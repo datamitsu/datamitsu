@@ -108,7 +108,8 @@ func TestUnresettableInstancesAreNeverPooled(t *testing.T) {
 	}
 
 	tracingOn(t)
-	diags, err := m.ParseOutput(ctx, "echo", "echo", []byte("unresettable"), nil, 0)
+	resp, err := m.ParseOutput(ctx, "echo", "echo", []byte("unresettable"), nil, 0)
+	diags := resp.Diagnostics
 	if err != nil {
 		t.Fatalf("ParseOutput() error = %v", err)
 	}
@@ -170,7 +171,8 @@ func TestPooledParsesMatchFreshInstances(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewRuntime() error = %v", err)
 		}
-		diags, err := rt.Parse(ctx, "echo", in, nil, 0)
+		resp, err := rt.Parse(ctx, "echo", in, nil, 0)
+		diags := resp.Diagnostics
 		if err != nil {
 			t.Fatalf("fresh Parse() error = %v", err)
 		}
@@ -178,7 +180,8 @@ func TestPooledParsesMatchFreshInstances(t *testing.T) {
 		want = append(want, messages(diags))
 	}
 
-	got, err := m.ParseOutput(ctx, "echo", "echo", inputs[0], nil, 0)
+	resp, err := m.ParseOutput(ctx, "echo", "echo", inputs[0], nil, 0)
+	got := resp.Diagnostics
 	if err != nil {
 		t.Fatalf("first pooled ParseOutput() error = %v", err)
 	}
@@ -192,7 +195,8 @@ func TestPooledParsesMatchFreshInstances(t *testing.T) {
 		t.Fatal("ParseOutput(not-declared) error = nil, want an error")
 	}
 
-	got, err = m.ParseOutput(ctx, "echo", "echo", inputs[1], nil, 0)
+	resp, err = m.ParseOutput(ctx, "echo", "echo", inputs[1], nil, 0)
+	got = resp.Diagnostics
 	if err != nil {
 		t.Fatalf("second pooled ParseOutput() error = %v", err)
 	}
@@ -227,7 +231,8 @@ func TestPooledParseSurvivesADeadIdleInstance(t *testing.T) {
 		_ = inst.Close(ctx)
 	}
 
-	diags, err := m.ParseOutput(ctx, "echo", "echo", []byte("after the corpse"), nil, 0)
+	resp, err := m.ParseOutput(ctx, "echo", "echo", []byte("after the corpse"), nil, 0)
+	diags := resp.Diagnostics
 	if err != nil {
 		t.Fatalf("ParseOutput() after a dead pooled instance error = %v", err)
 	}
@@ -251,7 +256,8 @@ func TestPooledParsesAreSafeUnderConcurrency(t *testing.T) {
 	for i := range 16 {
 		wg.Go(func() {
 			in := []byte(string(rune('a'+i)) + "-concurrent")
-			diags, err := m.ParseOutput(ctx, "echo", "echo", in, nil, 0)
+			resp, err := m.ParseOutput(ctx, "echo", "echo", in, nil, 0)
+			diags := resp.Diagnostics
 			errs[i] = err
 			if err == nil && len(diags) == 1 {
 				msgs[i] = diags[0].Message
@@ -365,7 +371,8 @@ func TestParseRetriesOnceWhenAReusedInstanceFails(t *testing.T) {
 		t.Fatalf("Close() of the pooled instance error = %v", err)
 	}
 
-	diags, err := m.ParseOutput(ctx, "echo", "echo", []byte("retried"), nil, 0)
+	resp, err := m.ParseOutput(ctx, "echo", "echo", []byte("retried"), nil, 0)
+	diags := resp.Diagnostics
 	if err != nil {
 		t.Fatalf("ParseOutput() over a poisoned pool error = %v, want the retry to succeed", err)
 	}

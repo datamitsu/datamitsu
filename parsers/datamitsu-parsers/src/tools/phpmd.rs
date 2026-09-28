@@ -14,9 +14,9 @@
 //! violations were found), and on a non-JSON / errored run produces a single
 //! synthetic "cannot analyze/parse" diagnostic without a level.
 
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 use crate::severity::{self, Level};
 
 use tinyjson::JsonValue;

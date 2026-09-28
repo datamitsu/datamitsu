@@ -33,6 +33,14 @@ const (
 	// FailFast is the default of fix, lint and check: the first failing tool
 	// stops the run.
 	FailFast = true
+
+	// MaxParseInputBytes is how many bytes of each output stream of one tool
+	// process a parser reads (8 MiB).
+	MaxParseInputBytes = 8 << 20
+
+	// MaxFindingsPerProcess is how many findings are kept from the output of
+	// one tool process.
+	MaxFindingsPerProcess = 10000
 )
 
 // Values of Effective.FailFastSource.
@@ -63,7 +71,9 @@ type Effective struct {
 	LogLevel                 string `json:"logLevel"`
 	MaxCmdLength             int    `json:"maxCmdLength"`
 	MaxErrorCmdDisplay       int    `json:"maxErrorCmdDisplay"`
+	MaxFindingsPerProcess    int    `json:"maxFindingsPerProcess"`
 	MaxParallelWorkers       int    `json:"maxParallelWorkers"`
+	MaxParseInputBytes       int    `json:"maxParseInputBytes"`
 	MinimumReleaseAgeMinutes int    `json:"minimumReleaseAgeMinutes"`
 	NoOCI                    bool   `json:"noOci"`
 	OCIRegistry              string `json:"ociRegistry"`
@@ -106,7 +116,9 @@ func Compute() Effective {
 		LogLevel:                 env.GetLogLevel().String(),
 		MaxCmdLength:             env.GetMaxCommandLength(),
 		MaxErrorCmdDisplay:       env.GetMaxErrorCommandDisplay(),
+		MaxFindingsPerProcess:    env.MaxFindingsPerProcess(),
 		MaxParallelWorkers:       env.GetMaxParallelWorkers(),
+		MaxParseInputBytes:       env.MaxParseInputBytes(),
 		MinimumReleaseAgeMinutes: env.MinimumReleaseAgeMinutes(),
 		NoOCI:                    env.NoOCI(),
 		OCIRegistry:              env.GetOCIRegistry(),

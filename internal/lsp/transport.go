@@ -26,7 +26,7 @@ func (s *Server) Run(ctx context.Context) error {
 	if !s.attach(t) {
 		return nil
 	}
-	defer s.closeSession()
+	defer s.closeSession(ctx)
 
 	done := make(chan struct{})
 	go func() {

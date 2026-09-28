@@ -13,10 +13,12 @@ jobs:
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
       # Build the WASM parser module BEFORE goreleaser: .goreleaser.yml lists it
       # under extra_files, so a snapshot build globbing-fails without it. Mirrors
-      # release.yml. rustup/cargo are preinstalled on ubuntu-latest; only the
-      # freestanding wasm32 target needs adding.
-      - name: Add Rust wasm32 target
-        run: rustup target add wasm32-unknown-unknown
+      # release.yml. rustup is preinstalled on ubuntu-latest; the release it
+      # installs, with the freestanding wasm32 target, is the one
+      # parsers/rust-toolchain.toml pins, and cargo runs in parsers/ to use it.
+      - name: Install the Rust toolchain parsers/rust-toolchain.toml pins
+        run: rustup toolchain install
+        working-directory: parsers
       - name: Cache cargo registry + wasm target
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -33,12 +35,16 @@ jobs:
           DATAMITSU_PARSERS_VERSION: 0.0.0-pr.${{ github.event.pull_request.number }}
         name: Build WASM parser modules
         run: |
-          cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml
-          echo "wasm size: $(wc -c < parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes"
+          cargo build --release --target wasm32-unknown-unknown
+          echo "wasm size: $(wc -c < target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes"
+        working-directory: parsers
       # Natively: the parsers' own tests and the tool output recorded under
       # parsers/datamitsu-parsers/fixtures.
       - name: Test WASM parser modules
-        run: cargo test --manifest-path parsers/Cargo.toml
+        run: |
+          cargo test
+          cargo test --no-default-features --features format
+        working-directory: parsers
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
         name: Build binaries with GoReleaser
@@ -84,10 +90,12 @@ jobs:
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
       # Build the WASM parser module BEFORE goreleaser: .goreleaser.yml lists it
       # under extra_files, so a snapshot build globbing-fails without it. Mirrors
-      # release.yml. rustup/cargo are preinstalled on ubuntu-latest; only the
-      # freestanding wasm32 target needs adding.
-      - name: Add Rust wasm32 target
-        run: rustup target add wasm32-unknown-unknown
+      # release.yml. rustup is preinstalled on ubuntu-latest; the release it
+      # installs, with the freestanding wasm32 target, is the one
+      # parsers/rust-toolchain.toml pins, and cargo runs in parsers/ to use it.
+      - name: Install the Rust toolchain parsers/rust-toolchain.toml pins
+        run: rustup toolchain install
+        working-directory: parsers
       - name: Cache cargo registry + wasm target
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -104,8 +112,9 @@ jobs:
           DATAMITSU_PARSERS_VERSION: 0.0.0-pr.${{ github.event.pull_request.number }}
         name: Build WASM parser modules
         run: |
-          cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml
-          echo "wasm size: $(wc -c < parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes"
+          cargo build --release --target wasm32-unknown-unknown
+          echo "wasm size: $(wc -c < target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes"
+        working-directory: parsers
       - env:
           GORELEASER_CURRENT_TAG: 0.0.0-pr.${{ github.event.pull_request.number }}
         name: Build binaries with GoReleaser
@@ -158,6 +167,37 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: false
           tags: datamitsu:pr-${{ github.event.pull_request.number }}-alpine
+  embedded-parsers:
+    name: Embedded Parser Module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-environment
+      # The container build task build:parsers:embedded runs: the three files
+      # that name the Rust release agree, the image runs that rustc, and the
+      # module it builds must be the committed one, byte for byte. Nobody needs
+      # Docker or Rust to fix a failure: the rebuilt module is the artifact.
+      - name: Rebuild the embedded parser module in its container
+        run: pnpm dm exec task -- build:parsers:embedded:module
+      - id: compare
+        name: Compare it with the committed module
+        run: |
+          if cmp parsers/target-embedded/wasm32-unknown-unknown/release/datamitsu_parsers.wasm internal/parsermanager/embedded/fallback.wasm; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.compare.outputs.stale == 'true'
+        name: Upload the rebuilt module
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: embedded-fallback-wasm
+          path: parsers/target-embedded/wasm32-unknown-unknown/release/datamitsu_parsers.wasm
+      - if: steps.compare.outputs.stale == 'true'
+        name: Fail on a stale module
+        run: |
+          echo "::error::the embedded fallback module is stale; download the artifact of this run and commit it as internal/parsermanager/embedded/fallback.wasm with go run ./internal/parsermanager/embedded/cmd/sourcehash, or run task build:parsers:embedded"
+          exit 1
   lint:
     name: Lint
     permissions:

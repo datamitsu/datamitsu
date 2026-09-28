@@ -59,6 +59,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	if err := applyFailFast(cmd, checkFailFast, &opts); err != nil {
 		return err
 	}
+	if err := checkParseLimits(); err != nil {
+		return err
+	}
 	if err := applyReports(cmd, checkReports, &opts); err != nil {
 		return err
 	}

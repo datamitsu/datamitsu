@@ -621,10 +621,11 @@ judged on three facts, and each one that fails adds a reason to the tool's
 | execution  | every planned task ran to the end                                                                                    | `cancelled`, `not-started`, `setup-failed`, `platform-skip`                                                         |
 | extraction | every output was read into findings by a parser, or a cache replayed a pass its parser read as clean                 | `no-extraction`, `parser-unavailable`, `parse-failed`, `truncated`, `unparsed-cache-hit`, `failed-without-findings` |
 
-A tool without an output parser is never complete (`no-extraction`): its exit
-code says whether it passed, not what it found. Nor is a tool whose process
-exited non-zero while its parser found nothing in what it printed
-(`failed-without-findings`): the parser did not recognize that output. The run is `complete` when
+A tool whose output no parser read — its own, a format parser, or the fallback
+built into datamitsu — is never complete (`no-extraction`, or `parse-failed` when
+a parser was declared): its exit code says whether it passed, not what it found.
+Nor is a tool whose process exited non-zero while the parser that recognized its
+output found nothing in it (`failed-without-findings`). The run is `complete` when
 every tool is, every operation ran, and nothing was left out at run level:
 `narrowed-selection`, `tools-filter` (with `selection.excludedTools` naming the
 tools `--tools` left out — the selected tools' own runs can still be complete),
@@ -1214,7 +1215,15 @@ datamitsu config runtime
 # Mechanically verify a single value (and that env overrides apply)
 datamitsu config runtime | jq .minimumReleaseAgeMinutes
 DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeconds  # -> 1200
+
+# The parse caps: bytes read from each output stream, findings kept per process
+datamitsu config runtime | jq '{maxParseInputBytes, maxFindingsPerProcess}'
 ```
+
+`fix`, `lint` and `check` refuse a `DATAMITSU_MAX_PARSE_INPUT_BYTES` or
+`DATAMITSU_MAX_FINDINGS_PER_PROCESS` that is not a positive integer with exit 2;
+`config runtime` reports the default in its place. See
+[parse caps](../guides/architecture/parsers.md#parse-caps).
 
 ### config chain-hash
 
@@ -1599,11 +1608,20 @@ level words the tool prints (`levels`, `none` when it prints none), the unit it
 counts columns in where that was measured (`columns`), and whether it is a
 security scanner (`category`); an older module shows none of these lines, which
 is how to tell which contract a pinned module carries (see
-[levels](../guides/architecture/parsers.md#levels)). Both accept:
+[levels](../guides/architecture/parsers.md#levels)). A module built with
+descriptor schema 3 also lists its format parsers and the `fallback` sniffer,
+each marked `format` ([format parsers](../guides/architecture/parsers.md#format-parsers)).
+A module older than schema 3 is named once on stderr with a `note:` line, as
+`datamitsu config show` names one already in the store
+([older modules](../guides/architecture/parsers.md#older-modules)).
+Both accept:
 
 - `--json` — machine-readable output, for driving configs or build pipelines.
 - `--wasm <path>` — describe a local `.wasm` file directly, with no config or
   network access (handy in CI and release tooling).
+- `--embedded` — describe the fallback parser module built into this binary
+  (format parsers and the `fallback` sniffer only), with no config or network
+  access ([the embedded fallback](../guides/architecture/parsers.md#the-embedded-fallback)).
 
 ```bash
 # Human-readable catalog of all tools the configured parsers can parse
@@ -1620,15 +1638,35 @@ datamitsu devtools parsers list --wasm ./parsers/target/wasm32-unknown-unknown/r
 ```
 
 `run` pipes a tool's raw output (from stdin) through its parser and prints the
-structured diagnostics — the quickest way to develop or debug a parser against
-real output (parsers are not yet wired into the lint pipeline). It reads stdout
-from stdin; pass `--stderr-file` / `--exit-code` for parsers that use them, and
-`--wasm <path>` to use a local module instead of a configured one.
+module's answer as JSON — `abi`, whether it `recognized` the output, the `format`
+it read, and the structured `diagnostics` — the quickest way to develop or debug a
+parser against real output. A module that answers with a bare array (ABI 1) is
+shown in the same shape, with `recognized` inferred as the core infers it. It reads
+stdout from stdin; pass `--stderr-file` / `--exit-code` for parsers that use them,
+and `--wasm <path>` to use a local module instead of a configured one.
 
 ```bash
 # Run eslint through datamitsu, then parse its JSON into diagnostics
 datamitsu exec eslint -- --format json file.js \
   | datamitsu devtools parsers run eslint --wasm ./datamitsu_parsers.wasm --exit-code 1
+
+# Run a format parser of the fallback built into this binary
+datamitsu exec shellcheck -- -f checkstyle script.sh \
+  | datamitsu devtools parsers run checkstyle-xml --embedded --exit-code 1
+```
+
+`sniff [<file>|-]` runs the sniffer of the built-in fallback over a captured output
+(a file, or stdin with `-` or no argument) and prints the standard format it
+recognized and the findings it read, or `no standard format recognized`. It is how
+to check which format key a tool's flag produces before declaring it as
+`outputParser.parser`. `--stderr-file` and `--exit-code` pass the tool's other
+stream and exit code; `--json` prints the whole answer.
+
+```bash
+ruff check --output-format sarif src > out.sarif
+datamitsu devtools parsers sniff out.sarif
+# format: sarif (1 finding)
+#   src/a.py:1:8 error [F401] `os` imported but unused
 ```
 
 `prefetch` downloads and SHA-256 verifies the configured parser modules into the
@@ -2434,46 +2472,48 @@ from the same shell function that runs an activation through `eval`.
 
 ## Environment Variables
 
-| Variable                          | Description                                                                                                                                    | Default                                             |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `DATAMITSU_CACHE_DIR`             | Custom base directory; ephemeral data goes in `{base}/cache`, downloaded artifacts in `{base}/store`                                           | `$XDG_CACHE_HOME/datamitsu` or `~/.cache/datamitsu` |
-| `DATAMITSU_CONCURRENCY`           | Number of concurrent download workers                                                                                                          | `3`                                                 |
-| `DATAMITSU_INSTALL_TIMEOUT`       | Per-app install timeout in seconds (`0` = disabled)                                                                                            | `600`                                               |
-| `DATAMITSU_MIN_RELEASE_AGE`       | Minimum release age in minutes for `pull-*` and the Go lock-file check (`0` = disabled)                                                        | `10080`                                             |
-| `DATAMITSU_MAX_CMD_LENGTH`        | Maximum command-line length before a list-taking operation is split into chunks                                                                | `32000`                                             |
-| `DATAMITSU_MAX_ERROR_CMD_DISPLAY` | Maximum command length shown in an error before truncation                                                                                     | `120`                                               |
-| `DATAMITSU_MAX_PARALLEL_WORKERS`  | Maximum parallel tool execution workers                                                                                                        | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
-| `DATAMITSU_UNIT_CACHE_TTL`        | Minutes a cached unit-level verdict stays trusted; `0` disables verdict caching                                                                | `1440` (24h)                                        |
-| `DATAMITSU_FAIL_FAST`             | Stop `fix`, `lint` and `check` at the first failing tool (`true`/`1`) or run everything (`false`/`0`)                                          | `true`                                              |
-| `DATAMITSU_FAIL_ON`               | Raise every operation's `failOn` for `fix`, `lint` and `check` to `error`, `warning`, `info` or `hint`; never lowers one (twin of `--fail-on`) | -                                                   |
-| `DATAMITSU_REPORT`                | Reports `fix`, `lint` and `check` write, as comma-separated `format=path` pairs (twin of `--report`; see [Reports](#reports))                  | -                                                   |
-| `DATAMITSU_ALLOW_PARTIAL`         | Write a report that lists findings for a narrowed run (`true`/`1`) instead of refusing it (twin of `--allow-partial`)                          | `false`                                             |
-| `DATAMITSU_EVENTS`                | Which findings the JSON-L stream of `fix`, `lint` and `check` emits: `diagnostics=reported` or `diagnostics=all` (twin of `--events`)          | `diagnostics=reported`                              |
-| `DATAMITSU_ANNOTATIONS`           | Whether `fix`, `lint` and `check` print GitHub workflow annotations: `auto`, `github` or `off` (twin of `--annotations`)                       | `auto`                                              |
-| `DATAMITSU_OUTPUT`                | How `fix`, `lint` and `check` show their results: `human` or `agent` (twin of `--output`)                                                      | `human`                                             |
-| `DATAMITSU_CONFIG_CACHE`          | Serve evaluated config chains from disk (`0`/`false`/`off`/`no` disables it)                                                                   | `1`                                                 |
-| `DATAMITSU_LSP_FORMAT_WIDEN_TO`   | How far editor format-on-save may widen: `target` or `unit`                                                                                    | `unit`                                              |
-| `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` | Format-on-save watchdog in ms: no further tool group starts once it has elapsed (`0` = disabled)                                               | `15000`                                             |
-| `DATAMITSU_LOG_LEVEL`             | Log level (`debug`, `info`, `warn`, `error`)                                                                                                   | `warn`                                              |
-| `DATAMITSU_LOG_FORMAT`            | Status output format (`console`, or newline-delimited `jsonl` with log lines as `log` events)                                                  | `console`                                           |
-| `DATAMITSU_TIMINGS`               | Enable detailed planner/runner timings (`1` = enabled)                                                                                         | `0`                                                 |
-| `DATAMITSU_STARTUP_TIMINGS`       | Report per-phase startup/config-load durations to stderr (`1` = enabled)                                                                       | `0`                                                 |
-| `DATAMITSU_TRACE`                 | Record a full execution trace and print its summary (`1` = enabled)                                                                            | `0`                                                 |
-| `DATAMITSU_TRACE_DIR`             | Directory for execution trace files                                                                                                            | `{cache}/traces`                                    |
-| `DATAMITSU_FORCE_GIT_SUBPROCESS`  | Resolve the git root by forking `git` instead of walking the filesystem (`1` = enabled)                                                        | `0`                                                 |
-| `DATAMITSU_BINARY_COMMAND`        | Override binary command path                                                                                                                   | -                                                   |
-| `DATAMITSU_NO_SPONSOR`            | Suppress sponsor messages (any non-empty value)                                                                                                | -                                                   |
-| `DATAMITSU_OFFLINE`               | Refuse all network access (any non-empty value; requires a pre-seeded store)                                                                   | -                                                   |
-| `DATAMITSU_NO_OCI`                | Disable OCI bundle store **seeding** (any non-empty value; twin of `--no-oci`)                                                                 | -                                                   |
-| `DATAMITSU_NO_PARSE`              | Show tools' raw output instead of parsed findings; parsing still runs (twin of `--no-parse`)                                                   | -                                                   |
-| `DATAMITSU_LIBC`                  | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection                                                 | auto-detected                                       |
-| `DATAMITSU_OCI_REGISTRY`          | Registry host for base-image digest resolution in `devtools dockerfile`                                                                        | `ghcr.io`                                           |
-| `DATAMITSU_PARSERS_DIR`           | Override directory for downloaded WASM output-parser modules                                                                                   | `{store}/.parsers`                                  |
-| `DATAMITSU_ROOT`                  | Git root of the source-mode farm activated in this shell (exported by `datamitsu source`)                                                      | -                                                   |
-| `DATAMITSU_FARM`                  | Farm directory activated in this shell (exported by `datamitsu source`)                                                                        | -                                                   |
-| `DATAMITSU_FARM_CONFIG`           | Config chain of the farm activated in this shell (exported by `datamitsu source --config`)                                                     | -                                                   |
-| `NO_COLOR`                        | Disable color output                                                                                                                           | -                                                   |
-| `FORCE_COLOR`                     | Force color output                                                                                                                             | -                                                   |
+| Variable                             | Description                                                                                                                                    | Default                                             |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `DATAMITSU_CACHE_DIR`                | Custom base directory; ephemeral data goes in `{base}/cache`, downloaded artifacts in `{base}/store`                                           | `$XDG_CACHE_HOME/datamitsu` or `~/.cache/datamitsu` |
+| `DATAMITSU_CONCURRENCY`              | Number of concurrent download workers                                                                                                          | `3`                                                 |
+| `DATAMITSU_INSTALL_TIMEOUT`          | Per-app install timeout in seconds (`0` = disabled)                                                                                            | `600`                                               |
+| `DATAMITSU_MIN_RELEASE_AGE`          | Minimum release age in minutes for `pull-*` and the Go lock-file check (`0` = disabled)                                                        | `10080`                                             |
+| `DATAMITSU_MAX_CMD_LENGTH`           | Maximum command-line length before a list-taking operation is split into chunks                                                                | `32000`                                             |
+| `DATAMITSU_MAX_ERROR_CMD_DISPLAY`    | Maximum command length shown in an error before truncation                                                                                     | `120`                                               |
+| `DATAMITSU_MAX_PARALLEL_WORKERS`     | Maximum parallel tool execution workers                                                                                                        | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
+| `DATAMITSU_UNIT_CACHE_TTL`           | Minutes a cached unit-level verdict stays trusted; `0` disables verdict caching                                                                | `1440` (24h)                                        |
+| `DATAMITSU_FAIL_FAST`                | Stop `fix`, `lint` and `check` at the first failing tool (`true`/`1`) or run everything (`false`/`0`)                                          | `true`                                              |
+| `DATAMITSU_FAIL_ON`                  | Raise every operation's `failOn` for `fix`, `lint` and `check` to `error`, `warning`, `info` or `hint`; never lowers one (twin of `--fail-on`) | -                                                   |
+| `DATAMITSU_REPORT`                   | Reports `fix`, `lint` and `check` write, as comma-separated `format=path` pairs (twin of `--report`; see [Reports](#reports))                  | -                                                   |
+| `DATAMITSU_ALLOW_PARTIAL`            | Write a report that lists findings for a narrowed run (`true`/`1`) instead of refusing it (twin of `--allow-partial`)                          | `false`                                             |
+| `DATAMITSU_EVENTS`                   | Which findings the JSON-L stream of `fix`, `lint` and `check` emits: `diagnostics=reported` or `diagnostics=all` (twin of `--events`)          | `diagnostics=reported`                              |
+| `DATAMITSU_ANNOTATIONS`              | Whether `fix`, `lint` and `check` print GitHub workflow annotations: `auto`, `github` or `off` (twin of `--annotations`)                       | `auto`                                              |
+| `DATAMITSU_OUTPUT`                   | How `fix`, `lint` and `check` show their results: `human` or `agent` (twin of `--output`)                                                      | `human`                                             |
+| `DATAMITSU_CONFIG_CACHE`             | Serve evaluated config chains from disk (`0`/`false`/`off`/`no` disables it)                                                                   | `1`                                                 |
+| `DATAMITSU_LSP_FORMAT_WIDEN_TO`      | How far editor format-on-save may widen: `target` or `unit`                                                                                    | `unit`                                              |
+| `DATAMITSU_LSP_FORMAT_TIMEOUT_MS`    | Format-on-save watchdog in ms: no further tool group starts once it has elapsed (`0` = disabled)                                               | `15000`                                             |
+| `DATAMITSU_LOG_LEVEL`                | Log level (`debug`, `info`, `warn`, `error`)                                                                                                   | `warn`                                              |
+| `DATAMITSU_LOG_FORMAT`               | Status output format (`console`, or newline-delimited `jsonl` with log lines as `log` events)                                                  | `console`                                           |
+| `DATAMITSU_TIMINGS`                  | Enable detailed planner/runner timings (`1` = enabled)                                                                                         | `0`                                                 |
+| `DATAMITSU_STARTUP_TIMINGS`          | Report per-phase startup/config-load durations to stderr (`1` = enabled)                                                                       | `0`                                                 |
+| `DATAMITSU_TRACE`                    | Record a full execution trace and print its summary (`1` = enabled)                                                                            | `0`                                                 |
+| `DATAMITSU_TRACE_DIR`                | Directory for execution trace files                                                                                                            | `{cache}/traces`                                    |
+| `DATAMITSU_FORCE_GIT_SUBPROCESS`     | Resolve the git root by forking `git` instead of walking the filesystem (`1` = enabled)                                                        | `0`                                                 |
+| `DATAMITSU_BINARY_COMMAND`           | Override binary command path                                                                                                                   | -                                                   |
+| `DATAMITSU_NO_SPONSOR`               | Suppress sponsor messages (any non-empty value)                                                                                                | -                                                   |
+| `DATAMITSU_OFFLINE`                  | Refuse all network access (any non-empty value; requires a pre-seeded store)                                                                   | -                                                   |
+| `DATAMITSU_NO_OCI`                   | Disable OCI bundle store **seeding** (any non-empty value; twin of `--no-oci`)                                                                 | -                                                   |
+| `DATAMITSU_NO_PARSE`                 | Show tools' raw output instead of parsed findings; parsing still runs (twin of `--no-parse`)                                                   | -                                                   |
+| `DATAMITSU_MAX_PARSE_INPUT_BYTES`    | Bytes of each output stream of one tool process a parser reads; a longer stream is cut and the process is `truncated`                          | `8388608` (8 MiB)                                   |
+| `DATAMITSU_MAX_FINDINGS_PER_PROCESS` | Findings kept from one tool process's output; the rest are dropped and the process is `truncated`                                              | `10000`                                             |
+| `DATAMITSU_LIBC`                     | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection                                                 | auto-detected                                       |
+| `DATAMITSU_OCI_REGISTRY`             | Registry host for base-image digest resolution in `devtools dockerfile`                                                                        | `ghcr.io`                                           |
+| `DATAMITSU_PARSERS_DIR`              | Override directory for downloaded WASM output-parser modules                                                                                   | `{store}/.parsers`                                  |
+| `DATAMITSU_ROOT`                     | Git root of the source-mode farm activated in this shell (exported by `datamitsu source`)                                                      | -                                                   |
+| `DATAMITSU_FARM`                     | Farm directory activated in this shell (exported by `datamitsu source`)                                                                        | -                                                   |
+| `DATAMITSU_FARM_CONFIG`              | Config chain of the farm activated in this shell (exported by `datamitsu source --config`)                                                     | -                                                   |
+| `NO_COLOR`                           | Disable color output                                                                                                                           | -                                                   |
+| `FORCE_COLOR`                        | Force color output                                                                                                                             | -                                                   |
 
 `DATAMITSU_ROOT` and `DATAMITSU_FARM` are written by `datamitsu source`. Neither
 is used to resolve a tool — the shim discovers the repository root from the

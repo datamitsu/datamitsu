@@ -27,10 +27,72 @@ tasks:
     desc: Build the embedded JS artifacts — config library and inspector — before any Go build
   build:parsers:
     cmds:
-      - cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml
-      - "echo \"wasm size: $(wc -c < parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes\""
+      # From parsers/, where rustup finds rust-toolchain.toml.
+      - cargo build --release --target wasm32-unknown-unknown
+      - "echo \"wasm size: $(wc -c < target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes\""
       - task: gen:parsers-doc
     desc: Build the Rust→WASM parser modules, report size, and regenerate the catalog doc
+    dir: parsers
+  build:parsers:embedded:
+    cmds:
+      - task: build:parsers:embedded:module
+      - cp parsers/target-embedded/wasm32-unknown-unknown/release/datamitsu_parsers.wasm internal/parsermanager/embedded/fallback.wasm
+      - go run ./internal/parsermanager/embedded/cmd/sourcehash
+    desc: Build the fallback parser module the core embeds, in its container, into internal/parsermanager/embedded with its source hash
+  build:parsers:embedded:module:
+    cmds:
+      # One Rust release, named in three files: the toolchain file, the lock and
+      # the image digest the Dockerfile pins.
+      - |
+        lock_version=$(sed -n 1p parsers/embedded.lock)
+        lock_digest=$(sed -n 2p parsers/embedded.lock)
+        if [ "$lock_version" != "{{.RUST_VERSION}}" ]; then
+          echo "parsers/embedded.lock names Rust $lock_version, parsers/rust-toolchain.toml {{.RUST_VERSION}}" >&2
+          exit 1
+        fi
+        if ! grep -q "@$lock_digest\$" parsers/embedded.Dockerfile; then
+          echo "parsers/embedded.Dockerfile does not pin the image digest parsers/embedded.lock names ($lock_digest)" >&2
+          exit 1
+        fi
+      - docker build --platform linux/amd64 --build-arg RUST_VERSION={{.RUST_VERSION}} -t datamitsu-parsers-embedded -f parsers/embedded.Dockerfile parsers
+      # The digest pins the image, not the release in its tag: a digest of another
+      # rustc must not pass.
+      - |
+        release=$(docker run --rm --platform linux/amd64 datamitsu-parsers-embedded rustc -vV | sed -n 's/^release: //p')
+        if [ "$release" != "{{.RUST_VERSION}}" ]; then
+          echo "the image runs rustc $release, parsers/rust-toolchain.toml names {{.RUST_VERSION}}" >&2
+          exit 1
+        fi
+      # The caller's uid, so nothing root-owned lands in the checkout; a separate
+      # target directory, so native and container artifacts never mix; a named
+      # volume as a writable cargo home. The remapped prefixes are hygiene: the
+      # container's paths are the same on every machine already.
+      - |
+        docker run --rm --platform linux/amd64 --user "$(id -u):$(id -g)" \
+          -e CARGO_HOME=/cargo -e CARGO_TARGET_DIR=/src/target-embedded -e CARGO_INCREMENTAL=0 \
+          -v "{{.ROOT_DIR}}/parsers:/src" -v datamitsu-cargo-home:/cargo -w /src \
+          datamitsu-parsers-embedded sh -ec '
+            sysroot=$(rustc --print sysroot)
+            commit=$(rustc -vV | sed -n "s/^commit-hash: //p")
+            export RUSTFLAGS="--remap-path-prefix=$CARGO_HOME=/cargo --remap-path-prefix=$sysroot/lib/rustlib/src/rust=/rustc/$commit --remap-path-prefix=$PWD=/src"
+            cargo build --release --locked --target wasm32-unknown-unknown --no-default-features --features format
+          '
+      - "echo \"embedded wasm: $(wc -c < parsers/target-embedded/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes, sha256 $(sha256sum parsers/target-embedded/wasm32-unknown-unknown/release/datamitsu_parsers.wasm | cut -d' ' -f1)\""
+    desc: Build the embedded fallback parser module in a digest-pinned linux/amd64 container into parsers/target-embedded (the CI gate compares it with the committed one)
+    vars:
+      RUST_VERSION:
+        sh: sed -n 's/^channel = "\(.*\)"$/\1/p' parsers/rust-toolchain.toml
+  build:parsers:fixture:
+    cmds:
+      # The remapped prefixes keep the home directory, the cargo home and the
+      # toolchain's install path out of a module that is committed.
+      - |
+        RUSTFLAGS="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$(rustc --print sysroot)/lib/rustlib/src/rust=/rustc/$(rustc -vV | sed -n 's/^commit-hash: //p') --remap-path-prefix=$PWD=/src" \
+          cargo build --release --target wasm32-unknown-unknown
+      - cp target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm ../internal/parsermanager/testdata/echo.wasm
+      - task: gen:parsers-doc
+    desc: Build the public parser module into internal/parsermanager/testdata/echo.wasm, the module the core's tests run, and regenerate the catalog doc
+    dir: parsers
   # ── Demo ──
   demo:capture:
     cmds:
@@ -82,7 +144,7 @@ tasks:
       - go run . devtools parsers list --wasm parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm --json | ./node_modules/.bin/tsx packaging/parsers-catalog.ts > website/docs/reference/parser-catalog.md
       # Format the generated page with the repo's own tools so it matches what the
       # pre-commit hook expects (idempotent → no drift, no .prettierignore needed).
-      - pnpm dm fix ./website/docs/reference/parser-catalog.md
+      - pnpm dm fix --tools prettier,oxfmt ./website/docs/reference/parser-catalog.md
     desc: Regenerate the parser-catalog docs page from the built WASM module (run by build:parsers)
   gen:toolenv-doc:
     cmds:

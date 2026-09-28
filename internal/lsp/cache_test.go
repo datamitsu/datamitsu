@@ -17,5 +17,5 @@ func TestNewSessionWiresCache(t *testing.T) {
 	if ss.cache == nil {
 		t.Fatal("newSession must wire a non-nil execution cache (it was built with nil)")
 	}
-	ss.close()
+	ss.close(t.Context())
 }

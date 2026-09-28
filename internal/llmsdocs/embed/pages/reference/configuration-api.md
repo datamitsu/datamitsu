@@ -1157,10 +1157,51 @@ Keeping `module` and `parser` separate is what makes multiple module versions
 work: declare `parsers: { core: {…v2}, core_legacy: {…v1} }` and point each tool's
 `outputParser.module` at the version it needs.
 
-Output parsers are a Phase-1 _plumbing_ surface: the pipeline (declare → download
-→ verify → load → invoke) ships now with a trivial `echo` parser, but real
-diagnostic parsers (hadolint, yamllint, …) arrive in a later phase. See
-[WASM Output Parsers](../guides/architecture/parsers.md) for the architecture.
+`embedded` is reserved: it is the fallback parser module built into datamitsu
+([the embedded fallback](../guides/architecture/parsers.md#the-embedded-fallback)),
+so a `parsers` entry cannot take the name and `outputParser.module` cannot name
+it; either fails the configuration load.
+
+`parser` also accepts a **format key**, for a tool that has no parser of its own
+but prints a standard format on request. Pass the tool the flag that selects the
+format and name the format:
+
+| `parser`             | Example flag                                          |
+| -------------------- | ----------------------------------------------------- |
+| `sarif`              | `ruff check --output-format sarif`, `semgrep --sarif` |
+| `checkstyle-xml`     | `shellcheck -f checkstyle`, `hadolint -f checkstyle`  |
+| `gcc`                | `typos --format brief`, `shellcheck -f gcc`           |
+| `codeclimate`        | `ruff check --output-format gitlab`                   |
+| `github-annotations` | `ruff check --output-format github`                   |
+| `junit-xml`          | `golangci-lint run --output.junit-xml.path=stdout`    |
+
+```javascript
+const toolsConfig = {
+  ruff: {
+    name: "ruff",
+    outputParser: { module: "core", parser: "sarif" },
+    operations: {
+      lint: {
+        app: "ruff",
+        args: ["check", "--output-format", "sarif", "{files}"],
+        scope: "per-project",
+      },
+    },
+  },
+};
+```
+
+A tool's own format is usually richer than a standard one, and its parser reads
+it without a conversion in between: prefer a tool's parser when the module has
+one, a format key when the tool prints a standard shape, and know that the line
+formats (`gcc`, `msvc`, `github-annotations`, `azure-logissue`) carry only a
+file, a line, a column, a level and the text. The
+[parser catalog](./parser-catalog.md#format-parsers) lists every format key, and
+[format parsers](../guides/architecture/parsers.md#format-parsers) says what each
+recognizes. A module older than the one that introduced them does not know the
+keys: `datamitsu devtools parsers list` shows what the pinned module carries.
+
+See [WASM Output Parsers](../guides/architecture/parsers.md) for the architecture.
 
 ### Formatting input/output modes (`input` / `output`)
 

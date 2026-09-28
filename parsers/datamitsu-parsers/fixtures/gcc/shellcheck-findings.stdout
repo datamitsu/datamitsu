@@ -1,0 +1,2 @@
+bad.sh:2:6: note: Double quote to prevent globbing and word splitting. [SC2086]
+bad.sh:3:1: warning: x appears unused. Verify use (or export if used externally). [SC2034]

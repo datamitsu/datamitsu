@@ -19,9 +19,9 @@
 //! columns are kept, the end made exclusive; any later line keeps its row and
 //! drops columns the report cannot pin down.
 
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "gitleaks",

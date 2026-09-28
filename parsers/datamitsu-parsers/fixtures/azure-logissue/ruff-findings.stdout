@@ -1,0 +1,1 @@
+##vso[task.logissue type=error;sourcepath=/work/bad.py;linenumber=1;columnnumber=8;code=F401;]`os` imported but unused

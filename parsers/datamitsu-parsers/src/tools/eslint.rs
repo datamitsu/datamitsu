@@ -2,25 +2,20 @@
 //!
 //! eslint is NOT a none-ls diagnostics builtin (it was moved to an external
 //! plugin), so this is ported directly from eslint's `--format json` output: an
-//! array of result objects, each with a `messages` array. Two wrinkles make it a
-//! bespoke parser rather than a `json_diag::from_json` one-liner:
-//!   * diagnostics are **nested** under each file's `messages`, and
-//!   * `severity` is **numeric** (2 = error, 1 = warning), not a string token;
-//!   * `ruleId` may be `null` (parse/internal errors) → no code.
-
-use std::collections::HashMap;
-
-use tinyjson::JsonValue;
+//! array of result objects, each with a `messages` array. It reads that report
+//! through the `eslint-json` format parser, which knows its two wrinkles:
+//! diagnostics **nested** under each file's `messages`, and a **numeric**
+//! `severity` (2 = error, 1 = warning); a `null` `ruleId` (a parse error) gives
+//! no code.
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "eslint",
 	description: "Pluggable linter for JavaScript and TypeScript.",
 	url: "https://eslint.org",
-	severities: &[Level("2", severity::ERROR), Level("1", severity::WARNING)],
+	severities: crate::format::eslint_json::LEVELS,
 	column_unit: "utf-16",
 	category: "",
 	kind: "tool",
@@ -35,81 +30,13 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	// Lenient: eslint runs batched over a whole project, where a plugin writing to
 	// stdout (sonarjs' pnpm-catalog `console.debug`, …) would otherwise cost every
 	// diagnostic in the run.
-	crate::tools::json_diag::extract_lenient(stdout, from_report)
-}
-
-fn from_report(value: &JsonValue) -> Vec<RawDiagnostic> {
-	let results = match value {
-		JsonValue::Array(a) => a,
-		_ => return Vec::new(),
-	};
-	let mut out = Vec::new();
-	for result in results {
-		let obj = match result {
-			JsonValue::Object(m) => m,
-			_ => continue,
-		};
-		// One eslint run covers many files, so each result's path is the only way
-		// to attribute its messages.
-		let file = match obj.get("filePath") {
-			Some(JsonValue::String(s)) if !s.is_empty() => Some(s.clone()),
-			_ => None,
-		};
-		if let Some(JsonValue::Array(messages)) = obj.get("messages") {
-			for msg in messages {
-				if let Some(mut d) = message_to_diag(msg) {
-					d.file.clone_from(&file);
-					out.push(d);
-				}
-			}
-		}
-	}
-	out
-}
-
-fn message_to_diag(msg: &JsonValue) -> Option<RawDiagnostic> {
-	let m = match msg {
-		JsonValue::Object(m) => m,
-		_ => return None,
-	};
-	let message = match m.get("message") {
-		Some(JsonValue::String(s)) => s.clone(),
-		_ => return None,
-	};
-	Some(RawDiagnostic {
-		message,
-		row: num(m, "line"),
-		col: num(m, "column"),
-		end_row: num(m, "endLine"),
-		end_col: num(m, "endColumn"),
-		severity: severity_of(m.get("severity")),
-		code: match m.get("ruleId") {
-			Some(JsonValue::String(s)) => Some(s.clone()),
-			_ => None, // null for parse/internal errors
-		},
-		..RawDiagnostic::default()
-	})
-}
-
-fn num(m: &HashMap<String, JsonValue>, key: &str) -> Option<u32> {
-	match m.get(key) {
-		Some(JsonValue::Number(n)) => crate::numconv::json_u32(*n),
-		_ => None,
-	}
-}
-
-fn severity_of(v: Option<&JsonValue>) -> Option<u8> {
-	match v {
-		Some(JsonValue::Number(n)) => {
-			crate::numconv::json_int(*n).and_then(|n| severity::of(DESCRIPTOR.severities, &n.to_string()))
-		}
-		_ => None,
-	}
+	crate::format::eslint_json::findings(stdout)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::severity;
 
 	// Real `eslint --format json` output (trimmed).
 	pub(super) const SAMPLE: &[u8] = br#"[{"filePath":"/x/broken.js","messages":[

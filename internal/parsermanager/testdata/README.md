@@ -3,8 +3,9 @@
 ## `echo.wasm`
 
 A build of the current crate, `parsers/datamitsu-parsers`, with every parser it
-carries. Despite the name it is not an echo-only module: `echo` is one of its
-dispatch keys. It is the module the core's current contract is tested against —
+carries — the tool parsers, the format parsers and the sniffer (`fallback`) — at
+descriptor schema 3, answering in response ABI 2. Despite the name it is not an
+echo-only module: `echo` is one of its dispatch keys. It is the module the core's current contract is tested against —
 `runtime_test.go`, the pool tests, `internal/runner/parser_test.go` (served over
 `httptest`), the `devtools parsers` tests of `cmd` and `test/cli`, and the
 execution scenarios of `test/cli`, which seed it into an offline store
@@ -13,14 +14,23 @@ execution scenarios of `test/cli`, which seed it into an offline store
 It is built without `DATAMITSU_PARSERS_VERSION`, so `describe` reports the crate
 version rather than a release version.
 
-Nothing regenerates it automatically: `task build:parsers` builds into Cargo's
-target directory and regenerates the catalogue page, and copies nothing here. After
-a change under `parsers/`, rebuild and copy it by hand, in the same change:
+After a change under `parsers/`, rebuild it in the same change:
 
 ```bash
-pnpm dm exec task -- build:parsers
-cp parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm internal/parsermanager/testdata/echo.wasm
+pnpm dm exec task -- build:parsers:fixture
 ```
+
+The task builds the public module with the toolchain `parsers/rust-toolchain.toml`
+pins, copies it here and regenerates the catalogue page. It remaps the cargo home,
+the toolchain's source tree and the workspace to fixed names, so the committed
+bytes name no directory of the machine that built them. `task build:parsers` alone
+builds into Cargo's target directory and copies nothing here.
+
+## `response-v2.json`
+
+A `parse` answer in the object form of response ABI 2 (`recognized`, `format`,
+`diagnostics`), written by hand so the decoder was tested against it before any
+module answered that way.
 
 ## `released/`
 

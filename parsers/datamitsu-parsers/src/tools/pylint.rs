@@ -3,9 +3,9 @@
 //!
 //! pylint's `column` and `endColumn` count from 0 (its `line`/`endLine` from 1),
 //! so both columns are shifted to 1-based; `endColumn` is already exclusive.
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {

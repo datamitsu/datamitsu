@@ -1,0 +1,36 @@
+# The sources of the fallback parser module the core embeds
+# (internal/parsermanager/embedded/fallback.wasm): every file its build
+# (`--no-default-features --features format`, in embedded.Dockerfile) reads.
+# Their hash, in fallback.wasm.sources beside the module, is how a Go test
+# notices a source that changed without the module being rebuilt. The tool
+# parsers (src/tools/) and the test-only files (src/contract.rs,
+# src/format/fixtures.rs) are not in that build and not listed here.
+# Paths are relative to the repository root.
+parsers/Cargo.lock
+parsers/Cargo.toml
+parsers/datamitsu-parsers/Cargo.toml
+parsers/datamitsu-parsers/src/capabilities.rs
+parsers/datamitsu-parsers/src/diagnostic.rs
+parsers/datamitsu-parsers/src/fallback.rs
+parsers/datamitsu-parsers/src/format/azure_logissue.rs
+parsers/datamitsu-parsers/src/format/checkstyle_xml.rs
+parsers/datamitsu-parsers/src/format/codeclimate.rs
+parsers/datamitsu-parsers/src/format/eslint_json.rs
+parsers/datamitsu-parsers/src/format/gcc.rs
+parsers/datamitsu-parsers/src/format/github_annotations.rs
+parsers/datamitsu-parsers/src/format/json.rs
+parsers/datamitsu-parsers/src/format/junit_xml.rs
+parsers/datamitsu-parsers/src/format/lines.rs
+parsers/datamitsu-parsers/src/format/mod.rs
+parsers/datamitsu-parsers/src/format/msvc.rs
+parsers/datamitsu-parsers/src/format/sarif.rs
+parsers/datamitsu-parsers/src/format/xml.rs
+parsers/datamitsu-parsers/src/json_diag.rs
+parsers/datamitsu-parsers/src/lib.rs
+parsers/datamitsu-parsers/src/location.rs
+parsers/datamitsu-parsers/src/numconv.rs
+parsers/datamitsu-parsers/src/response.rs
+parsers/datamitsu-parsers/src/severity.rs
+parsers/embedded.Dockerfile
+parsers/embedded.lock
+parsers/rust-toolchain.toml

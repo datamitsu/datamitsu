@@ -4,6 +4,7 @@ Usage:
   datamitsu devtools parsers inspect <tool> [flags]
 
 Flags:
+      --embedded      Describe the fallback parser module built into this binary instead of the configured parsers
   -h, --help          help for inspect
       --json          Emit machine-readable JSON instead of the rendered view
       --wasm string   Describe a local .wasm module file instead of the configured parsers

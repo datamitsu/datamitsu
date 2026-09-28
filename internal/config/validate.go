@@ -530,11 +530,18 @@ func signerRejected(field, stillVerified string) string {
 	return fmt.Sprintf("%s is set but signature verification is not implemented in this build; remove signer (%s)", field, stillVerified)
 }
 
+// ReservedParserModule is the module name of the fallback parser built into
+// datamitsu: a `parsers` entry cannot take it, and an outputParser cannot name
+// it, since the core runs that module on its own terms and a declaration
+// would read as a pin it never follows.
+const ReservedParserModule = "embedded"
+
 // ValidateParsers validates the parsers map: each entry must declare exactly
 // one source (url or oci) and a non-empty, well-formed SHA-256 hash (64
 // lowercase hex). The hash is mandatory for EVERY source — an empty hash is a
 // hard error per the security policy (mirroring the bundle/archive
-// hash-mandatory rule), never a download in "hash-less" mode.
+// hash-mandatory rule), never a download in "hash-less" mode. The name
+// ReservedParserModule is not available.
 //
 // The two sources are mutually exclusive rather than a fallback chain: an
 // air-gapped organization must be able to prove there is no github.com egress
@@ -555,6 +562,10 @@ func ValidateParsers(parsers MapOfParsers) error {
 	for _, name := range names {
 		if name == "" {
 			errs = append(errs, "parser name must not be empty")
+			continue
+		}
+		if name == ReservedParserModule {
+			errs = append(errs, fmt.Sprintf("parser %q: the name is reserved for the fallback parser module built into datamitsu", name))
 			continue
 		}
 		p := parsers[name]
@@ -813,7 +824,14 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 		if tool.OutputParser != nil {
 			// Validate the module reference (which `parsers` entry to load); the
 			// dispatch key inside the module can only be checked at runtime.
-			if _, ok := parsers[tool.OutputParser.Module]; !ok {
+			switch _, ok := parsers[tool.OutputParser.Module]; {
+			case tool.OutputParser.Module == ReservedParserModule:
+				errs = append(errs, fmt.Sprintf(
+					"tool %q: outputParser module %q is the fallback built into datamitsu, which runs on its own; "+
+						"name a parsers entry",
+					toolName, tool.OutputParser.Module,
+				))
+			case !ok:
 				errs = append(errs, fmt.Sprintf(
 					"tool %q: outputParser references unknown parsers module %q",
 					toolName, tool.OutputParser.Module,

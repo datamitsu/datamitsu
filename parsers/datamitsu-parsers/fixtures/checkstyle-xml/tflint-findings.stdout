@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle>
+  <file name="main.tf">
+    <error source="terraform_deprecated_interpolation" line="3" column="11" severity="warning" message="Interpolation-only expressions are deprecated in Terraform v0.12.14" link="https://github.com/terraform-linters/tflint-ruleset-terraform/blob/v0.15.0/docs/rules/terraform_deprecated_interpolation.md" rule="terraform_deprecated_interpolation"></error>
+    <error source="terraform_required_version" line="1" column="1" severity="warning" message="terraform &#34;required_version&#34; attribute is required" link="https://github.com/terraform-linters/tflint-ruleset-terraform/blob/v0.15.0/docs/rules/terraform_required_version.md" rule="terraform_required_version"></error>
+    <error source="terraform_typed_variables" line="1" column="1" severity="warning" message="`x` variable has no type" link="https://github.com/terraform-linters/tflint-ruleset-terraform/blob/v0.15.0/docs/rules/terraform_typed_variables.md" rule="terraform_typed_variables"></error>
+  </file>
+</checkstyle>

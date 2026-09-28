@@ -111,6 +111,8 @@ func TestConfigRuntime(t *testing.T) {
 		"installTimeoutSeconds":    600,
 		"maxCmdLength":             32000,
 		"maxErrorCmdDisplay":       120,
+		"maxFindingsPerProcess":    10000,
+		"maxParseInputBytes":       8388608,
 		"minimumReleaseAgeMinutes": 10080,
 	}
 	for k, want := range wantNum {

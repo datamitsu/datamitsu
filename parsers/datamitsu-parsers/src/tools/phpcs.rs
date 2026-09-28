@@ -6,9 +6,9 @@
 //! `severity = "type"` (ERROR/WARNING tokens) and `code = "source"`; line/column
 //! use the defaults. We iterate every file's messages (the WASM core has no single
 //! buffer name to key on) and reuse the field mapping via `from_obj`.
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 use crate::severity::{self, Level};
 
 use tinyjson::JsonValue;

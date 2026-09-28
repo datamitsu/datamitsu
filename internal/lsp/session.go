@@ -11,6 +11,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/uievent"
@@ -37,6 +38,7 @@ type session struct {
 	binMgr   *binmanager.BinManager
 	executor *tooling.Executor
 	cache    *cache.Cache // nil when the cache could not be built (formatting still works)
+	parsers  *parsermanager.Manager
 
 	// fixWidenTo is the project's execution.widenTo for fix. The editor policy is
 	// clamped to it: a session default must not out-scope what the repository
@@ -57,8 +59,8 @@ type session struct {
 }
 
 // newSession assembles the server's OWN lightweight planner+binManager+executor
-// for cfg (no parser, no UI), so a format request never parses diagnostics or
-// prints to stdout.
+// for cfg (no UI, and no parser but the embedded fallback), so a format
+// request never prints to stdout.
 //
 // The planner's cwd is the root, NOT the process launch directory: an editor
 // selects which file to format from anywhere in the workspace, so the CLI's
@@ -98,12 +100,15 @@ func newSession(cfg *config.Config, root string) *session {
 	executor := tooling.NewExecutor(root, false, false, binMgr, projectCache)
 	// The CLI names the same modules, so the verdicts both write agree.
 	executor.SetParserModules(cfg.Parsers)
+	parsers := parsermanager.New(nil)
+	executor.SetParser(fallbackParser{mgr: parsers})
 
 	return &session{
 		planner:        planner,
 		binMgr:         binMgr,
 		executor:       executor,
 		cache:          projectCache,
+		parsers:        parsers,
 		fixWidenTo:     cfg.Execution.ResolveWidenTo(config.OpFix, ""),
 		managedConfigs: cfg.ManagedConfigs,
 		tools:          cfg.Tools,
@@ -111,9 +116,12 @@ func newSession(cfg *config.Config, root string) *session {
 }
 
 // close flushes the session's execution cache and stops its debounce timer.
-func (ss *session) close() {
+func (ss *session) close(ctx context.Context) {
 	if ss.cache != nil {
 		ss.cache.Shutdown()
+	}
+	if ss.parsers != nil {
+		_ = ss.parsers.Close(context.WithoutCancel(ctx))
 	}
 }
 
@@ -250,7 +258,7 @@ func (s *Server) load(ctx context.Context, prior inputDigests) error {
 		if old := s.loaded.cache; old != nil && !slices.Contains(s.supersededKeys, old.InvalidationKey()) {
 			s.supersededKeys = append(s.supersededKeys, old.InvalidationKey())
 		}
-		s.loaded.close()
+		s.loaded.close(ctx)
 	}
 	s.loaded = newSession(cfg, s.root)
 	if s.loaded.cache != nil {
@@ -285,8 +293,8 @@ func (s *Server) reportOutsideRoot(path string) {
 		"format %s: outside %s, the repository this language server serves; not formatted", path, s.root))
 }
 
-func (s *Server) closeSession() {
+func (s *Server) closeSession(ctx context.Context) {
 	if s.loaded != nil {
-		s.loaded.close()
+		s.loaded.close(ctx)
 	}
 }

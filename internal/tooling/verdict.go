@@ -11,6 +11,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/parsermanager/embedded"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/toolenv"
 	"github.com/datamitsu/datamitsu/internal/trace"
@@ -50,15 +51,20 @@ var guardNames = []string{
 // The host values an operation inherits (inheritEnv) are in it as the pairs
 // the task captured: they change what the tool does as much as env does, and
 // the invalidation key, which hashes configuration, never sees them.
+//
+// The fallback parser the binary embeds is in it too: a verdict recorded over
+// output it read must not be replayed by a build whose fallback reads it
+// otherwise, and every development build reports the same version.
 func verdictIdentity(task Task, unitDirRel, parserModuleHash string) string {
 	parserKey := ""
 	if task.Tool.OutputParser != nil {
 		parserKey = task.Tool.OutputParser.Parser
 	}
 	inherited := task.inherited.Pairs()
-	parts := make([][]byte, 0, 9+len(task.OpConfig.Args)+len(task.OpConfig.Env)+len(inherited))
+	parts := make([][]byte, 0, 10+len(task.OpConfig.Args)+len(task.OpConfig.Env)+len(inherited))
 	parts = append(parts,
-		[]byte("dmv3"),
+		[]byte("dmv4"),
+		[]byte(embeddedParserKey()),
 		[]byte(task.ToolName),
 		[]byte(task.Operation),
 		[]byte(unitDirRel),
@@ -80,6 +86,9 @@ func verdictIdentity(task Task, unitDirRel, parserModuleHash string) string {
 	}
 	return hashutil.XXH3Multi(parts...)
 }
+
+// embeddedParserKey identifies the fallback parser module the binary embeds.
+var embeddedParserKey = embedded.ContentKey
 
 // envPrefixes are the inherited environment variables that can change a tool's
 // answer. Tools inherit the process environment (toolenv.Apply strips only the

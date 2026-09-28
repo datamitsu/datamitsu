@@ -1,1 +1,12 @@
 *.wasm binary linguist-generated=true
+# The sources of the embedded fallback parser module are fingerprinted byte for
+# byte (internal/parsermanager/embedded/sourcehash): keep them LF everywhere.
+parsers/Cargo.lock text eol=lf
+parsers/Cargo.toml text eol=lf
+parsers/datamitsu-parsers/Cargo.toml text eol=lf
+parsers/datamitsu-parsers/embedded-sources.txt text eol=lf
+parsers/datamitsu-parsers/src/**/*.rs text eol=lf
+parsers/embedded.Dockerfile text eol=lf
+parsers/embedded.lock text eol=lf
+parsers/rust-toolchain.toml text eol=lf
+internal/parsermanager/embedded/fallback.wasm.sources text eol=lf

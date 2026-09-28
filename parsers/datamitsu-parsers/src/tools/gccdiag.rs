@@ -1,22 +1,17 @@
 //! gccdiag — wrapper for any C/C++ compiler that uses correct args from
 //! compile_commands.json. Ported from the none-ls diagnostics/gccdiag builtin.
 //!
-//! The warning option GCC ends a diagnostic with (`[-Wunused-variable]`) is the
-//! rule, and becomes the code.
+//! Its diagnostics are gcc's, on stderr, and the `gcc` format parser reads
+//! them: the warning option GCC ends a diagnostic with (`[-Wunused-variable]`)
+//! is the rule, and becomes the code.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "gccdiag",
 	description: "gccdiag is a wrapper for any C/C++ compiler (gcc, avr-gcc, arm-none-eabi-gcc, etc) that automatically uses the correct compiler arguments for a file in your project by parsing the `compile_commands.json` file at the root of your project.",
 	url: "https://gitlab.com/andrejr/gccdiag",
-	severities: &[
-		Level("fatal error", severity::ERROR),
-		Level("error", severity::ERROR),
-		Level("warning", severity::WARNING),
-		Level("note", severity::INFO),
-	],
+	severities: crate::format::gcc::LEVELS,
 	column_unit: "",
 	category: "",
 	kind: "tool",
@@ -36,57 +31,13 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 
 // from_stderr = true: diagnostics arrive on stderr.
 pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
-	String::from_utf8_lossy(stderr).lines().filter_map(parse_line).collect()
-}
-
-// Pattern: ^([^:]+):(%d+):(%d+):%s+([^:]+):%s+(.*)$
-// fields: filename, row, col, severity, message
-fn parse_line(line: &str) -> Option<RawDiagnostic> {
-	// filename: up to first ':'
-	let (filename, rest) = line.split_once(':')?;
-	// row: digits up to ':'
-	let (row_s, rest) = rest.split_once(':')?;
-	let row: u32 = row_s.parse().ok()?;
-	// col: digits up to ':'
-	let (col_s, rest) = rest.split_once(':')?;
-	let col: u32 = col_s.parse().ok()?;
-	// severity: %s+ then [^:]+ up to ':'
-	let (sev_s, message) = rest.split_once(':')?;
-	let sev_s = sev_s.trim();
-	// message: %s+(.*)
-	let message = message.trim_start();
-	if message.is_empty() {
-		return None;
-	}
-
-	Some(RawDiagnostic {
-		message: message.to_string(),
-		row: Some(row),
-		col: Some(col),
-		severity: severity::of(DESCRIPTOR.severities, sev_s),
-		code: warning_option(message),
-		file: crate::diagnostic::file_field(filename),
-		..RawDiagnostic::default()
-	})
-}
-
-/// The trailing `[-W…]` option, named as the rule it enables: `-Werror=` only
-/// says that the rule was promoted to an error.
-fn warning_option(message: &str) -> Option<String> {
-	let open = message.rfind(" [-W")?;
-	let option = message[open + 2..].strip_suffix(']')?;
-	if option.contains([' ', '[', ']']) {
-		return None;
-	}
-	Some(match option.strip_prefix("-Werror=") {
-		Some(rule) => format!("-W{rule}"),
-		None => option.to_string(),
-	})
+	crate::format::gcc::findings(stderr)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::severity;
 
 	pub(super) const COMPILE: &[u8] = b"a.c: In function \xe2\x80\x98main\xe2\x80\x99:\na.c:3:10: error: \xe2\x80\x98y\xe2\x80\x99 undeclared (first use in this function)\n    3 |   return y;\n      |          ^\na.c:3:10: note: each undeclared identifier is reported only once for each function it appears in\na.c:2:7: warning: unused variable \xe2\x80\x98x\xe2\x80\x99 [-Wunused-variable]\n    2 |   int x;\n      |       ^\n";
 

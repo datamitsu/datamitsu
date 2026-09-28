@@ -3,7 +3,12 @@ package parsermanager
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 // Capabilities is a parser module's self-description, returned by its WASM
@@ -12,17 +17,31 @@ import (
 // none of this is declared in datamitsu config, which carries only a source
 // and a hash.
 type Capabilities struct {
-	SchemaVersion int              `json:"schemaVersion"`
-	Module        string           `json:"module"`
-	Version       string           `json:"version"`
-	Tools         []ToolCapability `json:"tools"`
+	SchemaVersion int    `json:"schemaVersion"`
+	Module        string `json:"module"`
+	Version       string `json:"version"`
+	// ABI is the form of the module's parse answers: 1 for a bare array of
+	// diagnostics, 2 for an object that also says whether the output was
+	// recognized. A module that predates the field answers in form 1.
+	ABI   int              `json:"abi"`
+	Tools []ToolCapability `json:"tools"`
 }
 
-// SchemaSeverityContract is the first descriptor schema whose tools declare
-// their level vocabulary, column unit, category and kind. A module at it or
-// later sets a severity only from a level the tool printed, which is what lets
-// a failOn threshold trust the levels it compares.
-const SchemaSeverityContract = 2
+// Descriptor schemas this core reads.
+const (
+	// SchemaSeverityContract is the first descriptor schema whose tools
+	// declare their level vocabulary, column unit, category and kind. A
+	// module at it or later sets a severity only from a level the tool
+	// printed, which is what lets a failOn threshold trust the levels it
+	// compares.
+	SchemaSeverityContract = 2
+	// SchemaABI2 is the first descriptor schema of a module whose parse
+	// answers say whether they recognized the output (ABI 2).
+	SchemaABI2 = 3
+	// SchemaNewest is the newest schema this core knows. A module that
+	// declares a later one is read as this one, its unknown fields ignored.
+	SchemaNewest = SchemaABI2
+)
 
 // SeverityContract reports whether the module's levels come only from what its
 // tools printed (schema 2 or later).
@@ -48,7 +67,8 @@ type ToolCapability struct {
 	ColumnUnit string `json:"columnUnit,omitempty"`
 	// Category is "security" for a security scanner; empty otherwise.
 	Category string `json:"category,omitempty"`
-	// Kind is what the parser reads: "tool" for one tool's own output format.
+	// Kind is what the parser reads: "tool" for one tool's own output format,
+	// "format" for a standard format any tool may print.
 	Kind string `json:"kind,omitempty"`
 }
 
@@ -66,6 +86,38 @@ type OperationRecipe struct {
 type ParserCatalog struct {
 	Tools     []CatalogTool `json:"tools"`
 	Conflicts []string      `json:"conflicts,omitempty"`
+	// Modules are the distinct modules described, each once, under the first
+	// parsers entry (alphabetically) that declares it.
+	Modules []CatalogModule `json:"modules,omitempty"`
+}
+
+// CatalogModule is one distinct module a catalog described.
+type CatalogModule struct {
+	Parser        string `json:"parser"`
+	Module        string `json:"module"`
+	Version       string `json:"version"`
+	SchemaVersion int    `json:"schemaVersion"`
+}
+
+// Outdated reports a module older than the newest descriptor schema this core
+// reads: it still parses its tools, and cannot say whether it recognized an
+// output.
+func (m CatalogModule) Outdated() bool {
+	return m.SchemaVersion < SchemaNewest
+}
+
+// OutdatedNote says what a module older than the newest descriptor schema
+// leaves out, for the surfaces that report it: config show, devtools parsers
+// list, and a verbose run.
+func (m CatalogModule) OutdatedNote() string {
+	return fmt.Sprintf("parser module %q (%s %s) is descriptor schema %d, older than %d: it still parses its tools, "+
+		"but cannot say whether it recognized an output and has no format parsers; the fallback built into "+
+		"datamitsu reads what it answers with nothing on a failure. A newer module release carries both",
+		m.Parser, m.Module, m.Version, m.SchemaVersion, SchemaNewest)
+}
+
+func moduleOf(parser string, caps Capabilities) CatalogModule {
+	return CatalogModule{Parser: parser, Module: caps.Module, Version: caps.Version, SchemaVersion: caps.SchemaVersion}
 }
 
 // CatalogTool is one entry of a ParserCatalog: a tool plus which configured
@@ -108,7 +160,10 @@ func DescribeLocal(ctx context.Context, wasm []byte) (Capabilities, error) {
 // CatalogFromCapabilities flattens a single module's capabilities into a catalog,
 // attributing every tool to the given parser name. Used by the --wasm path.
 func CatalogFromCapabilities(parserName string, caps Capabilities) *ParserCatalog {
-	cat := &ParserCatalog{Tools: make([]CatalogTool, 0, len(caps.Tools))}
+	cat := &ParserCatalog{
+		Tools:   make([]CatalogTool, 0, len(caps.Tools)),
+		Modules: []CatalogModule{moduleOf(parserName, caps)},
+	}
 	for _, t := range caps.Tools {
 		cat.Tools = append(cat.Tools, CatalogTool{
 			ToolCapability: t,
@@ -136,6 +191,7 @@ func (m *Manager) ListCapabilities(ctx context.Context) (*ParserCatalog, error) 
 	capsByKey := make(map[string]Capabilities) // content key -> describe result (once)
 	seen := make(map[string]CatalogTool)       // tool name -> winning entry
 	var conflicts []string
+	var modules []CatalogModule
 
 	for _, name := range names {
 		p := m.parsers[name]
@@ -148,6 +204,7 @@ func (m *Manager) ListCapabilities(ctx context.Context) (*ParserCatalog, error) 
 			}
 			caps = c
 			capsByKey[key] = c
+			modules = append(modules, moduleOf(name, c))
 		}
 		for _, t := range caps.Tools {
 			entry := CatalogTool{
@@ -172,12 +229,41 @@ func (m *Manager) ListCapabilities(ctx context.Context) (*ParserCatalog, error) 
 		}
 	}
 
-	cat := &ParserCatalog{Tools: make([]CatalogTool, 0, len(seen)), Conflicts: conflicts}
+	cat := &ParserCatalog{Tools: make([]CatalogTool, 0, len(seen)), Conflicts: conflicts, Modules: modules}
 	for _, e := range seen {
 		cat.Tools = append(cat.Tools, e)
 	}
 	sortCatalog(cat)
 	return cat, nil
+}
+
+// DescribeStored describes the declared modules already in the store, whose
+// bytes still match their declared hash, without fetching anything: a
+// configuration read offline says what it can about the modules it pins.
+func DescribeStored(ctx context.Context, parsers config.MapOfParsers) []CatalogModule {
+	names := make([]string, 0, len(parsers))
+	for name := range parsers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var out []CatalogModule
+	for _, name := range names {
+		p := parsers[name]
+		path := filepath.Join(moduleDir(name, p), wasmFileName)
+		if binmanager.VerifyFileHashPublic(path, p.Hash, binmanager.BinHashTypeSHA256) != nil {
+			continue
+		}
+		wasm, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		caps, err := DescribeLocal(ctx, wasm)
+		if err != nil {
+			continue
+		}
+		out = append(out, moduleOf(name, caps))
+	}
+	return out
 }
 
 // sortCatalog orders tools by name for a stable, byte-reproducible listing.

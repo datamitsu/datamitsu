@@ -7,6 +7,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 
 	"github.com/spf13/cobra"
@@ -35,7 +36,9 @@ var configShowCmd = &cobra.Command{
 		}
 
 		fmt.Println(string(jsonData))
-		return nil
+		// Only modules already in the store: showing a configuration fetches
+		// nothing.
+		return writeOutdatedNotes(cmd.ErrOrStderr(), parsermanager.DescribeStored(cmd.Context(), cfg.Parsers))
 	},
 }
 

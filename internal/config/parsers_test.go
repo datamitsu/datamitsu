@@ -75,6 +75,24 @@ func TestValidateParsers_Valid(t *testing.T) {
 	}
 }
 
+// TestTheEmbeddedModuleNameIsReserved: the fallback built into datamitsu is
+// served under "embedded", so no parsers entry may take the name and no tool
+// may name it as its module.
+func TestTheEmbeddedModuleNameIsReserved(t *testing.T) {
+	err := ValidateParsers(MapOfParsers{
+		ReservedParserModule: {URL: "https://example.com/x.wasm", Hash: validParserHash()},
+	})
+	if err == nil || !strings.Contains(err.Error(), `parser "embedded": the name is reserved`) {
+		t.Errorf("ValidateParsers(embedded) = %v, want the reserved-name error", err)
+	}
+	err = ValidateTools(MapOfTools{
+		"ruff": {Name: "ruff", OutputParser: &OutputParser{Module: ReservedParserModule, Parser: "sarif"}},
+	}, MapOfParsers{"core": {URL: "https://example.com/x.wasm", Hash: validParserHash()}})
+	if err == nil || !strings.Contains(err.Error(), `outputParser module "embedded" is the fallback built into datamitsu`) {
+		t.Errorf("ValidateTools(module embedded) = %v, want the reserved-module error", err)
+	}
+}
+
 func TestValidateParsers_NoSource(t *testing.T) {
 	parsers := MapOfParsers{
 		"echo": {Hash: validParserHash()},

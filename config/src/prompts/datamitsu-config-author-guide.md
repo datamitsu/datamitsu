@@ -84,6 +84,35 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - Output no declared parser recognized is read by the
+  fallback built into datamitsu, which tries the standard formats
+  (`datamitsu llms guides/architecture/parsers`). A tool without an
+  `outputParser` that prints SARIF, Checkstyle, compiler lines and the like now
+  has findings: they block its cached passes, and an `error` one fails a run the
+  tool itself passed. Declare the format key for such a tool
+  (`datamitsu devtools parsers sniff <captured output>` names it), or its own
+  parser where the module has one; a declared parser that recognizes nothing is
+  now `parse-failed` — for a JSON or XML parser, also when the tool exited 0
+  but printed no document of it, so make sure the tool prints the format its
+  parser reads. Every cache is cold once.
+- **after v0.3.1** - The parser module name `embedded` is reserved for the
+  fallback built into datamitsu: a `parsers` entry named `embedded`, or an
+  `outputParser.module` naming it, fails the load
+  (`datamitsu llms reference/configuration-api`). Rename such an entry and the
+  tools that name it.
+- **after v0.3.1** - `outputParser.parser` accepts a format key — `sarif`,
+  `codeclimate`, `eslint-json`, `json`, `checkstyle-xml`, `junit-xml`,
+  `github-annotations`, `azure-logissue`, `msvc`, `gcc` — for a tool without a
+  parser of its own that prints a standard format on request
+  (`datamitsu llms reference/configuration-api`). Wire such a tool by passing
+  its format flag and naming the format —
+  `ruff check --output-format sarif` as `sarif`,
+  `shellcheck -f checkstyle` as `checkstyle-xml`,
+  `typos --format brief` as `gcc` — and keep a tool's own parser where the
+  module has one, since its format is richer. The keys come
+  with the parser module released with this core (descriptor schema 3): bump
+  the `parsers` pin and check it with `datamitsu devtools parsers list`, which
+  then lists the format keys.
 - **after v0.3.1** - `facts().ci` says which CI runs the job: `vendor`
   (`github`, `gitlab`, `azure`, `teamcity`, … or `generic`), `isCI`, `isPR`,
   `sha`, `ref`, `baseRef` and `prNumber`

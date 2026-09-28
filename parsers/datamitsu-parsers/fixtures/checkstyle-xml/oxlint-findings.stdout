@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><checkstyle version="4.3"><file name="/work/a.js"><error line="1" column="1" severity="error" message="Unexpected var, use let or const instead." source="eslint(no-var)" /><error line="2" column="1" severity="error" message="`debugger` statement is not allowed" source="eslint(no-debugger)" /></file></checkstyle>

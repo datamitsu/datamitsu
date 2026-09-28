@@ -1,0 +1,24 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✗ cc  <DUR> (1 failed)
+  ┌─ cc [repository] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; echo 'a.c:1:2: error: y undeclared'; exit 1 cc
+  │  Exit code: 1
+  │  Duration:  <DUR>
+  │
+  │  a.c:1:2 error y undeclared
+  └<RULE>
+
+┗━ 1 tools · 1 runs · done in <DUR> · 1 failed <RULE>
+
+===STDERR===
+WARN declared parser "hadolint" of module "core" did not recognize the output of cc; the fallback parsed it as gcc
+error: operation failed

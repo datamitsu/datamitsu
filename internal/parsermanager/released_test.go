@@ -106,7 +106,8 @@ func TestReleasedV1ParsesHadolint(t *testing.T) {
 {"file":"Dockerfile","line":7,"column":2,"level":"info","code":"DL3059","message":"Multiple consecutive RUN instructions"},
 {"file":"-","line":9,"column":1,"level":"style","code":"DL3015","message":"Avoid additional packages"},
 {"file":"-","line":2,"column":1,"level":"unheard-of","code":"DL9999","message":"Unknown level"}]`)
-	diags, err := rt.Parse(context.Background(), "hadolint", out, nil, 1)
+	resp, err := rt.Parse(context.Background(), "hadolint", out, nil, 1)
+	diags := resp.Diagnostics
 	if err != nil {
 		t.Fatalf("Parse(hadolint): %v", err)
 	}
@@ -153,7 +154,8 @@ func TestReleasedV1ParsesHadolint(t *testing.T) {
 
 func TestReleasedV1UnknownToolYieldsNothing(t *testing.T) {
 	rt := newReleasedV1Runtime(t)
-	diags, err := rt.Parse(context.Background(), "not-a-real-parser", []byte("x"), []byte("y"), 1)
+	resp, err := rt.Parse(context.Background(), "not-a-real-parser", []byte("x"), []byte("y"), 1)
+	diags := resp.Diagnostics
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
@@ -185,7 +187,8 @@ func TestReleasedV1PoolsAndResets(t *testing.T) {
 	}
 	tracingOn(t)
 	for i, input := range []string{"first", "second", "third"} {
-		diags, err := m.ParseOutput(ctx, "released", "echo", []byte(input), nil, int32(i))
+		resp, err := m.ParseOutput(ctx, "released", "echo", []byte(input), nil, int32(i))
+		diags := resp.Diagnostics
 		if err != nil {
 			t.Fatalf("ParseOutput(%s): %v", input, err)
 		}

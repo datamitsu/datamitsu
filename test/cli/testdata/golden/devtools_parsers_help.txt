@@ -4,8 +4,10 @@ Each module self-describes (via its `describe` export) which tools it can parse,
 how to invoke each, and its build-injected version. Results are deduplicated across
 every configured parser — a module declared by N tools is described once.
 
-Use --json for machine-readable output (to drive configs or build pipelines), or
---wasm <path> to describe a local .wasm file without any config or network access.
+Use --json for machine-readable output (to drive configs or build pipelines),
+--wasm <path> to describe a local .wasm file without any config or network access,
+or --embedded for the fallback module built into this binary. sniff shows which
+standard format that fallback reads in a captured output.
 
 Usage:
   datamitsu devtools parsers [command]
@@ -15,6 +17,7 @@ Available Commands:
   list        List every tool the configured parser modules can parse (deduplicated)
   prefetch    Download + verify parser modules into the store (for OCI-bundle builds / airgap)
   run         Run a parser on a tool's raw output (from stdin) and print the diagnostics
+  sniff       Show which standard format the built-in fallback reads in a captured tool output
 
 Flags:
   -h, --help   help for parsers

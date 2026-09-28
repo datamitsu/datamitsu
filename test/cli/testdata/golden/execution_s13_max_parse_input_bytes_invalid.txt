@@ -1,0 +1,5 @@
+exit code: 2
+===STDOUT===
+
+===STDERR===
+error: invalid DATAMITSU_MAX_PARSE_INPUT_BYTES value: "8MiB" (must be a positive integer)

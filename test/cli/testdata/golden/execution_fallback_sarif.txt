@@ -1,0 +1,23 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✗ ruff  <DUR> (1 failed)
+  ┌─ ruff [repository] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; printf '%s\n' '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"ruff"}},"results":[{"ruleId":"F401","level":"error","message":{"text":"os imported but unused"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"a.py"},"region":{"startLine":1,"startColumn":8}}}]}]}]}'; exit 1 ruff
+  │  Exit code: 1
+  │  Duration:  <DUR>
+  │
+  │  a.py:1:8 error os imported but unused [F401]
+  └<RULE>
+
+┗━ 1 tools · 1 runs · done in <DUR> · 1 failed <RULE>
+
+===STDERR===
+error: operation failed

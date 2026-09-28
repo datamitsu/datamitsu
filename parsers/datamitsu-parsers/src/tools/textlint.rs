@@ -9,9 +9,9 @@
 //! `1 -> warning`, `2 -> error`, `3 -> info`. textlint messages carry 1-based
 //! `line` and `column`, `ruleId` and `message`; the end span is not read, so it
 //! stays unset.
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 use crate::severity::{self, Level};
 use tinyjson::JsonValue;
 
