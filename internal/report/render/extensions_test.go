@@ -193,4 +193,9 @@ func TestDescribeAndNotes(t *testing.T) {
 	if notes := Notes(run, []Spec{{Format: "json", Path: "run.json"}}); len(notes) != 0 {
 		t.Errorf("the own JSON says it itself, yet Notes = %q", notes)
 	}
+	run.Operations[0].Tools = run.Operations[0].Tools[1:]
+	notes = Notes(run, []Spec{{Format: "sarif", Path: "r.sarif"}})
+	if len(notes) != 2 || notes[1] != "report: sarif holds no tool run, so an upload of it changes no alert" {
+		t.Errorf("Notes of a SARIF file without a run = %q", notes)
+	}
 }

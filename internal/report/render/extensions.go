@@ -110,8 +110,8 @@ func Describe(run *report.Run, specs []Spec) {
 
 // Notes are the warnings a run's reports call for, one line each: a tool
 // whose completeness is not established — named once, with the reports that
-// leave it out and those that flag it — a tool a format cannot hold, and the
-// findings a format could not carry.
+// leave it out and those that flag it — a tool a format cannot hold, the
+// findings a format could not carry, and a format that leaves every tool out.
 func Notes(run *report.Run, specs []Spec) []string {
 	type key struct{ op, tool string }
 	type note struct {
@@ -160,6 +160,10 @@ func Notes(run *report.Run, specs []Spec) []string {
 			if line := omittedFindings(spec.Format, companion.Omitted); line != "" {
 				findings = append(findings, line)
 			}
+		}
+		if c, capped := r.(Capped); capped && c.WrittenTools(run, spec.Options) == 0 {
+			findings = append(findings, fmt.Sprintf("report: %s holds no tool run, "+
+				"so an upload of it changes no alert", spec.Format))
 		}
 	}
 	keys := make([]key, 0, len(notes))

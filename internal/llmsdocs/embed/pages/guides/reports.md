@@ -273,7 +273,7 @@ jobs:
   stderr, one line per tool, and the own JSON records it in the report's
   `exports` entry (`omitted`). For the same reason a narrowed run is written
   rather than refused: every tool in it is incomplete, so its file holds no run
-  and changes no alert. A tool with more than 25 000 results is left out too:
+  and changes no alert, and a `WARN` line says the file holds none. A tool with more than 25 000 results is left out too:
   GitHub would keep the 5 000 most severe and close the alerts of the rest.
 - **Twenty tools per file.** GitHub reads at most twenty runs from one file. A
   path that ends in `/` names a directory: `datamitsu-1.sarif`,

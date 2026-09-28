@@ -136,7 +136,8 @@ func TestReportSARIF(t *testing.T) {
 		if _, doc := e.sarif("r.sarif"); len(doc.Runs) != 0 {
 			t.Errorf("runs = %v, want none for a narrowed run", doc.tools())
 		}
-		if !strings.Contains(res.Stderr, "lint tool hadolint is incomplete (narrowed-selection): left out of sarif") {
+		if !strings.Contains(res.Stderr, "lint tool hadolint is incomplete (narrowed-selection): left out of sarif") ||
+			!strings.Contains(res.Stderr, "WARN report: sarif holds no tool run, so an upload of it changes no alert") {
 			t.Errorf("stderr:\n%s", res.Stderr)
 		}
 	})
