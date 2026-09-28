@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/report"
+	"github.com/datamitsu/datamitsu/internal/report/render/codequality"
 	"github.com/datamitsu/datamitsu/internal/report/render/common"
 	"github.com/datamitsu/datamitsu/internal/report/render/junit"
 	"github.com/datamitsu/datamitsu/internal/report/render/sarif"
@@ -22,6 +23,7 @@ var (
 	_ Omitter       = sarif.Renderer{}
 	_ OptionChecker = sarif.Renderer{}
 	_ Companioned   = junit.Renderer{}
+	_ Companioned   = codequality.Renderer{}
 )
 
 // companionRenderer stands in for a format without a place for completeness.

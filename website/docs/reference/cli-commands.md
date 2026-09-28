@@ -569,7 +569,8 @@ that `config reconcile` runs after writing its files.
 has ended, whether or not its tools failed — the run that fails is the one a
 pipeline needs to read. The flag is repeatable, one per format: `json`, the
 run's own document; `markdown`, the same run for a person; `sarif`, the run for
-code scanning; and `junit`, the run as test results. The [Reports guide](../guides/reports.md) explains what a
+code scanning; `junit`, the run as test results; and `codequality`, GitLab's
+Code Quality report. The [Reports guide](../guides/reports.md) explains what a
 report holds and how far to trust it; [`report render`](#report-render) writes
 one again, offline, from a run's own JSON.
 
@@ -695,10 +696,21 @@ directory: a `<failure type="exit">` listing its findings, or an
 that did not run are `<skipped>` cases. See
 [Test results](../guides/reports.md#test-results-junit).
 
+`codequality` writes GitLab's Code Quality array: one issue per finding of the
+`lint` operation (fix for a `fix` run), with `check_name` `<source>/<rule>`,
+the finding's fingerprint, `severity` `major` for an error, `minor` for a
+warning and `info` below, `categories` `Security` for a `security` tool and
+`Style` otherwise, and a repository-relative `location.path` with `positions`
+in characters, or `lines` where the columns could not be converted. A finding
+without a file or outside the repository cannot be placed and is left out and
+counted. A tool that is not complete is kept. See
+[GitLab Code Quality](../guides/reports.md#gitlab-code-quality).
+
 A format that lists findings but has no place to say how complete it is —
-`junit` — gets a completeness companion beside its file,
+`junit`, `codequality` — gets a completeness companion beside its file,
 `<path>.completeness.json` (`datamitsu.completeness/1`): whether the report is
-complete, the run-level reasons, each tool with its own, and the run's exports.
+complete, the run-level reasons, each tool with its own, the findings the
+format could not carry (`omitted`), and the run's exports.
 A job checks it before it publishes the report. Each incomplete tool also gets
 one `WARN` line on stderr, and the report's entry in `exports` names the
 companion (`companion`). A report on stdout has none.
@@ -1014,12 +1026,12 @@ offline:
 datamitsu report render --input <run.json> --format <format> [--output <path>|-]
 ```
 
-| Flag                | Description                                                                                             |
-| ------------------- | ------------------------------------------------------------------------------------------------------- |
-| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)                                |
-| `--format <format>` | The format to write: `json`, `markdown`, `sarif` or `junit`; a format's options follow a `?` (required) |
-| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report`                     |
-| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                                    |
+| Flag                | Description                                                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)                                               |
+| `--format <format>` | The format to write: `json`, `markdown`, `sarif`, `junit` or `codequality`; a format's options follow a `?` (required) |
+| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report`                                    |
+| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                                                   |
 
 The renderers and the completeness rule are the run's own: a document of a
 narrowed run is refused (exit 2) for a format that lists findings unless

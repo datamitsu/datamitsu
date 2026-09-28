@@ -20,8 +20,8 @@ datamitsu lint --report json=out/run.json
 everything the record holds; `markdown` writes the same run for a person — the
 tools, the findings the terminal would show and what the run left out; `sarif`
 writes it for GitHub code scanning ([Code scanning](#code-scanning)); `junit`
-writes it as test results for the CI systems that read them
-([Other CI systems](#other-ci-systems)). The flags, the variable twins and the
+and `codequality` write it for the CI systems that read test results and code
+quality reports ([Other CI systems](#other-ci-systems)). The flags, the variable twins and the
 exit codes are in the [CLI reference](../reference/cli-commands.md#reports).
 
 ## What a report holds
@@ -134,8 +134,9 @@ Two rules keep a report from claiming more than it holds:
 A run can still end up incomplete — a tool cancelled, an output its parser
 could not read, a tool without a parser — and a format has to say so. The own
 JSON and `markdown` say it themselves, and `sarif` leaves such a tool out. A
-format whose shape has no place for the claim — `junit` — is written in full
-and gets a **completeness companion** beside it, `<path>.completeness.json`:
+format whose shape has no place for the claim — `junit`, `codequality` — is
+written in full and gets a **completeness companion** beside it,
+`<path>.completeness.json`:
 
 ```json
 {
@@ -156,7 +157,8 @@ not cover everything, and a service that compares one run with the last reads a
 finding that is missing as fixed. A job checks the companion before it
 publishes: `jq -e .complete <path>.completeness.json`. `complete` is true when
 every tool the report holds is complete and the run left nothing out; `tools`
-names each one, `incomplete` the run-level reasons. Every tool that is not
+names each one, `incomplete` the run-level reasons, and `omitted` counts the
+findings the format could not carry, by tool and reason. Every tool that is not
 complete also gets one `WARN` line on stderr naming the reports that leave it
 out or flag it, and the report's entry in the own JSON's `exports` names its
 companion. A report written to stdout has no companion, and its warning says so.
@@ -377,6 +379,46 @@ block. Azure Pipelines: a `PublishTestResults@2` task with
 Engine as a JUnit report. Bitbucket Pipelines: write it under
 `test-results/`, which the pipeline scans on its own
 (`--report junit=test-results/datamitsu.xml`).
+
+### GitLab Code Quality
+
+`--report codequality=<path>` writes GitLab's Code Quality report, the array
+GitLab reads from `artifacts:reports:codequality`, merges across a pipeline's
+jobs and compares with the target branch's, to show in a merge request what it
+brings in and what it fixes:
+
+```yaml
+lint:
+  script:
+    - datamitsu lint --fail-fast=false --report codequality=gl-code-quality.json --report junit=junit.xml
+  after_script:
+    # An incomplete report would show every finding it misses as fixed.
+    - jq -e .complete gl-code-quality.json.completeness.json > /dev/null || rm -f gl-code-quality.json
+  artifacts:
+    when: always
+    reports:
+      codequality: gl-code-quality.json
+      junit: junit.xml
+    paths:
+      - "*.completeness.json"
+```
+
+- One issue per finding of the `lint` operation (`check` writes its lint, a
+  `fix` run its fix), every level: `check_name` is `<source>/<rule>`,
+  `description` the message, `fingerprint` the finding's
+  [fingerprint](#fingerprints), unique in the report. `severity` is `major`
+  for an error, `minor` for a warning and `info` for info and hints; datamitsu
+  never writes `critical` or `blocker`, which no core level means.
+  `categories` is `Security` for a `security` tool and `Style` otherwise.
+- `location.path` is relative to the repository root. `positions` carries the
+  columns in characters where the report could convert them, `lines` the rows
+  where it could not. A finding without a file, and one outside the
+  repository, cannot be placed and is left out; the companion counts them
+  (`omitted`) and one `WARN` line says so.
+- GitLab compares the merged report of the merge request's pipeline with the
+  target branch's, so a finding a report misses reads as fixed. A tool that is
+  not complete is kept, with the findings it has, and the companion says it is
+  not; the `after_script` above keeps GitLab from comparing such a report.
 
 ## Fingerprints
 

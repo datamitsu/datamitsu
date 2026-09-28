@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/report"
+	"github.com/datamitsu/datamitsu/internal/report/render/codequality"
 	"github.com/datamitsu/datamitsu/internal/report/render/json"
 	"github.com/datamitsu/datamitsu/internal/report/render/junit"
 	"github.com/datamitsu/datamitsu/internal/report/render/markdown"
@@ -33,7 +34,7 @@ type Renderer interface {
 	OmitsIncompleteTools() bool
 }
 
-var renderers = []Renderer{json.Renderer{}, markdown.Renderer{}, sarif.Renderer{}, junit.Renderer{}}
+var renderers = []Renderer{json.Renderer{}, markdown.Renderer{}, sarif.Renderer{}, junit.Renderer{}, codequality.Renderer{}}
 
 // Lookup finds a format by the name --report spells it with.
 func Lookup(format string) (Renderer, bool) {
