@@ -363,7 +363,9 @@ inside a document on stdout; empty output is not read at all. One rule applies t
 `github-annotations`, `azure-logissue`) and to no structured one: a line naming a
 path that is not a file on disk — relative to the process's working directory, or
 absolute — is not a match, so prose that happens to look like `path:1:2:` is not a
-finding. When no line survives, the fallback recognized nothing.
+finding. When no line of the format the sniffer picked survives, the line formats
+it would have tried after that one read the output in turn, and the first with a
+line that survives is the one; when none has, the fallback recognized nothing.
 
 `datamitsu devtools parsers sniff <file>` shows what the fallback makes of a
 captured output, before a tool's format flag is declared as its format key.

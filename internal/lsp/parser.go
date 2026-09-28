@@ -24,8 +24,18 @@ type fallbackParser struct {
 	mgr *parsermanager.Manager
 }
 
-func (fallbackParser) Parse(context.Context, string, string, string, []byte, []byte, int32) (tooling.ParseAnswer, error) {
-	return tooling.ParseAnswer{}, &tooling.ParserUnavailableError{Err: errNoDeclaredParser}
+// Parse runs a format key of the embedded module, which the executor asks for
+// when the sniffer's line format named no file; a declared module is
+// unavailable here.
+func (p fallbackParser) Parse(ctx context.Context, module, parser, toolName string, stdout, stderr []byte, exitCode int32) (tooling.ParseAnswer, error) {
+	if module != tooling.EmbeddedParserModule {
+		return tooling.ParseAnswer{}, &tooling.ParserUnavailableError{Err: errNoDeclaredParser}
+	}
+	resp, err := p.mgr.ParseOutput(ctx, module, parser, stdout, stderr, exitCode)
+	if err != nil {
+		return tooling.ParseAnswer{}, fmt.Errorf("fallback parser: %w", err)
+	}
+	return answer(resp, toolName, exitCode), nil
 }
 
 func (p fallbackParser) Fallback(ctx context.Context, toolName string, stdout, stderr []byte, exitCode int32) (tooling.ParseAnswer, error) {
@@ -33,13 +43,17 @@ func (p fallbackParser) Fallback(ctx context.Context, toolName string, stdout, s
 	if err != nil {
 		return tooling.ParseAnswer{}, fmt.Errorf("fallback parser: %w", err)
 	}
+	return answer(resp, toolName, exitCode), nil
+}
+
+func answer(resp parsermanager.Response, toolName string, exitCode int32) tooling.ParseAnswer {
 	return tooling.ParseAnswer{
 		Diagnostics:  diagnostic.ResolveAll(resp.Diagnostics, toolName, exitCode != 0),
 		Recognized:   resp.Recognized,
 		Format:       resp.Format,
 		FormatParser: true,
 		Partial:      resp.Partial,
-	}, nil
+	}
 }
 
 func (fallbackParser) FellBack(string, config.OutputParser, string) {}

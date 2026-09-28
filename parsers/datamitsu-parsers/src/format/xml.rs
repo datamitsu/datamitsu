@@ -181,13 +181,17 @@ fn attributes(s: &str) -> Option<Vec<(&str, String)>> {
 /// `s` with its entity and character references replaced. A reference it does
 /// not know stays as written.
 pub(crate) fn decode(s: &str) -> String {
+	// The longest reference, `&#x10FFFF;`, ends within this many bytes; looking
+	// further for its `;` would read the rest of the text for every `&`.
+	const LONGEST: usize = 10;
 	let mut out = String::with_capacity(s.len());
 	let mut rest = s;
 	while let Some(amp) = rest.find('&') {
 		out.push_str(&rest[..amp]);
 		let after = &rest[amp..];
-		match after
-			.find(';')
+		match after.as_bytes()[..after.len().min(LONGEST)]
+			.iter()
+			.position(|&b| b == b';')
 			.and_then(|semi| Some((reference(&after[1..semi])?, semi)))
 		{
 			Some((c, semi)) => {
@@ -333,6 +337,13 @@ mod tests {
 		assert_eq!(decode("&lt;a&gt; &amp; &quot;b&quot; &apos;c&apos;"), "<a> & \"b\" 'c'");
 		assert_eq!(decode("&#65;&#x42;&#X43;"), "ABC");
 		assert_eq!(decode("a & b &nbsp; &#xZZ; &"), "a & b &nbsp; &#xZZ; &");
+		assert_eq!(decode("&#x10FFFF;&#1114111;"), "\u{10FFFF}\u{10FFFF}");
+	}
+
+	#[test]
+	fn ampersands_without_a_reference_cost_one_pass() {
+		let s = "&".repeat(1 << 20);
+		assert_eq!(decode(&s), s);
 	}
 
 	#[test]

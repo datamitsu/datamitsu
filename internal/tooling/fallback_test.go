@@ -124,6 +124,18 @@ func TestTheParsersReadAnOutputInTurn(t *testing.T) {
 			want: ExtractionParseFailed, fallbackRuns: 1,
 		},
 		{
+			name: "a line format that named no file leaves the later ones their turn",
+			parser: &fakeParser{
+				fallback: sniffedAs("github-annotations", diagnostic.Diagnostic{Message: "noise", File: "/no/such/source.xyz"}),
+				formats: map[string]ParseAnswer{
+					"gcc": {Diagnostics: []diagnostic.Diagnostic{finding}, Recognized: true, Format: "gcc"},
+				},
+			},
+			stdout: "::warning file=/no/such/source.xyz,line=1::noise\nreal.c:1:1: error: m",
+			want:   ExtractionParsedFindings, provenance: "fallback:gcc", module: EmbeddedParserModule, findings: 1,
+			fallbackRuns: 1,
+		},
+		{
 			name: "a structured format keeps a finding on a path that is not there",
 			parser: &fakeParser{fallback: sniffedAs("sarif",
 				diagnostic.Diagnostic{Message: "m", File: "gone.py"})}, stdout: "{}",
@@ -220,5 +232,20 @@ func TestNoPassOverOutputTheFallbackCouldNotRead(t *testing.T) {
 		if got := passesOf(proc, []string{"a.go"}); len(got) != 0 {
 			t.Errorf("%s: %s records passes %v", name, proc.Extraction, got)
 		}
+	}
+}
+
+// TestTheLaterLineFormatsRunInTheSniffersOrder: when the sniffer's line format
+// named no file, the core asks the ones after it, in order, until one does.
+func TestTheLaterLineFormatsRunInTheSniffersOrder(t *testing.T) {
+	fp := &fakeParser{fallback: sniffedAs("azure-logissue", diagnostic.Diagnostic{Message: "m", File: "/nowhere"})}
+	e := &Executor{parser: fp}
+	var proc ProcessResult
+	e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), t.TempDir(), []byte("x"), nil, 0, false)
+	if want := []string{"msvc", "gcc"}; !slices.Equal(fp.formatsAsked, want) {
+		t.Errorf("asked %q, want %q", fp.formatsAsked, want)
+	}
+	if proc.Extraction != ExtractionNone {
+		t.Errorf("extraction %q, want none: nothing named a file", proc.Extraction)
 	}
 }

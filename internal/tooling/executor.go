@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -993,9 +994,9 @@ const (
 const EmbeddedParserModule = config.ReservedParserModule
 
 // lineFormats are the formats the fallback recognizes by a matching line, not
-// by an envelope: prose can match them, so a line whose path is not a file on
-// disk does not count.
-var lineFormats = map[string]bool{"gcc": true, "msvc": true, "github-annotations": true, "azure-logissue": true}
+// by an envelope, in the order the sniffer tries them: prose can match them,
+// so a line whose path is not a file on disk does not count.
+var lineFormats = []string{"github-annotations", "azure-logissue", "msvc", "gcc"}
 
 // extract runs, in turn, the parsers that may read one output. A declared
 // parser that recognized it decides. Otherwise — no parser declared, one that
@@ -1099,8 +1100,22 @@ func (e *Executor) fallback(ctx context.Context, task Task, files []string, work
 		return partial, false, nil
 	}
 	diags := located(answer.Diagnostics, files, workingDir)
-	if lineFormats[answer.Format] {
+	if at := slices.Index(lineFormats, answer.Format); at >= 0 {
 		diags = onDisk(diags)
+		// A format whose every line named no file matched nothing: the line
+		// formats the sniffer would have tried after it get their turn.
+		for _, format := range lineFormats[at+1:] {
+			if len(diags) > 0 {
+				break
+			}
+			later, err := e.parser.Parse(ctx, EmbeddedParserModule, format, task.ToolName, stdout, stderr, code)
+			if err != nil {
+				log.Debug("the fallback parser failed", zap.String("tool", task.ToolName), zap.String("format", format), zap.Error(err))
+				return sniffed{}, false, err
+			}
+			diags = onDisk(located(later.Diagnostics, files, workingDir))
+			answer.Format = format
+		}
 		if len(diags) == 0 {
 			return partial, false, nil
 		}

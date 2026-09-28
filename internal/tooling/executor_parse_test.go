@@ -31,12 +31,18 @@ type fakeParser struct {
 
 	fallback                    *ParseAnswer
 	fallbackFails               error
+	formats                     map[string]ParseAnswer
+	formatsAsked                []string
 	fallbackStdout, fallbackErr []byte
 	fallbackCalls               int
 	fellBack, readNothing       []string
 }
 
 func (f *fakeParser) Parse(_ context.Context, module, parser, toolName string, stdout, stderr []byte, exitCode int32) (ParseAnswer, error) {
+	if module == EmbeddedParserModule {
+		f.formatsAsked = append(f.formatsAsked, parser)
+		return f.formats[parser], nil
+	}
 	f.gotModule, f.gotParser, f.gotTool, f.gotStdout, f.gotStderr, f.gotExit = module, parser, toolName, stdout, stderr, exitCode
 	return ParseAnswer{
 		Diagnostics: f.diags, Recognized: !f.unrecognized, Format: parser, FormatParser: f.format, Partial: f.partial,

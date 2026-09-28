@@ -91,6 +91,21 @@ func TestACutOffDocumentIsNotACleanRun(t *testing.T) {
 	}
 }
 
+// TestALineFormatNamingNoFileLeavesTheNextItsTurn: a workflow command about a
+// file that does not exist does not stop the fallback from reading the
+// compiler line after it, which names one that does.
+func TestALineFormatNamingNoFileLeavesTheNextItsTurn(t *testing.T) {
+	script := settle + clitest.RecordRun + "; echo '::warning file=/no/such/source.xyz,line=1::noise'; " +
+		"echo 'a.py:1:1: error: real finding'"
+	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, clitest.ShellTool("mixed", script, clitest.ToolOpSpec{}))
+
+	res := e.run("", nil, "lint", "--report", "json=run.json")
+	e.wantExit(res, 1)
+	if doc := e.read("run.json"); !strings.Contains(doc, `"provenance": "fallback:gcc"`) {
+		t.Errorf("the compiler line was not read:\n%s\n%s", doc, res.Stdout)
+	}
+}
+
 // TestFallbackStandsInForADeclaredParser: a declared parser that does not
 // recognize the output hands it to the fallback, and the run says so once.
 func TestFallbackStandsInForADeclaredParser(t *testing.T) {
