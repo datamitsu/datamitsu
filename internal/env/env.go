@@ -470,6 +470,12 @@ func Annotations() string {
 	return os.Getenv(annotations.Name)
 }
 
+// Output returns DATAMITSU_OUTPUT exactly as set, "" when unset. The command
+// layer accepts human and agent and exits 2 on anything else.
+func Output() string {
+	return os.Getenv(output.Name)
+}
+
 // ParseBool reads the boolean spelling datamitsu's variables accept: true or
 // 1, false or 0, case-insensitive and trimmed.
 func ParseBool(raw string) (value, ok bool) {

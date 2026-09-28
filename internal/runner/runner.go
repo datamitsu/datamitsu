@@ -435,13 +435,16 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// — instead of leaving them invisible.
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
 		sc.recordOp(opSummary{op: operation, skipped: len(plan.Skipped)})
+		if sc.agentOutput() {
+			sc.printAgentOperation(agentOperation{op: operation, skipped: plan.Skipped, note: sc.footerNote(operation)})
+		}
 		if len(plan.Skipped) > 0 {
 			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth, sc.footerNote(operation))
 			sc.recordSkips(plan.Skipped)
 			sc.recordCoverage(plan)
 			return nil
 		}
-		if !ui.Quiet() {
+		if !ui.Muted() {
 			msg := "ℹ️  No applicable tools found"
 			if len(projectTypes) == 0 {
 				msg = "⚠️  No project types detected"
@@ -518,7 +521,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	for i, pt := range projectTypes {
 		shortTypes[i] = shortProjectType(pt)
 	}
-	if !ui.Quiet() {
+	if !ui.Muted() {
 		fmt.Println()
 		fmt.Println(phaseTop(string(operation)))
 		if line := sc.targetLine(); line != "" {
@@ -723,8 +726,11 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		ensureSpan.EndWith(trace.A("apps", len(plan.GetAppNames())))
 		if err != nil {
 			finalizeProgress()
-			if !ui.Quiet() {
+			if !ui.Muted() {
 				fmt.Println(ui.RuleLine("┗", "setup failed", clr.Red("setup failed")))
+			}
+			if sc.agentOutput() {
+				sc.printAgentLine(string(operation) + ": setup failed")
 			}
 			ui.Emit(uievent.Event{
 				Type:   uievent.TypeDone,
@@ -811,7 +817,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		DurationMs: totalWallClockTime,
 	})
 	opDuration = totalWallClockTime
-	sc.recordOp(opSummary{
+	summary := opSummary{
 		op:         operation,
 		tools:      len(toolGroups),
 		runs:       totalRuns,
@@ -820,7 +826,14 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		cancelled:  len(stopped),
 		partial:    partialTasks(results),
 		durationMs: totalWallClockTime,
-	})
+	}
+	sc.recordOp(summary)
+	if sc.agentOutput() {
+		sc.printAgentOperation(agentOperation{
+			op: operation, groups: toolGroups, results: results, stopped: stopped, skipped: plan.Skipped,
+			cause: cause, summary: summary, note: sc.footerNote(operation),
+		})
+	}
 
 	sc.recordSkips(plan.Skipped)
 	sc.recordCoverage(plan)
@@ -1008,7 +1021,7 @@ func relativeToRoot(paths []string, root string) []string {
 // printSkippedTools renders faint "┃ ⊘ name   skipped (reason)" body lines,
 // aligned to nameWidth like the per-tool result rows. No-op for an empty list.
 func printSkippedTools(skipped []tooling.SkippedTool, nameWidth int) {
-	if ui.Quiet() {
+	if ui.Muted() {
 		return
 	}
 	for _, s := range skipped {
@@ -1022,7 +1035,7 @@ func printSkippedTools(skipped []tooling.SkippedTool, nameWidth int) {
 // renderSkipOnlyBlock prints a minimal operation block containing only skipped
 // tools, used when planning produced skips but nothing runnable.
 func renderSkipOnlyBlock(operation, targetLine string, skipped []tooling.SkippedTool, nameWidth int, note string) {
-	if ui.Quiet() {
+	if ui.Muted() {
 		return
 	}
 	fmt.Println()
@@ -1105,7 +1118,7 @@ func runSequential(
 		if _, usage := errors.AsType[exitcode.UsageError](err); command != "" && explainMode == "" && !usage {
 			elapsedMs := time.Since(started).Milliseconds()
 			if len(operations) > 1 {
-				(&sharedContext{}).printRunClosing(command, operations, elapsedMs)
+				(&sharedContext{opts: opts}).printRunClosing(command, operations, elapsedMs)
 			}
 			omitReports(opts.Reports, err)
 			(&sharedContext{}).emitRunDone(command, operations, elapsedMs, false)
@@ -1115,12 +1128,17 @@ func runSequential(
 	defer func() {
 		// Timing reports are human output (bare fmt). Suppress in JSON-L mode so
 		// DATAMITSU_TIMINGS doesn't leak a non-JSON block onto the clean streams.
-		if !ui.Quiet() {
+		if !ui.Muted() {
 			sc.timings.Print()
 			sc.planner.GetTimings().Print()
 		}
 		sc.shutdown()
 	}()
+
+	if sc.agentOutput() {
+		ui.SetMuted(true)
+		defer ui.SetMuted(false)
+	}
 
 	// Branded banner once at the top (skipped in explain/json so that output
 	// stays clean/machine-readable, and when running as a continuation).
@@ -1279,6 +1297,9 @@ type Options struct {
 	// Annotations is the workflow-annotation mode asked for: auto, github or
 	// off; empty prints none.
 	Annotations string
+	// Output is how the run shows its results: human, or agent for a program
+	// that reads them; empty is human.
+	Output string
 }
 
 // validate rejects unknown flag values. Rank() reads an unvalidated string
@@ -1454,7 +1475,7 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 // detailed timings (scope, avg, min/max) appended only when `detailed` is set
 // (DATAMITSU_TIMINGS). Failed tools show a red ✗ and a bordered detail box.
 func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detailed bool) {
-	if ui.Quiet() {
+	if ui.Muted() {
 		return
 	}
 	fmt.Println(clr.Faint("┃"))
@@ -1811,7 +1832,7 @@ func phaseTop(operation string) string {
 // operation (tool/run counts, wall-clock time, failures, cancelled tasks, skips,
 // cache hit rate and an optional note).
 func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, cacheHits, cacheMisses, skipped, cancelled int, note string) {
-	if ui.Quiet() {
+	if ui.Muted() {
 		return
 	}
 	totalTools := len(toolGroups)

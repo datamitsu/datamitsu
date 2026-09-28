@@ -1485,6 +1485,21 @@ func TestAnnotations(t *testing.T) {
 	}
 }
 
+func TestOutput(t *testing.T) {
+	t.Setenv(output.Name, os.Getenv(output.Name))
+
+	_ = os.Unsetenv(output.Name)
+	if got := Output(); got != "" {
+		t.Errorf("Output() unset = %q, want empty", got)
+	}
+	for _, raw := range []string{"human", "agent", "Agent "} {
+		t.Setenv(output.Name, raw)
+		if got := Output(); got != raw {
+			t.Errorf("Output() = %q, want %q returned raw", got, raw)
+		}
+	}
+}
+
 func TestParseBool(t *testing.T) {
 	for _, tt := range []struct {
 		raw       string

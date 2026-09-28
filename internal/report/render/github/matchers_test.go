@@ -124,6 +124,34 @@ func TestMatchersAgainstFramedOutput(t *testing.T) {
 		}
 	})
 
+	// --output agent prints one record per finding at the left margin, in the
+	// compilers' path:row:col form an agent reads, and frames only the tail
+	// of a tool's output. Residual: go's pattern reads the record of a
+	// finding in a .go file — with its real path, so GitHub annotates the
+	// line twice.
+	t.Run("agent records", func(t *testing.T) {
+		goRecord := "internal/x/a.go:12:3: error golangci-lint(typecheck): undefined: y"
+		records := []string{
+			"src/a.ts:3:7: error tsc(TS2322): Type 'string' is not assignable to type 'number'.",
+			"src/a.js:3:7: error eslint(no-unused-vars): 'x' is assigned a value but never used.",
+			"tsc exited 2 without parsable findings",
+			framed("src/a.ts(3,7): error TS2322: x"),
+			framed("  3:7  error  'x' is unused  no-unused-vars"),
+			"lint: 2 tools · 2 runs · 1 failed · 2 errors 0 warnings · 0 hidden",
+		}
+		for _, name := range []string{"tsc.json", "eslint-stylish.json"} {
+			if got := loadMatcher(t, name).match(append([]string{goRecord}, records...)); len(got) != 0 {
+				t.Errorf("%s matched an agent record: %q", name, got)
+			}
+		}
+		if got := loadMatcher(t, "go.json").match([]string{goRecord}); len(got) != 1 || got[0] != "internal/x/a.go" {
+			t.Errorf("go on a record of a .go file = %q, want the documented match", got)
+		}
+		if got := loadMatcher(t, "go.json").match(records); len(got) != 0 {
+			t.Errorf("go matched the record of another file: %q", got)
+		}
+	})
+
 	// Residual: eslint-compact is not anchored at the path either, and no
 	// wrapper tool prints its format; the frame lands in the file group.
 	t.Run("eslint-compact", func(t *testing.T) {

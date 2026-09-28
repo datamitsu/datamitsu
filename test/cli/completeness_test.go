@@ -23,7 +23,7 @@ var testedLeafCommands = map[string]string{
 	"inspect":                      "TestInspectHelp / TestInspectExport / TestInspectInvalidFlags",
 	"cache clear":                  "TestCacheClearDryRun",
 	"cache path project":           "TestCachePathProject",
-	"check":                        "TestExplainPlanGolden / TestCheckFixLintHelpGolden / TestExecutionCheckStopsAfterFix / TestExecutionFixCache",
+	"check":                        "TestExplainPlanGolden / TestCheckFixLintHelpGolden / TestExecutionCheckStopsAfterFix / TestExecutionFixCache / TestAgentOutput",
 	"config chain-hash":            "TestConfigChainHashTable",
 	"config lockfile":              "TestConfigLockfile",
 	"config reconcile":             "TestConfigReconcileRequiresApplyToWrite",

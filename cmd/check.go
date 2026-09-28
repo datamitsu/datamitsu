@@ -65,6 +65,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	if err := applyAnnotations(cmd, checkReports, checkExplain, &opts); err != nil {
 		return err
 	}
+	if err := applyOutput(cmd, checkReports, &opts); err != nil {
+		return err
+	}
 	err := runner.RunSequential(
 		[]config.OperationType{config.OpFix, config.OpLint},
 		args, checkExplain, checkFileScoped, checkSelectedTools, checkFailOnSkip,
@@ -75,7 +78,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		},
 	)
 	if err == nil && checkExplain == "" {
-		sponsor.New(env.GetCachePath()).MaybePrint(false)
+		sponsor.New(env.GetCachePath()).MaybePrint(opts.Output == runner.OutputAgent)
 	}
 	return err
 }

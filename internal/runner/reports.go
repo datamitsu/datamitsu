@@ -30,24 +30,27 @@ func now() time.Time {
 }
 
 // startReport begins recording the run when something reads what it found: a
-// report to write, a JSON-L stream to carry diagnostic events, or annotations
-// to print.
+// report to write, a JSON-L stream to carry diagnostic events, annotations or
+// a step summary to print. An agent's output records nothing, but is masked
+// as a report is.
 func (sc *sharedContext) startReport() {
-	if len(sc.opts.Reports) == 0 && !ui.Quiet() && sc.annotations.mode != AnnotationsGitHub && !sc.wantsStepSummary() {
+	records := len(sc.opts.Reports) > 0 || ui.Quiet() || sc.annotations.mode == AnnotationsGitHub || sc.wantsStepSummary()
+	if !records && !sc.agentOutput() {
+		return
+	}
+	sc.secrets = sc.collectSecrets()
+	sc.executor.SetEnvObserver(func(environ []string) { sc.secrets.Add(environ) })
+	if !records {
 		return
 	}
 	opts := report.Options{
-		Root:   sc.rootPath,
-		Tools:  sc.cfg.Tools,
-		Apps:   sc.cfg.Apps,
-		FailOn: config.Severity(sc.opts.FailOn),
+		Root:    sc.rootPath,
+		Tools:   sc.cfg.Tools,
+		Apps:    sc.cfg.Apps,
+		FailOn:  config.Severity(sc.opts.FailOn),
+		Secrets: sc.secrets,
+		Parsers: sc.describedParser(),
 	}
-	if sc.parserMgr != nil {
-		opts.Parsers = sc.parserMgr.DescribedParser
-	}
-	sc.secrets = sc.collectSecrets()
-	opts.Secrets = sc.secrets
-	sc.executor.SetEnvObserver(func(environ []string) { sc.secrets.Add(environ) })
 	// The stream is masked as a report is, every event alike: a task's op_id
 	// names its directory, and the events of one task must still correlate.
 	ui.SetEventMask(func(e *uievent.Event) { report.MaskAll(e, sc.secrets.Values()) })

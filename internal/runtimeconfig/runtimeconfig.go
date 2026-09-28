@@ -68,6 +68,7 @@ type Effective struct {
 	NoOCI                    bool   `json:"noOci"`
 	OCIRegistry              string `json:"ociRegistry"`
 	Offline                  bool   `json:"offline"`
+	Output                   string `json:"output"`
 	Report                   string `json:"report"`
 	StartupTimings           bool   `json:"startupTimings"`
 	Timings                  bool   `json:"timings"`
@@ -110,6 +111,7 @@ func Compute() Effective {
 		NoOCI:                    env.NoOCI(),
 		OCIRegistry:              env.GetOCIRegistry(),
 		Offline:                  env.Offline(),
+		Output:                   env.Output(),
 		Report:                   env.Report(),
 		StartupTimings:           env.IsStartupTimingsEnabled(),
 		Timings:                  env.IsTimingsEnabled(),

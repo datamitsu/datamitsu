@@ -71,6 +71,10 @@ func (sc *sharedContext) printRunClosing(command string, operations []config.Ope
 	parts = append(parts, "setup "+ui.FormatDurationShort(max(setup, 0)))
 
 	rest := " · " + strings.Join(parts[1:], " · ")
+	if sc.opts.Output == OutputAgent {
+		fmt.Println(parts[0] + rest)
+		return
+	}
 	fmt.Println()
 	fmt.Println(ui.RuleLine("┗", parts[0]+rest, clr.Bold(parts[0])+rest))
 }

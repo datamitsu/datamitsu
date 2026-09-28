@@ -319,9 +319,9 @@ func (a *Accumulator) newToolRun(op, name string) *ToolRun {
 		FailOn:      string(config.EffectiveFailOn(toolOp, a.opts.FailOn)),
 		Invocations: []Invocation{},
 	}
+	tr.mayHoldSecrets = WithholdsOutput(tool, a.opts.Parsers)
 	if p := tool.OutputParser; p != nil {
 		tr.Parser = &ParserRef{Module: p.Module, Parser: p.Parser}
-		tr.mayHoldSecrets = true
 		if a.opts.Parsers != nil {
 			if facts, ok := a.opts.Parsers(p.Module, p.Parser); ok {
 				tr.Parser.Version = facts.Version
@@ -329,12 +329,26 @@ func (a *Accumulator) newToolRun(op, name string) *ToolRun {
 				tr.Parser.ColumnUnit = facts.Tool.ColumnUnit
 				tr.GateActive = facts.Contract
 				tr.Category = facts.Tool.Category
-				// A module that does not list the key says nothing about it.
-				tr.mayHoldSecrets = facts.Tool.Name == "" || facts.Tool.Category == categorySecurity
 			}
 		}
 	}
 	return tr
+}
+
+// WithholdsOutput reports a tool whose output no output of a run may carry:
+// one its parser module puts in the security category, whose output may be
+// the secret it found, and one with a parser the run never described — its
+// module did not load, or does not list the key — which may be one.
+func WithholdsOutput(tool config.Tool, parsers ParserFacts) bool {
+	p := tool.OutputParser
+	if p == nil {
+		return false
+	}
+	if parsers == nil {
+		return true
+	}
+	facts, ok := parsers(p.Module, p.Parser)
+	return !ok || facts.Tool.Name == "" || facts.Tool.Category == categorySecurity
 }
 
 func (a *Accumulator) appRef(name string) AppRef {
@@ -408,7 +422,7 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 		if f, ok := syntheticFinding(task.ToolName, proc, tr.Category); ok {
 			inv.Findings = append(inv.Findings, f)
 		}
-		inv.OutputTail = outputTail(proc, tr.mayHoldSecrets, a.opts.Secrets.Values())
+		inv.OutputTail = OutputTail(proc, tr.mayHoldSecrets, a.opts.Secrets.Values())
 		out = append(out, inv)
 	}
 	// A process given no path answers for every file no other process and no

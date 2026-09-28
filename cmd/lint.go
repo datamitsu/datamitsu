@@ -65,6 +65,9 @@ func runLint(cmd *cobra.Command, args []string) error {
 	if err := applyAnnotations(cmd, lintReports, lintExplain, &opts); err != nil {
 		return err
 	}
+	if err := applyOutput(cmd, lintReports, &opts); err != nil {
+		return err
+	}
 	err := runner.Run(config.OpLint, args, lintExplain, lintFileScoped, lintSelectedTools, lintFailOnSkip,
 		opts,
 		func() (*config.Config, string, error) {
@@ -72,7 +75,7 @@ func runLint(cmd *cobra.Command, args []string) error {
 			return cfg, "", err
 		})
 	if err == nil && lintExplain == "" {
-		sponsor.New(env.GetCachePath()).MaybePrint(false)
+		sponsor.New(env.GetCachePath()).MaybePrint(opts.Output == runner.OutputAgent)
 	}
 	return err
 }

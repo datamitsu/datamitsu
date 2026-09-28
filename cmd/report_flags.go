@@ -10,6 +10,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/report/render"
 	"github.com/datamitsu/datamitsu/internal/runner"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+	"github.com/datamitsu/datamitsu/internal/ui"
 
 	"github.com/spf13/cobra"
 )
@@ -25,6 +26,8 @@ const (
 		"(at or above failOn, the default) or diagnostics=all (also via DATAMITSU_EVENTS)"
 	annotationsUsage = "Print the run's findings as workflow annotations once it ends: auto (github in a GitHub Actions job, " +
 		"unless stdout carries a document or --log-format jsonl is on), github or off (also via DATAMITSU_ANNOTATIONS)"
+	outputUsage = "How the run shows its results: human (frames, colour, progress) or agent (one line per finding " +
+		"the terminal would show, one summary line per operation; also via DATAMITSU_OUTPUT)"
 )
 
 // Values of --events and DATAMITSU_EVENTS.
@@ -39,6 +42,7 @@ type reportFlags struct {
 	allowPartial bool
 	events       string
 	annotations  string
+	output       string
 }
 
 func addReportFlags(cmd *cobra.Command, flags *reportFlags) {
@@ -47,6 +51,48 @@ func addReportFlags(cmd *cobra.Command, flags *reportFlags) {
 	cmd.Flags().BoolVar(&flags.allowPartial, "allow-partial", false, allowPartialUsage)
 	cmd.Flags().StringVar(&flags.events, "events", "", eventsUsage)
 	cmd.Flags().StringVar(&flags.annotations, "annotations", runner.AnnotationsAuto, annotationsUsage)
+	cmd.Flags().StringVar(&flags.output, "output", runner.OutputHuman, outputUsage)
+}
+
+// applyOutput resolves how the run shows its results from --output, or
+// DATAMITSU_OUTPUT when the flag is not given; both are checked either way.
+// agent prints its records on stdout, so it is refused where stdout is not
+// free: beside a JSON-L event stream, which keeps stdout clean, and beside a
+// report written to "-". It runs after applyReports, which may have made
+// stderr a stream.
+func applyOutput(cmd *cobra.Command, flags reportFlags, opts *runner.Options) error {
+	eff, err := runtimeconfig.Get()
+	if err != nil {
+		eff = runtimeconfig.Compute()
+	}
+	mode := runner.OutputHuman
+	for _, v := range []struct {
+		raw, source string
+		use         bool
+	}{
+		{eff.Output, "DATAMITSU_OUTPUT", eff.Output != ""},
+		{flags.output, "--output", cmd.Flags().Changed("output")},
+	} {
+		if !v.use {
+			continue
+		}
+		if !slices.Contains(runner.OutputModes(), v.raw) {
+			return exitcode.UsageErrorf("invalid %s value: %q (must be %s)", v.source, v.raw, strings.Join(runner.OutputModes(), " or "))
+		}
+		mode = v.raw
+	}
+	if mode == runner.OutputAgent {
+		switch {
+		case slices.ContainsFunc(opts.Reports, render.Spec.Stdout):
+			return exitcode.UsageErrorf("--output agent cannot be combined with a report written to stdout (-): " +
+				"its records would land in the document")
+		case ui.Quiet():
+			return exitcode.UsageErrorf("--output agent cannot be combined with --log-format jsonl: " +
+				"the event stream keeps stdout clean")
+		}
+	}
+	opts.Output = mode
+	return nil
 }
 
 // applyAnnotations resolves the annotation mode asked for from --annotations,

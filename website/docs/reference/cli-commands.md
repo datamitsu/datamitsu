@@ -170,6 +170,7 @@ datamitsu check [files...]
 | `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 | `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
+| `--output <mode>`            | How the run shows its results: `human` (the default) or `agent`, one line per finding for a program that reads the run (see [Agent output](#agent-output))                                                      |
 
 **Examples:**
 
@@ -371,6 +372,54 @@ and the files it never reached are named under its failure:
 
 The line names up to three files, relative to the repository root, and counts
 the rest.
+
+### Agent output
+
+`--output agent` (or `DATAMITSU_OUTPUT=agent`) prints a run for a program that
+reads it, such as a coding agent: no banner, frame, colour or progress, and one
+line per record on stdout.
+
+```console
+$ datamitsu check --fail-fast=false --output agent
+fix: 3 tools · 4 runs · 0 failed · 0 errors 0 warnings · 0 hidden
+src/a.ts:3:7: error eslint(no-unused-vars): 'x' is assigned a value but never used.
+src/b.ts:9:1: error eslint(no-var): Unexpected var, use let or const instead.
+tsc [packages/api] exited 2 without parsable findings
+  │  error TS5083: Cannot read file 'tsconfig.base.json'.
+knip: skipped (opt-in)
+lint: 4 tools · 5 runs · 2 failed · 2 errors 0 warnings · 5 hidden
+check · done in 9.40s · fix 1.10s · lint 7.90s · setup 400ms
+```
+
+- **A finding** is `path:row:col: <level> <source>(<code>): <message>`, the path
+  relative to the repository root, the column as the tool counted it and left
+  out when there is none. A line break in the message is written as the two
+  characters `\n`, so a finding is always one line. The findings are the ones
+  the terminal would show, chosen by the same rule (see
+  [Findings in the terminal](#findings-in-the-terminal)), and `--no-parse`
+  changes only the human frames.
+- **A tool that failed without findings** is one line —
+  `<tool> [<dir>] exited <code> without parsable findings`, after the file for a
+  tool that runs once per file — followed by the last 20 lines of what it
+  printed, each behind `  │  `, masked as a report is. A tool whose parser
+  module puts it in the `security` category gets
+  `failed (exit <code>); output withheld for a security tool` and no output.
+- **What did not run** — a task stopped or never started, the files a tool that
+  runs once per file left unchecked, a tool the planner skipped — is one line
+  each, as the human block words it.
+- **Each operation ends** with
+  `<op>: <tools> tools · <runs> runs · <failed> failed · <E> errors <W> warnings · <H> hidden`,
+  `<H>` counting the findings below the threshold, and `check` with its closing
+  wall-clock line. The exit code is the run's.
+
+Fail-fast stays the default: add `--fail-fast=false` to see every failure at
+once. `--output agent` prints on stdout, so it cannot be combined with
+`--log-format jsonl`, which keeps stdout clean, or with a report written to
+stdout (`-`); either exits 2, as does any other value. In a GitHub Actions job
+the records print inside the
+[stop-commands region](#github-annotations) like any other tool text; a record
+of a finding in a `.go` file is in the form `actions/setup-go`'s problem matcher
+reads, so a job that registers it annotates such a finding twice.
 
 ### Run events
 
@@ -822,6 +871,7 @@ datamitsu fix [files...]
 | `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 | `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
+| `--output <mode>`            | How the run shows its results: `human` (the default) or `agent`, one line per finding for a program that reads the run (see [Agent output](#agent-output))                                                      |
 
 **Examples:**
 
@@ -858,6 +908,7 @@ datamitsu lint [files...]
 | `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 | `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
+| `--output <mode>`            | How the run shows its results: `human` (the default) or `agent`, one line per finding for a program that reads the run (see [Agent output](#agent-output))                                                      |
 
 **Examples:**
 
@@ -2302,6 +2353,7 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_ALLOW_PARTIAL`         | Write a report that lists findings for a narrowed run (`true`/`1`) instead of refusing it (twin of `--allow-partial`)                          | `false`                                             |
 | `DATAMITSU_EVENTS`                | Which findings the JSON-L stream of `fix`, `lint` and `check` emits: `diagnostics=reported` or `diagnostics=all` (twin of `--events`)          | `diagnostics=reported`                              |
 | `DATAMITSU_ANNOTATIONS`           | Whether `fix`, `lint` and `check` print GitHub workflow annotations: `auto`, `github` or `off` (twin of `--annotations`)                       | `auto`                                              |
+| `DATAMITSU_OUTPUT`                | How `fix`, `lint` and `check` show their results: `human` or `agent` (twin of `--output`)                                                      | `human`                                             |
 | `DATAMITSU_CONFIG_CACHE`          | Serve evaluated config chains from disk (`0`/`false`/`off`/`no` disables it)                                                                   | `1`                                                 |
 | `DATAMITSU_LSP_FORMAT_WIDEN_TO`   | How far editor format-on-save may widen: `target` or `unit`                                                                                    | `unit`                                              |
 | `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` | Format-on-save watchdog in ms: no further tool group starts once it has elapsed (`0` = disabled)                                               | `15000`                                             |
@@ -2341,7 +2393,7 @@ config chain the farm was baked from, joined with the platform's list separator,
 and is informational in the same way. All three are excluded from the farm's
 staleness fingerprint, so exporting them cannot make a farm look stale.
 `DATAMITSU_FAIL_FAST`, `DATAMITSU_FAIL_ON`, `DATAMITSU_REPORT`,
-`DATAMITSU_ALLOW_PARTIAL`, `DATAMITSU_EVENTS` and `DATAMITSU_ANNOTATIONS` are excluded too: they change how far one run goes and what it prints or writes, never what a
+`DATAMITSU_ALLOW_PARTIAL`, `DATAMITSU_EVENTS`, `DATAMITSU_ANNOTATIONS` and `DATAMITSU_OUTPUT` are excluded too: they change how far one run goes and what it prints or writes, never what a
 farm contains, so setting one for one command does not re-bake the farm.
 
 `DATAMITSU_FORCE_GIT_SUBPROCESS` applies to the config loader's memoized git-root
