@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/clitest"
+	"github.com/datamitsu/datamitsu/internal/report"
 )
 
 // This file freezes --report sarif: which tools a SARIF file holds, under
@@ -143,6 +144,28 @@ func TestReportSARIF(t *testing.T) {
 		}
 		if doc := e.read("run.json"); !strings.Contains(doc, `"failed-without-findings"`) {
 			t.Errorf("the own JSON does not say why crasher is incomplete:\n%s", doc)
+		}
+
+		// A document an earlier build wrote called crasher complete; read
+		// back, it is not.
+		var run report.Run
+		if err := json.Unmarshal([]byte(e.read("run.json")), &run); err != nil {
+			t.Fatal(err)
+		}
+		for i := range run.Operations[0].Tools {
+			if tr := &run.Operations[0].Tools[i]; tr.Name == "crasher" {
+				tr.Complete, tr.Incomplete = true, []report.Reason{}
+			}
+		}
+		old, err := json.MarshalIndent(&run, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.p.WriteFile("old.json", string(old))
+		rendered := e.run("", nil, "report", "render", "--input", "old.json", "--format", "sarif")
+		e.wantExit(rendered, 0)
+		if strings.Contains(rendered.Stdout, `"name": "crasher"`) {
+			t.Errorf("an earlier build's document wrote crasher's run:\n%s", rendered.Stdout)
 		}
 	})
 

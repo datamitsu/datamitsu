@@ -1055,7 +1055,9 @@ datamitsu report render --input <run.json> --format <format> [--output <path>|-]
 The renderers and the completeness rule are the run's own: a document of a
 narrowed run is refused (exit 2) for a format that lists findings unless
 `--allow-partial`, and a document without its completeness fields is read as
-incomplete, never as complete. The document holds everything a renderer needs,
+incomplete, never as complete — as is a tool an earlier build called complete
+although one of its processes failed while its parser found nothing
+(`failed-without-findings`). The document holds everything a renderer needs,
 so rendering works on another machine and after the checkout changed; `json`
 reproduces the document byte for byte, and every other format the file the run
 wrote, its completeness companion included, which is written beside

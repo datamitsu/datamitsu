@@ -59,6 +59,29 @@ func failedWithoutFindings(inv Invocation) bool {
 	return inv.Extraction == string(tooling.ExtractionParsedClean) && inv.ExitCode != nil && *inv.ExitCode != 0
 }
 
+// Revise applies to a document read back the completeness rules an earlier
+// build did not know, from the invocation facts the document records: a tool
+// with a process that failed while its parser found nothing was complete
+// before failed-without-findings existed. A document this build wrote is left
+// as it is.
+func Revise(run *Run) {
+	for i := range run.Operations {
+		for j := range run.Operations[i].Tools {
+			tr := &run.Operations[i].Tools[j]
+			if slices.Contains(tr.Incomplete, ReasonFailedWithoutFindings) ||
+				!slices.ContainsFunc(tr.Invocations, func(inv Invocation) bool {
+					return inv.State == string(tooling.ProcessRan) && failedWithoutFindings(inv)
+				}) {
+				continue
+			}
+			tr.Incomplete = append(tr.Incomplete, ReasonFailedWithoutFindings)
+			slices.Sort(tr.Incomplete)
+			tr.Complete = false
+			run.Complete = false
+		}
+	}
+}
+
 func extractionReason(e tooling.Extraction) (Reason, bool) {
 	switch e {
 	case tooling.ExtractionParsedClean, tooling.ExtractionParsedFindings:

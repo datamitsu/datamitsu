@@ -114,6 +114,7 @@ func readReport(path string) (*report.Run, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	report.Revise(run)
 	return run, nil
 }
 

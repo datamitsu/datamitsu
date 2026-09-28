@@ -1,6 +1,7 @@
 package report
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -72,6 +73,26 @@ func TestToolReasons(t *testing.T) {
 				t.Errorf("toolReasons() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// A document an earlier build wrote called a tool complete although one of
+// its processes failed while its parser found nothing; read back, it is not.
+func TestRevise(t *testing.T) {
+	two := 2
+	run := &Run{Complete: true, Operations: []Operation{{Name: "lint", Ran: true, Tools: []ToolRun{
+		{Name: "a", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{State: "ran", Extraction: "parsed-clean", ExitCode: &two}}},
+		{Name: "b", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{State: "ran", Extraction: "parsed-findings", ExitCode: &two}}},
+	}}}}
+	Revise(run)
+	a, b := run.Operations[0].Tools[0], run.Operations[0].Tools[1]
+	if run.Complete || a.Complete || !reflect.DeepEqual(a.Incomplete, []Reason{ReasonFailedWithoutFindings}) || !b.Complete {
+		t.Errorf("revised run = %+v", run)
+	}
+	before := fmt.Sprint(run)
+	Revise(run)
+	if fmt.Sprint(run) != before {
+		t.Error("revising twice changed the run again")
 	}
 }
 
