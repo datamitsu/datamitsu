@@ -1257,8 +1257,8 @@ func TestExecutionParserProblems(t *testing.T) {
 	res := e.run("", nil, "lint")
 	e.wantExit(res, 0)
 	for _, want := range []string{
-		`parser module "core" has no parser "no-such-parser", so the output of alpha is not parsed and its lint passes are not cached`,
-		`parser module "missing" could not be loaded, so 1 tool(s) that use it ran without parsing and their lint passes are not cached`,
+		`parser module "core" has no parser "no-such-parser", so the output of alpha is not parsed by it and its lint passes are not cached`,
+		`parser module "missing" could not be loaded, so 1 tool(s) that use it ran without it and their lint passes are not cached`,
 	} {
 		if n := strings.Count(res.Stderr, want); n != 1 {
 			t.Errorf("stderr carries %q %d times, want once:\n%s", want, n, res.Stderr)
@@ -1283,7 +1283,7 @@ func TestExecutionParserProblems(t *testing.T) {
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, fixer, perFile("beta", "hadolint", "missing")))
 	checked := e.run("", nil, "check")
 	e.wantExit(checked, 0)
-	want := `parser module "missing" could not be loaded, so 2 tool(s) that use it ran without parsing`
+	want := `parser module "missing" could not be loaded, so 2 tool(s) that use it ran without it`
 	if n := strings.Count(checked.Stderr, want); n != 1 {
 		t.Errorf("check's stderr carries %q %d times, want once:\n%s", want, n, checked.Stderr)
 	}

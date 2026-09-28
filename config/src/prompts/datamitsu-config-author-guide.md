@@ -84,6 +84,15 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - Output no declared parser recognized is read by the
+  fallback built into datamitsu, which tries the standard formats
+  (`datamitsu llms guides/architecture/parsers`). A tool without an
+  `outputParser` that prints SARIF, Checkstyle, compiler lines and the like now
+  has findings: they block its cached passes, and an `error` one fails a run the
+  tool itself passed. Declare the format key for such a tool
+  (`datamitsu devtools parsers sniff <captured output>` names it), or its own
+  parser where the module has one; a declared parser that recognizes nothing is
+  now `parse-failed`. Every cache is cold once.
 - **after v0.3.1** - The parser module name `embedded` is reserved for the
   fallback built into datamitsu: a `parsers` entry named `embedded`, or an
   `outputParser.module` naming it, fails the load

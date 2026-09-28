@@ -422,7 +422,7 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 		inv.FailureKind = failureKind(proc)
 		inv.Duration = Millis(proc.DurationMs)
 		inv.Extraction = string(proc.Extraction)
-		inv.Provenance = provenanceOf(proc.Extraction)
+		inv.Provenance = provenanceOf(proc)
 		for _, file := range proc.Files {
 			if fr, ok := byFile[file]; ok && !claimed[file] {
 				claimed[file] = true
@@ -432,6 +432,7 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 		shown := ShownOf(proc)
 		for i, d := range proc.Diagnostics {
 			f := a.finding(task.ToolName, d, tr)
+			f.Provenance = inv.Provenance
 			f.Shown = shown[i]
 			inv.Findings = append(inv.Findings, f)
 		}
@@ -702,8 +703,15 @@ func failureKind(proc tooling.ProcessResult) string {
 	return ""
 }
 
-func provenanceOf(e tooling.Extraction) string {
-	if e == tooling.ExtractionParsedClean || e == tooling.ExtractionParsedFindings || e == tooling.ExtractionTruncated {
+// provenanceOf is what read a process's findings. A process whose output was
+// read by a parser that did not answer for it (parser-unavailable, with the
+// fallback's findings) names what did.
+func provenanceOf(proc tooling.ProcessResult) string {
+	if proc.Provenance != "" {
+		return proc.Provenance
+	}
+	if e := proc.Extraction; e == tooling.ExtractionParsedClean || e == tooling.ExtractionParsedFindings ||
+		e == tooling.ExtractionTruncated {
 		return provenanceParser
 	}
 	return provenanceNone

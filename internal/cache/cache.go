@@ -629,7 +629,10 @@ func (c *Cache) Clear() error {
 //   - d20v1: a fix pass follows the lint rule too: the failOn gate judges what
 //     a fixer leaves behind, so a fix pass recorded over a finding below one
 //     threshold would hide it from a stricter one.
-const cacheSemantics = "d20v1"
+//   - d8v1: the output of a tool without a parser that recognized it is read
+//     by the fallback built into the binary, and its findings block a pass as
+//     any others do.
+const cacheSemantics = "d8v1"
 
 // withoutThresholds returns cfg with no operation's failOn. A pass is recorded
 // only for output with no finding of any level, which holds at every

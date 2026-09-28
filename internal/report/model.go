@@ -99,8 +99,10 @@ const (
 	ReasonParseFailed       Reason = "parse-failed"
 	ReasonTruncated         Reason = "truncated"
 	ReasonUnparsedCacheHit  Reason = "unparsed-cache-hit"
-	// ReasonFailedWithoutFindings: a process exited non-zero and its parser
-	// found nothing in what it printed, so the output was not recognized.
+	// ReasonFailedWithoutFindings: a process exited non-zero and the parser
+	// that recognized its output found nothing in it: the failure is not in
+	// what it printed. (An earlier build also recorded here an empty answer of
+	// a module that could not say whether it recognized the output.)
 	ReasonFailedWithoutFindings Reason = "failed-without-findings"
 
 	ReasonToolsFilter      Reason = "tools-filter"
@@ -221,7 +223,9 @@ type Invocation struct {
 	// Extraction is what became of the output: parsed-clean,
 	// parsed-findings, parser-unavailable, parse-failed, truncated or none.
 	Extraction string `json:"extraction"`
-	// Provenance is where the findings came from: parser or none.
+	// Provenance is what read the findings: parser (a tool's own parser),
+	// format (a declared format parser), fallback:<format> (the fallback
+	// built into datamitsu, and the format it recognized), or none.
 	Provenance string       `json:"provenance"`
 	Files      []FileResult `json:"files"`
 	Findings   []Finding    `json:"findings"`

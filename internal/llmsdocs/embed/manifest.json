@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "e4061f650b7dc8a8e582fbafdb74cf26",
+  "pageSetHash": "d98fa57b92b2159d26fba5bf36537e27",
   "pages": [
     {
       "slug": "about",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 28386,
-      "contentHash": "6126735a6fbaccb01b18540499321756"
+      "bytes": 28914,
+      "contentHash": "f64b610e0d4213a91768355ded697efc"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 46905,
-      "contentHash": "52983ead082a49a561f7cf42b2b61bb0"
+      "bytes": 50060,
+      "contentHash": "98d9715a1031fce594b2d67918ea694c"
     },
     {
       "slug": "guides/architecture/planner",
@@ -325,8 +325,8 @@
       "url": "https://datamitsu.com/docs/guides/reports.md",
       "title": "Reports",
       "description": "One record of a fix, lint or check run — what it holds, what it never contains, how complete it says it is, and how its findings keep their identity across runs",
-      "bytes": 33106,
-      "contentHash": "8a072a9d99767bf252afece1434d04fe"
+      "bytes": 33286,
+      "contentHash": "50c74e2be16e71c13606c3d592b92315"
     },
     {
       "slug": "guides/runtime-management",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 155019,
-      "contentHash": "f50102313a75d787844e254ffcd2357c"
+      "bytes": 155111,
+      "contentHash": "6dfca483e9cca015e1964de601b453d3"
     },
     {
       "slug": "reference/comparison",

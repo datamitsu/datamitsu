@@ -252,12 +252,19 @@ type ProcessResult struct {
 	// Success is whether the process did what it was run for: a zero exit,
 	// no finding the gate failed it for and, for a formatter, a formatted file
 	// written.
-	Success     bool
-	Extraction  Extraction
-	ParseError  string // the module's error for parse-failed and parser-unavailable
-	OutputTail  []byte // the last 4 KiB of the output the frame would show
-	Diagnostics []diagnostic.Diagnostic
-	DurationMs  int64
+	Success    bool
+	Extraction Extraction
+	ParseError string // why the output is parse-failed or parser-unavailable
+	// Provenance is what read the findings: "parser" (a tool's parser),
+	// "format" (a declared format parser), or "fallback:<format>" (the
+	// embedded sniffer); empty when nothing did.
+	Provenance string
+	// ParserModule is the module whose answer the findings are: the declared
+	// one, or the embedded fallback's; empty when nothing was read.
+	ParserModule string
+	OutputTail   []byte // the last 4 KiB of the output the frame would show
+	Diagnostics  []diagnostic.Diagnostic
+	DurationMs   int64
 	// FailOn is the effective threshold the gate applied to the process's
 	// findings; empty when no gate ran.
 	FailOn config.Severity

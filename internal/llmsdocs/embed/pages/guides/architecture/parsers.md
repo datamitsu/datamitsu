@@ -140,14 +140,14 @@ prints a link (tfsec, dclint, buildifier, reek, …).
 process a tool runs therefore records an **extraction outcome** next to its exit
 code:
 
-| Outcome              | When                                                                      | Lint pass cached        |
-| -------------------- | ------------------------------------------------------------------------- | ----------------------- |
-| `parsed-clean`       | the parser ran without error and returned no diagnostic                   | yes                     |
-| `parsed-findings`    | the parser returned at least one diagnostic                               | for the files it spared |
-| `parser-unavailable` | the module did not load, or its `describe` does not list the declared key | no                      |
-| `parse-failed`       | the module returned an error for this output                              | no                      |
-| `truncated`          | a stream or the findings exceeded a [parse cap](#parse-caps)              | no                      |
-| `none`               | the tool declares no `outputParser`, so nothing was attempted             | on success              |
+| Outcome              | When                                                                               | Lint pass cached        |
+| -------------------- | ---------------------------------------------------------------------------------- | ----------------------- |
+| `parsed-clean`       | the parser ran without error and returned no diagnostic                            | yes                     |
+| `parsed-findings`    | the parser returned at least one diagnostic                                        | for the files it spared |
+| `parser-unavailable` | the module did not load, or its `describe` does not list the declared key          | no                      |
+| `parse-failed`       | the module returned an error, or neither it nor the fallback recognized the output | no                      |
+| `truncated`          | a stream or the findings exceeded a [parse cap](#parse-caps)                       | no                      |
+| `none`               | no parser declared, and the [fallback](#three-layers) recognized nothing           | on success              |
 
 The last column is the [caching rule](./caching.md#a-lint-pass-means-nothing-to-report):
 a cached lint pass is replayed as "nothing to report", so it is recorded only where
@@ -307,6 +307,61 @@ spanning the parsing-difficulty classes — a representative few:
 
 The single `.wasm` dispatches all of them by name (`tool.outputParser`). JSON
 tools share one `from_json` helper (`src/json_diag.rs`), so each is a few lines.
+
+## Three layers
+
+Every output of `fix`, `lint` and `check` passes through up to three parsers, in
+turn, until one recognizes it:
+
+1. **The declared parser** — the tool's `outputParser`, a tool parser or a
+   [format parser](#format-parsers) of the module the configuration pins. An
+   answer that recognized the output decides, found or clean. A parser key the
+   module does not list, or a module that did not load, is `parser-unavailable`:
+   warned once per run and never cached, and the output still goes on to the
+   fallback so its findings are not lost.
+2. **The fallback** — the sniffer of the [module the binary embeds](#the-embedded-fallback),
+   when no parser was declared, or the declared one failed, did not recognize the
+   output, or (an array-answering module) answered with nothing under a non-zero
+   exit. The first standard format it recognizes reads the output. The core never
+   runs a declared module's own `fallback` key: the fallback is always the
+   binary's.
+3. **Nothing** — output no parser recognized. With a parser declared it is
+   `parse-failed`: warned once per run, never cached, and the tool is incomplete in
+   a report. Without one it is `none`: the exit code decides, as it always did, and
+   a failed run is reported with one synthetic finding.
+
+```mermaid
+flowchart TD
+    O[process output] --> D{parser declared?}
+    D -- yes --> P[declared parser]
+    P -- recognized --> R1[parser / format]
+    P -- not recognized, error, unavailable --> F[embedded fallback]
+    D -- no --> F
+    F -- recognized --> R2[fallback:format]
+    F -- nothing --> N{parser declared?}
+    N -- yes --> PF[parse-failed]
+    N -- no --> NO[none: the exit code decides]
+```
+
+A process records what read its findings — its **provenance**: `parser` (a tool
+parser), `format` (a declared format parser) or `fallback:<format>` (the format the
+fallback recognized); reports carry it per invocation and per finding. When the
+fallback reads what a declared parser did not, the run warns once: `declared parser
+"<key>" of module "<module>" did not recognize the output of <tool>; the fallback
+parsed it as <format>`. Its findings gate like any other — the embedded module sets
+levels only from what the tool printed — and block a cached pass like any other.
+
+The fallback reads a stdout-mode formatter's stderr only: its stdout is the file's
+new content, which no parser ever reads. It reads a tool without a declared parser
+as the tool's frame shows it, stdout and stderr together; empty output is not read
+at all. One rule applies to the **line** formats it recognizes (`gcc`, `msvc`,
+`github-annotations`, `azure-logissue`) and to no structured one: a line naming a
+path that is not a file on disk — relative to the process's working directory, or
+absolute — is not a match, so prose that happens to look like `path:1:2:` is not a
+finding. When no line survives, the fallback recognized nothing.
+
+`datamitsu devtools parsers sniff <file>` shows what the fallback makes of a
+captured output, before a tool's format flag is declared as its format key.
 
 ## Format parsers
 

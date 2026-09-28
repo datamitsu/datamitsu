@@ -82,10 +82,14 @@ func TestDiagnosticParser_EndToEnd(t *testing.T) {
 		`{"ruleId":"semi","severity":1,"message":"Missing semicolon.","line":1,"column":10}]}]`)
 
 	// module "core" (the parsers entry), parser "eslint" (dispatch key), tool "eslint" (source).
-	diags, err := parser.Parse(context.Background(), "core", "eslint", "eslint", eslintJSON, nil, 1)
+	answer, err := parser.Parse(context.Background(), "core", "eslint", "eslint", eslintJSON, nil, 1)
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
+	if !answer.Recognized || answer.Format != "eslint" || answer.FormatParser {
+		t.Errorf("answer = recognized %v format %q format parser %v, want eslint's own", answer.Recognized, answer.Format, answer.FormatParser)
+	}
+	diags := answer.Diagnostics
 	if len(diags) != 2 {
 		t.Fatalf("got %d diagnostics, want 2: %+v", len(diags), diags)
 	}
@@ -136,11 +140,11 @@ func TestDiagnosticParser_Unavailable(t *testing.T) {
 		{"broken", "hadolint", "gamma"},
 		{"broken", "yamllint", "delta"},
 	} {
-		diags, err := parser.Parse(context.Background(), c.module, c.key, c.tool, []byte("x"), nil, 1)
+		answer, err := parser.Parse(context.Background(), c.module, c.key, c.tool, []byte("x"), nil, 1)
 		if _, ok := errors.AsType[*tooling.ParserUnavailableError](err); !ok {
 			t.Errorf("%s/%s: err = %v, want a ParserUnavailableError", c.module, c.key, err)
 		}
-		if len(diags) != 0 {
+		if diags := answer.Diagnostics; len(diags) != 0 {
 			t.Errorf("%s/%s: diagnostics = %+v, want none", c.module, c.key, diags)
 		}
 	}
@@ -149,12 +153,12 @@ func TestDiagnosticParser_Unavailable(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("pending = %q, want one warning for the module and one for the key", got)
 	}
-	if !strings.HasPrefix(got[0], `parser module "broken" could not be loaded, so 2 tool(s) that use it ran without parsing `+
+	if !strings.HasPrefix(got[0], `parser module "broken" could not be loaded, so 2 tool(s) that use it ran without it `+
 		`and their lint passes are not cached; `+
 		`"datamitsu devtools parsers prefetch" fetches it ahead of a run: `) {
 		t.Errorf("module warning = %q", got[0])
 	}
-	if want := `parser module "core" has no parser "no-such-parser", so the output of alpha, beta is not parsed ` +
+	if want := `parser module "core" has no parser "no-such-parser", so the output of alpha, beta is not parsed by it ` +
 		`and its lint passes are not cached`; got[1] != want {
 		t.Errorf("key warning = %q, want %q", got[1], want)
 	}
@@ -186,6 +190,14 @@ func (failingModules) HasParser(context.Context, string, string) (bool, error) {
 
 func (failingModules) ParseOutput(context.Context, string, string, []byte, []byte, int32) (parsermanager.Response, error) {
 	return parsermanager.Response{}, errors.New("decode parser output: unexpected end of JSON input")
+}
+
+func (failingModules) Fallback(context.Context, []byte, []byte, int32) (parsermanager.Response, error) {
+	return parsermanager.Response{ABI: 2, Diagnostics: []parsermanager.RawDiagnostic{}}, nil
+}
+
+func (failingModules) DescribedParser(string, string) (parsermanager.ParserFacts, bool) {
+	return parsermanager.ParserFacts{}, false
 }
 
 type shellApps map[string]*binmanager.CommandInfo

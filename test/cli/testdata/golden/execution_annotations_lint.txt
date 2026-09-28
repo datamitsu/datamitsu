@@ -11,11 +11,11 @@ exit code: 1
 ┃ ✗ beta      <DUR> (1 failed)
   ┌─ beta [repository] (run #1) <RULE>
   │  Cwd:       <TMP>
-  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; echo '::error title=x::y'; exit 1 beta
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; echo '::error file=gone.txt,title=x::y'; exit 1 beta
   │  Exit code: 1
   │  Duration:  <DUR>
   │
-  │  ::error title=x::y
+  │  ::error file=gone.txt,title=x::y
   └<RULE>
 
 ┃ ✗ hadolint  <DUR> (1 failed)

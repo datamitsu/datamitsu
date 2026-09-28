@@ -128,11 +128,11 @@ func TestReportSARIF(t *testing.T) {
 		e.wantExit(bad, 2)
 	})
 
-	// A parsed tool that failed while its parser found nothing in what it
-	// printed is not complete: a run of it without results would close every
-	// alert it has.
+	// A parsed tool that failed while its parser, which recognized what it
+	// printed, found nothing in it is not complete: a run of it without
+	// results would close every alert it has.
 	t.Run("failed_without_findings", func(t *testing.T) {
-		e := sarifProject(t, clitest.ShellTool("crasher", settle+clitest.RecordRun+"; echo 'panic: not a finding'; exit 2",
+		e := sarifProject(t, clitest.ShellTool("crasher", settle+clitest.RecordRun+"; echo '[]'; exit 2",
 			clitest.ToolOpSpec{Parser: "hadolint"}))
 		res := e.run("", nil, "lint", "--report", "sarif=r.sarif", "--report", "json=run.json")
 		e.wantExit(res, 1)

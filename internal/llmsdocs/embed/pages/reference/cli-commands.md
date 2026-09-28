@@ -618,10 +618,11 @@ judged on three facts, and each one that fails adds a reason to the tool's
 | execution  | every planned task ran to the end                                                                                    | `cancelled`, `not-started`, `setup-failed`, `platform-skip`                                                         |
 | extraction | every output was read into findings by a parser, or a cache replayed a pass its parser read as clean                 | `no-extraction`, `parser-unavailable`, `parse-failed`, `truncated`, `unparsed-cache-hit`, `failed-without-findings` |
 
-A tool without an output parser is never complete (`no-extraction`): its exit
-code says whether it passed, not what it found. Nor is a tool whose process
-exited non-zero while its parser found nothing in what it printed
-(`failed-without-findings`): the parser did not recognize that output. The run is `complete` when
+A tool whose output no parser read — its own, a format parser, or the fallback
+built into datamitsu — is never complete (`no-extraction`, or `parse-failed` when
+a parser was declared): its exit code says whether it passed, not what it found.
+Nor is a tool whose process exited non-zero while the parser that recognized its
+output found nothing in it (`failed-without-findings`). The run is `complete` when
 every tool is, every operation ran, and nothing was left out at run level:
 `narrowed-selection`, `tools-filter` (with `selection.excludedTools` naming the
 tools `--tools` left out — the selected tools' own runs can still be complete),

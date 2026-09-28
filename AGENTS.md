@@ -271,6 +271,15 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   `column_unit` measured on the real tool or the parser listed in
   `UNKNOWN_COLUMN_UNITS`. `src/contract.rs` checks every parser against its
   `SAMPLES` and recorded fixtures, and requires its `POSITIONS` row.
+- Every output of `fix`/`lint`/`check` is parsed (`parseFileDiagnostics`,
+  `extract`): the declared parser, then — when there is none, or it failed, did
+  not recognize the output, or gave an empty ABI 1 answer under a non-zero exit
+  — the embedded fallback's sniffer, never a declared module's `fallback` key.
+  What read the findings is `ProcessResult.Provenance` (`parser`, `format`,
+  `fallback:<format>`) and `ParserModule` (whose contract the `failOn` gate
+  asks). A stdout-mode formatter's stdout reaches no parser; a line format the
+  fallback recognized keeps only lines naming a file on disk. The runner always
+  wires a parser, since the fallback needs no configuration.
 - A change under `parsers/` rebuilds `internal/parsermanager/testdata/echo.wasm`
   and regenerates `website/docs/reference/parser-catalog.md` in the same change,
   both through `task build:parsers:fixture`
@@ -330,9 +339,10 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   a report that was not written exits `exitcode.Export` (5) only when nothing
   else failed (1 > 4 > 5).
 - Completeness is per tool, from scope, execution and extraction
-  (`internal/report/completeness.go`); a tool without a parser is never
-  complete, nor one with a process that exited non-zero while its parser
-  answered with nothing (`failed-without-findings`). A report that lists findings (every renderer whose
+  (`internal/report/completeness.go`); a tool whose output no parser read — the
+  declared one or the embedded fallback — is never complete, nor one with a
+  process that exited non-zero while the parser that recognized its output found
+  nothing in it (`failed-without-findings`). A report that lists findings (every renderer whose
   `OmitsIncompleteTools` is false) is refused with exit 2 for a run narrowed at
   plan time unless `--allow-partial`, and any report turns fail-fast off; an
   explicit `--fail-fast=true` or `DATAMITSU_FAIL_FAST=true` with a report exits 2.
@@ -403,6 +413,15 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 **Breaking change: usage errors exit 2** — an unknown flag, a flag or `DATAMITSU_*` value a command does not accept, a missing required flag, flags that cannot be combined, a wrong number of positional arguments, and a combination refused before anything runs (`--require-coverage` with `--tools`) exited 1 like a failed tool and now exit 2 (`exitcode.Usage`, `internal/exitcode`), with the same messages. A script that tested `== 1` for them must test `== 2`. `llms` keeps its own 2 and 3; an unknown command (`datamitsu bogus`) still exits 1.
 
 **Breaking change: `--fail-on-skip` exits 4** — a tool skipped for having no binary for the host made `--fail-on-skip` exit 1, like a failed tool, and now exits 4 (`exitcode.Coverage`), the code of `--require-coverage`: both say the run did not look at everything. A tool failure still wins (exit 1), and when `--fail-on-skip` and `--require-coverage` both fail, both messages are printed and the run exits 4 once.
+
+**Breaking change: output no declared parser recognized is parsed by the
+fallback** — every output of `fix`/`lint`/`check` that no declared parser
+recognized goes to the embedded fallback's sniffer. A tool without an
+`outputParser` that prints a standard format now has findings: they block its
+cached passes (`cacheSemantics` `d8v1`, verdict identity `dmv4`), and one at or
+above `failOn` fails a run the tool itself passed. A declared parser that
+recognizes nothing is `parse-failed` rather than clean. Declare a format key
+(`datamitsu devtools parsers sniff` names it) or keep the tool's own parser.
 
 **Breaking change: the parser module name `embedded` is reserved** — the core
 serves the fallback parser module it embeds under that name, so a `parsers`

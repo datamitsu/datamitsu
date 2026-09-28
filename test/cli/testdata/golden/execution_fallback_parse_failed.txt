@@ -1,0 +1,24 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✗ crasher  <DUR> (1 failed)
+  ┌─ crasher [repository] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; echo 'panic: not a finding'; exit 2 crasher
+  │  Exit code: 2
+  │  Duration:  <DUR>
+  │
+  │  panic: not a finding
+  └<RULE>
+
+┗━ 1 tools · 1 runs · done in <DUR> · 1 failed <RULE>
+
+===STDERR===
+WARN declared parser "hadolint" of module "core" did not recognize the output of crasher, nor did any standard format, so its findings are unknown and its lint passes are not cached
+error: operation failed

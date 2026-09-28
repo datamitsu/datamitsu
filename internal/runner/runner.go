@@ -326,18 +326,15 @@ func initSharedContext(
 	planner.SetPlatformChecker(binMgr)
 	sc.executor = tooling.NewExecutor(sc.rootPath, false, sc.failFast, binMgr, sc.projectCache)
 	sc.executor.SetParserModules(sc.cfg.Parsers)
-	// Wire output-parsing whenever parsers are declared. --no-parse only changes
-	// what a failure frame shows: what the run records must not depend on it.
-	if len(sc.cfg.Parsers) > 0 {
-		sc.parserMgr = parsermanager.New(sc.cfg.Parsers)
-		sc.parseProblems = newParseProblems()
-		sc.executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
-		sc.ignoredFailOn = &toolSet{}
-	}
+	// Output is always parsed: by a declared parser, and otherwise by the
+	// fallback built into the binary. --no-parse only changes what a failure
+	// frame shows: what the run records must not depend on it.
+	sc.parserMgr = parsermanager.New(sc.cfg.Parsers)
+	sc.parseProblems = newParseProblems()
+	sc.executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
+	sc.ignoredFailOn = &toolSet{}
 	sc.startReport()
-	if sc.parserMgr != nil {
-		sc.executor.SetGate(sc.gate())
-	}
+	sc.executor.SetGate(sc.gate())
 
 	// All configured tools are known here, so the result column width is fixed
 	// once and shared across every operation (so fix and lint blocks align).
