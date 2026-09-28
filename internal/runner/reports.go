@@ -294,7 +294,7 @@ func (sc *sharedContext) writeReports(run *report.Run, targets []*render.Target,
 	}
 	if !ui.Quiet() {
 		for _, f := range failures[:last] {
-			fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), f)
+			fmt.Fprintf(os.Stderr, "%s %s\n", clr.Red("error:"), toolText(f.Error()))
 		}
 	}
 	if err != nil {

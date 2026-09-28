@@ -169,6 +169,10 @@ func entryOf(ctx context.Context, path string) (entry, error) {
 		return entry{hash: "link:" + hashutil.XXH3Hex([]byte(target))}, nil
 	case info.IsDir():
 		return entry{hash: "dir"}, nil
+	case !info.Mode().IsRegular():
+		// A named pipe, a socket or a device is never opened: opening a pipe
+		// waits for a writer.
+		return entry{hash: "special:" + info.Mode().Type().String()}, nil
 	}
 	f, err := os.Open(path)
 	if err != nil {

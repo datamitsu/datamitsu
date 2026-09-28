@@ -259,6 +259,7 @@ func TestAnnotationsPathsInMessages(t *testing.T) {
 		{"report", "baseline", name, "--output", "out/base.json"},
 		{"lint", "--baseline", name},
 		{"lint", "--baseline", "out/##vso[task.complete]missing.json"},
+		{"lint", "--report", "json=Dockerfile/##vso[task.complete]r.json"},
 	} {
 		res := e.run("", azureEnv, args...)
 		for line := range strings.SplitSeq(res.Stdout+res.Stderr, "\n") {
