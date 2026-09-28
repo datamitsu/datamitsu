@@ -67,6 +67,29 @@ func TestAgentOutput(t *testing.T) {
 		e.golden("agent_github", res, maskToken)
 	})
 
+	// DATAMITSU_TIMINGS reports are human output too.
+	t.Run("timings", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+		res := e.run("", []string{"DATAMITSU_TIMINGS=1"}, "lint", agentOutput)
+		e.wantExit(res, 0)
+		if lines := strings.Split(strings.TrimSuffix(res.Stdout, "\n"), "\n"); len(lines) != 1 {
+			t.Errorf("stdout should be the summary line alone:\n%s", res.Stdout)
+		}
+	})
+
+	// What a tool printed is masked as a report is, a secret that spans lines
+	// included.
+	t.Run("masked_tail", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
+			clitest.ShellTool("alpha", settle+clitest.RecordRun+`; printf 'token: %s\n' "$DEPLOY_TOKEN"; exit 1`, clitest.ToolOpSpec{}))
+		res := e.run("", []string{"DEPLOY_TOKEN=first-half-of-it\nsecond-half-of-it"}, "lint", agentOutput)
+		e.wantExit(res, 1)
+		if strings.Contains(res.Stdout, "half-of-it") || !strings.Contains(res.Stdout, "  │  token: ***\n") {
+			t.Errorf("the tail should hold the secret masked whole:\n%s", res.Stdout)
+		}
+	})
+
 	// check keeps its closing wall-clock line, plain.
 	t.Run("check", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,

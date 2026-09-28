@@ -2,6 +2,7 @@ package markdown
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -122,8 +123,29 @@ func TestWriteBudget(t *testing.T) {
 	if cut == 0 || listed+cut != 200 {
 		t.Errorf("listed %d and cut %d of 200 findings", listed, cut)
 	}
-	if !strings.Contains(out.String(), fmt.Sprintf("_%d findings cut: the page ran out of room.", cut)) {
-		t.Errorf("no footer counting the cut findings:\n%s", out.String()[max(0, out.Len()-300):])
+	if !strings.HasSuffix(out.String(), fmt.Sprintf("_%d findings cut: the page ran out of room._\n", cut)) {
+		t.Errorf("no footer counting the cut findings, or one naming a report the run did not write:\n%s", out.String()[max(0, out.Len()-300):])
+	}
+
+	run.Exports = []report.Export{
+		{Format: "json", Path: "out/run.json", Status: report.ExportWritten},
+		{Format: "json", Path: "-", Status: report.ExportWritten},
+		{Format: "markdown", Path: "out/run.md", Status: report.ExportWritten},
+	}
+	out.Reset()
+	if _, err := Write(&out, run, budget); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(out.String(), "the page ran out of room. Every finding is in `out/run.json`._\n") {
+		t.Errorf("the footer should name the run's own JSON file:\n%s", out.String()[max(0, out.Len()-300):])
+	}
+}
+
+// A page without room for the note that says so gets nothing.
+func TestWriteNoRoom(t *testing.T) {
+	var out bytes.Buffer
+	if _, err := Write(&out, sampleRun(), 10); !errors.Is(err, ErrNoRoom) || out.Len() != 0 {
+		t.Errorf("Write with 10 bytes = %v, wrote %q; want ErrNoRoom and nothing", err, out.String())
 	}
 }
 

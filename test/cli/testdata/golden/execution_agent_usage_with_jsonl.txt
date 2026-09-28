@@ -2,5 +2,5 @@ exit code: 2
 ===STDOUT===
 
 ===STDERR===
-{"events":"hello,phase,download,install,chunk,tool_run,error,done,log,report,diagnostic","op_id":"stream","schema":"datamitsu.report/1","ts":0,"type":"hello"}
+{"annotations":"off","events":"hello,phase,download,install,chunk,tool_run,error,done,log,report,diagnostic","op_id":"stream","schema":"datamitsu.report/1","ts":0,"type":"hello"}
 {"msg":"--output agent cannot be combined with --log-format jsonl: the event stream keeps stdout clean","op_id":"run-1","status":"fail","ts":0,"type":"error"}

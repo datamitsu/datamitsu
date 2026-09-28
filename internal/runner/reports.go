@@ -30,19 +30,16 @@ func now() time.Time {
 }
 
 // startReport begins recording the run when something reads what it found: a
-// report to write, a JSON-L stream to carry diagnostic events, annotations or
-// a step summary to print. An agent's output records nothing, but is masked
-// as a report is.
+// report to write, a JSON-L stream to carry diagnostic events, annotations, a
+// step summary or an agent's records to print.
 func (sc *sharedContext) startReport() {
-	records := len(sc.opts.Reports) > 0 || ui.Quiet() || sc.annotations.mode == AnnotationsGitHub || sc.wantsStepSummary()
-	if !records && !sc.agentOutput() {
+	reads := len(sc.opts.Reports) > 0 || ui.Quiet() || sc.annotations.mode == AnnotationsGitHub ||
+		sc.wantsStepSummary() || sc.agentOutput()
+	if !reads {
 		return
 	}
 	sc.secrets = sc.collectSecrets()
 	sc.executor.SetEnvObserver(func(environ []string) { sc.secrets.Add(environ) })
-	if !records {
-		return
-	}
 	opts := report.Options{
 		Root:    sc.rootPath,
 		Tools:   sc.cfg.Tools,

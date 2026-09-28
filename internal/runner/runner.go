@@ -436,7 +436,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
 		sc.recordOp(opSummary{op: operation, skipped: len(plan.Skipped)})
 		if sc.agentOutput() {
-			sc.printAgentOperation(agentOperation{op: operation, skipped: plan.Skipped, note: sc.footerNote(operation)})
+			sc.printAgentOperation(agentOperation{op: operation, record: opRecord, skipped: plan.Skipped, note: sc.footerNote(operation)})
 		}
 		if len(plan.Skipped) > 0 {
 			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth, sc.footerNote(operation))
@@ -830,8 +830,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	sc.recordOp(summary)
 	if sc.agentOutput() {
 		sc.printAgentOperation(agentOperation{
-			op: operation, groups: toolGroups, results: results, stopped: stopped, skipped: plan.Skipped,
-			cause: cause, summary: summary, note: sc.footerNote(operation),
+			op: operation, record: opRecord, skipped: plan.Skipped, cause: cause, summary: summary, note: sc.footerNote(operation),
 		})
 	}
 
@@ -1125,6 +1124,11 @@ func runSequential(
 		}
 		return err
 	}
+	// Before the deferred timing report, which must still see it muted.
+	if sc.agentOutput() {
+		ui.SetMuted(true)
+		defer ui.SetMuted(false)
+	}
 	defer func() {
 		// Timing reports are human output (bare fmt). Suppress in JSON-L mode so
 		// DATAMITSU_TIMINGS doesn't leak a non-JSON block onto the clean streams.
@@ -1134,11 +1138,6 @@ func runSequential(
 		}
 		sc.shutdown()
 	}()
-
-	if sc.agentOutput() {
-		ui.SetMuted(true)
-		defer ui.SetMuted(false)
-	}
 
 	// Branded banner once at the top (skipped in explain/json so that output
 	// stays clean/machine-readable, and when running as a continuation).

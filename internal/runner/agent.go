@@ -2,7 +2,6 @@ package runner
 
 import (
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -35,49 +34,70 @@ func (sc *sharedContext) agentOutput() bool {
 	return sc.opts.Output == OutputAgent && !ui.Quiet()
 }
 
-// agentOperation is what one operation printed in agent mode, before its
-// summary line: the operation, and its numbers.
+// agentOperation is one operation as agent output shows it: its record and
+// the numbers of its footer.
 type agentOperation struct {
 	op      config.OperationType
-	groups  []toolExecutionGroup
-	results []tooling.GroupExecutionResult
-	stopped []stoppedTask
+	record  *report.OperationRecord
 	skipped []tooling.SkippedTool
 	cause   stopCause
 	summary opSummary
 	note    string
 }
 
-// printAgentOperation prints an operation as an agent reads it: every finding
-// the terminal would show (visibleMask, the rule the frames follow) as
+// printAgentOperation prints an operation as an agent reads it, from the
+// report's record of it, masked as a report is: every finding the terminal
+// would show (report.Visible, the rule of the frames) as
 // "path:row:col: <severity> <source>(<code>): <message>", a failure that left
-// no finding with the end of what the tool printed, the files, tasks and
-// tools the run did not reach, and a summary line.
+// no finding in the words of its synthetic finding with the end of what the
+// tool printed, the files, tasks and tools the run did not reach, and a
+// summary line.
 func (sc *sharedContext) printAgentOperation(a agentOperation) {
+	op := a.record.Operation()
+	report.MaskAll(&op, sc.secretValues())
 	var b strings.Builder
 	var shown, hidden levelCounts
-	for _, g := range a.groups {
-		for _, exec := range g.executions {
-			sc.agentResult(&b, exec.result, &shown, &hidden)
-		}
+	stopped := map[string]bool{}
+	for _, c := range op.Cancelled {
+		stopped[c.TaskID] = true
 	}
-	for _, group := range a.results {
-		for _, result := range group.Results {
-			if files := unrunFiles(result); len(files) > 0 {
-				fmt.Fprintf(&b, "%s: %d %s not run (%s): %s\n", agentLabel(result.ToolName, result.RelativeDir),
-					len(files), plural(len(files), "file", "files"), a.cause, strings.Join(relativeFiles(files, sc.rootPath), ", "))
+	for _, tr := range op.Tools {
+		unrun := map[string][]string{}
+		var order []string
+		for _, inv := range tr.Invocations {
+			agentInvocation(&b, tr, inv, &shown, &hidden)
+			notRun := inv.State == string(tooling.ProcessNotStarted) || inv.State == string(tooling.ProcessCancelled)
+			if !notRun || stopped[inv.TaskID] {
+				continue
+			}
+			label := agentLabel(tr.Name, inv.Dir)
+			if _, seen := unrun[label]; !seen {
+				order = append(order, label)
+			}
+			for _, f := range inv.Files {
+				unrun[label] = append(unrun[label], f.Path)
+			}
+		}
+		for _, label := range order {
+			if files := unrun[label]; len(files) > 0 {
+				fmt.Fprintf(&b, "%s: %d %s not run (%s): %s\n", label, len(files), plural(len(files), "file", "files"),
+					a.cause, strings.Join(files, ", "))
 			}
 		}
 	}
-	for _, t := range a.stopped {
-		fmt.Fprintf(&b, "%s: %s (%s)\n", agentLabel(t.tool, t.dir), t.state(), t.cause)
+	for _, c := range op.Cancelled {
+		state := "not started"
+		if c.Started {
+			state = "cancelled"
+		}
+		fmt.Fprintf(&b, "%s: %s (%s)\n", agentLabel(c.Tool, c.Dir), state, c.Cause)
 	}
 	for _, s := range a.skipped {
 		fmt.Fprintf(&b, "%s: skipped (%s)\n", s.ToolName, s.ReasonText())
 	}
 	fmt.Fprintf(&b, "%s: %d tools · %d runs · %d failed · %d errors %d warnings", a.op, a.summary.tools, a.summary.runs,
 		a.summary.failed, shown[0], shown[1])
-	if extra := shown[2] + shown[3]; extra > 0 {
+	if shown[2]+shown[3] > 0 {
 		fmt.Fprintf(&b, " %d info %d hints", shown[2], shown[3])
 	}
 	fmt.Fprintf(&b, " · %d hidden", hidden.total())
@@ -85,47 +105,40 @@ func (sc *sharedContext) printAgentOperation(a agentOperation) {
 		b.WriteString(" · " + a.note)
 	}
 	b.WriteString("\n")
-	text := b.String()
-	report.MaskAll(&text, sc.secretValues())
-	fmt.Print(text)
+	fmt.Print(b.String())
 }
 
-// agentResult writes one task's records.
-func (sc *sharedContext) agentResult(b *strings.Builder, result tooling.ExecutionResult, shown, hidden *levelCounts) {
-	label := agentLabel(result.ToolName, result.RelativeDir)
-	ran := false
-	for _, proc := range result.Processes {
-		for i, visible := range visibleMask(proc) {
-			d := proc.Diagnostics[i]
-			if !visible {
-				hidden.add(d.Severity)
-				continue
-			}
-			shown.add(d.Severity)
-			b.WriteString(sc.agentFinding(result.ToolName, d) + "\n")
-		}
-		if proc.State != tooling.ProcessRan {
-			continue
-		}
-		ran = true
-		if proc.Success || len(proc.Diagnostics) > 0 {
-			continue
-		}
-		withhold := report.WithholdsOutput(sc.cfg.Tools[result.ToolName], sc.describedParser())
-		if len(proc.Files) == 1 {
-			b.WriteString(report.RelPath(sc.rootPath, proc.Files[0]) + ": ")
-		}
-		b.WriteString(failureLine(label, proc, withhold, sc.securityTool(result.ToolName)) + "\n")
-		for _, line := range tailLines(report.OutputTail(proc, withhold, sc.secretValues()), agentTailLines) {
-			b.WriteString(frameIndent + line + "\n")
-		}
+// agentInvocation writes the records of one invocation of tr.
+func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocation, shown, hidden *levelCounts) {
+	visible, below := report.Visible(tr, inv)
+	for _, f := range visible {
+		shown.add(severityOf(f.Severity))
+		b.WriteString(agentFinding(f) + "\n")
 	}
-	if !ran && !result.Success && !result.IsCancelled() {
-		msg := "failed before it ran"
-		if result.Error != nil {
-			msg += ": " + oneLine(result.Error.Error())
-		}
-		b.WriteString(label + " " + msg + "\n")
+	for _, f := range below {
+		hidden.add(severityOf(f.Severity))
+	}
+	label := agentLabel(tr.Name, inv.Dir)
+	var failure string
+	synthetic, isSynthetic := report.Synthetic(inv)
+	switch {
+	case isSynthetic:
+		// The synthetic finding names the tool first; the record names its
+		// directory too.
+		failure = label + strings.TrimPrefix(synthetic.Message, tr.Name)
+	case inv.FailureKind == "setup":
+		failure = label + " failed before it ran"
+	case inv.FailureKind == "exit" && len(visible)+len(below) == 0:
+		failure = label + " failed without parsable findings"
+	default:
+		return
+	}
+	if len(inv.Files) == 1 {
+		b.WriteString(inv.Files[0].Path + ": ")
+	}
+	b.WriteString(failure + "\n")
+	for _, line := range tailLines(inv.OutputTail, agentTailLines) {
+		b.WriteString(frameIndent + line + "\n")
 	}
 }
 
@@ -134,47 +147,35 @@ func (sc *sharedContext) agentResult(b *strings.Builder, result tooling.Executio
 // could read it as a command or a problem matcher's match.
 const frameIndent = "  │  "
 
-// failureLine is a failure that left no finding, in the words of the report's
-// synthetic finding.
-func failureLine(label string, proc tooling.ProcessResult, withhold, security bool) string {
-	code := 0
-	if proc.ExitCode != nil {
-		code = *proc.ExitCode
-	}
-	switch {
-	case security && withhold:
-		return fmt.Sprintf("%s failed (exit %d); output withheld for a security tool", label, code)
-	case code == 0:
-		return label + " failed without parsable findings"
-	}
-	return fmt.Sprintf("%s exited %d without parsable findings", label, code)
-}
-
 // agentFinding is one finding on one line: the path relative to the
-// repository root, the row and column when known, the level, the rule and the
-// message, whose line breaks become the two characters \n.
-func (sc *sharedContext) agentFinding(tool string, d diagnostic.Diagnostic) string {
+// repository root, the row and column as the tool reported them when known,
+// the level, the rule and the message, whose line breaks become the two
+// characters \n.
+func agentFinding(f report.Finding) string {
 	var loc string
-	if d.File != "" {
-		loc = report.RelPath(sc.rootPath, d.File)
-		if d.Row > 0 {
-			loc += ":" + strconv.Itoa(d.Row)
-			if d.Col > 0 {
-				loc += ":" + strconv.Itoa(d.Col)
+	if l := f.Location; l.Path != "" {
+		loc = l.Path
+		if l.Row > 0 {
+			loc += ":" + strconv.Itoa(l.Row)
+			if l.Col > 0 {
+				loc += ":" + strconv.Itoa(l.Col)
 			}
 		}
 		loc += ": "
 	}
-	source := d.Source
+	source := f.Source
 	if source == "" {
-		source = tool
+		source = f.Tool
 	}
-	if d.Code != "" {
-		source += "(" + d.Code + ")"
+	if f.Code != "" {
+		source += "(" + f.Code + ")"
 	}
-	message := string(tooling.StripCSI([]byte(d.Message)))
-	message = strings.NewReplacer("\r\n", `\n`, "\r", `\n`, "\n", `\n`).Replace(message)
-	return fmt.Sprintf("%s%s %s: %s", loc, d.Severity, source, message)
+	message := strings.NewReplacer("\r\n", `\n`, "\r", `\n`, "\n", `\n`).Replace(f.Message)
+	return fmt.Sprintf("%s%s %s: %s", loc, f.Severity, source, message)
+}
+
+func severityOf(level string) diagnostic.Severity {
+	return diagnostic.Severity(config.Severity(level).Level())
 }
 
 func agentLabel(tool, dir string) string {
@@ -196,21 +197,6 @@ func tailLines(text string, n int) []string {
 	return lines[max(0, len(lines)-n):]
 }
 
-func oneLine(s string) string {
-	return strings.Join(strings.Fields(s), " ")
-}
-
-func relativeFiles(files []string, root string) []string {
-	out := make([]string, 0, len(files))
-	for _, f := range files {
-		if rel, err := filepath.Rel(root, f); err == nil && !strings.HasPrefix(rel, "..") {
-			f = filepath.ToSlash(rel)
-		}
-		out = append(out, f)
-	}
-	return out
-}
-
 func plural(n int, one, many string) string {
 	if n == 1 {
 		return one
@@ -225,17 +211,6 @@ func (sc *sharedContext) describedParser() report.ParserFacts {
 		return nil
 	}
 	return sc.parserMgr.DescribedParser
-}
-
-// securityTool reports a tool whose parser module puts it in the security
-// category.
-func (sc *sharedContext) securityTool(name string) bool {
-	p := sc.cfg.Tools[name].OutputParser
-	if p == nil || sc.parserMgr == nil {
-		return false
-	}
-	facts, ok := sc.parserMgr.DescribedParser(p.Module, p.Parser)
-	return ok && facts.Tool.Category == "security"
 }
 
 // printAgentLine prints a line of agent output, masked.

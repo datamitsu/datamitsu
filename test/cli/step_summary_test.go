@@ -27,7 +27,7 @@ func TestStepSummary(t *testing.T) {
 		e := annotatedProject(t, "lint")
 		summary := summaryFile(t)
 		const limit = 1 << 20
-		prefix := strings.Repeat("earlier step output\n", (limit-700)/20)
+		prefix := strings.Repeat("earlier step output\n", (limit-400)/20)
 		if err := os.WriteFile(summary, []byte(prefix), 0o644); err != nil {
 			t.Fatal(err)
 		}

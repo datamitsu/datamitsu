@@ -2,12 +2,12 @@ exit code: 0
 ===STDOUT===
 
 ===STDERR===
+{"annotations":"off","events":"hello,phase,download,install,chunk,tool_run,error,done,log,report,diagnostic","op_id":"stream","schema":"datamitsu.report/1","ts":0,"type":"hello"}
 {"cached":false,"duration_ms":1,"findings_error":0,"findings_hint":0,"findings_info":0,"findings_warning":0,"op_id":"run-1:fixer::1","status":"done","success":true,"tool":"fixer","ts":0,"type":"tool_run"}
 {"cached":false,"duration_ms":1,"findings_error":0,"findings_hint":0,"findings_info":0,"findings_warning":0,"op_id":"run-2:linter::1","status":"done","success":true,"tool":"linter","ts":0,"type":"tool_run"}
 {"cancelled":0,"complete":true,"duration_ms":1,"op":"check","op_id":"cmd-3","runs":2,"status":"done","success":true,"tools":2,"ts":0,"type":"done"}
 {"duration_ms":1,"op":"fix","op_id":"run-1","runs":1,"status":"done","tools":1,"ts":0,"type":"done"}
 {"duration_ms":1,"op":"lint","op_id":"run-2","runs":1,"status":"done","tools":1,"ts":0,"type":"done"}
-{"events":"hello,phase,download,install,chunk,tool_run,error,done,log,report,diagnostic","op_id":"stream","schema":"datamitsu.report/1","ts":0,"type":"hello"}
 {"index":1,"op_id":"run-1:fixer::1","status":"done","success":true,"tool":"fixer","total":1,"ts":0,"type":"chunk"}
 {"index":1,"op_id":"run-2:linter::1","status":"done","success":true,"tool":"linter","total":1,"ts":0,"type":"chunk"}
 {"op":"fix","op_id":"run-1","status":"start","ts":0,"type":"phase"}

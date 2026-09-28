@@ -110,4 +110,8 @@ func TestNamesAndLookup(t *testing.T) {
 	if _, ok := Lookup("sarif"); ok {
 		t.Error("sarif is plan 8's format")
 	}
+	// Markdown lists findings: a narrowed run refuses it as it refuses json.
+	if got := Listing([]Spec{{Format: "markdown"}}); !reflect.DeepEqual(got, []string{"markdown"}) {
+		t.Errorf("Listing(markdown) = %v, want it listed", got)
+	}
 }

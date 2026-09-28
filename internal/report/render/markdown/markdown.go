@@ -10,6 +10,7 @@
 package markdown
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -38,21 +39,28 @@ func (Renderer) Render(w io.Writer, run *report.Run, _ map[string]string) error 
 	return err
 }
 
-// footerReserve is what the footer of a cut document may take.
-const footerReserve = 256
-
 // Write writes the document, at most budget bytes of it when budget is not
 // zero: the part that fits, then a footer saying how many findings did not.
-// It returns how many were cut.
+// It returns how many were cut; ErrNoRoom, and nothing written, when not even
+// the footer fits.
 func Write(w io.Writer, run *report.Run, budget int) (cut int, err error) {
 	parts := document(run)
+	total := 0
+	for _, p := range parts {
+		total += p.findings
+	}
+	// The footer of the deepest cut is the longest one.
+	reserve := len(footer(total, run))
+	if budget > 0 && reserve > budget {
+		return total, ErrNoRoom
+	}
 	var b strings.Builder
 	for i, p := range parts {
-		if budget > 0 && b.Len()+len(p.text) > budget-footerReserve {
+		if budget > 0 && b.Len()+len(p.text) > budget-reserve {
 			for _, rest := range parts[i:] {
 				cut += rest.findings
 			}
-			fmt.Fprintf(&b, "\n_%s cut: the page ran out of room. The full list is in the run's report._\n", count(cut, "finding", "findings"))
+			b.WriteString(footer(cut, run))
 			break
 		}
 		b.WriteString(p.text)
@@ -63,8 +71,27 @@ func Write(w io.Writer, run *report.Run, budget int) (cut int, err error) {
 	return cut, nil
 }
 
-// MinBudget is the smallest budget Write can honor.
-const MinBudget = 2 * footerReserve
+// ErrNoRoom is a budget too small for even the note that says so.
+var ErrNoRoom = errors.New("no room left on the page")
+
+func footer(cut int, run *report.Run) string {
+	return fmt.Sprintf("\n_%s cut: the page ran out of room.%s_\n", count(cut, "finding", "findings"), wholeList(run))
+}
+
+// wholeList names where the findings a cut document leaves out can be read:
+// the run's own JSON documents, written to a file, which hold every finding.
+func wholeList(run *report.Run) string {
+	var paths []string
+	for _, e := range run.Exports {
+		if e.Format == "json" && e.Status == report.ExportWritten && e.Path != "-" {
+			paths = append(paths, code(e.Path))
+		}
+	}
+	if len(paths) == 0 {
+		return ""
+	}
+	return " Every finding is in " + strings.Join(paths, " and ") + "."
+}
 
 // part is a piece of the document; findings counts the findings it lists, so
 // a cut document knows how many it left out.

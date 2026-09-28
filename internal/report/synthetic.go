@@ -36,12 +36,12 @@ func syntheticFinding(tool string, proc tooling.ProcessResult, category string) 
 	}, true
 }
 
-// OutputTail is what a failed process printed last, for the own JSON and an
+// outputTail is what a failed process printed last, for the own JSON and an
 // agent's output: without ANSI sequences, and "" for a tool whose output is
-// withheld (WithholdsOutput). A tail cut from a longer output loses the start
+// withheld (withholdsOutput). A tail cut from a longer output loses the start
 // a secret the cut went through could have left (withoutFragment); the rest
 // is masked by whoever prints it.
-func OutputTail(proc tooling.ProcessResult, withhold bool, secrets []string) string {
+func outputTail(proc tooling.ProcessResult, withhold bool, secrets []string) string {
 	failed := (proc.State == tooling.ProcessRan && !proc.Success) || proc.State == tooling.ProcessSetupFailed
 	if !failed || withhold || len(proc.OutputTail) == 0 {
 		return ""

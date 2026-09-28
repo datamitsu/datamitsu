@@ -184,6 +184,9 @@ func TestAnnotationsWhenNot(t *testing.T) {
 		}
 		events := clitest.MustParseJSONL(t, res.Stderr)
 		wantReportEvent(t, events, "github-annotations", "-", "omitted", "the run writes a JSON-L event stream")
+		if hello := events[0]; hello.Type != "hello" || hello.Fields["annotations"] != "off" {
+			t.Errorf("the stream opens with %v, want a hello saying stdout carries no annotations", hello.Fields)
+		}
 	})
 
 	t.Run("jsonl_explicit", func(t *testing.T) {
@@ -197,7 +200,11 @@ func TestAnnotationsWhenNot(t *testing.T) {
 		if got := strings.TrimSuffix(res.Stdout, "\n"); got != strings.Join(want, "\n") {
 			t.Errorf("stdout =\n%s\nwant the annotations alone:\n%s", got, strings.Join(want, "\n"))
 		}
-		clitest.AssertChains(t, clitest.MustParseJSONL(t, res.Stderr))
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		if hello := events[0]; hello.Type != "hello" || hello.Fields["annotations"] != "github" {
+			t.Errorf("the stream opens with %v, want a hello saying stdout carries annotations", hello.Fields)
+		}
 	})
 
 	t.Run("report_on_stdout", func(t *testing.T) {

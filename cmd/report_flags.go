@@ -132,6 +132,14 @@ func applyAnnotations(cmd *cobra.Command, flags reportFlags, explain string, opt
 		}
 	}
 	opts.Annotations = mode
+	// Beside a stream only an explicit github prints annotations; the
+	// stream's hello says which.
+	if ui.Quiet() {
+		streamAnnotations = runner.AnnotationsOff
+		if mode == runner.AnnotationsGitHub {
+			streamAnnotations = runner.AnnotationsGitHub
+		}
+	}
 	return nil
 }
 

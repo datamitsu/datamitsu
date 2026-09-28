@@ -191,7 +191,7 @@ func (sc *sharedContext) writeStepSummary(run *report.Run) bool {
 		return false
 	}
 	budget := summaryLimit - int(info.Size())
-	if budget < markdown.MinBudget {
+	if budget <= 0 {
 		logger.Logger.Warn(fmt.Sprintf("the step summary was not written: it holds %d bytes of GitHub's %d", info.Size(), summaryLimit))
 		return false
 	}

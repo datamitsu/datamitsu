@@ -425,7 +425,7 @@ stderr as typed events, one JSON object per line:
 
 | `type`       | When                                                                                                                                                                           |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `hello`      | Opens the stream: `op_id` `stream`, `schema` (`datamitsu.report/1`) and `events`, the comma-separated types the stream may carry                                               |
+| `hello`      | Opens the stream: `op_id` `stream`, `schema` (`datamitsu.report/1`), `events`, the comma-separated types the stream may carry, and for `fix`, `lint` and `check` `annotations` |
 | `phase`      | An operation (`op`: `fix` or `lint`) starts: `status: "start"`                                                                                                                 |
 | `tool_run`   | A tool starts in a directory (`status: "start"`) and ends: `done` or `fail` with its findings per level, or `skip` for a stopped tool                                          |
 | `chunk`      | A tool finished a unit of its work: `index` of `total`                                                                                                                         |
@@ -444,14 +444,17 @@ events do.
 
 A `--log-format jsonl` stream opens with a `hello` event, whatever the
 command, so a reader can tell a stream without `diagnostic` events from a run
-that found nothing:
+that found nothing. For `fix`, `lint` and `check` it also says whether stdout
+carries [GitHub annotations](#github-annotations) beside the stream:
+`annotations` is `github` or `off`.
 
 ```json
 {
   "type": "hello",
   "op_id": "stream",
   "schema": "datamitsu.report/1",
-  "events": "hello,phase,download,install,chunk,tool_run,error,done,log,report,diagnostic"
+  "events": "hello,phase,download,install,chunk,tool_run,error,done,log,report,diagnostic",
+  "annotations": "off"
 }
 ```
 
@@ -705,7 +708,8 @@ value, from the flag or the variable, exits 2 as well. Nothing is printed when
 no task ran — a plan that matched nothing, a run refused before it started.
 The annotations are recorded as an export of the [report](#reports),
 `github-annotations`, `written` or `omitted` with the reason, and under
-`--log-format jsonl` as a `report` event.
+`--log-format jsonl` as a `report` event; the stream's `hello` says the mode
+the run settled on.
 
 The annotations are what the terminal shows (see
 [Findings in the terminal](#findings-in-the-terminal)): each tool's findings at
@@ -739,7 +743,7 @@ to the step summary, the Markdown page of the job's run that
 carries, since the summary is a file, and under `--log-format jsonl` too. It
 lists every finding the annotations could have shown. GitHub takes 1 MiB of
 summary from a step, whoever wrote it, so the run writes what fits in what the
-file has left and ends with a line saying how many findings it cut. A summary
+file has left and ends with a line saying how many findings it cut and, when the run wrote its `json` report to a file, that every finding is there. A summary
 that cannot be written — the variable is unset, the file cannot be opened, or
 it is full — is one warning (a `log` event under `--log-format jsonl`), never a
 failure; nothing is written when no task ran. Gitea and Forgejo have no step

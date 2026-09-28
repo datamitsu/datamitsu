@@ -79,8 +79,8 @@ func TestOutputTail(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.proc.OutputTail = []byte(tt.tail)
-			if got := OutputTail(tt.proc, tt.category == "security", nil); got != tt.want {
-				t.Errorf("OutputTail() = %q, want %q", got, tt.want)
+			if got := outputTail(tt.proc, tt.category == "security", nil); got != tt.want {
+				t.Errorf("outputTail() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -97,19 +97,19 @@ func TestOutputTailCutThroughASecret(t *testing.T) {
 	}
 	proc := tooling.ProcessResult{State: tooling.ProcessRan, ExitCode: new(1), OutputTail: cut}
 	secrets := []string{secret}
-	tail := OutputTail(proc, false, secrets)
+	tail := outputTail(proc, false, secrets)
 	if strings.Contains(tail, secret[4:]) || len(tail) != tooling.OutputTailBytes-len(secret[4:]) {
 		t.Errorf("tail keeps %d bytes starting %q; want the fragment gone", len(tail), tail[:min(10, len(tail))])
 	}
 
 	// A whole secret just after the cut is masked whole, not cut again.
 	whole := []byte(strings.Repeat("x", 5) + secret + strings.Repeat("y", tooling.OutputTailBytes-5-len(secret)))
-	tail = OutputTail(tooling.ProcessResult{State: tooling.ProcessRan, ExitCode: new(1), OutputTail: whole}, false, secrets)
+	tail = outputTail(tooling.ProcessResult{State: tooling.ProcessRan, ExitCode: new(1), OutputTail: whole}, false, secrets)
 	if !strings.HasPrefix(tail, "xxxxx"+Masked+"y") {
 		t.Errorf("tail starts %q; want the secret masked whole", tail[:min(20, len(tail))])
 	}
 
-	if untouched := OutputTail(tooling.ProcessResult{State: tooling.ProcessRan, ExitCode: new(1), OutputTail: []byte("short " + secret)}, false, secrets); untouched != "short "+secret {
+	if untouched := outputTail(tooling.ProcessResult{State: tooling.ProcessRan, ExitCode: new(1), OutputTail: []byte("short " + secret)}, false, secrets); untouched != "short "+secret {
 		t.Errorf("a tail that was not cut lost bytes: %q", untouched)
 	}
 }

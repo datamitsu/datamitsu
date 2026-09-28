@@ -323,7 +323,9 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   rest — so an event's fingerprint is the report's. `uievent.Event` stays flat:
   new fields are `omitempty`, pointers where false or zero must be written, set
   only on the events that carry them. Every stream `setJSONLStderr` opens (`--log-format jsonl`, `lsp`, a report
-  on stdout) starts with `hello` and absorbs `SIGPIPE`, so a closed reader fails
+  on stdout) starts with `hello` — written by the sink (`helloFirst`) right
+  before the first other event, or at exit, so that it can carry what the
+  command settled after the stream opened (`streamAnnotations`) — and absorbs `SIGPIPE`, so a closed reader fails
   a write instead of killing the run; a stream the sink could not write fails the run with exit
   1 and the error on stdout (`JSONLSink.Failed`, `ui.EventStreamFailed`).
 - What a person sees is one rule, `report.ShownMask` (`report.Visible` over the
@@ -342,8 +344,9 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   which of them still match framed output. The step summary is the `markdown`
   renderer's `Write` with a budget — 1 MiB less what the file already holds —
   appended best-effort before the annotations, so their notice can name it.
-- `--output agent` (`runner/agent.go`) prints records from the same results
-  through `visibleMask`; `ui.SetMuted` turns every human rendering off for it.
+- `--output agent` (`runner/agent.go`) prints each operation from the report's
+  record of it (`OperationRecord.Operation`, masked) through `report.Visible`;
+  `ui.SetMuted` turns every human rendering off for it.
   A new piece of human output checks `ui.Muted()`; `ui.Quiet()` means only
   "stderr is a JSON-L stream", which agent output is not.
 
