@@ -528,10 +528,23 @@ offline, through the same renderers and the same completeness rule:
 datamitsu report render --input out/run.json --format json --output -
 ```
 
-The document holds everything a renderer needs, so this works on another
-machine and after the checkout changed. A document of a narrowed run is refused
-for a format that lists findings unless `--allow-partial`, as the run would have
-been, and a document without its completeness fields is read as incomplete.
+The document holds everything a renderer needs — the columns in every unit
+were converted while the files were on disk — so this works on another machine,
+without the checkout, and after the sources changed, and every format comes out
+byte for byte as the run wrote it, completeness companion included. A pipeline
+can therefore write the own JSON once and publish it in whatever formats its
+consumers read:
+
+```bash
+datamitsu lint --fail-fast=false --report json=out/run.json
+datamitsu report render --input out/run.json --format sarif --output out/sarif/
+datamitsu report render --input out/run.json --format codequality --output out/gl-code-quality.json
+```
+
+A document of a narrowed run is refused for a format that lists findings unless
+`--allow-partial`, as the run would have been — `sarif` is written, without its
+incomplete tools — and a document without its completeness fields is read as
+incomplete. A companion is written beside `--output`, never on stdout.
 
 ## Findings as they happen
 

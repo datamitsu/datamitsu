@@ -1050,9 +1050,10 @@ narrowed run is refused (exit 2) for a format that lists findings unless
 incomplete, never as complete. The document holds everything a renderer needs,
 so rendering works on another machine and after the checkout changed; `json`
 reproduces the document byte for byte, and every other format the file the run
-wrote. An `--output` that ends in `/` is a directory, for `sarif`; a document
-with more tools than one SARIF file holds is refused (exit 2) for a file or
-stdout. A document of another schema, or one
+wrote, its completeness companion included, which is written beside
+`--output` and never on stdout. An `--output` that ends in `/` is a directory,
+for `sarif`; a document with more tools than one SARIF file holds is refused
+(exit 2) for a file or stdout. A document of another schema, or one
 that cannot be read, exits 1; an output that cannot be written exits 5.
 
 ```bash

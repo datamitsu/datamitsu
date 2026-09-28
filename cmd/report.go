@@ -42,9 +42,12 @@ works on another machine and after the checkout changed.
 A format that lists findings is refused for a document of a narrowed run
 (named files, a subdirectory, --file-scoped, --tools) unless --allow-partial,
 exactly as --report is; a document without its completeness fields is read as
-incomplete, never as complete.
+incomplete, never as complete. A format written with a completeness companion
+gets it beside --output, never on stdout, and an --output that ends in / is a
+directory, for a format that splits a run over files (sarif).
 
-  ` + "datamitsu report render --input out/run.json --format json --output -",
+  ` + "datamitsu report render --input out/run.json --format json --output -\n" +
+		"  datamitsu report render --input out/run.json --format sarif --output sarif/",
 	Args: usageArgs(cobra.NoArgs),
 	RunE: runReportRender,
 }
