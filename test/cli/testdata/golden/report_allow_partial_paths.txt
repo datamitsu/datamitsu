@@ -1,0 +1,185 @@
+{
+  "schema": "datamitsu.report/1",
+  "datamitsu": {
+    "version": "<VERSION>",
+    "configuration": "datamitsu.config"
+  },
+  "startedAt": "<TS>",
+  "endedAt": "<TS>",
+  "selection": {
+    "mode": "paths",
+    "paths": [
+      "Dockerfile"
+    ],
+    "fileScoped": false
+  },
+  "failFast": false,
+  "complete": false,
+  "incomplete": [
+    "narrowed-selection"
+  ],
+  "operations": [
+    {
+      "name": "lint",
+      "ran": true,
+      "success": true,
+      "durationMs": <DUR>,
+      "skipped": [],
+      "cancelled": [],
+      "tools": [
+        {
+          "name": "alpha",
+          "app": {
+            "name": "alpha",
+            "kind": "shell"
+          },
+          "parser": null,
+          "failOn": "error",
+          "gateActive": false,
+          "category": "",
+          "complete": false,
+          "incomplete": [
+            "narrowed-selection",
+            "no-extraction"
+          ],
+          "invocations": [
+            {
+              "id": "alpha::1#1",
+              "taskId": "alpha::1",
+              "dir": "",
+              "scope": "repository",
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
+              "wholeUnit": true,
+              "state": "ran",
+              "exitCode": 0,
+              "success": true,
+              "failureKind": "",
+              "durationMs": <DUR>,
+              "extraction": "none",
+              "provenance": "none",
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                },
+                {
+                  "path": "exec.config.js",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                },
+                {
+                  "path": "fixture.marker",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                },
+                {
+                  "path": "sub/keep.txt",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                }
+              ],
+              "findings": []
+            }
+          ]
+        },
+        {
+          "name": "hadolint",
+          "app": {
+            "name": "hadolint",
+            "kind": "shell"
+          },
+          "parser": {
+            "module": "core",
+            "parser": "hadolint",
+            "version": "0.1.0",
+            "schema": 2
+          },
+          "failOn": "error",
+          "gateActive": true,
+          "category": "",
+          "complete": false,
+          "incomplete": [
+            "narrowed-selection"
+          ],
+          "invocations": [
+            {
+              "id": "hadolint::2#1",
+              "taskId": "hadolint::2",
+              "dir": "",
+              "scope": "per-file",
+              "granularity": "file",
+              "arity": "one",
+              "coverage": "complete",
+              "wholeUnit": false,
+              "state": "ran",
+              "exitCode": 0,
+              "success": true,
+              "failureKind": "",
+              "durationMs": <DUR>,
+              "extraction": "parsed-findings",
+              "provenance": "parser",
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                }
+              ],
+              "findings": [
+                {
+                  "fingerprint": "9f687dcb779d9609b5a6a17a72fde8629ddf00f81dc0b8a4fe7e14bce7fdfe8d",
+                  "fingerprintBasis": "line",
+                  "tool": "hadolint",
+                  "source": "hadolint",
+                  "code": "DL3006",
+                  "severity": "warning",
+                  "reported": false,
+                  "gates": false,
+                  "kind": "issue",
+                  "message": "Always tag the version of an image explicitly",
+                  "location": {
+                    "path": "Dockerfile",
+                    "row": 1,
+                    "endRow": 1,
+                    "col": 1,
+                    "endCol": 1,
+                    "unit": "",
+                    "chars": {
+                      "start": 1,
+                      "end": 1
+                    },
+                    "bytes": {
+                      "start": 1,
+                      "end": 1
+                    },
+                    "utf16": {
+                      "start": 1,
+                      "end": 1
+                    },
+                    "precision": "ascii"
+                  },
+                  "provenance": "parser"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "exports": [
+    {
+      "format": "json",
+      "path": "run.json",
+      "status": "written"
+    }
+  ]
+}

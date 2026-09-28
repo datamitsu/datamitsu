@@ -29,17 +29,19 @@ in console mode.
 
 ## Exit codes
 
-| Code         | Meaning                                                                                                                                                                                                                                                                                                      |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `0`          | Success                                                                                                                                                                                                                                                                                                      |
-| `1`          | A tool failed — it exited non-zero, or its parsed output held a finding at or above its operation's `failOn` (see [Failing on findings](#failing-on-findings---fail-on)) — or any error without a code of its own                                                                                            |
-| `2`          | Usage: an unknown flag, a flag or `DATAMITSU_*` value the command does not accept (`--widen-to=Repo`, `DATAMITSU_FAIL_FAST=yes`), a missing required flag, flags that cannot be combined, the wrong number of arguments, or a combination refused before anything runs (`--require-coverage` with `--tools`) |
-| `3`          | `llms`: an unknown or ambiguous page                                                                                                                                                                                                                                                                         |
-| `4`          | The run did not cover what it was asked to: `--require-coverage` (see [Narrowed runs](#narrowed-runs)) or `--fail-on-skip` (see [Skipped tools](#skipped-tools)); when both fail, both messages are printed                                                                                                  |
-| `130`, `143` | `fix`, `lint` or `check` interrupted by `SIGINT` or `SIGTERM` (see [Keep-going runs](#keep-going-runs))                                                                                                                                                                                                      |
+| Code         | Meaning                                                                                                                                                                                                                                                                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `0`          | Success                                                                                                                                                                                                                                                                                                                                                            |
+| `1`          | A tool failed — it exited non-zero, or its parsed output held a finding at or above its operation's `failOn` (see [Failing on findings](#failing-on-findings---fail-on)) — or any error without a code of its own                                                                                                                                                  |
+| `2`          | Usage: an unknown flag, a flag or `DATAMITSU_*` value the command does not accept (`--widen-to=Repo`, `DATAMITSU_FAIL_FAST=yes`), a missing required flag, flags that cannot be combined, the wrong number of arguments, or a combination refused before anything runs (`--require-coverage` with `--tools`, a report of a narrowed run without `--allow-partial`) |
+| `3`          | `llms`: an unknown or ambiguous page                                                                                                                                                                                                                                                                                                                               |
+| `4`          | The run did not cover what it was asked to: `--require-coverage` (see [Narrowed runs](#narrowed-runs)) or `--fail-on-skip` (see [Skipped tools](#skipped-tools)); when both fail, both messages are printed                                                                                                                                                        |
+| `5`          | A report asked for with `--report` or `DATAMITSU_REPORT` was not written (see [Reports](#reports))                                                                                                                                                                                                                                                                 |
+| `130`, `143` | `fix`, `lint` or `check` interrupted by `SIGINT` or `SIGTERM` (see [Keep-going runs](#keep-going-runs))                                                                                                                                                                                                                                                            |
 
 When several apply, a tool failure (`1`) wins over an incomplete run (`4`),
-whose messages are still printed after the failure. A usage error is found
+which wins over a report that was not written (`5`); the messages of the ones
+that lost are still printed. A usage error is found
 before anything runs and combines with nothing. A script that tells "you called
 it wrong" from "the code is bad" checks for `2` and `1` apart. An unknown command
 (`datamitsu bogus`) and a few checks that other commands make on their own
@@ -164,6 +166,9 @@ datamitsu check [files...]
 | `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
 | `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
 | `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
+| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
+| `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 
 **Examples:**
 
@@ -249,7 +254,7 @@ effective value as `failFast`, and where it came from as `failFastSource`
 `false`, `1` or `0` is refused.
 
 In CI, run `datamitsu lint --fail-fast=false`: one run then reports every
-failing tool. When a later operation fails for another reason than an earlier
+failing tool. A [report](#reports) turns fail-fast off by itself. When a later operation fails for another reason than an earlier
 one — lint cannot install its tools after fix failed — both reasons are
 reported. A tool that runs once per file and is interrupted after one of its
 files failed stays a failure; the files it did not reach make the run
@@ -371,13 +376,16 @@ the rest.
 With `--log-format=jsonl`, `fix`, `lint` and `check` write their progress to
 stderr as typed events, one JSON object per line:
 
-| `type`     | When                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------- |
-| `phase`    | An operation (`op`: `fix` or `lint`) starts: `status: "start"`                                          |
-| `tool_run` | A tool starts in a directory (`status: "start"`) and ends: `done`, `fail`, or `skip` for a stopped tool |
-| `chunk`    | A tool finished a unit of its work: `index` of `total`                                                  |
-| `error`    | A tool failed: `tool`, `dir`, `msg`                                                                     |
-| `done`     | The operation ended, with its summary                                                                   |
+| `type`       | When                                                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `hello`      | Opens the stream: `op_id` `stream`, `schema` (`datamitsu.report/1`) and `events`, the comma-separated types the stream may carry      |
+| `phase`      | An operation (`op`: `fix` or `lint`) starts: `status: "start"`                                                                        |
+| `tool_run`   | A tool starts in a directory (`status: "start"`) and ends: `done` or `fail` with its findings per level, or `skip` for a stopped tool |
+| `chunk`      | A tool finished a unit of its work: `index` of `total`                                                                                |
+| `error`      | A tool failed: `tool`, `dir`, `msg`                                                                                                   |
+| `done`       | The operation ended, with its summary                                                                                                 |
+| `report`     | A report was written or not: `format`, `path`, `status` and, when it was not, `msg` (see [Reports](#reports))                         |
+| `diagnostic` | One finding of a tool, once the tool finished: by default those at or above the operation's `failOn`                                  |
 
 Every task — one tool in one directory, or one file of a tool that runs once
 per file — has an `op_id` of its own: the operation's `op_id` followed by
@@ -386,6 +394,76 @@ the root) and `seq` numbers the operation's planned tasks from 1 in plan order,
 for example `run-1:eslint:packages/web:3`. A task's `tool_run` start, its `chunk`
 events, its `error` and its closing `tool_run` share it, and no other task's
 events do.
+
+A `--log-format jsonl` stream opens with a `hello` event, whatever the
+command, so a reader can tell a stream without `diagnostic` events from a run
+that found nothing:
+
+```json
+{
+  "type": "hello",
+  "op_id": "stream",
+  "schema": "datamitsu.report/1",
+  "events": "hello,phase,download,install,chunk,tool_run,error,done,log,report,diagnostic"
+}
+```
+
+A `tool_run` that ends with `done` or `fail` carries the task's findings per
+level — `findings_error`, `findings_warning`, `findings_info`, `findings_hint`,
+zero included — and `cached`, true when a cache answered for the task. No other
+event carries them.
+
+A `diagnostic` event is one finding, emitted once its tool has finished in the
+operation — every task of the tool, since a finding's fingerprint depends on
+all of the tool's findings — and before the operation's `done`. Its `op_id` is
+the task that reported it:
+
+```json
+{
+  "type": "diagnostic",
+  "op_id": "run-1:eslint:packages/web:3",
+  "tool": "eslint",
+  "dir": "packages/web",
+  "file": "packages/web/src/a.ts",
+  "row": 3,
+  "col": 7,
+  "end_row": 3,
+  "end_col": 8,
+  "severity": "error",
+  "code": "no-unused-vars",
+  "source": "eslint",
+  "msg": "'x' is assigned a value but never used.",
+  "fingerprint": "8d08ad593059cec87a6c97ce43655d04b1bee8102810cd99952dd606b26bb618",
+  "provenance": "parser",
+  "reported": true,
+  "gates": true
+}
+```
+
+`file` is relative to the repository root, rows and columns are 1-based and
+`end_col` is exclusive; `fingerprint` is the finding's
+[report fingerprint](#reports). Every event of a JSON-L stream is masked as a
+report is, `op_id` included, from its first line with the values the
+environment names, and once a run has loaded its configuration with its apps'
+and operations' values and those its tools were started with; a task's events
+still share one `op_id`. By
+default only the findings at or above the operation's `failOn` are emitted —
+what the terminal shows. `--events diagnostics=all` (or
+`DATAMITSU_EVENTS=diagnostics=all`) emits every finding, with `reported` and
+`gates` saying which are at the threshold and which failed their tool;
+`diagnostics=reported` is the default. Any other value exits 2. The synthetic
+finding a report lists for a tool that failed without findings is never an
+event.
+
+A stream that could not be written — a closed or full stderr — fails the
+command, whichever it is and however it ended otherwise: it exits 1 and says so
+on stdout, the one stream left, unless stdout carries the command's own data (a
+report written to `-`, the language server's JSON-RPC, `source`'s shell code).
+
+`--verbose` adds datamitsu's debug log lines to the stream as `log` events,
+with what a tool printed and the arguments it ran with withheld
+(`"<withheld>"`): a stream is what a pipeline publishes. The console keeps
+them.
 
 A `tool_run` with `status: "skip"` ends the chain of a tool the run stopped,
 and is never a failure. Its `msg` says what happened and why:
@@ -430,6 +508,115 @@ that `config reconcile` runs after writing its files.
   "complete": false
 }
 ```
+
+### Reports
+
+`--report <format>=<path>` writes a report of the run once its last operation
+has ended, whether or not its tools failed — the run that fails is the one a
+pipeline needs to read. The flag is repeatable, one per format; `json` is the
+format today. The [Reports guide](../guides/reports.md) explains what a report
+holds and how far to trust it; [`report render`](#report-render) writes one
+again, offline, from a run's own JSON.
+
+```bash
+# CI: the whole run as one document, uploaded whatever the outcome
+datamitsu lint --report json=out/run.json
+```
+
+- The path is required, and relative to the working directory. Missing
+  directories are created, and the file is written to a temporary name beside
+  it and renamed, so a reader never sees half a report. It gets the
+  permissions a file created in its place would — the umask decides — and a
+  report it replaces keeps its own.
+- `-` writes the report to stdout, for one format per run. stdout then carries
+  the report alone: the human output is left out, and stderr carries the
+  [run events](#run-events) as it does under `--log-format jsonl`.
+- `DATAMITSU_REPORT` is the variable twin, comma-separated:
+  `DATAMITSU_REPORT=json=out/run.json`. A `--report` naming the same format
+  wins over its entry. `datamitsu config runtime` reports the variable as
+  `report`.
+- A report turns fail-fast off: a run that stopped at the first failing tool
+  could not list every finding. A report together with `--fail-fast=true`, or
+  with `DATAMITSU_FAIL_FAST=true` and no `--fail-fast` flag, exits 2.
+- A format named twice, an unknown format or option, a missing path, and a
+  report combined with `--explain` (which runs nothing) exit 2 before anything
+  runs.
+- A report that cannot be written prints
+  `error: report <format>: <path>: <cause>` and makes the run exit 5 — unless a
+  tool failed (exit 1) or the run was incomplete (exit 4), which keep their code;
+  the line is printed either way. Under `--log-format jsonl` the same fact is a
+  `report` event.
+- The time a report is stamped with comes from `SOURCE_DATE_EPOCH` when it is
+  set, the reproducible-builds convention; durations are always measured.
+
+A report says how much of the repository its findings stand for. Every tool is
+judged on three facts, and each one that fails adds a reason to the tool's
+`incomplete` list:
+
+| Fact       | Complete when                                                                                                        | Reasons                                                                                  |
+| ---------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| scope      | the run covered the whole repository — no files named, no subdirectory, no `--file-scoped` — and every task its unit | `narrowed-selection`, `partial-unit`                                                     |
+| execution  | every planned task ran to the end                                                                                    | `cancelled`, `not-started`, `setup-failed`, `platform-skip`                              |
+| extraction | every output was read into findings by a parser, or a cache replayed a pass its parser read as clean                 | `no-extraction`, `parser-unavailable`, `parse-failed`, `truncated`, `unparsed-cache-hit` |
+
+A tool without an output parser is never complete (`no-extraction`): its exit
+code says whether it passed, not what it found. The run is `complete` when
+every tool is, every operation ran, and nothing was left out at run level:
+`narrowed-selection`, `tools-filter` (with `selection.excludedTools` naming the
+tools `--tools` left out — the selected tools' own runs can still be complete),
+`not-narrowable` (a tool skipped because it could not be narrowed) and
+`operation-skipped`. A tool disabled with `skip: true` is neither.
+
+A report that lists findings is refused for a run narrowed before it starts —
+files named, a subdirectory, `--file-scoped` or `--tools` — because it would
+read as the findings of the repository: the run exits 2 before anything runs,
+and the report is recorded as `refused`. `--allow-partial` (or
+`DATAMITSU_ALLOW_PARTIAL=true`) writes it anyway, with every reason in the
+document; it never makes a run complete. A report left on its path by an
+earlier run is not deleted, so a pipeline that uploads it with `if: always()`
+checks the exit code as well.
+
+`json` writes datamitsu's own document, `datamitsu.report/1`: what the run was
+asked to cover (`selection`), whether fail-fast was on (`failFast`), and for each
+operation (`fix`, `lint`; `check` writes one document holding both) whether it
+ran and succeeded, the tools the planner skipped and the tasks the run stopped.
+Each tool lists its app as configured, its parser module and its threshold, and
+one invocation per process: its task, state, exit code, extraction outcome, the
+files it answered for and the findings it reported, with paths relative to the
+repository root. The files a cache answered appear as one `cached` or
+`verdict-hit` invocation of their task.
+
+Every finding carries a `fingerprint` that identifies it across runs: SHA-256
+over the tool, the rule, the path and the text of the finding's first line, and
+its position among the findings the tool reported with the same rule on the
+same line. A line inserted above a finding moves its row, not its fingerprint,
+and rewording a message changes neither. `fingerprintBasis` says what the
+fingerprint rests on: `line`, `row` when the file could not be read, `none` for
+a finding without a file. A finding's `location` gives its columns as the tool
+counted them, in the `unit` its parser declares, and converted while the file
+was on disk into code points (`chars`), UTF-8 bytes (`bytes`) and UTF-16 units
+(`utf16`); `precision` is `exact`, `ascii` (no unit declared, but an ASCII
+line), or `unknown`, when there was nothing to convert from. A report never holds a command line or
+an environment variable, and nothing caches it: every report is written from
+the run that produced it.
+
+A tool that exits non-zero without a finding its parser could read is listed
+with one `synthetic` finding of level `error` and no location, whose message
+says so — `tsc exited 2 without parsable findings` — rather than as a clean
+tool. The message carries none of the tool's output. The document keeps the last
+4 KiB of a failed invocation's output as `outputTail`, without its colour codes.
+For a tool whose parser module puts it in the `security` category, the output is
+never kept: its synthetic finding reads
+`gitleaks failed (exit 1); output withheld for a security tool`, and there is no
+`outputTail`.
+
+Before a report is written, the value of every variable of the environment,
+and of every app's and operation's `env`, whose name contains `TOKEN`,
+`SECRET`, `PASSWORD` or `CREDENTIAL`, or ends in `_KEY` (in any letter case),
+and that is at least 8 characters long, is replaced by `***` wherever it occurs
+in the document. This catches what the environment names; a secret a tool
+prints that no variable holds is not caught, which is why a security tool's
+output is withheld altogether.
 
 ### Skipped tools
 
@@ -536,6 +723,9 @@ datamitsu fix [files...]
 | `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
 | `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
 | `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
+| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
+| `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 
 **Examples:**
 
@@ -568,6 +758,9 @@ datamitsu lint [files...]
 | `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
 | `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
 | `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
+| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
+| `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 
 **Examples:**
 
@@ -607,6 +800,40 @@ AA contrast against their surface produce a warning, not an error. `--print-them
 writes the merged theme — the complete built-in one when no `--theme` is given. See
 [Config Inspector](../guides/config-inspector.md) for navigation, artifact contents,
 theming, and publishing examples.
+
+## report
+
+Work with the reports `fix`, `lint` and `check` write with
+[`--report`](#reports). None of these commands runs a tool.
+
+### report render
+
+Render a run's own JSON document (`datamitsu.report/1`) into a report format,
+offline:
+
+```bash
+datamitsu report render --input <run.json> --format <format> [--output <path>|-]
+```
+
+| Flag                | Description                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)            |
+| `--format <format>` | The format to write: `json`; a format's options follow a `?` (required)             |
+| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report` |
+| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                |
+
+The renderers and the completeness rule are the run's own: a document of a
+narrowed run is refused (exit 2) for a format that lists findings unless
+`--allow-partial`, and a document without its completeness fields is read as
+incomplete, never as complete. The document holds everything a renderer needs,
+so rendering works on another machine and after the checkout changed; `json`
+reproduces the document byte for byte. A document of another schema, or one
+that cannot be read, exits 1; an output that cannot be written exits 5.
+
+```bash
+# Print a run's report again
+datamitsu report render --input out/run.json --format json
+```
 
 ## config
 
@@ -1751,7 +1978,10 @@ the directory it was started in.
 ### lsp events
 
 Every stderr line is one JSON object carrying `type` and `op_id`, with
-`--verbose` or without. The language server emits:
+`--verbose` or without. The stream opens with a `hello` event, as a `--log-format jsonl`
+stream does (see [Run events](#run-events)). The language server never emits
+`diagnostic` events: an editor gets findings through `publishDiagnostics`. It
+emits:
 
 | `type`                | Meaning                                                                                                            |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -1968,6 +2198,9 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_UNIT_CACHE_TTL`        | Minutes a cached unit-level verdict stays trusted; `0` disables verdict caching                                                                | `1440` (24h)                                        |
 | `DATAMITSU_FAIL_FAST`             | Stop `fix`, `lint` and `check` at the first failing tool (`true`/`1`) or run everything (`false`/`0`)                                          | `true`                                              |
 | `DATAMITSU_FAIL_ON`               | Raise every operation's `failOn` for `fix`, `lint` and `check` to `error`, `warning`, `info` or `hint`; never lowers one (twin of `--fail-on`) | -                                                   |
+| `DATAMITSU_REPORT`                | Reports `fix`, `lint` and `check` write, as comma-separated `format=path` pairs (twin of `--report`; see [Reports](#reports))                  | -                                                   |
+| `DATAMITSU_ALLOW_PARTIAL`         | Write a report that lists findings for a narrowed run (`true`/`1`) instead of refusing it (twin of `--allow-partial`)                          | `false`                                             |
+| `DATAMITSU_EVENTS`                | Which findings the JSON-L stream of `fix`, `lint` and `check` emits: `diagnostics=reported` or `diagnostics=all` (twin of `--events`)          | `diagnostics=reported`                              |
 | `DATAMITSU_CONFIG_CACHE`          | Serve evaluated config chains from disk (`0`/`false`/`off`/`no` disables it)                                                                   | `1`                                                 |
 | `DATAMITSU_LSP_FORMAT_WIDEN_TO`   | How far editor format-on-save may widen: `target` or `unit`                                                                                    | `unit`                                              |
 | `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` | Format-on-save watchdog in ms: no further tool group starts once it has elapsed (`0` = disabled)                                               | `15000`                                             |
@@ -2006,8 +2239,9 @@ which exports no `DATAMITSU_ROOT` because it has no git root; it records the
 config chain the farm was baked from, joined with the platform's list separator,
 and is informational in the same way. All three are excluded from the farm's
 staleness fingerprint, so exporting them cannot make a farm look stale.
-`DATAMITSU_FAIL_FAST` is excluded too: it changes how far one run goes, never
-what a farm contains, so setting it for one command does not re-bake the farm.
+`DATAMITSU_FAIL_FAST`, `DATAMITSU_FAIL_ON`, `DATAMITSU_REPORT`,
+`DATAMITSU_ALLOW_PARTIAL` and `DATAMITSU_EVENTS` are excluded too: they change how far one run goes and what it prints or writes, never what a
+farm contains, so setting one for one command does not re-bake the farm.
 
 `DATAMITSU_FORCE_GIT_SUBPROCESS` applies to the config loader's memoized git-root
 lookup, which is where the pure-Go walk runs; the command handlers use a separate

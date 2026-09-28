@@ -18,6 +18,7 @@ var (
 	checkRequireCov    string
 	checkFailFast      bool
 	checkFailOn        string
+	checkReports       reportFlags
 )
 
 var checkCmd = &cobra.Command{
@@ -46,6 +47,7 @@ func init() {
 	checkCmd.Flags().BoolVar(&checkFailOnSkip, "fail-on-skip", false, "Exit non-zero if any tool is skipped because its binary is unavailable for this platform")
 	addFailFastFlag(checkCmd, &checkFailFast)
 	addFailOnFlag(checkCmd, &checkFailOn)
+	addReportFlags(checkCmd, &checkReports)
 	rootCmd.AddCommand(checkCmd)
 }
 
@@ -55,6 +57,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if err := applyFailFast(cmd, checkFailFast, &opts); err != nil {
+		return err
+	}
+	if err := applyReports(cmd, checkReports, &opts); err != nil {
 		return err
 	}
 	err := runner.RunSequential(

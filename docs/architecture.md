@@ -507,7 +507,7 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 - Color utilities in [internal/color/](internal/color/) using `github.com/fatih/color`
 - Respects user environment variables in order: `NO_COLOR` (disables), `FORCE_COLOR` (enables), `CLICOLOR_FORCE` (enables), `CLICOLOR=0` (disables), then falls back to TTY detection
 - Never overrides user-set color env vars; only sets defaults when absent
-- Tools run by fix, lint and check get `NO_COLOR=1` and no colour hints, whatever datamitsu's own colour setting: their output is read by a parser, which receives it with ANSI sequences stripped (`stripCSI` in `parseFileDiagnostics`)
+- Tools run by fix, lint and check get `NO_COLOR=1` and no colour hints, whatever datamitsu's own colour setting: their output is read by a parser, which receives it with ANSI sequences stripped (`StripCSI` in `parseFileDiagnostics`)
 - `clr.Init()` is called in `cmd/root.go Execute()` at startup
 
 ### Output Architecture (Single-Print-Layer Rule)

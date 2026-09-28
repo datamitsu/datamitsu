@@ -16,6 +16,7 @@ var (
 	eventMu   sync.RWMutex
 	eventSink uievent.Sink
 	quiet     bool
+	eventMask func(*uievent.Event)
 )
 
 // SetEventSink installs a process-global typed event sink and toggles quiet mode.
@@ -30,15 +31,29 @@ func SetEventSink(s uievent.Sink, quietMode bool) {
 	eventMu.Unlock()
 }
 
-// Emit forwards e to the active event sink, if any. It is a no-op when no sink is
-// installed, so emitters may call it unconditionally at negligible cost.
+// Emit forwards e to the active event sink, if any, masked by the active
+// masker. It is a no-op when no sink is installed, so emitters may call it
+// unconditionally at negligible cost.
 func Emit(e uievent.Event) {
 	eventMu.RLock()
-	s := eventSink
+	s, mask := eventSink, eventMask
 	eventMu.RUnlock()
-	if s != nil {
-		s.Emit(e)
+	if s == nil {
+		return
 	}
+	if mask != nil {
+		mask(&e)
+	}
+	s.Emit(e)
+}
+
+// SetEventMask installs a function every event passes through before the sink
+// writes it — one place, so that an event's op_id is masked exactly as the
+// op_ids of the events it correlates with. nil removes it.
+func SetEventMask(mask func(*uievent.Event)) {
+	eventMu.Lock()
+	eventMask = mask
+	eventMu.Unlock()
 }
 
 // Quiet reports whether human line output is currently suppressed (JSON-L mode).
@@ -48,6 +63,18 @@ func Quiet() bool {
 	eventMu.RLock()
 	defer eventMu.RUnlock()
 	return quiet
+}
+
+// EventStreamFailed returns the first error the active event sink met writing
+// its stream, nil when it met none or cannot tell.
+func EventStreamFailed() error {
+	eventMu.RLock()
+	s := eventSink
+	eventMu.RUnlock()
+	if f, ok := s.(interface{ Failed() error }); ok {
+		return f.Failed()
+	}
+	return nil
 }
 
 // sinkActive reports whether a typed event sink is installed. Used by emitters

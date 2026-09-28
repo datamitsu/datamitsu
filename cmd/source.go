@@ -55,6 +55,7 @@ binaries this shadows — go to stderr, so the output is always safe to eval.`,
 	// Running here rather than in cobra.OnInitialize makes it unconditional:
 	// it overrides --log-format.
 	PersistentPreRun: func(_ *cobra.Command, _ []string) {
+		stdoutOwned = true
 		ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)
 	},
 	// A group command with no Run of its own prints help and exits 0, which for

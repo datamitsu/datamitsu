@@ -46,8 +46,10 @@ const (
 // There is intentionally no ToMap() method — map conversion (for the JS VM) is
 // internal to the engine layer via json.Marshal/json.Unmarshal.
 type Effective struct {
+	AllowPartial             string `json:"allowPartial"`
 	Concurrency              int    `json:"concurrency"`
 	ConfigCache              bool   `json:"configCache"`
+	Events                   string `json:"events"`
 	FailFast                 bool   `json:"failFast"`
 	FailFastSource           string `json:"failFastSource"`
 	FailOn                   string `json:"failOn"`
@@ -65,6 +67,7 @@ type Effective struct {
 	NoOCI                    bool   `json:"noOci"`
 	OCIRegistry              string `json:"ociRegistry"`
 	Offline                  bool   `json:"offline"`
+	Report                   string `json:"report"`
 	StartupTimings           bool   `json:"startupTimings"`
 	Timings                  bool   `json:"timings"`
 	Trace                    bool   `json:"trace"`
@@ -84,8 +87,10 @@ func Compute() Effective {
 		failFastSource = FailFastSourceEnv
 	}
 	return Effective{
+		AllowPartial:             env.AllowPartial(),
 		Concurrency:              env.GetConcurrency(),
 		ConfigCache:              env.ConfigCacheEnabled(),
+		Events:                   env.Events(),
 		FailFast:                 failFast,
 		FailFastSource:           failFastSource,
 		FailOn:                   env.FailOn(),
@@ -103,6 +108,7 @@ func Compute() Effective {
 		NoOCI:                    env.NoOCI(),
 		OCIRegistry:              env.GetOCIRegistry(),
 		Offline:                  env.Offline(),
+		Report:                   env.Report(),
 		StartupTimings:           env.IsStartupTimingsEnabled(),
 		Timings:                  env.IsTimingsEnabled(),
 		Trace:                    env.IsTraceEnabled(),

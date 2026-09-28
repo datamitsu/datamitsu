@@ -32,6 +32,8 @@ import (
 	"github.com/datamitsu/datamitsu/internal/managedconfig"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
+	"github.com/datamitsu/datamitsu/internal/report"
+	"github.com/datamitsu/datamitsu/internal/report/render"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
@@ -95,6 +97,8 @@ type planExecutor interface {
 	SetParser(parser tooling.DiagnosticParser)
 	SetParserModules(parsers config.MapOfParsers)
 	SetGate(gate tooling.Gate)
+	SetEnvObserver(observe func(environ []string))
+	AssignTaskIDs(plan *tooling.ExecutionPlan)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
 	TaskDir(task tooling.Task) string
 }
@@ -153,6 +157,19 @@ type sharedContext struct {
 	// summaries holds what each operation that ran reported, for check's
 	// closing line and the run-level done event.
 	summaries []opSummary
+	// fileScoped records --file-scoped, which the report states.
+	fileScoped bool
+	// report records the run for its reports; nil when it writes none.
+	report *report.Accumulator
+	// secrets are the values reports and diagnostic events mask: the host's
+	// and the configuration's up front, then each tool process's own.
+	secrets *report.Secrets
+	// annotator anchors each parsed process's findings for the report, in the
+	// gate hook; nil when nothing reads them.
+	annotator *report.Annotator
+	// startedAt stamps the report: SOURCE_DATE_EPOCH or the clock at the
+	// start of the run.
+	startedAt time.Time
 }
 
 func initSharedContext(
@@ -172,6 +189,8 @@ func initSharedContext(
 		platformSkipped: make(map[string]struct{}),
 		narrowed:        make(map[string]struct{}),
 		failFast:        resolveFailFast(opts.FailFast),
+		fileScoped:      fileScoped,
+		startedAt:       now(),
 	}
 
 	// Parse selected tools flag
@@ -209,6 +228,9 @@ func initSharedContext(
 		default:
 			return nil, exitcode.UsageErrorf("invalid --explain value: %s (must be summary, detailed, or json)", explainMode)
 		}
+		if len(opts.Reports) > 0 {
+			return nil, errReportWithExplain
+		}
 	}
 
 	// Get cwd
@@ -234,6 +256,9 @@ func initSharedContext(
 	rootSpan.EndWith(trace.A("root", sc.rootPath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get git root: %w", err)
+	}
+	if err := refuseNarrowedReports(opts, tooling.NewSelection(sc.rootPath, sc.cwdPath, args, fileScoped), fileScoped, sc.selectedTools); err != nil {
+		return nil, err
 	}
 
 	// Load configuration
@@ -297,7 +322,10 @@ func initSharedContext(
 		sc.parseProblems = newParseProblems()
 		sc.executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
 		sc.ignoredFailOn = &toolSet{}
-		sc.executor.SetGate(tooling.ThresholdGate(config.Severity(opts.FailOn), sc.severityContract, sc.ignoredFailOn.add))
+	}
+	sc.startReport()
+	if sc.parserMgr != nil {
+		sc.executor.SetGate(sc.gate())
 	}
 
 	// All configured tools are known here, so the result column width is fixed
@@ -353,7 +381,7 @@ func plannedParserModules(plan *tooling.ExecutionPlan) []string {
 }
 
 // runSingleOperation executes one operation (fix, lint, etc.) using a pre-initialized shared context
-func runSingleOperation(ctx context.Context, sc *sharedContext, operation config.OperationType) error {
+func runSingleOperation(ctx context.Context, sc *sharedContext, operation config.OperationType) (retErr error) {
 	defer trace.Start(trace.CatCLI, "runSingleOperation").EndWith(trace.A("operation", string(operation)))
 
 	// Create execution plan
@@ -383,6 +411,13 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		fmt.Println(output)
 		return nil
 	}
+
+	// Named now, not by Execute: a setup failure below still leaves every
+	// planned task with the identity a report and an event refer to it by.
+	sc.executor.AssignTaskIDs(plan)
+	opRecord := sc.beginReportOperation(operation, plan)
+	opDuration := int64(0)
+	defer func() { opRecord.End(retErr == nil, opDuration) }()
 
 	// Nothing to run (no project types, or no applicable tasks). Still surface
 	// any explicit skips — recording unsupported-platform ones for --fail-on-skip
@@ -612,20 +647,31 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	sc.executor.SetResultCallback(func(result tooling.ExecutionResult) {
 		// A cancelled task is not a failure: it ends its chain with a skip event
 		// and is listed apart from the results, never as a failed run.
+		finished := opRecord.AddTask(result)
 		if result.IsCancelled() {
 			task := stoppedFromResult(result)
 			stopped = append(stopped, task)
 			emitStopped(runOpID, task)
+			opRecord.Stopped(task.cancel())
 		} else {
 			opID := toolOpID(runOpID, result.TaskID)
+			var levels levelCounts
+			for _, d := range result.Diagnostics {
+				levels.add(d.Severity)
+			}
 			ui.Emit(uievent.Event{
-				Type:       uievent.TypeToolRun,
-				OpID:       opID,
-				Status:     doneStatus(result.Success),
-				Tool:       result.ToolName,
-				Dir:        result.RelativeDir,
-				Success:    new(result.Success),
-				DurationMs: result.Duration,
+				Type:            uievent.TypeToolRun,
+				OpID:            opID,
+				Status:          doneStatus(result.Success),
+				Tool:            result.ToolName,
+				Dir:             result.RelativeDir,
+				Success:         new(result.Success),
+				DurationMs:      result.Duration,
+				FindingsError:   new(levels[0]),
+				FindingsWarning: new(levels[1]),
+				FindingsInfo:    new(levels[2]),
+				FindingsHint:    new(levels[3]),
+				Cached:          new(result.Cached),
 			})
 			if !result.Success {
 				ui.Emit(uievent.Event{
@@ -650,6 +696,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			delete(activeTasks, result.TaskID)
 			progressMu.Unlock()
 		}
+		sc.emitDiagnostics(runOpID, finished)
 	})
 
 	// Pre-install every tool the plan needs once, before parallel per-file
@@ -691,7 +738,9 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	for _, task := range unreachedTasks(plan, results, sc.executor.TaskDir, cause) {
 		stopped = append(stopped, task)
 		emitStopped(runOpID, task)
+		opRecord.Stopped(task.cancel())
 	}
+	sc.emitDiagnostics(runOpID, opRecord.Flush())
 	// An interruption can stop a run between two groups that passed, with no
 	// failed result to show for it; the tasks it stopped still fail the
 	// operation.
@@ -747,6 +796,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		Cancelled:  nonZero(len(stopped)),
 		DurationMs: totalWallClockTime,
 	})
+	opDuration = totalWallClockTime
 	sc.recordOp(opSummary{
 		op:         operation,
 		tools:      len(toolGroups),
@@ -884,6 +934,11 @@ func (sc *sharedContext) coverageFailure() error {
 	}
 	return exitcode.CoverageErrorf("--require-coverage=%s: %s", level, strings.Join(reasons, "; "))
 }
+
+// errReportWithExplain rejects a report of a run that runs nothing: --explain
+// prints the plan and stops, so the report asked for could never be written.
+var errReportWithExplain = exitcode.UsageError{Err: errors.New(
+	"--report cannot be combined with --explain: a plan runs nothing to report")}
 
 // errRequireCoverageWithTools rejects a combination that cannot mean anything:
 // --tools drops the skip entries of unselected tools before anything can observe
@@ -1038,6 +1093,7 @@ func runSequential(
 			if len(operations) > 1 {
 				(&sharedContext{}).printRunClosing(command, operations, elapsedMs)
 			}
+			omitReports(opts.Reports, err)
 			(&sharedContext{}).emitRunDone(command, operations, elapsedMs, false)
 		}
 		return err
@@ -1071,7 +1127,7 @@ func runSequential(
 	if len(operations) > 1 {
 		sc.printRunClosing(command, operations, elapsedMs)
 	}
-	err = sc.outcome(ctx, opErr)
+	err = sc.finishReports(operations, sc.outcome(ctx, opErr))
 	if command != "" {
 		sc.emitRunDone(command, operations, elapsedMs, err == nil)
 	}
@@ -1194,6 +1250,15 @@ type Options struct {
 	// FailOn raises every operation's failOn to this level (a config.Severity
 	// name); empty raises nothing. It never lowers an operation's own.
 	FailOn string
+	// Reports are written once the last operation has ended, whether or not
+	// its tools failed.
+	Reports []render.Spec
+	// AllowPartial writes a report that lists findings for a narrowed run
+	// instead of refusing the run.
+	AllowPartial bool
+	// AllDiagnostics makes the JSON-L stream carry every finding as a
+	// diagnostic event, not only those at or above failOn.
+	AllDiagnostics bool
 }
 
 // validate rejects unknown flag values. Rank() reads an unvalidated string

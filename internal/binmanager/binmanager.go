@@ -868,44 +868,50 @@ func (bm *BinManager) GetAppsList() []AppInfo {
 	apps := make([]AppInfo, 0, len(bm.mapOfApps))
 
 	for name, app := range bm.mapOfApps {
-		info := AppInfo{
-			Name:        name,
-			Type:        "unknown",
-			Description: app.Description,
-		}
-
-		switch {
-		case app.Binary != nil:
-			info.Type = "binary"
-			info.Version = app.Binary.Version
-		case app.Bun != nil:
-			info.Type = "bun"
-			info.Version = app.Bun.Version
-			info.PackageName = app.Bun.PackageName
-		case app.Uv != nil:
-			info.Type = "uv"
-			info.Version = app.Uv.Version
-			info.PackageName = app.Uv.PackageName
-		case app.Node != nil:
-			info.Type = "node"
-			info.Version = app.Node.Version
-			info.PackageName = app.Node.PackageName
-		case app.Jvm != nil:
-			info.Type = "jvm"
-			info.Version = app.Jvm.Version
-		case app.Go != nil:
-			info.Type = "go"
-			info.Version = app.Go.Version
-			info.PackageName = app.Go.PackageName
-		case app.Shell != nil:
-			info.Type = "shell"
-			info.Command = app.Shell.Name
-		}
-
-		apps = append(apps, info)
+		apps = append(apps, DescribeApp(name, app))
 	}
 
 	return apps
+}
+
+// DescribeApp is what an app's configuration says about it: its kind, the
+// version it pins, and the package or command it runs. Type is "unknown" for
+// an app that declares no kind.
+func DescribeApp(name string, app App) AppInfo {
+	info := AppInfo{
+		Name:        name,
+		Type:        "unknown",
+		Description: app.Description,
+	}
+
+	switch {
+	case app.Binary != nil:
+		info.Type = "binary"
+		info.Version = app.Binary.Version
+	case app.Bun != nil:
+		info.Type = "bun"
+		info.Version = app.Bun.Version
+		info.PackageName = app.Bun.PackageName
+	case app.Uv != nil:
+		info.Type = "uv"
+		info.Version = app.Uv.Version
+		info.PackageName = app.Uv.PackageName
+	case app.Node != nil:
+		info.Type = "node"
+		info.Version = app.Node.Version
+		info.PackageName = app.Node.PackageName
+	case app.Jvm != nil:
+		info.Type = "jvm"
+		info.Version = app.Jvm.Version
+	case app.Go != nil:
+		info.Type = "go"
+		info.Version = app.Go.Version
+		info.PackageName = app.Go.PackageName
+	case app.Shell != nil:
+		info.Type = "shell"
+		info.Command = app.Shell.Name
+	}
+	return info
 }
 
 // GetExecCmd returns an exec.Cmd ready to execute the given app with args.

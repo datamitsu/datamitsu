@@ -2,15 +2,16 @@ exit code: 0
 ===STDOUT===
 
 ===STDERR===
+{"cached":true,"findings_error":0,"findings_hint":0,"findings_info":0,"findings_warning":0,"op_id":"run-1:alpha::1","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
+{"cached":true,"findings_error":0,"findings_hint":0,"findings_info":0,"findings_warning":0,"op_id":"run-1:alpha::2","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
+{"cached":true,"findings_error":0,"findings_hint":0,"findings_info":0,"findings_warning":0,"op_id":"run-1:alpha::3","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
 {"cancelled":0,"complete":true,"op":"lint","op_id":"cmd-2","runs":3,"status":"done","success":true,"tools":1,"ts":0,"type":"done"}
+{"events":"hello,phase,download,install,chunk,tool_run,error,done,log,report,diagnostic","op_id":"stream","schema":"datamitsu.report/1","ts":0,"type":"hello"}
 {"index":1,"op_id":"run-1:alpha::1","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
 {"index":1,"op_id":"run-1:alpha::2","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
 {"index":1,"op_id":"run-1:alpha::3","status":"done","success":true,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
 {"op":"lint","op_id":"run-1","runs":3,"status":"done","tools":1,"ts":0,"type":"done"}
 {"op":"lint","op_id":"run-1","status":"start","ts":0,"type":"phase"}
-{"op_id":"run-1:alpha::1","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
 {"op_id":"run-1:alpha::1","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
-{"op_id":"run-1:alpha::2","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
 {"op_id":"run-1:alpha::2","status":"start","tool":"alpha","ts":0,"type":"tool_run"}
-{"op_id":"run-1:alpha::3","status":"done","success":true,"tool":"alpha","ts":0,"type":"tool_run"}
 {"op_id":"run-1:alpha::3","status":"start","tool":"alpha","ts":0,"type":"tool_run"}

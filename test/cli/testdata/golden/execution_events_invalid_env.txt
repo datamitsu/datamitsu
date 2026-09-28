@@ -1,0 +1,5 @@
+exit code: 2
+===STDOUT===
+
+===STDERR===
+error: invalid DATAMITSU_EVENTS value: "everything" (must be diagnostics=reported or diagnostics=all)

@@ -13,10 +13,12 @@ import (
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
+	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/runner"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/sponsor"
@@ -60,6 +62,10 @@ var (
 	noParse bool
 	// logFormat selects the status output encoding ("" defers to env: console|jsonl)
 	logFormat string
+	// stdoutOwned marks a command whose stdout carries data a reader parses —
+	// a report written to "-", JSON-RPC, shell code — so no error text may go
+	// there.
+	stdoutOwned bool
 )
 
 // agentHelpNotice is addressed to an AI agent reading this help. It is phrased
@@ -132,12 +138,45 @@ func init() {
 // consumer that parses it.
 func setJSONLStderr(on bool) {
 	if on {
+		// Already a stream (--log-format jsonl, then a report on stdout): it
+		// has said hello once.
+		if ui.Quiet() {
+			return
+		}
+		// A reader that closed the stream must fail the write, not kill the
+		// process: the run still ends, writes its reports and says why on
+		// stdout.
+		absorbBrokenPipe()
 		ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)
+		// Masked from its first event: a failure before a run records its
+		// own secrets — a config that does not load — still quotes paths and
+		// values. A run extends the masker with its configuration's.
+		hostSecrets := report.SecretValues(env.EnvironAll())
+		ui.SetEventMask(func(e *uievent.Event) { report.MaskAll(e, hostSecrets) })
 		logger.Route(ui.Emit)
+		emitHello()
 		return
 	}
 	ui.SetEventSink(nil, false)
+	ui.SetEventMask(nil)
 	logger.Route(nil)
+}
+
+// emitHello opens a stream with what it may carry, so a reader tells a stream
+// without diagnostic events from one whose run found nothing. The event types
+// are comma-separated: the envelope stays flat.
+func emitHello() {
+	types := uievent.Types()
+	names := make([]string, len(types))
+	for i, t := range types {
+		names[i] = string(t)
+	}
+	ui.Emit(uievent.Event{
+		Type:   uievent.TypeHello,
+		OpID:   "stream",
+		Schema: report.SchemaVersion,
+		Events: strings.Join(names, ","),
+	})
 }
 
 // resolveLogFormat returns the effective status output format. The --log-format
@@ -258,6 +297,18 @@ func Execute() {
 	// progress container repaint, and before any os.Exit below.
 	flushTrace()
 
+	// A JSON-L stream its reader could not get is a failure of the command,
+	// whatever the command did: the reader saw less than happened.
+	streamErr := ui.EventStreamFailed()
+	if streamErr != nil {
+		msg := "the JSON-L event stream could not be written: " + streamErr.Error()
+		if err == nil {
+			err = errors.New(msg)
+		} else {
+			err = fmt.Errorf("%w\n%s", err, msg)
+		}
+	}
+
 	if err != nil {
 		// A tool failing, a caller mistake and a run that did not cover what it
 		// was asked to cover are different outcomes, and CI needs to tell them
@@ -267,7 +318,22 @@ func Execute() {
 		if coded, ok := errors.AsType[CodedError](err); ok {
 			code = coded.ExitCode()
 		}
+		// A broken stream is a failure (1), which outranks a run that did not
+		// cover everything (4) and a report that was not written (5).
+		if streamErr != nil && (code == exitcode.Coverage || code == exitcode.Export) {
+			code = 1
+		}
 
+		// A stream that could not be written takes no error event either: the
+		// error goes to stdout, the one stream left — unless stdout carries the
+		// command's own data (a report, JSON-RPC, shell code), where a line of
+		// text would corrupt what a reader parses.
+		if streamErr != nil {
+			if !stdoutOwned {
+				fmt.Printf("error: %s\n", err)
+			}
+			os.Exit(code)
+		}
 		// In JSON-L mode the human error line would be a non-JSON line on the
 		// stderr event stream; emit a typed error event instead so every stderr
 		// line stays valid JSON.

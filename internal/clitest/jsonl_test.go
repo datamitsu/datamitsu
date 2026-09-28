@@ -127,6 +127,9 @@ func TestAssertChains(t *testing.T) {
 		cmdDoneStopped  = `{"type":"done","op_id":"cmd-2","op":"lint","status":"fail","runs":1,"cancelled":1,"complete":false}`
 		cmdDoneWrong    = `{"type":"done","op_id":"cmd-2","op":"lint","status":"done","runs":1,"cancelled":0,"complete":true}`
 		cmdDoneComplete = `{"type":"done","op_id":"cmd-2","op":"lint","status":"fail","runs":1,"cancelled":1,"complete":true}`
+		// A finding of task a, and one of no task.
+		aDiagnostic     = `{"type":"diagnostic","op_id":"run-1:a::1","tool":"a","severity":"error"}`
+		strayDiagnostic = `{"type":"diagnostic","op_id":"run-1:z::9","tool":"z","severity":"error"}`
 	)
 	cases := []struct {
 		name    string
@@ -162,6 +165,10 @@ func TestAssertChains(t *testing.T) {
 		{"done before phase", []string{`{"type":"done","op_id":"run-1","status":"done"}`, phase}, "done before its phase start"},
 		{"phase twice", []string{phase, phase, aStart, aDone, doneOne}, "starts twice"},
 		{"done without phase", []string{doneOne}, "has no phase start"},
+		{"diagnostic after its task", []string{phase, aStart, aDone, aDiagnostic, doneOne}, ""},
+		{"diagnostic before its task ended", []string{phase, aStart, aDiagnostic, aDone, doneOne}, "precedes the end of its task"},
+		{"diagnostic after the done", []string{phase, aStart, aDone, doneOne, aDiagnostic}, "follows the done"},
+		{"diagnostic of no task", []string{phase, aStart, aDone, strayDiagnostic, doneOne}, "belongs to no task"},
 		{"progress status", []string{phase, `{"type":"tool_run","op_id":"run-1:a::1","status":"progress","tool":"a"}`}, `status "progress"`},
 	}
 	for _, tc := range cases {

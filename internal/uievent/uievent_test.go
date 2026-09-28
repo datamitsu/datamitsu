@@ -4,10 +4,45 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 )
+
+type failingWriter struct{ err error }
+
+func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
+
+// A sink keeps the first write error for the command to report; emitting goes
+// on without panicking.
+func TestJSONLSinkRecordsTheFirstWriteError(t *testing.T) {
+	first := errors.New("no space left on device")
+	s := NewJSONLSink(failingWriter{first})
+	if s.Failed() != nil {
+		t.Fatal("a sink that wrote nothing has failed")
+	}
+	s.Emit(Event{Type: TypeHello, OpID: "stream"})
+	s.Emit(Event{Type: TypeLog, OpID: "log-1"})
+	if err := s.Failed(); !errors.Is(err, first) {
+		t.Errorf("Failed() = %v, want %v", err, first)
+	}
+}
+
+func TestTypesListsTheStreamVocabulary(t *testing.T) {
+	seen := map[Type]bool{}
+	for _, typ := range Types() {
+		if seen[typ] {
+			t.Errorf("%s listed twice", typ)
+		}
+		seen[typ] = true
+	}
+	for _, want := range []Type{TypeHello, TypeDiagnostic, TypeReport, TypeToolRun} {
+		if !seen[want] {
+			t.Errorf("Types() lacks %s", want)
+		}
+	}
+}
 
 func TestNextOpIDUniqueAndPrefixed(t *testing.T) {
 	a := NextOpID("run")

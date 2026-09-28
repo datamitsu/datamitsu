@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 
@@ -1419,5 +1420,95 @@ func TestFailOn(t *testing.T) {
 		if got := FailOn(); got != raw {
 			t.Errorf("FailOn() = %q, want %q returned raw", got, raw)
 		}
+	}
+}
+
+// DATAMITSU_REPORT comes back exactly as set: the command layer parses it, and a
+// value it cannot read is refused rather than dropped.
+func TestReport(t *testing.T) {
+	t.Setenv(report.Name, os.Getenv(report.Name))
+
+	_ = os.Unsetenv(report.Name)
+	if got := Report(); got != "" {
+		t.Errorf("Report() unset = %q, want empty", got)
+	}
+	for _, raw := range []string{"json=out/run.json", "json=a.json,sarif=b.sarif", "json", " =x "} {
+		t.Setenv(report.Name, raw)
+		if got := Report(); got != raw {
+			t.Errorf("Report() = %q, want %q returned raw", got, raw)
+		}
+	}
+}
+
+func TestAllowPartial(t *testing.T) {
+	t.Setenv(allowPartial.Name, os.Getenv(allowPartial.Name))
+
+	_ = os.Unsetenv(allowPartial.Name)
+	if got := AllowPartial(); got != "" {
+		t.Errorf("AllowPartial() unset = %q, want empty", got)
+	}
+	for _, raw := range []string{"true", "0", "yes", " TRUE "} {
+		t.Setenv(allowPartial.Name, raw)
+		if got := AllowPartial(); got != raw {
+			t.Errorf("AllowPartial() = %q, want %q returned raw", got, raw)
+		}
+	}
+}
+
+func TestEvents(t *testing.T) {
+	t.Setenv(events.Name, os.Getenv(events.Name))
+
+	_ = os.Unsetenv(events.Name)
+	if got := Events(); got != "" {
+		t.Errorf("Events() unset = %q, want empty", got)
+	}
+	for _, raw := range []string{"diagnostics=all", "diagnostics=reported", "everything"} {
+		t.Setenv(events.Name, raw)
+		if got := Events(); got != raw {
+			t.Errorf("Events() = %q, want %q returned raw", got, raw)
+		}
+	}
+}
+
+func TestParseBool(t *testing.T) {
+	for _, tt := range []struct {
+		raw       string
+		value, ok bool
+	}{
+		{"true", true, true},
+		{" 1 ", true, true},
+		{"TRUE", true, true},
+		{"false", false, true},
+		{"0", false, true},
+		{"yes", false, false},
+		{"", false, false},
+	} {
+		if value, ok := ParseBool(tt.raw); value != tt.value || ok != tt.ok {
+			t.Errorf("ParseBool(%q) = %v, %v; want %v, %v", tt.raw, value, ok, tt.value, tt.ok)
+		}
+	}
+}
+
+func TestSourceDateEpoch(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want time.Time
+		ok   bool
+	}{
+		{raw: "", ok: false},
+		{raw: "1700000000", want: time.Date(2023, 11, 14, 22, 13, 20, 0, time.UTC), ok: true},
+		{raw: " 0 ", want: time.Unix(0, 0).UTC(), ok: true},
+		{raw: "-1", ok: false},
+		{raw: "1.5", ok: false},
+		{raw: "yesterday", ok: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			t.Setenv(sourceDateEpoch, tt.raw)
+			got, ok := SourceDateEpoch()
+			if ok != tt.ok || !got.Equal(tt.want) || (ok && got.Location() != time.UTC) {
+				t.Errorf("SourceDateEpoch() = %v, %v; want %v, %v in UTC", got, ok, tt.want, tt.ok)
+			}
+		})
 	}
 }

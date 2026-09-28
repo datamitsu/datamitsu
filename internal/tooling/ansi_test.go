@@ -26,8 +26,8 @@ func TestStripCSI(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := string(stripCSI([]byte(tt.in))); got != tt.want {
-				t.Errorf("stripCSI(%q) = %q, want %q", tt.in, got, tt.want)
+			if got := string(StripCSI([]byte(tt.in))); got != tt.want {
+				t.Errorf("StripCSI(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}
@@ -36,8 +36,8 @@ func TestStripCSI(t *testing.T) {
 func TestStripCSILeavesItsInputAlone(t *testing.T) {
 	in := []byte("\x1b[31merror\x1b[0m")
 	raw := bytes.Clone(in)
-	stripCSI(in)
+	StripCSI(in)
 	if !bytes.Equal(in, raw) {
-		t.Errorf("stripCSI rewrote its input to %q", in)
+		t.Errorf("StripCSI rewrote its input to %q", in)
 	}
 }

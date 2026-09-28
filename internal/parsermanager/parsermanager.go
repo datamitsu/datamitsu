@@ -86,6 +86,44 @@ type Manager struct {
 type moduleFacts struct {
 	parsers  map[string]bool
 	contract bool
+	caps     Capabilities
+}
+
+// ParserFacts is what a module described about itself and one of its parser
+// keys.
+type ParserFacts struct {
+	Version string
+	Schema  int
+	// Contract reports the severity contract (Capabilities.SeverityContract).
+	Contract bool
+	// Tool is the parser key's entry; the zero value when the module does not
+	// list the key.
+	Tool ToolCapability
+}
+
+// DescribedParser returns what module's describe said about parser, and
+// whether this Manager has described the module at all. It never loads a
+// module: a caller that only reports on a run asks after the fact, and must
+// not fetch or compile anything to do so.
+func (m *Manager) DescribedParser(module, parser string) (ParserFacts, bool) {
+	key, ok := m.instanceKey(module)
+	if !ok {
+		return ParserFacts{}, false
+	}
+	m.mu.Lock()
+	facts, described := m.described[key]
+	m.mu.Unlock()
+	if !described {
+		return ParserFacts{}, false
+	}
+	out := ParserFacts{Version: facts.caps.Version, Schema: facts.caps.SchemaVersion, Contract: facts.contract}
+	for _, t := range facts.caps.Tools {
+		if t.Name == parser {
+			out.Tool = t
+			break
+		}
+	}
+	return out, true
 }
 
 // ErrModuleUnavailable marks a parse that never reached the module: it could
@@ -368,7 +406,7 @@ func (m *Manager) describeOnce(ctx context.Context, module string) (moduleFacts,
 			return nil, moduleUnavailableError{err}
 		}
 		m.releaseReset(ctx, module, inst)
-		facts = moduleFacts{parsers: make(map[string]bool, len(caps.Tools)), contract: caps.SeverityContract()}
+		facts = moduleFacts{parsers: make(map[string]bool, len(caps.Tools)), contract: caps.SeverityContract(), caps: caps}
 		for _, t := range caps.Tools {
 			facts.parsers[t.Name] = true
 		}

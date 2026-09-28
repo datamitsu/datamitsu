@@ -1,0 +1,156 @@
+{
+  "schema": "datamitsu.report/1",
+  "datamitsu": {
+    "version": "<VERSION>",
+    "configuration": "datamitsu.config"
+  },
+  "startedAt": "<TS>",
+  "endedAt": "<TS>",
+  "selection": {
+    "mode": "all",
+    "fileScoped": false
+  },
+  "failFast": false,
+  "complete": false,
+  "incomplete": [],
+  "operations": [
+    {
+      "name": "lint",
+      "ran": true,
+      "success": false,
+      "durationMs": <DUR>,
+      "skipped": [],
+      "cancelled": [],
+      "tools": [
+        {
+          "name": "alpha",
+          "app": {
+            "name": "alpha",
+            "kind": "shell"
+          },
+          "parser": null,
+          "failOn": "error",
+          "gateActive": false,
+          "category": "",
+          "complete": false,
+          "incomplete": [
+            "no-extraction"
+          ],
+          "invocations": [
+            {
+              "id": "alpha::1#1",
+              "taskId": "alpha::1",
+              "dir": "",
+              "scope": "repository",
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
+              "wholeUnit": true,
+              "state": "ran",
+              "exitCode": 1,
+              "success": false,
+              "failureKind": "exit",
+              "durationMs": <DUR>,
+              "extraction": "none",
+              "provenance": "none",
+              "files": [
+                {
+                  "path": "exec.config.js",
+                  "state": "ran",
+                  "success": false,
+                  "exitCode": 1
+                },
+                {
+                  "path": "fixture.marker",
+                  "state": "ran",
+                  "success": false,
+                  "exitCode": 1
+                }
+              ],
+              "findings": [
+                {
+                  "fingerprint": "52d5c4cc399dd1c4bb668b1a0df87342a7f3c523ad65854a2551b702ae8b9360",
+                  "fingerprintBasis": "none",
+                  "tool": "alpha",
+                  "source": "alpha",
+                  "severity": "error",
+                  "reported": false,
+                  "gates": true,
+                  "kind": "synthetic",
+                  "message": "alpha exited 1 without parsable findings",
+                  "location": {
+                    "path": "",
+                    "row": 0,
+                    "endRow": 0,
+                    "col": 0,
+                    "endCol": 0,
+                    "unit": "",
+                    "precision": "unknown"
+                  },
+                  "provenance": "synthetic"
+                }
+              ],
+              "outputTail": "alpha: failed\n"
+            }
+          ]
+        },
+        {
+          "name": "beta",
+          "app": {
+            "name": "beta",
+            "kind": "shell"
+          },
+          "parser": null,
+          "failOn": "error",
+          "gateActive": false,
+          "category": "",
+          "complete": false,
+          "incomplete": [
+            "no-extraction"
+          ],
+          "invocations": [
+            {
+              "id": "beta::2#1",
+              "taskId": "beta::2",
+              "dir": "",
+              "scope": "repository",
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
+              "wholeUnit": true,
+              "state": "ran",
+              "exitCode": 0,
+              "success": true,
+              "failureKind": "",
+              "durationMs": <DUR>,
+              "extraction": "none",
+              "provenance": "none",
+              "files": [
+                {
+                  "path": "exec.config.js",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                },
+                {
+                  "path": "fixture.marker",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                }
+              ],
+              "findings": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "exports": [
+    {
+      "format": "json",
+      "path": "run.json",
+      "status": "written"
+    }
+  ]
+}

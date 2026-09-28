@@ -266,6 +266,43 @@ func TestSeverityContract(t *testing.T) {
 	}
 }
 
+// TestDescribedParser answers only from a describe the Manager already made:
+// before one it knows nothing and loads nothing, after one it reports the
+// module's version and schema and the parser key's descriptor entry.
+func TestDescribedParser(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+	ctx := context.Background()
+	wasm := echoWASM(t)
+	srv, hits := serveWASM(t, wasm)
+	m := New(config.MapOfParsers{"core": {URL: srv.URL, Hash: sha256Hex(wasm)}})
+	t.Cleanup(func() { _ = m.Close(context.Background()) })
+
+	if _, ok := m.DescribedParser("core", "yamllint"); ok {
+		t.Fatal("DescribedParser answered before any describe")
+	}
+	if n := atomic.LoadInt64(hits); n != 0 {
+		t.Fatalf("DescribedParser fetched the module %d time(s), want none", n)
+	}
+	if _, err := m.HasParser(ctx, "core", "yamllint"); err != nil {
+		t.Fatal(err)
+	}
+	facts, ok := m.DescribedParser("core", "yamllint")
+	switch {
+	case !ok:
+		t.Fatal("DescribedParser knows nothing after a describe")
+	case !facts.Contract || facts.Schema < SchemaSeverityContract || facts.Version == "":
+		t.Errorf("DescribedParser(core) = %+v, want the current module's version and schema with the contract", facts)
+	case facts.Tool.Name != "yamllint" || facts.Tool.ColumnUnit != "utf-32":
+		t.Errorf("DescribedParser(core, yamllint).Tool = %+v, want yamllint measured in utf-32", facts.Tool)
+	}
+	if facts, ok := m.DescribedParser("core", "no-such-parser"); !ok || facts.Tool.Name != "" {
+		t.Errorf("an unlisted key: %+v, %v; want the module's facts and no tool", facts, ok)
+	}
+	if _, ok := m.DescribedParser("undeclared", "yamllint"); ok {
+		t.Error("an undeclared module was described")
+	}
+}
+
 // TestHasParserDescribesOnce: concurrent callers share one describe per
 // module, including one that misses the answer while another stores it.
 func TestHasParserDescribesOnce(t *testing.T) {

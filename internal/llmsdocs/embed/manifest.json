@@ -4,8 +4,8 @@
   "license": "MIT",
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
-  "pageCount": 56,
-  "pageSetHash": "1cb68ff666739e8f46347229b96c7ee8",
+  "pageCount": 57,
+  "pageSetHash": "12fd3b64154eeedefbcd2eb5e14ab36e",
   "pages": [
     {
       "slug": "about",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 17095,
-      "contentHash": "0b253b67eeb9d22e406e59a6c33d6cfb"
+      "bytes": 17804,
+      "contentHash": "d9f40c31f60219fb36bcb6361497eef1"
     },
     {
       "slug": "guides/architecture",
@@ -318,6 +318,15 @@
       "description": "An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app, or a WASM output-parser module), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.",
       "bytes": 12550,
       "contentHash": "9e7d023ac3006c1eff6bab531457071c"
+    },
+    {
+      "slug": "guides/reports",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/guides/reports.md",
+      "title": "Reports",
+      "description": "One record of a fix, lint or check run — what it holds, what it never contains, how complete it says it is, and how its findings keep their identity across runs",
+      "bytes": 11328,
+      "contentHash": "dd47ca99241fcc90ec6768f1edd73148"
     },
     {
       "slug": "guides/runtime-management",
@@ -451,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 117256,
-      "contentHash": "f27d596660d9e64eed04f111fa400ceb"
+      "bytes": 133838,
+      "contentHash": "b699411b3ad380cf81b8cdf1a75fc1dc"
     },
     {
       "slug": "reference/comparison",

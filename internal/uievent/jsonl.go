@@ -27,6 +27,12 @@ type JSONLSink struct {
 	// drop sub-interval progress updates. Entries are removed on the op's terminal
 	// event so the map stays bounded over a long run.
 	lastProgress map[string]time.Time
+
+	// err is the first write that failed. Emitting goes on — a later write
+	// may succeed, and an emitter cannot act on the failure — but a command
+	// that finishes asks Failed, so a broken stream is not reported as a
+	// success.
+	err error
 }
 
 // NewJSONLSink returns a sink writing JSON-L to w (typically os.Stderr).
@@ -56,8 +62,17 @@ func (s *JSONLSink) Emit(e Event) {
 		delete(s.lastProgress, e.OpID)
 	}
 
-	//nolint:errchkjson // Event has only JSON-encodable fields; a broken stderr is unactionable
-	_ = s.enc.Encode(e)
+	if err := s.enc.Encode(e); err != nil && s.err == nil {
+		s.err = err
+	}
+}
+
+// Failed returns the first error writing the stream met, nil when every line
+// was written.
+func (s *JSONLSink) Failed() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.err
 }
 
 // throttled reports whether e is a progress update for download/chunk that

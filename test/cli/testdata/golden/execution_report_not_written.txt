@@ -1,0 +1,15 @@
+exit code: 5
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✓ alpha     <DUR>
+┃ ✓ hadolint  <DUR> · 1 warning
+┗━ 2 tools · 2 runs · done in <DUR> · 1 warning hidden · cache 0% <RULE>
+
+===STDERR===
+error: report json: blocker/run.json: not a directory
