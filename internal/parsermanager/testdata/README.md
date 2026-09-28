@@ -25,6 +25,12 @@ the toolchain's source tree and the workspace to fixed names, so the committed
 bytes name no directory of the machine that built them. `task build:parsers` alone
 builds into Cargo's target directory and copies nothing here.
 
+## `response-v2.json`
+
+A `parse` answer in the object form of response ABI 2 (`recognized`, `format`,
+`diagnostics`), written by hand so the decoder was tested against it before any
+module answered that way.
+
 ## `released/`
 
 Modules as they were published, which the core must keep reading. They are never

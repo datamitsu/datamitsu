@@ -32,7 +32,7 @@ func parsingDisabled() bool { return parsingDisabledByFlag.Load() || env.NoParse
 // parserModules is the part of *parsermanager.Manager a diagnosticParser uses.
 type parserModules interface {
 	HasParser(ctx context.Context, module, parser string) (bool, error)
-	ParseOutput(ctx context.Context, module, parser string, stdout, stderr []byte, exitCode int32) ([]parsermanager.RawDiagnostic, error)
+	ParseOutput(ctx context.Context, module, parser string, stdout, stderr []byte, exitCode int32) (parsermanager.Response, error)
 }
 
 // diagnosticParser adapts the parser manager and the defaults-in-core resolution
@@ -71,7 +71,7 @@ func (p diagnosticParser) Parse(
 			Err: fmt.Errorf("parser module %q has no parser %q", module, parser),
 		}
 	}
-	raws, err := p.mgr.ParseOutput(ctx, module, parser, stdout, stderr, exitCode)
+	resp, err := p.mgr.ParseOutput(ctx, module, parser, stdout, stderr, exitCode)
 	if err != nil {
 		if errors.Is(err, parsermanager.ErrModuleUnavailable) {
 			p.problems.moduleUnavailable(module, toolName, err)
@@ -80,7 +80,7 @@ func (p diagnosticParser) Parse(
 		p.problems.parseFailed(toolName, err)
 		return nil, err
 	}
-	return diagnostic.ResolveAll(raws, toolName, exitCode != 0), nil
+	return diagnostic.ResolveAll(resp.Diagnostics, toolName, exitCode != 0), nil
 }
 
 // parseProblems gathers, across the parses of a run, what could not be parsed:

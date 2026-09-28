@@ -49,8 +49,9 @@ produces — the quickest way to develop or debug a parser against real output.
 
 Reads the tool's stdout from stdin; pass --stderr-file / --exit-code if the parser
 uses them (e.g. cue_fmt reads stderr). Resolves the module from --wasm (a local
-.wasm), or from the configured ` + "`parsers`" + ` entry named <tool>. Output is JSON
-(the nullable RawDiagnostic list — the core fills defaults later).
+.wasm), or from the configured ` + "`parsers`" + ` entry named <tool>. Output is the
+module's answer as JSON: whether it recognized the output, the format it read,
+and the nullable diagnostics (the core fills defaults later).
 
   pnpm dm exec eslint -- --format json file.js | \
     datamitsu devtools parsers run eslint --wasm ./datamitsu_parsers.wasm`,
@@ -143,13 +144,13 @@ func runParsersRun(cmd *cobra.Command, args []string) error {
 	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.
 	ec := int32(exitCode)
 
-	var diags []parsermanager.RawDiagnostic
+	var resp parsermanager.Response
 	if wasmPath, _ := cmd.Flags().GetString("wasm"); wasmPath != "" {
 		wasm, readErr := os.ReadFile(wasmPath)
 		if readErr != nil {
 			return fmt.Errorf("read wasm module: %w", readErr)
 		}
-		diags, err = parsermanager.ParseLocal(ctx, wasm, tool, stdout, stderr, ec)
+		resp, err = parsermanager.ParseLocal(ctx, wasm, tool, stdout, stderr, ec)
 	} else {
 		c, _, _, loadErr := loadConfig()
 		if loadErr != nil {
@@ -163,12 +164,12 @@ func runParsersRun(cmd *cobra.Command, args []string) error {
 		}
 		mgr := parsermanager.New(c.Parsers)
 		defer func() { _ = mgr.Close(ctx) }()
-		diags, err = mgr.ParseOutput(ctx, module, tool, stdout, stderr, ec)
+		resp, err = mgr.ParseOutput(ctx, module, tool, stdout, stderr, ec)
 	}
 	if err != nil {
 		return err
 	}
-	return writeJSONIndent(cmd.OutOrStdout(), diags)
+	return writeJSONIndent(cmd.OutOrStdout(), resp)
 }
 
 // loadParserCatalog builds the catalog either from a local --wasm file (fully

@@ -12,17 +12,31 @@ import (
 // none of this is declared in datamitsu config, which carries only a source
 // and a hash.
 type Capabilities struct {
-	SchemaVersion int              `json:"schemaVersion"`
-	Module        string           `json:"module"`
-	Version       string           `json:"version"`
-	Tools         []ToolCapability `json:"tools"`
+	SchemaVersion int    `json:"schemaVersion"`
+	Module        string `json:"module"`
+	Version       string `json:"version"`
+	// ABI is the form of the module's parse answers: 1 for a bare array of
+	// diagnostics, 2 for an object that also says whether the output was
+	// recognized. A module that predates the field answers in form 1.
+	ABI   int              `json:"abi"`
+	Tools []ToolCapability `json:"tools"`
 }
 
-// SchemaSeverityContract is the first descriptor schema whose tools declare
-// their level vocabulary, column unit, category and kind. A module at it or
-// later sets a severity only from a level the tool printed, which is what lets
-// a failOn threshold trust the levels it compares.
-const SchemaSeverityContract = 2
+// Descriptor schemas this core reads.
+const (
+	// SchemaSeverityContract is the first descriptor schema whose tools
+	// declare their level vocabulary, column unit, category and kind. A
+	// module at it or later sets a severity only from a level the tool
+	// printed, which is what lets a failOn threshold trust the levels it
+	// compares.
+	SchemaSeverityContract = 2
+	// SchemaABI2 is the first descriptor schema of a module whose parse
+	// answers say whether they recognized the output (ABI 2).
+	SchemaABI2 = 3
+	// SchemaNewest is the newest schema this core knows. A module that
+	// declares a later one is read as this one, its unknown fields ignored.
+	SchemaNewest = SchemaABI2
+)
 
 // SeverityContract reports whether the module's levels come only from what its
 // tools printed (schema 2 or later).
@@ -48,7 +62,8 @@ type ToolCapability struct {
 	ColumnUnit string `json:"columnUnit,omitempty"`
 	// Category is "security" for a security scanner; empty otherwise.
 	Category string `json:"category,omitempty"`
-	// Kind is what the parser reads: "tool" for one tool's own output format.
+	// Kind is what the parser reads: "tool" for one tool's own output format,
+	// "format" for a standard format any tool may print.
 	Kind string `json:"kind,omitempty"`
 }
 

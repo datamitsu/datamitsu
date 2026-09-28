@@ -149,7 +149,7 @@ code:
 | `parsed-findings`    | the parser returned at least one diagnostic                               | for the files it spared |
 | `parser-unavailable` | the module did not load, or its `describe` does not list the declared key | no                      |
 | `parse-failed`       | the module returned an error for this output                              | no                      |
-| `truncated`          | reserved for an output or finding count over a cap; no cap exists yet     | no                      |
+| `truncated`          | a stream or the findings exceeded a [parse cap](#parse-caps)              | no                      |
 | `none`               | the tool declares no `outputParser`, so nothing was attempted             | on success              |
 
 The last column is the [caching rule](./caching.md#a-lint-pass-means-nothing-to-report):
@@ -177,6 +177,22 @@ descriptor schema 2 parsed its output, by its operation's
 [`failOn`](../../reference/configuration-api.md#failing-on-findings-failon): a
 finding at or above it fails a tool that exited 0. The extraction outcome decides
 what the cache may record.
+
+### Parse caps
+
+What one process's output costs to parse is bounded, twice:
+
+| Cap                                                                         | Default         | Over it                                   |
+| --------------------------------------------------------------------------- | --------------- | ----------------------------------------- |
+| `maxParseInputBytes` (`DATAMITSU_MAX_PARSE_INPUT_BYTES`), per stream        | 8 MiB (8388608) | the parser reads the first bytes up to it |
+| `maxFindingsPerProcess` (`DATAMITSU_MAX_FINDINGS_PER_PROCESS`), per process | 10000           | the findings after it are dropped         |
+
+A process over either records `truncated`, with the findings it kept: they are
+shown and they gate as any finding does, but no pass is cached and a report marks
+the tool incomplete. Both are runtime configuration, shown by
+[`datamitsu config runtime`](../../reference/cli-commands.md#config-runtime); a
+value that is not a positive integer stops `fix`, `lint` and `check` with exit 2
+before anything runs.
 
 ### Noise tolerance
 
@@ -500,6 +516,20 @@ exported `parse`, then read and free the output buffer. The raw bytes are passed
 preserved; the parser decides whether to split. The JSON result deserializes into
 nullable Go structs (pointer fields, so a field the tool omitted stays `nil`).
 
+The answer comes in one of two forms, and the core reads both:
+
+| ABI | Answer                                                          | Recognized                                              |
+| --- | --------------------------------------------------------------- | ------------------------------------------------------- |
+| 1   | a JSON array of diagnostics                                     | inferred: at least one diagnostic, or the tool exited 0 |
+| 2   | `{"recognized": true, "format": "sarif", "diagnostics": [ … ]}` | said by the parser                                      |
+
+`recognized: false` means the parser found nothing it understands — no document of
+its format, no line it matches — which is a different answer from understanding the
+output and finding nothing in it (`recognized: true` with no diagnostics). An array
+cannot tell the two apart, so an empty array from a tool that failed counts as not
+recognized. `format` names the format a format parser read, or the tool for a tool
+parser. A field the core does not know, in the answer or in a diagnostic, is ignored.
+
 Instances are **pooled**. Instantiating a module allocates a fresh linear memory,
 and a run parses the output of many tool invocations of the same module, so after
 a successful parse the instance goes back to the manager rather than being
@@ -543,9 +573,13 @@ The manifest carries a `schemaVersion`. From schema 2 every tool also declares:
 | `category`   | `security` for a security scanner; empty otherwise                                       |
 | `kind`       | what the parser reads: `tool`, one tool's own output format                              |
 
-The core reads schema 1 and schema 2 modules alike and ignores fields it does not
-know, so a configuration pinned to an older module keeps working; its tools simply
-declare none of the above.
+Schema 3 adds `abi` at the top level: `2` for a module whose `parse` answers in
+the object form above. A module without the field answers with arrays.
+
+The core reads schemas 1 to 3 alike and ignores fields it does not know, so a
+configuration pinned to an older module keeps working; its tools simply declare
+none of the above. A module that declares a schema newer than any the core knows
+is read as the newest one the core knows.
 
 To debug a parser against a real `datamitsu lint` run, pass **`--no-parse`** (or set
 `DATAMITSU_NO_PARSE`): a failure frame shows each tool's raw output instead of its
@@ -553,7 +587,8 @@ parsed findings, so you can see exactly what the parser was given. The flag chan
 only what is displayed. Parsing still runs, and parser modules are still fetched
 and compiled, because what a run records must not depend on how it is shown.
 `devtools parsers run` is the complementary tool for iterating on a parser against
-piped output.
+piped output: it prints the module's whole answer — `abi`, `recognized`, `format`
+and the diagnostics.
 
 [`datamitsu devtools parsers list`](../../reference/cli-commands.md#devtools-parsers)
 aggregates `describe` across every configured parser into a **deduplicated** view:

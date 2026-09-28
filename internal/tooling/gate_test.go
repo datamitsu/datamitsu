@@ -69,6 +69,11 @@ func TestThresholdGate(t *testing.T) {
 		{
 			name: "output nobody parsed", own: config.SeverityWarning, contract: true, extraction: ExtractionParserUnavailable,
 		},
+		{
+			name: "the findings kept from truncated output", contract: true, extraction: ExtractionTruncated,
+			findings: findingsAt(diagnostic.SeverityError), wantFailed: true,
+			wantReason: "1 finding at or above failOn=error", reported: []bool{true}, gates: []bool{true},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -103,7 +108,7 @@ func TestThresholdGate(t *testing.T) {
 					t.Errorf("finding %d: gates %v but Gating = %v", i, d.Gates, decision.Gating)
 				}
 			}
-			parsed := extraction == ExtractionParsedFindings
+			parsed := extraction == ExtractionParsedFindings || extraction == ExtractionTruncated
 			if proc.GateActive != (c.contract && parsed) || proc.FailOn != config.EffectiveFailOn(task.OpConfig, c.global) {
 				t.Errorf("GateActive %v FailOn %q", proc.GateActive, proc.FailOn)
 			}

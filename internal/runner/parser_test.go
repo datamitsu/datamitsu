@@ -184,8 +184,8 @@ type failingModules struct{}
 
 func (failingModules) HasParser(context.Context, string, string) (bool, error) { return true, nil }
 
-func (failingModules) ParseOutput(context.Context, string, string, []byte, []byte, int32) ([]parsermanager.RawDiagnostic, error) {
-	return nil, errors.New("decode parser output: unexpected end of JSON input")
+func (failingModules) ParseOutput(context.Context, string, string, []byte, []byte, int32) (parsermanager.Response, error) {
+	return parsermanager.Response{}, errors.New("decode parser output: unexpected end of JSON input")
 }
 
 type shellApps map[string]*binmanager.CommandInfo

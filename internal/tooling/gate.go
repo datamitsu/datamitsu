@@ -49,8 +49,10 @@ func ThresholdGate(global config.Severity, contract func(module string) bool, ig
 		failOn := config.EffectiveFailOn(task.OpConfig, global)
 		level := diagnostic.Severity(failOn.Level())
 		// Only a module that parsed has been described; asking about any other
-		// would load it again.
-		parsed := proc.Extraction == ExtractionParsedClean || proc.Extraction == ExtractionParsedFindings
+		// would load it again. A truncated process was parsed too, and its
+		// findings are real.
+		parsed := proc.Extraction == ExtractionParsedClean || proc.Extraction == ExtractionParsedFindings ||
+			proc.Extraction == ExtractionTruncated
 		active := parsed && task.Tool.OutputParser != nil && contract(task.Tool.OutputParser.Module)
 		proc.FailOn, proc.GateActive = failOn, active
 

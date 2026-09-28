@@ -25,6 +25,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
 	"github.com/datamitsu/datamitsu/internal/toolenv"
 	"github.com/datamitsu/datamitsu/internal/trace"
@@ -88,6 +89,7 @@ type Executor struct {
 	parserModules        config.MapOfParsers  // the declared parser modules, for the verdict identity
 	gate                 Gate                 // Optional: fails a process on its parsed findings
 	envObserver          func(environ []string)
+	limits               ParseLimits
 
 	// cmdInfos memoizes command resolution for the lifetime of one Execute; it is
 	// nil outside one (FormatContent), which resolves directly.
@@ -159,6 +161,43 @@ func (e *Executor) SetFileProgressCallback(callback FileProgressCallback) {
 // outputParser. Without it, tool output is never parsed.
 func (e *Executor) SetParser(parser DiagnosticParser) {
 	e.parser = parser
+}
+
+// ParseLimits bound what one tool process's output costs to parse: the bytes of
+// each stream a parser reads and the findings kept. Output beyond either is
+// dropped and the process's extraction is truncated.
+type ParseLimits struct {
+	InputBytes int
+	Findings   int
+}
+
+// EffectiveParseLimits are the parse caps of the effective runtime
+// configuration.
+func EffectiveParseLimits() ParseLimits {
+	eff, err := runtimeconfig.Get()
+	if err != nil {
+		eff = runtimeconfig.Compute()
+	}
+	return ParseLimits{InputBytes: eff.MaxParseInputBytes, Findings: eff.MaxFindingsPerProcess}
+}
+
+// SetParseLimits replaces the executor's parse limits, which are otherwise
+// those of the effective runtime configuration; a limit that is not positive
+// keeps that value.
+func (e *Executor) SetParseLimits(limits ParseLimits) {
+	e.limits = limits
+}
+
+// orDefaults is l with each limit that is not positive at its effective value.
+func (l ParseLimits) orDefaults() ParseLimits {
+	defaults := EffectiveParseLimits()
+	if l.InputBytes <= 0 {
+		l.InputBytes = defaults.InputBytes
+	}
+	if l.Findings <= 0 {
+		l.Findings = defaults.Findings
+	}
+	return l
 }
 
 // SetParserModules tells the executor which parser modules the configuration
@@ -867,10 +906,15 @@ func joinStreams(stdout, stderr []byte) []byte {
 // The parser reads the streams without their ANSI sequences: a tool that
 // colours its output even into a pipe would otherwise hide a position or a
 // level from a line parser behind an escape. The caller keeps the raw streams
-// for the frame.
+// for the frame. It reads at most the executor's ParseLimits of either stream
+// and keeps at most its limit of findings; a process that exceeds either is
+// truncated, with the findings that were kept.
 func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult, task Task, workingDir string, stdout, stderr []byte, exitCode int) {
 	op := task.Tool.OutputParser
+	limits := e.limits.orDefaults()
 	stdout, stderr = StripCSI(stdout), StripCSI(stderr)
+	stdout, cutOut := limits.cut(stdout)
+	stderr, cutErr := limits.cut(stderr)
 	cntParse.Add(1)
 	parseSpan := trace.Start(trace.CatParse, "parseDiagnostics")
 	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.
@@ -906,11 +950,29 @@ func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult
 		}
 		diags[i].File = diagnostic.AbsPath(diags[i].File, workingDir)
 	}
+	dropped := len(diags) > limits.Findings
+	if dropped {
+		diags = diags[:limits.Findings]
+	}
 	proc.Diagnostics = diags
 	proc.Extraction = ExtractionParsedClean
 	if len(diags) > 0 {
 		proc.Extraction = ExtractionParsedFindings
 	}
+	if cutOut || cutErr || dropped {
+		proc.Extraction = ExtractionTruncated
+		log.Debug("tool output exceeded a parse limit",
+			zap.String("tool", task.ToolName),
+			zap.Bool("stdoutCut", cutOut), zap.Bool("stderrCut", cutErr), zap.Bool("findingsDropped", dropped))
+	}
+}
+
+// cut returns the part of stream a parser reads, and whether any was left out.
+func (l ParseLimits) cut(stream []byte) ([]byte, bool) {
+	if len(stream) <= l.InputBytes {
+		return stream, false
+	}
+	return stream[:l.InputBytes], true
 }
 
 func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binmanager.CommandInfo, workingDir string, startTime time.Time) ExecutionResult {

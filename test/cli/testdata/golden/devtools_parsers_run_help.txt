@@ -3,8 +3,9 @@ produces — the quickest way to develop or debug a parser against real output.
 
 Reads the tool's stdout from stdin; pass --stderr-file / --exit-code if the parser
 uses them (e.g. cue_fmt reads stderr). Resolves the module from --wasm (a local
-.wasm), or from the configured `parsers` entry named <tool>. Output is JSON
-(the nullable RawDiagnostic list — the core fills defaults later).
+.wasm), or from the configured `parsers` entry named <tool>. Output is the
+module's answer as JSON: whether it recognized the output, the format it read,
+and the nullable diagnostics (the core fills defaults later).
 
   pnpm dm exec eslint -- --format json file.js | \
     datamitsu devtools parsers run eslint --wasm ./datamitsu_parsers.wasm

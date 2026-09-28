@@ -703,7 +703,7 @@ func failureKind(proc tooling.ProcessResult) string {
 }
 
 func provenanceOf(e tooling.Extraction) string {
-	if e == tooling.ExtractionParsedClean || e == tooling.ExtractionParsedFindings {
+	if e == tooling.ExtractionParsedClean || e == tooling.ExtractionParsedFindings || e == tooling.ExtractionTruncated {
 		return provenanceParser
 	}
 	return provenanceNone

@@ -508,6 +508,53 @@ func NoParse() bool {
 	return os.Getenv(noParse.Name) != ""
 }
 
+// MaxParseInputBytes is how many bytes of each output stream of one tool
+// process a parser reads. It takes a positive integer; unset or any other
+// value yields the default, and CheckParseCaps tells an invalid value apart.
+func MaxParseInputBytes() int {
+	return positiveInt(maxParseInputBytes)
+}
+
+// MaxFindingsPerProcess is how many findings are kept from the output of one
+// tool process. It takes a positive integer; unset or any other value yields
+// the default, and CheckParseCaps tells an invalid value apart.
+func MaxFindingsPerProcess() int {
+	return positiveInt(maxFindingsPerProcess)
+}
+
+// CheckParseCaps returns an error naming the first of
+// DATAMITSU_MAX_PARSE_INPUT_BYTES and DATAMITSU_MAX_FINDINGS_PER_PROCESS that
+// holds a value other than a positive integer. The command layer turns it into
+// a usage error.
+func CheckParseCaps() error {
+	for _, v := range []envVar{maxParseInputBytes, maxFindingsPerProcess} {
+		raw := os.Getenv(v.Name)
+		if raw == "" {
+			continue
+		}
+		if _, ok := parsePositiveInt(raw); !ok {
+			return fmt.Errorf("invalid %s value: %q (must be a positive integer)", v.Name, raw)
+		}
+	}
+	return nil
+}
+
+func positiveInt(v envVar) int {
+	if n, ok := parsePositiveInt(os.Getenv(v.Name)); ok {
+		return n
+	}
+	n, _ := parsePositiveInt(v.DefaultValue)
+	return n
+}
+
+func parsePositiveInt(raw string) (int, bool) {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
+}
+
 // LibcOverride returns the raw DATAMITSU_LIBC value ("" when unset). The
 // target package validates it (glibc/musl) and applies it to host detection.
 func LibcOverride() string {

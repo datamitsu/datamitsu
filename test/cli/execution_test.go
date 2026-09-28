@@ -1385,6 +1385,8 @@ func TestExecutionUsageErrors(t *testing.T) {
 		{"fail_on_env_invalid_with_flag", []string{"DATAMITSU_FAIL_ON=warnings"}, []string{"lint", "--fail-on=warning"}},
 		{"fail_on_flag_invalid", nil, []string{"check", "--fail-on=Error"}},
 		{"explain_invalid", nil, []string{"lint", "--explain=bogus"}},
+		{"max_parse_input_bytes_invalid", []string{"DATAMITSU_MAX_PARSE_INPUT_BYTES=8MiB"}, []string{"lint"}},
+		{"max_findings_per_process_invalid", []string{"DATAMITSU_MAX_FINDINGS_PER_PROCESS=0"}, []string{"check"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

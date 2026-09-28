@@ -1542,3 +1542,41 @@ func TestSourceDateEpoch(t *testing.T) {
 		})
 	}
 }
+
+// The parse caps take positive integers. Anything else falls back to the
+// default, and CheckParseCaps names the variable that holds it.
+func TestParseCaps(t *testing.T) {
+	tests := []struct {
+		name         string
+		bytes        string
+		findings     string
+		wantBytes    int
+		wantFindings int
+		wantErr      string
+	}{
+		{name: "defaults", wantBytes: 8 << 20, wantFindings: 10000},
+		{name: "overrides", bytes: "1024", findings: " 5 ", wantBytes: 1024, wantFindings: 5},
+		{name: "zero bytes", bytes: "0", wantBytes: 8 << 20, wantFindings: 10000, wantErr: maxParseInputBytes.Name},
+		{name: "negative findings", findings: "-1", wantBytes: 8 << 20, wantFindings: 10000, wantErr: maxFindingsPerProcess.Name},
+		{name: "words", bytes: "8MiB", wantBytes: 8 << 20, wantFindings: 10000, wantErr: maxParseInputBytes.Name},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(maxParseInputBytes.Name, tt.bytes)
+			t.Setenv(maxFindingsPerProcess.Name, tt.findings)
+			if got := MaxParseInputBytes(); got != tt.wantBytes {
+				t.Errorf("MaxParseInputBytes() = %d, want %d", got, tt.wantBytes)
+			}
+			if got := MaxFindingsPerProcess(); got != tt.wantFindings {
+				t.Errorf("MaxFindingsPerProcess() = %d, want %d", got, tt.wantFindings)
+			}
+			err := CheckParseCaps()
+			switch {
+			case tt.wantErr == "" && err != nil:
+				t.Errorf("CheckParseCaps() = %v, want nil", err)
+			case tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)):
+				t.Errorf("CheckParseCaps() = %v, want an error naming %s", err, tt.wantErr)
+			}
+		})
+	}
+}

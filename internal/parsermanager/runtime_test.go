@@ -35,7 +35,8 @@ func TestRuntime_EchoRoundTrips(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = rt.Close(ctx) })
 
-	diags, err := rt.Parse(ctx, "echo", []byte("hello world"), nil, 0)
+	resp, err := rt.Parse(ctx, "echo", []byte("hello world"), nil, 0)
+	diags := resp.Diagnostics
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -64,7 +65,8 @@ func TestRuntime_EchoPreservesMultilineAndExitCode(t *testing.T) {
 	t.Cleanup(func() { _ = rt.Close(ctx) })
 
 	// Multiline input must arrive whole (host does not line-split).
-	diags, err := rt.Parse(ctx, "echo", []byte("line1\nline2"), []byte("ignored"), 2)
+	resp, err := rt.Parse(ctx, "echo", []byte("line1\nline2"), []byte("ignored"), 2)
+	diags := resp.Diagnostics
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -84,7 +86,8 @@ func TestRuntime_UnknownToolReturnsEmpty(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = rt.Close(ctx) })
 
-	diags, err := rt.Parse(ctx, "not-a-real-parser", []byte("x"), nil, 1)
+	resp, err := rt.Parse(ctx, "not-a-real-parser", []byte("x"), nil, 1)
+	diags := resp.Diagnostics
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -171,7 +174,8 @@ func TestRuntime_YamllintParsesRealOutput(t *testing.T) {
 
 	out := []byte("stdin:3:1: [error] too many blank lines (3 > 0) (empty-lines)\n" +
 		"stdin:10:5: [warning] line too long (90 > 80 characters) (line-length)\n")
-	diags, err := rt.Parse(ctx, "yamllint", out, nil, 1)
+	resp, err := rt.Parse(ctx, "yamllint", out, nil, 1)
+	diags := resp.Diagnostics
 	if err != nil {
 		t.Fatalf("Parse(yamllint) error = %v", err)
 	}
@@ -359,7 +363,8 @@ func TestParseOutput_EndToEnd(t *testing.T) {
 		"echo": {URL: srv.URL, Hash: sha256Hex(wasm)},
 	})
 
-	diags, err := m.ParseOutput(ctx, "echo", "echo", []byte("end to end"), nil, 0)
+	resp, err := m.ParseOutput(ctx, "echo", "echo", []byte("end to end"), nil, 0)
+	diags := resp.Diagnostics
 	if err != nil {
 		t.Fatalf("ParseOutput() error = %v", err)
 	}

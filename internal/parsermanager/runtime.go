@@ -1,6 +1,7 @@
 package parsermanager
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -36,6 +37,65 @@ type RawDiagnostic struct {
 	// only way to attribute them; per-file parsers leave it nil and the executor
 	// stamps the file it linted.
 	File *string `json:"file,omitempty"`
+}
+
+// Response is a module's answer to one parse: the diagnostics it extracted and
+// whether it understood the output at all.
+//
+// A module answers in one of two forms. The first release returns a bare JSON
+// array (ABI 1), which cannot tell "understood the output and found nothing"
+// from "found nothing it understands"; Recognized is then inferred as the core
+// has always read such an answer: diagnostics were found, or the tool exited
+// 0. A later module returns an object (ABI 2) that says so itself and names
+// the format it read. Fields a newer module adds are ignored.
+type Response struct {
+	// ABI is the form the module answered in: 1 for an array, 2 for an object.
+	ABI int `json:"abi"`
+	// Recognized is false when the parser found nothing it understands — no
+	// document of its format, no matching line — which is not the same answer
+	// as understanding the output and finding nothing in it.
+	Recognized bool `json:"recognized"`
+	// Format is the format key a format parser or the fallback read, or the
+	// tool name for a tool parser; empty in an ABI 1 answer.
+	Format      string          `json:"format,omitempty"`
+	Diagnostics []RawDiagnostic `json:"diagnostics"`
+}
+
+// responseV2 is the object form of a parse answer; a pointer tells an absent
+// recognized from false.
+type responseV2 struct {
+	Recognized  *bool           `json:"recognized"`
+	Format      string          `json:"format"`
+	Diagnostics []RawDiagnostic `json:"diagnostics"`
+}
+
+// DecodeResponse reads a module's parse answer in either form. exitCode is
+// the tool's, which an ABI 1 answer needs to say whether it recognized the
+// output.
+func DecodeResponse(data []byte, exitCode int32) (Response, error) {
+	trimmed := bytes.TrimLeft(data, " \t\r\n")
+	if len(trimmed) > 0 && trimmed[0] == '{' {
+		var v2 responseV2
+		if err := json.Unmarshal(data, &v2); err != nil {
+			return Response{}, fmt.Errorf("decode parser output: %w", err)
+		}
+		if v2.Recognized == nil {
+			return Response{}, errors.New("decode parser output: the answer does not say whether it recognized the output")
+		}
+		diags := v2.Diagnostics
+		if diags == nil {
+			diags = []RawDiagnostic{}
+		}
+		return Response{ABI: 2, Recognized: *v2.Recognized, Format: v2.Format, Diagnostics: diags}, nil
+	}
+	var diags []RawDiagnostic
+	if err := json.Unmarshal(data, &diags); err != nil {
+		return Response{}, fmt.Errorf("decode parser output: %w", err)
+	}
+	if diags == nil {
+		diags = []RawDiagnostic{}
+	}
+	return Response{ABI: 1, Recognized: len(diags) > 0 || exitCode == 0, Diagnostics: diags}, nil
 }
 
 // ParserRuntime is an instantiated wazero module ready to parse tool output. It
@@ -135,8 +195,21 @@ func (p *ParserRuntime) Describe(ctx context.Context) (Capabilities, error) {
 	if err := json.Unmarshal(out, &caps); err != nil {
 		return Capabilities{}, fmt.Errorf("decode describe output: %w", err)
 	}
+	normalizeSchema(&caps)
 	normalizeSeverities(&caps)
 	return caps, nil
+}
+
+// normalizeSchema reads a descriptor from a newer module as the newest schema
+// this core knows, whose fields it can read and whose unknown ones it ignores,
+// and gives a module that predates the abi field the array answers it sends.
+func normalizeSchema(caps *Capabilities) {
+	if caps.SchemaVersion > SchemaNewest {
+		caps.SchemaVersion = SchemaNewest
+	}
+	if caps.ABI == 0 {
+		caps.ABI = 1
+	}
 }
 
 // normalizeSeverities keeps nil for "not declared" apart from an empty list for
@@ -187,30 +260,30 @@ func (p *ParserRuntime) Close(ctx context.Context) error {
 }
 
 // Parse invokes the module's dispatcher for toolName over the tool's raw
-// stdout/stderr bytes and exit code, returning the decoded diagnostics. Raw
-// bytes are passed whole (never line-split here) so multiline parsers keep their
-// input intact. The result fields are nullable per the RawDiagnostic contract.
+// stdout/stderr bytes and exit code, returning its decoded answer. Raw bytes
+// are passed whole (never line-split here) so multiline parsers keep their
+// input intact. The diagnostics are nullable per the RawDiagnostic contract.
 func (p *ParserRuntime) Parse(
 	ctx context.Context,
 	toolName string,
 	stdout, stderr []byte,
 	exitCode int32,
-) ([]RawDiagnostic, error) {
+) (Response, error) {
 	toolPtr, toolLen, err := p.writeBuf(ctx, []byte(toolName))
 	if err != nil {
-		return nil, fmt.Errorf("write tool name: %w", err)
+		return Response{}, fmt.Errorf("write tool name: %w", err)
 	}
 	defer p.free(ctx, toolPtr, toolLen)
 
 	outPtr, outLen, err := p.writeBuf(ctx, stdout)
 	if err != nil {
-		return nil, fmt.Errorf("write stdout: %w", err)
+		return Response{}, fmt.Errorf("write stdout: %w", err)
 	}
 	defer p.free(ctx, outPtr, outLen)
 
 	errPtr, errLen, err := p.writeBuf(ctx, stderr)
 	if err != nil {
-		return nil, fmt.Errorf("write stderr: %w", err)
+		return Response{}, fmt.Errorf("write stderr: %w", err)
 	}
 	defer p.free(ctx, errPtr, errLen)
 
@@ -224,7 +297,7 @@ func (p *ParserRuntime) Parse(
 		uint64(uint32(exitCode)),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("call parse: %w", err)
+		return Response{}, fmt.Errorf("call parse: %w", err)
 	}
 
 	// parse returns (ptr << 32) | len of a freshly allocated output buffer.
@@ -235,18 +308,13 @@ func (p *ParserRuntime) Parse(
 
 	buf, ok := p.mod.Memory().Read(resPtr, resLen)
 	if !ok {
-		return nil, fmt.Errorf("parse output out of range (ptr=%d len=%d)", resPtr, resLen)
+		return Response{}, fmt.Errorf("parse output out of range (ptr=%d len=%d)", resPtr, resLen)
 	}
 	// Memory().Read may return a view into linear memory; copy before decoding
 	// so a later alloc cannot move the bytes out from under json.Unmarshal.
 	out := make([]byte, len(buf))
 	copy(out, buf)
-
-	var diags []RawDiagnostic
-	if err := json.Unmarshal(out, &diags); err != nil {
-		return nil, fmt.Errorf("decode parser output: %w", err)
-	}
-	return diags, nil
+	return DecodeResponse(out, exitCode)
 }
 
 // writeBuf allocates len(data) bytes in the module and writes data into them,

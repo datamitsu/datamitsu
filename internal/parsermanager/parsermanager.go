@@ -207,7 +207,7 @@ func (m *Manager) LoadWASMBytes(ctx context.Context, name string) ([]byte, error
 // and exit code. It is the end-to-end seam: declare → download → verify → load →
 // invoke. The two names are distinct: module selects the WASM artifact (so
 // versions are separate entries), parser is the dispatch key inside it (a name
-// from describe). Both come from a tool's `outputParser`. The returned
+// from describe). Both come from a tool's `outputParser`. The answer's
 // diagnostics are nullable per the RawDiagnostic contract (the Go core fills
 // defaults in a later phase).
 //
@@ -236,33 +236,33 @@ func (m *Manager) ParseOutput(
 	module, parser string,
 	stdout, stderr []byte,
 	exitCode int32,
-) ([]RawDiagnostic, error) {
+) (Response, error) {
 	inst, reused, err := m.acquirePooled(ctx, module)
 	if err != nil {
-		return nil, moduleUnavailableError{err}
+		return Response{}, moduleUnavailableError{err}
 	}
 
-	diags, parseErr := inst.Parse(ctx, parser, stdout, stderr, exitCode)
+	resp, parseErr := inst.Parse(ctx, parser, stdout, stderr, exitCode)
 	if parseErr == nil {
 		m.releaseReset(ctx, module, inst)
-		return diags, nil
+		return resp, nil
 	}
 	_ = inst.Close(ctx)
 	if !reused {
-		return nil, parseErr
+		return Response{}, parseErr
 	}
 
 	fresh, err := m.Acquire(ctx, module)
 	if err != nil {
-		return nil, parseErr // report the parse failure, not the re-instantiate one
+		return Response{}, parseErr // report the parse failure, not the re-instantiate one
 	}
-	diags, parseErr = fresh.Parse(ctx, parser, stdout, stderr, exitCode)
+	resp, parseErr = fresh.Parse(ctx, parser, stdout, stderr, exitCode)
 	if parseErr != nil {
 		_ = fresh.Close(ctx)
-		return nil, parseErr
+		return Response{}, parseErr
 	}
 	m.releaseReset(ctx, module, fresh)
-	return diags, nil
+	return resp, nil
 }
 
 // Acquire returns a ready-to-use parser instance for module: it downloads and
@@ -566,10 +566,10 @@ func (m *Manager) compiledFor(ctx context.Context, module string, p config.Parse
 // ParseLocal runs the named tool's parser, inside an already-loaded WASM module,
 // over the given raw output — like ParseOutput but for a local module (no config
 // or download). It backs `devtools parsers run --wasm` and offline tests.
-func ParseLocal(ctx context.Context, wasm []byte, toolName string, stdout, stderr []byte, exitCode int32) ([]RawDiagnostic, error) {
+func ParseLocal(ctx context.Context, wasm []byte, toolName string, stdout, stderr []byte, exitCode int32) (Response, error) {
 	rt, err := NewRuntime(ctx, wasm)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 	defer func() { _ = rt.Close(ctx) }()
 	return rt.Parse(ctx, toolName, stdout, stderr, exitCode)

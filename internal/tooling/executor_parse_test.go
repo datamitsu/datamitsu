@@ -123,6 +123,45 @@ func TestParseFileDiagnostics_Extraction(t *testing.T) {
 	}
 }
 
+// TestParseFileDiagnostics_Limits pins the parse caps: a parser reads at most
+// the limit of each stream, keeps at most the limit of findings, and a process
+// over either is truncated with what was kept.
+func TestParseFileDiagnostics_Limits(t *testing.T) {
+	three := []diagnostic.Diagnostic{{Message: "a"}, {Message: "b"}, {Message: "c"}}
+	cases := []struct {
+		name         string
+		limits       ParseLimits
+		stdout       string
+		stderr       string
+		diags        []diagnostic.Diagnostic
+		wantStdout   string
+		wantStderr   string
+		wantFindings int
+		want         Extraction
+	}{
+		{"within both", ParseLimits{InputBytes: 8, Findings: 3}, "12345678", "abc", three, "12345678", "abc", 3, ExtractionParsedFindings},
+		{"stdout cut", ParseLimits{InputBytes: 4, Findings: 3}, "12345678", "", nil, "1234", "", 0, ExtractionTruncated},
+		{"stderr cut", ParseLimits{InputBytes: 2, Findings: 3}, "", "abc", three, "", "ab", 3, ExtractionTruncated},
+		{"findings dropped", ParseLimits{InputBytes: 8, Findings: 2}, "x", "", three, "x", "", 2, ExtractionTruncated},
+		{"unset limits are the defaults", ParseLimits{}, "x", "y", three, "x", "y", 3, ExtractionParsedFindings},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fp := &fakeParser{diags: c.diags}
+			e := &Executor{parser: fp}
+			e.SetParseLimits(c.limits)
+			var proc ProcessResult
+			e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), "/w", []byte(c.stdout), []byte(c.stderr), 1)
+			if string(fp.gotStdout) != c.wantStdout || string(fp.gotStderr) != c.wantStderr {
+				t.Errorf("parser read %q/%q, want %q/%q", fp.gotStdout, fp.gotStderr, c.wantStdout, c.wantStderr)
+			}
+			if len(proc.Diagnostics) != c.wantFindings || proc.Extraction != c.want {
+				t.Errorf("got %d findings, %q; want %d, %q", len(proc.Diagnostics), proc.Extraction, c.wantFindings, c.want)
+			}
+		})
+	}
+}
+
 // TestExecutionResultParseFailed: a task whose every process was parsed says
 // so; one process whose output could not be parsed makes an empty
 // Diagnostics unbelievable, and the task says that instead.

@@ -1,0 +1,22 @@
+{
+  "diagnostics": [
+    {
+      "code": "SC2086",
+      "col": 5,
+      "file": "src/a.sh",
+      "message": "Double quote to prevent globbing and word splitting.",
+      "row": 3,
+      "severity": 3
+    },
+    {
+      "code": "SC2086",
+      "col": 1,
+      "file": "src/b.sh",
+      "message": "Double quote to prevent globbing and word splitting.",
+      "row": 7,
+      "severity": 3
+    }
+  ],
+  "format": "checkstyle-xml",
+  "recognized": true
+}
