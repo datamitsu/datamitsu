@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -156,7 +155,7 @@ func refuseNarrowedReports(opts Options, sel tooling.Selection, fileScoped bool,
 		if slices.Contains(listing, spec.Format) {
 			status = report.ExportRefused
 		}
-		emitReport(spec, status, "the run is narrowed: "+strings.Join(why, ", "))
+		emitReport(spec, status, "the run is narrowed: "+strings.Join(why, ", "), report.SecretValues(env.EnvironAll()))
 	}
 	return exitcode.UsageErrorf("the run is narrowed (%s), so report %s would not list every finding: "+
 		"run it over the whole repository, or pass --allow-partial to write it with the reasons it is incomplete",
@@ -171,16 +170,13 @@ func (sc *sharedContext) emitDiagnostics(runOpID string, found []report.ToolFind
 	if len(found) == 0 || !ui.Quiet() {
 		return
 	}
-	var mask *strings.Replacer
+	secrets := sc.secretValues()
 	for _, tf := range found {
 		f := tf.Finding
 		if !f.Reported && !sc.opts.AllDiagnostics {
 			continue
 		}
-		if mask == nil {
-			mask = maskReplacer(sc.secretValues())
-		}
-		ui.Emit(uievent.Event{
+		e := uievent.Event{
 			Type:        uievent.TypeDiagnostic,
 			OpID:        toolOpID(runOpID, tf.TaskID),
 			Tool:        f.Tool,
@@ -193,40 +189,18 @@ func (sc *sharedContext) emitDiagnostics(runOpID string, found []report.ToolFind
 			Severity:    f.Severity,
 			Code:        f.Code,
 			Source:      f.Source,
-			Msg:         mask.Replace(f.Message),
+			Msg:         f.Message,
 			Fingerprint: f.Fingerprint,
 			Provenance:  f.Provenance,
 			Reported:    new(f.Reported),
 			Gates:       new(f.Gates),
-		})
+		}
+		// The op_id ties the event to its task's events, which carry the same
+		// directory unmasked: it is an identity, not content.
+		report.MaskAll(&e, secrets)
+		e.OpID = toolOpID(runOpID, tf.TaskID)
+		ui.Emit(e)
 	}
-}
-
-func maskReplacer(secrets []string) *strings.Replacer {
-	pairs := make([]string, 0, 2*len(secrets))
-	for _, s := range secrets {
-		pairs = append(pairs, s, report.Masked)
-	}
-	return strings.NewReplacer(pairs...)
-}
-
-// streamOutcome fails a run whose JSON-L stream could not be written: its
-// consumer read less than the run did. It exits 1 — a broken stderr is not an
-// unwritten report — unless the run was interrupted, and says so on stdout, the
-// one stream left.
-func streamOutcome(err error) error {
-	streamErr := ui.EventStreamFailed()
-	if streamErr == nil {
-		return err
-	}
-	if interrupted, ok := errors.AsType[interruptedError](err); ok {
-		return interrupted
-	}
-	msg := "the JSON-L event stream could not be written: " + streamErr.Error()
-	if err != nil {
-		msg = err.Error() + "\n" + msg
-	}
-	return errors.New(msg)
 }
 
 // finishReports writes every report of the run after its last operation,
@@ -269,7 +243,7 @@ func (sc *sharedContext) finishReports(operations []config.OperationType, err er
 			status, msg = report.ExportFailed, writeErr.Error()
 			failures = append(failures, fmt.Errorf("report %s: %s: %w", t.Spec.Format, t.Spec.Path, writeErr))
 		}
-		emitReport(t.Spec, status, msg)
+		emitReport(t.Spec, status, msg, sc.secretValues())
 	}
 	if len(failures) == 0 {
 		return err
@@ -294,17 +268,21 @@ func (sc *sharedContext) finishReports(operations []config.OperationType, err er
 // was written.
 func omitReports(specs []render.Spec, cause error) {
 	for _, s := range specs {
-		emitReport(s, report.ExportOmitted, cause.Error())
+		emitReport(s, report.ExportOmitted, cause.Error(), report.SecretValues(env.EnvironAll()))
 	}
 }
 
-func emitReport(spec render.Spec, status, msg string) {
-	ui.Emit(uievent.Event{
+// emitReport writes a report event, masked as the report would be: its path
+// and its message come from the user and the file system.
+func emitReport(spec render.Spec, status, msg string, secrets []string) {
+	e := uievent.Event{
 		Type:   uievent.TypeReport,
 		OpID:   uievent.NextOpID("report"),
 		Status: status,
 		Format: spec.Format,
 		Path:   spec.Path,
 		Msg:    msg,
-	})
+	}
+	report.MaskAll(&e, secrets)
+	ui.Emit(e)
 }

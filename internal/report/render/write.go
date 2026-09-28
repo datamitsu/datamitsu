@@ -2,9 +2,12 @@ package render
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -66,10 +69,6 @@ func (t *Target) Write(run *report.Run) error {
 		err = closeErr
 	}
 	if err == nil {
-		// CreateTemp creates the file 0600; a report is for the pipeline to read.
-		err = os.Chmod(tmp, 0o644)
-	}
-	if err == nil {
 		err = os.Rename(tmp, t.Spec.Path)
 	}
 	if err != nil {
@@ -80,20 +79,41 @@ func (t *Target) Write(run *report.Run) error {
 }
 
 // createBeside creates the temporary file a report is written into, in the
-// directory of its path so that the final rename is atomic.
+// directory of its path so that the final rename is atomic. It gets the mode a
+// report created in place would: the process's umask decides, and a report the
+// rename replaces keeps its own permissions.
 func createBeside(path string) (*os.File, error) {
-	if info, err := os.Stat(path); err == nil && info.IsDir() {
+	existing, statErr := os.Stat(path)
+	if statErr == nil && existing.IsDir() {
 		return nil, errors.New("is a directory")
 	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, unwrapPathError(err)
 	}
-	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return nil, unwrapPathError(err)
+	for range 100 {
+		var suffix [8]byte
+		if _, err := rand.Read(suffix[:]); err != nil {
+			return nil, fmt.Errorf("name a temporary file: %w", err)
+		}
+		name := filepath.Join(dir, "."+filepath.Base(path)+"."+hex.EncodeToString(suffix[:])+".tmp")
+		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return nil, unwrapPathError(err)
+		}
+		if statErr == nil && existing.Mode().IsRegular() {
+			if err := f.Chmod(existing.Mode().Perm()); err != nil {
+				_ = f.Close()
+				_ = os.Remove(name)
+				return nil, unwrapPathError(err)
+			}
+		}
+		return f, nil
 	}
-	return f, nil
+	return nil, errors.New("no free temporary name")
 }
 
 // unwrapPathError drops the path an *os.PathError repeats: the message it is

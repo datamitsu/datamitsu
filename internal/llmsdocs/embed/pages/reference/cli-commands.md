@@ -439,7 +439,8 @@ the task that reported it:
 
 `file` is relative to the repository root, rows and columns are 1-based and
 `end_col` is exclusive; `fingerprint` is the finding's
-[report fingerprint](#reports), and its message is masked like a report's. By
+[report fingerprint](#reports); every field but `op_id` is masked like a
+report's. By
 default only the findings at or above the operation's `failOn` are emitted —
 what the terminal shows. `--events diagnostics=all` (or
 `DATAMITSU_EVENTS=diagnostics=all`) emits every finding, with `reported` and
@@ -517,7 +518,9 @@ datamitsu lint --report json=out/run.json
 
 - The path is required, and relative to the working directory. Missing
   directories are created, and the file is written to a temporary name beside
-  it and renamed, so a reader never sees half a report.
+  it and renamed, so a reader never sees half a report. It gets the
+  permissions a file created in its place would — the umask decides — and a
+  report it replaces keeps its own.
 - `-` writes the report to stdout, for one format per run. stdout then carries
   the report alone: the human output is left out, and stderr carries the
   [run events](#run-events) as it does under `--log-format jsonl`.

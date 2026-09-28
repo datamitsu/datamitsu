@@ -59,7 +59,11 @@ func TestRoundTrip(t *testing.T) {
 }
 
 func TestDecodeRefusesOtherSchemas(t *testing.T) {
-	for _, doc := range []string{`{"schema": "datamitsu.report/2"}`, `{}`, `not json`} {
+	for _, doc := range []string{
+		`{"schema": "datamitsu.report/2"}`, `{}`, `not json`,
+		`{"schema": "datamitsu.report/1"}{"schema": "datamitsu.report/1"}`,
+		`{"schema": "datamitsu.report/1"} trailing`,
+	} {
 		if _, err := Decode(strings.NewReader(doc)); err == nil {
 			t.Errorf("Decode(%s) accepted it", doc)
 		}

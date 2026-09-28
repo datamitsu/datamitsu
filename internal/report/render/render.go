@@ -22,7 +22,6 @@ type Renderer interface {
 	Name() string
 	// Options lists the option names the format accepts after "?".
 	Options() []string
-	// Render writes run to w.
 	Render(w io.Writer, run *report.Run, options map[string]string) error
 	// OmitsIncompleteTools reports a format that leaves out a tool whose
 	// completeness is not established instead of listing it: such a format is
@@ -32,7 +31,7 @@ type Renderer interface {
 
 var renderers = []Renderer{json.Renderer{}}
 
-// Lookup returns the renderer of format.
+// Lookup finds a format by the name --report spells it with.
 func Lookup(format string) (Renderer, bool) {
 	for _, r := range renderers {
 		if r.Name() == format {
@@ -42,7 +41,7 @@ func Lookup(format string) (Renderer, bool) {
 	return nil, false
 }
 
-// Names lists the formats, sorted.
+// Names lists the formats a report can be asked for, sorted for messages.
 func Names() []string {
 	names := make([]string, 0, len(renderers))
 	for _, r := range renderers {

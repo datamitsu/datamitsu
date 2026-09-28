@@ -108,7 +108,6 @@ func ordinals(in []fingerprintInput) []int {
 	return out
 }
 
-// fingerprints computes the fingerprint of every input.
 func fingerprints(in []fingerprintInput) []string {
 	numbers := ordinals(in)
 	out := make([]string, len(in))

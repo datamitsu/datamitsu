@@ -179,24 +179,75 @@ func TestEventsBrokenStream(t *testing.T) {
 		})
 	}
 
-	// A report on stdout owns it: the command still fails, and writes nothing
-	// after the report.
+	// A report on stdout owns it — from a run or from report render: the
+	// command still fails, and writes nothing after the report.
+	e.p.WriteFile("run.json", `{"schema": "datamitsu.report/1", "selection": {"mode": "all"}}`)
+	for _, args := range [][]string{
+		{"lint", "--report", "json=-"},
+		{"--log-format", "jsonl", "report", "render", "--input", "run.json", "--format", "json"},
+	} {
+		t.Run("stdout_"+args[0], func(t *testing.T) {
+			stdout, code := runWithFullStderr(t, e, args...)
+			if code != 1 {
+				t.Fatalf("exit code = %d, want 1", code)
+			}
+			var doc map[string]any
+			if err := json.Unmarshal(stdout, &doc); err != nil {
+				t.Errorf("stdout is not the report alone: %v\n%s", err, stdout)
+			}
+		})
+	}
+
+	// A broken stream outranks a report that could not be written: exit 1.
+	t.Run("export_failed", func(t *testing.T) {
+		e.p.WriteFile("blocker", "a file, not a directory\n")
+		stdout, code := runWithFullStderr(t, e, "--log-format", "jsonl", "lint", "--report", "json=blocker/x.json")
+		if code != 1 || !strings.Contains(string(stdout), "report json: blocker/x.json: not a directory") ||
+			!strings.Contains(string(stdout), "the JSON-L event stream could not be written") {
+			t.Errorf("exit code = %d, stdout %q; want 1 naming both failures", code, stdout)
+		}
+	})
+}
+
+// runWithFullStderr runs the binary in e with stderr on /dev/full and returns
+// its stdout and exit code.
+func runWithFullStderr(t *testing.T, e *execProject, args ...string) ([]byte, int) {
+	t.Helper()
 	full, err := os.OpenFile("/dev/full", os.O_WRONLY, 0)
 	if err != nil {
 		t.Skipf("/dev/full: %v", err)
 	}
 	t.Cleanup(func() { _ = full.Close() })
 	var stdout bytes.Buffer
-	cmd := exec.Command(clitest.BuildOnce(t), "--no-auto-config", "--config", e.cfg, "lint", "--report", "json=-")
+	cmd := exec.Command(clitest.BuildOnce(t), append([]string{"--no-auto-config", "--config", e.cfg}, args...)...)
 	cmd.Dir = e.p.Dir
 	cmd.Env = clitest.BaseEnv(e.cache)
 	cmd.Stdout, cmd.Stderr = &stdout, full
-	if code := clitest.ExitCodeOf(cmd.Run()); code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	code := clitest.ExitCodeOf(cmd.Run())
+	return stdout.Bytes(), code
+}
+
+// A secret value is masked in every field of a diagnostic event but its op_id,
+// not only in its message: here it is a directory name.
+func TestEventsMaskSecrets(t *testing.T) {
+	const secret = "abcdefgh12"
+	e := newExecProject(t, map[string]string{"fixture.marker": "", secret + "/Dockerfile": "FROM debian\n"}, fixtureSpec)
+	spec := fixtureSpec
+	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, parsedTool(hadolintFinding, 0)))
+	res := e.run("", []string{"DATAMITSU_TEST_TOKEN=" + secret}, jsonl("lint", "--events", "diagnostics=all", "--report", "json=run.json")...)
+	e.wantExit(res, 0)
+	events := clitest.MustParseJSONL(t, res.Stderr)
+	clitest.AssertChains(t, events)
+	diags := diagnosticsOf(events)
+	if len(diags) != 1 || diags[0].Fields["file"] != "***/Dockerfile" || diags[0].Dir != "***" {
+		t.Fatalf("diagnostic events = %v, want one in ***/Dockerfile", diags)
 	}
-	var doc map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &doc); err != nil {
-		t.Errorf("stdout is not the report alone: %v\n%s", err, stdout.String())
+	if run := toolRuns(events, "hadolint"); diags[0].OpID != run[0].OpID {
+		t.Errorf("diagnostic op_id = %s, want its task's %s", diags[0].OpID, run[0].OpID)
+	}
+	if strings.Contains(e.read("run.json"), secret) {
+		t.Errorf("the report holds the secret:\n%s", e.read("run.json"))
 	}
 }
 

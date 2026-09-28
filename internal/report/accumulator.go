@@ -96,7 +96,8 @@ func (a *Accumulator) BeginOperation(name string, plan *tooling.ExecutionPlan, t
 	return rec
 }
 
-// NotRun records an operation the run never reached.
+// NotRun records an operation the run never reached; one that began is left
+// as it is.
 func (a *Accumulator) NotRun(name string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -168,7 +169,8 @@ func (o *OperationRecord) Stopped(c Cancel) {
 	o.stopped = append(o.stopped, c)
 }
 
-// End records how the operation ended.
+// End records whether the operation succeeded and how long its tools took, the
+// "done in" of its footer.
 func (o *OperationRecord) End(success bool, durationMs int64) {
 	if o == nil {
 		return
@@ -401,7 +403,7 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 		if f, ok := syntheticFinding(task.ToolName, proc, tr.Category); ok {
 			inv.Findings = append(inv.Findings, f)
 		}
-		inv.OutputTail = outputTail(proc, tr.Category, a.opts.Secrets.longest())
+		inv.OutputTail = outputTail(proc, tr.Category, a.opts.Secrets.Values())
 		out = append(out, inv)
 	}
 	// A process given no path answers for every file no other process and no

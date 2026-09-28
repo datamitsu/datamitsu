@@ -13,6 +13,7 @@ import (
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
@@ -288,8 +289,14 @@ func Execute() {
 
 	// A JSON-L stream its reader could not get is a failure of the command,
 	// whatever the command did: the reader saw less than happened.
-	if streamErr := ui.EventStreamFailed(); err == nil && streamErr != nil {
-		err = fmt.Errorf("the JSON-L event stream could not be written: %w", streamErr)
+	streamErr := ui.EventStreamFailed()
+	if streamErr != nil {
+		msg := "the JSON-L event stream could not be written: " + streamErr.Error()
+		if err == nil {
+			err = errors.New(msg)
+		} else {
+			err = fmt.Errorf("%w\n%s", err, msg)
+		}
 	}
 
 	if err != nil {
@@ -301,12 +308,17 @@ func Execute() {
 		if coded, ok := errors.AsType[CodedError](err); ok {
 			code = coded.ExitCode()
 		}
+		// A broken stream is a failure (1), which outranks a run that did not
+		// cover everything (4) and a report that was not written (5).
+		if streamErr != nil && (code == exitcode.Coverage || code == exitcode.Export) {
+			code = 1
+		}
 
 		// A stream that could not be written takes no error event either: the
 		// error goes to stdout, the one stream left — unless stdout carries the
 		// command's own data (a report, JSON-RPC, shell code), where a line of
 		// text would corrupt what a reader parses.
-		if ui.EventStreamFailed() != nil {
+		if streamErr != nil {
 			if !stdoutOwned {
 				fmt.Printf("error: %s\n", err)
 			}

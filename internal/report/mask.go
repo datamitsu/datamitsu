@@ -80,14 +80,6 @@ func (s *Secrets) Values() []string {
 	return out
 }
 
-// longest is the length of the longest secret, 0 when there is none.
-func (s *Secrets) longest() int {
-	if values := s.Values(); len(values) > 0 {
-		return len(values[0])
-	}
-	return 0
-}
-
 func secretName(name string) bool {
 	upper := strings.ToUpper(name)
 	for _, word := range []string{"TOKEN", "SECRET", "PASSWORD", "CREDENTIAL"} {
@@ -104,16 +96,47 @@ func secretName(name string) bool {
 // best effort: it catches what the environment names, not a secret a tool
 // prints that no variable ever held.
 func Mask(run *Run, secrets []string) {
-	if run == nil || len(secrets) == 0 {
+	MaskAll(run, secrets)
+}
+
+// MaskAll masks every exported string that ptr, a pointer, reaches — a Run,
+// an event — as Mask does.
+func MaskAll(ptr any, secrets []string) {
+	v := reflect.ValueOf(ptr)
+	if len(secrets) == 0 || v.Kind() != reflect.Pointer || v.IsNil() {
 		return
 	}
+	maskValue(v.Elem(), replacer(secrets))
+}
+
+func replacer(secrets []string) *strings.Replacer {
 	pairs := make([]string, 0, 2*len(secrets))
 	for _, s := range secrets {
 		if s != "" {
 			pairs = append(pairs, s, Masked)
 		}
 	}
-	maskValue(reflect.ValueOf(run).Elem(), strings.NewReplacer(pairs...))
+	return strings.NewReplacer(pairs...)
+}
+
+// withoutFragment masks text, which a cut at a byte count started, and drops
+// what it begins with that could be the end of a secret the cut went
+// through: a part of a secret is not a secret masking can recognize.
+func withoutFragment(text string, secrets []string) string {
+	if len(secrets) == 0 {
+		return text
+	}
+	text = replacer(secrets).Replace(text)
+	drop := 0
+	for _, s := range secrets {
+		for k := min(len(s)-1, len(text)); k > drop; k-- {
+			if strings.HasPrefix(text, s[len(s)-k:]) {
+				drop = k
+				break
+			}
+		}
+	}
+	return text[drop:]
 }
 
 var timeType = reflect.TypeFor[time.Time]()

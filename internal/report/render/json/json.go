@@ -5,6 +5,7 @@ package json
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -17,14 +18,14 @@ type Renderer struct{}
 // Name is the format's name in --report.
 func (Renderer) Name() string { return "json" }
 
-// Options lists the options the format takes: none.
+// Options is empty: the document has no variant to choose.
 func (Renderer) Options() []string { return nil }
 
 // OmitsIncompleteTools is false: the document lists every tool, with its
 // completeness, instead of leaving one out.
 func (Renderer) OmitsIncompleteTools() bool { return false }
 
-// Render writes run to w followed by a newline.
+// Render writes the document indented by two spaces, with a final newline.
 func (Renderer) Render(w io.Writer, run *report.Run, _ map[string]string) error {
 	data, err := json.MarshalIndent(run, "", "  ")
 	if err != nil {
@@ -43,6 +44,9 @@ func Decode(r io.Reader) (*report.Run, error) {
 	dec := json.NewDecoder(r)
 	if err := dec.Decode(&run); err != nil {
 		return nil, fmt.Errorf("decode report: %w", err)
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, errors.New("decode report: data after the document")
 	}
 	if run.Schema != report.SchemaVersion {
 		return nil, fmt.Errorf("unsupported report schema %q (want %q)", run.Schema, report.SchemaVersion)

@@ -1131,7 +1131,7 @@ func runSequential(
 	if command != "" {
 		sc.emitRunDone(command, operations, elapsedMs, err == nil)
 	}
-	return streamOutcome(err)
+	return err
 }
 
 // runOperations walks the repository once, runs the bundled checks, then the

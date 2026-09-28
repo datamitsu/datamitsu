@@ -24,9 +24,8 @@ func TestTargetWritesAtomically(t *testing.T) {
 	if err := target.Write(&report.Run{Schema: report.SchemaVersion}); err != nil {
 		t.Fatal(err)
 	}
-	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm()&0o044 == 0 {
-		t.Fatalf("report = %v, %v; want it written and readable", info, err)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("report not written: %v", err)
 	}
 	entries, _ := os.ReadDir(filepath.Dir(path))
 	if len(entries) != 1 {

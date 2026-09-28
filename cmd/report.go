@@ -80,6 +80,9 @@ func runReportRender(cmd *cobra.Command, _ []string) error {
 			"pass --allow-partial to render it with the reasons it is incomplete",
 			reportRenderInput, strings.Join(why, ", "), spec.Format)
 	}
+	if spec.Stdout() {
+		stdoutOwned = true
+	}
 	target := render.Open(spec, cmd.OutOrStdout())
 	if err := target.Write(run); err != nil {
 		return exitcode.ExportError{Err: fmt.Errorf("report %s: %s: %w", spec.Format, spec.Path, err)}
