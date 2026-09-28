@@ -44,6 +44,7 @@ Standard llms.txt form: `datamitsu llms --web`.
 - [Managed Configs](guides/managed-configs): Using managed configuration files, symlinks, and the .datamitsu/ directory
 - [Managed Content (Bundles)](guides/managed-content): Using content-addressed bundles to distribute managed files through symlinks
 - [OCI Bundles](guides/oci-bundles): An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app, or a WASM output-parser module), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.
+- [Reports](guides/reports): One record of a fix, lint or check run — what it holds, what it never contains, how complete it says it is, and how its findings keep their identity across runs
 - [Runtime Management](guides/runtime-management): Managing Bun, UV (Python), Node.js, JVM, and Go runtimes with datamitsu
 - [Source Mode](guides/source-mode): Put a project's declared toolchain on PATH for the current shell, so every tool runs at the version the repository pins — with lazy downloads and invisible branch switching
 - [Supply Chain Security](guides/supply-chain-security): How datamitsu enforces supply chain integrity for Bun, pnpm, UV, and Go dependencies

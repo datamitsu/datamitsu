@@ -346,6 +346,80 @@ func TestReportSecurityTool(t *testing.T) {
 	}
 }
 
+// TestReportRender: `report render` converts a run's own JSON offline through
+// the same renderers and the same completeness rule; its json target
+// reproduces the document byte for byte, without the checkout.
+func TestReportRender(t *testing.T) {
+	t.Run("round_trip", func(t *testing.T) {
+		e := reportProject(t)
+		e.wantExit(e.run("", nil, "lint", "--report", "json=run.json"), 0)
+		original := e.read("run.json")
+		if err := os.Remove(filepath.Join(e.p.Dir, "Dockerfile")); err != nil {
+			t.Fatal(err)
+		}
+
+		res := e.run("", nil, "report", "render", "--input", "run.json", "--format", "json", "--output", "out/again.json")
+		e.wantExit(res, 0)
+		if again := e.read("out/again.json"); again != original {
+			t.Errorf("render changed the document:\n--- run\n%s\n--- render\n%s", original, again)
+		}
+		stdout := e.run("", nil, "report", "render", "--input", "run.json", "--format", "json")
+		e.wantExit(stdout, 0)
+		if stdout.Stdout != original || stdout.Stderr != "" {
+			t.Errorf("render to stdout = %q (stderr %q), want the document alone", stdout.Stdout, stdout.Stderr)
+		}
+	})
+
+	t.Run("narrowed", func(t *testing.T) {
+		e := reportProject(t)
+		e.wantExit(e.run("", nil, "lint", "Dockerfile", "--allow-partial", "--report", "json=run.json"), 0)
+		refused := e.run("", nil, "report", "render", "--input", "run.json", "--format", "json")
+		e.wantExit(refused, 2)
+		e.golden("report_render_narrowed", refused)
+		allowed := e.run("", nil, "report", "render", "--input", "run.json", "--format", "json", "--allow-partial")
+		e.wantExit(allowed, 0)
+		if allowed.Stdout != e.read("run.json") {
+			t.Error("--allow-partial rendered another document")
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		e := reportProject(t)
+		e.p.WriteFile("future.json", `{"schema": "datamitsu.report/2", "complete": true}`)
+		e.p.WriteFile("blocker", "a file, not a directory\n")
+		e.p.WriteFile("run.json", `{"schema": "datamitsu.report/1", "selection": {"mode": "all"}}`)
+		for _, tc := range []struct {
+			name string
+			args []string
+			exit int
+		}{
+			{name: "future_schema", args: []string{"--input", "future.json", "--format", "json"}, exit: 1},
+			{name: "missing_input", args: []string{"--input", "none.json", "--format", "json"}, exit: 1},
+			{name: "unknown_format", args: []string{"--input", "run.json", "--format", "yaml"}, exit: 2},
+			{name: "unknown_option", args: []string{"--input", "run.json", "--format", "json?category=x"}, exit: 2},
+			{name: "no_input_flag", args: []string{"--format", "json"}, exit: 2},
+			{name: "unwritable", args: []string{"--input", "run.json", "--format", "json", "--output", "blocker/x.json"}, exit: 5},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				res := e.run("", nil, append([]string{"report", "render"}, tc.args...)...)
+				e.wantExit(res, tc.exit)
+				e.golden("report_render_"+tc.name, res)
+			})
+		}
+	})
+
+	t.Run("help", func(t *testing.T) {
+		norm := clitest.NewNormalizer()
+		for _, args := range [][]string{{"report", "--help"}, {"report", "render", "--help"}} {
+			res := clitest.Run(t, clitest.RunOptions{}, args...)
+			if res.ExitCode != 0 {
+				t.Fatalf("%v exit = %d\n%s", args, res.ExitCode, res.Stderr)
+			}
+			clitest.AssertGolden(t, strings.Join(args[:len(args)-1], "_")+"_help", norm.Apply(res.Stdout))
+		}
+	})
+}
+
 func wantReportEvent(t *testing.T, events []clitest.Event, format, path, status, msg string) {
 	t.Helper()
 	got := eventsOf(events, func(e clitest.Event) bool { return e.Type == "report" })

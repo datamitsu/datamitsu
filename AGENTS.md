@@ -279,8 +279,10 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 
 - `internal/report` is the one record of a `fix`/`lint`/`check` run (`report.Run`,
   schema `datamitsu.report/1`); every `--report` format is a renderer over it
-  (`internal/report/render/<format>`) and reads nothing else. A new consumer of
-  a run's results reads the model, never `ExecutionResult`.
+  (`internal/report/render/<format>`, registered in `render.renderers`) and
+  reads nothing else, so `datamitsu report render` gives the run's own output
+  offline. A new consumer of a run's results reads the model, never
+  `ExecutionResult`. `render.Open`/`Target.Write` is the one atomic writer.
 - A report carries no argv and no environment: `Command` and every environment
   value stay out of the model, an app is referenced by name, kind and configured
   version. A report is never stored in any cache.

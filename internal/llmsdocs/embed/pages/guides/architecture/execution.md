@@ -136,7 +136,7 @@ A task that failed on its own and stopped short — the rest of a per-file loop 
 
 ### The report of a run
 
-When a run is asked for a report (`--report`), the runner folds every task's result into one record as the task completes, and builds the document once the last operation has ended: operations, then the tools of each, then one invocation per process with the files it answered for and the findings it reported, plus the tasks the planner skipped and the run stopped. Every renderer reads that record and nothing else, which is what lets a report of `check` be one document and a report be written after a failure. The record holds no command line and no environment, and is never cached. See [Reports](../../reference/cli-commands.md#reports).
+When a run is asked for a report (`--report`), the runner folds every task's result into one record as the task completes, and builds the document once the last operation has ended: operations, then the tools of each, then one invocation per process with the files it answered for and the findings it reported, plus the tasks the planner skipped and the run stopped. Every renderer reads that record and nothing else, which is what lets a report of `check` be one document and a report be written after a failure. The record holds no command line and no environment, and is never cached. See the [Reports guide](../reports.md) and [Reports](../../reference/cli-commands.md#reports).
 
 **Example scenario:**
 

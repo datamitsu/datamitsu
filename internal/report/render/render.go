@@ -52,6 +52,19 @@ func Names() []string {
 	return names
 }
 
+// Listing returns the formats among specs that list findings: those a run
+// narrowed at plan time may not write without --allow-partial, where a format
+// that omits incomplete tools is written anyway.
+func Listing(specs []Spec) []string {
+	var out []string
+	for _, s := range specs {
+		if r, ok := Lookup(s.Format); ok && !r.OmitsIncompleteTools() {
+			out = append(out, s.Format)
+		}
+	}
+	return out
+}
+
 // Stdout is the path that writes a report to standard output.
 const Stdout = "-"
 

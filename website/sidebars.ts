@@ -40,6 +40,7 @@ const sidebars: SidebarsConfig = {
         "guides/managed-configs",
         "guides/managed-content",
         "guides/tooling-system",
+        "guides/reports",
         "guides/using-wrappers",
         "guides/supply-chain-security",
         "guides/oci-bundles",

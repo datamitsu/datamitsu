@@ -500,7 +500,9 @@ that `config reconcile` runs after writing its files.
 `--report <format>=<path>` writes a report of the run once its last operation
 has ended, whether or not its tools failed — the run that fails is the one a
 pipeline needs to read. The flag is repeatable, one per format; `json` is the
-format today.
+format today. The [Reports guide](../guides/reports.md) explains what a report
+holds and how far to trust it; [`report render`](#report-render) writes one
+again, offline, from a run's own JSON.
 
 ```bash
 # CI: the whole run as one document, uploaded whatever the outcome
@@ -782,6 +784,40 @@ AA contrast against their surface produce a warning, not an error. `--print-them
 writes the merged theme — the complete built-in one when no `--theme` is given. See
 [Config Inspector](../guides/config-inspector.md) for navigation, artifact contents,
 theming, and publishing examples.
+
+## report
+
+Work with the reports `fix`, `lint` and `check` write with
+[`--report`](#reports). None of these commands runs a tool.
+
+### report render
+
+Render a run's own JSON document (`datamitsu.report/1`) into a report format,
+offline:
+
+```bash
+datamitsu report render --input <run.json> --format <format> [--output <path>|-]
+```
+
+| Flag                | Description                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)            |
+| `--format <format>` | The format to write: `json`; a format's options follow a `?` (required)             |
+| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report` |
+| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                |
+
+The renderers and the completeness rule are the run's own: a document of a
+narrowed run is refused (exit 2) for a format that lists findings unless
+`--allow-partial`, and a document without its completeness fields is read as
+incomplete, never as complete. The document holds everything a renderer needs,
+so rendering works on another machine and after the checkout changed; `json`
+reproduces the document byte for byte. A document of another schema, or one
+that cannot be read, exits 1; an output that cannot be written exits 5.
+
+```bash
+# Print a run's report again
+datamitsu report render --input out/run.json --format json
+```
 
 ## config
 

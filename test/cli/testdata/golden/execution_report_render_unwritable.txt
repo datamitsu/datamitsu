@@ -1,0 +1,5 @@
+exit code: 5
+===STDOUT===
+
+===STDERR===
+error: report json: blocker/x.json: not a directory

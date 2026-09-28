@@ -1,11 +1,9 @@
 package runner
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -142,12 +140,7 @@ func refuseNarrowedReports(opts Options, sel tooling.Selection, fileScoped bool,
 	if len(why) == 0 {
 		return nil
 	}
-	var listing []string
-	for _, spec := range opts.Reports {
-		if r, ok := render.Lookup(spec.Format); ok && !r.OmitsIncompleteTools() {
-			listing = append(listing, spec.Format)
-		}
-	}
+	listing := render.Listing(opts.Reports)
 	if len(listing) == 0 {
 		return nil
 	}
@@ -229,15 +222,6 @@ func streamOutcome(err error) error {
 	return errors.New(msg)
 }
 
-// exportTarget is one report on its way to disk: the temporary file it is
-// written into beside its path, or stdout.
-type exportTarget struct {
-	spec     render.Spec
-	renderer render.Renderer
-	tmp      *os.File
-	err      error
-}
-
 // finishReports writes every report of the run after its last operation,
 // whether or not its tools failed: the run that fails is the one a pipeline
 // needs to read. err is what the run returns so far. A report that could not be
@@ -251,12 +235,13 @@ func (sc *sharedContext) finishReports(operations []config.OperationType, err er
 	for _, op := range operations {
 		sc.report.NotRun(string(op))
 	}
-	targets := openExports(sc.opts.Reports)
+	targets := make([]*render.Target, len(sc.opts.Reports))
 	exports := make([]report.Export, len(targets))
-	for i, t := range targets {
-		exports[i] = report.Export{Format: t.spec.Format, Path: t.spec.Path, Status: report.ExportWritten}
-		if t.err != nil {
-			exports[i].Status, exports[i].Detail = report.ExportFailed, t.err.Error()
+	for i, spec := range sc.opts.Reports {
+		targets[i] = render.Open(spec, os.Stdout)
+		exports[i] = report.Export{Format: spec.Format, Path: spec.Path, Status: report.ExportWritten}
+		if err := targets[i].Err; err != nil {
+			exports[i].Status, exports[i].Detail = report.ExportFailed, err.Error()
 		}
 	}
 	run := sc.report.Build(report.BuildInfo{
@@ -271,17 +256,13 @@ func (sc *sharedContext) finishReports(operations []config.OperationType, err er
 	report.Mask(run, sc.secretValues())
 
 	var failures []error
-	for i := range targets {
-		t := &targets[i]
-		if t.err == nil {
-			t.err = t.write(run)
-		}
+	for _, t := range targets {
 		status, msg := report.ExportWritten, ""
-		if t.err != nil {
-			status, msg = report.ExportFailed, t.err.Error()
-			failures = append(failures, fmt.Errorf("report %s: %s: %w", t.spec.Format, t.spec.Path, t.err))
+		if writeErr := t.Write(run); writeErr != nil {
+			status, msg = report.ExportFailed, writeErr.Error()
+			failures = append(failures, fmt.Errorf("report %s: %s: %w", t.Spec.Format, t.Spec.Path, writeErr))
 		}
-		emitReport(t.spec, status, msg)
+		emitReport(t.Spec, status, msg)
 	}
 	if len(failures) == 0 {
 		return err
@@ -319,79 +300,4 @@ func emitReport(spec render.Spec, status, msg string) {
 		Path:   spec.Path,
 		Msg:    msg,
 	})
-}
-
-// openExports prepares every target before anything is rendered, so the
-// document can record which of its exports could not be written.
-func openExports(specs []render.Spec) []exportTarget {
-	targets := make([]exportTarget, 0, len(specs))
-	for _, spec := range specs {
-		t := exportTarget{spec: spec}
-		t.renderer, _ = render.Lookup(spec.Format)
-		if !spec.Stdout() {
-			t.tmp, t.err = createBeside(spec.Path)
-		}
-		targets = append(targets, t)
-	}
-	return targets
-}
-
-// createBeside creates the temporary file a report is written into, in the
-// directory of its path so that the final rename is atomic.
-func createBeside(path string) (*os.File, error) {
-	if info, err := os.Stat(path); err == nil && info.IsDir() {
-		return nil, errors.New("is a directory")
-	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, unwrapPathError(err)
-	}
-	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return nil, unwrapPathError(err)
-	}
-	return f, nil
-}
-
-// unwrapPathError drops the path an *os.PathError repeats: the message it is
-// part of already names the report's path.
-func unwrapPathError(err error) error {
-	if pe, ok := errors.AsType[*os.PathError](err); ok {
-		return pe.Err
-	}
-	return err
-}
-
-func (t *exportTarget) write(run *report.Run) error {
-	if t.tmp == nil {
-		w := bufio.NewWriter(os.Stdout)
-		if err := t.renderer.Render(w, run, t.spec.Options); err != nil {
-			return err
-		}
-		if err := w.Flush(); err != nil {
-			return fmt.Errorf("write report: %w", err)
-		}
-		return nil
-	}
-	tmp := t.tmp.Name()
-	w := bufio.NewWriter(t.tmp)
-	err := t.renderer.Render(w, run, t.spec.Options)
-	if err == nil {
-		err = w.Flush()
-	}
-	if closeErr := t.tmp.Close(); err == nil {
-		err = closeErr
-	}
-	if err == nil {
-		// CreateTemp creates the file 0600; a report is for the pipeline to read.
-		err = os.Chmod(tmp, 0o644)
-	}
-	if err == nil {
-		err = os.Rename(tmp, t.spec.Path)
-	}
-	if err != nil {
-		_ = os.Remove(tmp)
-		return unwrapPathError(err)
-	}
-	return nil
 }

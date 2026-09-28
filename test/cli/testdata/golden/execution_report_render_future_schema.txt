@@ -1,0 +1,5 @@
+exit code: 1
+===STDOUT===
+
+===STDERR===
+error: future.json: unsupported report schema "datamitsu.report/2" (want "datamitsu.report/1")
