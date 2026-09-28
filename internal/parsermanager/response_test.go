@@ -17,6 +17,7 @@ func TestDecodeResponse(t *testing.T) {
 		recognized bool
 		format     string
 		messages   []string
+		partial    bool
 	}{
 		{name: "v1 findings", data: `[{"message":"a"}]`, exit: 1, abi: 1, recognized: true, messages: []string{"a"}},
 		{name: "v1 empty on exit 0 is a clean run", data: `[]`, exit: 0, abi: 1, recognized: true},
@@ -33,6 +34,10 @@ func TestDecodeResponse(t *testing.T) {
 		{name: "v2 not recognized", data: `{"recognized":false,"format":"gcc","diagnostics":[]}`, exit: 0, abi: 2, format: "gcc"},
 		{name: "v2 diagnostics absent", data: "\n{\"recognized\":false}", exit: 1, abi: 2},
 		{
+			name: "v2 partial", data: `{"recognized":true,"format":"sarif","diagnostics":[{"message":"d"}],"partial":true}`,
+			exit: 1, abi: 2, recognized: true, format: "sarif", messages: []string{"d"}, partial: true,
+		},
+		{
 			name: "v2 fields a newer module adds are ignored",
 			data: `{"recognized":true,"format":"sarif","confidence":0.9,"diagnostics":[{"message":"c","extra":{"x":1}}]}`,
 			exit: 0, abi: 2, recognized: true, format: "sarif", messages: []string{"c"},
@@ -44,9 +49,9 @@ func TestDecodeResponse(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DecodeResponse() error = %v", err)
 			}
-			if got.ABI != tt.abi || got.Recognized != tt.recognized || got.Format != tt.format {
-				t.Errorf("DecodeResponse() = abi %d recognized %v format %q, want %d %v %q",
-					got.ABI, got.Recognized, got.Format, tt.abi, tt.recognized, tt.format)
+			if got.ABI != tt.abi || got.Recognized != tt.recognized || got.Format != tt.format || got.Partial != tt.partial {
+				t.Errorf("DecodeResponse() = abi %d recognized %v format %q partial %v, want %d %v %q %v",
+					got.ABI, got.Recognized, got.Format, got.Partial, tt.abi, tt.recognized, tt.format, tt.partial)
 			}
 			if got.Diagnostics == nil {
 				t.Error("Diagnostics = nil, want a list")

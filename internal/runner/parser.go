@@ -114,6 +114,7 @@ func answerOf(resp parsermanager.Response, toolName string, exitCode int32, form
 		Recognized:   resp.Recognized,
 		Format:       resp.Format,
 		FormatParser: format,
+		Partial:      resp.Partial,
 	}
 }
 

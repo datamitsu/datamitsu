@@ -557,8 +557,9 @@ version and run the parser tests before the bump ships:
 
 ```bash
 # In the datamitsu repository: rerun the tool over a clean input and over one with
-# findings, write stdout, stderr and the exit code into the fixture files, then
-cargo test --manifest-path parsers/Cargo.toml
+# findings, write stdout, stderr and the exit code into the fixture files, then run
+# the tests from parsers/, where rustup picks up the pinned Rust release
+(cd parsers && cargo test)
 ```
 
 `parsers/datamitsu-parsers/fixtures/README.md` lists the arguments each recording uses.

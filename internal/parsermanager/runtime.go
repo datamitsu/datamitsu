@@ -59,6 +59,10 @@ type Response struct {
 	// tool name for a tool parser; empty in an ABI 1 answer.
 	Format      string          `json:"format,omitempty"`
 	Diagnostics []RawDiagnostic `json:"diagnostics"`
+	// Partial is true when the output holds a document the parser could not
+	// read whole — cut off, or malformed — so findings may be missing whatever
+	// it recognized. An ABI 1 answer never says so.
+	Partial bool `json:"partial,omitempty"`
 }
 
 // responseV2 is the object form of a parse answer; a pointer tells an absent
@@ -67,6 +71,7 @@ type responseV2 struct {
 	Recognized  *bool           `json:"recognized"`
 	Format      string          `json:"format"`
 	Diagnostics []RawDiagnostic `json:"diagnostics"`
+	Partial     bool            `json:"partial"`
 }
 
 // DecodeResponse reads a module's parse answer in either form. exitCode is
@@ -86,7 +91,7 @@ func DecodeResponse(data []byte, exitCode int32) (Response, error) {
 		if diags == nil {
 			diags = []RawDiagnostic{}
 		}
-		return Response{ABI: 2, Recognized: *v2.Recognized, Format: v2.Format, Diagnostics: diags}, nil
+		return Response{ABI: 2, Recognized: *v2.Recognized, Format: v2.Format, Diagnostics: diags, Partial: v2.Partial}, nil
 	}
 	var diags []RawDiagnostic
 	if err := json.Unmarshal(data, &diags); err != nil {

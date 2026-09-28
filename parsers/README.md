@@ -71,17 +71,19 @@ Each tool is one module under `datamitsu-parsers/src/tools/`. To add one:
    of the real tool under `datamitsu-parsers/fixtures/<tool>/` and assert them in
    `src/tools/fixtures.rs` ([fixtures/README.md](datamitsu-parsers/fixtures/README.md)).
 
-A format parser is one module under `src/format/`, with its `DESCRIPTOR` of kind
-`format`, a `parse` returning a `Response`, its `SAMPLES`, an entry in
-`format::PARSERS` (which also sets the sniffer's order), in `format::DESCRIPTORS`
-and `format::samples`, and rows in `FORMAT_POSITIONS` and
-`FORMAT_UNKNOWN_COLUMN_UNITS` in `src/contract.rs`.
+A format parser lives under `src/format/`; the
+[output parser guide](../website/docs/guides/architecture/parsers.md#format-parsers)
+says what one needs.
 
 ## Build & test
 
 ```bash
-# Native unit tests (no wasm toolchain needed)
-cargo test --manifest-path parsers/Cargo.toml
+# Native unit tests of both builds (no wasm toolchain needed), run from parsers/
+# so rustup picks up rust-toolchain.toml
+cd parsers
+cargo test
+cargo test --no-default-features --features format
+cd ..
 
 # Build the WASM artifact and report its size
 task build:parsers
@@ -93,7 +95,7 @@ task build:parsers:fixture
 ```
 
 `rust-toolchain.toml` pins the Rust release. rustup reads it from the directory
-cargo runs in, so run cargo from `parsers/` (the tasks do) to build with it;
+cargo runs in, so run cargo from `parsers/` (the tasks do) to build and test with it;
 `embedded.lock` and `embedded.Dockerfile` name the same release for the
 container build.
 

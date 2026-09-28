@@ -103,6 +103,27 @@ func TestTheParsersReadAnOutputInTurn(t *testing.T) {
 			fallbackRuns: 1,
 		},
 		{
+			name: "a declared parser's partial answer is truncated", declared: true,
+			parser: &fakeParser{diags: []diagnostic.Diagnostic{finding}, partial: true}, stdout: "[{",
+			want: ExtractionTruncated, provenance: ProvenanceParser, module: "core", findings: 1,
+		},
+		{
+			name:   "the fallback's findings in a partial output are truncated",
+			parser: &fakeParser{fallback: &ParseAnswer{Diagnostics: []diagnostic.Diagnostic{finding}, Recognized: true, Format: "sarif", Partial: true}},
+			stdout: "{}", want: ExtractionTruncated, provenance: "fallback:sarif", module: EmbeddedParserModule, findings: 1,
+			fallbackRuns: 1,
+		},
+		{
+			name:   "a document cut off that nothing read leaves a tool without a parser truncated",
+			parser: &fakeParser{fallback: &ParseAnswer{Format: "fallback", Partial: true}}, stdout: `{"runs":[`,
+			want: ExtractionTruncated, fallbackRuns: 1,
+		},
+		{
+			name:   "a fallback that fails leaves a tool without a parser parse-failed",
+			parser: &fakeParser{fallbackFails: errors.New("trap")}, stdout: "x",
+			want: ExtractionParseFailed, fallbackRuns: 1,
+		},
+		{
 			name: "a structured format keeps a finding on a path that is not there",
 			parser: &fakeParser{fallback: sniffedAs("sarif",
 				diagnostic.Diagnostic{Message: "m", File: "gone.py"})}, stdout: "{}",
@@ -182,5 +203,22 @@ func TestAFormattersStdoutReachesNoParser(t *testing.T) {
 	}
 	if len(fp.fallbackStdout) != 0 || string(fp.fallbackErr) != "note\n" {
 		t.Errorf("the fallback read stdout %q and stderr %q, want stderr alone", fp.fallbackStdout, fp.fallbackErr)
+	}
+}
+
+// TestNoPassOverOutputTheFallbackCouldNotRead: a tool without a parser whose
+// output the fallback failed on, or found a document cut off in, records no
+// pass though it exited 0.
+func TestNoPassOverOutputTheFallbackCouldNotRead(t *testing.T) {
+	for name, fp := range map[string]*fakeParser{
+		"failed":  {fallbackFails: errors.New("trap")},
+		"partial": {fallback: &ParseAnswer{Format: "fallback", Partial: true}},
+	} {
+		e := &Executor{parser: fp}
+		var proc ProcessResult
+		e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), t.TempDir(), []byte("x"), nil, 0, false)
+		if got := passesOf(proc, []string{"a.go"}); len(got) != 0 {
+			t.Errorf("%s: %s records passes %v", name, proc.Extraction, got)
+		}
 	}
 }

@@ -8,7 +8,7 @@
 //! the module it embeds when a tool's output has no parser that recognized it.
 use crate::capabilities::ToolCapability;
 use crate::diagnostic::RawDiagnostic;
-use crate::format::PARSERS;
+use crate::format::{unfinished, PARSERS};
 use crate::response::Response;
 use crate::severity::{self, Level};
 
@@ -46,8 +46,13 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 };
 
 /// The answer of the first format that recognizes the output; not recognized
-/// when none does.
+/// when none does. Partial when either stream holds a document that cannot be
+/// read whole, whatever else was recognized.
 pub fn sniff(stdout: &[u8], stderr: &[u8], exit_code: i32) -> Response {
+	first(stdout, stderr, exit_code).partial_if(unfinished(stdout) || unfinished(stderr))
+}
+
+fn first(stdout: &[u8], stderr: &[u8], exit_code: i32) -> Response {
 	PARSERS
 		.iter()
 		.map(|(_, parse)| parse(stdout, stderr, exit_code))
@@ -63,7 +68,8 @@ pub fn sniff(stdout: &[u8], stderr: &[u8], exit_code: i32) -> Response {
 /// JSON value or an XML document cut off, or XML with a tag that cannot be
 /// read — which may have held findings, nor when it holds findings in a
 /// standard format: the tool printed another format than the parser reads,
-/// and the core's fallback is what reads it. Otherwise it recognized the
+/// and the core's fallback is what reads it. Either way the answer is partial
+/// when such a document is there: the findings read may not be all of them. Otherwise it recognized the
 /// output when its own format was there, or when the run exited 0: a clean
 /// run may print nothing, or a summary no format describes, and neither is a
 /// shape the parser missed.
@@ -75,14 +81,12 @@ pub(crate) fn declared(
 	stderr: &[u8],
 	exit_code: i32,
 ) -> Response {
+	let partial = unfinished(stdout) || unfinished(stderr);
 	if !diagnostics.is_empty() {
-		return Response::recognized(key, diagnostics);
+		return Response::recognized(key, diagnostics).partial_if(partial);
 	}
-	if crate::format::unfinished(stdout)
-		|| crate::format::unfinished(stderr)
-		|| !sniff(stdout, stderr, exit_code).diagnostics.is_empty()
-	{
-		return Response::unrecognized(key);
+	if partial || !first(stdout, stderr, exit_code).diagnostics.is_empty() {
+		return Response::unrecognized(key).partial_if(partial);
 	}
 	if own || exit_code == 0 {
 		return Response::recognized(key, Vec::new());
@@ -196,9 +200,26 @@ mod tests {
 	}
 
 	#[test]
+	fn what_a_cut_off_document_leaves_is_partial() {
+		let cut = br#"[{"message":"m","line":1},{"message":"lost""#;
+		let salvaged = vec![RawDiagnostic {
+			message: "m".to_string(),
+			..RawDiagnostic::default()
+		}];
+		let r = declared("hadolint", salvaged, true, cut, b"", 1);
+		assert!(r.recognized && r.partial);
+		let clean = br#"{"version":"2.1.0","runs":[]}"#;
+		let r = sniff(clean, &cut[..], 0);
+		assert!(r.recognized && r.partial, "a clean stream must not hide a cut-off one");
+		assert!(sniff(cut, b"", 0).partial);
+		assert!(!sniff(clean, b"", 0).partial);
+	}
+
+	#[test]
 	fn a_declared_parser_does_not_recognize_a_document_cut_off_on_a_clean_exit() {
 		let cut = br#"{"version":"2.1.0","runs":[{"results":[{"message":{"text":"m"}}"#;
 		assert!(!declared("sarif", vec![], false, cut, b"", 0).recognized);
+		assert!(declared("sarif", vec![], false, cut, b"", 0).partial);
 		assert!(!declared("eslint", vec![], true, cut, b"", 0).recognized);
 		assert!(!declared("gcc", vec![], false, b"", b"<checkstyle>\n<file name=\"a\">", 0).recognized);
 	}

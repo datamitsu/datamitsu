@@ -139,7 +139,7 @@ pub fn find_envelope<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec
 /// the documents before the first one cut off.
 fn search<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec<T>>, whole: bool) -> Option<Vec<T>> {
 	let text = String::from_utf8_lossy(bytes);
-	if let Ok(v) = text.parse::<JsonValue>() {
+	if let Some(Ok(v)) = parse(&text) {
 		DOCUMENT_SEEN.with(|seen| seen.set(true));
 		return extract(&v);
 	}
@@ -151,7 +151,7 @@ fn search<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec<T>>, whole
 			}
 			continue;
 		};
-		let Ok(value) = text[start..end].parse::<JsonValue>() else {
+		let Some(Ok(value)) = parse(&text[start..end]) else {
 			continue;
 		};
 		DOCUMENT_SEEN.with(|seen| seen.set(true));
@@ -193,7 +193,7 @@ fn spans(text: &str) -> impl Iterator<Item = (usize, Option<usize>)> + '_ {
 /// merely holds a bracket breaks off at a character no JSON value takes.
 pub(crate) fn cut(bytes: &[u8]) -> bool {
 	let text = String::from_utf8_lossy(bytes);
-	if text.parse::<JsonValue>().is_ok() {
+	if matches!(parse(&text), Some(Ok(_))) {
 		return false;
 	}
 	let cut = spans(&text).any(|(start, end)| end.is_none() && runs_to_end(&text[start..]));
@@ -202,9 +202,45 @@ pub(crate) fn cut(bytes: &[u8]) -> bool {
 
 /// Whether `value` is JSON up to its end and stops there, unfinished.
 fn runs_to_end(value: &str) -> bool {
-	value
-		.parse::<JsonValue>()
-		.is_err_and(|e| e.to_string().ends_with("Unexpected EOF"))
+	parse(value).is_some_and(|r| r.is_err_and(|e| e.to_string().ends_with("Unexpected EOF")))
+}
+
+/// Deeper than this a value is not parsed: tinyjson recurses once per level,
+/// and a pathological nesting would exhaust the module's stack and trap. A
+/// report nests a dozen levels.
+const MAX_DEPTH: usize = 256;
+
+/// `text` parsed as JSON; `None` when it nests deeper than [`MAX_DEPTH`].
+fn parse(text: &str) -> Option<Result<JsonValue, tinyjson::JsonParseError>> {
+	(depth(text) <= MAX_DEPTH).then(|| text.parse::<JsonValue>())
+}
+
+/// The deepest nesting of arrays and objects in `text`, outside strings.
+fn depth(text: &str) -> usize {
+	let (mut depth, mut deepest) = (0usize, 0usize);
+	let mut in_string = false;
+	let mut escaped = false;
+	for c in text.chars() {
+		if in_string {
+			match c {
+				_ if escaped => escaped = false,
+				'\\' => escaped = true,
+				'"' => in_string = false,
+				_ => {}
+			}
+			continue;
+		}
+		match c {
+			'"' => in_string = true,
+			'{' | '[' => {
+				depth += 1;
+				deepest = deepest.max(depth);
+			}
+			'}' | ']' => depth = depth.saturating_sub(1),
+			_ => {}
+		}
+	}
+	deepest
 }
 
 /// Byte index just past the value opening at `start`, or `None` if it never
@@ -478,6 +514,15 @@ mod envelope_tests {
 	fn braces_that_never_close_cost_a_bounded_scan() {
 		let out = "{ ".repeat(200_000);
 		assert!(spans(&out).count() < 400);
+	}
+
+	#[test]
+	fn a_document_nested_past_the_limit_is_not_parsed() {
+		let deep = format!("{}{}", "[".repeat(100_000), "]".repeat(100_000));
+		assert_eq!(find_envelope(deep.as_bytes(), |_| Some(vec![()])), None);
+		assert!(!cut(deep.as_bytes()));
+		let fine = format!("{}{}", "[".repeat(MAX_DEPTH), "]".repeat(MAX_DEPTH));
+		assert_eq!(find_envelope(fine.as_bytes(), |_| Some(vec![()])), Some(vec![()]));
 	}
 
 	#[test]

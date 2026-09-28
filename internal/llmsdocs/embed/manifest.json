@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "92ffc75ce7163c8a2c81b1748c30eeb6",
+  "pageSetHash": "465b555d24daca9d1a51cfd06e545f47",
   "pages": [
     {
       "slug": "about",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 52422,
-      "contentHash": "abfd0bdc14d0a404aa3d642d60d2abb7"
+      "bytes": 53875,
+      "contentHash": "dcd2bb79e85ed21ed5321f33cba41e55"
     },
     {
       "slug": "guides/architecture/planner",
@@ -406,8 +406,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 35881,
-      "contentHash": "cddf0994e9f7661df4aaeaecd3ad90e0"
+      "bytes": 35939,
+      "contentHash": "87a4db472592339a201ac766533f74f2"
     },
     {
       "slug": "how-to/manage-cache",

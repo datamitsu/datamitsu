@@ -255,7 +255,19 @@ fn roots(text: &str, root: &str) -> Vec<usize> {
 	let open = format!("<{root}");
 	let mut out = Vec::new();
 	let mut from = 0;
+	// Whether a tag here would open its line: nothing but whitespace, or an
+	// XML declaration, since the line began. Kept as the scan moves, so a long
+	// line is not read again for every tag on it.
+	let mut opens_line = true;
 	while let Some(at) = text[from..].find('<').map(|i| from + i) {
+		let mut gap = &text[from..at];
+		if let Some(nl) = gap.rfind('\n') {
+			opens_line = true;
+			gap = &gap[nl + 1..];
+		}
+		if !gap.trim().is_empty() {
+			opens_line = gap.trim_end().ends_with("?>");
+		}
 		let rest = &text[at..];
 		let skipped = if rest.starts_with("<![CDATA[") {
 			Some("]]>")
@@ -269,15 +281,13 @@ fn roots(text: &str, root: &str) -> Vec<usize> {
 				break;
 			};
 			from = at + end + close.len();
+			opens_line = false;
 			continue;
 		}
-		if rest.starts_with(&open) {
-			let line_start = text[..at].rfind('\n').map_or(0, |n| n + 1);
-			let before = text[line_start..at].trim();
-			if before.is_empty() || before.ends_with("?>") {
-				out.push(at);
-			}
+		if rest.starts_with(&open) && opens_line {
+			out.push(at);
 		}
+		opens_line = false;
 		from = at + 1;
 	}
 	out
@@ -381,6 +391,20 @@ mod tests {
 		assert_eq!(tokens("<a><b></a></b>").len(), 2);
 		assert_eq!(tokens("<a></wrong></a>").len(), 1);
 		assert_eq!(tokens("<a><b/></a>").len(), 3);
+	}
+
+	#[test]
+	fn a_root_opens_its_line_or_follows_the_declaration() {
+		let text =
+			"<?xml version=\"1.0\"?><checkstyle/>\n  <checkstyle/> <checkstyle/>\nx <checkstyle/>\n<!-- c --><checkstyle/>";
+		let starts: Vec<_> = text.match_indices("<checkstyle").map(|(i, _)| i).collect();
+		assert_eq!(roots(text, "checkstyle"), [starts[0], starts[1]]);
+	}
+
+	#[test]
+	fn a_long_line_of_suites_is_scanned_once() {
+		let text = format!("<testsuites>{}</testsuites>", "<testsuite name=\"s\"/>".repeat(200_000));
+		assert_eq!(roots(&text, "testsuite"), [0]);
 	}
 
 	#[test]

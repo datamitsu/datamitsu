@@ -69,6 +69,28 @@ func TestFallbackReadsTheStreamsApart(t *testing.T) {
 	}
 }
 
+// TestACutOffDocumentIsNotACleanRun: a tool without a parser that exits 0
+// printing a SARIF log cut off before it closes is truncated, not clean: the
+// report marks it incomplete, and the next run runs it again.
+func TestACutOffDocumentIsNotACleanRun(t *testing.T) {
+	cut := sarifLog[:len(sarifLog)/2]
+	ruff := clitest.ShellTool("ruff", settle+clitest.RecordRun+"; printf '%s' '"+cut+"'", clitest.ToolOpSpec{})
+	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, ruff)
+
+	res := e.run("", nil, "lint", "--report", "json=run.json")
+	e.wantExit(res, 0)
+	doc := e.read("run.json")
+	for _, want := range []string{`"extraction": "truncated"`, `"complete": false`} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("run.json lacks %s:\n%s", want, doc)
+		}
+	}
+	e.wantExit(e.run("", nil, "lint"), 0)
+	if _, got := e.p.Marker("ruff"); strings.Count(got, "ruff") != 2 {
+		t.Errorf("ruff ran %q, want twice: no pass stands for a cut-off document", got)
+	}
+}
+
 // TestFallbackStandsInForADeclaredParser: a declared parser that does not
 // recognize the output hands it to the fallback, and the run says so once.
 func TestFallbackStandsInForADeclaredParser(t *testing.T) {

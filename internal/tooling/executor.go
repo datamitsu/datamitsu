@@ -133,6 +133,9 @@ type ParseAnswer struct {
 	// FormatParser reports that the key read a standard format any tool may
 	// print, not one tool's own output.
 	FormatParser bool
+	// Partial is true when the output holds a document the parser could not
+	// read whole, so the findings may not be all there were.
+	Partial bool
 }
 
 // ResultCallback is called when a task completes
@@ -958,11 +961,12 @@ func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult
 	if x.outcome == ExtractionParsedClean && len(diags) > 0 {
 		proc.Extraction = ExtractionParsedFindings
 	}
-	if (cutOut || cutErr || dropped) && x.outcome != ExtractionParserUnavailable {
+	if (cutOut || cutErr || dropped || x.partial) && x.outcome != ExtractionParserUnavailable {
 		proc.Extraction = ExtractionTruncated
-		log.Debug("tool output exceeded a parse limit",
+		log.Debug("tool output exceeded a parse limit or held a document cut off",
 			zap.String("tool", task.ToolName),
-			zap.Bool("stdoutCut", cutOut), zap.Bool("stderrCut", cutErr), zap.Bool("findingsDropped", dropped))
+			zap.Bool("stdoutCut", cutOut), zap.Bool("stderrCut", cutErr), zap.Bool("findingsDropped", dropped),
+			zap.Bool("partialDocument", x.partial))
 	}
 }
 
@@ -973,6 +977,8 @@ type extracted struct {
 	parseError string
 	provenance string
 	module     string
+	// partial: the output held a document the parser could not read whole.
+	partial bool
 }
 
 // Provenances of findings.
@@ -1034,6 +1040,7 @@ func (e *Executor) extract(ctx context.Context, task Task, files []string, worki
 				outcome:    ExtractionParsedClean,
 				provenance: provenance,
 				module:     op.Module,
+				partial:    answer.Partial,
 			}
 		default:
 			unrecognized = true
@@ -1041,7 +1048,7 @@ func (e *Executor) extract(ctx context.Context, task Task, files []string, worki
 			x.parseError = fmt.Sprintf("parser %q of module %q did not recognize the output", op.Parser, op.Module)
 		}
 	}
-	fallback, ok := e.fallback(ctx, task, files, workingDir, stdout, stderr, code)
+	fallback, ok, err := e.fallback(ctx, task, files, workingDir, stdout, stderr, code)
 	switch {
 	case ok && declared:
 		e.parser.FellBack(task.ToolName, *op, fallback.format)
@@ -1049,6 +1056,17 @@ func (e *Executor) extract(ctx context.Context, task Task, files []string, worki
 		e.parser.Unrecognized(task.ToolName, *op)
 	}
 	if !ok {
+		// Without a declaration, nothing recognized keeps the exit-status rule
+		// only when the fallback could read the output: one that failed, or
+		// found a document cut off, has not shown the output holds nothing.
+		switch {
+		case declared:
+		case err != nil:
+			x.outcome, x.parseError = ExtractionParseFailed, err.Error()
+		case fallback.x.partial:
+			x.outcome, x.partial = ExtractionTruncated, true
+			x.parseError = "the output holds a document cut off or malformed, which no parser read"
+		}
 		return x
 	}
 	fallback.x.outcome = ExtractionParsedClean
@@ -1064,25 +1082,27 @@ type sniffed struct {
 	format string
 }
 
-// fallback runs the embedded sniffer; ok is false when it recognized nothing.
-// Of a line format it keeps only the findings on files that exist.
-func (e *Executor) fallback(ctx context.Context, task Task, files []string, workingDir string, stdout, stderr []byte, code int32) (sniffed, bool) {
+// fallback runs the embedded sniffer; ok is false when it recognized nothing,
+// with the error when it could not run and x.partial when it found a document
+// cut off. Of a line format it keeps only the findings on files that exist.
+func (e *Executor) fallback(ctx context.Context, task Task, files []string, workingDir string, stdout, stderr []byte, code int32) (sniffed, bool, error) {
 	if len(bytes.TrimSpace(stdout)) == 0 && len(bytes.TrimSpace(stderr)) == 0 {
-		return sniffed{}, false
+		return sniffed{}, false, nil
 	}
 	answer, err := e.parser.Fallback(ctx, task.ToolName, stdout, stderr, code)
 	if err != nil {
 		log.Debug("the fallback parser failed", zap.String("tool", task.ToolName), zap.Error(err))
-		return sniffed{}, false
+		return sniffed{}, false, err
 	}
+	partial := sniffed{x: extracted{partial: answer.Partial}}
 	if !answer.Recognized {
-		return sniffed{}, false
+		return partial, false, nil
 	}
 	diags := located(answer.Diagnostics, files, workingDir)
 	if lineFormats[answer.Format] {
 		diags = onDisk(diags)
 		if len(diags) == 0 {
-			return sniffed{}, false
+			return partial, false, nil
 		}
 	}
 	return sniffed{
@@ -1090,9 +1110,10 @@ func (e *Executor) fallback(ctx context.Context, task Task, files []string, work
 			diags:      diags,
 			provenance: ProvenanceFallbackPrefix + answer.Format,
 			module:     EmbeddedParserModule,
+			partial:    answer.Partial,
 		},
 		format: answer.Format,
-	}, true
+	}, true, nil
 }
 
 // located stamps a process's one file on a finding that names none and makes

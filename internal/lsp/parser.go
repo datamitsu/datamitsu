@@ -38,6 +38,7 @@ func (p fallbackParser) Fallback(ctx context.Context, toolName string, stdout, s
 		Recognized:   resp.Recognized,
 		Format:       resp.Format,
 		FormatParser: true,
+		Partial:      resp.Partial,
 	}, nil
 }
 

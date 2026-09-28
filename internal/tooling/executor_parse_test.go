@@ -27,8 +27,10 @@ type fakeParser struct {
 	err                           error
 	unrecognized                  bool
 	format                        bool
+	partial                       bool
 
 	fallback                    *ParseAnswer
+	fallbackFails               error
 	fallbackStdout, fallbackErr []byte
 	fallbackCalls               int
 	fellBack, readNothing       []string
@@ -36,12 +38,17 @@ type fakeParser struct {
 
 func (f *fakeParser) Parse(_ context.Context, module, parser, toolName string, stdout, stderr []byte, exitCode int32) (ParseAnswer, error) {
 	f.gotModule, f.gotParser, f.gotTool, f.gotStdout, f.gotStderr, f.gotExit = module, parser, toolName, stdout, stderr, exitCode
-	return ParseAnswer{Diagnostics: f.diags, Recognized: !f.unrecognized, Format: parser, FormatParser: f.format}, f.err
+	return ParseAnswer{
+		Diagnostics: f.diags, Recognized: !f.unrecognized, Format: parser, FormatParser: f.format, Partial: f.partial,
+	}, f.err
 }
 
 func (f *fakeParser) Fallback(_ context.Context, _ string, stdout, stderr []byte, _ int32) (ParseAnswer, error) {
 	f.fallbackCalls++
 	f.fallbackStdout, f.fallbackErr = stdout, stderr
+	if f.fallbackFails != nil {
+		return ParseAnswer{}, f.fallbackFails
+	}
 	if f.fallback == nil {
 		return ParseAnswer{}, nil
 	}

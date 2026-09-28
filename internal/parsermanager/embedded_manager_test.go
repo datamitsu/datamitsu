@@ -2,6 +2,7 @@ package parsermanager
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -40,6 +41,14 @@ func TestTheManagerServesTheEmbeddedModule(t *testing.T) {
 	unknown, err := m.Fallback(ctx, []byte("All checks passed!\n"), nil, 0)
 	if err != nil || unknown.Recognized {
 		t.Errorf("Fallback(prose) = %+v, %v; want not recognized", unknown, err)
+	}
+	cut, err := m.Fallback(ctx, []byte(`{"version":"2.1.0","runs":[{"results":[`), nil, 0)
+	if err != nil || cut.Recognized || !cut.Partial {
+		t.Errorf("Fallback(cut-off SARIF) = %+v, %v; want not recognized and partial", cut, err)
+	}
+	deep, err := m.Fallback(ctx, []byte(strings.Repeat("[", 200_000)+strings.Repeat("]", 200_000)), nil, 0)
+	if err != nil || deep.Recognized {
+		t.Errorf("Fallback(deeply nested JSON) = recognized %v, %v; want an answer without a trap", deep.Recognized, err)
 	}
 	cat, err := m.ListCapabilities(ctx)
 	if err != nil {

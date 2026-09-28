@@ -143,14 +143,14 @@ prints a link (tfsec, dclint, buildifier, reek, …).
 process a tool runs therefore records an **extraction outcome** next to its exit
 code:
 
-| Outcome              | When                                                                               | Lint pass cached        |
-| -------------------- | ---------------------------------------------------------------------------------- | ----------------------- |
-| `parsed-clean`       | the parser ran without error and returned no diagnostic                            | yes                     |
-| `parsed-findings`    | the parser returned at least one diagnostic                                        | for the files it spared |
-| `parser-unavailable` | the module did not load, or its `describe` does not list the declared key          | no                      |
-| `parse-failed`       | the module returned an error, or neither it nor the fallback recognized the output | no                      |
-| `truncated`          | a stream or the findings exceeded a [parse cap](#parse-caps)                       | no                      |
-| `none`               | no parser declared, and the [fallback](#three-layers) recognized nothing           | on success              |
+| Outcome              | When                                                                                    | Lint pass cached        |
+| -------------------- | --------------------------------------------------------------------------------------- | ----------------------- |
+| `parsed-clean`       | the parser ran without error and returned no diagnostic                                 | yes                     |
+| `parsed-findings`    | the parser returned at least one diagnostic                                             | for the files it spared |
+| `parser-unavailable` | the module did not load, or its `describe` does not list the declared key               | no                      |
+| `parse-failed`       | the module returned an error, or neither it nor the fallback recognized the output      | no                      |
+| `truncated`          | a stream or the findings exceeded a [parse cap](#parse-caps), or the answer was partial | no                      |
+| `none`               | no parser declared, and the [fallback](#three-layers) recognized nothing                | on success              |
 
 The last column is the [caching rule](./caching.md#a-lint-pass-means-nothing-to-report):
 a cached lint pass is replayed as "nothing to report", so it is recorded only where
@@ -422,6 +422,22 @@ The key `fallback` is the **sniffer**: it tries the formats in the order of the
 table and answers with the first that recognizes the output, named by its format.
 It recognizes only what a format matched, exit code or not — it guesses, and a guess
 needs evidence.
+
+Every answer, a declared parser's and the sniffer's, is **partial** when either
+stream holds a document that cannot be read whole: the findings read beside it, or
+out of the whole part of it, may not be all there were. A partial answer is
+`truncated` in the core, whoever read it — for a tool without a parser too, where
+output the fallback recognized nothing in but found a document cut off in is
+`truncated`, not `none`. A fallback that fails outright (a module error) leaves such
+a tool `parse-failed`. A JSON document nested deeper than 256 levels is not parsed
+at all.
+
+A format parser is one module under `parsers/datamitsu-parsers/src/format/`: its
+`DESCRIPTOR` of kind `format`, a `parse` returning a `Response`, its `SAMPLES`, an
+entry in `format::PARSERS` (which also sets the sniffer's order), in
+`format::DESCRIPTORS` and in `format::samples`, and its rows in `FORMAT_POSITIONS`
+and `FORMAT_UNKNOWN_COLUMN_UNITS` in `src/contract.rs`. Its sources are listed in
+`embedded-sources.txt`, so adding one rebuilds the embedded fallback.
 
 ### The embedded fallback
 
@@ -695,17 +711,20 @@ nullable Go structs (pointer fields, so a field the tool omitted stays `nil`).
 The answer comes in one of two forms, and the core reads both; the module this
 core is built with answers in the second:
 
-| ABI | Answer                                                          | Recognized                                              |
-| --- | --------------------------------------------------------------- | ------------------------------------------------------- |
-| 1   | a JSON array of diagnostics                                     | inferred: at least one diagnostic, or the tool exited 0 |
-| 2   | `{"recognized": true, "format": "sarif", "diagnostics": [ … ]}` | said by the parser                                      |
+| ABI | Answer                                                                                            | Recognized                                              |
+| --- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 1   | a JSON array of diagnostics                                                                       | inferred: at least one diagnostic, or the tool exited 0 |
+| 2   | `{"recognized": true, "format": "sarif", "diagnostics": [ … ]}`, and `"partial": true` when it is | said by the parser                                      |
 
 `recognized: false` means the parser found nothing it understands — no document of
 its format, no line it matches — which is a different answer from understanding the
 output and finding nothing in it (`recognized: true` with no diagnostics). An array
 cannot tell the two apart, so an empty array from a tool that failed counts as not
 recognized. `format` names the format a format parser read, or the tool for a tool
-parser. A field the core does not know, in the answer or in a diagnostic, is ignored.
+parser. `partial` says the output holds a document the parser could not read whole —
+cut off, or malformed — so the findings it read, if any, may not be all of them: the
+core records `truncated`, keeps the findings and caches no pass. A field the core
+does not know, in the answer or in a diagnostic, is ignored.
 
 Instances are **pooled**. Instantiating a module allocates a fresh linear memory,
 and a run parses the output of many tool invocations of the same module, so after

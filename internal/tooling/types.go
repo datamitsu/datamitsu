@@ -184,9 +184,10 @@ const (
 	ExtractionParserUnavailable Extraction = "parser-unavailable"
 	// ExtractionParseFailed: the module returned an error for this output.
 	ExtractionParseFailed Extraction = "parse-failed"
-	// ExtractionTruncated: a stream exceeded the input the parser reads, or
-	// the findings exceeded the number kept (ParseLimits); the findings kept
-	// are recorded.
+	// ExtractionTruncated: a stream exceeded the input the parser reads, the
+	// findings exceeded the number kept (ParseLimits), or the output held a
+	// document cut off or malformed (a partial answer); the findings kept are
+	// recorded.
 	ExtractionTruncated Extraction = "truncated"
 	// ExtractionNone: nothing was attempted — the tool declares no parser, or
 	// the output is a formatter's file content, which no parser reads. A

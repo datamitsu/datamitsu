@@ -4,6 +4,8 @@
 //! list of findings cannot: `recognized: false` is "nothing here is in my
 //! format", `recognized: true` with no diagnostics is "my format, and it found
 //! nothing". The core falls back to the embedded sniffer only on the first.
+//! `partial` says the output holds a document the parser could not read whole —
+//! cut off, or malformed — so findings may be missing whatever it recognized.
 
 use crate::diagnostic::{json_string, to_json_array, RawDiagnostic};
 
@@ -16,6 +18,8 @@ pub struct Response {
 	/// for a tool parser; empty when no parser answered.
 	pub format: String,
 	pub diagnostics: Vec<RawDiagnostic>,
+	/// Whether the output holds a document that could not be read whole.
+	pub partial: bool,
 }
 
 impl Response {
@@ -25,6 +29,7 @@ impl Response {
 			recognized: true,
 			format: format.to_string(),
 			diagnostics,
+			partial: false,
 		}
 	}
 
@@ -34,16 +39,24 @@ impl Response {
 			recognized: false,
 			format: format.to_string(),
 			diagnostics: Vec::new(),
+			partial: false,
 		}
 	}
 
-	/// The answer as the host reads it.
+	/// This answer, marked partial when `partial` is.
+	pub fn partial_if(mut self, partial: bool) -> Self {
+		self.partial |= partial;
+		self
+	}
+
+	/// The answer as the host reads it; `partial` only when it is set.
 	pub fn to_json(&self) -> String {
 		format!(
-			r#"{{"recognized":{},"format":{},"diagnostics":{}}}"#,
+			r#"{{"recognized":{},"format":{},"diagnostics":{}{}}}"#,
 			self.recognized,
 			json_string(&self.format),
 			to_json_array(&self.diagnostics),
+			if self.partial { r#","partial":true"# } else { "" },
 		)
 	}
 }
@@ -68,6 +81,10 @@ mod tests {
 		assert_eq!(
 			Response::unrecognized("gcc").to_json(),
 			r#"{"recognized":false,"format":"gcc","diagnostics":[]}"#
+		);
+		assert_eq!(
+			Response::unrecognized("gcc").partial_if(true).to_json(),
+			r#"{"recognized":false,"format":"gcc","diagnostics":[],"partial":true}"#
 		);
 	}
 }
