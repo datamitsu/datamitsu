@@ -352,13 +352,15 @@ failed:
   one per line as `path:row:col: level source(code): message`. Findings below
   the threshold are the case's `<system-out>`, and the file passes. Clean and
   cached files pass, and so does every clean file of a tool that failed.
-- **One extra case for a failed invocation without such a finding**, named
-  after the directory it ran in (`.` for the repository root): a tool that
-  exited non-zero on findings below the threshold is a
-  `<failure type="exit">` listing them, and a tool that failed without any is
-  an `<error type="exit">` carrying the last lines of its output, masked —
-  never a `security` tool's. A finding without a file is on that case too.
-  A failed tsc run over a project fails one case, not every file in it.
+- **One extra case for each process that failed without such a finding**,
+  named after the directory it ran in (`.` for the repository root), with the
+  process's ID after it when several of the tool's ran there: a process that
+  exited non-zero on findings below the threshold is a `<failure type="exit">`
+  listing them, and one that failed without any is an `<error type="exit">`
+  carrying the last lines of its output, masked — never a `security` tool's.
+  A process that could not be set up is an `<error type="setup">`, and a
+  finding without a file is on its process's case too. A failed tsc run over a
+  project fails one case, not every file in it.
 - **Skipped cases** for what did not run: `cancelled: fail-fast` and
   `not started: fail-fast` for the tasks the run stopped, `skip: true`,
   `platform-skip` and `narrowed` for the tools the planner skipped, and

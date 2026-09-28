@@ -694,7 +694,8 @@ a `<failure>` only for a file with a finding at or above the operation's
 `failOn` that failed its tool — the failure count follows the gate, not the
 findings. Findings below the threshold are a case's `<system-out>`. An
 invocation that failed without such a finding is one extra case named after its
-directory: a `<failure type="exit">` listing its findings, or an
+directory (with the invocation's ID when several share one): a
+`<failure type="exit">` listing its findings, or an
 `<error type="exit">` with the masked tail of its output when it has none
 (never for a `security` tool). Stopped tasks, skipped tools and an operation
 that did not run are `<skipped>` cases. See
