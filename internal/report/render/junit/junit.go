@@ -236,6 +236,14 @@ type invocationCase struct {
 	tc      *testCase
 }
 
+// settledFailure is an invocation that exited non-zero on findings the
+// report lists with another invocation of the tool.
+type settledFailure struct {
+	inv   report.Invocation
+	code  int
+	count int
+}
+
 // toolCases builds the cases of one tool run: a case per file its
 // invocations answered for, a case per invocation that failed on its own
 // without a gating finding or reported a finding without a file, and a
@@ -249,6 +257,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		return files[path]
 	}
 	var invocations []invocationCase
+	var settled []settledFailure
 	withhold := common.Security(tr)
 
 	for _, inv := range tr.Invocations {
@@ -307,13 +316,19 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		if inv.State != string(tooling.ProcessRan) || inv.FailureKind != report.FailureExit || gating {
 			continue
 		}
-		tc := ownCase()
-		if count != 1 {
-			tc.time += inv.Duration
-		}
 		code := 0
 		if inv.ExitCode != nil {
 			code = *inv.ExitCode
+		}
+		if synthetic == nil && len(inv.Findings) == 0 && code != 0 {
+			// It exited on findings another invocation lists: decided once
+			// every file's case is known.
+			settled = append(settled, settledFailure{inv: inv, code: code, count: count})
+			continue
+		}
+		tc := ownCase()
+		if count != 1 {
+			tc.time += inv.Duration
 		}
 		fail := &caseFailure{kind: "exit", message: fmt.Sprintf("exit %d", code)}
 		for _, f := range inv.Findings {
@@ -324,15 +339,32 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		switch {
 		case synthetic != nil:
 			fail.text, fail.tail = synthetic.Message, tail(inv, withhold)
-		case len(fail.findings) > 0 || code != 0:
-			// It printed findings: listed here or, when another invocation
-			// reported them too, with that one.
+		case len(fail.findings) > 0:
 			fail.onFindings = true
 		default:
 			// Rejected after it exited 0, without a finding.
 			fail.tail = tail(inv, withhold)
 		}
 		tc.failure = fail
+	}
+	// A process whose findings another invocation lists failed on them: when
+	// one gates, a file it answered for fails already; otherwise it is a
+	// failure of its own, with its findings listed there.
+	for _, s := range settled {
+		gated := false
+		for _, fr := range s.inv.Files {
+			if tc := files[fr.Path]; answered(fr.State) && tc != nil && len(tc.gating) > 0 {
+				gated = true
+			}
+		}
+		if gated {
+			continue
+		}
+		tc := &testCase{className: tr.Name, failure: &caseFailure{kind: "exit", message: fmt.Sprintf("exit %d", s.code), onFindings: true}}
+		if s.count != 1 {
+			tc.time = s.inv.Duration
+		}
+		invocations = append(invocations, invocationCase{dir: dirName(s.inv.Dir), id: s.inv.ID, tc: tc})
 	}
 
 	// An invocation's case is named after its directory, told apart by the

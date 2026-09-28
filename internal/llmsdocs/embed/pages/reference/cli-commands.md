@@ -595,9 +595,11 @@ datamitsu lint --report json=out/run.json
 - A report turns fail-fast off: a run that stopped at the first failing tool
   could not list every finding. A report together with `--fail-fast=true`, or
   with `DATAMITSU_FAIL_FAST=true` and no `--fail-fast` flag, exits 2.
-- A format named twice, an unknown format or option, a missing path, and a
-  report combined with `--explain` (which runs nothing) exit 2 before anything
-  runs.
+- A format named twice, an unknown format or option, a missing path, two
+  reports that would write one file — one path twice, a report where another's
+  completeness companion goes, or a file inside a split format's directory —
+  and a report combined with `--explain` (which runs nothing) exit 2 before
+  anything runs.
 - A report that cannot be written prints
   `error: report <format>: <path>: <cause>` and makes the run exit 5 — unless a
   tool failed (exit 1) or the run was incomplete (exit 4), which keep their code;

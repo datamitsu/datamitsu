@@ -86,6 +86,16 @@ func TestParseSpecs(t *testing.T) {
 		{name: "a format twice in env", env: "json=a,json=b", wantErr: "invalid DATAMITSU_REPORT value: report json is named twice"},
 		{name: "a bad env entry", env: "json=a,", wantErr: "invalid DATAMITSU_REPORT value"},
 		{name: "two on stdout", flags: []string{"json=-"}, env: "fake=-", wantErr: "only one report can be written to stdout"},
+		{name: "one path twice", flags: []string{"json=out/a", "markdown=out/./a"}, wantErr: "reports json and markdown would both write"},
+		{
+			name: "a report where another's companion goes", flags: []string{"json=out/r.xml.completeness.json", "junit=out/r.xml"},
+			wantErr: "reports json and junit (its completeness companion) would both write",
+		},
+		{name: "a file a split format owns", flags: []string{"sarif=out/", "json=out/datamitsu-1.sarif"}, wantErr: "reports json and sarif would both write"},
+		{
+			name: "a directory beside its own files", flags: []string{"sarif=out/", "json=out/run.json", "junit=out/junit.xml"},
+			want: []Spec{{Format: "sarif", Path: "out/"}, {Format: "json", Path: "out/run.json"}, {Format: "junit", Path: "out/junit.xml"}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

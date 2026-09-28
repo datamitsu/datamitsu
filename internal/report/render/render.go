@@ -16,6 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render/checkstyle"
 	"github.com/datamitsu/datamitsu/internal/report/render/codequality"
+	"github.com/datamitsu/datamitsu/internal/report/render/common"
 	"github.com/datamitsu/datamitsu/internal/report/render/json"
 	"github.com/datamitsu/datamitsu/internal/report/render/junit"
 	"github.com/datamitsu/datamitsu/internal/report/render/markdown"
@@ -180,7 +181,68 @@ func ParseSpecs(flags []string, fromEnv string) ([]Spec, error) {
 	if stdout > 1 {
 		return nil, errors.New("only one report can be written to stdout (-)")
 	}
+	if err := checkCollisions(specs); err != nil {
+		return nil, err
+	}
 	return specs, nil
+}
+
+// output is a file a report writes: its own path, or its completeness
+// companion's.
+type output struct {
+	format, path string
+}
+
+// checkCollisions refuses two reports that would write one file — two paths,
+// a report and another's companion, or a file inside a directory a split
+// format owns — since the one written last would replace the other, and both
+// would read as written.
+func checkCollisions(specs []Spec) error {
+	var files []output
+	var dirs []Spec
+	for _, s := range specs {
+		if s.Stdout() {
+			continue
+		}
+		if s.Dir() {
+			dirs = append(dirs, s)
+			continue
+		}
+		files = append(files, output{s.Format, absolute(s.Path)})
+		if r, ok := Lookup(s.Format); ok {
+			if _, companioned := r.(Companioned); companioned {
+				files = append(files, output{s.Format + " (its completeness companion)", absolute(common.CompanionPath(s.Path))})
+			}
+		}
+	}
+	for i, a := range files {
+		for _, b := range files[i+1:] {
+			if a.path == b.path {
+				return fmt.Errorf("reports %s and %s would both write %s", a.format, b.format, a.path)
+			}
+		}
+		for _, d := range dirs {
+			r, _ := Lookup(d.Format)
+			if split, ok := r.(DirRenderer); ok && filepath.Dir(a.path) == absolute(d.Path) && split.Owns(filepath.Base(a.path)) {
+				return fmt.Errorf("reports %s and %s would both write %s", a.format, d.Format, a.path)
+			}
+		}
+	}
+	for i, a := range dirs {
+		for _, b := range dirs[i+1:] {
+			if absolute(a.Path) == absolute(b.Path) {
+				return fmt.Errorf("reports %s and %s would both write into %s", a.Format, b.Format, a.Path)
+			}
+		}
+	}
+	return nil
+}
+
+func absolute(path string) string {
+	if abs, err := filepath.Abs(path); err == nil {
+		return abs
+	}
+	return filepath.Clean(path)
 }
 
 func parseList(values []string, source string) ([]Spec, error) {

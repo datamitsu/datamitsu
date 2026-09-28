@@ -355,6 +355,35 @@ func TestThresholdFailureAfterDedupe(t *testing.T) {
 	}
 }
 
+// Two processes that exited 1 on one gating finding, which the report lists
+// once: the file fails once, and neither process gets a case of its own. A
+// process whose settled findings did not gate still fails on its own.
+func TestExitFailureAfterDedupe(t *testing.T) {
+	one := 1
+	build := func(gates bool) *report.Run {
+		f := issue("pkg/a.ts", 3, "warning", gates, "Unexpected var")
+		return &report.Run{Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{{
+			Name: "eslint", FailOn: "error", Complete: true,
+			Invocations: []report.Invocation{
+				{ID: "eslint:pkg:1#1", Dir: "pkg", State: "ran", ExitCode: &one, FailureKind: "exit", Files: files("pkg/a.ts"), Findings: []report.Finding{f}},
+				{ID: "eslint:pkg:2#1", Dir: "pkg", State: "ran", ExitCode: &one, FailureKind: "exit", Files: files("pkg/a.ts")},
+			},
+		}}}}}
+	}
+	doc, _ := decode(t, build(true))
+	if s := doc.suite(t, "lint/eslint"); s.Tests != 1 || s.Failures != 1 {
+		t.Errorf("gating: suite = %+v, want the file failing once and nothing else", s)
+	}
+	doc, _ = decode(t, build(false))
+	s := doc.suite(t, "lint/eslint")
+	if s.Tests != 3 || s.Failures != 2 {
+		t.Errorf("below the threshold: suite = %+v, want the file passing and each process failing on its own", s)
+	}
+	if c := s.testCase(t, "pkg (eslint:pkg:2#1)"); c.Failure == nil || c.Failure.Message != "exit 1" {
+		t.Errorf("the process whose findings are listed elsewhere = %+v", c)
+	}
+}
+
 // A process the executor failed after it exited 0 — a formatter that printed
 // nothing for a file that is not empty — failed on its own: an error case,
 // not a pass.
