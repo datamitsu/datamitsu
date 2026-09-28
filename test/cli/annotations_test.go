@@ -241,7 +241,7 @@ func TestAnnotationsUsage(t *testing.T) {
 		{name: "github_with_report_on_stdout", jsonl: true, args: []string{"lint", "--annotations", "github", "--report", "json=-"}},
 		{name: "github_env_with_report_on_stdout", jsonl: true, env: []string{"DATAMITSU_ANNOTATIONS=github"}, args: []string{"lint", "--report", "json=-"}},
 		{name: "github_with_explain_json", args: []string{"lint", "--annotations", "github", "--explain=json"}},
-		{name: "invalid_flag", args: []string{"lint", "--annotations", "azure"}},
+		{name: "invalid_flag", args: []string{"lint", "--annotations", "gitlab"}},
 		{name: "invalid_env", env: []string{"DATAMITSU_ANNOTATIONS=on"}, args: []string{"lint", "--annotations", "off"}},
 	}
 	for _, tc := range cases {

@@ -153,22 +153,22 @@ lint is skipped — unless `--fail-fast=false` runs it anyway (see
 datamitsu check [files...]
 ```
 
-| Flag                         | Description                                                                                                                                                                                                     |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                                                                                                             |
-| `--file-scoped`              | Only process git staged files                                                                                                                                                                                   |
-| `--tools <list>`             | Comma-separated list of tools to run                                                                                                                                                                            |
-| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools))                                                                                  |
-| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                        |
-| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
-| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
-| `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
-| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; one that lists findings turns fail-fast off (see [Reports](#reports))                                                               |
-| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
-| `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
-| `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
-| `--output <mode>`            | How the run shows its results: `human` (the default) or `agent`, one line per finding for a program that reads the run (see [Agent output](#agent-output))                                                      |
-| `--baseline <file>`          | Gate only on findings the baseline does not hold: a [`report baseline`](#report-baseline) document or a run's own JSON; a tool that exits non-zero still fails (see [Baselines](#baselines))                    |
+| Flag                         | Description                                                                                                                                                                                                                             |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                                                                                                                                     |
+| `--file-scoped`              | Only process git staged files                                                                                                                                                                                                           |
+| `--tools <list>`             | Comma-separated list of tools to run                                                                                                                                                                                                    |
+| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools))                                                                                                          |
+| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                                |
+| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                                                |
+| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                                             |
+| `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on))                         |
+| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; one that lists findings turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                                                 |
+| `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                                             |
+| `--annotations <mode>`       | Print the run's findings as CI annotations once it ends: `auto` (the default), `github`, `azure`, `teamcity` or `off` (see [GitHub annotations](#github-annotations) and [Azure Pipelines and TeamCity](#azure-pipelines-and-teamcity)) |
+| `--output <mode>`            | How the run shows its results: `human` (the default) or `agent`, one line per finding for a program that reads the run (see [Agent output](#agent-output))                                                                              |
+| `--baseline <file>`          | Gate only on findings the baseline does not hold: a [`report baseline`](#report-baseline) document or a run's own JSON; a tool that exits non-zero still fails (see [Baselines](#baselines))                                            |
 
 **Examples:**
 
@@ -862,20 +862,22 @@ request changed, with no token and no extra step:
 
 `--annotations` (or `DATAMITSU_ANNOTATIONS`) chooses when:
 
-| Mode     | Prints                                                                                                                                              |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auto`   | in a GitHub Actions job (`GITHUB_ACTIONS=true`, not Gitea or Forgejo), unless stdout carries a document or `--log-format jsonl` is on — the default |
-| `github` | wherever the run is, under `--log-format jsonl` too: stdout is not the event stream's channel                                                       |
-| `off`    | never                                                                                                                                               |
+| Mode       | Prints                                                                                                                                                                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `auto`     | the annotations of the CI the run is in — GitHub's in a GitHub Actions job (`GITHUB_ACTIONS=true`, not Gitea or Forgejo), Azure Pipelines' under `TF_BUILD`, TeamCity's under `TEAMCITY_VERSION` — unless stdout carries a document or `--log-format jsonl` is on; the default |
+| `github`   | GitHub's, wherever the run is, under `--log-format jsonl` too: stdout is not the event stream's channel                                                                                                                                                                        |
+| `azure`    | Azure Pipelines' logging commands, wherever the run is (see [Azure Pipelines and TeamCity](#azure-pipelines-and-teamcity))                                                                                                                                                     |
+| `teamcity` | TeamCity's service messages, wherever the run is                                                                                                                                                                                                                               |
+| `off`      | never                                                                                                                                                                                                                                                                          |
 
-`--annotations github` together with a report written to stdout (`-`) or with
+An explicit mode together with a report written to stdout (`-`) or with
 `--explain=json` exits 2: the commands would land in the document. Any other
 value, from the flag or the variable, exits 2 as well. Nothing is printed when
 no task ran — a plan that matched nothing, a run refused before it started.
 The annotations are recorded as an export of the [report](#reports),
-`github-annotations`, `written` or `omitted` with the reason, and under
-`--log-format jsonl` as a `report` event; the stream's `hello` says the mode
-the run settled on.
+`github-annotations`, `azure-annotations` or `teamcity-annotations`, `written`
+or `omitted` with the reason, and under `--log-format jsonl` as a `report`
+event; the stream's `hello` says the mode the run settled on.
 
 The annotations are what the terminal shows (see
 [Findings in the terminal](#findings-in-the-terminal)): each tool's findings at
@@ -928,6 +930,62 @@ which GitHub drops, keeping an error annotation without a location — and so do
 `eslint-compact`'s, for output in ESLint's compact format. Such a line appears
 only when a tool's output is shown raw: it has no parser, `--no-parse` is on, or
 it failed without findings.
+
+### Azure Pipelines and TeamCity
+
+Under `TF_BUILD` the run logs its findings as the issues of the Azure Pipelines
+task, once the last operation has ended:
+
+```text
+##vso[task.logissue type=error;sourcepath=src/a.ts;linenumber=3;columnnumber=7;code=eslint(no-unused-vars)]'x' is assigned a value but never used.
+##vso[task.logissue type=error;code=tsc]tsc exited 2 without parsable findings
+```
+
+The findings are those GitHub would get — what the terminal shows, each once,
+and the failures without a finding — with the path relative to the repository
+root and the column in characters on a one-line finding whose columns could be
+converted. The agent has two issue types, `error` and `warning`, so `info` and
+`hint` findings are not logged, and keeps ten of each type per task: datamitsu
+orders each type as it does for GitHub — the files the pull request touched
+first, then one finding of every other file before a second of any — and when
+anything did not fit, ends with one plain line, `datamitsu: 4 more findings in
+out/run.json`. The touched files are those that differ between HEAD and its
+merge base with `origin/<target branch>` (`SYSTEM_PULLREQUEST_TARGETBRANCH`);
+when that ref is not fetched, or the build is not a pull request, one `info`
+line says so. A property value and the message are escaped as the agent
+unescapes them: `%` as `%AZP25`, `;` as `%3B`, a carriage return as `%0D`, a
+line feed as `%0A`, `]` as `%5D`.
+
+The agent runs a `##vso[` command wherever it appears in a line, not only at its
+start, and has no way to suspend that. In `azure` mode every line of tool text
+the run prints — raw output, a parsed message, a command line, an agent record
+or tail — has `##vso[` rewritten to `##vso [`, so no tool can set a variable,
+upload a file or fail the task through datamitsu's output. That alters a line of
+raw output by one space.
+
+Under `TEAMCITY_VERSION` the run reports its findings as TeamCity inspections:
+an `inspectionType` once per tool and rule (`id` `<tool>/<rule>`, the rule's
+documentation as its description when the tool names one), an `inspection` per
+finding with the file, the line and a `SEVERITY` of `ERROR`, `WARNING`, `INFO`
+or `WEAK WARNING` for the four levels, and a `buildProblem` for a tool that
+failed without a finding, whose `identity` is the tool's name in Java identifier
+characters, at most 60. TeamCity keeps every inspection, so nothing is left out,
+except a finding without a file, which an inspection cannot hold: one plain line
+counts those. Values are escaped as TeamCity reads them: `|` as `||`, `'` as
+`|'`, `[` and `]` as `|[` and `|]`, line breaks as `|n` and `|r`, and other
+control characters and the Unicode line separators as `|0xNNNN`.
+
+TeamCity reads a service message anywhere in a line too. Everything the run
+prints between its first results block and the inspections is wrapped in
+`##teamcity[disableServiceMessages]` … `##teamcity[enableServiceMessages]`, and
+the inspections follow the second line; inside, every line of tool text has
+`##teamcity[` rewritten to `##teamcity [`, so a tool cannot turn the reading
+back on either.
+
+Tools still see `TF_BUILD` and `TEAMCITY_VERSION` (see
+[Tool Environment](./tool-environment.md)); a tool that prints logging commands
+or service messages of its own when it sees them has them broken like any other
+line. The recipes are in the [Reports guide](../guides/reports.md#azure-pipelines-and-teamcity).
 
 ### Skipped tools
 
@@ -1024,21 +1082,21 @@ Run fix operations on files.
 datamitsu fix [files...]
 ```
 
-| Flag                         | Description                                                                                                                                                                                                     |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                                                                                                             |
-| `--file-scoped`              | Only process git staged files                                                                                                                                                                                   |
-| `--tools <list>`             | Comma-separated list of tools to run                                                                                                                                                                            |
-| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools))                                                                                  |
-| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                        |
-| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
-| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
-| `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
-| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; one that lists findings turns fail-fast off (see [Reports](#reports))                                                               |
-| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
-| `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
-| `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
-| `--output <mode>`            | How the run shows its results: `human` (the default) or `agent`, one line per finding for a program that reads the run (see [Agent output](#agent-output))                                                      |
+| Flag                         | Description                                                                                                                                                                                                                             |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                                                                                                                                     |
+| `--file-scoped`              | Only process git staged files                                                                                                                                                                                                           |
+| `--tools <list>`             | Comma-separated list of tools to run                                                                                                                                                                                                    |
+| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools))                                                                                                          |
+| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                                |
+| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                                                |
+| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                                             |
+| `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on))                         |
+| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; one that lists findings turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                                                 |
+| `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                                             |
+| `--annotations <mode>`       | Print the run's findings as CI annotations once it ends: `auto` (the default), `github`, `azure`, `teamcity` or `off` (see [GitHub annotations](#github-annotations) and [Azure Pipelines and TeamCity](#azure-pipelines-and-teamcity)) |
+| `--output <mode>`            | How the run shows its results: `human` (the default) or `agent`, one line per finding for a program that reads the run (see [Agent output](#agent-output))                                                                              |
 
 **Examples:**
 
@@ -1061,22 +1119,22 @@ Run lint operations on files.
 datamitsu lint [files...]
 ```
 
-| Flag                         | Description                                                                                                                                                                                                     |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                                                                                                             |
-| `--file-scoped`              | Only process git staged files                                                                                                                                                                                   |
-| `--tools <list>`             | Comma-separated list of tools to run                                                                                                                                                                            |
-| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools))                                                                                  |
-| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                        |
-| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
-| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
-| `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
-| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; one that lists findings turns fail-fast off (see [Reports](#reports))                                                               |
-| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
-| `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
-| `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
-| `--output <mode>`            | How the run shows its results: `human` (the default) or `agent`, one line per finding for a program that reads the run (see [Agent output](#agent-output))                                                      |
-| `--baseline <file>`          | Gate only on findings the baseline does not hold: a [`report baseline`](#report-baseline) document or a run's own JSON; a tool that exits non-zero still fails (see [Baselines](#baselines))                    |
+| Flag                         | Description                                                                                                                                                                                                                             |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                                                                                                                                     |
+| `--file-scoped`              | Only process git staged files                                                                                                                                                                                                           |
+| `--tools <list>`             | Comma-separated list of tools to run                                                                                                                                                                                                    |
+| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools))                                                                                                          |
+| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                                |
+| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                                                |
+| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                                             |
+| `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on))                         |
+| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; one that lists findings turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                                                 |
+| `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                                             |
+| `--annotations <mode>`       | Print the run's findings as CI annotations once it ends: `auto` (the default), `github`, `azure`, `teamcity` or `off` (see [GitHub annotations](#github-annotations) and [Azure Pipelines and TeamCity](#azure-pipelines-and-teamcity)) |
+| `--output <mode>`            | How the run shows its results: `human` (the default) or `agent`, one line per finding for a program that reads the run (see [Agent output](#agent-output))                                                                              |
+| `--baseline <file>`          | Gate only on findings the baseline does not hold: a [`report baseline`](#report-baseline) document or a run's own JSON; a tool that exits non-zero still fails (see [Baselines](#baselines))                                            |
 
 **Examples:**
 
@@ -2634,7 +2692,7 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_REPORT`                   | Reports `fix`, `lint` and `check` write, as comma-separated `format=path` pairs (twin of `--report`; see [Reports](#reports))                  | -                                                   |
 | `DATAMITSU_ALLOW_PARTIAL`            | Write a report that lists findings for a narrowed run (`true`/`1`) instead of refusing it (twin of `--allow-partial`)                          | `false`                                             |
 | `DATAMITSU_EVENTS`                   | Which findings the JSON-L stream of `fix`, `lint` and `check` emits: `diagnostics=reported` or `diagnostics=all` (twin of `--events`)          | `diagnostics=reported`                              |
-| `DATAMITSU_ANNOTATIONS`              | Whether `fix`, `lint` and `check` print GitHub workflow annotations: `auto`, `github` or `off` (twin of `--annotations`)                       | `auto`                                              |
+| `DATAMITSU_ANNOTATIONS`              | Whether `fix`, `lint` and `check` print CI annotations: `auto`, `github`, `azure`, `teamcity` or `off` (twin of `--annotations`)               | `auto`                                              |
 | `DATAMITSU_OUTPUT`                   | How `fix`, `lint` and `check` show their results: `human` or `agent` (twin of `--output`)                                                      | `human`                                             |
 | `DATAMITSU_CONFIG_CACHE`             | Serve evaluated config chains from disk (`0`/`false`/`off`/`no` disables it)                                                                   | `1`                                                 |
 | `DATAMITSU_LSP_FORMAT_WIDEN_TO`      | How far editor format-on-save may widen: `target` or `unit`                                                                                    | `unit`                                              |

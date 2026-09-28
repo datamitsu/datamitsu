@@ -189,14 +189,14 @@ func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocatio
 	}
 	record(b, failure)
 	for _, line := range tailLines(inv.OutputTail, agentTailLines) {
-		b.WriteString(frameIndent + line + "\n")
+		b.WriteString(frameIndent + toolText(line) + "\n")
 	}
 }
 
 // record writes one record on one line: a line break in anything it names —
 // a message, a path, a directory — is written as the two characters \n.
 func record(b *strings.Builder, text string) {
-	b.WriteString(lineBreaks.Replace(text) + "\n")
+	b.WriteString(toolText(lineBreaks.Replace(text)) + "\n")
 }
 
 var lineBreaks = strings.NewReplacer("\r\n", `\n`, "\r", `\n`, "\n", `\n`)

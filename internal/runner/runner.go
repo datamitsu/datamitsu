@@ -243,6 +243,7 @@ func initSharedContext(
 	}
 	stdoutDocument := sc.explainLevel == "json" || slices.ContainsFunc(opts.Reports, render.Spec.Stdout)
 	sc.annotations = resolveAnnotations(opts.Annotations, sc.ci.Vendor, ui.Quiet(), stdoutDocument)
+	toolText = neutralizerOf(sc.annotations.mode)
 
 	// Get cwd
 	var err error
@@ -1817,7 +1818,7 @@ func printFramed(border func(a ...any) string, label, text string) {
 			fmt.Printf("  %s\n", border("│"))
 			continue
 		}
-		fmt.Printf("  %s  %s\n", border("│"), line)
+		fmt.Printf("  %s  %s\n", border("│"), toolText(line))
 	}
 }
 

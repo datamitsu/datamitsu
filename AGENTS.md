@@ -415,6 +415,16 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   which of them still match framed output. The step summary is the `markdown`
   renderer's `Write` with a budget — 1 MiB less what the file already holds —
   appended best-effort before the annotations, so their notice can name it.
+- Azure Pipelines (`render/azure`, logging commands) and TeamCity
+  (`render/teamcity`, service messages) are annotation modes beside GitHub:
+  `runner.nativeMode` maps a CI vendor to its mode for `auto`, and both reuse
+  `github.Candidates` (Azure also `github.Order` and a ten-per-type budget).
+  Both CIs read a command anywhere in a line, so in those modes every line of
+  tool text the runner prints on stdout goes through `runner.toolText`, which
+  breaks `##vso[` or `##teamcity[` with a space — `printFramed`, agent records
+  and tails do; new stdout tool text must too. TeamCity's results block is
+  also wrapped in `disableServiceMessages` … `enableServiceMessages` by
+  `openCommandRegion`/`closeCommandRegion`.
 - The interchange formats share `internal/report/render/common`: a format
   that lists one operation writes lint, or fix for a fix-only run
   (`common.ListedOperation`); columns come only from the model's precomputed

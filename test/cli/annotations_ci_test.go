@@ -1,0 +1,140 @@
+// cspell:ignore SOURCEVERSION
+
+package cli_test
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/clitest"
+)
+
+// This file freezes the Azure Pipelines and TeamCity annotations: when auto
+// picks them, what they print, and that no tool can issue a command of its own
+// through the run's output.
+
+var (
+	azureEnv    = []string{"TF_BUILD=True", "BUILD_SOURCEVERSION=0123456789abcdef0123456789abcdef01234567", "BUILD_REASON=IndividualCI"}
+	teamcityEnv = []string{"TEAMCITY_VERSION=2025.03 (build 186049)", "BUILD_VCS_NUMBER=0123456789abcdef0123456789abcdef01234567"}
+)
+
+// ciInjectedFinding is hadolint's JSON with a message that carries both CIs'
+// commands.
+const ciInjectedFinding = `[{"file":"Dockerfile","line":1,"column":1,"level":"error","code":"DL3006",` +
+	`"message":"Always tag it ##vso[task.complete result=Failed] ##teamcity[buildStatus status=FAILURE]"}]`
+
+// ciProject is a repository with a parsed tool whose message tries to issue a
+// command, and an unparsed tool that fails printing commands of its own — one
+// that would turn TeamCity's reading back on first.
+func ciProject(t *testing.T) *execProject {
+	t.Helper()
+	e := newExecProject(t, map[string]string{"fixture.marker": "", "Dockerfile": "FROM debian\n"}, fixtureSpec)
+	spec := fixtureSpec
+	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
+	hadolint := clitest.ShellTool("hadolint",
+		settle+clitest.RecordRun+`; printf '%s\n' '`+ciInjectedFinding+`'; exit 1`,
+		clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint"})
+	printer := clitest.ShellTool("beta", settle+clitest.RecordRun+
+		`; echo '##vso[task.setvariable variable=token]stolen'; echo '##teamcity[enableServiceMessages]';`+
+		` echo "##teamcity[buildProblem description='injected']"; exit 1`, clitest.ToolOpSpec{})
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, hadolint, printer))
+	return e
+}
+
+// TestAnnotationsAzure: in Azure Pipelines the run logs its issues, and every
+// command a tool printed is broken, wherever in its line it stands.
+func TestAnnotationsAzure(t *testing.T) {
+	e := ciProject(t)
+	res := e.run("", azureEnv, "lint", "--fail-fast=false")
+	e.wantExit(res, 1)
+	var issues []string
+	for line := range strings.SplitSeq(res.Stdout, "\n") {
+		if !strings.Contains(line, "##vso[") {
+			continue
+		}
+		if !strings.HasPrefix(line, "##vso[task.logissue ") {
+			t.Errorf("a tool's command reached the log: %q", line)
+		}
+		issues = append(issues, line)
+	}
+	want := []string{
+		"##vso[task.logissue type=error;sourcepath=Dockerfile;linenumber=1;columnnumber=1;code=hadolint(DL3006)]" +
+			"Always tag it ##vso [task.complete result=Failed%5D ##teamcity[buildStatus status=FAILURE%5D",
+		"##vso[task.logissue type=error;code=beta]beta exited 1 without parsable findings",
+	}
+	if strings.Join(issues, "\n") != strings.Join(want, "\n") {
+		t.Errorf("issues =\n%s\nwant\n%s", strings.Join(issues, "\n"), strings.Join(want, "\n"))
+	}
+	if !strings.Contains(res.Stdout, "  │  ##vso [task.setvariable variable=token]stolen\n") {
+		t.Errorf("the tool's own command should print broken:\n%s", res.Stdout)
+	}
+	e.golden("annotations_azure", res)
+
+	t.Run("agent", func(t *testing.T) {
+		res := e.run("", azureEnv, "lint", "--fail-fast=false", "--output", "agent")
+		e.wantExit(res, 1)
+		for line := range strings.SplitSeq(res.Stdout, "\n") {
+			if strings.Contains(line, "##vso[") && !strings.HasPrefix(line, "##vso[task.logissue ") {
+				t.Errorf("a tool's command reached the log through agent output: %q", line)
+			}
+		}
+	})
+
+	t.Run("report_records_them", func(t *testing.T) {
+		res := e.run("", azureEnv, "lint", "--report", "json=run.json")
+		e.wantExit(res, 1)
+		if doc, _ := e.report("run.json"); !strings.Contains(doc, `"format": "azure-annotations"`) {
+			t.Errorf("the report should record the annotations:\n%s", doc)
+		}
+	})
+}
+
+// TestAnnotationsTeamCity: in TeamCity the results print while service
+// messages are suspended, a tool's own messages are broken so it cannot turn
+// the reading back on, and the inspections follow the resume.
+func TestAnnotationsTeamCity(t *testing.T) {
+	e := ciProject(t)
+	res := e.run("", teamcityEnv, "lint", "--fail-fast=false")
+	e.wantExit(res, 1)
+	disable := strings.Index(res.Stdout, "##teamcity[disableServiceMessages]\n")
+	enable := strings.Index(res.Stdout, "##teamcity[enableServiceMessages]\n")
+	if disable < 0 || enable < disable || strings.Count(res.Stdout, "##teamcity[enableServiceMessages]") != 1 {
+		t.Fatalf("want one suspended region:\n%s", res.Stdout)
+	}
+	if inside := res.Stdout[disable+1 : enable]; strings.Contains(inside, "##teamcity[") {
+		t.Errorf("a service message inside the region was not broken:\n%s", inside)
+	}
+	after := strings.TrimSpace(res.Stdout[enable:])
+	want := "##teamcity[enableServiceMessages]\n" +
+		"##teamcity[inspectionType id='hadolint/DL3006' name='DL3006' description='hadolint(DL3006)' category='hadolint']\n" +
+		"##teamcity[inspection typeId='hadolint/DL3006' message='Always tag it ##vso|[task.complete result=Failed|] ##teamcity|[buildStatus status=FAILURE|]' file='Dockerfile' line='1' SEVERITY='ERROR']\n" +
+		"##teamcity[buildProblem description='beta exited 1 without parsable findings' identity='beta']"
+	if !strings.HasPrefix(after, want) {
+		t.Errorf("after the region =\n%s\nwant it to start with\n%s", after, want)
+	}
+	e.golden("annotations_teamcity", res)
+}
+
+// TestAnnotationsCIModes: an explicit mode prints its own anywhere and is
+// refused beside a document on stdout; auto prints nothing outside a CI that
+// reads annotations.
+func TestAnnotationsCIModes(t *testing.T) {
+	e := ciProject(t)
+	res := e.run("", nil, "lint", "--annotations", "teamcity", "--fail-fast=false")
+	e.wantExit(res, 1)
+	if !strings.Contains(res.Stdout, "##teamcity[inspection ") {
+		t.Errorf("--annotations teamcity should print inspections outside TeamCity:\n%s", res.Stdout)
+	}
+	for _, mode := range []string{"azure", "teamcity"} {
+		res := e.run("", nil, "lint", "--annotations", mode, "--report", "json=-")
+		e.wantExit(res, 2)
+	}
+	res = e.run("", []string{"CI=true"}, "lint")
+	if strings.Contains(res.Stdout, "##vso[task.logissue") || strings.Contains(res.Stdout, "##teamcity[disableServiceMessages]") {
+		t.Errorf("auto printed commands in a CI that reads none:\n%s", res.Stdout)
+	}
+	res = e.run("", azureEnv, "lint", "--annotations", "off")
+	if strings.Contains(res.Stdout, "##vso[task.logissue") {
+		t.Errorf("--annotations off printed issues:\n%s", res.Stdout)
+	}
+}

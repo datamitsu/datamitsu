@@ -25,8 +25,9 @@ const (
 		"(also via DATAMITSU_ALLOW_PARTIAL)"
 	eventsUsage = "Which findings --log-format jsonl carries as diagnostic events: diagnostics=reported " +
 		"(at or above failOn, the default) or diagnostics=all (also via DATAMITSU_EVENTS)"
-	annotationsUsage = "Print the run's findings as workflow annotations once it ends: auto (github in a GitHub Actions job, " +
-		"unless stdout carries a document or --log-format jsonl is on), github or off (also via DATAMITSU_ANNOTATIONS)"
+	annotationsUsage = "Print the run's findings as CI annotations once it ends: auto (github in a GitHub Actions job, " +
+		"azure in Azure Pipelines, teamcity in TeamCity, unless stdout carries a document or --log-format jsonl is on), " +
+		"github, azure, teamcity or off (also via DATAMITSU_ANNOTATIONS)"
 	outputUsage = "How the run shows its results: human (frames, colour, progress) or agent (one line per finding " +
 		"the terminal would show, one summary line per operation; also via DATAMITSU_OUTPUT)"
 )
@@ -144,23 +145,23 @@ func applyAnnotations(cmd *cobra.Command, flags reportFlags, explain string, opt
 		}
 		mode = v.raw
 	}
-	if mode == runner.AnnotationsGitHub {
+	if explicit := mode != runner.AnnotationsAuto && mode != runner.AnnotationsOff; explicit {
 		switch {
 		case slices.ContainsFunc(opts.Reports, render.Spec.Stdout):
-			return exitcode.UsageErrorf("--annotations github cannot be combined with a report written to stdout (-): " +
-				"the workflow commands would land in the document")
+			return exitcode.UsageErrorf("--annotations %s cannot be combined with a report written to stdout (-): "+
+				"the commands would land in the document", mode)
 		case isJSONExplain(explain):
-			return exitcode.UsageErrorf("--annotations github cannot be combined with --explain=json: " +
-				"the workflow commands would land in the plan")
+			return exitcode.UsageErrorf("--annotations %s cannot be combined with --explain=json: "+
+				"the commands would land in the plan", mode)
 		}
 	}
 	opts.Annotations = mode
-	// Beside a stream only an explicit github prints annotations; the
-	// stream's hello says which.
+	// Beside a stream only an explicit mode prints annotations; the stream's
+	// hello says which.
 	if ui.Quiet() {
 		streamAnnotations = runner.AnnotationsOff
-		if mode == runner.AnnotationsGitHub {
-			streamAnnotations = runner.AnnotationsGitHub
+		if mode != runner.AnnotationsAuto {
+			streamAnnotations = mode
 		}
 	}
 	return nil

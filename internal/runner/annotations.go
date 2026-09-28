@@ -17,33 +17,54 @@ import (
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render"
+	"github.com/datamitsu/datamitsu/internal/report/render/azure"
 	"github.com/datamitsu/datamitsu/internal/report/render/github"
 	"github.com/datamitsu/datamitsu/internal/report/render/markdown"
+	"github.com/datamitsu/datamitsu/internal/report/render/teamcity"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/datamitsu/datamitsu/internal/uievent"
 )
 
-// Values of Options.Annotations: auto prints GitHub annotations in a GitHub
-// Actions job whose stdout is free, github prints them wherever the run is,
-// off never does.
+// Values of Options.Annotations: auto prints the annotations of the CI the run
+// is in — GitHub workflow commands in GitHub Actions, logging commands in
+// Azure Pipelines, service messages in TeamCity — when its stdout is free;
+// github, azure and teamcity print theirs wherever the run is; off never
+// prints any.
 const (
-	AnnotationsAuto   = "auto"
-	AnnotationsGitHub = "github"
-	AnnotationsOff    = "off"
+	AnnotationsAuto     = "auto"
+	AnnotationsGitHub   = "github"
+	AnnotationsAzure    = "azure"
+	AnnotationsTeamCity = "teamcity"
+	AnnotationsOff      = "off"
 )
 
 // AnnotationModes lists the values --annotations takes.
 func AnnotationModes() []string {
-	return []string{AnnotationsAuto, AnnotationsGitHub, AnnotationsOff}
+	return []string{AnnotationsAuto, AnnotationsGitHub, AnnotationsAzure, AnnotationsTeamCity, AnnotationsOff}
 }
 
-const annotationsExport = "github-annotations"
+// nativeMode is the annotation mode of a CI vendor, "" for one that reads
+// none.
+func nativeMode(vendor string) string {
+	switch vendor {
+	case cienv.VendorGitHub:
+		return AnnotationsGitHub
+	case cienv.VendorAzure:
+		return AnnotationsAzure
+	case cienv.VendorTeamCity:
+		return AnnotationsTeamCity
+	}
+	return ""
+}
 
 // annotationState is what the run decided about annotations and what it has
 // printed so far.
 type annotationState struct {
-	// mode is github or off, resolved from the mode asked for.
+	// mode is github, azure, teamcity or off, resolved from the mode asked for.
 	mode string
+	// export names the annotations in the report's exports:
+	// <mode>-annotations.
+	export string
 	// why says why the mode is off, for the report's exports.
 	why string
 	// recorded marks a run whose exports list the annotations: one in a
@@ -56,32 +77,55 @@ type annotationState struct {
 	executed bool
 }
 
-// resolveAnnotations decides whether a run prints annotations. auto prints
-// them in a GitHub Actions job whose stdout carries neither a document nor
-// sits beside a JSON-L stream; github prints them wherever the run is — the
-// command layer refused it beside a document on stdout.
+// resolveAnnotations decides whether a run prints annotations, and which. auto
+// prints those of the CI the run is in when its stdout carries no document and
+// sits beside no JSON-L stream; an explicit mode prints its own wherever the
+// run is — the command layer refused it beside a document on stdout. The
+// report records them in a CI that reads annotations, or when a mode was asked
+// for.
 func resolveAnnotations(requested, vendor string, quiet, stdoutDocument bool) annotationState {
-	st := annotationState{mode: AnnotationsOff, recorded: vendor == cienv.VendorGitHub || requested == AnnotationsGitHub}
+	native := nativeMode(vendor)
+	st := annotationState{mode: AnnotationsOff, recorded: native != ""}
+	named := native
 	switch requested {
-	case AnnotationsGitHub:
-		st.mode = AnnotationsGitHub
+	case AnnotationsGitHub, AnnotationsAzure, AnnotationsTeamCity:
+		st.mode, st.recorded, named = requested, true, requested
 	case AnnotationsAuto:
 		switch {
-		case vendor != cienv.VendorGitHub:
-			st.why = "not a GitHub Actions job"
+		case native == "":
+			st.why = "not a CI job that reads annotations"
 		case stdoutDocument:
 			st.why = "stdout carries a document"
 		case quiet:
 			st.why = "the run writes a JSON-L event stream"
 		default:
-			st.mode = AnnotationsGitHub
+			st.mode = native
 		}
 	case AnnotationsOff:
 		st.why = "--annotations off"
 	default:
 		st.recorded = false
 	}
+	if named != "" {
+		st.export = named + "-annotations"
+	}
 	return st
+}
+
+// toolText is what a line of tool text becomes before the runner prints it on
+// stdout: unchanged, or — where the CI reads commands anywhere in a line —
+// with every command broken.
+var toolText = func(line string) string { return line }
+
+// neutralizerOf is toolText for an annotation mode.
+func neutralizerOf(mode string) func(string) string {
+	switch mode {
+	case AnnotationsAzure:
+		return azure.Neutralize
+	case AnnotationsTeamCity:
+		return teamcity.Neutralize
+	}
+	return func(line string) string { return line }
 }
 
 // commandToken ends the stop-commands region: unguessable, so no tool output
@@ -92,16 +136,27 @@ var commandToken = sync.OnceValue(func() string {
 	return hex.EncodeToString(b[:])
 })
 
-// openCommandRegion stops the runner from reading workflow commands before
-// the results block prints anything a tool wrote: a line of tool output that
-// starts with "::" would otherwise be a command, and a finding's message is
-// tool output too. The annotations are printed after it is closed.
+// openCommandRegion stops the CI from reading commands before the results
+// block prints anything a tool wrote: a line of tool output that starts with
+// "::" would otherwise be a GitHub workflow command, one that holds
+// "##teamcity[" a service message, and a finding's message is tool output
+// too. GitHub stops for a token no tool can guess; TeamCity stops for the
+// build step, and toolText keeps a tool from turning it back on. Azure has no
+// such region: toolText alone breaks its commands. The annotations are
+// printed after the region is closed.
 func (sc *sharedContext) openCommandRegion() {
 	sc.annotations.executed = true
-	if sc.annotations.mode != AnnotationsGitHub || ui.Quiet() || sc.annotations.regionOpen {
+	if ui.Quiet() || sc.annotations.regionOpen {
 		return
 	}
-	fmt.Println("::stop-commands::" + commandToken())
+	switch sc.annotations.mode {
+	case AnnotationsGitHub:
+		fmt.Println("::stop-commands::" + commandToken())
+	case AnnotationsTeamCity:
+		fmt.Println(teamcity.DisableServiceMessages)
+	default:
+		return
+	}
 	sc.annotations.regionOpen = true
 }
 
@@ -109,7 +164,12 @@ func (sc *sharedContext) closeCommandRegion() {
 	if !sc.annotations.regionOpen {
 		return
 	}
-	fmt.Println("::" + commandToken() + "::")
+	switch sc.annotations.mode {
+	case AnnotationsGitHub:
+		fmt.Println("::" + commandToken() + "::")
+	case AnnotationsTeamCity:
+		fmt.Println(teamcity.EnableServiceMessages)
+	}
 	sc.annotations.regionOpen = false
 }
 
@@ -120,9 +180,9 @@ func (sc *sharedContext) annotationExport() (report.Export, bool) {
 	if !st.recorded {
 		return report.Export{}, false
 	}
-	e := report.Export{Format: annotationsExport, Path: render.Stdout, Status: report.ExportWritten}
+	e := report.Export{Format: st.export, Path: render.Stdout, Status: report.ExportWritten}
 	switch {
-	case st.mode != AnnotationsGitHub:
+	case st.mode == AnnotationsOff:
 		e.Status, e.Detail = report.ExportOmitted, st.why
 	case !st.executed:
 		e.Status, e.Detail = report.ExportOmitted, "no task executed"
@@ -138,19 +198,64 @@ func (sc *sharedContext) printAnnotations(ctx context.Context, run *report.Run, 
 	if e, ok := sc.annotationExport(); ok {
 		emitReport(render.Spec{Format: e.Format, Path: e.Path}, e.Status, e.Detail, sc.secretValues())
 	}
-	if sc.annotations.mode != AnnotationsGitHub || !sc.annotations.executed || run == nil {
+	if sc.annotations.mode == AnnotationsOff || !sc.annotations.executed || run == nil {
 		return
 	}
-	candidates := github.Candidates(run)
-	var touched map[string]bool
-	if github.Overflows(candidates) {
-		var why string
-		touched, why = TouchedFiles(ctx, sc.rootPath, sc.ci, sc.ciRuntime)
-		if why != "" {
-			info("touched-file priority off: " + why)
+	switch sc.annotations.mode {
+	case AnnotationsGitHub:
+		candidates := github.Candidates(run)
+		var touched map[string]bool
+		if github.Overflows(candidates) {
+			touched = touchedOrWhy(TouchedFiles(ctx, sc.rootPath, sc.ci, sc.ciRuntime))
+		}
+		_ = github.Print(os.Stdout, github.Select(candidates, touched), rest)
+	case AnnotationsAzure:
+		candidates := azure.Candidates(run)
+		var touched map[string]bool
+		if azure.Overflows(candidates) {
+			touched = touchedOrWhy(AzureTouchedFiles(ctx, sc.rootPath, sc.ci))
+		}
+		_ = azure.Print(os.Stdout, azure.Select(candidates, touched), rest)
+	case AnnotationsTeamCity:
+		_ = teamcity.Print(os.Stdout, teamcity.Build(teamcity.Candidates(run)))
+	}
+}
+
+// touchedOrWhy says, when the touched files are unknown, why their priority
+// is off.
+func touchedOrWhy(touched map[string]bool, why string) map[string]bool {
+	if why != "" {
+		info("touched-file priority off: " + why)
+	}
+	return touched
+}
+
+// AzureTouchedFiles lists the files, relative to the repository root, that the
+// pull request an Azure Pipelines build builds touched: those that differ
+// between the merge base with the target branch's remote-tracking ref and
+// HEAD. why says, when it cannot tell, what would let it.
+func AzureTouchedFiles(ctx context.Context, root string, ci cienv.Info) (touched map[string]bool, why string) {
+	branch := strings.TrimPrefix(ci.BaseRef, "refs/heads/")
+	if branch == "" {
+		return nil, "not a pull request build"
+	}
+	ref := "origin/" + branch
+	out, err := git(ctx, root, "rev-parse", "--verify", "--quiet", "--end-of-options", ref+"^{commit}")
+	base := strings.TrimSpace(out)
+	if err != nil || !isObjectName(base) {
+		return nil, ref + " not fetched"
+	}
+	out, err = git(ctx, root, "diff", "--name-only", "-z", base+"...HEAD", "--")
+	if err != nil {
+		return nil, "no merge base of HEAD and " + ref
+	}
+	touched = map[string]bool{}
+	for name := range strings.SplitSeq(out, "\x00") {
+		if name != "" {
+			touched[name] = true
 		}
 	}
-	_ = github.Print(os.Stdout, github.Select(candidates, touched), rest)
+	return touched, ""
 }
 
 // summaryLimit is how much Markdown GitHub takes from one step's summary,

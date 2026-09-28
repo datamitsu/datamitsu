@@ -38,7 +38,7 @@ func now() time.Time {
 // step summary or an agent's records to print, or a baseline to match
 // fingerprints against.
 func (sc *sharedContext) startReport() {
-	reads := len(sc.opts.Reports) > 0 || ui.Quiet() || sc.annotations.mode == AnnotationsGitHub ||
+	reads := len(sc.opts.Reports) > 0 || ui.Quiet() || sc.annotations.mode != AnnotationsOff ||
 		sc.wantsStepSummary() || sc.agentOutput() || sc.opts.Baseline != nil
 	if !reads {
 		return

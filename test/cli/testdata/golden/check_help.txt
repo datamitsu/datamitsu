@@ -13,7 +13,7 @@ Usage:
 
 Flags:
       --allow-partial                Write a report that lists findings for a narrowed run (named files, a subdirectory, --tools, --file-scoped) instead of refusing it; the report keeps every reason it is incomplete (also via DATAMITSU_ALLOW_PARTIAL)
-      --annotations string           Print the run's findings as workflow annotations once it ends: auto (github in a GitHub Actions job, unless stdout carries a document or --log-format jsonl is on), github or off (also via DATAMITSU_ANNOTATIONS) (default "auto")
+      --annotations string           Print the run's findings as CI annotations once it ends: auto (github in a GitHub Actions job, azure in Azure Pipelines, teamcity in TeamCity, unless stdout carries a document or --log-format jsonl is on), github, azure, teamcity or off (also via DATAMITSU_ANNOTATIONS) (default "auto")
       --baseline string              Gate only on findings the baseline does not hold: a document of 'report baseline', or a run's own JSON report. A finding it holds is neither reported nor gates; a tool that exits non-zero still fails
       --events string                Which findings --log-format jsonl carries as diagnostic events: diagnostics=reported (at or above failOn, the default) or diagnostics=all (also via DATAMITSU_EVENTS)
       --explain string[="summary"]   Show execution plan without running (summary|detailed|json)

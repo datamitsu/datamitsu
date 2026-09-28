@@ -482,6 +482,40 @@ pipelines:
           - exit "$status"
 ```
 
+### Azure Pipelines and TeamCity
+
+Both read commands from the log, so the run needs no step of its own: under
+`TF_BUILD` it logs each error and warning as an issue of the task, under
+`TEAMCITY_VERSION` it reports each finding as an inspection and each tool that
+failed without one as a build problem.
+
+```yaml
+# azure-pipelines.yml
+steps:
+  - checkout: self
+    fetchDepth: 0 # the target branch, for touched-file priority
+  - script: datamitsu lint --fail-fast=false --report json=$(Build.ArtifactStagingDirectory)/run.json
+    displayName: lint
+```
+
+```text
+# TeamCity command line build step
+datamitsu lint --fail-fast=false
+```
+
+- **Azure keeps ten issues of each type per task.** Findings in the files the
+  pull request touched come first — they are read from
+  `origin/<target branch>`, so fetch it — and a plain line says how many did not
+  fit and where they are; `info` and `hint` have no issue type and are left out.
+  Publish the JSON report as an artifact for the rest.
+- **TeamCity keeps everything.** Inspections appear in the build's Inspections
+  tab; a finding without a file cannot be an inspection and is counted instead.
+- **No tool can issue a command.** Azure runs `##vso[` wherever it appears in a
+  line, TeamCity reads `##teamcity[` the same way. datamitsu rewrites both
+  prefixes, with a space, in every line of tool output it prints in that mode —
+  one space of difference in a raw line — and TeamCity's results block is also
+  wrapped in `disableServiceMessages` … `enableServiceMessages`.
+
 ### GitLab Code Quality
 
 `--report codequality=<path>` writes GitLab's Code Quality report, the array
