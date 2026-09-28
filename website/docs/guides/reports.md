@@ -24,7 +24,7 @@ are in the [CLI reference](../reference/cli-commands.md#reports).
 
 ```mermaid
 graph TD
-    R["run: selection, failFast, complete, incomplete, exports"] --> O["operations: fix, lint"]
+    R["run: selection, failFast, complete, incomplete, exports, ci"] --> O["operations: fix, lint"]
     O --> T["tools: app, parser, failOn, complete, incomplete"]
     T --> I["invocations: one per process — state, exit code, extraction"]
     I --> F["files: path, state"]
@@ -33,8 +33,11 @@ graph TD
 
 - **The run** — what it was asked to cover (`selection`: the whole repository,
   a subdirectory, named files, a `--tools` filter), whether fail-fast was on,
-  whether the run is complete, and every report it was asked for with its
-  status.
+  whether the run is complete, every report it was asked for with its
+  status, and the CI job it ran in (`ci`: the `vendor` — empty outside CI —
+  and the commit, ref, base branch and pull request number the vendor names,
+  as [`facts().ci`](../reference/configuration-api.md#platform-information)
+  reads them).
 - **Operations** — `fix` and `lint` in the order they ran; `check` writes one
   document holding both. An operation the run never reached is listed with
   `ran: false`. Each lists the tools the planner skipped, with the reason, and

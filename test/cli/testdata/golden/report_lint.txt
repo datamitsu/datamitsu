@@ -167,5 +167,8 @@
       "path": "out/run.json",
       "status": "written"
     }
-  ]
+  ],
+  "ci": {
+    "vendor": ""
+  }
 }

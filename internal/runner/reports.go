@@ -231,6 +231,9 @@ func (sc *sharedContext) finishReports(operations []config.OperationType, err er
 		Selection:     sc.reportSelection(),
 		FailFast:      sc.failFast,
 		Exports:       exports,
+		CI: report.CIEnvironment{
+			Vendor: sc.ci.Vendor, SHA: sc.ci.SHA, Ref: sc.ci.Ref, BaseRef: sc.ci.BaseRef, PRNumber: sc.ci.PRNumber,
+		},
 	})
 	report.Mask(run, sc.secretValues())
 

@@ -39,6 +39,20 @@ type Run struct {
 	// Exports lists every report the run was asked for, with the status each
 	// had when this document was written.
 	Exports []Export `json:"exports"`
+	// CI is the continuous-integration job the run ran in; its vendor is ""
+	// outside CI.
+	CI CIEnvironment `json:"ci"`
+}
+
+// CIEnvironment identifies a CI job and the change it built: identifiers only.
+type CIEnvironment struct {
+	// Vendor is github, gitlab, azure, teamcity, buildkite, bitbucket,
+	// jenkins, circleci, gitea, generic, or "".
+	Vendor   string `json:"vendor"`
+	SHA      string `json:"sha,omitempty"`
+	Ref      string `json:"ref,omitempty"`
+	BaseRef  string `json:"baseRef,omitempty"`
+	PRNumber string `json:"prNumber,omitempty"`
 }
 
 // Producer names the datamitsu build and the configuration a run came from.

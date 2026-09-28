@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/datamitsu/datamitsu/internal/cienv"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/gitenv"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
@@ -50,6 +51,10 @@ type Facts struct {
 	IsMonorepo bool `json:"isMonorepo"`
 	// Env contains all environment variables
 	Env map[string]string `json:"env"`
+	// CI is the continuous-integration system the process runs under, read
+	// from Env: a function of the environment, which the config-eval key
+	// already hashes whole.
+	CI cienv.Info `json:"ci"`
 }
 
 // CollectOptions tweaks fact collection for special-purpose callers.
@@ -135,6 +140,7 @@ func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts 
 
 	// Collect all environment variables
 	facts.Env = collectAllEnv()
+	facts.CI, _ = cienv.Detect(func(name string) string { return facts.Env[name] })
 
 	return facts, gitRoot, nil
 }

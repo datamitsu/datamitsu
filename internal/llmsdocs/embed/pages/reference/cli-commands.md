@@ -574,7 +574,10 @@ earlier run is not deleted, so a pipeline that uploads it with `if: always()`
 checks the exit code as well.
 
 `json` writes datamitsu's own document, `datamitsu.report/1`: what the run was
-asked to cover (`selection`), whether fail-fast was on (`failFast`), and for each
+asked to cover (`selection`), whether fail-fast was on (`failFast`), the CI job
+it ran in (`ci`: `vendor`, empty outside CI, and the `sha`, `ref`, `baseRef` and
+`prNumber` the vendor names — see
+[`facts().ci`](./configuration-api.md#platform-information)), and for each
 operation (`fix`, `lint`; `check` writes one document holding both) whether it
 ran and succeeded, the tools the planner skipped and the tasks the run stopped.
 Each tool lists its app as configured, its parser module and its threshold, and

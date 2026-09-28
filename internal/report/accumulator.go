@@ -206,6 +206,7 @@ type BuildInfo struct {
 	Selection     Selection
 	FailFast      bool
 	Exports       []Export
+	CI            CIEnvironment
 }
 
 // Build turns what was recorded into a Run, sorted so that one input always
@@ -222,6 +223,7 @@ func (a *Accumulator) Build(info BuildInfo) *Run {
 		FailFast:   info.FailFast,
 		Operations: make([]Operation, 0, len(a.ops)),
 		Exports:    append([]Export{}, info.Exports...),
+		CI:         info.CI,
 	}
 	names := make([]string, 0, len(a.ops))
 	for _, op := range a.ops {

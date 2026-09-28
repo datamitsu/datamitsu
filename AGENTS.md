@@ -75,6 +75,7 @@ on Intel i9-14900K it is 26× faster.
 - **Standard environment variables** like `PATH`, `HOME`, `TMPDIR` when constructing child process environments
 - **Third-party service tokens** like `GITHUB_TOKEN`, `NPM_TOKEN` in their respective client packages
 - **Universal standards** like `CI`, `NO_COLOR`, `TERM` - but prefer wrapping in `internal/env` for consistency
+- **CI vendors' variables** (`GITHUB_*`, `CI_*`, `TF_BUILD`, …) in `internal/cienv` only: `Detect(getenv)` is the one place a CI is recognized (`facts().ci`, `report.Run.CI`), and `Variables()` lists every name it reads — the blackbox harness strips that list, so a name read elsewhere would let a CI job change a golden
 
 **Rationale:** Centralized environment variable handling provides:
 

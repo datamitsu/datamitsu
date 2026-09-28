@@ -20,6 +20,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/bundled"
 	"github.com/datamitsu/datamitsu/internal/cache"
+	"github.com/datamitsu/datamitsu/internal/cienv"
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
@@ -170,6 +171,10 @@ type sharedContext struct {
 	// startedAt stamps the report: SOURCE_DATE_EPOCH or the clock at the
 	// start of the run.
 	startedAt time.Time
+	// ci is the CI the run runs under, and ciRuntime where it takes a step
+	// summary and its event.
+	ci        cienv.Info
+	ciRuntime cienv.Runtime
 }
 
 func initSharedContext(
@@ -192,6 +197,7 @@ func initSharedContext(
 		fileScoped:      fileScoped,
 		startedAt:       now(),
 	}
+	sc.ci, sc.ciRuntime = cienv.Current()
 
 	// Parse selected tools flag
 	if selectedToolsFlag != "" {

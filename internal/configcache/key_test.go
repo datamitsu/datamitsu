@@ -295,4 +295,17 @@ func TestFactsFrom(t *testing.T) {
 			t.Fatal("Facts must not carry Env; the whole environment belongs in Inputs.Environ")
 		}
 	})
+
+	// facts().ci is read from the environment, which Inputs.Environ hashes
+	// whole: two environments that give it different values give two keys.
+	t.Run("ci is derived from the environment", func(t *testing.T) {
+		if _, ok := reflect.TypeFor[Facts]().FieldByName("CI"); ok {
+			t.Fatal("Facts must not carry CI; it is a function of Inputs.Environ")
+		}
+		github := baseInputs()
+		github.Environ = append(github.Environ, "GITHUB_ACTIONS=true")
+		if Key(github) == Key(baseInputs()) {
+			t.Fatal("an environment that changes facts().ci does not change the key")
+		}
+	})
 }
