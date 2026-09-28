@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -207,6 +208,37 @@ func TestEventsBrokenStream(t *testing.T) {
 			t.Errorf("exit code = %d, stdout %q; want 1 naming both failures", code, stdout)
 		}
 	})
+}
+
+// A reader that closed the stream does not kill the run: the write fails, the
+// run ends, and it exits 1 saying so on stdout.
+func TestEventsClosedStream(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a closed pipe raises SIGPIPE on Unix only; the property is left unverified on Windows")
+	}
+	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
+		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = reader.Close()
+	t.Cleanup(func() { _ = writer.Close() })
+
+	var stdout bytes.Buffer
+	cmd := exec.Command(clitest.BuildOnce(t), "--no-auto-config", "--config", e.cfg, "--log-format", "jsonl", "lint", "--report", "json=run.json")
+	cmd.Dir = e.p.Dir
+	cmd.Env = clitest.BaseEnv(e.cache)
+	cmd.Stdout, cmd.Stderr = &stdout, writer
+	if code := clitest.ExitCodeOf(cmd.Run()); code != 1 {
+		t.Fatalf("exit code = %d, want 1\n%s", code, stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "error: the JSON-L event stream could not be written") {
+		t.Errorf("stdout = %q, want the stream's error", stdout.String())
+	}
+	if _, err := os.Stat(filepath.Join(e.p.Dir, "run.json")); err != nil {
+		t.Errorf("the run did not write its report: %v", err)
+	}
 }
 
 // runWithFullStderr runs the binary in e with stderr on /dev/full and returns

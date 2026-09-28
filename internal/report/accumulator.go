@@ -545,24 +545,31 @@ func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun)
 // numbers the rest across all of its invocations, which is what makes two
 // findings on one line of one file distinct however the tool's work was split.
 func settleFindings(tr *ToolRun) {
-	first := map[fingerprintInput][2]int{}
+	// The same finding may weigh more where it came from a process that
+	// failed: the one listed is the strongest, in the invocation that reported
+	// it, and the first of equals.
+	best := map[fingerprintInput][2]int{}
+	for i, inv := range tr.Invocations {
+		for j, f := range inv.Findings {
+			if f.Kind == kindSynthetic {
+				continue
+			}
+			input := f.input()
+			if pos, seen := best[input]; !seen || stronger(f, tr.Invocations[pos[0]].Findings[pos[1]]) {
+				best[input] = [2]int{i, j}
+			}
+		}
+	}
 	var in []fingerprintInput
 	var at [][2]int
 	for i := range tr.Invocations {
 		inv := &tr.Invocations[i]
 		kept := inv.Findings[:0]
-		for _, f := range inv.Findings {
-			input := f.input()
+		for j, f := range inv.Findings {
 			// A synthetic finding stands for its own invocation, never for
 			// another's, however alike their failures read.
-			if pos, dup := first[input]; dup && f.Kind != kindSynthetic {
-				// The same finding may weigh more where it came from a process
-				// that failed; the one listed says what the strongest said.
-				strongest(&tr.Invocations[pos[0]].Findings[pos[1]], f)
+			if f.Kind != kindSynthetic && best[f.input()] != [2]int{i, j} {
 				continue
-			}
-			if f.Kind != kindSynthetic {
-				first[input] = [2]int{i, len(kept)}
 			}
 			kept = append(kept, f)
 		}
@@ -577,17 +584,17 @@ func settleFindings(tr *ToolRun) {
 	}
 }
 
-// strongest makes kept say the most any of its duplicates said: the more
-// severe level, and reported or gating when one of them was.
-func strongest(kept *Finding, dup Finding) {
-	if severityRank[dup.Severity] < severityRank[kept.Severity] {
-		kept.Severity = dup.Severity
+// stronger reports whether a says more than b: it gates where b does not, is
+// reported where b is not, or is more severe.
+func stronger(a, b Finding) bool {
+	switch {
+	case a.Gates != b.Gates:
+		return a.Gates
+	case a.Reported != b.Reported:
+		return a.Reported
 	}
-	kept.Reported = kept.Reported || dup.Reported
-	kept.Gates = kept.Gates || dup.Gates
+	return config.Severity(a.Severity).Level() < config.Severity(b.Severity).Level()
 }
-
-var severityRank = map[string]int{"error": 1, "warning": 2, "info": 3, "hint": 4}
 
 // input is what the finding's fingerprint is computed from.
 func (f Finding) input() fingerprintInput {

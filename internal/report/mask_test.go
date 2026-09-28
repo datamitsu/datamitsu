@@ -75,6 +75,17 @@ func TestMask(t *testing.T) {
 	}
 }
 
+// A secret JSON escapes — a quote, a backslash — is masked in its escaped
+// spelling too, the one a routed log line's fields carry.
+func TestMaskJSONSpelling(t *testing.T) {
+	const secret = `token"with\\slash`
+	run := &Run{Operations: []Operation{{Name: `{"files":["dir/token\"with\\\\slash/a"]}` + " and " + secret}}}
+	Mask(run, []string{secret})
+	if got := run.Operations[0].Name; got != `{"files":["dir/***/a"]}`+" and "+Masked {
+		t.Errorf("masked = %s", got)
+	}
+}
+
 func TestMaskNothing(t *testing.T) {
 	run := &Run{Schema: SchemaVersion}
 	Mask(run, nil)

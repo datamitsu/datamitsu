@@ -143,6 +143,10 @@ func setJSONLStderr(on bool) {
 		if ui.Quiet() {
 			return
 		}
+		// A reader that closed the stream must fail the write, not kill the
+		// process: the run still ends, writes its reports and says why on
+		// stdout.
+		absorbBrokenPipe()
 		ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)
 		// Masked from its first event: a failure before a run records its
 		// own secrets — a config that does not load — still quotes paths and

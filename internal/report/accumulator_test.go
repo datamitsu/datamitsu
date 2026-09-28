@@ -303,9 +303,9 @@ func TestFindingMessageIsPlainText(t *testing.T) {
 	}
 }
 
-// Duplicates from two processes are listed once, with the most any of them
-// said: the error a failed process reported is not lost behind the warning a
-// passing one reported first.
+// Duplicates from two processes are listed once, where the strongest was
+// reported: the error a failed process reported is not lost behind the warning
+// a passing one reported first, nor moved onto the passing one.
 func TestSettleFindingsKeepsTheStrongest(t *testing.T) {
 	finding := func(severity string, reported, gates bool) Finding {
 		return Finding{
@@ -318,11 +318,21 @@ func TestSettleFindingsKeepsTheStrongest(t *testing.T) {
 		{ID: "t::1#2", Findings: []Finding{finding("error", true, true)}},
 	}}
 	settleFindings(tr)
-	if len(tr.Invocations[1].Findings) != 0 {
-		t.Fatalf("the duplicate was kept: %+v", tr.Invocations[1].Findings)
+	if len(tr.Invocations[0].Findings) != 0 {
+		t.Fatalf("the weaker duplicate was kept: %+v", tr.Invocations[0].Findings)
 	}
-	if got := tr.Invocations[0].Findings[0]; got.Severity != "error" || !got.Reported || !got.Gates {
-		t.Errorf("kept finding = %+v, want the error, reported and gating", got)
+	if got := tr.Invocations[1].Findings; len(got) != 1 || got[0].Severity != "error" || !got[0].Gates {
+		t.Errorf("kept findings of the failed process = %+v, want its gating error", got)
+	}
+
+	// Of equals, the first is kept.
+	tr = &ToolRun{Invocations: []Invocation{
+		{ID: "t::1#1", Findings: []Finding{finding("error", true, true)}},
+		{ID: "t::1#2", Findings: []Finding{finding("error", true, true)}},
+	}}
+	settleFindings(tr)
+	if len(tr.Invocations[0].Findings) != 1 || len(tr.Invocations[1].Findings) != 0 {
+		t.Errorf("findings = %+v, %+v; want the first of two equals", tr.Invocations[0].Findings, tr.Invocations[1].Findings)
 	}
 }
 

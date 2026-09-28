@@ -322,7 +322,8 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   rest — so an event's fingerprint is the report's. `uievent.Event` stays flat:
   new fields are `omitempty`, pointers where false or zero must be written, set
   only on the events that carry them. Every stream `setJSONLStderr` opens (`--log-format jsonl`, `lsp`, a report
-  on stdout) starts with `hello`; a stream the sink could not write fails the run with exit
+  on stdout) starts with `hello` and absorbs `SIGPIPE`, so a closed reader fails
+  a write instead of killing the run; a stream the sink could not write fails the run with exit
   1 and the error on stdout (`JSONLSink.Failed`, `ui.EventStreamFailed`).
 
 ## Product Stage

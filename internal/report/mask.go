@@ -1,6 +1,7 @@
 package report
 
 import (
+	"encoding/json"
 	"reflect"
 	"sort"
 	"strings"
@@ -109,14 +110,29 @@ func MaskAll(ptr any, secrets []string) {
 	maskValue(v.Elem(), replacer(secrets))
 }
 
+// replacer masks each secret as it is, and as JSON spells it inside a string:
+// a log line routed to the stream carries its fields JSON-encoded, where a
+// quote or a backslash in a secret is escaped.
 func replacer(secrets []string) *strings.Replacer {
-	pairs := make([]string, 0, 2*len(secrets))
+	pairs := make([]string, 0, 4*len(secrets))
 	for _, s := range secrets {
-		if s != "" {
-			pairs = append(pairs, s, Masked)
+		if s == "" {
+			continue
+		}
+		pairs = append(pairs, s, Masked)
+		if escaped := jsonSpelling(s); escaped != s {
+			pairs = append(pairs, escaped, Masked)
 		}
 	}
 	return strings.NewReplacer(pairs...)
+}
+
+func jsonSpelling(s string) string {
+	quoted, err := json.Marshal(s)
+	if err != nil {
+		return s
+	}
+	return string(quoted[1 : len(quoted)-1])
 }
 
 // withoutFragment masks text, which a cut at a byte count started, and drops
