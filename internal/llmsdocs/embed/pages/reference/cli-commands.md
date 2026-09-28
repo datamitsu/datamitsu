@@ -566,8 +566,9 @@ that `config reconcile` runs after writing its files.
 has ended, whether or not its tools failed — the run that fails is the one a
 pipeline needs to read. The flag is repeatable, one per format: `json`, the
 run's own document; `markdown`, the same run for a person; `sarif`, the run for
-code scanning; `junit`, the run as test results; and `codequality`, GitLab's
-Code Quality report. The [Reports guide](../guides/reports.md) explains what a
+code scanning; `junit`, the run as test results; `codequality`, GitLab's Code
+Quality report; `checkstyle`, Checkstyle XML; and `rdjsonl`, reviewdog's
+diagnostics. The [Reports guide](../guides/reports.md) explains what a
 report holds and how far to trust it; [`report render`](#report-render) writes
 one again, offline, from a run's own JSON.
 
@@ -703,8 +704,21 @@ without a file or outside the repository cannot be placed and is left out and
 counted. A tool that is not complete is kept. See
 [GitLab Code Quality](../guides/reports.md#gitlab-code-quality).
 
+`checkstyle` writes one `<file>` per file and one `<error>` per finding of the
+`lint` operation (fix for a `fix` run), with `line`, `column` in characters
+where the report could convert it, `severity` `error`, `warning` or `info`,
+`message` and `source` `<source>/<rule>`; a finding without a file is under
+`<file name="">`. `rdjsonl` writes one reviewdog diagnostic per line: the
+message, the path with a range in UTF-8 byte columns (exclusive end, left out
+where they could not be converted), severity `ERROR`, `WARNING` or `INFO`, the
+source with its app's official URL and the rule with its documentation; a
+finding without a file has no location. See
+[Checkstyle](../guides/reports.md#checkstyle) and
+[reviewdog](../guides/reports.md#reviewdog).
+
 A format that lists findings but has no place to say how complete it is —
-`junit`, `codequality` — gets a completeness companion beside its file,
+`junit`, `codequality`, `checkstyle`, `rdjsonl` — gets a completeness companion
+beside its file,
 `<path>.completeness.json` (`datamitsu.completeness/1`): whether the report is
 complete, the run-level reasons, each tool with its own, the findings the
 format could not carry (`omitted`), and the run's exports.
@@ -1023,12 +1037,12 @@ offline:
 datamitsu report render --input <run.json> --format <format> [--output <path>|-]
 ```
 
-| Flag                | Description                                                                                                            |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)                                               |
-| `--format <format>` | The format to write: `json`, `markdown`, `sarif`, `junit` or `codequality`; a format's options follow a `?` (required) |
-| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report`                                    |
-| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                                                   |
+| Flag                | Description                                                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)                                                                        |
+| `--format <format>` | The format to write: `json`, `markdown`, `sarif`, `junit`, `codequality`, `checkstyle` or `rdjsonl`; a format's options follow a `?` (required) |
+| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report`                                                             |
+| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                                                                            |
 
 The renderers and the completeness rule are the run's own: a document of a
 narrowed run is refused (exit 2) for a format that lists findings unless

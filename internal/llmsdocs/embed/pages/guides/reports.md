@@ -16,9 +16,10 @@ datamitsu lint --report json=out/run.json
 `json` writes datamitsu's own document, `datamitsu.report/1`, which carries
 everything the record holds; `markdown` writes the same run for a person — the
 tools, the findings the terminal would show and what the run left out; `sarif`
-writes it for GitHub code scanning ([Code scanning](#code-scanning)); `junit`
-and `codequality` write it for the CI systems that read test results and code
-quality reports ([Other CI systems](#other-ci-systems)). The flags, the variable twins and the
+writes it for GitHub code scanning ([Code scanning](#code-scanning)); `junit`,
+`codequality`, `checkstyle` and `rdjsonl` write it for the CI systems and
+review tools that read test results, code quality reports, Checkstyle and
+reviewdog's diagnostics ([Other CI systems](#other-ci-systems)). The flags, the variable twins and the
 exit codes are in the [CLI reference](../reference/cli-commands.md#reports).
 
 ## What a report holds
@@ -131,9 +132,9 @@ Two rules keep a report from claiming more than it holds:
 A run can still end up incomplete — a tool cancelled, an output its parser
 could not read, a tool without a parser — and a format has to say so. The own
 JSON and `markdown` say it themselves, and `sarif` leaves such a tool out. A
-format whose shape has no place for the claim — `junit`, `codequality` — is
-written in full and gets a **completeness companion** beside it,
-`<path>.completeness.json`:
+format whose shape has no place for the claim — `junit`, `codequality`,
+`checkstyle`, `rdjsonl` — is written in full and gets a **completeness
+companion** beside it, `<path>.completeness.json`:
 
 ```json
 {
@@ -416,6 +417,60 @@ lint:
   target branch's, so a finding a report misses reads as fixed. A tool that is
   not complete is kept, with the findings it has, and the companion says it is
   not; the `after_script` above keeps GitLab from comparing such a report.
+
+### Checkstyle
+
+`--report checkstyle=<path>` writes Checkstyle XML: one `<file>` per file, one
+`<error>` per finding of the `lint` operation (fix for a `fix` run), every
+level, with `line`, `column` (characters, left out where the report could not
+convert it), `severity` (`error`, `warning`, and `info` for info and hints),
+`message` and `source` (`<source>/<rule>`). A finding without a file, the
+`synthetic` finding of a tool that failed without a parsable one included, is
+under `<file name="">`; a file outside the repository keeps its absolute path.
+
+Jenkins' Warnings Next Generation plugin reads it, or the SARIF file, and
+compares each build with a reference build to tell new findings from fixed
+ones — which is why a narrowed run refuses the report and an incomplete tool is
+flagged in the companion rather than left out:
+
+```groovy
+stage('Lint') {
+  steps {
+    sh 'datamitsu lint --fail-fast=false --report checkstyle=reports/checkstyle.xml --report junit=reports/junit.xml'
+  }
+  post {
+    always {
+      recordIssues tools: [checkStyle(pattern: 'reports/checkstyle.xml')]
+      junit 'reports/junit.xml'
+    }
+  }
+}
+```
+
+`recordIssues tools: [sarif(pattern: 'reports/datamitsu-*.sarif')]` reads the
+SARIF files of `--report sarif=reports/` instead. Azure Pipelines shows SARIF
+files published as the `CodeAnalysisLogs` build artifact in the Scans tab of
+the SARIF SAST Scans Tab extension.
+
+### reviewdog
+
+`--report rdjsonl=<path>` writes reviewdog's rdjsonl, one diagnostic per line:
+`message`, `location` (the path, and a range whose columns are UTF-8 bytes with
+an exclusive end, as reviewdog counts them, left out where the report could not
+convert them), `severity` (`ERROR`, `WARNING`, and `INFO` for info and hints),
+`source` (the tool, with its app's official URL) and `code` (the rule and its
+documentation). A finding without a file is a line without a location.
+reviewdog turns it into review comments on the forge it reports to, filtered to
+the lines a change touched:
+
+```bash
+datamitsu lint --fail-fast=false --report rdjsonl=rd.jsonl
+reviewdog -f=rdjsonl -reporter=github-pr-review < rd.jsonl
+```
+
+reviewdog itself compares nothing between runs, but the rdjsonl stream lists
+findings like the other formats, so a narrowed run refuses it and the
+companion is written beside it. Suggested fixes are not written.
 
 ## Fingerprints
 

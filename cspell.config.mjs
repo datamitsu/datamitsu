@@ -595,5 +595,7 @@ export default defineConfig((config) => ({
     "companioned",
     // encoding/xml's struct tag for an element's character data.
     "chardata",
+    // reviewdog's filter mode that reports every diagnostic.
+    "nofilter",
   ],
 }));

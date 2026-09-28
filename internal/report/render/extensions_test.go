@@ -11,9 +11,11 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/report"
+	"github.com/datamitsu/datamitsu/internal/report/render/checkstyle"
 	"github.com/datamitsu/datamitsu/internal/report/render/codequality"
 	"github.com/datamitsu/datamitsu/internal/report/render/common"
 	"github.com/datamitsu/datamitsu/internal/report/render/junit"
+	"github.com/datamitsu/datamitsu/internal/report/render/rdjsonl"
 	"github.com/datamitsu/datamitsu/internal/report/render/sarif"
 )
 
@@ -24,6 +26,8 @@ var (
 	_ OptionChecker = sarif.Renderer{}
 	_ Companioned   = junit.Renderer{}
 	_ Companioned   = codequality.Renderer{}
+	_ Companioned   = checkstyle.Renderer{}
+	_ Companioned   = rdjsonl.Renderer{}
 )
 
 // companionRenderer stands in for a format without a place for completeness.
