@@ -163,7 +163,7 @@ func TestCanonicalEnviron_ResolvesDuplicatesLastWins(t *testing.T) {
 // contains: it must not make an activated shell re-bake its farm, yet config JS
 // can still read it, so the config-eval fingerprint keeps it.
 func TestEnviron_ExcludesExecutionOnlyVariables(t *testing.T) {
-	for _, v := range []struct{ name, value string }{{failFast.Name, "false"}, {failOn.Name, "warning"}, {report.Name, "json=out.json"}, {allowPartial.Name, "true"}, {events.Name, "diagnostics=all"}} {
+	for _, v := range []struct{ name, value string }{{failFast.Name, "false"}, {failOn.Name, "warning"}, {report.Name, "json=out.json"}, {allowPartial.Name, "true"}, {events.Name, "diagnostics=all"}, {annotations.Name, "github"}} {
 		t.Run(v.name, func(t *testing.T) {
 			t.Setenv(v.name, v.value)
 

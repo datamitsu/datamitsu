@@ -47,6 +47,7 @@ const (
 // internal to the engine layer via json.Marshal/json.Unmarshal.
 type Effective struct {
 	AllowPartial             string `json:"allowPartial"`
+	Annotations              string `json:"annotations"`
 	Concurrency              int    `json:"concurrency"`
 	ConfigCache              bool   `json:"configCache"`
 	Events                   string `json:"events"`
@@ -88,6 +89,7 @@ func Compute() Effective {
 	}
 	return Effective{
 		AllowPartial:             env.AllowPartial(),
+		Annotations:              env.Annotations(),
 		Concurrency:              env.GetConcurrency(),
 		ConfigCache:              env.ConfigCacheEnabled(),
 		Events:                   env.Events(),

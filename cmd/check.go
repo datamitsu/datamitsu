@@ -62,6 +62,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	if err := applyReports(cmd, checkReports, &opts); err != nil {
 		return err
 	}
+	if err := applyAnnotations(cmd, checkReports, checkExplain, &opts); err != nil {
+		return err
+	}
 	err := runner.RunSequential(
 		[]config.OperationType{config.OpFix, config.OpLint},
 		args, checkExplain, checkFileScoped, checkSelectedTools, checkFailOnSkip,

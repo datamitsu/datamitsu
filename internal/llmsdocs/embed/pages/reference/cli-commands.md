@@ -166,6 +166,7 @@ datamitsu check [files...]
 | `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
 | `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
+| `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
 
 **Examples:**
 
@@ -373,16 +374,16 @@ the rest.
 With `--log-format=jsonl`, `fix`, `lint` and `check` write their progress to
 stderr as typed events, one JSON object per line:
 
-| `type`       | When                                                                                                                                  |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `hello`      | Opens the stream: `op_id` `stream`, `schema` (`datamitsu.report/1`) and `events`, the comma-separated types the stream may carry      |
-| `phase`      | An operation (`op`: `fix` or `lint`) starts: `status: "start"`                                                                        |
-| `tool_run`   | A tool starts in a directory (`status: "start"`) and ends: `done` or `fail` with its findings per level, or `skip` for a stopped tool |
-| `chunk`      | A tool finished a unit of its work: `index` of `total`                                                                                |
-| `error`      | A tool failed: `tool`, `dir`, `msg`                                                                                                   |
-| `done`       | The operation ended, with its summary                                                                                                 |
-| `report`     | A report was written or not: `format`, `path`, `status` and, when it was not, `msg` (see [Reports](#reports))                         |
-| `diagnostic` | One finding of a tool, once the tool finished: by default those at or above the operation's `failOn`                                  |
+| `type`       | When                                                                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `hello`      | Opens the stream: `op_id` `stream`, `schema` (`datamitsu.report/1`) and `events`, the comma-separated types the stream may carry                                               |
+| `phase`      | An operation (`op`: `fix` or `lint`) starts: `status: "start"`                                                                                                                 |
+| `tool_run`   | A tool starts in a directory (`status: "start"`) and ends: `done` or `fail` with its findings per level, or `skip` for a stopped tool                                          |
+| `chunk`      | A tool finished a unit of its work: `index` of `total`                                                                                                                         |
+| `error`      | A tool failed: `tool`, `dir`, `msg`                                                                                                                                            |
+| `done`       | The operation ended, with its summary                                                                                                                                          |
+| `report`     | A report was written or not: `format`, `path`, `status` and, when it was not, `msg` (see [Reports](#reports)); `github-annotations` for the [annotations](#github-annotations) |
+| `diagnostic` | One finding of a tool, once the tool finished: by default those at or above the operation's `failOn`                                                                           |
 
 Every task — one tool in one directory, or one file of a tool that runs once
 per file — has an `op_id` of its own: the operation's `op_id` followed by
@@ -618,6 +619,73 @@ in the document. This catches what the environment names; a secret a tool
 prints that no variable holds is not caught, which is why a security tool's
 output is withheld altogether.
 
+### GitHub annotations
+
+In a GitHub Actions job `fix`, `lint` and `check` print the run's findings as
+workflow commands once the last operation has ended — `::error file=…,line=…::`
+— which GitHub shows as annotations in the Checks tab and on the lines a pull
+request changed, with no token and no extra step:
+
+```text
+::error file=src/a.ts,line=3,col=7,endColumn=8,title=eslint(no-unused-vars)::'x' is assigned a value but never used.
+::error title=tsc::tsc exited 2 without parsable findings
+```
+
+`--annotations` (or `DATAMITSU_ANNOTATIONS`) chooses when:
+
+| Mode     | Prints                                                                                                                                              |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto`   | in a GitHub Actions job (`GITHUB_ACTIONS=true`, not Gitea or Forgejo), unless stdout carries a document or `--log-format jsonl` is on — the default |
+| `github` | wherever the run is, under `--log-format jsonl` too: stdout is not the event stream's channel                                                       |
+| `off`    | never                                                                                                                                               |
+
+`--annotations github` together with a report written to stdout (`-`) or with
+`--explain=json` exits 2: the commands would land in the document. Any other
+value, from the flag or the variable, exits 2 as well. Nothing is printed when
+no task ran — a plan that matched nothing, a run refused before it started.
+The annotations are recorded as an export of the [report](#reports),
+`github-annotations`, `written` or `omitted` with the reason, and under
+`--log-format jsonl` as a `report` event.
+
+The annotations are what the terminal shows (see
+[Findings in the terminal](#findings-in-the-terminal)): each tool's findings at
+or above its `failOn`, or all of them for a tool that failed on findings below
+it, plus one error without a file for a tool that failed without a finding its
+parser could read. A finding reported twice — by `fix` and by `lint`, or by two
+processes of one tool — is annotated once. The path is relative to the
+repository root, whatever directory the workflow checked the repository out
+into; a finding outside the repository names no file. Columns are given in
+characters, and only on a one-line finding whose columns could be converted
+(see the report's `precision`). A message is escaped and cut at 4096 bytes.
+
+GitHub keeps the first ten annotations of each type — error, warning, notice —
+a step prints, so datamitsu chooses which ten: findings in the files the change
+touched come first, then one finding of every other file before a second of any,
+then findings without a file. When anything did not fit, a notice takes the
+first notice slot and says how many were left out and where they are:
+`datamitsu: 15 more findings in out/run.json` names every report written to a
+file that lists findings. The files a change touched come from git: on a
+`pull_request`, the merge commit the checkout holds against its first parent,
+the base branch's tip (with `actions/checkout`'s default depth of 1 that parent
+is not fetched: set `fetch-depth: 2`); on a `push`, the commit the push started
+from, named by the event (fetched only with `fetch-depth: 0`). When the change
+cannot be read, one `info` line says why, and the order is the same without the
+priority. Several datamitsu commands in one step share one budget of ten.
+
+Everything the run prints between its first results block and the annotations
+is one `::stop-commands::` region with a random token, so no line a tool printed
+— raw output, a parsed message — can be read as a workflow command; the
+annotations follow its end. Every line of tool text in a frame is indented
+behind its border. The problem matchers `actions/setup-go` and
+`actions/setup-node` register read every line whatever the region, and the
+indentation keeps `tsc`'s and `eslint-stylish`'s from matching; two remain:
+`go`'s pattern accepts any text before a path, so raw output in Go's
+`file:line:col: message` form still matches — with the border in the file name,
+which GitHub drops, keeping an error annotation without a location — and so does
+`eslint-compact`'s, for output in ESLint's compact format. Such a line appears
+only when a tool's output is shown raw: it has no parser, `--no-parse` is on, or
+it failed without findings.
+
 ### Skipped tools
 
 :::info
@@ -726,6 +794,7 @@ datamitsu fix [files...]
 | `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
 | `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
+| `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
 
 **Examples:**
 
@@ -761,6 +830,7 @@ datamitsu lint [files...]
 | `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
 | `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
+| `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
 
 **Examples:**
 
@@ -2201,6 +2271,7 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_REPORT`                | Reports `fix`, `lint` and `check` write, as comma-separated `format=path` pairs (twin of `--report`; see [Reports](#reports))                  | -                                                   |
 | `DATAMITSU_ALLOW_PARTIAL`         | Write a report that lists findings for a narrowed run (`true`/`1`) instead of refusing it (twin of `--allow-partial`)                          | `false`                                             |
 | `DATAMITSU_EVENTS`                | Which findings the JSON-L stream of `fix`, `lint` and `check` emits: `diagnostics=reported` or `diagnostics=all` (twin of `--events`)          | `diagnostics=reported`                              |
+| `DATAMITSU_ANNOTATIONS`           | Whether `fix`, `lint` and `check` print GitHub workflow annotations: `auto`, `github` or `off` (twin of `--annotations`)                       | `auto`                                              |
 | `DATAMITSU_CONFIG_CACHE`          | Serve evaluated config chains from disk (`0`/`false`/`off`/`no` disables it)                                                                   | `1`                                                 |
 | `DATAMITSU_LSP_FORMAT_WIDEN_TO`   | How far editor format-on-save may widen: `target` or `unit`                                                                                    | `unit`                                              |
 | `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` | Format-on-save watchdog in ms: no further tool group starts once it has elapsed (`0` = disabled)                                               | `15000`                                             |
@@ -2240,7 +2311,7 @@ config chain the farm was baked from, joined with the platform's list separator,
 and is informational in the same way. All three are excluded from the farm's
 staleness fingerprint, so exporting them cannot make a farm look stale.
 `DATAMITSU_FAIL_FAST`, `DATAMITSU_FAIL_ON`, `DATAMITSU_REPORT`,
-`DATAMITSU_ALLOW_PARTIAL` and `DATAMITSU_EVENTS` are excluded too: they change how far one run goes and what it prints or writes, never what a
+`DATAMITSU_ALLOW_PARTIAL`, `DATAMITSU_EVENTS` and `DATAMITSU_ANNOTATIONS` are excluded too: they change how far one run goes and what it prints or writes, never what a
 farm contains, so setting one for one command does not re-bake the farm.
 
 `DATAMITSU_FORCE_GIT_SUBPROCESS` applies to the config loader's memoized git-root

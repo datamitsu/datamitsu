@@ -316,6 +316,18 @@ func TestComputeEvents(t *testing.T) {
 	}
 }
 
+// DATAMITSU_ANNOTATIONS is reported as set; the command layer reads it.
+func TestComputeAnnotations(t *testing.T) {
+	for _, raw := range []string{"", "auto", "github", "off", "bogus"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("DATAMITSU_ANNOTATIONS", raw)
+			if eff := Compute(); eff.Annotations != raw {
+				t.Errorf("Annotations = %q, want %q", eff.Annotations, raw)
+			}
+		})
+	}
+}
+
 func TestFailFastMatchesConstant(t *testing.T) {
 	t.Setenv("DATAMITSU_FAIL_FAST", "")
 	if value, _ := env.FailFast(); value != FailFast {

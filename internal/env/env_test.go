@@ -1470,6 +1470,21 @@ func TestEvents(t *testing.T) {
 	}
 }
 
+func TestAnnotations(t *testing.T) {
+	t.Setenv(annotations.Name, os.Getenv(annotations.Name))
+
+	_ = os.Unsetenv(annotations.Name)
+	if got := Annotations(); got != "" {
+		t.Errorf("Annotations() unset = %q, want empty", got)
+	}
+	for _, raw := range []string{"auto", "github", "off", "GitHub "} {
+		t.Setenv(annotations.Name, raw)
+		if got := Annotations(); got != raw {
+			t.Errorf("Annotations() = %q, want %q returned raw", got, raw)
+		}
+	}
+}
+
 func TestParseBool(t *testing.T) {
 	for _, tt := range []struct {
 		raw       string

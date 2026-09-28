@@ -463,6 +463,13 @@ func Events() string {
 	return os.Getenv(events.Name)
 }
 
+// Annotations returns DATAMITSU_ANNOTATIONS exactly as set, "" when unset. The
+// command layer accepts auto, github and off and exits 2 on anything else: a
+// mistyped mode must not silently print, or silently not print, annotations.
+func Annotations() string {
+	return os.Getenv(annotations.Name)
+}
+
 // ParseBool reads the boolean spelling datamitsu's variables accept: true or
 // 1, false or 0, case-insensitive and trimmed.
 func ParseBool(raw string) (value, ok bool) {

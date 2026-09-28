@@ -54,7 +54,7 @@ var testedLeafCommands = map[string]string{
 	"fix":                          "TestExplainPlanGolden / TestExecutionFixCache",
 	"init":                         "TestInitNoopSuccess / TestInitDryRunGolden",
 	"install":                      "TestInstallNoTargets",
-	"lint":                         "TestExplainPlanGolden / TestExecutionTwoToolsPass / TestExecutionFailFastBetweenPriorities / TestReportJSON",
+	"lint":                         "TestExplainPlanGolden / TestExecutionTwoToolsPass / TestExecutionFailFastBetweenPriorities / TestReportJSON / TestAnnotationsGitHub",
 	"report render":                "TestReportRender",
 	"llms":                         "TestLlmsHelpGolden / TestLlmsRootIndex / TestLlmsUnknownPageGolden",
 	"lsp":                          "TestLspFormattingSession",

@@ -25,11 +25,12 @@ func probeProject(t *testing.T, op clitest.ToolOpSpec) *execProject {
 // TestToolEnvironment freezes what fix, lint and check hand a tool: no
 // GITHUB_ACTIONS, agent marker or FORCE_COLOR, CI kept, NO_COLOR=1 whatever the
 // host says; inheritEnv returns a stripped variable with the host's value; env
-// cannot set NO_COLOR; exec hands its app the host environment unchanged.
+// cannot set NO_COLOR; exec hands its app the host environment unchanged. The
+// host is a GitHub job, whose annotations annotations_test.go freezes.
 func TestToolEnvironment(t *testing.T) {
 	t.Run("lint strips and sets", func(t *testing.T) {
 		e := probeProject(t, clitest.ToolOpSpec{})
-		res := e.run("", hostEnv, "lint")
+		res := e.run("", hostEnv, "lint", "--annotations", "off")
 		e.wantExit(res, 1)
 		if !strings.Contains(res.Stdout, "CI=true GITHUB_ACTIONS= AI_AGENT= FORCE_COLOR= NO_COLOR=1\n") {
 			t.Errorf("the tool saw another environment:\n%s", res.Stdout)
@@ -39,7 +40,7 @@ func TestToolEnvironment(t *testing.T) {
 
 	t.Run("inheritEnv hands one back", func(t *testing.T) {
 		e := probeProject(t, clitest.ToolOpSpec{InheritEnv: []string{"GITHUB_ACTIONS"}})
-		res := e.run("", hostEnv, "lint")
+		res := e.run("", hostEnv, "lint", "--annotations", "off")
 		e.wantExit(res, 1)
 		if !strings.Contains(res.Stdout, "CI=true GITHUB_ACTIONS=true AI_AGENT= FORCE_COLOR= NO_COLOR=1\n") {
 			t.Errorf("the tool should see the host's GITHUB_ACTIONS and nothing else stripped:\n%s", res.Stdout)

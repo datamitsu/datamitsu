@@ -1,0 +1,38 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+::stop-commands::<TOKEN>
+┃
+┃ ✗ beta      <DUR> (1 failed)
+  ┌─ beta [repository] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; echo '::error title=x::y'; exit 1 beta
+  │  Exit code: 1
+  │  Duration:  <DUR>
+  │
+  │  ::error title=x::y
+  └<RULE>
+
+┃ ✗ hadolint  <DUR> (1 failed)
+  ┌─ hadolint [per-file] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; printf '%s\n' '[{"file":"Dockerfile","line":1,"column":1,"level":"error","code":"DL3006","message":"Always tag the version of an image explicitly\n::error::injected"}]'; exit 1 hadolint <TMP>/Dockerfile
+  │  Exit code: 1
+  │  Duration:  <DUR>
+  │
+  │  Dockerfile:1:1 error Always tag the version of an image explicitly
+  │  ::error::injected [DL3006]
+  └<RULE>
+
+┗━ 2 tools · 2 runs · done in <DUR> · 2 failed · cache 0% <RULE>
+::<TOKEN>::
+::error file=Dockerfile,line=1,col=1,title=hadolint(DL3006)::Always tag the version of an image explicitly%0A::error::injected
+::error title=beta::beta exited 1 without parsable findings
+
+===STDERR===
+error: operation failed
