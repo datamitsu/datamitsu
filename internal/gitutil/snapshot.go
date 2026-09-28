@@ -54,13 +54,10 @@ func Environ() []string {
 // `git status --porcelain=v2 -z --untracked-files=all` without optional locks
 // — a hook's `git commit` holds index.lock, and a status that refreshed the
 // index would fail on it — and hashes every dirty file. env is git's
-// environment (Environ); when git refuses the inherited index, which belongs
-// to another repository, it is read again with the repository's own.
+// environment (Environ). An index git cannot read is a failed snapshot, never
+// a reason to read another: snapshots of one run compare against one index.
 func Take(ctx context.Context, root string, env []string) (Snapshot, error) {
 	out, err := status(ctx, root, env)
-	if err != nil && holds(env, "GIT_INDEX_FILE=") {
-		out, err = status(ctx, root, gitenv.Sanitize(env))
-	}
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -81,15 +78,6 @@ func Take(ctx context.Context, root string, env []string) (Snapshot, error) {
 		s.entries[path] = e
 	}
 	return s, nil
-}
-
-func holds(env []string, prefix string) bool {
-	for _, kv := range env {
-		if strings.HasPrefix(kv, prefix) {
-			return true
-		}
-	}
-	return false
 }
 
 func status(ctx context.Context, root string, env []string) ([]byte, error) {

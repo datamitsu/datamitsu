@@ -247,3 +247,27 @@ func TestAnnotationsDocumentOnStdout(t *testing.T) {
 		})
 	}
 }
+
+// TestAnnotationsPathsInMessages: a warning or an error that names a path the
+// pipeline gave — a baseline, a report — breaks the command it may hold.
+func TestAnnotationsPathsInMessages(t *testing.T) {
+	e := ciProject(t)
+	e.run("", nil, "lint", "--report", "json=out/run.json", "--allow-partial", "Dockerfile")
+	const name = "out/##vso[task.setvariable variable=x]y.json"
+	e.p.WriteFile(name, e.read("out/run.json"))
+	for _, args := range [][]string{
+		{"report", "baseline", name, "--output", "out/base.json"},
+		{"lint", "--baseline", name},
+		{"lint", "--baseline", "out/##vso[task.complete]missing.json"},
+	} {
+		res := e.run("", azureEnv, args...)
+		for line := range strings.SplitSeq(res.Stdout+res.Stderr, "\n") {
+			if strings.Contains(line, "##vso[") && !strings.HasPrefix(line, "##vso[task.logissue ") {
+				t.Errorf("%v: a command reached the log: %q", args, line)
+			}
+		}
+		if !strings.Contains(res.Stderr, "##vso [") {
+			t.Errorf("%v: want the path named, broken:\n%s", args, res.Stderr)
+		}
+	}
+}

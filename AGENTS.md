@@ -428,7 +428,9 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   stopped and unrun lines, the target line, progress labels, agent records and
   tails, `--explain` plans, the console log (`logger.SetConsoleFilter`), another
   CI's annotations (`foreignCommandsBroken`), and every JSON-L event through the
-  event mask; new output of that kind must too. A document on stdout cannot take a space: `render.Target.Guard`
+  event mask; new output of that kind must too. Before any run, `cmd` installs
+  the vendor's filter on the console log, the stream's event mask and the final
+  error line (`runner.CINeutralizer`), since a warning may name a path. A document on stdout cannot take a space: `render.Target.Guard`
   (`runner.CommandGuard`, `render.GuardCommands`) spells the bracket `\u005b`
   in JSON and `&#91;` in XML, which decode to the same text. TeamCity's results block is
   also wrapped in `disableServiceMessages` … `enableServiceMessages` by

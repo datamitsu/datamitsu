@@ -208,6 +208,16 @@ func TestTakeUnderAHook(t *testing.T) {
 	if s := r.snapshot(nil); s.entries["stale.txt"].tracked {
 		t.Error("with the repository's index stale.txt should be untracked")
 	}
+
+	// An index git cannot read fails the snapshot: it is never replaced by
+	// the repository's own, against which the next snapshot would compare.
+	broken := filepath.Join(r.dir, ".git", "broken-index")
+	if err := os.WriteFile(broken, []byte("not an index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Take(context.Background(), r.dir, append(os.Environ(), "GIT_INDEX_FILE="+broken)); err == nil {
+		t.Error("a snapshot over an index git cannot read succeeded")
+	}
 }
 
 func TestTakeOutsideARepository(t *testing.T) {

@@ -144,6 +144,13 @@ func neutralizerOf(mode, vendor string) func(string) string {
 	}
 }
 
+// CINeutralizer is toolText for anything a process prints in the CI of
+// vendor, before a run has resolved its annotations: the identity where the
+// CI reads no command anywhere in a line.
+func CINeutralizer(vendor string) func(string) string {
+	return neutralizerOf("", vendor)
+}
+
 // CommandGuard is the render.Target guard of a document written to stdout in
 // the CI of vendor that prints the annotations of mode; nil where no CI reads
 // commands in it.
