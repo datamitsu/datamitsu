@@ -300,6 +300,61 @@ func TestSetupFailure(t *testing.T) {
 	}
 }
 
+// Two processes of a tool that failed in one directory are two cases: one
+// that exited on findings below the threshold, and one that crashed, whose
+// output stays with it.
+func TestFailedInvocationsInOneDirectory(t *testing.T) {
+	one, two := 1, 2
+	run := &report.Run{Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{{
+		Name: "hadolint", FailOn: "error",
+		Invocations: []report.Invocation{
+			{
+				ID: "hadolint::1#1", State: "ran", ExitCode: &one, FailureKind: "exit", Files: files("Dockerfile"),
+				Findings: []report.Finding{issue("Dockerfile", 1, "warning", false, "pin it")},
+			},
+			{
+				ID: "hadolint::1#2", State: "ran", ExitCode: &two, FailureKind: "exit", Files: files("web.Dockerfile"), OutputTail: "panic: boom\n",
+				Findings: []report.Finding{{
+					Tool: "hadolint", Source: "hadolint", Severity: "error", Gates: true, Kind: "synthetic",
+					Message: "hadolint exited 2 without parsable findings", Location: report.Location{Precision: "unknown"},
+				}},
+			},
+		},
+	}}}}}
+	doc, _ := decode(t, run)
+	s := doc.suite(t, "lint/hadolint")
+	first, second := s.testCase(t, ". (hadolint::1#1)"), s.testCase(t, ". (hadolint::1#2)")
+	if first.Failure == nil || first.Failure.Message != "exit 1" || first.Failure.Text != "Dockerfile:1:3: warning eslint(no-var): pin it" {
+		t.Errorf("the process that exited on findings = %+v", first)
+	}
+	if second.Error == nil || second.Error.Message != "exit 2" || second.Error.Text != "hadolint exited 2 without parsable findings\npanic: boom" {
+		t.Errorf("the process that crashed = %+v", second)
+	}
+	if s.Failures != 1 || s.Errors != 1 {
+		t.Errorf("counts = %d failures, %d errors; want one of each", s.Failures, s.Errors)
+	}
+}
+
+// A process that failed the threshold on a finding another process reported
+// too is not a case of its own once the duplicate is listed with the other:
+// the file the finding is on fails, once.
+func TestThresholdFailureAfterDedupe(t *testing.T) {
+	zero := 0
+	gating := issue("pkg/a.ts", 3, "error", true, "Unexpected var")
+	run := &report.Run{Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{{
+		Name: "eslint", FailOn: "error", Complete: true,
+		Invocations: []report.Invocation{
+			{ID: "eslint:pkg:1#1", Dir: "pkg", State: "ran", ExitCode: &zero, FailureKind: "threshold", Files: files("pkg/a.ts"), Findings: []report.Finding{gating}},
+			{ID: "eslint:pkg:2#1", Dir: "pkg", State: "ran", ExitCode: &zero, FailureKind: "threshold", Files: files("pkg/a.ts")},
+		},
+	}}}}}
+	doc, _ := decode(t, run)
+	s := doc.suite(t, "lint/eslint")
+	if s.Tests != 1 || s.Failures != 1 || s.Errors != 0 {
+		t.Errorf("suite = %+v, want the file failing once and nothing else", s)
+	}
+}
+
 func TestEscaping(t *testing.T) {
 	run := sampleRun()
 	run.Operations[0].Tools[0].Invocations[0].Findings[0].Message = "quote \" amp & ctrl \x1b[31m and ]]> end\r\nnext"

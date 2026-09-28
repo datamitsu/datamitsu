@@ -26,6 +26,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render/common"
+	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
 // Renderer writes JUnit XML.
@@ -210,116 +211,138 @@ func reasons(rs []report.Reason) string {
 func cachedFiles(tr *report.ToolRun) int {
 	n := 0
 	for _, inv := range tr.Invocations {
-		if inv.State == stateCached || inv.State == stateVerdictHit {
+		if inv.State == string(tooling.FileCached) || inv.State == string(tooling.FileVerdictHit) {
 			n += len(inv.Files)
 		}
 	}
 	return n
 }
 
-// Invocation and file states the cases are built from.
-const (
-	stateRan         = "ran"
-	stateCached      = "cached"
-	stateVerdictHit  = "verdict-hit"
-	stateSetupFailed = "setup-failed"
-)
+// answered reports a state in which an invocation, or a file, has its result.
+func answered(state string) bool {
+	switch state {
+	case string(tooling.ProcessRan), string(tooling.FileCached), string(tooling.FileVerdictHit):
+		return true
+	}
+	return false
+}
+
+// invocationCase is the case of one invocation: one that failed on its own
+// without a gating finding, did not get set up, or reported a finding without
+// a file.
+type invocationCase struct {
+	dir, id string
+	tc      *testCase
+}
 
 // toolCases builds the cases of one tool run: a case per file its
-// invocations answered for, an extra case per directory whose invocation
-// failed without a gating finding or reported a finding without a file, and
-// a skipped case per task the run stopped.
+// invocations answered for, a case per invocation that failed on its own
+// without a gating finding or reported a finding without a file, and a
+// skipped case per task the run stopped.
 func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 	files := map[string]*testCase{}
-	dirs := map[string]*testCase{}
 	fileCase := func(path string) *testCase {
 		if files[path] == nil {
 			files[path] = &testCase{className: tr.Name, name: path}
 		}
 		return files[path]
 	}
-	dirCase := func(dir string) *testCase {
-		name := strings.ReplaceAll(dir, `\`, "/")
-		if name == "" {
-			name = "."
-		}
-		if dirs[name] == nil {
-			dirs[name] = &testCase{className: tr.Name, name: name}
-		}
-		return dirs[name]
-	}
+	var invocations []invocationCase
 	withhold := common.Security(tr)
 
 	for _, inv := range tr.Invocations {
-		switch inv.State {
-		case stateRan, stateCached, stateVerdictHit:
-		case stateSetupFailed:
-			tc := dirCase(inv.Dir)
+		var own *testCase
+		ownCase := func() *testCase {
+			if own == nil {
+				own = &testCase{className: tr.Name}
+				invocations = append(invocations, invocationCase{dir: dirName(inv.Dir), id: inv.ID, tc: own})
+			}
+			return own
+		}
+		if inv.State == string(tooling.ProcessSetupFailed) {
+			tc := ownCase()
 			tc.time += inv.Duration
-			tc.errors = append(tc.errors, caseError{kind: "setup", message: "setup failed", tail: tail(inv, withhold)})
-			continue
-		default:
-			// Cancelled and never started: the task's skipped case stands for
-			// its files.
+			tc.failure = &caseFailure{kind: "setup", message: "setup failed", tail: tail(inv, withhold)}
 			continue
 		}
-		answered := 0
+		// A task cancelled or never started is its skipped case.
+		if !answered(inv.State) {
+			continue
+		}
+		count := 0
 		for _, fr := range inv.Files {
-			if fr.State == stateRan || fr.State == stateCached || fr.State == stateVerdictHit {
-				answered++
+			if answered(fr.State) {
+				count++
 			}
 		}
 		for _, fr := range inv.Files {
-			if fr.State != stateRan && fr.State != stateCached && fr.State != stateVerdictHit {
+			if !answered(fr.State) {
 				continue
 			}
 			tc := fileCase(fr.Path)
-			if answered == 1 && inv.State == stateRan {
+			if count == 1 && inv.State == string(tooling.ProcessRan) {
 				tc.time += inv.Duration
 			}
 		}
 
 		gating := false
-		var synthetic []report.Finding
+		var synthetic *report.Finding
 		for _, f := range inv.Findings {
 			switch {
 			case common.Synthetic(f):
-				synthetic = append(synthetic, f)
+				synthetic = &f
 			case f.Location.Path == "":
-				dirCase(inv.Dir).add(f, tr.FailOn)
+				ownCase().add(f, tr.FailOn)
 				gating = gating || f.Gates
 			default:
 				fileCase(f.Location.Path).add(f, tr.FailOn)
 				gating = gating || f.Gates
 			}
 		}
-		if inv.State != stateRan || inv.Success || gating {
+		// A threshold failure is the gating finding's, wherever the report
+		// lists it after duplicates across invocations collapsed; only a
+		// process that failed on its own, without one, needs a case of its
+		// own — not a failure of every file it answered for.
+		if inv.State != string(tooling.ProcessRan) || inv.ExitCode == nil || *inv.ExitCode == 0 || gating {
 			continue
 		}
-		// Failed without a gating finding: one case for the invocation, not a
-		// failure of every file it answered for.
-		tc := dirCase(inv.Dir)
-		if answered != 1 {
+		tc := ownCase()
+		if count != 1 {
 			tc.time += inv.Duration
 		}
-		code := 0
-		if inv.ExitCode != nil {
-			code = *inv.ExitCode
-		}
-		tc.exitCodes = append(tc.exitCodes, code)
-		for _, f := range inv.Findings {
-			if !common.Synthetic(f) {
-				tc.exitFindings = append(tc.exitFindings, line(f))
+		fail := &caseFailure{kind: "exit", message: fmt.Sprintf("exit %d", *inv.ExitCode)}
+		if synthetic != nil {
+			fail.text, fail.tail = synthetic.Message, tail(inv, withhold)
+		} else {
+			// It printed findings, listed here or, when another invocation
+			// reported them too, with that one.
+			fail.onFindings = true
+			for _, f := range inv.Findings {
+				fail.findings = append(fail.findings, line(f))
 			}
 		}
-		for _, f := range synthetic {
-			tc.errors = append(tc.errors, caseError{kind: "exit", message: fmt.Sprintf("exit %d", code), text: f.Message, tail: tail(inv, withhold)})
-		}
+		tc.failure = fail
 	}
 
-	out := make([]*testCase, 0, len(files)+len(dirs))
+	// An invocation's case is named after its directory, told apart by the
+	// invocation when several of the tool's share one.
+	perDir := map[string]int{}
+	for _, c := range invocations {
+		perDir[c.dir]++
+	}
+	own := make([]*testCase, 0, len(invocations))
+	for _, c := range invocations {
+		c.tc.name = c.dir
+		if perDir[c.dir] > 1 {
+			c.tc.name = c.dir + " (" + c.id + ")"
+		}
+		own = append(own, c.tc)
+	}
+	sort.SliceStable(own, func(i, j int) bool { return own[i].name < own[j].name })
+
+	out := make([]*testCase, 0, len(files)+len(own))
 	out = append(out, sortedCases(files)...)
-	out = append(out, sortedCases(dirs)...)
+	out = append(out, own...)
 	var stopped []*testCase
 	for _, c := range cancelled {
 		if c.Tool != tr.Name {
@@ -333,6 +356,13 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 	}
 	sort.SliceStable(stopped, func(i, j int) bool { return stopped[i].name < stopped[j].name })
 	return append(out, stopped...)
+}
+
+func dirName(dir string) string {
+	if dir = strings.ReplaceAll(dir, `\`, "/"); dir == "" {
+		return "."
+	}
+	return dir
 }
 
 func tail(inv report.Invocation, withhold bool) string {
@@ -355,7 +385,6 @@ func sortedCases(cases map[string]*testCase) []*testCase {
 	return out
 }
 
-// testCase is one <testcase>.
 type testCase struct {
 	className, name string
 	time            report.Millis
@@ -363,18 +392,19 @@ type testCase struct {
 	// invocation; below are the rest, the case's output.
 	gating, below []string
 	failOn        string
-	// exitCodes, exitFindings and errors are those of the invocations that
-	// failed without a gating finding.
-	exitCodes    []int
-	exitFindings []string
-	errors       []caseError
-	skipped      string
+	// failure is set on the case of an invocation that failed on its own.
+	failure *caseFailure
+	skipped string
 }
 
-// caseError is what an invocation that failed without a finding left: its
-// structured message and the masked tail of its output.
-type caseError struct {
-	kind, message, text, tail string
+// caseFailure is how an invocation failed on its own: exit, a <failure> when
+// it printed findings and an <error> carrying its output tail when it printed
+// none, or setup, an <error>.
+type caseFailure struct {
+	kind, message string
+	onFindings    bool
+	findings      []string
+	text, tail    string
 }
 
 func (tc *testCase) add(f report.Finding, failOn string) {
@@ -399,9 +429,9 @@ func (tc *testCase) outcome() outcome {
 	switch {
 	case tc.skipped != "":
 		return outcomeSkipped
-	case len(tc.gating) > 0 || len(tc.exitFindings) > 0:
+	case len(tc.gating) > 0 || (tc.failure != nil && tc.failure.onFindings):
 		return outcomeFailure
-	case len(tc.errors) > 0 || len(tc.exitCodes) > 0:
+	case tc.failure != nil:
 		return outcomeError
 	}
 	return outcomePass
@@ -416,29 +446,20 @@ func (tc *testCase) write(b *strings.Builder) {
 	case outcomeFailure:
 		kind, message, lines := "threshold", findingsAtOrAbove(len(tc.gating), tc.failOn), tc.gating
 		if len(tc.gating) == 0 {
-			kind, message, lines = "exit", exitMessage(tc.exitCodes), tc.exitFindings
-			for _, e := range tc.errors {
-				lines = append(lines, e.text)
-			}
+			kind, message, lines = tc.failure.kind, tc.failure.message, tc.failure.findings
 		}
 		fmt.Fprintf(&body, `      <failure type="%s" message="%s">%s</failure>`+"\n",
 			kind, common.XMLAttr(message), common.XMLText(strings.Join(lines, "\n")))
 	case outcomeError:
-		kind, message := "exit", exitMessage(tc.exitCodes)
-		if len(tc.exitCodes) == 0 {
-			kind, message = tc.errors[0].kind, tc.errors[0].message
-		}
 		var text []string
-		for _, e := range tc.errors {
-			if e.text != "" {
-				text = append(text, e.text)
-			}
-			if e.tail != "" {
-				text = append(text, strings.TrimRight(e.tail, "\n"))
-			}
+		if tc.failure.text != "" {
+			text = append(text, tc.failure.text)
+		}
+		if tc.failure.tail != "" {
+			text = append(text, strings.TrimRight(tc.failure.tail, "\n"))
 		}
 		fmt.Fprintf(&body, `      <error type="%s" message="%s">%s</error>`+"\n",
-			kind, common.XMLAttr(message), common.XMLText(strings.Join(text, "\n")))
+			tc.failure.kind, common.XMLAttr(tc.failure.message), common.XMLText(strings.Join(text, "\n")))
 	case outcomePass:
 	}
 	if len(tc.below) > 0 {
@@ -459,18 +480,6 @@ func findingsAtOrAbove(n int, failOn string) string {
 		noun = "finding"
 	}
 	return fmt.Sprintf("%d %s at or above failOn=%s", n, noun, failOn)
-}
-
-func exitMessage(codes []int) string {
-	seen := map[int]bool{}
-	var parts []string
-	for _, c := range codes {
-		if !seen[c] {
-			seen[c] = true
-			parts = append(parts, strconv.Itoa(c))
-		}
-	}
-	return "exit " + strings.Join(parts, ", ")
 }
 
 // line is one finding as a case lists it: "path:row:col: severity
