@@ -42,7 +42,7 @@ func (Renderer) Companion(run *report.Run, _ map[string]string) common.Companion
 	return common.NewCompanion(run, "checkstyle", ops, nil)
 }
 
-// Render writes the document.
+// Render writes every finding of the listed operation, one <file> per file.
 func (Renderer) Render(w io.Writer, run *report.Run, _ map[string]string) error {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")

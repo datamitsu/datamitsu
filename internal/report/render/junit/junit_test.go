@@ -355,6 +355,25 @@ func TestThresholdFailureAfterDedupe(t *testing.T) {
 	}
 }
 
+// A process the executor failed after it exited 0 — a formatter that printed
+// nothing for a file that is not empty — failed on its own: an error case,
+// not a pass.
+func TestFailureAfterExitZero(t *testing.T) {
+	zero := 0
+	run := &report.Run{Operations: []report.Operation{{Name: "fix", Ran: true, Tools: []report.ToolRun{{
+		Name: "fmt", FailOn: "error",
+		Invocations: []report.Invocation{{
+			ID: "fmt::1#1", State: "ran", ExitCode: &zero, FailureKind: "exit", Files: files("a.go"), OutputTail: "empty output\n",
+		}},
+	}}}}}
+	doc, _ := decode(t, run)
+	s := doc.suite(t, "fix/fmt")
+	c := s.testCase(t, ".")
+	if c.Error == nil || c.Error.Message != "exit 0" || c.Error.Text != "empty output" || s.Errors != 1 {
+		t.Errorf("suite = %+v, want the invocation's error case", s)
+	}
+}
+
 func TestEscaping(t *testing.T) {
 	run := sampleRun()
 	run.Operations[0].Tools[0].Invocations[0].Findings[0].Message = "quote \" amp & ctrl \x1b[31m and ]]> end\r\nnext"

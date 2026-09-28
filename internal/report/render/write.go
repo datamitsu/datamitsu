@@ -84,11 +84,16 @@ func (t *Target) Write(run *report.Run) error {
 			err = companionErr
 		}
 	}
-	if err == nil {
-		err = os.Rename(t.tmp.Name(), t.Spec.Path)
-	}
+	// The companion goes first, and goes again if the report does not
+	// follow: a report must never stand beside an earlier run's companion,
+	// which a job would read as this report's.
 	if err == nil && t.companion != nil {
 		err = os.Rename(t.companion.Name(), common.CompanionPath(t.Spec.Path))
+	}
+	if err == nil {
+		if err = os.Rename(t.tmp.Name(), t.Spec.Path); err != nil && t.companion != nil {
+			_ = os.Remove(common.CompanionPath(t.Spec.Path))
+		}
 	}
 	if err != nil {
 		_ = os.Remove(t.tmp.Name())

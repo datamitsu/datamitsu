@@ -387,16 +387,64 @@ lint:
       - reports/
 ```
 
-Every consumer below compares runs or fails builds on what the report lists,
-so a job publishes it only when its companion says it is complete — the
-GitLab recipe above and the Jenkins one under [Checkstyle](#checkstyle) show
-the check. Jenkins' JUnit plugin: `junit 'reports/junit.xml'` in a
-`post { always { … } }` block. Azure Pipelines: a `PublishTestResults@2` task with
-`testResultsFormat: JUnit` and `condition: always()`. CircleCI:
-`store_test_results` with `path: reports`. Buildkite: upload the file to Test
-Engine as a JUnit report. Bitbucket Pipelines: write it under
-`test-results/`, which the pipeline scans on its own
-(`--report junit=test-results/datamitsu.xml`).
+Every other consumer compares runs or fails builds on what the report lists
+too, so each recipe publishes it only when its companion says it is complete.
+Jenkins' JUnit plugin is in the recipe under [Checkstyle](#checkstyle).
+
+Azure Pipelines publishes it with `PublishTestResults@2`:
+
+```yaml
+steps:
+  - script: datamitsu lint --fail-fast=false --report junit=reports/junit.xml
+  - script: jq -e .complete reports/junit.xml.completeness.json || rm -f reports/junit.xml
+    condition: always()
+  - task: PublishTestResults@2
+    condition: always()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: reports/junit.xml
+```
+
+CircleCI reads every JUnit file under the directory `store_test_results` names:
+
+```yaml
+steps:
+  - run: datamitsu lint --fail-fast=false --report junit=reports/datamitsu/junit.xml
+  - run:
+      when: always
+      command: jq -e .complete reports/datamitsu/junit.xml.completeness.json || rm -f reports/datamitsu/junit.xml
+  - store_test_results:
+      path: reports
+```
+
+Buildkite Test Engine takes it through the test collector plugin, which needs
+the suite's `BUILDKITE_ANALYTICS_TOKEN`:
+
+```yaml
+steps:
+  - command: |
+      status=0
+      datamitsu lint --fail-fast=false --report junit=junit.xml || status=$?
+      jq -e .complete junit.xml.completeness.json || rm -f junit.xml
+      exit "$status"
+    plugins:
+      - test-collector#v1.12.0:
+          files: junit.xml
+          format: junit
+```
+
+Bitbucket Pipelines reads the files it finds under `test-results/` on its own:
+
+```yaml
+pipelines:
+  default:
+    - step:
+        script:
+          - status=0
+          - datamitsu lint --fail-fast=false --report junit=test-results/datamitsu.xml || status=$?
+          - jq -e .complete test-results/datamitsu.xml.completeness.json || rm -f test-results/datamitsu.xml
+          - exit "$status"
+```
 
 ### GitLab Code Quality
 
@@ -496,9 +544,17 @@ reviewdog turns it into review comments on the forge it reports to, filtered to
 the lines a change touched:
 
 ```bash
-datamitsu lint --fail-fast=false --report rdjsonl=rd.jsonl
-reviewdog -f=rdjsonl -reporter=github-pr-review < rd.jsonl
+rm -f rd.jsonl
+status=0
+datamitsu lint --fail-fast=false --report rdjsonl=rd.jsonl || status=$?
+if [ -f rd.jsonl ]; then
+  reviewdog -f=rdjsonl -reporter=github-pr-review < rd.jsonl
+fi
+exit "$status"
 ```
+
+The run's exit code is kept for the end, so a lint that fails still gets its
+comments — the run whose comments matter most — and still fails the job.
 
 reviewdog itself compares nothing between runs, but the rdjsonl stream lists
 findings like the other formats, so a narrowed run refuses it and the

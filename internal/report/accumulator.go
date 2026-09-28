@@ -483,9 +483,9 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 			inv.ID = task.ID + "#0"
 			switch state {
 			case string(tooling.ProcessSetupFailed):
-				inv.FailureKind = failureSetup
+				inv.FailureKind = FailureSetup
 			case string(tooling.ProcessCancelled):
-				inv.FailureKind = failureCancelled
+				inv.FailureKind = FailureCancelled
 			}
 		}
 		for _, fr := range rest {
@@ -689,14 +689,14 @@ func failureKind(proc tooling.ProcessResult) string {
 		case proc.Success:
 			return ""
 		case proc.ThresholdFailed:
-			return failureThreshold
+			return FailureThreshold
 		default:
-			return failureExit
+			return FailureExit
 		}
 	case tooling.ProcessCancelled:
-		return failureCancelled
+		return FailureCancelled
 	case tooling.ProcessSetupFailed:
-		return failureSetup
+		return FailureSetup
 	case tooling.ProcessNotStarted:
 	}
 	return ""
@@ -709,14 +709,9 @@ func provenanceOf(e tooling.Extraction) string {
 	return provenanceNone
 }
 
-// Values of Invocation.FailureKind, Finding.Kind, the provenances and the
-// categories this package writes.
+// Values of Finding.Kind, the provenances and the categories this package
+// writes.
 const (
-	failureExit      = "exit"
-	failureThreshold = "threshold"
-	failureCancelled = "cancelled"
-	failureSetup     = "setup"
-
 	kindIssue     = "issue"
 	kindSecurity  = "security"
 	kindSynthetic = "synthetic"

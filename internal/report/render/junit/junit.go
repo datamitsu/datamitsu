@@ -51,7 +51,8 @@ func (Renderer) Companion(run *report.Run, _ map[string]string) common.Companion
 	return common.NewCompanion(run, "junit", ops, nil)
 }
 
-// Render writes the document.
+// Render writes a suite for every tool of every operation, and one for an
+// operation that did not run.
 func (Renderer) Render(w io.Writer, run *report.Run, _ map[string]string) error {
 	suites := make([]suite, 0, len(run.Operations))
 	for i := range run.Operations {
@@ -303,23 +304,33 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		// lists it after duplicates across invocations collapsed; only a
 		// process that failed on its own, without one, needs a case of its
 		// own — not a failure of every file it answered for.
-		if inv.State != string(tooling.ProcessRan) || inv.ExitCode == nil || *inv.ExitCode == 0 || gating {
+		if inv.State != string(tooling.ProcessRan) || inv.FailureKind != report.FailureExit || gating {
 			continue
 		}
 		tc := ownCase()
 		if count != 1 {
 			tc.time += inv.Duration
 		}
-		fail := &caseFailure{kind: "exit", message: fmt.Sprintf("exit %d", *inv.ExitCode)}
-		if synthetic != nil {
-			fail.text, fail.tail = synthetic.Message, tail(inv, withhold)
-		} else {
-			// It printed findings, listed here or, when another invocation
-			// reported them too, with that one.
-			fail.onFindings = true
-			for _, f := range inv.Findings {
+		code := 0
+		if inv.ExitCode != nil {
+			code = *inv.ExitCode
+		}
+		fail := &caseFailure{kind: "exit", message: fmt.Sprintf("exit %d", code)}
+		for _, f := range inv.Findings {
+			if !common.Synthetic(f) {
 				fail.findings = append(fail.findings, line(f))
 			}
+		}
+		switch {
+		case synthetic != nil:
+			fail.text, fail.tail = synthetic.Message, tail(inv, withhold)
+		case len(fail.findings) > 0 || code != 0:
+			// It printed findings: listed here or, when another invocation
+			// reported them too, with that one.
+			fail.onFindings = true
+		default:
+			// Rejected after it exited 0, without a finding.
+			fail.tail = tail(inv, withhold)
 		}
 		tc.failure = fail
 	}

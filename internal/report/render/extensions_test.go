@@ -102,6 +102,41 @@ func TestTargetWritesCompanion(t *testing.T) {
 	}
 }
 
+// A report that cannot be moved into place leaves no companion at all: an
+// earlier run's could vouch for a report it does not describe.
+func TestTargetCompanionWithoutItsReport(t *testing.T) {
+	withCompanion(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cq.json")
+	companion := path + ".completeness.json"
+	for _, p := range []string{path, companion} {
+		if err := os.WriteFile(p, []byte(`{"complete": true}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	target := Open(Spec{Format: "companioned", Path: path}, nil)
+	if target.Err != nil {
+		t.Fatal(target.Err)
+	}
+	// Something takes the report's place between opening and writing.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(path, "taken"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := target.Write(incompleteRun()); err == nil {
+		t.Fatal("the report was written over a directory")
+	}
+	if _, err := os.Stat(companion); !os.IsNotExist(err) {
+		t.Errorf("a companion stands without its report: %v", err)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 || entries[0].Name() != "cq.json" {
+		t.Errorf("the directory holds %v, want the directory in the report's place alone", entries)
+	}
+}
+
 // A directory target writes a split format's files and removes the ones an
 // earlier run left that this one did not write, and nothing else.
 func TestTargetDirectory(t *testing.T) {

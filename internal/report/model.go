@@ -300,6 +300,17 @@ type Location struct {
 	Precision string `json:"precision"`
 }
 
+// Values of Invocation.FailureKind: the tool failed on its own — a non-zero
+// exit, or a result the executor rejected after it exited — a finding at or
+// above failOn failed a tool that exited 0, the task was cancelled, or it could
+// not be set up.
+const (
+	FailureExit      = "exit"
+	FailureThreshold = "threshold"
+	FailureCancelled = "cancelled"
+	FailureSetup     = "setup"
+)
+
 // Export is one report a run was asked for.
 type Export struct {
 	Format string `json:"format"`

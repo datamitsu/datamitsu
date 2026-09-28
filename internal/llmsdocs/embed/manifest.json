@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "e6d21ea37b5774f545e567186dbbc8c1",
+  "pageSetHash": "9eddc87ed35252bf1b5a3038179a8fe4",
   "pages": [
     {
       "slug": "about",
@@ -325,8 +325,8 @@
       "url": "https://datamitsu.com/docs/guides/reports.md",
       "title": "Reports",
       "description": "One record of a fix, lint or check run — what it holds, what it never contains, how complete it says it is, and how its findings keep their identity across runs",
-      "bytes": 30279,
-      "contentHash": "2a95dfae5dd71f51960251944023c96b"
+      "bytes": 31675,
+      "contentHash": "7fea8167753186e07ae24b1f96a7064e"
     },
     {
       "slug": "guides/runtime-management",
