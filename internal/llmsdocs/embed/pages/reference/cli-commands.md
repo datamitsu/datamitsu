@@ -414,7 +414,7 @@ check · done in 9.40s · fix 1.10s · lint 7.90s · setup 400ms
   followed by the files seen before the observation stopped.
 - **Each operation ends** with
   `<op>: <tools> tools · <runs> runs · <failed> failed · <E> errors <W> warnings · <H> hidden`,
-  `<H>` counting the findings below the threshold, and `·  baselined` when a
+  `<H>` counting the findings below the threshold, and `· <N> baselined` when a
   [baseline](#baselines) held some, and `check` with its closing
   wall-clock line. The exit code is the run's.
 
@@ -509,7 +509,8 @@ still share one `op_id`. By
 default only the findings at or above the operation's `failOn` are emitted —
 what the terminal shows. `--events diagnostics=all` (or
 `DATAMITSU_EVENTS=diagnostics=all`) emits every finding, with `reported` and
-`gates` saying which are at the threshold and which failed their tool;
+`gates` saying which are at the threshold and which failed their tool, and
+`baselined: true` on one a [baseline](#baselines) held;
 `diagnostics=reported` is the default. Any other value exits 2. The synthetic
 finding a report lists for a tool that failed without findings is never an
 event.
@@ -957,11 +958,15 @@ unescapes them: `%` as `%AZP25`, `;` as `%3B`, a carriage return as `%0D`, a
 line feed as `%0A`, `]` as `%5D`.
 
 The agent runs a `##vso[` command wherever it appears in a line, not only at its
-start, and has no way to suspend that. In `azure` mode every line of tool text
-the run prints — raw output, a parsed message, a command line, an agent record
-or tail — has `##vso[` rewritten to `##vso [`, so no tool can set a variable,
-upload a file or fail the task through datamitsu's output. That alters a line of
-raw output by one space.
+start, on stdout and stderr, and has no way to suspend that. Under `TF_BUILD` —
+whatever `--annotations` says — and in `azure` mode, every line the run prints
+that holds tool output or a repository path — raw output, a parsed message, a
+command line, a directory, a file name, a progress label, an agent record or
+tail, a JSON-L event — has `##vso[` rewritten to `##vso [`, so no tool and no
+file name can set a variable, upload a file or fail the task through
+datamitsu's output. That alters a line of raw output by one space. A report
+written to stdout is a document and is not rewritten: write reports to files
+there.
 
 Under `TEAMCITY_VERSION` the run reports its findings as TeamCity inspections:
 an `inspectionType` once per tool and rule (`id` `<tool>/<rule>`, the rule's
@@ -978,9 +983,12 @@ control characters and the Unicode line separators as `|0xNNNN`.
 TeamCity reads a service message anywhere in a line too. Everything the run
 prints between its first results block and the inspections is wrapped in
 `##teamcity[disableServiceMessages]` … `##teamcity[enableServiceMessages]`, and
-the inspections follow the second line; inside, every line of tool text has
-`##teamcity[` rewritten to `##teamcity [`, so a tool cannot turn the reading
-back on either.
+the inspections follow the second line; under `TEAMCITY_VERSION` and in
+`teamcity` mode every line that holds tool output or a repository path —
+inside the region and out, the event stream included — has `##teamcity[`
+rewritten to `##teamcity [`, so neither a tool nor a file name can turn the
+reading back on. A run killed before it prints its inspections — a second
+interrupt — leaves the reading suspended for the rest of the build step.
 
 Tools still see `TF_BUILD` and `TEAMCITY_VERSION` (see
 [Tool Environment](./tool-environment.md)); a tool that prints logging commands

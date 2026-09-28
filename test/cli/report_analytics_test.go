@@ -125,6 +125,19 @@ func TestReportBaseline(t *testing.T) {
 		e.golden("baseline_incomplete_source", res)
 	})
 
+	// So does an incomplete own report given as the baseline: it warns and
+	// works.
+	t.Run("incomplete_report_as_baseline", func(t *testing.T) {
+		e := gatedProject(t, hadolintError, 0)
+		e.run("", nil, "lint", "--report", "json=out/run.json", "--allow-partial", "Dockerfile")
+		res := e.run("", nil, "lint", "--baseline", "out/run.json")
+		e.wantExit(res, 0)
+		if !strings.Contains(res.Stderr, "--baseline: the run of out/run.json is incomplete (") ||
+			!strings.Contains(res.Stdout, "· 1 baselined") {
+			t.Errorf("want a warning and the finding baselined:\n%s\n%s", res.Stdout, res.Stderr)
+		}
+	})
+
 	t.Run("refused", func(t *testing.T) {
 		e := gatedProject(t, hadolintError, 0)
 		e.p.WriteFile("foreign.json", `{"schema":"datamitsu.baseline/2","fingerprint":"dmfp1","fingerprints":[]}`)

@@ -117,15 +117,21 @@ func resolveAnnotations(requested, vendor string, quiet, stdoutDocument bool) an
 // with every command broken.
 var toolText = func(line string) string { return line }
 
-// neutralizerOf is toolText for an annotation mode.
-func neutralizerOf(mode string) func(string) string {
-	switch mode {
-	case AnnotationsAzure:
-		return azure.Neutralize
-	case AnnotationsTeamCity:
-		return teamcity.Neutralize
+// neutralizerOf is toolText for a run in the CI of vendor that prints the
+// annotations of mode: a CI that reads commands anywhere in a line reads them
+// in whatever the run prints, annotations or not.
+func neutralizerOf(mode, vendor string) func(string) string {
+	azureCommands := mode == AnnotationsAzure || vendor == cienv.VendorAzure
+	teamcityMessages := mode == AnnotationsTeamCity || vendor == cienv.VendorTeamCity
+	return func(line string) string {
+		if azureCommands {
+			line = azure.Neutralize(line)
+		}
+		if teamcityMessages {
+			line = teamcity.Neutralize(line)
+		}
+		return line
 	}
-	return func(line string) string { return line }
 }
 
 // commandToken ends the stop-commands region: unguessable, so no tool output

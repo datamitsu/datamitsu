@@ -68,7 +68,12 @@ type Tool struct {
 	// that disappeared is fixed.
 	Complete   bool            `json:"complete"`
 	Incomplete []report.Reason `json:"incomplete"`
-	Counts     Counts          `json:"counts"`
+	// BeforeComplete and BeforeIncomplete are the tool's completeness in the
+	// first run: a finding new to a tool that did not look everywhere there
+	// may have been there already.
+	BeforeComplete   bool            `json:"beforeComplete"`
+	BeforeIncomplete []report.Reason `json:"beforeIncomplete"`
+	Counts           Counts          `json:"counts"`
 	// New are in the second run only; Unchanged in both, on the same row;
 	// Moved in both, on another row; Fixed in the first only, where the second
 	// looked everywhere; Unknown in the first only, where it did not;
@@ -95,6 +100,27 @@ type Entry struct {
 	BeforeRow int `json:"beforeRow,omitempty"`
 }
 
+// Comparable refuses two reports Diff cannot compare: fingerprints of another
+// version, or findings of different operations — a fix-only run's against a
+// lint run's.
+func Comparable(before, after *report.Run) error {
+	if before.Fingerprint != after.Fingerprint {
+		return fmt.Errorf("the reports hold fingerprints of versions %q and %q", before.Fingerprint, after.Fingerprint)
+	}
+	b, a := side(before).Operation, side(after).Operation
+	if b != a {
+		return fmt.Errorf("the reports list the findings of different operations, %s and %s", orNone(b), orNone(a))
+	}
+	return nil
+}
+
+func orNone(op string) string {
+	if op == "" {
+		return "none"
+	}
+	return op
+}
+
 // Diff compares the findings of before and after, both own reports with
 // fingerprints of one version. Each run contributes the operation a report
 // lists — lint, or fix for a fix-only run. A finding the second run does not
@@ -103,7 +129,7 @@ type Entry struct {
 func Diff(before, after *report.Run) Result {
 	res := Result{
 		Schema:      Schema,
-		Fingerprint: report.FingerprintVersion,
+		Fingerprint: after.Fingerprint,
 		Before:      side(before),
 		After:       side(after),
 		Tools:       []Tool{},
@@ -192,6 +218,7 @@ func unobserved(name, status string, tf toolFindings) Tool {
 
 func compare(name string, before, after toolFindings, lookedEverywhere bool) Tool {
 	t := newTool(name, StatusCompared, after.run)
+	t.BeforeComplete, t.BeforeIncomplete = before.run.Complete, append([]report.Reason{}, before.run.Incomplete...)
 	for fp, f := range after.findings {
 		prev, held := before.findings[fp]
 		switch {
@@ -362,6 +389,8 @@ func entryText(t Tool, e Entry, class string) string {
 	}
 	text := fmt.Sprintf("%s — %s %s: %s", markdown.Code(where), markdown.Code(rule), e.Severity, markdown.Escape(e.Message))
 	switch {
+	case class == "New" && !t.BeforeComplete && t.Status == StatusCompared:
+		text += " _(the first run's tool was incomplete: " + markdown.Escape(reasons(t.BeforeIncomplete)) + ")_"
 	case class == "Moved":
 		text += fmt.Sprintf(" _(was row %d)_", e.BeforeRow)
 	case class == "Unknown" && len(t.Incomplete) > 0:

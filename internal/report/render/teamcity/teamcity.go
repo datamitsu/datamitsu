@@ -68,6 +68,12 @@ func Build(candidates []github.Annotation) Messages {
 	var m Messages
 	var inspections, problems []string
 	declared := map[string]bool{}
+	urls := map[string]string{}
+	for _, a := range candidates {
+		if id := typeID(a); a.RuleURL != "" && urls[id] == "" {
+			urls[id] = a.RuleURL
+		}
+	}
 	for _, a := range sorted(candidates) {
 		if a.Synthetic {
 			problems = append(problems, messagePrefix+fmt.Sprintf("buildProblem description='%s' identity='%s']",
@@ -81,7 +87,7 @@ func Build(candidates []github.Annotation) Messages {
 		id := typeID(a)
 		if !declared[id] {
 			declared[id] = true
-			m.Lines = append(m.Lines, inspectionType(a, id))
+			m.Lines = append(m.Lines, inspectionType(a, id, urls[id]))
 		}
 		props := fmt.Sprintf("typeId='%s' message='%s' file='%s'", Escape(id), Escape(a.Message), Escape(a.File))
 		if a.Line > 0 {
@@ -135,12 +141,12 @@ func toolOf(a github.Annotation) string {
 	return a.Source
 }
 
-func inspectionType(a github.Annotation, id string) string {
+func inspectionType(a github.Annotation, id, url string) string {
 	name := a.Code
 	if name == "" {
 		name = toolOf(a)
 	}
-	description := a.RuleURL
+	description := url
 	if description == "" {
 		description = a.Title()
 	}

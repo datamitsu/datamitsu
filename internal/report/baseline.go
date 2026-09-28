@@ -106,48 +106,74 @@ func fingerprintsOf(run *Run) BaselineSet {
 // ErrBaseline marks a file LoadBaseline could not take as a baseline.
 var ErrBaseline = errors.New("not a baseline")
 
+// LoadedBaseline is a baseline as a run reads it: the fingerprints, their
+// version, and how complete the run they come from was.
+type LoadedBaseline struct {
+	Set        BaselineSet
+	Version    string
+	Complete   bool
+	Incomplete []Reason
+	// FromReport is set when the file was a run's own report rather than a
+	// baseline document.
+	FromReport bool
+}
+
 // LoadBaseline reads the fingerprints a run is matched against from path: a
 // baseline document, or a run's own report, whose findings are taken as one.
-// It returns the version of the fingerprints; a document of another schema,
-// or of fingerprints of another version, is refused (ErrBaseline).
-func LoadBaseline(path string) (BaselineSet, string, error) {
+// A document of another schema, or of fingerprints of another version, is
+// refused (ErrBaseline).
+func LoadBaseline(path string) (LoadedBaseline, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, "", fmt.Errorf("read baseline: %w", err)
+		return LoadedBaseline{}, fmt.Errorf("read baseline: %w", err)
 	}
 	var head struct {
 		Schema string `json:"schema"`
 	}
 	if err := json.Unmarshal(data, &head); err != nil {
-		return nil, "", fmt.Errorf("%w: %s is not JSON: %w", ErrBaseline, path, err)
+		return LoadedBaseline{}, fmt.Errorf("%w: %s is not JSON: %w", ErrBaseline, path, err)
 	}
 	switch head.Schema {
 	case BaselineSchema:
 		var b Baseline
 		if err := json.Unmarshal(data, &b); err != nil {
-			return nil, "", fmt.Errorf("%w: %s: %w", ErrBaseline, path, err)
+			return LoadedBaseline{}, fmt.Errorf("%w: %s: %w", ErrBaseline, path, err)
 		}
-		if b.Fingerprint != FingerprintVersion {
-			return nil, b.Fingerprint, fmt.Errorf("%w: %s holds fingerprints of version %q, and this build computes %q: "+
-				"make it again with `datamitsu report baseline`", ErrBaseline, path, b.Fingerprint, FingerprintVersion)
+		if err := sameVersion(path, b.Fingerprint); err != nil {
+			return LoadedBaseline{}, err
 		}
 		set := make(BaselineSet, len(b.Fingerprints))
 		for _, fp := range b.Fingerprints {
 			if !isFingerprint(fp) {
-				return nil, b.Fingerprint, fmt.Errorf("%w: %s holds %q, which is not a fingerprint", ErrBaseline, path, fp)
+				return LoadedBaseline{}, fmt.Errorf("%w: %s holds %q, which is not a fingerprint", ErrBaseline, path, fp)
 			}
 			set[fp] = true
 		}
-		return set, b.Fingerprint, nil
+		return LoadedBaseline{Set: set, Version: b.Fingerprint, Complete: b.Source.Complete, Incomplete: b.Source.Incomplete}, nil
 	case SchemaVersion:
 		var run Run
 		if err := json.Unmarshal(data, &run); err != nil {
-			return nil, "", fmt.Errorf("%w: %s: %w", ErrBaseline, path, err)
+			return LoadedBaseline{}, fmt.Errorf("%w: %s: %w", ErrBaseline, path, err)
 		}
-		return fingerprintsOf(&run), FingerprintVersion, nil
+		Revise(&run)
+		if err := sameVersion(path, run.Fingerprint); err != nil {
+			return LoadedBaseline{}, err
+		}
+		return LoadedBaseline{
+			Set: fingerprintsOf(&run), Version: run.Fingerprint, Complete: run.Complete,
+			Incomplete: IncompleteReasons(&run), FromReport: true,
+		}, nil
 	}
-	return nil, "", fmt.Errorf("%w: %s has schema %q (want %s, or a report, %s)",
+	return LoadedBaseline{}, fmt.Errorf("%w: %s has schema %q (want %s, or a report, %s)",
 		ErrBaseline, path, head.Schema, BaselineSchema, SchemaVersion)
+}
+
+func sameVersion(path, version string) error {
+	if version == FingerprintVersion {
+		return nil
+	}
+	return fmt.Errorf("%w: %s holds fingerprints of version %q, and this build computes %q: "+
+		"make it again from a run of this build", ErrBaseline, path, version, FingerprintVersion)
 }
 
 // isFingerprint reports 64 lowercase hexadecimal characters.

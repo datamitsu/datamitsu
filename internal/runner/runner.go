@@ -243,7 +243,7 @@ func initSharedContext(
 	}
 	stdoutDocument := sc.explainLevel == "json" || slices.ContainsFunc(opts.Reports, render.Spec.Stdout)
 	sc.annotations = resolveAnnotations(opts.Annotations, sc.ci.Vendor, ui.Quiet(), stdoutDocument)
-	toolText = neutralizerOf(sc.annotations.mode)
+	toolText = neutralizerOf(sc.annotations.mode, sc.ci.Vendor)
 
 	// Get cwd
 	var err error
@@ -627,7 +627,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		t := ensureTask()
 		progressMu.Unlock()
 
-		t.SetLabel(formatToolWithDir(toolName, relativeDir))
+		t.SetLabel(toolText(formatToolWithDir(toolName, relativeDir)))
 	})
 
 	// Set up file progress callback
@@ -654,7 +654,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		})
 
 		if dir != "" {
-			t.SetLabel(fmt.Sprintf("%s %s (%s) [%d/%d]", status, toolName, dir, fileIndex, totalFiles))
+			t.SetLabel(toolText(fmt.Sprintf("%s %s (%s) [%d/%d]", status, toolName, dir, fileIndex, totalFiles)))
 		} else {
 			t.SetLabel(fmt.Sprintf("%s %s [%d/%d]", status, toolName, fileIndex, totalFiles))
 		}
@@ -1000,14 +1000,14 @@ func (sc *sharedContext) targetLine() string {
 		if len(names) > 3 {
 			shown = strings.Join(names[:3], " ") + fmt.Sprintf(" +%d more", len(names)-3)
 		}
-		return clr.Faint(fmt.Sprintf("┃ ◑ target: %d %s · %s · narrowed run",
-			len(names), noun, shown))
+		return clr.Faint(toolText(fmt.Sprintf("┃ ◑ target: %d %s · %s · narrowed run",
+			len(names), noun, shown)))
 	case tooling.SelectionSubtree:
 		dir := sc.selection.Dir
 		if rel, err := filepath.Rel(sc.rootPath, dir); err == nil {
 			dir = rel
 		}
-		return clr.Faint(fmt.Sprintf("┃ ◑ target: %s · narrowed run", dir))
+		return clr.Faint(toolText(fmt.Sprintf("┃ ◑ target: %s · narrowed run", dir)))
 	}
 	return ""
 }
@@ -1785,10 +1785,10 @@ func printUnenforcedExecution(exec executionInstance, view taskView) {
 // printFrameContext prints the directories a frame's paths are relative to.
 func printFrameContext(exec executionInstance, border func(a ...any) string) {
 	if exec.relativeDir != "" {
-		fmt.Printf("  %s  %s %s\n", border("│"), clr.Faint("Dir:      "), exec.relativeDir)
+		fmt.Printf("  %s  %s %s\n", border("│"), clr.Faint("Dir:      "), toolText(exec.relativeDir))
 	}
 	if exec.result.WorkingDir != "" {
-		fmt.Printf("  %s  %s %s\n", border("│"), clr.Faint("Cwd:      "), exec.result.WorkingDir)
+		fmt.Printf("  %s  %s %s\n", border("│"), clr.Faint("Cwd:      "), toolText(exec.result.WorkingDir))
 	}
 }
 

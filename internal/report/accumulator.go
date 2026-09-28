@@ -292,15 +292,16 @@ func (a *Accumulator) Build(info BuildInfo) *Run {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	run := &Run{
-		Schema:     SchemaVersion,
-		Datamitsu:  Producer{Version: info.Version, Configuration: info.Configuration},
-		StartedAt:  info.StartedAt.UTC(),
-		EndedAt:    info.EndedAt.UTC(),
-		Selection:  info.Selection,
-		FailFast:   info.FailFast,
-		Operations: make([]Operation, 0, len(a.ops)),
-		Exports:    append([]Export{}, info.Exports...),
-		CI:         info.CI,
+		Schema:      SchemaVersion,
+		Fingerprint: FingerprintVersion,
+		Datamitsu:   Producer{Version: info.Version, Configuration: info.Configuration},
+		StartedAt:   info.StartedAt.UTC(),
+		EndedAt:     info.EndedAt.UTC(),
+		Selection:   info.Selection,
+		FailFast:    info.FailFast,
+		Operations:  make([]Operation, 0, len(a.ops)),
+		Exports:     append([]Export{}, info.Exports...),
+		CI:          info.CI,
 	}
 	names := make([]string, 0, len(a.ops))
 	for _, op := range a.ops {
@@ -398,7 +399,7 @@ func recordChanges(o *OperationRecord, op *Operation) {
 	for _, step := range steps {
 		for _, c := range log.byStep[step] {
 			if !attributeChange(op, step, c) {
-				op.Changes = append(op.Changes, Change{Path: c.Path, Kind: c.Kind})
+				op.Changes = append(op.Changes, Change{Path: c.Path, Kind: c.Kind, Step: step})
 			}
 		}
 	}
@@ -408,12 +409,13 @@ func attributeChange(op *Operation, step int, c gitutil.Change) bool {
 	for ti := range op.Tools {
 		for ii := range op.Tools[ti].Invocations {
 			inv := &op.Tools[ti].Invocations[ii]
-			if inv.Step != step {
+			started := inv.State == string(tooling.ProcessRan) || inv.State == string(tooling.ProcessCancelled)
+			if inv.Step != step || !started {
 				continue
 			}
 			for _, f := range inv.Files {
 				if f.Path == c.Path {
-					inv.Changes = append(inv.Changes, Change{Path: c.Path, Kind: c.Kind, Patch: f.Patch != ""})
+					inv.Changes = append(inv.Changes, Change{Path: c.Path, Kind: c.Kind, Patch: f.Patch != "", Step: step})
 					return true
 				}
 			}

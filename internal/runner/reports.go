@@ -55,7 +55,11 @@ func (sc *sharedContext) startReport() {
 	}
 	// The stream is masked as a report is, every event alike: a task's op_id
 	// names its directory, and the events of one task must still correlate.
-	ui.SetEventMask(func(e *uievent.Event) { report.MaskAll(e, sc.secrets.Values()) })
+	// A CI that reads commands anywhere in a line reads them on stderr too.
+	ui.SetEventMask(func(e *uievent.Event) {
+		report.MaskAll(e, sc.secrets.Values())
+		report.RewriteAll(e, toolText)
+	})
 	sc.report = report.NewAccumulator(opts)
 	sc.annotator = report.NewAnnotator(sc.rootPath, opts.Parsers)
 }

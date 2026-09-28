@@ -23,11 +23,14 @@ type Millis int64
 
 // Run is one run of fix, lint or check.
 type Run struct {
-	Schema    string    `json:"schema"`
-	Datamitsu Producer  `json:"datamitsu"`
-	StartedAt time.Time `json:"startedAt"`
-	EndedAt   time.Time `json:"endedAt"`
-	Selection Selection `json:"selection"`
+	Schema string `json:"schema"`
+	// Fingerprint is the version of the findings' fingerprints; a document
+	// without it holds dmfp1, the first.
+	Fingerprint string    `json:"fingerprint"`
+	Datamitsu   Producer  `json:"datamitsu"`
+	StartedAt   time.Time `json:"startedAt"`
+	EndedAt     time.Time `json:"endedAt"`
+	Selection   Selection `json:"selection"`
 	// FailFast is the value the run used; a report turns it off.
 	FailFast bool `json:"failFast"`
 	// Complete is true when every tool run is complete, every operation ran
@@ -164,29 +167,63 @@ type Change struct {
 	// Patch reports that the invocation's file result holds the change's
 	// patch; a tool that writes files itself leaves none.
 	Patch bool `json:"patch"`
+	// Step is the step of the operation that made the change.
+	Step int `json:"step"`
 }
 
-// AllChanges is every file op changed — attributed to an invocation or not —
-// sorted by path, each once.
+// AllChanges is every file op changed, once each, sorted by path: the net
+// change of the steps that changed it, in the order they ran — a file created
+// and then modified was created, one created and then deleted is not listed.
+// Patch is set when any step's change of the file has one.
 func (op Operation) AllChanges() []Change {
-	seen := map[string]bool{}
-	var out []Change
-	add := func(cs []Change) {
-		for _, c := range cs {
-			if !seen[c.Path] {
-				seen[c.Path] = true
-				out = append(out, c)
-			}
-		}
-	}
-	add(op.Changes)
+	all := append([]Change{}, op.Changes...)
 	for _, tr := range op.Tools {
 		for _, inv := range tr.Invocations {
-			add(inv.Changes)
+			all = append(all, inv.Changes...)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	sort.SliceStable(all, func(i, j int) bool {
+		if all[i].Path != all[j].Path {
+			return all[i].Path < all[j].Path
+		}
+		return all[i].Step < all[j].Step
+	})
+	var out []Change
+	for i := 0; i < len(all); {
+		j := i
+		patch := false
+		for j < len(all) && all[j].Path == all[i].Path {
+			patch = patch || all[j].Patch
+			j++
+		}
+		if c, ok := netChange(all[i:j]); ok {
+			c.Patch = patch
+			out = append(out, c)
+		}
+		i = j
+	}
 	return out
+}
+
+// netChange folds the changes of one file, in step order, into what changed
+// from before the first to after the last; ok is false when the file neither
+// existed before nor after.
+func netChange(steps []Change) (Change, bool) {
+	first, last := steps[0], steps[len(steps)-1]
+	existed := first.Kind != "created"
+	exists := last.Kind != "deleted"
+	c := last
+	switch {
+	case !existed && !exists:
+		return Change{}, false
+	case !existed:
+		c.Kind = "created"
+	case !exists:
+		c.Kind = "deleted"
+	case last.Kind != "reverted":
+		c.Kind = "modified"
+	}
+	return c, true
 }
 
 // Why an operation's changes were not observed.
@@ -198,6 +235,8 @@ const (
 	ChangesNotRun = "not-run"
 	// ChangesNotExecuted: no task ran — the tools could not be set up.
 	ChangesNotExecuted = "not-executed"
+	// ChangesNotRecorded: the document predates the observation of changes.
+	ChangesNotRecorded = "not-recorded"
 	// ChangesSnapshotFailed: the working tree's status could not be read —
 	// no version control binary, no repository, or a failed status;
 	// ChangesDetail says which.

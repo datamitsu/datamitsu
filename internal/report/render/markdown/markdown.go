@@ -261,11 +261,19 @@ func changedFiles(op report.Operation) string {
 		b.WriteString("_None._\n")
 		return b.String()
 	}
-	for _, c := range changes {
+	for _, c := range changes[:min(len(changes), changedFilesListed)] {
 		fmt.Fprintf(&b, "- %s %s\n", code(c.Path), escape(c.Kind))
+	}
+	if more := len(changes) - changedFilesListed; more > 0 {
+		fmt.Fprintf(&b, "- _and %s more; the JSON report lists every one_\n", count(more, "file", "files"))
 	}
 	return b.String()
 }
+
+// changedFilesListed is how many changed files the section names, so that a
+// fix that rewrote a whole repository does not push the findings off a step
+// summary.
+const changedFilesListed = 50
 
 func status(tr report.ToolRun) string {
 	if len(tr.Invocations) == 0 {
@@ -445,6 +453,9 @@ func line(f report.Finding) string {
 		title += "(" + f.Code + ")"
 	}
 	text := code(title) + ": " + escape(f.Message)
+	if f.Baselined {
+		text += " _(baselined)_"
+	}
 	loc := f.Location
 	if loc.Path == "" {
 		return text

@@ -150,7 +150,7 @@ func printStoppedTasks(stopped []stoppedTask, nameWidth int) {
 		if l.count > 1 {
 			text += fmt.Sprintf(" ×%d", l.count)
 		}
-		fmt.Println(clr.Faint("┃ ⊘ ") + clr.Faint(label) + strings.Repeat(" ", pad) + clr.Faint(text))
+		fmt.Println(clr.Faint("┃ ⊘ ") + clr.Faint(toolText(label)) + strings.Repeat(" ", pad) + clr.Faint(text))
 	}
 }
 
@@ -203,7 +203,7 @@ func printUnrunFiles(results []tooling.GroupExecutionResult, root string, nameWi
 			label := stoppedTask{tool: result.ToolName, dir: result.RelativeDir}.label()
 			pad := max(nameWidth-utf8.RuneCountInString(label), 0) + 2
 			text := fmt.Sprintf("%d %s not run (%s): %s", len(files), noun, cause, list)
-			fmt.Println(clr.Faint("┃ ⊘ ") + clr.Faint(label) + strings.Repeat(" ", pad) + clr.Faint(text))
+			fmt.Println(clr.Faint("┃ ⊘ ") + clr.Faint(toolText(label)) + strings.Repeat(" ", pad) + clr.Faint(toolText(text)))
 		}
 	}
 }

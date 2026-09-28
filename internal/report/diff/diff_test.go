@@ -140,3 +140,20 @@ func TestWrite(t *testing.T) {
 		t.Error("an unknown format was written")
 	}
 }
+
+func TestComparable(t *testing.T) {
+	lint := run(nil)
+	fix := run(nil)
+	fix.Operations[0].Name = "fix"
+	other := run(nil)
+	other.Fingerprint = "dmfp2"
+	if err := Comparable(lint, run(nil)); err != nil {
+		t.Errorf("two lint runs: %v", err)
+	}
+	if err := Comparable(lint, fix); err == nil || !strings.Contains(err.Error(), "different operations, lint and fix") {
+		t.Errorf("lint against fix = %v, want a refusal", err)
+	}
+	if err := Comparable(lint, other); err == nil || !strings.Contains(err.Error(), "versions") {
+		t.Errorf("other fingerprint version = %v, want a refusal", err)
+	}
+}

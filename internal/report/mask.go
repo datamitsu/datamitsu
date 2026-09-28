@@ -107,7 +107,17 @@ func MaskAll(ptr any, secrets []string) {
 	if len(secrets) == 0 || v.Kind() != reflect.Pointer || v.IsNil() {
 		return
 	}
-	maskValue(v.Elem(), replacer(secrets))
+	rewriteValue(v.Elem(), replacer(secrets).Replace)
+}
+
+// RewriteAll passes every exported string ptr points to, however deeply
+// nested, through rewrite.
+func RewriteAll(ptr any, rewrite func(string) string) {
+	v := reflect.ValueOf(ptr)
+	if rewrite == nil || v.Kind() != reflect.Pointer || v.IsNil() {
+		return
+	}
+	rewriteValue(v.Elem(), rewrite)
 }
 
 // replacer masks each secret as it is, and as JSON spells it inside a string:
@@ -157,15 +167,15 @@ func withoutFragment(text string, secrets []string) string {
 
 var timeType = reflect.TypeFor[time.Time]()
 
-func maskValue(v reflect.Value, r *strings.Replacer) {
+func rewriteValue(v reflect.Value, r func(string) string) {
 	switch v.Kind() {
 	case reflect.String:
 		if v.CanSet() {
-			v.SetString(r.Replace(v.String()))
+			v.SetString(r(v.String()))
 		}
 	case reflect.Pointer, reflect.Interface:
 		if !v.IsNil() {
-			maskValue(v.Elem(), r)
+			rewriteValue(v.Elem(), r)
 		}
 	case reflect.Struct:
 		if v.Type() == timeType {
@@ -173,18 +183,18 @@ func maskValue(v reflect.Value, r *strings.Replacer) {
 		}
 		for i := range v.NumField() {
 			if v.Type().Field(i).IsExported() {
-				maskValue(v.Field(i), r)
+				rewriteValue(v.Field(i), r)
 			}
 		}
 	case reflect.Slice, reflect.Array:
 		for i := range v.Len() {
-			maskValue(v.Index(i), r)
+			rewriteValue(v.Index(i), r)
 		}
 	case reflect.Map:
 		for _, key := range v.MapKeys() {
 			value := reflect.New(v.Type().Elem()).Elem()
 			value.Set(v.MapIndex(key))
-			maskValue(value, r)
+			rewriteValue(value, r)
 			v.SetMapIndex(key, value)
 		}
 	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,

@@ -7,6 +7,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
+	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render"
 	"github.com/datamitsu/datamitsu/internal/runner"
@@ -41,16 +42,22 @@ func addBaselineFlag(cmd *cobra.Command, path *string) {
 
 // applyBaseline loads the baseline a run is matched against before anything
 // runs: one that cannot be read, or holds another schema or fingerprints of
-// another version, is a usage error.
+// another version, is a usage error. A run's own report taken as one warns
+// when that run was incomplete, as report baseline does: it holds fewer
+// fingerprints, and suppresses fewer findings.
 func applyBaseline(path string, opts *runner.Options) error {
 	if path == "" {
 		return nil
 	}
-	set, _, err := report.LoadBaseline(path)
+	b, err := report.LoadBaseline(path)
 	if err != nil {
 		return exitcode.UsageErrorf("invalid --baseline: %w", err)
 	}
-	opts.Baseline = set
+	if b.FromReport && !b.Complete {
+		logger.Logger.Warn(fmt.Sprintf("--baseline: the run of %s is incomplete (%s): it suppresses only the findings it found",
+			path, reasonNames(b.Incomplete)))
+	}
+	opts.Baseline = b.Set
 	return nil
 }
 

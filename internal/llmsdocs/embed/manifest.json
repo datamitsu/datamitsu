@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "590a33d4f53d8e50f85613e8a9dea3ac",
+  "pageSetHash": "517d3364b07f7559eabdaff274a904e8",
   "pages": [
     {
       "slug": "about",
@@ -325,8 +325,8 @@
       "url": "https://datamitsu.com/docs/guides/reports.md",
       "title": "Reports",
       "description": "One record of a fix, lint or check run — what it holds, what it never contains, how complete it says it is, and how its findings keep their identity across runs",
-      "bytes": 42939,
-      "contentHash": "2e180a568592112277308b0668a98edf"
+      "bytes": 45217,
+      "contentHash": "81e5e2503b43ca06242c718dabb7af4b"
     },
     {
       "slug": "guides/runtime-management",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 170127,
-      "contentHash": "d63d773b03d0b53ba3cf9e5f1c61bf70"
+      "bytes": 170753,
+      "contentHash": "03fe6e9993d91756738127b909108744"
     },
     {
       "slug": "reference/comparison",

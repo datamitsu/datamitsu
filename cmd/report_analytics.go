@@ -101,6 +101,9 @@ func runReportDiff(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := diff.Comparable(before, after); err != nil {
+		return exitcode.UsageErrorf("report diff: %w", err)
+	}
 	var out bytes.Buffer
 	if err := diff.Write(&out, diff.Diff(before, after), reportDiffFormat); err != nil {
 		return err
@@ -126,7 +129,10 @@ func writeOutput(stdout io.Writer, what, path string, data []byte) error {
 
 // reasonList names why a run is incomplete: its own reasons and its tools'.
 func reasonList(run *report.Run) string {
-	reasons := report.IncompleteReasons(run)
+	return reasonNames(report.IncompleteReasons(run))
+}
+
+func reasonNames(reasons []report.Reason) string {
 	if len(reasons) == 0 {
 		return "completeness not established"
 	}

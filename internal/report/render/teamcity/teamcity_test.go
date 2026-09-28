@@ -72,7 +72,7 @@ func TestBuild(t *testing.T) {
 	if err := Print(&out, Build(candidates)); err != nil {
 		t.Fatal(err)
 	}
-	want := "##teamcity[inspectionType id='eslint/no-var' name='no-var' description='eslint(no-var)' category='eslint']\n" +
+	want := "##teamcity[inspectionType id='eslint/no-var' name='no-var' description='https://eslint.org/docs/rules/no-var' category='eslint']\n" +
 		"##teamcity[inspectionType id='eslint/unknown' name='eslint' description='eslint' category='eslint']\n" +
 		"##teamcity[inspection typeId='eslint/no-var' message='it|'s |[bad|]' file='a.ts' line='1' SEVERITY='ERROR']\n" +
 		"##teamcity[inspection typeId='eslint/unknown' message='hint' file='a.ts' line='5' SEVERITY='WEAK WARNING']\n" +

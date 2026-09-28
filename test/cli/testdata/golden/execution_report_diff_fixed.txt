@@ -33,6 +33,10 @@ exit code: 0
       "incomplete": [
         "no-extraction"
       ],
+      "beforeComplete": false,
+      "beforeIncomplete": [
+        "no-extraction"
+      ],
       "counts": {
         "new": 0,
         "fixed": 0,
@@ -53,6 +57,8 @@ exit code: 0
       "status": "compared",
       "complete": true,
       "incomplete": [],
+      "beforeComplete": true,
+      "beforeIncomplete": [],
       "counts": {
         "new": 0,
         "fixed": 1,

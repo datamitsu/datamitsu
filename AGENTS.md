@@ -359,7 +359,7 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   format that lists findings — `render.ListsFindings`, SARIF included — turns
   fail-fast off, and an explicit `--fail-fast=true` or
   `DATAMITSU_FAIL_FAST=true` beside one exits 2; a `NoFindings` format
-  (`history`) does neither.
+  (`history`, `patch`) does neither.
 - A baseline (`report.Baseline`, `datamitsu.baseline/1`, loaded by
   `report.LoadBaseline` in `cmd` before anything runs) is matched in the gate
   hook, after `report.Annotator` and before `tooling.ThresholdGate`:
@@ -419,10 +419,13 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   (`render/teamcity`, service messages) are annotation modes beside GitHub:
   `runner.nativeMode` maps a CI vendor to its mode for `auto`, and both reuse
   `github.Candidates` (Azure also `github.Order` and a ten-per-type budget).
-  Both CIs read a command anywhere in a line, so in those modes every line of
-  tool text the runner prints on stdout goes through `runner.toolText`, which
-  breaks `##vso[` or `##teamcity[` with a space — `printFramed`, agent records
-  and tails do; new stdout tool text must too. TeamCity's results block is
+  Both CIs read a command anywhere in a line, on stdout and stderr, so under
+  either vendor or in either mode every line the runner prints that holds
+  tool output or a repository path goes through `runner.toolText`, which
+  breaks `##vso[` or `##teamcity[` with a space — frames, frame context,
+  stopped and unrun lines, the target line, progress labels, agent records and
+  tails, and every JSON-L event through the event mask; new output of that kind
+  must too. TeamCity's results block is
   also wrapped in `disableServiceMessages` … `enableServiceMessages` by
   `openCommandRegion`/`closeCommandRegion`.
 - The interchange formats share `internal/report/render/common`: a format

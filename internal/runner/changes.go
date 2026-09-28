@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/gitutil"
@@ -11,6 +12,10 @@ import (
 
 // takeSnapshot is gitutil.Take; tests replace it.
 var takeSnapshot = gitutil.Take
+
+// snapshotGrace bounds a snapshot taken after the run was interrupted, whose
+// context no longer stops it.
+const snapshotGrace = 10 * time.Second
 
 // stepCallback observes what a fix operation changes: a snapshot of the
 // working tree before its first step and after every step — the tasks of one
@@ -24,11 +29,19 @@ func (sc *sharedContext) stepCallback(ctx context.Context, operation config.Oper
 	if operation != config.OpFix || rec == nil {
 		return nil
 	}
-	// The snapshots after an interruption must still run: the run's context
-	// is cancelled by then.
-	ctx = context.WithoutCancel(ctx)
 	env := gitutil.Environ()
-	before, err := takeSnapshot(ctx, sc.rootPath, env)
+	snapshot := func() (gitutil.Snapshot, error) {
+		// A snapshot after an interruption must still run, for a while: the
+		// run's context is cancelled by then.
+		snapCtx := context.WithoutCancel(ctx)
+		if ctx.Err() != nil {
+			var cancel context.CancelFunc
+			snapCtx, cancel = context.WithTimeout(snapCtx, snapshotGrace)
+			defer cancel()
+		}
+		return takeSnapshot(snapCtx, sc.rootPath, env)
+	}
+	before, err := snapshot()
 	observing := err == nil
 	if observing {
 		rec.ObserveChanges()
@@ -44,7 +57,7 @@ func (sc *sharedContext) stepCallback(ctx context.Context, operation config.Oper
 		if !observing {
 			return
 		}
-		after, err := takeSnapshot(ctx, sc.rootPath, env)
+		after, err := snapshot()
 		if err != nil {
 			observing = false
 			rec.ChangesNotObserved(report.ChangesSnapshotFailed, err.Error())

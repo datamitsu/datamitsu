@@ -58,8 +58,16 @@ graph TD
 - **Findings** — the rule, the level, whether it is at or above the threshold
   (`reported`), whether it failed its tool (`gates`) and whether the terminal
   shows it (`shown`, which the annotations, `markdown` and `--output agent`
-  follow), the message, where it is — the path relative to the repository
-  root, 1-based rows and columns with an exclusive end — and its fingerprint.
+  follow), whether a [baseline](#baselines) held it (`baselined`), the
+  message, where it is — the path relative to the repository root, 1-based
+  rows and columns with an exclusive end — and its fingerprint, whose version
+  the run states (`fingerprint`).
+- **Changes** — for a `fix`, the files it changed (see
+  [Changed files](#changed-files)): on each invocation, with the `step` it ran
+  in, and on the operation for a file no invocation was given; whether they
+  were observed (`changesObserved`, `changesReason`) and within what
+  (`changesScope`). A file result holds the `patch` a formatter applied when
+  `--report patch` was asked for.
 
 Everything is sorted, so one run gives one document byte for byte, and the time
 it is stamped with comes from `SOURCE_DATE_EPOCH` when that is set.
@@ -507,11 +515,21 @@ datamitsu lint --fail-fast=false
   Publish the JSON report as an artifact for the rest.
 - **TeamCity keeps everything.** Inspections appear in the build's Inspections
   tab; a finding without a file cannot be an inspection and is counted instead.
-- **No tool can issue a command.** Azure runs `##vso[` wherever it appears in a
-  line, TeamCity reads `##teamcity[` the same way. datamitsu rewrites both
-  prefixes, with a space, in every line of tool output it prints in that mode —
-  one space of difference in a raw line — and TeamCity's results block is also
-  wrapped in `disableServiceMessages` … `enableServiceMessages`.
+- **No tool output issues a command.** Azure runs `##vso[` wherever it appears
+  in a line, TeamCity reads `##teamcity[` the same way, on stdout and stderr.
+  In either CI — whatever `--annotations` says — and in either mode, datamitsu
+  rewrites the prefix, with a space, in every line it prints that holds tool
+  output or a repository path: raw output, parsed messages, command lines,
+  directories, file names, progress labels, agent records and the JSON-L
+  events. That is one space of difference in a raw line. TeamCity's results
+  block is also wrapped in `disableServiceMessages` … `enableServiceMessages`.
+- **Keep documents off stdout there.** A report written to stdout (`-`) is a
+  document and is not rewritten: a finding's message in it reaches the log as
+  it is. Write reports to files in Azure Pipelines and TeamCity.
+- **A run killed in the middle** — a second interrupt, a timeout that kills the
+  process — leaves TeamCity's reading suspended for the rest of the build step,
+  as it leaves GitHub's stop-commands region open; a run interrupted once
+  closes it.
 
 ### GitLab Code Quality
 
@@ -716,6 +734,9 @@ on stdout applied, in the order they were applied, as one patch `git apply`
 takes. A tool that rewrites files itself leaves no patch; its files are among
 the changes with `patch: false`.
 
+What datamitsu itself rewrites before the tools run — the `.datamitsuignore`
+normalization — happens before the first snapshot and is not among the changes.
+
 The snapshot costs one `git status` per group: on a repository of about 1 800
 tracked files, 5–8 ms with a fresh index and about 40 ms when every file's
 timestamp moved since the index was written.
@@ -728,12 +749,14 @@ the fingerprints of the findings a run reported, and a later run given it
 neither reports those findings nor lets them gate.
 
 ```bash
-datamitsu lint --report json=out/run.json
-datamitsu report baseline out/run.json --output .datamitsu-baseline.json
+datamitsu lint --report json=.datamitsu-baseline-run.json
+datamitsu report baseline .datamitsu-baseline-run.json --output .datamitsu-baseline.json
 datamitsu lint --baseline .datamitsu-baseline.json
 ```
 
-Commit the baseline beside the configuration. A finding is matched by its
+Commit the baseline beside the configuration, and the run it was made from if
+you want to compare later runs with it. `--baseline` takes a run's own JSON as
+well, and a run that was not complete warns there too. A finding is matched by its
 [fingerprint](#fingerprints), so it stays baselined when lines are inserted
 above it and when its message is reworded; it becomes new when its rule, its
 file or the text of its line changes. A baseline made from an incomplete run —
@@ -758,11 +781,23 @@ stops hiding them — never on a schedule, which would bake every new finding in
 `report diff` against the current run shows what it still hides:
 
 ```bash
+datamitsu lint --report json=out/run.json
 datamitsu report diff .datamitsu-baseline-run.json out/run.json --format markdown
 ```
 
-A baseline takes a run's own JSON as well, so keeping the run a baseline was
-made from lets `report diff` compare it with any later run.
+A finding is matched while its own process is judged, on the fingerprint that
+process computes. Two processes of one tool that each report a finding with
+the same rule on identical lines of one file number them apart only once the
+report settles them across the tool, so the one the report numbers second can
+be baselined by the first's fingerprint; one process per file, the usual case,
+never differs.
+
+What else shows a baselined finding: a tool that failed on its exit code shows
+every finding it failed on, baselined ones marked `(baselined)` in the terminal,
+JUnit and Markdown; the annotations and `--output agent` show them unmarked.
+SARIF, GitLab Code Quality, Checkstyle and rdjsonl list every finding, as they
+list those below the threshold; SARIF marks a baselined one in
+`properties.baselined`.
 
 ## Comparing two runs
 

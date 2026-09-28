@@ -51,19 +51,26 @@ func TestResolveAnnotations(t *testing.T) {
 	}
 }
 
-// TestNeutralizerOf: only a CI that reads commands anywhere in a line gets
-// them broken in tool text.
+// TestNeutralizerOf: a CI that reads commands anywhere in a line gets them
+// broken in tool text, whether the run prints its annotations or not.
 func TestNeutralizerOf(t *testing.T) {
 	const line = "x ##vso[task.setvariable variable=a]1 ##teamcity[buildProblem description='b'] ::error::c"
-	tests := map[string]string{
-		AnnotationsAzure:    "x ##vso [task.setvariable variable=a]1 ##teamcity[buildProblem description='b'] ::error::c",
-		AnnotationsTeamCity: "x ##vso[task.setvariable variable=a]1 ##teamcity [buildProblem description='b'] ::error::c",
-		AnnotationsGitHub:   line,
-		AnnotationsOff:      line,
+	const azureBroken = "x ##vso [task.setvariable variable=a]1 ##teamcity[buildProblem description='b'] ::error::c"
+	const teamcityBroken = "x ##vso[task.setvariable variable=a]1 ##teamcity [buildProblem description='b'] ::error::c"
+	tests := []struct {
+		mode, vendor, want string
+	}{
+		{AnnotationsAzure, "", azureBroken},
+		{AnnotationsOff, cienv.VendorAzure, azureBroken},
+		{AnnotationsTeamCity, "", teamcityBroken},
+		{AnnotationsOff, cienv.VendorTeamCity, teamcityBroken},
+		{AnnotationsAzure, cienv.VendorTeamCity, "x ##vso [task.setvariable variable=a]1 ##teamcity [buildProblem description='b'] ::error::c"},
+		{AnnotationsGitHub, cienv.VendorGitHub, line},
+		{AnnotationsOff, "", line},
 	}
-	for mode, want := range tests {
-		if got := neutralizerOf(mode)(line); got != want {
-			t.Errorf("%s: %q, want %q", mode, got, want)
+	for _, tt := range tests {
+		if got := neutralizerOf(tt.mode, tt.vendor)(line); got != tt.want {
+			t.Errorf("%s under %q: %q, want %q", tt.mode, tt.vendor, got, tt.want)
 		}
 	}
 }

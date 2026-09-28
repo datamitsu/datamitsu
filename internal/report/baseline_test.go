@@ -79,15 +79,16 @@ func TestLoadBaseline(t *testing.T) {
 	want := BaselineSet{strings.Repeat("a", 64): true, strings.Repeat("b", 64): true}
 
 	t.Run("baseline", func(t *testing.T) {
-		set, version, err := LoadBaseline(write("b.json", NewBaseline(baselineRun(), time.Now())))
-		if err != nil || version != FingerprintVersion || !reflect.DeepEqual(set, want) {
-			t.Errorf("LoadBaseline = %v, %q, %v", set, version, err)
+		b, err := LoadBaseline(write("b.json", NewBaseline(baselineRun(), time.Now())))
+		if err != nil || b.Version != FingerprintVersion || !reflect.DeepEqual(b.Set, want) || b.Complete || b.FromReport {
+			t.Errorf("LoadBaseline = %+v, %v", b, err)
 		}
 	})
 	t.Run("report", func(t *testing.T) {
-		set, version, err := LoadBaseline(write("r.json", baselineRun()))
-		if err != nil || version != FingerprintVersion || !reflect.DeepEqual(set, want) {
-			t.Errorf("LoadBaseline = %v, %q, %v", set, version, err)
+		b, err := LoadBaseline(write("r.json", baselineRun()))
+		if err != nil || b.Version != FingerprintVersion || !reflect.DeepEqual(b.Set, want) || !b.FromReport ||
+			!reflect.DeepEqual(b.Incomplete, []Reason{ReasonCancelled, ReasonToolsFilter}) {
+			t.Errorf("LoadBaseline = %+v, %v", b, err)
 		}
 	})
 
@@ -96,10 +97,11 @@ func TestLoadBaseline(t *testing.T) {
 		"fingerprint": map[string]any{"schema": BaselineSchema, "fingerprint": "dmfp2", "fingerprints": []string{}},
 		"not_hex":     map[string]any{"schema": BaselineSchema, "fingerprint": "dmfp1", "fingerprints": []string{"xyz"}},
 		"history":     map[string]any{"schema": HistorySchema},
+		"report_v2":   map[string]any{"schema": SchemaVersion, "fingerprint": "dmfp2"},
 	}
 	for name, doc := range refused {
 		t.Run(name, func(t *testing.T) {
-			if _, _, err := LoadBaseline(write(name+".json", doc)); !errors.Is(err, ErrBaseline) {
+			if _, err := LoadBaseline(write(name+".json", doc)); !errors.Is(err, ErrBaseline) {
 				t.Errorf("LoadBaseline error = %v, want ErrBaseline", err)
 			}
 		})
@@ -109,12 +111,12 @@ func TestLoadBaseline(t *testing.T) {
 		if err := os.WriteFile(path, []byte("{"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if _, _, err := LoadBaseline(path); !errors.Is(err, ErrBaseline) {
+		if _, err := LoadBaseline(path); !errors.Is(err, ErrBaseline) {
 			t.Errorf("LoadBaseline error = %v, want ErrBaseline", err)
 		}
 	})
 	t.Run("missing", func(t *testing.T) {
-		if _, _, err := LoadBaseline(filepath.Join(dir, "none.json")); err == nil {
+		if _, err := LoadBaseline(filepath.Join(dir, "none.json")); err == nil {
 			t.Error("a missing file loaded")
 		}
 	})

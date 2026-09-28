@@ -138,3 +138,38 @@ func TestAnnotationsCIModes(t *testing.T) {
 		t.Errorf("--annotations off printed issues:\n%s", res.Stdout)
 	}
 }
+
+// TestAnnotationsRepositoryNames: a directory whose name is a command — a pull
+// request can add one — prints broken wherever the run names it: a frame's
+// directory lines, the progress labels, the event stream.
+func TestAnnotationsRepositoryNames(t *testing.T) {
+	for _, tc := range []struct {
+		name, dir, prefix string
+		env               []string
+	}{
+		{"azure", "##vso[task.setvariable variable=token]x", "##vso[", azureEnv},
+		{"teamcity", "##teamcity[enableServiceMessages]", "##teamcity[", teamcityEnv},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newExecProject(t, map[string]string{tc.dir + "/pkg.marker": ""}, packagesSpec,
+				clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Scope: "per-project"}))
+			for _, args := range [][]string{{"lint"}, {"--log-format", "jsonl", "lint", "--annotations", tc.name}} {
+				res := e.run("", tc.env, args...)
+				e.wantExit(res, 1)
+				broken := strings.Replace(tc.dir, tc.prefix, strings.TrimSuffix(tc.prefix, "[")+" [", 1)
+				if !strings.Contains(res.Stdout+res.Stderr, broken) {
+					t.Errorf("%v: the directory should be named, broken:\n%s\n%s", args, res.Stdout, res.Stderr)
+				}
+				for _, stream := range []string{res.Stdout, res.Stderr} {
+					for line := range strings.SplitSeq(stream, "\n") {
+						if strings.Contains(line, tc.prefix) && !strings.HasPrefix(line, "##teamcity[enableServiceMessages]") &&
+							!strings.HasPrefix(line, "##teamcity[disableServiceMessages]") && !strings.HasPrefix(line, "##teamcity[buildProblem") &&
+							!strings.HasPrefix(line, "##vso[task.logissue") {
+							t.Errorf("%v: the directory's name printed as a command: %q", args, line)
+						}
+					}
+				}
+			}
+		})
+	}
+}
