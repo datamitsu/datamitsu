@@ -589,5 +589,9 @@ export default defineConfig((config) => ({
     "colours",
     "defences",
     "licence",
+    // The optional interfaces a report format adds to render.Renderer: one
+    // that leaves a tool out, one written with a completeness companion.
+    "omitter",
+    "companioned",
   ],
 }));

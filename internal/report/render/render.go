@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render/json"
 	"github.com/datamitsu/datamitsu/internal/report/render/markdown"
+	"github.com/datamitsu/datamitsu/internal/report/render/sarif"
 )
 
 // Renderer writes one format.
@@ -30,7 +32,7 @@ type Renderer interface {
 	OmitsIncompleteTools() bool
 }
 
-var renderers = []Renderer{json.Renderer{}, markdown.Renderer{}}
+var renderers = []Renderer{json.Renderer{}, markdown.Renderer{}, sarif.Renderer{}}
 
 // Lookup finds a format by the name --report spells it with.
 func Lookup(format string) (Renderer, bool) {
@@ -78,6 +80,12 @@ type Spec struct {
 // Stdout reports whether the spec writes to standard output.
 func (s Spec) Stdout() bool { return s.Path == Stdout }
 
+// Dir reports a path that ends in a separator: a directory a format that can
+// be split writes its files into.
+func (s Spec) Dir() bool {
+	return strings.HasSuffix(s.Path, "/") || strings.HasSuffix(s.Path, string(filepath.Separator))
+}
+
 // ParseSpec reads one "<format>=<path>[?opt=value[&opt=value…]]".
 func ParseSpec(raw string) (Spec, error) {
 	format, rest, ok := strings.Cut(strings.TrimSpace(raw), "=")
@@ -94,8 +102,11 @@ func ParseSpec(raw string) (Spec, error) {
 		return Spec{}, fmt.Errorf("report %s needs a path: %s=<path>, or %s=- for stdout", format, format, format)
 	}
 	spec := Spec{Format: format, Path: path}
+	if _, split := r.(DirRenderer); spec.Dir() && !split {
+		return Spec{}, fmt.Errorf("report %s is one file, and %s names a directory", format, path)
+	}
 	if query == "" {
-		return spec, nil
+		return spec, checkOptions(r, spec)
 	}
 	spec.Options = map[string]string{}
 	for pair := range strings.SplitSeq(query, "&") {
@@ -111,7 +122,19 @@ func ParseSpec(raw string) (Spec, error) {
 		}
 		spec.Options[key] = value
 	}
-	return spec, nil
+	return spec, checkOptions(r, spec)
+}
+
+// checkOptions lets a format refuse an option value it cannot use.
+func checkOptions(r Renderer, spec Spec) error {
+	c, ok := r.(OptionChecker)
+	if !ok {
+		return nil
+	}
+	if err := c.CheckOptions(spec.Options); err != nil {
+		return fmt.Errorf("report %s: %w", spec.Format, err)
+	}
+	return nil
 }
 
 // ParseSpecs reads the reports of a run: the --report flags, and the

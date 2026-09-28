@@ -15,7 +15,7 @@ Usage:
 
 Flags:
       --allow-partial   Render a format that lists findings for a document of a narrowed run
-      --format string   The format to write: json, markdown; a format's options follow a ?
+      --format string   The format to write: json, markdown, sarif; a format's options follow a ?
   -h, --help            help for render
       --input string    The own JSON document to read (datamitsu.report/1)
       --output string   Where to write it; - is stdout (default "-")

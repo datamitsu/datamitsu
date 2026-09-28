@@ -12,16 +12,21 @@ import (
 	"path/filepath"
 
 	"github.com/datamitsu/datamitsu/internal/report"
+	"github.com/datamitsu/datamitsu/internal/report/render/common"
 )
 
 // Target is one report on its way to its path: a temporary file beside it,
-// renamed over it once written, so that a reader never sees half a report; or
-// stdout.
+// renamed over it once written, so that a reader never sees half a report; a
+// directory whose files are each written that way; or stdout. A format with a
+// completeness companion gets one beside its file, written the same way.
 type Target struct {
 	Spec     Spec
 	renderer Renderer
 	tmp      *os.File
-	stdout   io.Writer
+	// companion is the temporary file of the completeness companion; nil for
+	// a format without one, and on stdout.
+	companion *os.File
+	stdout    io.Writer
 	// Err is why the target could not be opened; nil when it was.
 	Err error
 }
@@ -37,19 +42,32 @@ func Open(spec Spec, stdout io.Writer) *Target {
 		return t
 	}
 	t.renderer = r
-	if !spec.Stdout() {
+	switch {
+	case spec.Stdout():
+	case spec.Dir():
+		t.Err = makeDir(spec.Path)
+	default:
 		t.tmp, t.Err = createBeside(spec.Path)
+		if _, companioned := r.(Companioned); companioned && t.Err == nil {
+			if t.companion, t.Err = createBeside(common.CompanionPath(spec.Path)); t.Err != nil {
+				_ = t.tmp.Close()
+				_ = os.Remove(t.tmp.Name())
+			}
+		}
 	}
 	return t
 }
 
 // Write renders run into the target and moves it into place. On failure
-// nothing is left at the path that was not there before.
+// nothing is left at the path that was not there before; a directory keeps
+// the files written before the one that failed.
 func (t *Target) Write(run *report.Run) error {
-	if t.Err != nil {
+	switch {
+	case t.Err != nil:
 		return t.Err
-	}
-	if t.tmp == nil {
+	case t.Spec.Dir() && !t.Spec.Stdout():
+		return t.writeDir(run)
+	case t.tmp == nil:
 		w := bufio.NewWriter(t.stdout)
 		if err := t.renderer.Render(w, run, t.Spec.Options); err != nil {
 			return err
@@ -59,21 +77,102 @@ func (t *Target) Write(run *report.Run) error {
 		}
 		return nil
 	}
-	tmp := t.tmp.Name()
-	w := bufio.NewWriter(t.tmp)
-	err := t.renderer.Render(w, run, t.Spec.Options)
+	err := fill(t.tmp, func(w io.Writer) error { return t.renderer.Render(w, run, t.Spec.Options) })
+	if c, ok := t.renderer.(Companioned); ok && t.companion != nil {
+		companion := c.Companion(run, t.Spec.Options)
+		if companionErr := fill(t.companion, companion.Write); err == nil {
+			err = companionErr
+		}
+	}
+	if err == nil {
+		err = os.Rename(t.tmp.Name(), t.Spec.Path)
+	}
+	if err == nil && t.companion != nil {
+		err = os.Rename(t.companion.Name(), common.CompanionPath(t.Spec.Path))
+	}
+	if err != nil {
+		_ = os.Remove(t.tmp.Name())
+		if t.companion != nil {
+			_ = os.Remove(t.companion.Name())
+		}
+		return unwrapPathError(err)
+	}
+	return nil
+}
+
+// fill writes into f through render and closes it.
+func fill(f *os.File, render func(io.Writer) error) error {
+	w := bufio.NewWriter(f)
+	err := render(w)
 	if err == nil {
 		err = w.Flush()
 	}
-	if closeErr := t.tmp.Close(); err == nil {
+	if closeErr := f.Close(); err == nil {
 		err = closeErr
 	}
-	if err == nil {
-		err = os.Rename(tmp, t.Spec.Path)
+	return err
+}
+
+// writeDir writes the files of a format split over a directory, each through
+// a temporary file of its own, then removes the files of the format an
+// earlier run left there that this one did not write: an upload of the
+// directory would read them as part of this run.
+func (t *Target) writeDir(run *report.Run) error {
+	dirRenderer, ok := t.renderer.(DirRenderer)
+	if !ok {
+		return fmt.Errorf("report %s is one file, and %s names a directory", t.Spec.Format, t.Spec.Path)
 	}
+	files, err := dirRenderer.RenderFiles(run, t.Spec.Options)
 	if err != nil {
-		_ = os.Remove(tmp)
+		return err
+	}
+	written := map[string]bool{}
+	for _, file := range files {
+		path := filepath.Join(t.Spec.Path, file.Name)
+		tmp, err := createBeside(path)
+		if err != nil {
+			return fmt.Errorf("%s: %w", file.Name, err)
+		}
+		err = fill(tmp, func(w io.Writer) error {
+			if _, err := w.Write(file.Data); err != nil {
+				return fmt.Errorf("write report: %w", err)
+			}
+			return nil
+		})
+		if err == nil {
+			err = os.Rename(tmp.Name(), path)
+		}
+		if err != nil {
+			_ = os.Remove(tmp.Name())
+			return fmt.Errorf("%s: %w", file.Name, unwrapPathError(err))
+		}
+		written[file.Name] = true
+	}
+	entries, err := os.ReadDir(t.Spec.Path)
+	if err != nil {
 		return unwrapPathError(err)
+	}
+	for _, e := range entries {
+		if e.Type().IsRegular() && dirRenderer.Owns(e.Name()) && !written[e.Name()] {
+			if err := os.Remove(filepath.Join(t.Spec.Path, e.Name())); err != nil {
+				return fmt.Errorf("remove %s, left by an earlier run: %w", e.Name(), unwrapPathError(err))
+			}
+		}
+	}
+	return nil
+}
+
+// makeDir creates the directory a split format writes into.
+func makeDir(path string) error {
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return unwrapPathError(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return unwrapPathError(err)
+	}
+	if !info.IsDir() {
+		return errors.New("not a directory")
 	}
 	return nil
 }

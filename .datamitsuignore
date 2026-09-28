@@ -28,6 +28,11 @@ parsers/datamitsu-parsers/fixtures/*/*: *
 # them.
 internal/report/render/github/testdata/matchers/*: *
 
+# The schemas the interchange formats are validated against, vendored byte for
+# byte from their publishers (each renderer's test names the source): no tool
+# may rewrite or judge them.
+internal/report/render/*/testdata/schema/*: *
+
 # Vendored verbatim from a datamitsu-config release (see test/cli/README.md); it
 # is a bundle, re-fetched rather than edited, so no tool may rewrite or judge it.
 test/e2e/testdata/datamitsu.config.oci-ghcr.js: *

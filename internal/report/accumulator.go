@@ -370,7 +370,7 @@ func (a *Accumulator) appRef(name string) AppRef {
 		return AppRef{Name: name}
 	}
 	info := binmanager.DescribeApp(name, app)
-	return AppRef{Name: name, Kind: info.Type, Version: info.Version}
+	return AppRef{Name: name, Kind: info.Type, Version: info.Version, OfficialURL: app.OfficialURL}
 }
 
 // invocations lists what one planned task did: one invocation per process it

@@ -2,4 +2,4 @@ exit code: 2
 ===STDOUT===
 
 ===STDERR===
-error: invalid --format: unknown report format "yaml" (must be json, markdown)
+error: invalid --format: unknown report format "yaml" (must be json, markdown, sarif)

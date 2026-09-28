@@ -15,8 +15,10 @@ datamitsu lint --report json=out/run.json
 
 `json` writes datamitsu's own document, `datamitsu.report/1`, which carries
 everything the record holds; `markdown` writes the same run for a person — the
-tools, the findings the terminal would show and what the run left out. The flags, the variable twins and the exit codes
-are in the [CLI reference](../reference/cli-commands.md#reports).
+tools, the findings the terminal would show and what the run left out; `sarif`
+writes it for GitHub code scanning ([Code scanning](#code-scanning)). The flags,
+the variable twins and the exit codes are in the
+[CLI reference](../reference/cli-commands.md#reports).
 
 ## What a report holds
 
@@ -118,7 +120,9 @@ Two rules keep a report from claiming more than it holds:
   a run narrowed before it starts — files named, a subdirectory, `--file-scoped`,
   `--tools` — would read as the findings of the repository. The run exits 2
   before anything runs. `--allow-partial` writes it anyway, with every reason in
-  the document; it never makes the run complete.
+  the document; it never makes the run complete. `sarif` is written: it leaves
+  out every tool whose completeness is not established instead of listing it
+  ([Code scanning](#code-scanning)).
 - **A report turns fail-fast off.** A run that stopped at the first failing tool
   could not list every finding, so a report runs everything to the end, and a
   report together with an explicit `--fail-fast=true` is refused.
@@ -199,6 +203,85 @@ commands when it sees `GITHUB_ACTIONS` does not see it
 ones that can match what the run prints are `go` and `eslint-compact`, on a
 tool's raw output in their formats, which GitHub then annotates without a
 location.
+
+### Code scanning
+
+`--report sarif=<path>` writes the run in SARIF 2.1.0, which GitHub code
+scanning keeps as alerts: it shows a finding on the pull request that brings it
+in, and closes the alert once a later upload of the tool no longer holds it.
+
+```yaml
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - run: rm -rf sarif
+      - run: datamitsu lint --fail-fast=false --report sarif=sarif/
+      - if: always() && hashFiles('sarif/*.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: sarif
+```
+
+- **One run per tool, of `lint`.** A file holds one run per tool of the lint
+  operation — `check` writes its lint, a `fix` run its fix — because GitHub
+  rejects a file with two runs of one tool in one category.
+- **A tool that did not cover everything is left out.** An alert is closed when
+  the next upload of its tool does not hold it, so a tool whose completeness is
+  not established ([How complete a report is](#how-complete-a-report-is)) is
+  not written at all, and its alerts stay as they were. The run says so on
+  stderr, one line per tool, and the own JSON records it in the report's
+  `exports` entry (`omitted`). For the same reason a narrowed run is written
+  rather than refused: every tool in it is incomplete, so its file holds no run
+  and changes no alert. A tool with more than 25 000 results is left out too:
+  GitHub would keep the 5 000 most severe and close the alerts of the rest.
+- **Twenty tools per file.** GitHub reads at most twenty runs from one file. A
+  path that ends in `/` names a directory: `datamitsu-1.sarif`,
+  `datamitsu-2.sarif` and so on, twenty tools each, sorted by name, and the
+  `datamitsu-<n>.sarif` files an earlier run left there that this one did not
+  write are removed. `upload-sarif` takes the directory. A file, or `-`, for a
+  run that plans more than twenty tools exits 2 before anything runs. GitHub
+  refuses an upload of more than 10 MB gzipped.
+- **The category is in the file.** Every run is written under the category
+  `datamitsu` (`automationDetails.id` `datamitsu/`). The upload action's
+  `category` input does not change a file that already names one, so a job
+  that uploads more than once — a matrix — names its own:
+  `--report "sarif=sarif/?category=lint-${{ matrix.os }}"`. Uploads in one
+  category replace each other's alerts tool by tool.
+- **Findings keep their alerts.** A result's
+  `partialFingerprints.primaryLocationLineHash` is the finding's
+  [fingerprint](#fingerprints), the key GitHub matches alerts on from one upload
+  to the next; two tools never share one. Columns count code points
+  (`columnKind: unicodeCodePoints`) and are left out where the report could not
+  convert them.
+- **What else a run holds.** `ruleId` is the finding's rule, or
+  `<tool>/unknown` without one, each rule listed once with its documentation
+  link; the tool's app version and official URL; one `invocations` entry per
+  process. A finding without a file, and the `synthetic` finding of a tool that
+  failed without a parsable one, are notifications of their invocation: code
+  scanning shows a result only at a location. A file outside the repository is
+  an absolute `file://` URI.
+
+Before turning it on:
+
+- The job needs `security-events: write`. A pull request from a fork gets a
+  read-only token and cannot upload.
+- A private repository needs GitHub's code scanning licence.
+- A tool that is never uploaded again — removed from the configuration,
+  renamed (the run is named by the tool's key in the configuration), or skipped
+  by a condition — keeps its alerts open. Deleting its analyses
+  (`DELETE /repos/{owner}/{repo}/code-scanning/analyses/{id}?confirm_delete`)
+  removes them, and their history with them.
+- `rm -rf` before the run and `hashFiles` on the upload keep a file an earlier
+  step left from passing for this run's: a run refused before it starts
+  (exit 2) writes nothing. `if: always()` uploads the file of a run whose tools
+  failed, which is the one worth reading.
 
 ## Fingerprints
 

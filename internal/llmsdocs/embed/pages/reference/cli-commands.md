@@ -565,9 +565,10 @@ that `config reconcile` runs after writing its files.
 `--report <format>=<path>` writes a report of the run once its last operation
 has ended, whether or not its tools failed — the run that fails is the one a
 pipeline needs to read. The flag is repeatable, one per format: `json`, the
-run's own document, and `markdown`, the same run for a person. The [Reports guide](../guides/reports.md) explains what a report
-holds and how far to trust it; [`report render`](#report-render) writes one
-again, offline, from a run's own JSON.
+run's own document; `markdown`, the same run for a person; and `sarif`, the run
+for code scanning. The [Reports guide](../guides/reports.md) explains what a
+report holds and how far to trust it; [`report render`](#report-render) writes
+one again, offline, from a run's own JSON.
 
 ```bash
 # CI: the whole run as one document, uploaded whatever the outcome
@@ -582,6 +583,9 @@ datamitsu lint --report json=out/run.json
 - `-` writes the report to stdout, for one format per run. stdout then carries
   the report alone: the human output is left out, and stderr carries the
   [run events](#run-events) as it does under `--log-format jsonl`.
+- A path that ends in `/` names a directory, for a format that splits a run
+  over several files (`sarif`); any other format given one exits 2. Options
+  follow the path after `?`: `sarif=out/results.sarif?category=linux`.
 - `DATAMITSU_REPORT` is the variable twin, comma-separated:
   `DATAMITSU_REPORT=json=out/run.json`. A `--report` naming the same format
   wins over its entry. `datamitsu config runtime` reports the variable as
@@ -657,6 +661,24 @@ was on disk into code points (`chars`), UTF-8 bytes (`bytes`) and UTF-16 units
 line), or `unknown`, when there was nothing to convert from. A report never holds a command line or
 an environment variable, and nothing caches it: every report is written from
 the run that produced it.
+
+`sarif` writes SARIF 2.1.0 for GitHub code scanning and the other services
+that keep alerts across uploads. It holds one run per tool of the `lint`
+operation (`check` writes its lint, a `fix` run its fix), in the category
+`datamitsu` — `automationDetails.id` `datamitsu/` — or the one
+`?category=<name>` names, and each result carries the finding's fingerprint as
+`partialFingerprints.primaryLocationLineHash`. A tool whose completeness is not
+established is left out rather than listed, and so is a tool with more than
+25 000 results, which GitHub would cut: an upload without a tool leaves that
+tool's alerts as they are. Each tool left out gets one `WARN` line on stderr
+naming why and is recorded in the `omitted` list of the report's entry in
+`exports`. Because it leaves out what is incomplete, `sarif` is written for a
+narrowed run instead of being refused. GitHub reads at most twenty runs from one
+file: `sarif=<dir>/` writes `datamitsu-1.sarif`, `datamitsu-2.sarif` and so on,
+twenty tools each, sorted by name, and removes the `datamitsu-<n>.sarif` files
+an earlier run left there that this one did not write; a file or `-` for a run
+that plans more than twenty tools exits 2 before anything runs. See
+[Code scanning](../guides/reports.md#code-scanning) for the workflow.
 
 `markdown` writes the same run for a person, as GitHub renders Markdown: what
 the run covered and whether it is complete, a table of each operation's tools
@@ -969,19 +991,22 @@ offline:
 datamitsu report render --input <run.json> --format <format> [--output <path>|-]
 ```
 
-| Flag                | Description                                                                           |
-| ------------------- | ------------------------------------------------------------------------------------- |
-| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)              |
-| `--format <format>` | The format to write: `json` or `markdown`; a format's options follow a `?` (required) |
-| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report`   |
-| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                  |
+| Flag                | Description                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)                       |
+| `--format <format>` | The format to write: `json`, `markdown` or `sarif`; a format's options follow a `?` (required) |
+| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report`            |
+| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                           |
 
 The renderers and the completeness rule are the run's own: a document of a
 narrowed run is refused (exit 2) for a format that lists findings unless
 `--allow-partial`, and a document without its completeness fields is read as
 incomplete, never as complete. The document holds everything a renderer needs,
 so rendering works on another machine and after the checkout changed; `json`
-reproduces the document byte for byte. A document of another schema, or one
+reproduces the document byte for byte, and every other format the file the run
+wrote. An `--output` that ends in `/` is a directory, for `sarif`; a document
+with more tools than one SARIF file holds is refused (exit 2) for a file or
+stdout. A document of another schema, or one
 that cannot be read, exits 1; an output that cannot be written exits 5.
 
 ```bash
@@ -990,6 +1015,9 @@ datamitsu report render --input out/run.json --format json
 
 # The same run for a person
 datamitsu report render --input out/run.json --format markdown --output out/run.md
+
+# For code scanning, split into files of twenty tools
+datamitsu report render --input out/run.json --format sarif --output sarif/
 ```
 
 ## config

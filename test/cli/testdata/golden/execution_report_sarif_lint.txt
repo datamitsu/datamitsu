@@ -1,0 +1,15 @@
+exit code: 0
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✓ alpha     <DUR>
+┃ ✓ hadolint  <DUR> · 1 warning
+┗━ 2 tools · 2 runs · done in <DUR> · 1 warning hidden · cache 0% <RULE>
+
+===STDERR===
+WARN report: lint tool alpha is incomplete (no-extraction): left out of sarif

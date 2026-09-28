@@ -39,12 +39,16 @@ func TestParseSpec(t *testing.T) {
 		{raw: "fake=r.sarif?category=", want: Spec{Format: "fake", Path: "r.sarif", Options: map[string]string{"category": ""}}},
 		{raw: "json", wantErr: `"json" is not <format>=<path>`},
 		{raw: "=out.json", wantErr: "is not <format>=<path>"},
-		{raw: "yaml=out.yaml", wantErr: `unknown report format "yaml" (must be fake, json, markdown)`},
+		{raw: "yaml=out.yaml", wantErr: `unknown report format "yaml" (must be fake, json, markdown, sarif)`},
 		{raw: "json=", wantErr: "report json needs a path"},
 		{raw: "json=?x=1", wantErr: "report json needs a path"},
 		{raw: "json=a.json?x=1", wantErr: `report json takes no option, got "x"`},
 		{raw: "fake=a?x=1", wantErr: `report fake has no option "x" (must be category)`},
 		{raw: "fake=a?category=1&category=2", wantErr: `names option "category" twice`},
+		{raw: "sarif=out/", want: Spec{Format: "sarif", Path: "out/"}},
+		{raw: "sarif=out/?category=linux", want: Spec{Format: "sarif", Path: "out/", Options: map[string]string{"category": "linux"}}},
+		{raw: "sarif=a.sarif?category=", wantErr: "report sarif: category needs a name"},
+		{raw: "json=out/", wantErr: "report json is one file, and out/ names a directory"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.raw, func(t *testing.T) {
@@ -100,15 +104,17 @@ func TestParseSpecs(t *testing.T) {
 }
 
 func TestNamesAndLookup(t *testing.T) {
-	if got := Names(); !reflect.DeepEqual(got, []string{"json", "markdown"}) {
-		t.Errorf("Names() = %v, want [json markdown]", got)
+	if got := Names(); !reflect.DeepEqual(got, []string{"json", "markdown", "sarif"}) {
+		t.Errorf("Names() = %v, want [json markdown sarif]", got)
 	}
 	r, ok := Lookup("json")
 	if !ok || r.OmitsIncompleteTools() || len(r.Options()) != 0 {
 		t.Errorf("Lookup(json) = %v, %v; want the own JSON, which lists every tool and takes no option", r, ok)
 	}
-	if _, ok := Lookup("sarif"); ok {
-		t.Error("sarif is plan 8's format")
+	// SARIF leaves an incomplete tool out instead of listing it: a narrowed
+	// run writes it.
+	if got := Listing([]Spec{{Format: "sarif"}}); len(got) != 0 {
+		t.Errorf("Listing(sarif) = %v, want it written for a narrowed run", got)
 	}
 	// Markdown lists findings: a narrowed run refuses it as it refuses json.
 	if got := Listing([]Spec{{Format: "markdown"}}); !reflect.DeepEqual(got, []string{"markdown"}) {

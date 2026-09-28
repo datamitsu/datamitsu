@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/exitcode"
+	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render"
 	"github.com/datamitsu/datamitsu/internal/report/render/json"
@@ -80,8 +81,18 @@ func runReportRender(cmd *cobra.Command, _ []string) error {
 			"pass --allow-partial to render it with the reasons it is incomplete",
 			reportRenderInput, strings.Join(why, ", "), spec.Format)
 	}
+	if r, _ := render.Lookup(spec.Format); r != nil {
+		if c, capped := r.(render.Capped); capped {
+			if err := render.CheckCapacity(spec, c.WrittenTools(run, spec.Options)); err != nil {
+				return exitcode.UsageError{Err: err}
+			}
+		}
+	}
 	if spec.Stdout() {
 		stdoutOwned = true
+	}
+	for _, note := range render.Notes(run, []render.Spec{spec}) {
+		logger.Logger.Warn(note)
 	}
 	target := render.Open(spec, cmd.OutOrStdout())
 	if err := target.Write(run); err != nil {
