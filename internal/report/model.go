@@ -200,6 +200,10 @@ type Invocation struct {
 	Provenance string       `json:"provenance"`
 	Files      []FileResult `json:"files"`
 	Findings   []Finding    `json:"findings"`
+	// OutputTail is the last 4 KiB of what a failed invocation printed,
+	// without ANSI sequences and masked; never for a tool whose category is
+	// security. Only the own JSON carries it.
+	OutputTail string `json:"outputTail,omitempty"`
 }
 
 // FileResult is what became of one file an invocation answered for.
@@ -228,7 +232,9 @@ type Finding struct {
 	Reported bool `json:"reported"`
 	// Gates marks a finding that made its invocation fail.
 	Gates bool `json:"gates"`
-	// Kind is issue, or security for a tool whose category is security.
+	// Kind is issue, security for a tool whose category is security, or
+	// synthetic for the one finding that stands for a tool that failed
+	// without a parsable one.
 	Kind       string   `json:"kind"`
 	Message    string   `json:"message"`
 	Location   Location `json:"location"`

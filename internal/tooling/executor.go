@@ -852,7 +852,7 @@ func joinStreams(stdout, stderr []byte) []byte {
 // for the frame.
 func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult, task Task, workingDir string, stdout, stderr []byte, exitCode int) {
 	op := task.Tool.OutputParser
-	stdout, stderr = stripCSI(stdout), stripCSI(stderr)
+	stdout, stderr = StripCSI(stdout), StripCSI(stderr)
 	cntParse.Add(1)
 	parseSpan := trace.Start(trace.CatParse, "parseDiagnostics")
 	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.

@@ -50,6 +50,21 @@ func (sc *sharedContext) startReport() {
 	sc.annotator = report.NewAnnotator(sc.rootPath, opts.Parsers)
 }
 
+// secrets are the values a report masks: those of the host's variables and of
+// every app's and operation's env whose names say they hold a secret.
+func (sc *sharedContext) secrets() []string {
+	var envs []map[string]string
+	for _, app := range sc.cfg.Apps {
+		envs = append(envs, app.Env, app.RuntimeEnv)
+	}
+	for _, tool := range sc.cfg.Tools {
+		for _, op := range tool.Operations {
+			envs = append(envs, op.Env)
+		}
+	}
+	return report.SecretValues(env.EnvironAll(), envs...)
+}
+
 // gate is the hook the executor runs over every parsed process: it anchors the
 // process's findings — fingerprints and columns, while the files are on disk —
 // and then applies the failOn threshold, so that a fingerprint exists before
@@ -180,6 +195,7 @@ func (sc *sharedContext) finishReports(operations []config.OperationType, err er
 		FailFast:      sc.failFast,
 		Exports:       exports,
 	})
+	report.Mask(run, sc.secrets())
 
 	var failures []error
 	for i := range targets {

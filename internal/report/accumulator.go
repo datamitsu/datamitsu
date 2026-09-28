@@ -315,6 +315,10 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 		for _, d := range proc.Diagnostics {
 			inv.Findings = append(inv.Findings, a.finding(task.ToolName, d, tr))
 		}
+		if f, ok := syntheticFinding(task.ToolName, proc, tr.Category); ok {
+			inv.Findings = append(inv.Findings, f)
+		}
+		inv.OutputTail = outputTail(proc, tr.Category)
 		out = append(out, inv)
 	}
 	// A process given no path answers for every file no other process and no
@@ -461,7 +465,9 @@ func settleFindings(tr *ToolRun) {
 		kept := inv.Findings[:0]
 		for _, f := range inv.Findings {
 			input := f.input()
-			if seen[input] {
+			// A synthetic finding stands for its own invocation, never for
+			// another's, however alike their failures read.
+			if f.Kind != kindSynthetic && seen[input] {
 				continue
 			}
 			seen[input] = true
@@ -552,11 +558,13 @@ const (
 	failureCancelled = "cancelled"
 	failureSetup     = "setup"
 
-	kindIssue    = "issue"
-	kindSecurity = "security"
+	kindIssue     = "issue"
+	kindSecurity  = "security"
+	kindSynthetic = "synthetic"
 
-	provenanceParser = "parser"
-	provenanceNone   = "none"
+	provenanceParser    = "parser"
+	provenanceNone      = "none"
+	provenanceSynthetic = "synthetic"
 
 	categorySecurity = "security"
 )

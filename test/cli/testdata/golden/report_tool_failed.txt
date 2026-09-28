@@ -128,7 +128,30 @@
                   "exitCode": 1
                 }
               ],
-              "findings": []
+              "findings": [
+                {
+                  "fingerprint": "0e4d4419fb9dd80a7b70f10d68d8040a48c953e7e8a19540cb49f2a2ca795bf7",
+                  "fingerprintBasis": "none",
+                  "tool": "beta",
+                  "source": "beta",
+                  "severity": "error",
+                  "reported": false,
+                  "gates": true,
+                  "kind": "synthetic",
+                  "message": "beta exited 1 without parsable findings",
+                  "location": {
+                    "path": "",
+                    "row": 0,
+                    "endRow": 0,
+                    "col": 0,
+                    "endCol": 0,
+                    "unit": "",
+                    "precision": "unknown"
+                  },
+                  "provenance": "synthetic"
+                }
+              ],
+              "outputTail": "beta: failed\n"
             }
           ]
         },

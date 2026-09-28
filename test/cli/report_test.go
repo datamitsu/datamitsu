@@ -293,6 +293,59 @@ func TestReportKeepsGoing(t *testing.T) {
 	}
 }
 
+// TestReportMasksSecrets: a value of a variable whose name says it holds a
+// secret is masked wherever a report would carry it — a finding's message, a
+// failed tool's output — and a tool that fails without a finding is a
+// synthetic finding whose message carries no output.
+func TestReportMasksSecrets(t *testing.T) {
+	const secret = "abcdefgh12"
+	e := newExecProject(t, map[string]string{"fixture.marker": "", "Dockerfile": "FROM debian\n"}, fixtureSpec)
+	spec := fixtureSpec
+	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
+	leakyFinding := `[{"file":"Dockerfile","line":1,"column":1,"level":"warning","code":"DL3006",` +
+		`"message":"token '"$DATAMITSU_TEST_TOKEN"' in the image"}]`
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec,
+		clitest.ShellTool("leaky", settle+clitest.RecordRun+`; echo "using $DATAMITSU_TEST_TOKEN"; exit 3`, clitest.ToolOpSpec{}),
+		parsedTool(leakyFinding, 0),
+	))
+	res := e.run("", []string{"DATAMITSU_TEST_TOKEN=" + secret}, "lint", "--report", "json=run.json")
+	e.wantExit(res, 1)
+	doc, _ := e.report("run.json")
+	if strings.Contains(doc, secret) {
+		t.Errorf("the report holds the secret:\n%s", doc)
+	}
+	for _, want := range []string{
+		`"message": "token *** in the image"`, `"outputTail": "using ***\n"`,
+		`"message": "leaky exited 3 without parsable findings"`,
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("the report lacks %s:\n%s", want, doc)
+		}
+	}
+	e.goldenReport("masked", doc)
+}
+
+// TestReportSecurityTool: the output of a security tool never enters a report,
+// and its synthetic finding says so.
+func TestReportSecurityTool(t *testing.T) {
+	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec)
+	spec := fixtureSpec
+	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("gitleaks",
+		settle+clitest.RecordRun+`; echo "leak: found-secret-value"; exit 1`,
+		clitest.ToolOpSpec{Parser: "gitleaks"})))
+	res := e.run("", nil, "lint", "--report", "json=run.json")
+	e.wantExit(res, 1)
+	doc, _ := e.report("run.json")
+	if strings.Contains(doc, "found-secret-value") || strings.Contains(doc, "outputTail") {
+		t.Errorf("the report carries a security tool's output:\n%s", doc)
+	}
+	if !strings.Contains(doc, `"message": "gitleaks failed (exit 1); output withheld for a security tool"`) ||
+		!strings.Contains(doc, `"category": "security"`) {
+		t.Errorf("the report lacks the security tool's synthetic finding:\n%s", doc)
+	}
+}
+
 func wantReportEvent(t *testing.T, events []clitest.Event, format, path, status, msg string) {
 	t.Helper()
 	got := eventsOf(events, func(e clitest.Event) bool { return e.Type == "report" })

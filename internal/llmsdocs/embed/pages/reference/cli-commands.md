@@ -520,6 +520,24 @@ line), or `unknown`, when there was nothing to convert from. A report never hold
 an environment variable, and nothing caches it: every report is written from
 the run that produced it.
 
+A tool that exits non-zero without a finding its parser could read is listed
+with one `synthetic` finding of level `error` and no location, whose message
+says so — `tsc exited 2 without parsable findings` — rather than as a clean
+tool. The message carries none of the tool's output. The document keeps the last
+4 KiB of a failed invocation's output as `outputTail`, without its colour codes.
+For a tool whose parser module puts it in the `security` category, the output is
+never kept: its synthetic finding reads
+`gitleaks failed (exit 1); output withheld for a security tool`, and there is no
+`outputTail`.
+
+Before a report is written, the value of every variable of the environment,
+and of every app's and operation's `env`, whose name contains `TOKEN`,
+`SECRET`, `PASSWORD` or `CREDENTIAL`, or ends in `_KEY` (in any letter case),
+and that is at least 8 characters long, is replaced by `***` wherever it occurs
+in the document. This catches what the environment names; a secret a tool
+prints that no variable holds is not caught, which is why a security tool's
+output is withheld altogether.
+
 ### Skipped tools
 
 :::info

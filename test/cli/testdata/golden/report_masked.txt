@@ -1,0 +1,194 @@
+{
+  "schema": "datamitsu.report/1",
+  "datamitsu": {
+    "version": "<VERSION>",
+    "configuration": "datamitsu.config"
+  },
+  "startedAt": "<TS>",
+  "endedAt": "<TS>",
+  "selection": {
+    "mode": "all",
+    "fileScoped": false
+  },
+  "failFast": false,
+  "complete": false,
+  "incomplete": [],
+  "operations": [
+    {
+      "name": "lint",
+      "ran": true,
+      "success": false,
+      "durationMs": <DUR>,
+      "skipped": [],
+      "cancelled": [],
+      "tools": [
+        {
+          "name": "hadolint",
+          "app": {
+            "name": "hadolint",
+            "kind": "shell"
+          },
+          "parser": {
+            "module": "core",
+            "parser": "hadolint",
+            "version": "0.1.0",
+            "schema": 2
+          },
+          "failOn": "error",
+          "gateActive": true,
+          "category": "",
+          "complete": true,
+          "incomplete": [],
+          "invocations": [
+            {
+              "id": "hadolint::1#1",
+              "taskId": "hadolint::1",
+              "dir": "",
+              "scope": "per-file",
+              "granularity": "file",
+              "arity": "one",
+              "coverage": "complete",
+              "wholeUnit": false,
+              "state": "ran",
+              "exitCode": 0,
+              "success": true,
+              "failureKind": "",
+              "durationMs": <DUR>,
+              "extraction": "parsed-findings",
+              "provenance": "parser",
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                }
+              ],
+              "findings": [
+                {
+                  "fingerprint": "9f687dcb779d9609b5a6a17a72fde8629ddf00f81dc0b8a4fe7e14bce7fdfe8d",
+                  "fingerprintBasis": "line",
+                  "tool": "hadolint",
+                  "source": "hadolint",
+                  "code": "DL3006",
+                  "severity": "warning",
+                  "reported": false,
+                  "gates": false,
+                  "kind": "issue",
+                  "message": "token *** in the image",
+                  "location": {
+                    "path": "Dockerfile",
+                    "row": 1,
+                    "endRow": 1,
+                    "col": 1,
+                    "endCol": 1,
+                    "unit": "",
+                    "chars": {
+                      "start": 1,
+                      "end": 1
+                    },
+                    "bytes": {
+                      "start": 1,
+                      "end": 1
+                    },
+                    "utf16": {
+                      "start": 1,
+                      "end": 1
+                    },
+                    "precision": "ascii"
+                  },
+                  "provenance": "parser"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "leaky",
+          "app": {
+            "name": "leaky",
+            "kind": "shell"
+          },
+          "parser": null,
+          "failOn": "error",
+          "gateActive": false,
+          "category": "",
+          "complete": false,
+          "incomplete": [
+            "no-extraction"
+          ],
+          "invocations": [
+            {
+              "id": "leaky::2#1",
+              "taskId": "leaky::2",
+              "dir": "",
+              "scope": "repository",
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
+              "wholeUnit": true,
+              "state": "ran",
+              "exitCode": 3,
+              "success": false,
+              "failureKind": "exit",
+              "durationMs": <DUR>,
+              "extraction": "none",
+              "provenance": "none",
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "state": "ran",
+                  "success": false,
+                  "exitCode": 3
+                },
+                {
+                  "path": "exec.config.js",
+                  "state": "ran",
+                  "success": false,
+                  "exitCode": 3
+                },
+                {
+                  "path": "fixture.marker",
+                  "state": "ran",
+                  "success": false,
+                  "exitCode": 3
+                }
+              ],
+              "findings": [
+                {
+                  "fingerprint": "d7b19eb2b50d275c9dc39611a08116e57ec96e74fb6ef2a713f0a63d99721387",
+                  "fingerprintBasis": "none",
+                  "tool": "leaky",
+                  "source": "leaky",
+                  "severity": "error",
+                  "reported": false,
+                  "gates": true,
+                  "kind": "synthetic",
+                  "message": "leaky exited 3 without parsable findings",
+                  "location": {
+                    "path": "",
+                    "row": 0,
+                    "endRow": 0,
+                    "col": 0,
+                    "endCol": 0,
+                    "unit": "",
+                    "precision": "unknown"
+                  },
+                  "provenance": "synthetic"
+                }
+              ],
+              "outputTail": "using ***\n"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "exports": [
+    {
+      "format": "json",
+      "path": "run.json",
+      "status": "written"
+    }
+  ]
+}

@@ -67,7 +67,30 @@
                   "exitCode": 1
                 }
               ],
-              "findings": []
+              "findings": [
+                {
+                  "fingerprint": "52d5c4cc399dd1c4bb668b1a0df87342a7f3c523ad65854a2551b702ae8b9360",
+                  "fingerprintBasis": "none",
+                  "tool": "alpha",
+                  "source": "alpha",
+                  "severity": "error",
+                  "reported": false,
+                  "gates": true,
+                  "kind": "synthetic",
+                  "message": "alpha exited 1 without parsable findings",
+                  "location": {
+                    "path": "",
+                    "row": 0,
+                    "endRow": 0,
+                    "col": 0,
+                    "endCol": 0,
+                    "unit": "",
+                    "precision": "unknown"
+                  },
+                  "provenance": "synthetic"
+                }
+              ],
+              "outputTail": "alpha: failed\n"
             }
           ]
         },
