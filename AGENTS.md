@@ -279,7 +279,10 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   `fallback:<format>`) and `ParserModule` (whose contract the `failOn` gate
   asks). A stdout-mode formatter's stdout reaches no parser; a line format the
   fallback recognized keeps only lines naming a file on disk. The runner always
-  wires a parser, since the fallback needs no configuration.
+  wires a parser, since the fallback needs no configuration; the language server
+  wires the fallback alone (`internal/lsp/parser.go`), because the passes it
+  records go into the cache the CLI reuses and may only be ones the CLI would
+  record.
 - The core reads parse answers of ABI 1 (an array) and 2 (an object) and
   descriptor schemas 1–3, a newer schema as the newest known, unknown fields
   ignored (`parsermanager.DecodeResponse`, `normalizeSchema`); the released

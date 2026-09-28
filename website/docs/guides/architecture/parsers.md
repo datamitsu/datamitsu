@@ -354,6 +354,11 @@ fallback reads what a declared parser did not, the run warns once: `declared par
 parsed it as <format>`. Its findings gate like any other — the embedded module sets
 levels only from what the tool printed — and block a cached pass like any other.
 
+The language server reads the output of what it runs with the same fallback, and
+with no declared module: the passes it records go into the execution cache the CLI
+reuses, so it may record only one the CLI would. A tool with a declared parser
+records none there.
+
 The fallback reads a stdout-mode formatter's stderr only: its stdout is the file's
 new content, which no parser ever reads. Every other tool's stdout and stderr are
 captured apart, parser declared or not, so progress written to stderr never lands

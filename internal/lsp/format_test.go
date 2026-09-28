@@ -117,7 +117,7 @@ func newConfiguredServer(t *testing.T, cfg *config.Config, root string) *Server 
 	s := New(strings.NewReader(""), io.Discard, nil, root)
 	s.root = root
 	s.loaded = newSession(cfg, root)
-	t.Cleanup(s.closeSession)
+	t.Cleanup(func() { s.closeSession(t.Context()) })
 	return s
 }
 
