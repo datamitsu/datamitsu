@@ -339,7 +339,9 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   the frame's border: a line of tool text at the left margin can be a workflow
   command or a problem-matcher match. `render/github/testdata/matchers` holds
   the setup actions' matchers at a recorded upstream commit; their test states
-  which of them still match framed output.
+  which of them still match framed output. The step summary is the `markdown`
+  renderer's `Write` with a budget — 1 MiB less what the file already holds —
+  appended best-effort before the annotations, so their notice can name it.
 
 ## Product Stage
 

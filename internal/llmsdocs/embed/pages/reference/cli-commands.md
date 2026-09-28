@@ -511,8 +511,8 @@ that `config reconcile` runs after writing its files.
 
 `--report <format>=<path>` writes a report of the run once its last operation
 has ended, whether or not its tools failed — the run that fails is the one a
-pipeline needs to read. The flag is repeatable, one per format; `json` is the
-format today. The [Reports guide](../guides/reports.md) explains what a report
+pipeline needs to read. The flag is repeatable, one per format: `json`, the
+run's own document, and `markdown`, the same run for a person. The [Reports guide](../guides/reports.md) explains what a report
 holds and how far to trust it; [`report render`](#report-render) writes one
 again, offline, from a run's own JSON.
 
@@ -601,6 +601,17 @@ line), or `unknown`, when there was nothing to convert from. A report never hold
 an environment variable, and nothing caches it: every report is written from
 the run that produced it.
 
+`markdown` writes the same run for a person, as GitHub renders Markdown: what
+the run covered and whether it is complete, a table of each operation's tools
+(status, runs, files a cache answered, findings per level), the findings the
+terminal would show — grouped by level, then by file, as
+`path:row:col — source(code): message`, columns in characters and only where
+the report could convert them — with a count of those below the threshold, the
+tools skipped and the tasks stopped, and each incomplete tool with its reasons.
+It carries no tool output: a tool that failed without findings is its
+structured message. It lists findings, so it is refused for a narrowed run like
+`json`.
+
 A tool that exits non-zero without a finding its parser could read is listed
 with one `synthetic` finding of level `error` and no location, whose message
 says so — `tsc exited 2 without parsable findings` — rather than as a clean
@@ -663,14 +674,27 @@ a step prints, so datamitsu chooses which ten: findings in the files the change
 touched come first, then one finding of every other file before a second of any,
 then findings without a file. When anything did not fit, a notice takes the
 first notice slot and says how many were left out and where they are:
-`datamitsu: 15 more findings in out/run.json` names every report written to a
-file that lists findings. The files a change touched come from git: on a
+`datamitsu: 15 more findings in the step summary and in out/run.json` names the
+step summary when it was written and every report written to a file that lists
+findings. The files a change touched come from git: on a
 `pull_request`, the merge commit the checkout holds against its first parent,
 the base branch's tip (with `actions/checkout`'s default depth of 1 that parent
 is not fetched: set `fetch-depth: 2`); on a `push`, the commit the push started
 from, named by the event (fetched only with `fetch-depth: 0`). When the change
 cannot be read, one `info` line says why, and the order is the same without the
 priority. Several datamitsu commands in one step share one budget of ten.
+
+In a GitHub Actions job the run also appends its [`markdown`](#reports) report
+to the step summary, the Markdown page of the job's run that
+`GITHUB_STEP_SUMMARY` names, unless `--annotations off` — whatever stdout
+carries, since the summary is a file, and under `--log-format jsonl` too. It
+lists every finding the annotations could have shown. GitHub takes 1 MiB of
+summary from a step, whoever wrote it, so the run writes what fits in what the
+file has left and ends with a line saying how many findings it cut. A summary
+that cannot be written — the variable is unset, the file cannot be opened, or
+it is full — is one warning (a `log` event under `--log-format jsonl`), never a
+failure; nothing is written when no task ran. Gitea and Forgejo have no step
+summary.
 
 Everything the run prints between its first results block and the annotations
 is one `::stop-commands::` region with a random token, so no line a tool printed
@@ -885,12 +909,12 @@ offline:
 datamitsu report render --input <run.json> --format <format> [--output <path>|-]
 ```
 
-| Flag                | Description                                                                         |
-| ------------------- | ----------------------------------------------------------------------------------- |
-| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)            |
-| `--format <format>` | The format to write: `json`; a format's options follow a `?` (required)             |
-| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report` |
-| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                |
+| Flag                | Description                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)              |
+| `--format <format>` | The format to write: `json` or `markdown`; a format's options follow a `?` (required) |
+| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report`   |
+| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                  |
 
 The renderers and the completeness rule are the run's own: a document of a
 narrowed run is refused (exit 2) for a format that lists findings unless
@@ -903,6 +927,9 @@ that cannot be read, exits 1; an output that cannot be written exits 5.
 ```bash
 # Print a run's report again
 datamitsu report render --input out/run.json --format json
+
+# The same run for a person
+datamitsu report render --input out/run.json --format markdown --output out/run.md
 ```
 
 ## config

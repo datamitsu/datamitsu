@@ -14,9 +14,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var reportUsage = "Write a report once the run ends, failed or not: <format>=<path>, or <format>=- for stdout " +
+	"(repeatable; formats: " + strings.Join(render.Names(), ", ") + "; turns fail-fast off; also via DATAMITSU_REPORT)"
+
 const (
-	reportUsage = "Write a report once the run ends, failed or not: <format>=<path>, or <format>=- for stdout " +
-		"(repeatable; formats: json; turns fail-fast off; also via DATAMITSU_REPORT)"
 	allowPartialUsage = "Write a report that lists findings for a narrowed run (named files, a subdirectory, " +
 		"--tools, --file-scoped) instead of refusing it; the report keeps every reason it is incomplete " +
 		"(also via DATAMITSU_ALLOW_PARTIAL)"

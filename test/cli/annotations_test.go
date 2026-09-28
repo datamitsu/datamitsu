@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -9,12 +11,32 @@ import (
 	"github.com/datamitsu/datamitsu/internal/clitest"
 )
 
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(data)
+}
+
 // This file freezes the GitHub annotations of fix, lint and check: when they
 // are printed, which, how they are escaped, and the stop-commands region that
 // keeps tool output from printing any.
 
-// githubEnv is a GitHub Actions push job; the harness strips the real one.
-var githubEnv = []string{"GITHUB_ACTIONS=true", "GITHUB_EVENT_NAME=push", "GITHUB_SHA=0123456789abcdef0123456789abcdef01234567"}
+// githubEnv is a GitHub Actions push job that appends its step summary to
+// summary; the harness strips the real one.
+func githubEnv(summary string) []string {
+	return []string{
+		"GITHUB_ACTIONS=true", "GITHUB_EVENT_NAME=push", "GITHUB_SHA=0123456789abcdef0123456789abcdef01234567",
+		"GITHUB_STEP_SUMMARY=" + summary,
+	}
+}
+
+func summaryFile(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), "step-summary.md")
+}
 
 // The stop-commands token is random: 32 hex characters, once per process.
 var (
@@ -65,7 +87,7 @@ func commandLines(stdout string) []string {
 func TestAnnotationsGitHub(t *testing.T) {
 	t.Run("lint", func(t *testing.T) {
 		e := annotatedProject(t, "lint")
-		res := e.run("", githubEnv, "lint", "--fail-fast=false")
+		res := e.run("", githubEnv(summaryFile(t)), "lint", "--fail-fast=false")
 		e.wantExit(res, 1)
 		got := commandLines(maskToken(res.Stdout))
 		want := []string{
@@ -90,7 +112,7 @@ func TestAnnotationsGitHub(t *testing.T) {
 	// lint's; the annotations come before the closing line.
 	t.Run("check", func(t *testing.T) {
 		e := annotatedProject(t, "fix")
-		res := e.run("", githubEnv, "check", "--fail-fast=false")
+		res := e.run("", githubEnv(summaryFile(t)), "check", "--fail-fast=false")
 		e.wantExit(res, 1)
 		out := maskToken(res.Stdout)
 		if strings.Count(out, "::stop-commands::<TOKEN>") != 1 || strings.Count(out, "::<TOKEN>::") != 1 {
@@ -104,7 +126,7 @@ func TestAnnotationsGitHub(t *testing.T) {
 
 	t.Run("report_records_the_annotations", func(t *testing.T) {
 		e := annotatedProject(t, "lint")
-		res := e.run("", githubEnv, "lint", "--report", "json=run.json")
+		res := e.run("", githubEnv(summaryFile(t)), "lint", "--report", "json=run.json")
 		e.wantExit(res, 1)
 		_, doc := e.report("run.json")
 		exports, _ := doc["exports"].([]any)
@@ -140,7 +162,7 @@ func TestAnnotationsWhenNot(t *testing.T) {
 	// The variable turns them off; the flag wins over it.
 	t.Run("variable_off_flag_wins", func(t *testing.T) {
 		e := annotatedProject(t, "lint")
-		env := append([]string{"DATAMITSU_ANNOTATIONS=off"}, githubEnv...)
+		env := append([]string{"DATAMITSU_ANNOTATIONS=off"}, githubEnv(summaryFile(t))...)
 		res := e.run("", env, "lint")
 		e.wantExit(res, 1)
 		if lines := commandLines(res.Stdout); len(lines) != 0 {
@@ -155,7 +177,7 @@ func TestAnnotationsWhenNot(t *testing.T) {
 
 	t.Run("jsonl", func(t *testing.T) {
 		e := annotatedProject(t, "lint")
-		res := e.run("", githubEnv, jsonl("lint")...)
+		res := e.run("", githubEnv(summaryFile(t)), jsonl("lint")...)
 		e.wantExit(res, 1)
 		if res.Stdout != "" {
 			t.Errorf("auto under --log-format jsonl prints nothing, got:\n%s", res.Stdout)
@@ -166,7 +188,7 @@ func TestAnnotationsWhenNot(t *testing.T) {
 
 	t.Run("jsonl_explicit", func(t *testing.T) {
 		e := annotatedProject(t, "lint")
-		res := e.run("", githubEnv, jsonl("lint", "--annotations", "github", keepGoing)...)
+		res := e.run("", githubEnv(summaryFile(t)), jsonl("lint", "--annotations", "github", keepGoing)...)
 		e.wantExit(res, 1)
 		want := []string{
 			"::error file=Dockerfile,line=1,col=1,title=hadolint(DL3006)::Always tag the version of an image explicitly%0A::error::injected",
@@ -180,7 +202,7 @@ func TestAnnotationsWhenNot(t *testing.T) {
 
 	t.Run("report_on_stdout", func(t *testing.T) {
 		e := annotatedProject(t, "lint")
-		res := e.run("", githubEnv, "lint", "--report", "json=-")
+		res := e.run("", githubEnv(summaryFile(t)), "lint", "--report", "json=-")
 		e.wantExit(res, 1)
 		var doc map[string]any
 		if err := json.Unmarshal([]byte(res.Stdout), &doc); err != nil {
@@ -191,7 +213,7 @@ func TestAnnotationsWhenNot(t *testing.T) {
 	t.Run("empty_plan", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
 			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Globs: []string{"**/*.none"}}))
-		res := e.run("", githubEnv, "lint")
+		res := e.run("", githubEnv(summaryFile(t)), "lint")
 		e.wantExit(res, 0)
 		if strings.Contains(res.Stdout, "::") {
 			t.Errorf("a run in which no task ran prints no workflow command:\n%s", res.Stdout)

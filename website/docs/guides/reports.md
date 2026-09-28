@@ -17,7 +17,8 @@ datamitsu lint --report json=out/run.json
 ```
 
 `json` writes datamitsu's own document, `datamitsu.report/1`, which carries
-everything the record holds. The flags, the variable twins and the exit codes
+everything the record holds; `markdown` writes the same run for a person — the
+tools, the findings the terminal would show and what the run left out. The flags, the variable twins and the exit codes
 are in the [CLI reference](../reference/cli-commands.md#reports).
 
 ## What a report holds
@@ -178,8 +179,11 @@ jobs:
   ([GitHub annotations](../reference/cli-commands.md#github-annotations)).
   GitHub keeps ten of each type per step: the findings in the files the pull
   request touched come first, then one per file, and a notice counts the rest
-  and names the report that holds them. Several datamitsu commands in one step
+  and names where they are. Several datamitsu commands in one step
   share those ten.
+- **The step summary holds the rest.** The run appends its `markdown` report
+  to the job's summary page, as much of it as fits in the 1 MiB GitHub takes
+  from a step; `json` holds everything.
 - **`fetch-depth: 2`** fetches the base branch's tip, the first parent of the
   merge commit a `pull_request` checks out, which is how the run learns which
   files the pull request touched. Without it the order is the same, less that

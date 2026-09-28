@@ -1139,7 +1139,8 @@ func runSequential(
 	}
 	elapsedMs := sc.timings.Elapsed().Milliseconds()
 	run, targets := sc.buildReport(operations)
-	sc.printAnnotations(ctx, run, annotationsRest(run))
+	summary := sc.writeStepSummary(run)
+	sc.printAnnotations(ctx, run, annotationsRest(run, summary))
 	if len(operations) > 1 {
 		sc.printRunClosing(command, operations, elapsedMs)
 	}

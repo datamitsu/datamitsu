@@ -33,7 +33,7 @@ func now() time.Time {
 // report to write, a JSON-L stream to carry diagnostic events, or annotations
 // to print.
 func (sc *sharedContext) startReport() {
-	if len(sc.opts.Reports) == 0 && !ui.Quiet() && sc.annotations.mode != AnnotationsGitHub {
+	if len(sc.opts.Reports) == 0 && !ui.Quiet() && sc.annotations.mode != AnnotationsGitHub && !sc.wantsStepSummary() {
 		return
 	}
 	opts := report.Options{

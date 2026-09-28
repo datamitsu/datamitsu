@@ -1,0 +1,27 @@
+## datamitsu · datamitsu.config
+
+- **Selection:** the whole repository
+- **Complete:** no — some tools did not cover everything
+
+### lint
+
+| Tool | Status | Runs | Cached | Errors | Warnings | Info | Hints |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `alpha` | ✓ passed | 1 | 0 | 0 | 0 | 0 | 0 |
+| `beta` | ✗ failed | 1 | 0 | 0 | 0 | 0 | 0 |
+| `hadolint` | ✓ passed | 1 | 0 | 0 | 1 | 0 | 0 |
+
+#### Findings
+
+##### Errors
+
+No file
+
+- `beta`: beta exited 1 without parsable findings
+
+_1 warning below the threshold not listed._
+
+#### Incomplete
+
+- `alpha`: no-extraction
+- `beta`: no-extraction
