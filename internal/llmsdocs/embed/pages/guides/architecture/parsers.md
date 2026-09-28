@@ -400,22 +400,28 @@ cut-off `<testsuites>` is not a suite. An XML root counts only where it opens a
 line or follows the XML declaration, outside any CDATA section and comment, so a
 message that quotes `<checkstyle/>` is not a document. A line format is recognized
 when one line matches. Each parser reads stdout and stderr, and a structured one
-keeps the findings of the document in each, so a clean report on one stream cannot
-hide findings on the other; noise around a document is skipped as it is for the
-tool parsers, however many bracketed log lines come before it. The [parser catalog](../../reference/parser-catalog.md#format-parsers)
+keeps the findings of every document in each — a command that ran a tool twice
+printed two reports — so a clean report cannot hide findings in another; noise
+around a document is skipped as it is for the tool parsers, however many bracketed
+log lines come before it. A JSON value that opens its line as a report does — an
+object whose first key follows its brace, an array of objects — and closes but does
+not parse is a document that cannot be read, like one cut off. The [parser catalog](../../reference/parser-catalog.md#format-parsers)
 names the flag of each tool that prints each shape.
 
 A **declared** parser — a tool's or a format's — that found something recognized
 the output. One that found nothing did not, whatever the exit code, when the output
 holds a document that cannot be read whole — a JSON value or an XML document cut
-off before it closes, or XML with a tag that cannot be read — since its findings
-may be in the part that could not be read; nor when the output holds findings in a
-standard format (the tool printed another format than the parser reads, and the
-fallback reads it). Otherwise it recognized the output when its own format was
-there — its envelope, or for a JSON tool parser any JSON document — or when the
-run exited 0: a clean run may print nothing, or a summary no format describes. What
-remains, a failed run whose output held nothing either parser reads, is not
-recognized.
+off before it closes, or malformed — since its findings may be in the part that
+could not be read; nor when the output holds findings in a standard format (the
+tool printed another format than the parser reads, and the fallback reads it).
+Otherwise it recognized the output when its own format was there — its envelope,
+or for a JSON tool parser any JSON document — or when the run exited 0 and the
+parser reads no structured format: a clean run of a line-format tool may print
+nothing, or a summary no format describes. A parser of a JSON or XML format — the
+structured format keys, and the tool parsers that read JSON — that finds no
+document in a stream where the tool printed something has not read the output,
+clean exit or not; empty output on exit 0 is clean for every parser. What remains,
+a failed run whose output held nothing either parser reads, is not recognized.
 
 The key `fallback` is the **sniffer**: it tries the formats in the order of the
 table and answers with the first that recognizes the output, named by its format.

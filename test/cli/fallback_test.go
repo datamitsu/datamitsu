@@ -106,6 +106,23 @@ func TestALineFormatNamingNoFileLeavesTheNextItsTurn(t *testing.T) {
 	}
 }
 
+// TestAStructuredParserThatFindsNoDocumentDidNotRead: a tool declared with
+// the sarif format key that exits 0 printing something else, in no standard
+// format, has not been read: parse-failed and incomplete, not clean.
+func TestAStructuredParserThatFindsNoDocumentDidNotRead(t *testing.T) {
+	tool := clitest.ShellTool("reformatted", settle+clitest.RecordRun+"; echo 'new-format: finding on a.py'",
+		clitest.ToolOpSpec{Parser: "sarif"})
+	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, tool)
+
+	res := e.run("", nil, "lint", "--report", "json=run.json")
+	doc := e.read("run.json")
+	for _, want := range []string{`"extraction": "parse-failed"`, `"complete": false`} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("run.json lacks %s (exit %d):\n%s\n%s", want, res.ExitCode, doc, res.Stderr)
+		}
+	}
+}
+
 // TestFallbackStandsInForADeclaredParser: a declared parser that does not
 // recognize the output hands it to the fallback, and the run says so once.
 func TestFallbackStandsInForADeclaredParser(t *testing.T) {

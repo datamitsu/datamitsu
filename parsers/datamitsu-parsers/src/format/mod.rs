@@ -73,11 +73,14 @@ pub fn dispatch(key: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opti
 		return Some(crate::fallback::sniff(stdout, stderr, exit_code));
 	}
 	let (_, parse) = PARSERS.iter().find(|(name, _)| *name == key)?;
+	crate::json_diag::begin_parse();
 	let answer = parse(stdout, stderr, exit_code);
+	let searched = crate::json_diag::searched_text();
 	Some(crate::fallback::declared(
 		key,
 		answer.diagnostics,
 		answer.recognized,
+		searched,
 		stdout,
 		stderr,
 		exit_code,
@@ -104,7 +107,7 @@ fn each_stream(
 /// JSON value cut off before it closes, or a Checkstyle or JUnit document cut
 /// off or holding a tag that cannot be read. What it held cannot all be known.
 pub(crate) fn unfinished(stream: &[u8]) -> bool {
-	if crate::json_diag::cut(stream) {
+	if crate::json_diag::broken(stream) {
 		return true;
 	}
 	let text = String::from_utf8_lossy(stream);
@@ -148,10 +151,16 @@ mod tests {
 	}
 
 	#[test]
-	fn a_declared_format_takes_a_clean_exit_for_recognition_and_the_sniffer_does_not() {
+	fn a_declared_line_format_takes_a_clean_exit_for_recognition_and_the_others_do_not() {
 		for (key, _) in PARSERS {
+			let structured = !matches!(*key, "github-annotations" | "azure-logissue" | "msvc" | "gcc");
 			let clean = dispatch(key, b"All checks passed!", b"", 0).expect("a format");
-			assert!(clean.recognized && clean.diagnostics.is_empty(), "{key}");
+			assert_eq!(clean.recognized, !structured, "{key}");
+			assert!(clean.diagnostics.is_empty(), "{key}");
+			assert!(
+				dispatch(key, b"", b" \n", 0).expect("a format").recognized,
+				"{key}: empty output is clean"
+			);
 			let failed = dispatch(key, b"All checks passed!", b"", 1).expect("a format");
 			assert!(!failed.recognized, "{key}");
 		}

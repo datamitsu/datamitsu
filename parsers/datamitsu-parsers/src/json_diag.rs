@@ -21,11 +21,28 @@ thread_local! {
 	/// tool parser's criterion for recognizing what it read, even when the
 	/// document holds no finding. Cleared by [`begin_parse`] before every parse.
 	static DOCUMENT_SEEN: Cell<bool> = const { Cell::new(false) };
+	/// Whether the parse under way looked for a JSON or XML document in a
+	/// stream that holds text: a parser of a structured format that finds none
+	/// there has not read the output, clean exit or not.
+	static SEARCHED_TEXT: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Forget whether an earlier parse found a JSON document.
+/// Forget what an earlier parse found and looked for.
 pub(crate) fn begin_parse() {
 	DOCUMENT_SEEN.with(|seen| seen.set(false));
+	SEARCHED_TEXT.with(|searched| searched.set(false));
+}
+
+/// Note that the parse under way looks for a document in `text`.
+pub(crate) fn searching(text: &str) {
+	if !text.trim().is_empty() {
+		SEARCHED_TEXT.with(|searched| searched.set(true));
+	}
+}
+
+/// Whether the parse under way looked for a document in a stream with text.
+pub(crate) fn searched_text() -> bool {
+	SEARCHED_TEXT.with(Cell::get)
 }
 
 /// Whether the parse under way found a JSON document.
@@ -127,10 +144,11 @@ pub fn extract_lenient<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Vec<T>) 
 /// by its findings: `extract` answers `None` for a document that is not the
 /// format's envelope, and so does this when no document in the stream is one.
 /// A document that parses but is not an envelope is skipped, so a `{}` in the
-/// noise cannot stand in for the report. A value inside a document cut off
-/// before it closes is part of that document, not one of its own: the search
-/// ends at the cut, so the messages array of a cut-off ESLint report is not
-/// read as another format.
+/// noise cannot stand in for the report. Every envelope in the stream counts,
+/// in order — a command that ran a tool twice printed two reports — and a
+/// value inside one is part of it. So is a value inside a document cut off
+/// before it closes: the search ends at the cut, so the messages array of a
+/// cut-off ESLint report is not read as another format.
 pub fn find_envelope<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec<T>>) -> Option<Vec<T>> {
 	search(bytes, extract, true)
 }
@@ -139,11 +157,14 @@ pub fn find_envelope<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec
 /// the documents before the first one cut off.
 fn search<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec<T>>, whole: bool) -> Option<Vec<T>> {
 	let text = String::from_utf8_lossy(bytes);
+	searching(&text);
 	if let Some(Ok(v)) = parse(&text) {
 		DOCUMENT_SEEN.with(|seen| seen.set(true));
 		return extract(&v);
 	}
 	let mut best: Option<((usize, usize), Vec<T>)> = None;
+	let mut envelopes: Option<Vec<T>> = None;
+	let mut after = 0;
 	for (start, end) in spans(&text) {
 		let Some(end) = end else {
 			if whole && runs_to_end(&text[start..]) {
@@ -151,6 +172,9 @@ fn search<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec<T>>, whole
 			}
 			continue;
 		};
+		if whole && start < after {
+			continue;
+		}
 		let Some(Ok(value)) = parse(&text[start..end]) else {
 			continue;
 		};
@@ -158,10 +182,18 @@ fn search<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec<T>>, whole
 		let Some(out) = extract(&value) else {
 			continue;
 		};
+		if whole {
+			envelopes.get_or_insert_with(Vec::new).extend(out);
+			after = end;
+			continue;
+		}
 		let rank = (out.len(), end - start);
 		if best.as_ref().is_none_or(|(best_rank, _)| rank > *best_rank) {
 			best = Some((rank, out));
 		}
+	}
+	if whole {
+		return envelopes;
 	}
 	best.map(|(_, out)| out)
 }
@@ -188,16 +220,35 @@ fn spans(text: &str) -> impl Iterator<Item = (usize, Option<usize>)> + '_ {
 		})
 }
 
-/// Whether the stream holds a JSON document cut off before it closes: a value
-/// that runs to the end of the input without a syntax error. Prose that
-/// merely holds a bracket breaks off at a character no JSON value takes.
-pub(crate) fn cut(bytes: &[u8]) -> bool {
+/// Whether the stream holds a JSON document that cannot be read: a value that
+/// runs to the end of the input without a syntax error, cut off; or one that
+/// opens its line as a report does — an object whose first key follows its
+/// brace, an array of objects — and closes, but does not parse. Prose that
+/// merely holds a bracket breaks off at a character no JSON value takes, and
+/// seldom starts a line with `{"`.
+pub(crate) fn broken(bytes: &[u8]) -> bool {
 	let text = String::from_utf8_lossy(bytes);
 	if matches!(parse(&text), Some(Ok(_))) {
 		return false;
 	}
-	let cut = spans(&text).any(|(start, end)| end.is_none() && runs_to_end(&text[start..]));
-	cut
+	let mut line_start = 0;
+	let mut scanned = 0;
+	let broken = spans(&text).any(|(start, end)| {
+		let Some(end) = end else {
+			return runs_to_end(&text[start..]);
+		};
+		if let Some(nl) = text[scanned..start].rfind('\n') {
+			line_start = scanned + nl + 1;
+		}
+		scanned = start;
+		let inner = text[start + 1..end].trim_start();
+		let looks_like_a_report = match text.as_bytes()[start] {
+			b'{' => inner.starts_with('"'),
+			_ => inner.starts_with('{'),
+		};
+		text[line_start..start].trim().is_empty() && looks_like_a_report && matches!(parse(&text[start..end]), Some(Err(_)))
+	});
+	broken
 }
 
 /// Whether `value` is JSON up to its end and stops there, unfinished.
@@ -520,9 +571,37 @@ mod envelope_tests {
 	fn a_document_nested_past_the_limit_is_not_parsed() {
 		let deep = format!("{}{}", "[".repeat(100_000), "]".repeat(100_000));
 		assert_eq!(find_envelope(deep.as_bytes(), |_| Some(vec![()])), None);
-		assert!(!cut(deep.as_bytes()));
+		assert!(!broken(deep.as_bytes()));
 		let fine = format!("{}{}", "[".repeat(MAX_DEPTH), "]".repeat(MAX_DEPTH));
 		assert_eq!(find_envelope(fine.as_bytes(), |_| Some(vec![()])), Some(vec![()]));
+	}
+
+	#[test]
+	fn a_report_that_opens_its_line_and_does_not_parse_is_broken() {
+		for out in [
+			&br#"{"version":"2.1.0","runs":[BROKEN]}"#[..],
+			b"progress\n  [{\"filePath\": x}]\n",
+		] {
+			assert!(broken(out), "{}", String::from_utf8_lossy(out));
+		}
+		for out in [
+			&b"error: expected {\"a\": 1,} here"[..],
+			b"Formatted {count} files\n{count}\n",
+			b"[INFO] done\n[1/3] build\n",
+		] {
+			assert!(!broken(out), "{}", String::from_utf8_lossy(out));
+		}
+	}
+
+	#[test]
+	fn every_envelope_in_a_stream_counts() {
+		let out = b"[1]\n{\"n\":[1,2]}\nnoise\n{\"n\":[3]}\n";
+		let found = find_envelope(out, |v| {
+			member(v, "n")
+				.and_then(elements)
+				.map(|a| a.iter().map(|_| ()).collect())
+		});
+		assert_eq!(found.map(|f| f.len()), Some(3));
 	}
 
 	#[test]
@@ -533,7 +612,7 @@ mod envelope_tests {
 			br#"{"a":"unterminated"#,
 			b"{} then [",
 		] {
-			assert!(cut(out), "{}", String::from_utf8_lossy(out));
+			assert!(broken(out), "{}", String::from_utf8_lossy(out));
 		}
 		for out in [
 			&br#"{"version":"2.1.0","runs":[]}"#[..],
@@ -542,7 +621,7 @@ mod envelope_tests {
 			b"{} noise",
 			b"",
 		] {
-			assert!(!cut(out), "{}", String::from_utf8_lossy(out));
+			assert!(!broken(out), "{}", String::from_utf8_lossy(out));
 		}
 	}
 

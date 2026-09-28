@@ -92,7 +92,9 @@ configuration should do about it.
   tool itself passed. Declare the format key for such a tool
   (`datamitsu devtools parsers sniff <captured output>` names it), or its own
   parser where the module has one; a declared parser that recognizes nothing is
-  now `parse-failed`. Every cache is cold once.
+  now `parse-failed` — for a JSON or XML parser, also when the tool exited 0
+  but printed no document of it, so make sure the tool prints the format its
+  parser reads. Every cache is cold once.
 - **after v0.3.1** - The parser module name `embedded` is reserved for the
   fallback built into datamitsu: a `parsers` entry named `embedded`, or an
   `outputParser.module` naming it, fails the load

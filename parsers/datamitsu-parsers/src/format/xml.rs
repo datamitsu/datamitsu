@@ -45,6 +45,11 @@ impl<'a> Tokenizer<'a> {
 		}
 	}
 
+	/// The length of the text read so far.
+	pub(crate) fn read(&self) -> usize {
+		self.pos
+	}
+
 	/// End the token stream: what follows cannot be read.
 	fn stop(&mut self) -> Option<Token<'a>> {
 		self.pos = self.src.len();
@@ -229,8 +234,8 @@ fn reference(name: &str) -> Option<char> {
 /// What reading a document at one place in the output gave.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Doc {
-	/// The document, read whole: its findings.
-	Whole(Vec<RawDiagnostic>),
+	/// The document, read whole: its findings, and the length of its text.
+	Whole(Vec<RawDiagnostic>, usize),
 	/// Another element there, whose name begins like the root's.
 	Not,
 	/// The root opened, but the document is cut off or has a tag that cannot
@@ -238,16 +243,31 @@ pub(crate) enum Doc {
 	Broken,
 }
 
-/// The first document in `text` whose root tag begins with `<root`, as `read`
-/// makes of it. A broken one ends the search: whatever follows lies inside it.
+/// The documents in `text` whose root tag begins with `<root`, as `read`
+/// makes of them, as one: every whole one counts, in order — a command that
+/// ran a tool twice printed two reports. A broken one ends the search, and
+/// the answer is broken: whatever follows lies inside it.
 pub(crate) fn document(text: &str, root: &str, read: impl Fn(&str) -> Doc) -> Doc {
+	crate::json_diag::searching(text);
+	let mut found: Option<Vec<RawDiagnostic>> = None;
+	let mut after = 0;
 	for at in roots(text, root) {
+		if at < after {
+			continue;
+		}
 		match read(&text[at..]) {
 			Doc::Not => {}
-			doc => return doc,
+			Doc::Broken => return Doc::Broken,
+			Doc::Whole(diags, len) => {
+				found.get_or_insert_with(Vec::new).extend(diags);
+				after = at + len;
+			}
 		}
 	}
-	Doc::Not
+	match found {
+		Some(diags) => Doc::Whole(diags, after),
+		None => Doc::Not,
+	}
 }
 
 /// The places in `text` where a document whose root tag begins with `<root`

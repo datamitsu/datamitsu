@@ -31,7 +31,7 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Response {
 	super::each_stream(DESCRIPTOR.name, stdout, stderr, |s| {
 		match document(&String::from_utf8_lossy(s)) {
-			Doc::Whole(diags) => Some(diags),
+			Doc::Whole(diags, _) => Some(diags),
 			_ => None,
 		}
 	})
@@ -55,14 +55,14 @@ fn from(text: &str) -> Doc {
 			name: "checkstyle",
 			self_closing: true,
 			..
-		}) => return Doc::Whole(Vec::new()),
+		}) => return Doc::Whole(Vec::new(), tokens.read()),
 		Some(Token::Start { name: "checkstyle", .. }) => {}
 		Some(_) => return Doc::Not,
 		None => return Doc::Broken,
 	}
 	let mut file: Option<String> = None;
 	let mut out = Vec::new();
-	for token in tokens {
+	while let Some(token) = tokens.next() {
 		match token {
 			Token::Start {
 				name: "file", attrs, ..
@@ -87,7 +87,7 @@ fn from(text: &str) -> Doc {
 					..RawDiagnostic::default()
 				});
 			}
-			Token::End { name: "checkstyle" } => return Doc::Whole(out),
+			Token::End { name: "checkstyle" } => return Doc::Whole(out, tokens.read()),
 			_ => {}
 		}
 	}
@@ -162,6 +162,15 @@ mod tests {
 			assert!(!parse(out, b"", 0).recognized, "{}", String::from_utf8_lossy(out));
 			assert!(broken(&String::from_utf8_lossy(out)));
 		}
+	}
+
+	#[test]
+	fn every_document_in_the_output_counts() {
+		let mut out = b"<checkstyle/>\n".to_vec();
+		out.extend_from_slice(SHELLCHECK);
+		out.extend_from_slice(b"\n");
+		out.extend_from_slice(SHELLCHECK);
+		assert_eq!(parse(&out, b"", 1).diagnostics.len(), 6);
 	}
 
 	#[test]

@@ -61,22 +61,26 @@ fn first(stdout: &[u8], stderr: &[u8], exit_code: i32) -> Response {
 }
 
 /// The answer of a declared parser, a tool's or a format's, that read
-/// `diagnostics` out of the output and, with `own`, found its own format in it.
+/// `diagnostics` out of the output and, with `own`, found its own format in it;
+/// `searched` says it looked for a JSON or XML document in a stream that holds
+/// text.
 ///
 /// A parser that found something recognized the output. One that found
 /// nothing did not when the output holds a document it cannot read whole — a
-/// JSON value or an XML document cut off, or XML with a tag that cannot be
-/// read — which may have held findings, nor when it holds findings in a
-/// standard format: the tool printed another format than the parser reads,
-/// and the core's fallback is what reads it. Either way the answer is partial
-/// when such a document is there: the findings read may not be all of them. Otherwise it recognized the
-/// output when its own format was there, or when the run exited 0: a clean
-/// run may print nothing, or a summary no format describes, and neither is a
-/// shape the parser missed.
+/// JSON value or an XML document cut off, or malformed — which may have held
+/// findings, nor when it holds findings in a standard format: the tool printed
+/// another format than the parser reads, and the core's fallback is what
+/// reads it. Either way the answer is partial when such a document is there:
+/// the findings read may not be all of them. Otherwise it recognized the
+/// output when its own format was there, or when the run exited 0 and it did
+/// not search text for a document: a clean run may print nothing, or a
+/// summary no line format describes, but a parser of a structured format that
+/// finds no document where the tool printed something has not read it.
 pub(crate) fn declared(
 	key: &str,
 	diagnostics: Vec<RawDiagnostic>,
 	own: bool,
+	searched: bool,
 	stdout: &[u8],
 	stderr: &[u8],
 	exit_code: i32,
@@ -88,7 +92,7 @@ pub(crate) fn declared(
 	if partial || !first(stdout, stderr, exit_code).diagnostics.is_empty() {
 		return Response::unrecognized(key).partial_if(partial);
 	}
-	if own || exit_code == 0 {
+	if own || (exit_code == 0 && !searched) {
 		return Response::recognized(key, Vec::new());
 	}
 	Response::unrecognized(key)
@@ -190,13 +194,22 @@ mod tests {
 	#[test]
 	fn a_declared_parser_that_found_nothing_leaves_standard_findings_to_the_fallback() {
 		let sarif = br#"{"version":"2.1.0","runs":[{"results":[{"message":{"text":"m"}}]}]}"#;
-		assert!(!declared("gcc", vec![], false, sarif, b"", 0).recognized);
-		assert!(!declared("hadolint", vec![], true, sarif, b"", 1).recognized);
+		assert!(!declared("gcc", vec![], false, false, sarif, b"", 0).recognized);
+		assert!(!declared("hadolint", vec![], true, true, sarif, b"", 1).recognized);
 		let clean = br#"{"version":"2.1.0","runs":[]}"#;
-		assert!(declared("sarif", vec![], true, clean, b"", 1).recognized);
-		assert!(declared("gcc", vec![], false, b"0 issues.\n", b"", 0).recognized);
-		assert!(!declared("gcc", vec![], false, b"0 issues.\n", b"", 1).recognized);
-		assert!(declared("mypy", vec![], false, b"", b"", 0).recognized);
+		assert!(declared("sarif", vec![], true, true, clean, b"", 1).recognized);
+		assert!(declared("gcc", vec![], false, false, b"0 issues.\n", b"", 0).recognized);
+		assert!(!declared("gcc", vec![], false, false, b"0 issues.\n", b"", 1).recognized);
+		assert!(declared("mypy", vec![], false, false, b"", b"", 0).recognized);
+	}
+
+	#[test]
+	fn a_structured_parser_that_found_no_document_in_text_did_not_read_it() {
+		let prose = b"new-format: finding on a.py\n";
+		assert!(!declared("sarif", vec![], false, true, prose, b"", 0).recognized);
+		assert!(!declared("hadolint", vec![], false, true, prose, b"", 0).recognized);
+		assert!(declared("hadolint", vec![], false, false, b"", b"", 0).recognized);
+		assert!(declared("gcc", vec![], false, false, prose, b"", 0).recognized);
 	}
 
 	#[test]
@@ -206,7 +219,7 @@ mod tests {
 			message: "m".to_string(),
 			..RawDiagnostic::default()
 		}];
-		let r = declared("hadolint", salvaged, true, cut, b"", 1);
+		let r = declared("hadolint", salvaged, true, true, cut, b"", 1);
 		assert!(r.recognized && r.partial);
 		let clean = br#"{"version":"2.1.0","runs":[]}"#;
 		let r = sniff(clean, &cut[..], 0);
@@ -218,10 +231,10 @@ mod tests {
 	#[test]
 	fn a_declared_parser_does_not_recognize_a_document_cut_off_on_a_clean_exit() {
 		let cut = br#"{"version":"2.1.0","runs":[{"results":[{"message":{"text":"m"}}"#;
-		assert!(!declared("sarif", vec![], false, cut, b"", 0).recognized);
-		assert!(declared("sarif", vec![], false, cut, b"", 0).partial);
-		assert!(!declared("eslint", vec![], true, cut, b"", 0).recognized);
-		assert!(!declared("gcc", vec![], false, b"", b"<checkstyle>\n<file name=\"a\">", 0).recognized);
+		assert!(!declared("sarif", vec![], false, true, cut, b"", 0).recognized);
+		assert!(declared("sarif", vec![], false, true, cut, b"", 0).partial);
+		assert!(!declared("eslint", vec![], true, true, cut, b"", 0).recognized);
+		assert!(!declared("gcc", vec![], false, false, b"", b"<checkstyle>\n<file name=\"a\">", 0).recognized);
 	}
 
 	#[test]

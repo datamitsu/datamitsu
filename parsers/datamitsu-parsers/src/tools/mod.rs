@@ -349,7 +349,10 @@ pub fn answer(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Optio
 	crate::json_diag::begin_parse();
 	let diags = dispatch(tool, stdout, stderr, exit_code)?;
 	let own = crate::json_diag::document_seen();
-	Some(crate::fallback::declared(tool, diags, own, stdout, stderr, exit_code))
+	let searched = crate::json_diag::searched_text();
+	Some(crate::fallback::declared(
+		tool, diags, own, searched, stdout, stderr, exit_code,
+	))
 }
 
 /// Dispatch a real tool parser by name. Returns `None` when this module has no

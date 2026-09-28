@@ -39,7 +39,7 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Response {
 	super::each_stream(DESCRIPTOR.name, stdout, stderr, |s| {
 		match document(&String::from_utf8_lossy(s)) {
-			Doc::Whole(diags) => Some(diags),
+			Doc::Whole(diags, _) => Some(diags),
 			_ => None,
 		}
 	})
@@ -79,7 +79,7 @@ fn from(text: &str) -> Doc {
 			name,
 			self_closing: true,
 			..
-		}) if name == "testsuites" || name == "testsuite" => return Doc::Whole(Vec::new()),
+		}) if name == "testsuites" || name == "testsuite" => return Doc::Whole(Vec::new(), tokens.read()),
 		Some(Token::Start { name, .. }) if name == "testsuites" || name == "testsuite" => name,
 		Some(_) => return Doc::Not,
 		None => return Doc::Broken,
@@ -89,7 +89,7 @@ fn from(text: &str) -> Doc {
 	let mut case = Case::default();
 	let mut open: Option<Open> = None;
 	let mut out = Vec::new();
-	for token in tokens {
+	while let Some(token) = tokens.next() {
 		match token {
 			Token::Start {
 				name: "testcase",
@@ -142,7 +142,7 @@ fn from(text: &str) -> Doc {
 			Token::End { name } if name == root => {
 				depth -= 1;
 				if depth == 0 {
-					return Doc::Whole(out);
+					return Doc::Whole(out, tokens.read());
 				}
 			}
 			_ => {}
