@@ -14,6 +14,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render/json"
+	"github.com/datamitsu/datamitsu/internal/report/render/markdown"
 )
 
 // Renderer writes one format.
@@ -29,7 +30,7 @@ type Renderer interface {
 	OmitsIncompleteTools() bool
 }
 
-var renderers = []Renderer{json.Renderer{}}
+var renderers = []Renderer{json.Renderer{}, markdown.Renderer{}}
 
 // Lookup finds a format by the name --report spells it with.
 func Lookup(format string) (Renderer, bool) {

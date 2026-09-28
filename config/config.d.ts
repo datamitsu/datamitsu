@@ -1669,6 +1669,59 @@ declare global {
   }
 
   /**
+   * `facts().ci`: which CI runs the job, and the identifiers of the change it builds.
+   */
+  interface CIFacts {
+    /**
+     * The branch a pull or merge request targets, when the vendor says; empty otherwise.
+     */
+    baseRef: string;
+
+    /**
+     * Whether any CI was detected: a vendor's own marker, or `CI` set to anything but `false` or
+     * `0`.
+     */
+    isCI: boolean;
+
+    /**
+     * Whether the job builds a pull or merge request.
+     */
+    isPR: boolean;
+
+    /**
+     * The pull or merge request number, when the vendor says; empty otherwise.
+     */
+    prNumber: string;
+
+    /**
+     * The ref the job builds, as the vendor names it (`refs/pull/42/merge`, `main`).
+     */
+    ref: string;
+
+    /**
+     * The commit the job builds; on a GitHub pull request, the merge commit.
+     */
+    sha: string;
+
+    /**
+     * The CI, from its own variables; `generic` when only `CI` is set, empty outside CI. Gitea and
+     * Forgejo read as `gitea` although they set `GITHUB_ACTIONS` too.
+     */
+    vendor:
+      | ""
+      | "azure"
+      | "bitbucket"
+      | "buildkite"
+      | "circleci"
+      | "generic"
+      | "gitea"
+      | "github"
+      | "gitlab"
+      | "jenkins"
+      | "teamcity";
+  }
+
+  /**
    * Facts about the project environment. Collected automatically on engine initialization.
    *
    * Path-related fields have been removed. Use template placeholders in tool operation args
@@ -1693,6 +1746,16 @@ declare global {
      * Absolute path to the currently running binary
      */
     binaryPath: string;
+
+    /**
+     * The continuous-integration system the process runs under, detected from the variables each
+     * vendor sets for its jobs. Every field is empty or false outside CI. It is read from the same
+     * environment as `env`, so the config-evaluation cache already tells two values apart.
+     *
+     * @example
+     *   skip: !facts().ci.isCI;
+     */
+    ci: CIFacts;
 
     /**
      * The process environment available to configuration code, except observation-only datamitsu

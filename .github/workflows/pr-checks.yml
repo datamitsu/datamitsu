@@ -163,12 +163,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit's first parent, the base branch's tip: the
+          # annotations of the files a pull request touched come first.
+          fetch-depth: 2
       - uses: ./.github/actions/setup-environment
       - name: Check Go modules are tidy
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum
-      - name: Run datamitsu lint
+      # Every tool runs, so the annotations cover the whole repository. The
+      # variable rather than --fail-fast=false: a core older than the flag, which
+      # the wrapper may pin, ignores the variable instead of refusing the flag.
+      - env:
+          DATAMITSU_FAIL_FAST: "false"
+        name: Run datamitsu lint
         run: pnpm dm lint
   llms-docs-drift:
     name: Embedded Docs Drift

@@ -47,6 +47,7 @@ const (
 // internal to the engine layer via json.Marshal/json.Unmarshal.
 type Effective struct {
 	AllowPartial             string `json:"allowPartial"`
+	Annotations              string `json:"annotations"`
 	Concurrency              int    `json:"concurrency"`
 	ConfigCache              bool   `json:"configCache"`
 	Events                   string `json:"events"`
@@ -67,6 +68,7 @@ type Effective struct {
 	NoOCI                    bool   `json:"noOci"`
 	OCIRegistry              string `json:"ociRegistry"`
 	Offline                  bool   `json:"offline"`
+	Output                   string `json:"output"`
 	Report                   string `json:"report"`
 	StartupTimings           bool   `json:"startupTimings"`
 	Timings                  bool   `json:"timings"`
@@ -88,6 +90,7 @@ func Compute() Effective {
 	}
 	return Effective{
 		AllowPartial:             env.AllowPartial(),
+		Annotations:              env.Annotations(),
 		Concurrency:              env.GetConcurrency(),
 		ConfigCache:              env.ConfigCacheEnabled(),
 		Events:                   env.Events(),
@@ -108,6 +111,7 @@ func Compute() Effective {
 		NoOCI:                    env.NoOCI(),
 		OCIRegistry:              env.GetOCIRegistry(),
 		Offline:                  env.Offline(),
+		Output:                   env.Output(),
 		Report:                   env.Report(),
 		StartupTimings:           env.IsStartupTimingsEnabled(),
 		Timings:                  env.IsTimingsEnabled(),

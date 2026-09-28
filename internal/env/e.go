@@ -210,6 +210,23 @@ var (
 		Description:  "Which findings the JSON-L stream of fix/lint/check carries as diagnostic events: diagnostics=reported (at or above failOn, the default) or diagnostics=all; the --events flag wins",
 	}
 
+	// output is execution-only: it decides how one run shows its results,
+	// never what datamitsu installs or produces. An agent that exports it must
+	// not move the farm staleness key on every shell switch.
+	output = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_OUTPUT",
+		DefaultValue: "",
+		Description:  "How fix/lint/check show their results: human (frames, colour, progress) or agent (one line per finding, one summary line per operation); the --output flag wins",
+	}
+
+	// annotations is execution-only: it decides whether one run prints
+	// workflow annotations, never what datamitsu installs or produces.
+	annotations = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_ANNOTATIONS",
+		DefaultValue: "",
+		Description:  "Workflow annotations a fix/lint/check run prints after its last operation: auto (github under GitHub Actions, off otherwise and on a JSON-L or document stdout), github or off; the --annotations flag wins",
+	}
+
 	noParse = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_PARSE",
 		DefaultValue: "",

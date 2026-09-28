@@ -20,6 +20,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/bundled"
 	"github.com/datamitsu/datamitsu/internal/cache"
+	"github.com/datamitsu/datamitsu/internal/cienv"
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
@@ -170,6 +171,13 @@ type sharedContext struct {
 	// startedAt stamps the report: SOURCE_DATE_EPOCH or the clock at the
 	// start of the run.
 	startedAt time.Time
+	// ci is the CI the run runs under, and ciRuntime where it takes a step
+	// summary and its event.
+	ci        cienv.Info
+	ciRuntime cienv.Runtime
+	// annotations is whether the run prints workflow annotations, and what
+	// it has printed of them.
+	annotations annotationState
 }
 
 func initSharedContext(
@@ -192,6 +200,7 @@ func initSharedContext(
 		fileScoped:      fileScoped,
 		startedAt:       now(),
 	}
+	sc.ci, sc.ciRuntime = cienv.Current()
 
 	// Parse selected tools flag
 	if selectedToolsFlag != "" {
@@ -232,6 +241,8 @@ func initSharedContext(
 			return nil, errReportWithExplain
 		}
 	}
+	stdoutDocument := sc.explainLevel == "json" || slices.ContainsFunc(opts.Reports, render.Spec.Stdout)
+	sc.annotations = resolveAnnotations(opts.Annotations, sc.ci.Vendor, ui.Quiet(), stdoutDocument)
 
 	// Get cwd
 	var err error
@@ -424,13 +435,16 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// — instead of leaving them invisible.
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
 		sc.recordOp(opSummary{op: operation, skipped: len(plan.Skipped)})
+		if sc.agentOutput() {
+			sc.printAgentOperation(agentOperation{op: operation, record: opRecord, note: sc.footerNote(operation)})
+		}
 		if len(plan.Skipped) > 0 {
 			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth, sc.footerNote(operation))
 			sc.recordSkips(plan.Skipped)
 			sc.recordCoverage(plan)
 			return nil
 		}
-		if !ui.Quiet() {
+		if !ui.Muted() {
 			msg := "ℹ️  No applicable tools found"
 			if len(projectTypes) == 0 {
 				msg = "⚠️  No project types detected"
@@ -507,7 +521,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	for i, pt := range projectTypes {
 		shortTypes[i] = shortProjectType(pt)
 	}
-	if !ui.Quiet() {
+	if !ui.Muted() {
 		fmt.Println()
 		fmt.Println(phaseTop(string(operation)))
 		if line := sc.targetLine(); line != "" {
@@ -712,8 +726,11 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		ensureSpan.EndWith(trace.A("apps", len(plan.GetAppNames())))
 		if err != nil {
 			finalizeProgress()
-			if !ui.Quiet() {
+			if !ui.Muted() {
 				fmt.Println(ui.RuleLine("┗", "setup failed", clr.Red("setup failed")))
+			}
+			if sc.agentOutput() {
+				sc.printAgentLine(string(operation) + ": setup failed")
 			}
 			ui.Emit(uievent.Event{
 				Type:   uievent.TypeDone,
@@ -767,6 +784,9 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// summary footer (the footer doubles as the "complete" marker, so no separate
 	// line is printed). The print helpers self-suppress in JSON-L mode.
 	toolGroups := groupResultsByTool(results)
+	if len(toolGroups) > 0 {
+		sc.openCommandRegion()
+	}
 	if len(toolGroups) > 0 || len(plan.Skipped) > 0 || len(stopped) > 0 {
 		printGroupedResults(toolGroups, sc.nameWidth, env.IsTimingsEnabled())
 		printStoppedTasks(stopped, sc.nameWidth)
@@ -797,7 +817,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		DurationMs: totalWallClockTime,
 	})
 	opDuration = totalWallClockTime
-	sc.recordOp(opSummary{
+	summary := opSummary{
 		op:         operation,
 		tools:      len(toolGroups),
 		runs:       totalRuns,
@@ -806,7 +826,13 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		cancelled:  len(stopped),
 		partial:    partialTasks(results),
 		durationMs: totalWallClockTime,
-	})
+	}
+	sc.recordOp(summary)
+	if sc.agentOutput() {
+		sc.printAgentOperation(agentOperation{
+			op: operation, record: opRecord, cause: cause, summary: summary, note: sc.footerNote(operation),
+		})
+	}
 
 	sc.recordSkips(plan.Skipped)
 	sc.recordCoverage(plan)
@@ -994,7 +1020,7 @@ func relativeToRoot(paths []string, root string) []string {
 // printSkippedTools renders faint "┃ ⊘ name   skipped (reason)" body lines,
 // aligned to nameWidth like the per-tool result rows. No-op for an empty list.
 func printSkippedTools(skipped []tooling.SkippedTool, nameWidth int) {
-	if ui.Quiet() {
+	if ui.Muted() {
 		return
 	}
 	for _, s := range skipped {
@@ -1008,7 +1034,7 @@ func printSkippedTools(skipped []tooling.SkippedTool, nameWidth int) {
 // renderSkipOnlyBlock prints a minimal operation block containing only skipped
 // tools, used when planning produced skips but nothing runnable.
 func renderSkipOnlyBlock(operation, targetLine string, skipped []tooling.SkippedTool, nameWidth int, note string) {
-	if ui.Quiet() {
+	if ui.Muted() {
 		return
 	}
 	fmt.Println()
@@ -1083,6 +1109,13 @@ func runSequential(
 ) error {
 	showBanner := command != ""
 	started := time.Now()
+	// Before the configuration loads, and before the deferred timing report,
+	// which must still see it muted; the command layer refused agent output
+	// beside a JSON-L stream.
+	if opts.Output == OutputAgent {
+		ui.SetMuted(true)
+		defer ui.SetMuted(false)
+	}
 	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, opts, loadConfigFunc)
 	if err != nil {
 		// A run that could not start — no git root, a config that does not load
@@ -1091,7 +1124,7 @@ func runSequential(
 		if _, usage := errors.AsType[exitcode.UsageError](err); command != "" && explainMode == "" && !usage {
 			elapsedMs := time.Since(started).Milliseconds()
 			if len(operations) > 1 {
-				(&sharedContext{}).printRunClosing(command, operations, elapsedMs)
+				(&sharedContext{opts: opts}).printRunClosing(command, operations, elapsedMs)
 			}
 			omitReports(opts.Reports, err)
 			(&sharedContext{}).emitRunDone(command, operations, elapsedMs, false)
@@ -1101,7 +1134,7 @@ func runSequential(
 	defer func() {
 		// Timing reports are human output (bare fmt). Suppress in JSON-L mode so
 		// DATAMITSU_TIMINGS doesn't leak a non-JSON block onto the clean streams.
-		if !ui.Quiet() {
+		if !ui.Muted() {
 			sc.timings.Print()
 			sc.planner.GetTimings().Print()
 		}
@@ -1124,10 +1157,13 @@ func runSequential(
 		return sc.outcome(ctx, opErr)
 	}
 	elapsedMs := sc.timings.Elapsed().Milliseconds()
+	run, targets := sc.buildReport(operations)
+	summary := sc.writeStepSummary(run)
+	sc.printAnnotations(ctx, run, annotationsRest(run, summary))
 	if len(operations) > 1 {
 		sc.printRunClosing(command, operations, elapsedMs)
 	}
-	err = sc.finishReports(operations, sc.outcome(ctx, opErr))
+	err = sc.writeReports(run, targets, sc.outcome(ctx, opErr))
 	if command != "" {
 		sc.emitRunDone(command, operations, elapsedMs, err == nil)
 	}
@@ -1259,6 +1295,12 @@ type Options struct {
 	// AllDiagnostics makes the JSON-L stream carry every finding as a
 	// diagnostic event, not only those at or above failOn.
 	AllDiagnostics bool
+	// Annotations is the workflow-annotation mode asked for: auto, github or
+	// off; empty prints none.
+	Annotations string
+	// Output is how the run shows its results: human, or agent for a program
+	// that reads them; empty is human.
+	Output string
 }
 
 // validate rejects unknown flag values. Rank() reads an unvalidated string
@@ -1434,7 +1476,7 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 // detailed timings (scope, avg, min/max) appended only when `detailed` is set
 // (DATAMITSU_TIMINGS). Failed tools show a red ✗ and a bordered detail box.
 func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detailed bool) {
-	if ui.Quiet() {
+	if ui.Muted() {
 		return
 	}
 	fmt.Println(clr.Faint("┃"))
@@ -1648,7 +1690,7 @@ func printFailedExecution(runNum int, exec executionInstance) {
 
 	// Command details
 	if result.Command != "" {
-		fmt.Printf("  %s  %s %s\n", border("│"), label("Command:  "), result.Command)
+		printFramed(border, label("Command:  ")+" ", result.Command)
 	}
 
 	// Exit info
@@ -1670,24 +1712,15 @@ func printFailedExecution(runNum int, exec executionInstance) {
 		printFindings(view, result, border)
 		for _, failure := range result.UnparsedFailures {
 			fmt.Printf("  %s\n", border("│"))
-			for line := range strings.SplitSeq(failure, "\n") {
-				fmt.Printf("  %s  %s\n", border("│"), line)
-			}
+			printFramed(border, "", failure)
 		}
 		printHiddenLine(view, result, border)
 	case strings.TrimSpace(result.Output) != "":
 		fmt.Printf("  %s\n", border("│"))
-		lines := strings.SplitSeq(strings.TrimRight(result.Output, "\n"), "\n")
-		for line := range lines {
-			if strings.TrimSpace(line) == "" {
-				fmt.Printf("  %s\n", border("│"))
-				continue
-			}
-			fmt.Printf("  %s  %s\n", border("│"), line)
-		}
+		printFramed(border, "", strings.TrimRight(result.Output, "\n"))
 	case result.Error != nil:
 		fmt.Printf("  %s\n", border("│"))
-		fmt.Printf("  %s  %s\n", border("│"), result.Error.Error())
+		printFramed(border, "", result.Error.Error())
 	}
 
 	fmt.Printf("  %s%s\n", border("└"), border(strings.Repeat("─", 57)))
@@ -1712,9 +1745,7 @@ func printUnenforcedExecution(exec executionInstance, view taskView) {
 	fmt.Printf("  %s  %s\n", border("│"), clr.Faint("its parser module predates the severity contract; the exit code decided"))
 	if view.raw {
 		fmt.Printf("  %s\n", border("│"))
-		for line := range strings.SplitSeq(strings.TrimRight(result.Output, "\n"), "\n") {
-			fmt.Printf("  %s  %s\n", border("│"), line)
-		}
+		printFramed(border, "", strings.TrimRight(result.Output, "\n"))
 	} else {
 		printFindings(view, result, border)
 		printHiddenLine(view, result, border)
@@ -1739,7 +1770,27 @@ func printFindings(view taskView, result tooling.ExecutionResult, border func(a 
 	}
 	fmt.Printf("  %s\n", border("│"))
 	for _, d := range view.shown {
-		fmt.Printf("  %s  %s\n", border("│"), formatDiagnosticRelativeTo(d, result.WorkingDir))
+		printFramed(border, "", formatDiagnosticRelativeTo(d, result.WorkingDir))
+	}
+}
+
+// printFramed prints text behind a frame's border, every line of it: tool text
+// that reached the left margin could be read as a workflow command or match a
+// problem matcher. A carriage return ends a line as a line feed does, as it
+// does for GitHub's runner. label heads the first line; a blank line prints
+// the border alone.
+func printFramed(border func(a ...any) string, label, text string) {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	for i, line := range strings.Split(text, "\n") {
+		if i == 0 {
+			line = label + line
+		}
+		if strings.TrimSpace(line) == "" {
+			fmt.Printf("  %s\n", border("│"))
+			continue
+		}
+		fmt.Printf("  %s  %s\n", border("│"), line)
 	}
 }
 
@@ -1782,7 +1833,7 @@ func phaseTop(operation string) string {
 // operation (tool/run counts, wall-clock time, failures, cancelled tasks, skips,
 // cache hit rate and an optional note).
 func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, cacheHits, cacheMisses, skipped, cancelled int, note string) {
-	if ui.Quiet() {
+	if ui.Muted() {
 		return
 	}
 	totalTools := len(toolGroups)

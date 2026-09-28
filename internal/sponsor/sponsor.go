@@ -49,8 +49,9 @@ func StaticLine() string {
 	return "Support datamitsu development: " + sponsorURL
 }
 
-// MaybePrint prints a sponsor message if activation thresholds and throttling allow it.
-func (m *Manager) MaybePrint(isJSONOutput bool) {
+// MaybePrint prints a sponsor message if activation thresholds and throttling
+// allow it, and never for a run whose output a program reads (machineOutput).
+func (m *Manager) MaybePrint(machineOutput bool) {
 	defer func() { _ = recover() }()
 
 	path := statePath(m.cacheDir)
@@ -59,10 +60,10 @@ func (m *Manager) MaybePrint(isJSONOutput bool) {
 		state = &State{}
 	}
 
-	// ui.Quiet() covers JSON-L mode: a sponsor line written to stderr would inject
-	// a non-JSON line into the typed event stream. Returning before the counter
+	// ui.Muted() covers JSON-L mode, where a sponsor line written to stderr would inject
+	// a non-JSON line into the typed event stream, and agent output. Returning before the counter
 	// logic also avoids advancing activation state on a suppressed run.
-	if env.NoSponsor() || isJSONOutput || env.IsCI() || ui.Quiet() {
+	if env.NoSponsor() || machineOutput || env.IsCI() || ui.Muted() {
 		return
 	}
 

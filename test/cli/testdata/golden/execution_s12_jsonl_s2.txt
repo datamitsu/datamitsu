@@ -2,10 +2,10 @@ exit code: 1
 ===STDOUT===
 
 ===STDERR===
+{"annotations":"off","events":"hello,phase,download,install,chunk,tool_run,error,done,log,report,diagnostic","op_id":"stream","schema":"datamitsu.report/1","ts":0,"type":"hello"}
 {"cached":false,"duration_ms":1,"findings_error":0,"findings_hint":0,"findings_info":0,"findings_warning":0,"op_id":"run-1:alpha::1","status":"fail","success":false,"tool":"alpha","ts":0,"type":"tool_run"}
 {"cancelled":1,"complete":false,"duration_ms":1,"failed":1,"op":"lint","op_id":"cmd-2","runs":1,"status":"fail","success":false,"tools":1,"ts":0,"type":"done"}
 {"cancelled":1,"duration_ms":1,"failed":1,"op":"lint","op_id":"run-1","runs":1,"status":"fail","tools":1,"ts":0,"type":"done"}
-{"events":"hello,phase,download,install,chunk,tool_run,error,done,log,report,diagnostic","op_id":"stream","schema":"datamitsu.report/1","ts":0,"type":"hello"}
 {"index":1,"op_id":"run-1:alpha::1","status":"done","success":false,"tool":"alpha","total":1,"ts":0,"type":"chunk"}
 {"msg":"failed to execute (exit code 1): exit status 1","op_id":"run-1:alpha::1","tool":"alpha","ts":0,"type":"error"}
 {"msg":"not started: fail-fast","op_id":"run-1:beta::2","status":"skip","tool":"beta","ts":0,"type":"tool_run"}

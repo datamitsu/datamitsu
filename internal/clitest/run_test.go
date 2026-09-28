@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/cienv"
 )
 
 func TestRunVersionExitZero(t *testing.T) {
@@ -112,6 +114,26 @@ func TestBaseEnvStripsAmbientMarkers(t *testing.T) {
 	for _, key := range kept {
 		if got[key] != "1" {
 			t.Errorf("BaseEnv dropped %s, which is neither a listed name nor under a listed prefix", key)
+		}
+	}
+}
+
+// TestBaseEnvStripsEveryCIVariable pins the harness to cienv's list: a name
+// the CI detection reads and the harness passes on would make a golden
+// recorded in CI differ from a local one, or let a test append to a real
+// job's step summary.
+func TestBaseEnvStripsEveryCIVariable(t *testing.T) {
+	names := cienv.Variables()
+	if len(names) == 0 {
+		t.Fatal("cienv.Variables() is empty; the check would pass vacuously")
+	}
+	for _, name := range names {
+		t.Setenv(name, "1")
+	}
+	got := envMap(BaseEnv(t.TempDir()))
+	for _, name := range names {
+		if _, ok := got[name]; ok {
+			t.Errorf("BaseEnv passes %s on, which cienv reads", name)
 		}
 	}
 }

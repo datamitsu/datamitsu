@@ -1,0 +1,27 @@
+## datamitsu · datamitsu.config
+
+- **Selection:** the whole repository
+- **Complete:** no — some tools did not cover everything
+
+### lint
+
+| Tool | Status | Runs | Cached | Errors | Warnings | Info | Hints |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `beta` | ✗ failed | 1 | 0 | 0 | 0 | 0 | 0 |
+| `hadolint` | ✗ failed | 1 | 0 | 1 | 0 | 0 | 0 |
+
+#### Findings
+
+##### Errors
+
+`Dockerfile`
+
+- `Dockerfile:1:1` — `hadolint(DL3006)`: Always tag the version of an image explicitly ::error::injected
+
+No file
+
+- `beta`: beta exited 1 without parsable findings
+
+#### Incomplete
+
+- `beta`: no-extraction

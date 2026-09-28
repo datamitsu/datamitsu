@@ -62,6 +62,12 @@ func runFix(cmd *cobra.Command, args []string) error {
 	if err := applyReports(cmd, fixReports, &opts); err != nil {
 		return err
 	}
+	if err := applyAnnotations(cmd, fixReports, fixExplain, &opts); err != nil {
+		return err
+	}
+	if err := applyOutput(cmd, fixReports, &opts); err != nil {
+		return err
+	}
 	err := runner.Run(config.OpFix, args, fixExplain, fixFileScoped, fixSelectedTools, fixFailOnSkip,
 		opts,
 		func() (*config.Config, string, error) {
@@ -69,7 +75,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 			return cfg, "", err
 		})
 	if err == nil && fixExplain == "" {
-		sponsor.New(env.GetCachePath()).MaybePrint(false)
+		sponsor.New(env.GetCachePath()).MaybePrint(opts.Output == runner.OutputAgent)
 	}
 	return err
 }

@@ -143,7 +143,7 @@ func (d *Display) Close() {
 // mode, and in JSON-L (quiet) mode so no animated bars compete with the typed
 // stream even when stdout is a TTY. Caller must hold d.mu.
 func (d *Display) ensureProg() *mpb.Progress {
-	if d.mode != term.Interactive || Quiet() {
+	if d.mode != term.Interactive || Muted() {
 		return nil
 	}
 	if d.prog == nil {
@@ -167,9 +167,9 @@ func (d *Display) barEnded() {
 // avoids the mpb-pending-write race that would otherwise drop a line when
 // non-ui code writes directly to the same stream between bars.
 func (d *Display) writeLine(w io.Writer, s string) {
-	// JSON-L (quiet) mode: human lines are dropped so the typed event stream is
-	// the sole output and stdout stays clean.
-	if Quiet() {
+	// JSON-L (quiet) mode and agent output: human lines are dropped, so the
+	// typed event stream or the agent's records are the sole output.
+	if Muted() {
 		return
 	}
 	d.mu.Lock()

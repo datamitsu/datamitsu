@@ -34,6 +34,25 @@ func TestSetEventMask(t *testing.T) {
 	}
 }
 
+// Muted output drops human lines without a stream in their place, and is not
+// JSON-L mode: Quiet stays false.
+func TestSetMuted(t *testing.T) {
+	var out, errOut strings.Builder
+	d := newPlainDisplay(&out, &errOut)
+	SetMuted(true)
+	t.Cleanup(func() { SetMuted(false) })
+	d.Println("human")
+	d.Errorln("human")
+	if !Muted() || Quiet() || out.Len() != 0 || errOut.Len() != 0 {
+		t.Errorf("Muted %v, Quiet %v, wrote %q %q; want muted, not quiet, nothing written", Muted(), Quiet(), out.String(), errOut.String())
+	}
+	SetMuted(false)
+	d.Println("human")
+	if Muted() || out.String() != "human\n" {
+		t.Errorf("after SetMuted(false): Muted %v, wrote %q", Muted(), out.String())
+	}
+}
+
 // With no sink nothing is masked or written.
 func TestEmitWithoutSink(t *testing.T) {
 	called := false

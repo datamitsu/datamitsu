@@ -23,6 +23,11 @@ internal/inspector/inspector.html: *
 # a fixer would change what the tool printed, and a linter would judge it.
 parsers/datamitsu-parsers/fixtures/*/*: *
 
+# The problem matchers GitHub's setup actions register, vendored byte for byte
+# from the upstream commits matchers_test.go names: no tool may rewrite or judge
+# them.
+internal/report/render/github/testdata/matchers/*: *
+
 # Vendored verbatim from a datamitsu-config release (see test/cli/README.md); it
 # is a bundle, re-fetched rather than edited, so no tool may rewrite or judge it.
 test/e2e/testdata/datamitsu.config.oci-ghcr.js: *

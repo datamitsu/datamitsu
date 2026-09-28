@@ -75,6 +75,7 @@ on Intel i9-14900K it is 26× faster.
 - **Standard environment variables** like `PATH`, `HOME`, `TMPDIR` when constructing child process environments
 - **Third-party service tokens** like `GITHUB_TOKEN`, `NPM_TOKEN` in their respective client packages
 - **Universal standards** like `CI`, `NO_COLOR`, `TERM` - but prefer wrapping in `internal/env` for consistency
+- **CI vendors' variables** (`GITHUB_*`, `CI_*`, `TF_BUILD`, …) in `internal/cienv` only: `Detect(getenv)` is the one place a CI is recognized (`facts().ci`, `report.Run.CI`, the annotation mode), and `Variables()` lists every name it reads — the blackbox harness strips that list, so a name read elsewhere would let a CI job change a golden
 
 **Rationale:** Centralized environment variable handling provides:
 
@@ -89,7 +90,7 @@ on Intel i9-14900K it is 26× faster.
 2. Add getter function in `internal/env/env.go`
 3. Add tests in `internal/env/env_test.go`
 4. Use the getter everywhere else
-5. Decide whether the variable belongs in the source-mode staleness fingerprint. `env.Environ()` returns **every** `DATAMITSU_*` variable and the farm's staleness key hashes it, so a new variable invalidates baked farms by default — which is correct for anything that changes what datamitsu produces. A variable that only records _which_ farm a shell activated must be added to `environExcluded` in `internal/env/environ.go`, or every command in an activated shell reports the manifest stale and re-bakes. `internal/env/environ.go` holds **three** lists: `observationExcluded` (`DATAMITSU_TRACE`, `DATAMITSU_TRACE_DIR`, `DATAMITSU_CONFIG_CACHE`) drops a variable from every fingerprint; `executionOnly` (`DATAMITSU_FAIL_FAST`, `DATAMITSU_FAIL_ON`, `DATAMITSU_REPORT`, `DATAMITSU_ALLOW_PARTIAL`, `DATAMITSU_EVENTS`) names the variables that change what one `fix`/`lint`/`check` run prints or how far it goes, never what a farm contains; and `environExcluded` — the observation-only ones, the execution-only ones and the activation markers — gates only the source-mode staleness key. An execution-only variable is **not** observation-only: config JS may read it, so it stays in `env.EnvironAll()` and in `facts().env`. `env.EnvironAll()`, the whole-environment fingerprint the config-evaluation cache key hashes, excludes only `observationExcluded` — and `facts().env`, the environment config JS reads, is filtered by the same list (`env.ObservationOnly`). The two must stay aligned: anything config JS can branch on has to be able to move that key, so a variable dropped from the fingerprint must also be hidden from config JS or it becomes a config input that no cache key can distinguish. Only a variable that changes what datamitsu _reports about itself_, never what it produces, belongs in `observationExcluded`.
+5. Decide whether the variable belongs in the source-mode staleness fingerprint. `env.Environ()` returns **every** `DATAMITSU_*` variable and the farm's staleness key hashes it, so a new variable invalidates baked farms by default — which is correct for anything that changes what datamitsu produces. A variable that only records _which_ farm a shell activated must be added to `environExcluded` in `internal/env/environ.go`, or every command in an activated shell reports the manifest stale and re-bakes. `internal/env/environ.go` holds **three** lists: `observationExcluded` (`DATAMITSU_TRACE`, `DATAMITSU_TRACE_DIR`, `DATAMITSU_CONFIG_CACHE`) drops a variable from every fingerprint; `executionOnly` (`DATAMITSU_FAIL_FAST`, `DATAMITSU_FAIL_ON`, `DATAMITSU_REPORT`, `DATAMITSU_ALLOW_PARTIAL`, `DATAMITSU_EVENTS`, `DATAMITSU_ANNOTATIONS`, `DATAMITSU_OUTPUT`) names the variables that change what one `fix`/`lint`/`check` run prints or how far it goes, never what a farm contains; and `environExcluded` — the observation-only ones, the execution-only ones and the activation markers — gates only the source-mode staleness key. An execution-only variable is **not** observation-only: config JS may read it, so it stays in `env.EnvironAll()` and in `facts().env`. `env.EnvironAll()`, the whole-environment fingerprint the config-evaluation cache key hashes, excludes only `observationExcluded` — and `facts().env`, the environment config JS reads, is filtered by the same list (`env.ObservationOnly`). The two must stay aligned: anything config JS can branch on has to be able to move that key, so a variable dropped from the fingerprint must also be hidden from config JS or it becomes a config input that no cache key can distinguish. Only a variable that changes what datamitsu _reports about itself_, never what it produces, belongs in `observationExcluded`.
 
 **Examples:**
 
@@ -322,9 +323,34 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   rest — so an event's fingerprint is the report's. `uievent.Event` stays flat:
   new fields are `omitempty`, pointers where false or zero must be written, set
   only on the events that carry them. Every stream `setJSONLStderr` opens (`--log-format jsonl`, `lsp`, a report
-  on stdout) starts with `hello` and absorbs `SIGPIPE`, so a closed reader fails
+  on stdout) starts with `hello` — written by the sink (`helloFirst`) right
+  before the first other event, or at exit, so that it can carry what the
+  command settled after the stream opened (`streamAnnotations`) — and absorbs `SIGPIPE`, so a closed reader fails
   a write instead of killing the run; a stream the sink could not write fails the run with exit
   1 and the error on stdout (`JSONLSink.Failed`, `ui.EventStreamFailed`).
+- What a person sees is one rule, `report.ShownMask`, applied per process
+  (`report.ShownOf`, which the terminal's `visibleMask` is): the report records
+  it as `Finding.Shown` before duplicates across processes collapse, and the
+  annotations, Markdown, agent output and every later "what is shown" output
+  read it through `report.Visible`, never a filter of their own.
+- GitHub annotations (`internal/report/render/github`, `runner/annotations.go`)
+  are printed once, after the last operation, from the built `report.Run`;
+  `openCommandRegion` opens one `::stop-commands::<token>` region (a
+  `crypto/rand` token per process) before the first results block, and it is
+  closed right before them. Tool text printed on stdout during a run — raw
+  output, a parsed message, a command line, a tail — goes through
+  `printFramed`, which puts every line (a carriage return ends one too) behind
+  the frame's border: a line of tool text at the left margin can be a workflow
+  command or a problem-matcher match. `render/github/testdata/matchers` holds
+  the setup actions' matchers at a recorded upstream commit; their test states
+  which of them still match framed output. The step summary is the `markdown`
+  renderer's `Write` with a budget — 1 MiB less what the file already holds —
+  appended best-effort before the annotations, so their notice can name it.
+- `--output agent` (`runner/agent.go`) prints each operation from the report's
+  record of it (`OperationRecord.Operation`, masked) through `report.Visible`;
+  `ui.SetMuted` turns every human rendering off for it.
+  A new piece of human output checks `ui.Muted()`; `ui.Quiet()` means only
+  "stderr is a JSON-L stream", which agent output is not.
 
 ## Product Stage
 

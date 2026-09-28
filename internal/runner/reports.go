@@ -30,23 +30,24 @@ func now() time.Time {
 }
 
 // startReport begins recording the run when something reads what it found: a
-// report to write, or a JSON-L stream to carry diagnostic events.
+// report to write, a JSON-L stream to carry diagnostic events, annotations, a
+// step summary or an agent's records to print.
 func (sc *sharedContext) startReport() {
-	if len(sc.opts.Reports) == 0 && !ui.Quiet() {
+	reads := len(sc.opts.Reports) > 0 || ui.Quiet() || sc.annotations.mode == AnnotationsGitHub ||
+		sc.wantsStepSummary() || sc.agentOutput()
+	if !reads {
 		return
 	}
-	opts := report.Options{
-		Root:   sc.rootPath,
-		Tools:  sc.cfg.Tools,
-		Apps:   sc.cfg.Apps,
-		FailOn: config.Severity(sc.opts.FailOn),
-	}
-	if sc.parserMgr != nil {
-		opts.Parsers = sc.parserMgr.DescribedParser
-	}
 	sc.secrets = sc.collectSecrets()
-	opts.Secrets = sc.secrets
 	sc.executor.SetEnvObserver(func(environ []string) { sc.secrets.Add(environ) })
+	opts := report.Options{
+		Root:    sc.rootPath,
+		Tools:   sc.cfg.Tools,
+		Apps:    sc.cfg.Apps,
+		FailOn:  config.Severity(sc.opts.FailOn),
+		Secrets: sc.secrets,
+		Parsers: sc.describedParser(),
+	}
 	// The stream is masked as a report is, every event alike: a task's op_id
 	// names its directory, and the events of one task must still correlate.
 	ui.SetEventMask(func(e *uievent.Event) { report.MaskAll(e, sc.secrets.Values()) })
@@ -201,27 +202,28 @@ func (sc *sharedContext) emitDiagnostics(runOpID string, found []report.ToolFind
 	}
 }
 
-// finishReports writes every report of the run after its last operation,
-// whether or not its tools failed: the run that fails is the one a pipeline
-// needs to read. err is what the run returns so far. A report that could not be
-// written is always said — as a report event in JSON-L mode — and fails the
-// run with exitcode.Export only when nothing else did: a tool failure (1) and
-// an incomplete run (4) outrank it.
-func (sc *sharedContext) finishReports(operations []config.OperationType, err error) error {
-	if sc.report == nil || len(sc.opts.Reports) == 0 {
-		return err
+// buildReport builds the record of the run once its last operation has ended,
+// masked, with every report it was asked for opened on its path so that the
+// record says which of them could not be; nil when the run records nothing.
+func (sc *sharedContext) buildReport(operations []config.OperationType) (*report.Run, []*render.Target) {
+	if sc.report == nil {
+		return nil, nil
 	}
 	for _, op := range operations {
 		sc.report.NotRun(string(op))
 	}
 	targets := make([]*render.Target, len(sc.opts.Reports))
-	exports := make([]report.Export, len(targets))
+	exports := make([]report.Export, 0, len(targets)+1)
 	for i, spec := range sc.opts.Reports {
 		targets[i] = render.Open(spec, os.Stdout)
-		exports[i] = report.Export{Format: spec.Format, Path: spec.Path, Status: report.ExportWritten}
+		e := report.Export{Format: spec.Format, Path: spec.Path, Status: report.ExportWritten}
 		if err := targets[i].Err; err != nil {
-			exports[i].Status, exports[i].Detail = report.ExportFailed, err.Error()
+			e.Status, e.Detail = report.ExportFailed, err.Error()
 		}
+		exports = append(exports, e)
+	}
+	if e, ok := sc.annotationExport(); ok {
+		exports = append(exports, e)
 	}
 	run := sc.report.Build(report.BuildInfo{
 		Version:       ldflags.Version,
@@ -231,9 +233,24 @@ func (sc *sharedContext) finishReports(operations []config.OperationType, err er
 		Selection:     sc.reportSelection(),
 		FailFast:      sc.failFast,
 		Exports:       exports,
+		CI: report.CIEnvironment{
+			Vendor: sc.ci.Vendor, SHA: sc.ci.SHA, Ref: sc.ci.Ref, BaseRef: sc.ci.BaseRef, PRNumber: sc.ci.PRNumber,
+		},
 	})
 	report.Mask(run, sc.secretValues())
+	return run, targets
+}
 
+// writeReports writes every report of the run after its last operation,
+// whether or not its tools failed: the run that fails is the one a pipeline
+// needs to read. err is what the run returns so far. A report that could not be
+// written is always said — as a report event in JSON-L mode — and fails the
+// run with exitcode.Export only when nothing else did: a tool failure (1) and
+// an incomplete run (4) outrank it.
+func (sc *sharedContext) writeReports(run *report.Run, targets []*render.Target, err error) error {
+	if run == nil {
+		return err
+	}
 	var failures []error
 	for _, t := range targets {
 		status, msg := report.ExportWritten, ""
