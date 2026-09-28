@@ -4,7 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/report"
+	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
 func TestAgentInvocation(t *testing.T) {
@@ -22,6 +24,14 @@ func TestAgentInvocation(t *testing.T) {
 				Message: "first\r\nsecond\nthird", Location: report.Location{Path: "src/a.ts", Row: 3, Col: 7},
 			}}},
 			want: "src/a.ts:3:7: error tsc(TS2322): first\\nsecond\\nthird\n",
+		},
+		{
+			name: "a path with a line break is one record too",
+			inv: report.Invocation{State: "ran", ExitCode: &one, Findings: []report.Finding{{
+				Tool: "tsc", Source: "tsc", Severity: "error", Reported: true, Kind: "issue",
+				Message: "m", Location: report.Location{Path: "odd\nname.ts", Row: 1},
+			}}},
+			want: "odd\\nname.ts:1: error tsc: m\n",
 		},
 		{
 			name: "a failure without findings names its directory and ends with the tool's output",
@@ -62,6 +72,30 @@ func TestAgentInvocation(t *testing.T) {
 				t.Errorf("records =\n%q\nwant\n%q", b.String(), tt.want)
 			}
 		})
+	}
+}
+
+// Every record is one line, whatever it names, and every part of it is masked:
+// a skip reason can be a configuration's text, which may quote a secret.
+func TestPrintAgentOperationRecordsAreOneMaskedLineEach(t *testing.T) {
+	const secret = "super-secret-value"
+	plan := &tooling.ExecutionPlan{Skipped: []tooling.SkippedTool{
+		{ToolName: "trufflehog", Reason: tooling.SkipReasonConfig, Detail: "needs " + secret},
+		{ToolName: "odd", Reason: tooling.SkipReasonConfig, Detail: "two\nlines"},
+		{ToolName: "native", Reason: tooling.SkipReasonUnsupportedPlatform, Detail: "windows/arm64"},
+	}}
+	acc := report.NewAccumulator(report.Options{})
+	sc := &sharedContext{secrets: &report.Secrets{}}
+	sc.secrets.Add([]string{"DEPLOY_TOKEN=" + secret})
+	out := captureStdout(t, func() {
+		sc.printAgentOperation(agentOperation{op: config.OpLint, record: acc.BeginOperation("lint", plan, nil)})
+	})
+	want := "native: skipped (no binary for windows/arm64)\n" +
+		"odd: skipped (two\\nlines)\n" +
+		"trufflehog: skipped (needs ***)\n" +
+		"lint: 0 tools · 0 runs · 0 failed · 0 errors 0 warnings · 0 hidden\n"
+	if out != want {
+		t.Errorf("records =\n%s\nwant\n%s", out, want)
 	}
 }
 

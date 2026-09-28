@@ -45,9 +45,13 @@ func (Renderer) Render(w io.Writer, run *report.Run, _ map[string]string) error 
 // the footer fits.
 func Write(w io.Writer, run *report.Run, budget int) (cut int, err error) {
 	parts := document(run)
-	total := 0
+	total, size := 0, 0
 	for _, p := range parts {
 		total += p.findings
+		size += len(p.text)
+	}
+	if budget <= 0 || size <= budget {
+		budget = 0
 	}
 	// The footer of the deepest cut is the longest one.
 	reserve := len(footer(total, run))
@@ -163,7 +167,7 @@ func operation(op report.Operation) []part {
 		add(0, "| Tool | Status | Runs | Cached | Errors | Warnings | Info | Hints |\n| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 		for _, tr := range op.Tools {
 			levels := levelsOf(tr)
-			add(0, "| %s | %s | %d | %d | %d | %d | %d | %d |\n", code(tr.Name), status(tr), runs(tr), cached(tr),
+			add(0, "| %s | %s | %d | %d | %d | %d | %d | %d |\n", cell(tr.Name), status(tr), runs(tr), cached(tr),
 				levels[0], levels[1], levels[2], levels[3])
 		}
 	}
@@ -441,6 +445,12 @@ func code(s string) string {
 		return fence + " " + s + " " + fence
 	}
 	return fence + s + fence
+}
+
+// cell is s as inline code in a table cell, where a pipe ends the cell even
+// inside code unless it is escaped.
+func cell(s string) string {
+	return strings.ReplaceAll(code(s), "|", `\|`)
 }
 
 func codes(names []string) string {

@@ -436,7 +436,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
 		sc.recordOp(opSummary{op: operation, skipped: len(plan.Skipped)})
 		if sc.agentOutput() {
-			sc.printAgentOperation(agentOperation{op: operation, record: opRecord, skipped: plan.Skipped, note: sc.footerNote(operation)})
+			sc.printAgentOperation(agentOperation{op: operation, record: opRecord, note: sc.footerNote(operation)})
 		}
 		if len(plan.Skipped) > 0 {
 			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth, sc.footerNote(operation))
@@ -830,7 +830,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	sc.recordOp(summary)
 	if sc.agentOutput() {
 		sc.printAgentOperation(agentOperation{
-			op: operation, record: opRecord, skipped: plan.Skipped, cause: cause, summary: summary, note: sc.footerNote(operation),
+			op: operation, record: opRecord, cause: cause, summary: summary, note: sc.footerNote(operation),
 		})
 	}
 
@@ -1109,6 +1109,13 @@ func runSequential(
 ) error {
 	showBanner := command != ""
 	started := time.Now()
+	// Before the configuration loads, and before the deferred timing report,
+	// which must still see it muted; the command layer refused agent output
+	// beside a JSON-L stream.
+	if opts.Output == OutputAgent {
+		ui.SetMuted(true)
+		defer ui.SetMuted(false)
+	}
 	sc, err := initSharedContext(args, explainMode, fileScoped, selectedToolsFlag, failOnSkip, opts, loadConfigFunc)
 	if err != nil {
 		// A run that could not start — no git root, a config that does not load
@@ -1123,11 +1130,6 @@ func runSequential(
 			(&sharedContext{}).emitRunDone(command, operations, elapsedMs, false)
 		}
 		return err
-	}
-	// Before the deferred timing report, which must still see it muted.
-	if sc.agentOutput() {
-		ui.SetMuted(true)
-		defer ui.SetMuted(false)
 	}
 	defer func() {
 		// Timing reports are human output (bare fmt). Suppress in JSON-L mode so

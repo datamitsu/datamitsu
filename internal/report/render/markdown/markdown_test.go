@@ -141,6 +141,32 @@ func TestWriteBudget(t *testing.T) {
 	}
 }
 
+// A document that fits its budget exactly is written whole.
+func TestWriteExactFit(t *testing.T) {
+	var full bytes.Buffer
+	if _, err := Write(&full, sampleRun(), 0); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	cut, err := Write(&out, sampleRun(), full.Len())
+	if err != nil || cut != 0 || out.String() != full.String() {
+		t.Errorf("Write at an exact fit cut %d (%v):\n%s", cut, err, out.String())
+	}
+}
+
+// A pipe in a tool's name stays inside its table cell.
+func TestTableCellEscapesPipes(t *testing.T) {
+	run := sampleRun()
+	run.Operations[0].Tools[0].Name = "lint|types"
+	var out bytes.Buffer
+	if err := (Renderer{}).Render(&out, run, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "| `lint\\|types` | ✗ failed |") {
+		t.Errorf("the pipe is not escaped in its cell:\n%s", out.String())
+	}
+}
+
 // A page without room for the note that says so gets nothing.
 func TestWriteNoRoom(t *testing.T) {
 	var out bytes.Buffer

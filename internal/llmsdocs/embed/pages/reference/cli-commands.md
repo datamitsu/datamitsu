@@ -390,8 +390,8 @@ check · done in 9.40s · fix 1.10s · lint 7.90s · setup 400ms
 
 - **A finding** is `path:row:col: <level> <source>(<code>): <message>`, the path
   relative to the repository root, the column as the tool counted it and left
-  out when there is none. A line break in the message is written as the two
-  characters `\n`, so a finding is always one line. The findings are the ones
+  out when there is none. A line break in anything a record names — a message, a path, a skip reason — is written as the two
+  characters `\n`, so a record is always one line. The findings are the ones
   the terminal would show, chosen by the same rule (see
   [Findings in the terminal](#findings-in-the-terminal)), and `--no-parse`
   changes only the human frames.

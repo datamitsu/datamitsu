@@ -119,7 +119,7 @@ func TestTouchedFiles(t *testing.T) {
 		shallow := filepath.Join(t.TempDir(), "shallow")
 		cmd := exec.Command("git", "clone", "-q", "--depth", "1", "file://"+repo, shallow)
 		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Skipf("cannot make a shallow clone here: %v\n%s", err, out)
+			t.Fatalf("shallow clone: %v\n%s", err, out)
 		}
 		_, why := TouchedFiles(ctx, shallow, cienv.Info{SHA: merge}, cienv.Runtime{EventName: "pull_request"})
 		if why != "HEAD^1 not fetched (set fetch-depth: 2)" {

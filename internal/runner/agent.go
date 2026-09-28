@@ -39,7 +39,6 @@ func (sc *sharedContext) agentOutput() bool {
 type agentOperation struct {
 	op      config.OperationType
 	record  *report.OperationRecord
-	skipped []tooling.SkippedTool
 	cause   stopCause
 	summary opSummary
 	note    string
@@ -51,7 +50,7 @@ type agentOperation struct {
 // "path:row:col: <severity> <source>(<code>): <message>", a failure that left
 // no finding in the words of its synthetic finding with the end of what the
 // tool printed, the files, tasks and tools the run did not reach, and a
-// summary line.
+// summary line. Every record is one line.
 func (sc *sharedContext) printAgentOperation(a agentOperation) {
 	op := a.record.Operation()
 	report.MaskAll(&op, sc.secretValues())
@@ -80,8 +79,8 @@ func (sc *sharedContext) printAgentOperation(a agentOperation) {
 		}
 		for _, label := range order {
 			if files := unrun[label]; len(files) > 0 {
-				fmt.Fprintf(&b, "%s: %d %s not run (%s): %s\n", label, len(files), plural(len(files), "file", "files"),
-					a.cause, strings.Join(files, ", "))
+				record(&b, fmt.Sprintf("%s: %d %s not run (%s): %s", label, len(files), plural(len(files), "file", "files"),
+					a.cause, strings.Join(files, ", ")))
 			}
 		}
 	}
@@ -90,22 +89,32 @@ func (sc *sharedContext) printAgentOperation(a agentOperation) {
 		if c.Started {
 			state = "cancelled"
 		}
-		fmt.Fprintf(&b, "%s: %s (%s)\n", agentLabel(c.Tool, c.Dir), state, c.Cause)
+		record(&b, fmt.Sprintf("%s: %s (%s)", agentLabel(c.Tool, c.Dir), state, c.Cause))
 	}
-	for _, s := range a.skipped {
-		fmt.Fprintf(&b, "%s: skipped (%s)\n", s.ToolName, s.ReasonText())
+	for _, s := range op.Skipped {
+		record(&b, fmt.Sprintf("%s: skipped (%s)", s.Tool, skipText(s)))
 	}
-	fmt.Fprintf(&b, "%s: %d tools · %d runs · %d failed · %d errors %d warnings", a.op, a.summary.tools, a.summary.runs,
+	summary := fmt.Sprintf("%s: %d tools · %d runs · %d failed · %d errors %d warnings", a.op, a.summary.tools, a.summary.runs,
 		a.summary.failed, shown[0], shown[1])
 	if shown[2]+shown[3] > 0 {
-		fmt.Fprintf(&b, " %d info %d hints", shown[2], shown[3])
+		summary += fmt.Sprintf(" %d info %d hints", shown[2], shown[3])
 	}
-	fmt.Fprintf(&b, " · %d hidden", hidden.total())
+	summary += fmt.Sprintf(" · %d hidden", hidden.total())
 	if a.note != "" {
-		b.WriteString(" · " + a.note)
+		summary += " · " + a.note
 	}
-	b.WriteString("\n")
+	record(&b, summary)
 	fmt.Print(b.String())
+}
+
+// skipText is why the planner left a tool out, in the words of the human
+// block.
+func skipText(s report.Skip) string {
+	reasons := map[string]tooling.SkipReason{}
+	for _, r := range []tooling.SkipReason{tooling.SkipReasonConfig, tooling.SkipReasonUnsupportedPlatform, tooling.SkipReasonNotNarrowable} {
+		reasons[r.String()] = r
+	}
+	return tooling.SkippedTool{ToolName: s.Tool, Reason: reasons[s.Reason], Detail: s.Detail}.ReasonText()
 }
 
 // agentInvocation writes the records of one invocation of tr.
@@ -113,7 +122,7 @@ func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocatio
 	visible, below := report.Visible(tr, inv)
 	for _, f := range visible {
 		shown.add(severityOf(f.Severity))
-		b.WriteString(agentFinding(f) + "\n")
+		record(b, agentFinding(f))
 	}
 	for _, f := range below {
 		hidden.add(severityOf(f.Severity))
@@ -134,13 +143,21 @@ func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocatio
 		return
 	}
 	if len(inv.Files) == 1 {
-		b.WriteString(inv.Files[0].Path + ": ")
+		failure = inv.Files[0].Path + ": " + failure
 	}
-	b.WriteString(failure + "\n")
+	record(b, failure)
 	for _, line := range tailLines(inv.OutputTail, agentTailLines) {
 		b.WriteString(frameIndent + line + "\n")
 	}
 }
+
+// record writes one record on one line: a line break in anything it names —
+// a message, a path, a directory — is written as the two characters \n.
+func record(b *strings.Builder, text string) {
+	b.WriteString(lineBreaks.Replace(text) + "\n")
+}
+
+var lineBreaks = strings.NewReplacer("\r\n", `\n`, "\r", `\n`, "\n", `\n`)
 
 // frameIndent is the border a frame puts before every line of tool output;
 // the tail keeps it, so no line of it reaches the left margin, where a CI
@@ -170,8 +187,7 @@ func agentFinding(f report.Finding) string {
 	if f.Code != "" {
 		source += "(" + f.Code + ")"
 	}
-	message := strings.NewReplacer("\r\n", `\n`, "\r", `\n`, "\n", `\n`).Replace(f.Message)
-	return fmt.Sprintf("%s%s %s: %s", loc, f.Severity, source, message)
+	return fmt.Sprintf("%s%s %s: %s", loc, f.Severity, source, f.Message)
 }
 
 func severityOf(level string) diagnostic.Severity {

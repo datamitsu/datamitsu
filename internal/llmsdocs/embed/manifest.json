@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "dcaf6c65207f8d79510bb30b1b41bd3c",
+  "pageSetHash": "332e774a4b5aad2a4b6d8806b3cb7bc2",
   "pages": [
     {
       "slug": "about",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 145716,
-      "contentHash": "83c2771129f72df0a084f279b5d3557f"
+      "bytes": 145768,
+      "contentHash": "799ef3f79dfc122a784abdcabcd3748c"
     },
     {
       "slug": "reference/comparison",
