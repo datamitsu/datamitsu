@@ -568,8 +568,8 @@ that `config reconcile` runs after writing its files.
 `--report <format>=<path>` writes a report of the run once its last operation
 has ended, whether or not its tools failed — the run that fails is the one a
 pipeline needs to read. The flag is repeatable, one per format: `json`, the
-run's own document; `markdown`, the same run for a person; and `sarif`, the run
-for code scanning. The [Reports guide](../guides/reports.md) explains what a
+run's own document; `markdown`, the same run for a person; `sarif`, the run for
+code scanning; and `junit`, the run as test results. The [Reports guide](../guides/reports.md) explains what a
 report holds and how far to trust it; [`report render`](#report-render) writes
 one again, offline, from a run's own JSON.
 
@@ -682,6 +682,26 @@ twenty tools each, sorted by name, and removes the `datamitsu-<n>.sarif` files
 an earlier run left there that this one did not write; a file or `-` for a run
 that plans more than twenty tools exits 2 before anything runs. See
 [Code scanning](../guides/reports.md#code-scanning) for the workflow.
+
+`junit` writes JUnit XML: one suite per operation and tool (`<operation>/<tool>`,
+its completeness in `properties`), one case per file the tool answered for, and
+a `<failure>` only for a file with a finding at or above the operation's
+`failOn` that failed its tool — the failure count follows the gate, not the
+findings. Findings below the threshold are a case's `<system-out>`. An
+invocation that failed without such a finding is one extra case named after its
+directory: a `<failure type="exit">` listing its findings, or an
+`<error type="exit">` with the masked tail of its output when it has none
+(never for a `security` tool). Stopped tasks, skipped tools and an operation
+that did not run are `<skipped>` cases. See
+[Test results](../guides/reports.md#test-results-junit).
+
+A format that lists findings but has no place to say how complete it is —
+`junit` — gets a completeness companion beside its file,
+`<path>.completeness.json` (`datamitsu.completeness/1`): whether the report is
+complete, the run-level reasons, each tool with its own, and the run's exports.
+A job checks it before it publishes the report. Each incomplete tool also gets
+one `WARN` line on stderr, and the report's entry in `exports` names the
+companion (`companion`). A report on stdout has none.
 
 `markdown` writes the same run for a person, as GitHub renders Markdown: what
 the run covered and whether it is complete, a table of each operation's tools
@@ -994,12 +1014,12 @@ offline:
 datamitsu report render --input <run.json> --format <format> [--output <path>|-]
 ```
 
-| Flag                | Description                                                                                    |
-| ------------------- | ---------------------------------------------------------------------------------------------- |
-| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)                       |
-| `--format <format>` | The format to write: `json`, `markdown` or `sarif`; a format's options follow a `?` (required) |
-| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report`            |
-| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                           |
+| Flag                | Description                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)                                |
+| `--format <format>` | The format to write: `json`, `markdown`, `sarif` or `junit`; a format's options follow a `?` (required) |
+| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report`                     |
+| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                                    |
 
 The renderers and the completeness rule are the run's own: a document of a
 narrowed run is refused (exit 2) for a format that lists findings unless

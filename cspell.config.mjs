@@ -593,5 +593,7 @@ export default defineConfig((config) => ({
     // that leaves a tool out, one written with a completeness companion.
     "omitter",
     "companioned",
+    // encoding/xml's struct tag for an element's character data.
+    "chardata",
   ],
 }));

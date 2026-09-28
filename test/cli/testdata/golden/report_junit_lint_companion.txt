@@ -1,0 +1,38 @@
+{
+  "schema": "datamitsu.completeness/1",
+  "format": "junit",
+  "complete": false,
+  "incomplete": [],
+  "tools": [
+    {
+      "operation": "lint",
+      "name": "alpha",
+      "complete": false,
+      "incomplete": [
+        "no-extraction"
+      ]
+    },
+    {
+      "operation": "lint",
+      "name": "beta",
+      "complete": false,
+      "incomplete": [
+        "no-extraction"
+      ]
+    },
+    {
+      "operation": "lint",
+      "name": "hadolint",
+      "complete": true,
+      "incomplete": []
+    }
+  ],
+  "exports": [
+    {
+      "format": "junit",
+      "path": "out/junit.xml",
+      "status": "written",
+      "companion": "out/junit.xml.completeness.json"
+    }
+  ]
+}

@@ -16,9 +16,10 @@ datamitsu lint --report json=out/run.json
 `json` writes datamitsu's own document, `datamitsu.report/1`, which carries
 everything the record holds; `markdown` writes the same run for a person — the
 tools, the findings the terminal would show and what the run left out; `sarif`
-writes it for GitHub code scanning ([Code scanning](#code-scanning)). The flags,
-the variable twins and the exit codes are in the
-[CLI reference](../reference/cli-commands.md#reports).
+writes it for GitHub code scanning ([Code scanning](#code-scanning)); `junit`
+writes it as test results for the CI systems that read them
+([Other CI systems](#other-ci-systems)). The flags, the variable twins and the
+exit codes are in the [CLI reference](../reference/cli-commands.md#reports).
 
 ## What a report holds
 
@@ -126,6 +127,36 @@ Two rules keep a report from claiming more than it holds:
 - **A report turns fail-fast off.** A run that stopped at the first failing tool
   could not list every finding, so a report runs everything to the end, and a
   report together with an explicit `--fail-fast=true` is refused.
+
+A run can still end up incomplete — a tool cancelled, an output its parser
+could not read, a tool without a parser — and a format has to say so. The own
+JSON and `markdown` say it themselves, and `sarif` leaves such a tool out. A
+format whose shape has no place for the claim — `junit` — is written in full
+and gets a **completeness companion** beside it, `<path>.completeness.json`:
+
+```json
+{
+  "schema": "datamitsu.completeness/1",
+  "format": "junit",
+  "complete": false,
+  "incomplete": [],
+  "tools": [
+    { "operation": "lint", "name": "eslint", "complete": true, "incomplete": [] },
+    { "operation": "lint", "name": "tsc", "complete": false, "incomplete": ["cancelled"] }
+  ],
+  "exports": []
+}
+```
+
+Read alone, a report of that format cannot tell a clean run from a tool that did
+not cover everything, and a service that compares one run with the last reads a
+finding that is missing as fixed. A job checks the companion before it
+publishes: `jq -e .complete <path>.completeness.json`. `complete` is true when
+every tool the report holds is complete and the run left nothing out; `tools`
+names each one, `incomplete` the run-level reasons. Every tool that is not
+complete also gets one `WARN` line on stderr naming the reports that leave it
+out or flag it, and the report's entry in the own JSON's `exports` names its
+companion. A report written to stdout has no companion, and its warning says so.
 
 A report left on its path by an earlier run is not deleted: it is the user's
 file. A run that is refused, or whose report could not be written, leaves it
@@ -282,6 +313,67 @@ Before turning it on:
   step left from passing for this run's: a run refused before it starts
   (exit 2) writes nothing. `if: always()` uploads the file of a run whose tools
   failed, which is the one worth reading.
+
+## Other CI systems
+
+Every CI system has a place for what a run found that a log line cannot reach.
+Each recipe runs `lint --fail-fast=false`, so every tool runs to the end, and
+publishes its report whatever the outcome.
+
+### Test results (JUnit)
+
+`--report junit=<path>` writes the run as JUnit XML, which GitLab, Jenkins,
+Azure Pipelines, CircleCI, Buildkite and Bitbucket read as test results. A test
+report fails a build on one failed case, so a case fails only where the run
+failed:
+
+- **One suite per operation and tool**, named `<operation>/<tool>`, with its
+  completeness in `properties`: `complete`, `incomplete`, `cached` (the files a
+  cache answered), and the run's `run.complete` and `run.incomplete`. `check`
+  gives suites for both operations.
+- **One case per file** a tool answered for. A file fails
+  (`<failure type="threshold">`) when a finding on it is at or above the
+  operation's `failOn` and failed its tool; its findings are the failure's text,
+  one per line as `path:row:col: level source(code): message`. Findings below
+  the threshold are the case's `<system-out>`, and the file passes. Clean and
+  cached files pass, and so does every clean file of a tool that failed.
+- **One extra case for a failed invocation without such a finding**, named
+  after the directory it ran in (`.` for the repository root): a tool that
+  exited non-zero on findings below the threshold is a
+  `<failure type="exit">` listing them, and a tool that failed without any is
+  an `<error type="exit">` carrying the last lines of its output, masked —
+  never a `security` tool's. A finding without a file is on that case too.
+  A failed tsc run over a project fails one case, not every file in it.
+- **Skipped cases** for what did not run: `cancelled: fail-fast` and
+  `not started: fail-fast` for the tasks the run stopped, `skip: true`,
+  `platform-skip` and `narrowed` for the tools the planner skipped, and
+  `did not run` for an operation that never started.
+
+The failure count is the number of files that failed the gate, not the number
+of findings. A narrowed run refuses the report unless `--allow-partial`, and the
+completeness companion is written beside it.
+
+GitLab reads the report from `artifacts:reports:junit`:
+
+```yaml
+lint:
+  script:
+    - datamitsu lint --fail-fast=false --report junit=reports/junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: reports/junit.xml
+    paths:
+      - reports/
+```
+
+Jenkins' JUnit plugin: `junit 'reports/junit.xml'` in a `post { always { … } }`
+block. Azure Pipelines: a `PublishTestResults@2` task with
+`testResultsFormat: JUnit` and `condition: always()`. CircleCI:
+`store_test_results` with `path: reports`. Buildkite: upload the file to Test
+Engine as a JUnit report. Bitbucket Pipelines: write it under
+`test-results/`, which the pipeline scans on its own
+(`--report junit=test-results/datamitsu.xml`).
 
 ## Fingerprints
 

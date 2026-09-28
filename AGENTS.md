@@ -357,7 +357,9 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   runner, `render.Describe` (export details) and `render.Notes` (one `WARN`
   line per incomplete tool) find it there. SARIF leaves an incomplete tool
   out, since code scanning closes the alerts of a tool it no longer holds;
-  never write a partial run of one.
+  never write a partial run of one. Every other new format lists everything
+  and, when its shape has no field for completeness, is `Companioned`:
+  `Target.Write` writes `<path>.completeness.json` beside it, atomically.
 - `--output agent` (`runner/agent.go`) prints each operation from the report's
   record of it (`OperationRecord.Operation`, masked) through `report.Visible`;
   `ui.SetMuted` turns every human rendering off for it.
