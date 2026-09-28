@@ -99,6 +99,9 @@ const (
 	ReasonParseFailed       Reason = "parse-failed"
 	ReasonTruncated         Reason = "truncated"
 	ReasonUnparsedCacheHit  Reason = "unparsed-cache-hit"
+	// ReasonFailedWithoutFindings: a process exited non-zero and its parser
+	// found nothing in what it printed, so the output was not recognized.
+	ReasonFailedWithoutFindings Reason = "failed-without-findings"
 
 	ReasonToolsFilter      Reason = "tools-filter"
 	ReasonNotNarrowable    Reason = "not-narrowable"

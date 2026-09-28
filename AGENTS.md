@@ -312,7 +312,8 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   else failed (1 > 4 > 5).
 - Completeness is per tool, from scope, execution and extraction
   (`internal/report/completeness.go`); a tool without a parser is never
-  complete. A report that lists findings (every renderer whose
+  complete, nor one with a process that exited non-zero while its parser
+  answered with nothing (`failed-without-findings`). A report that lists findings (every renderer whose
   `OmitsIncompleteTools` is false) is refused with exit 2 for a run narrowed at
   plan time unless `--allow-partial`, and any report turns fail-fast off; an
   explicit `--fail-fast=true` or `DATAMITSU_FAIL_FAST=true` with a report exits 2.

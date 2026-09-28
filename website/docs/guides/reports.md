@@ -102,16 +102,19 @@ A report that lists no finding for a tool means "clean" only when the tool
 covered what the report claims. Every tool is judged on three facts, and each
 one that fails adds a reason to its `incomplete` list:
 
-| Fact       | Complete when                                                                                        | Reasons                                                                                  |
-| ---------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| scope      | the run covered the whole repository and every task its whole unit                                   | `narrowed-selection`, `partial-unit`                                                     |
-| execution  | every planned task ran to the end                                                                    | `cancelled`, `not-started`, `setup-failed`, `platform-skip`                              |
-| extraction | every output was read into findings by a parser, or a cache replayed a pass its parser read as clean | `no-extraction`, `parser-unavailable`, `parse-failed`, `truncated`, `unparsed-cache-hit` |
+| Fact       | Complete when                                                                                        | Reasons                                                                                                             |
+| ---------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| scope      | the run covered the whole repository and every task its whole unit                                   | `narrowed-selection`, `partial-unit`                                                                                |
+| execution  | every planned task ran to the end                                                                    | `cancelled`, `not-started`, `setup-failed`, `platform-skip`                                                         |
+| extraction | every output was read into findings by a parser, or a cache replayed a pass its parser read as clean | `no-extraction`, `parser-unavailable`, `parse-failed`, `truncated`, `unparsed-cache-hit`, `failed-without-findings` |
 
 A complete result in one project says nothing about the projects a narrowed run
 left out, which is why scope needs the whole repository. A tool without an output
 parser is never complete: its exit code says whether it passed, not what it
-found.
+found. Neither is a tool that exited non-zero while its parser found nothing
+in what it printed (`failed-without-findings`): the parser did not recognize
+that output, and a report that listed the tool would read its failure as
+clean — code scanning would close every alert the tool had.
 
 The run is `complete` when every tool is, every operation ran, and the run left
 nothing out: a narrowed selection, a `--tools` filter (the tools it left out are

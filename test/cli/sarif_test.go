@@ -127,6 +127,25 @@ func TestReportSARIF(t *testing.T) {
 		e.wantExit(bad, 2)
 	})
 
+	// A parsed tool that failed while its parser found nothing in what it
+	// printed is not complete: a run of it without results would close every
+	// alert it has.
+	t.Run("failed_without_findings", func(t *testing.T) {
+		e := sarifProject(t, clitest.ShellTool("crasher", settle+clitest.RecordRun+"; echo 'panic: not a finding'; exit 2",
+			clitest.ToolOpSpec{Parser: "hadolint"}))
+		res := e.run("", nil, "lint", "--report", "sarif=r.sarif", "--report", "json=run.json")
+		e.wantExit(res, 1)
+		if _, doc := e.sarif("r.sarif"); strings.Join(doc.tools(), ",") != "hadolint" {
+			t.Errorf("runs = %v, want hadolint alone", doc.tools())
+		}
+		if !strings.Contains(res.Stderr, "lint tool crasher is incomplete (failed-without-findings): left out of sarif") {
+			t.Errorf("stderr:\n%s", res.Stderr)
+		}
+		if doc := e.read("run.json"); !strings.Contains(doc, `"failed-without-findings"`) {
+			t.Errorf("the own JSON does not say why crasher is incomplete:\n%s", doc)
+		}
+	})
+
 	// A narrowed run is written, not refused: every tool is incomplete, so
 	// the file holds no run and closes no alert.
 	t.Run("narrowed", func(t *testing.T) {

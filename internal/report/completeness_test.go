@@ -43,6 +43,15 @@ func TestToolReasons(t *testing.T) {
 			want:        []Reason{ReasonParseFailed, ReasonParserUnavailable, ReasonTruncated},
 		},
 		{
+			name: "a failed process its parser found nothing in", sel: all, parsed: true,
+			invocations: []Invocation{
+				{State: "ran", Coverage: "complete", Extraction: "parsed-clean", ExitCode: new(2)},
+				{State: "ran", Coverage: "complete", Extraction: "parsed-clean", ExitCode: new(0)},
+				{State: "ran", Coverage: "complete", Extraction: "parsed-findings", ExitCode: new(1)},
+			},
+			want: []Reason{ReasonFailedWithoutFindings},
+		},
+		{
 			name: "a cache hit of a parsed tool replays a parsed-clean pass", sel: all, parsed: true,
 			invocations: []Invocation{{State: "cached"}, {State: "verdict-hit"}}, want: []Reason{},
 		},

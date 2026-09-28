@@ -613,14 +613,16 @@ A report says how much of the repository its findings stand for. Every tool is
 judged on three facts, and each one that fails adds a reason to the tool's
 `incomplete` list:
 
-| Fact       | Complete when                                                                                                        | Reasons                                                                                  |
-| ---------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| scope      | the run covered the whole repository — no files named, no subdirectory, no `--file-scoped` — and every task its unit | `narrowed-selection`, `partial-unit`                                                     |
-| execution  | every planned task ran to the end                                                                                    | `cancelled`, `not-started`, `setup-failed`, `platform-skip`                              |
-| extraction | every output was read into findings by a parser, or a cache replayed a pass its parser read as clean                 | `no-extraction`, `parser-unavailable`, `parse-failed`, `truncated`, `unparsed-cache-hit` |
+| Fact       | Complete when                                                                                                        | Reasons                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| scope      | the run covered the whole repository — no files named, no subdirectory, no `--file-scoped` — and every task its unit | `narrowed-selection`, `partial-unit`                                                                                |
+| execution  | every planned task ran to the end                                                                                    | `cancelled`, `not-started`, `setup-failed`, `platform-skip`                                                         |
+| extraction | every output was read into findings by a parser, or a cache replayed a pass its parser read as clean                 | `no-extraction`, `parser-unavailable`, `parse-failed`, `truncated`, `unparsed-cache-hit`, `failed-without-findings` |
 
 A tool without an output parser is never complete (`no-extraction`): its exit
-code says whether it passed, not what it found. The run is `complete` when
+code says whether it passed, not what it found. Nor is a tool whose process
+exited non-zero while its parser found nothing in what it printed
+(`failed-without-findings`): the parser did not recognize that output. The run is `complete` when
 every tool is, every operation ran, and nothing was left out at run level:
 `narrowed-selection`, `tools-filter` (with `selection.excludedTools` naming the
 tools `--tools` left out — the selected tools' own runs can still be complete),
