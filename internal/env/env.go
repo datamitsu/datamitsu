@@ -456,6 +456,13 @@ func AllowPartial() string {
 	return os.Getenv(allowPartial.Name)
 }
 
+// Events returns DATAMITSU_EVENTS exactly as set, "" when unset. The command
+// layer accepts diagnostics=reported and diagnostics=all and exits 2 on
+// anything else.
+func Events() string {
+	return os.Getenv(events.Name)
+}
+
 // ParseBool reads the boolean spelling datamitsu's variables accept: true or
 // 1, false or 0, case-insensitive and trimmed.
 func ParseBool(raw string) (value, ok bool) {

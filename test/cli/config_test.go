@@ -201,7 +201,7 @@ func TestConfigRuntimeFailFast(t *testing.T) {
 
 // TestConfigRuntimeExecutionVariables: `datamitsu config runtime` reports the
 // execution-only variables of fix, lint and check as they are set, empty when
-// they are not — `jq .failOn`, `jq .report`, `jq .allowPartial`. The command
+// they are not — `jq .failOn`, `jq .report`, `jq .allowPartial`, `jq .events`. The command
 // layer validates them.
 func TestConfigRuntimeExecutionVariables(t *testing.T) {
 	for _, tc := range []struct{ key, env, want string }{
@@ -211,6 +211,8 @@ func TestConfigRuntimeExecutionVariables(t *testing.T) {
 		{"report", "DATAMITSU_REPORT=json=out/run.json", "json=out/run.json"},
 		{"allowPartial", "", ""},
 		{"allowPartial", "DATAMITSU_ALLOW_PARTIAL=1", "1"},
+		{"events", "", ""},
+		{"events", "DATAMITSU_EVENTS=diagnostics=all", "diagnostics=all"},
 	} {
 		var env []string
 		if tc.env != "" {

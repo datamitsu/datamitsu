@@ -13,6 +13,7 @@ Usage:
 
 Flags:
       --allow-partial                Write a report that lists findings for a narrowed run (named files, a subdirectory, --tools, --file-scoped) instead of refusing it; the report keeps every reason it is incomplete (also via DATAMITSU_ALLOW_PARTIAL)
+      --events string                Which findings --log-format jsonl carries as diagnostic events: diagnostics=reported (at or above failOn, the default) or diagnostics=all (also via DATAMITSU_EVENTS)
       --explain string[="summary"]   Show execution plan without running (summary|detailed|json)
       --fail-fast                    Stop at the first failing tool; --fail-fast=false runs everything to the end (also via DATAMITSU_FAIL_FAST) (default true)
       --fail-on string               Fail on findings at this level or above in every operation (error|warning|info|hint); raises an operation's failOn, never lowers it (also via DATAMITSU_FAIL_ON)

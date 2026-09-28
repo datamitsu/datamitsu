@@ -202,6 +202,14 @@ var (
 		Description:  "Write a report that lists findings for a narrowed fix/lint/check run instead of refusing it (true or 1, false or 0); the --allow-partial flag wins",
 	}
 
+	// events is execution-only: it decides which findings one run's JSON-L
+	// stream carries, never what datamitsu installs or produces.
+	events = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_EVENTS",
+		DefaultValue: "",
+		Description:  "Which findings the JSON-L stream of fix/lint/check carries as diagnostic events: diagnostics=reported (at or above failOn, the default) or diagnostics=all; the --events flag wins",
+	}
+
 	noParse = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_PARSE",
 		DefaultValue: "",

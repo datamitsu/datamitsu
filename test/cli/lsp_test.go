@@ -128,7 +128,9 @@ func TestLspFormattingSession(t *testing.T) {
 
 // stderrEvents decodes a JSON-L stderr and fails on any line that is not a JSON
 // object carrying type and op_id: stderr is the typed event stream and nothing
-// else, --verbose included, so an editor can parse every line.
+// else, --verbose included, so an editor can parse every line. It fails on a
+// diagnostic event too: the editor gets findings through publishDiagnostics,
+// never on stderr.
 func stderrEvents(t *testing.T, stderr string) []map[string]any {
 	t.Helper()
 	var events []map[string]any
@@ -143,6 +145,8 @@ func stderrEvents(t *testing.T, stderr string) []map[string]any {
 		}
 		if typ, ok := e["type"].(string); !ok || typ == "" {
 			t.Errorf("stderr event without a type: %q", line)
+		} else if typ == "diagnostic" {
+			t.Errorf("the language server emitted a diagnostic event: %q", line)
 		}
 		if id, ok := e["op_id"].(string); !ok || id == "" {
 			t.Errorf("stderr event without an op_id: %q", line)

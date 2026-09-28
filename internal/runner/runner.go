@@ -159,6 +159,10 @@ type sharedContext struct {
 	fileScoped bool
 	// report records the run for its reports; nil when it writes none.
 	report *report.Accumulator
+	// secrets are the values reports and diagnostic events mask, collected
+	// once (secretValues).
+	secrets     []string
+	secretsOnce sync.Once
 	// annotator anchors each parsed process's findings for the report, in the
 	// gate hook; nil when nothing reads them.
 	annotator *report.Annotator
@@ -639,7 +643,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	sc.executor.SetResultCallback(func(result tooling.ExecutionResult) {
 		// A cancelled task is not a failure: it ends its chain with a skip event
 		// and is listed apart from the results, never as a failed run.
-		opRecord.AddTask(result)
+		finished := opRecord.AddTask(result)
 		if result.IsCancelled() {
 			task := stoppedFromResult(result)
 			stopped = append(stopped, task)
@@ -647,14 +651,23 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			opRecord.Stopped(task.cancel())
 		} else {
 			opID := toolOpID(runOpID, result.TaskID)
+			var levels levelCounts
+			for _, d := range result.Diagnostics {
+				levels.add(d.Severity)
+			}
 			ui.Emit(uievent.Event{
-				Type:       uievent.TypeToolRun,
-				OpID:       opID,
-				Status:     doneStatus(result.Success),
-				Tool:       result.ToolName,
-				Dir:        result.RelativeDir,
-				Success:    new(result.Success),
-				DurationMs: result.Duration,
+				Type:            uievent.TypeToolRun,
+				OpID:            opID,
+				Status:          doneStatus(result.Success),
+				Tool:            result.ToolName,
+				Dir:             result.RelativeDir,
+				Success:         new(result.Success),
+				DurationMs:      result.Duration,
+				FindingsError:   new(levels[0]),
+				FindingsWarning: new(levels[1]),
+				FindingsInfo:    new(levels[2]),
+				FindingsHint:    new(levels[3]),
+				Cached:          new(result.Cached),
 			})
 			if !result.Success {
 				ui.Emit(uievent.Event{
@@ -679,6 +692,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			delete(activeTasks, result.TaskID)
 			progressMu.Unlock()
 		}
+		sc.emitDiagnostics(runOpID, finished)
 	})
 
 	// Pre-install every tool the plan needs once, before parallel per-file
@@ -722,6 +736,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		emitStopped(runOpID, task)
 		opRecord.Stopped(task.cancel())
 	}
+	sc.emitDiagnostics(runOpID, opRecord.Flush())
 	// An interruption can stop a run between two groups that passed, with no
 	// failed result to show for it; the tasks it stopped still fail the
 	// operation.
@@ -1112,7 +1127,7 @@ func runSequential(
 	if command != "" {
 		sc.emitRunDone(command, operations, elapsedMs, err == nil)
 	}
-	return err
+	return streamOutcome(err)
 }
 
 // runOperations walks the repository once, runs the bundled checks, then the
@@ -1237,6 +1252,9 @@ type Options struct {
 	// AllowPartial writes a report that lists findings for a narrowed run
 	// instead of refusing the run.
 	AllowPartial bool
+	// AllDiagnostics makes the JSON-L stream carry every finding as a
+	// diagnostic event, not only those at or above failOn.
+	AllDiagnostics bool
 }
 
 // validate rejects unknown flag values. Rank() reads an unvalidated string

@@ -167,6 +167,7 @@ datamitsu check [files...]
 | `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
 | `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
 | `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 
 **Examples:**
@@ -375,14 +376,16 @@ the rest.
 With `--log-format=jsonl`, `fix`, `lint` and `check` write their progress to
 stderr as typed events, one JSON object per line:
 
-| `type`     | When                                                                                                          |
-| ---------- | ------------------------------------------------------------------------------------------------------------- |
-| `phase`    | An operation (`op`: `fix` or `lint`) starts: `status: "start"`                                                |
-| `tool_run` | A tool starts in a directory (`status: "start"`) and ends: `done`, `fail`, or `skip` for a stopped tool       |
-| `chunk`    | A tool finished a unit of its work: `index` of `total`                                                        |
-| `error`    | A tool failed: `tool`, `dir`, `msg`                                                                           |
-| `done`     | The operation ended, with its summary                                                                         |
-| `report`   | A report was written or not: `format`, `path`, `status` and, when it was not, `msg` (see [Reports](#reports)) |
+| `type`       | When                                                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `hello`      | Opens the stream: `op_id` `stream`, `schema` (`datamitsu.report/1`) and `events`, the comma-separated types the stream may carry      |
+| `phase`      | An operation (`op`: `fix` or `lint`) starts: `status: "start"`                                                                        |
+| `tool_run`   | A tool starts in a directory (`status: "start"`) and ends: `done` or `fail` with its findings per level, or `skip` for a stopped tool |
+| `chunk`      | A tool finished a unit of its work: `index` of `total`                                                                                |
+| `error`      | A tool failed: `tool`, `dir`, `msg`                                                                                                   |
+| `done`       | The operation ended, with its summary                                                                                                 |
+| `report`     | A report was written or not: `format`, `path`, `status` and, when it was not, `msg` (see [Reports](#reports))                         |
+| `diagnostic` | One finding of a tool, once the tool finished: by default those at or above the operation's `failOn`                                  |
 
 Every task — one tool in one directory, or one file of a tool that runs once
 per file — has an `op_id` of its own: the operation's `op_id` followed by
@@ -391,6 +394,65 @@ the root) and `seq` numbers the operation's planned tasks from 1 in plan order,
 for example `run-1:eslint:packages/web:3`. A task's `tool_run` start, its `chunk`
 events, its `error` and its closing `tool_run` share it, and no other task's
 events do.
+
+The stream opens with a `hello` event on every command that writes one, so a
+reader can tell a stream without `diagnostic` events from a run that found
+nothing:
+
+```json
+{
+  "type": "hello",
+  "op_id": "stream",
+  "schema": "datamitsu.report/1",
+  "events": "hello,phase,download,install,chunk,tool_run,error,done,log,report,diagnostic"
+}
+```
+
+A `tool_run` that ends with `done` or `fail` carries the task's findings per
+level — `findings_error`, `findings_warning`, `findings_info`, `findings_hint`,
+zero included — and `cached`, true when a cache answered for the task. No other
+event carries them.
+
+A `diagnostic` event is one finding, emitted once its tool has finished in the
+operation — every task of the tool, since a finding's fingerprint depends on
+all of the tool's findings — and before the operation's `done`. Its `op_id` is
+the task that reported it:
+
+```json
+{
+  "type": "diagnostic",
+  "op_id": "run-1:eslint:packages/web:3",
+  "tool": "eslint",
+  "dir": "packages/web",
+  "file": "packages/web/src/a.ts",
+  "row": 3,
+  "col": 7,
+  "end_row": 3,
+  "end_col": 8,
+  "severity": "error",
+  "code": "no-unused-vars",
+  "source": "eslint",
+  "msg": "'x' is assigned a value but never used.",
+  "fingerprint": "8d08ad593059cec87a6c97ce43655d04b1bee8102810cd99952dd606b26bb618",
+  "provenance": "parser",
+  "reported": true,
+  "gates": true
+}
+```
+
+`file` is relative to the repository root, rows and columns are 1-based and
+`end_col` is exclusive; `fingerprint` is the finding's
+[report fingerprint](#reports), and its message is masked like a report's. By
+default only the findings at or above the operation's `failOn` are emitted —
+what the terminal shows. `--events diagnostics=all` (or
+`DATAMITSU_EVENTS=diagnostics=all`) emits every finding, with `reported` and
+`gates` saying which are at the threshold and which failed their tool;
+`diagnostics=reported` is the default. Any other value exits 2. The synthetic
+finding a report lists for a tool that failed without findings is never an
+event.
+
+A stream that could not be written — a closed or full stderr — fails the run:
+it exits 1 and says so on stdout, the one stream left.
 
 A `tool_run` with `status: "skip"` ends the chain of a tool the run stopped,
 and is never a failure. Its `msg` says what happened and why:
@@ -647,6 +709,7 @@ datamitsu fix [files...]
 | `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
 | `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
 | `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 
 **Examples:**
@@ -681,6 +744,7 @@ datamitsu lint [files...]
 | `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
 | `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
 | `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 
 **Examples:**
@@ -1865,7 +1929,10 @@ the directory it was started in.
 ### lsp events
 
 Every stderr line is one JSON object carrying `type` and `op_id`, with
-`--verbose` or without. The language server emits:
+`--verbose` or without. The stream opens with a `hello` event, as every JSON-L
+stream does (see [Run events](#run-events)). The language server never emits
+`diagnostic` events: an editor gets findings through `publishDiagnostics`. It
+emits:
 
 | `type`                | Meaning                                                                                                            |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -2084,6 +2151,7 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_FAIL_ON`               | Raise every operation's `failOn` for `fix`, `lint` and `check` to `error`, `warning`, `info` or `hint`; never lowers one (twin of `--fail-on`) | -                                                   |
 | `DATAMITSU_REPORT`                | Reports `fix`, `lint` and `check` write, as comma-separated `format=path` pairs (twin of `--report`; see [Reports](#reports))                  | -                                                   |
 | `DATAMITSU_ALLOW_PARTIAL`         | Write a report that lists findings for a narrowed run (`true`/`1`) instead of refusing it (twin of `--allow-partial`)                          | `false`                                             |
+| `DATAMITSU_EVENTS`                | Which findings the JSON-L stream of `fix`, `lint` and `check` emits: `diagnostics=reported` or `diagnostics=all` (twin of `--events`)          | `diagnostics=reported`                              |
 | `DATAMITSU_CONFIG_CACHE`          | Serve evaluated config chains from disk (`0`/`false`/`off`/`no` disables it)                                                                   | `1`                                                 |
 | `DATAMITSU_LSP_FORMAT_WIDEN_TO`   | How far editor format-on-save may widen: `target` or `unit`                                                                                    | `unit`                                              |
 | `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` | Format-on-save watchdog in ms: no further tool group starts once it has elapsed (`0` = disabled)                                               | `15000`                                             |
@@ -2122,8 +2190,8 @@ which exports no `DATAMITSU_ROOT` because it has no git root; it records the
 config chain the farm was baked from, joined with the platform's list separator,
 and is informational in the same way. All three are excluded from the farm's
 staleness fingerprint, so exporting them cannot make a farm look stale.
-`DATAMITSU_FAIL_FAST`, `DATAMITSU_FAIL_ON`, `DATAMITSU_REPORT` and
-`DATAMITSU_ALLOW_PARTIAL` are excluded too: they change how far one run goes and what it prints or writes, never what a
+`DATAMITSU_FAIL_FAST`, `DATAMITSU_FAIL_ON`, `DATAMITSU_REPORT`,
+`DATAMITSU_ALLOW_PARTIAL` and `DATAMITSU_EVENTS` are excluded too: they change how far one run goes and what it prints or writes, never what a
 farm contains, so setting one for one command does not re-bake the farm.
 
 `DATAMITSU_FORCE_GIT_SUBPROCESS` applies to the config loader's memoized git-root

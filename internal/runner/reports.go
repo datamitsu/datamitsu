@@ -32,9 +32,10 @@ func now() time.Time {
 	return time.Now().UTC()
 }
 
-// startReport begins recording the run when it has a report to write.
+// startReport begins recording the run when something reads what it found: a
+// report to write, or a JSON-L stream to carry diagnostic events.
 func (sc *sharedContext) startReport() {
-	if len(sc.opts.Reports) == 0 {
+	if len(sc.opts.Reports) == 0 && !ui.Quiet() {
 		return
 	}
 	opts := report.Options{
@@ -50,9 +51,15 @@ func (sc *sharedContext) startReport() {
 	sc.annotator = report.NewAnnotator(sc.rootPath, opts.Parsers)
 }
 
-// secrets are the values a report masks: those of the host's variables and of
-// every app's and operation's env whose names say they hold a secret.
-func (sc *sharedContext) secrets() []string {
+// secretValues are the values a report and the event stream mask: those of
+// the host's variables and of every app's and operation's env whose names say
+// they hold a secret. Computed once per run.
+func (sc *sharedContext) secretValues() []string {
+	sc.secretsOnce.Do(func() { sc.secrets = sc.collectSecrets() })
+	return sc.secrets
+}
+
+func (sc *sharedContext) collectSecrets() []string {
 	var envs []map[string]string
 	for _, app := range sc.cfg.Apps {
 		envs = append(envs, app.Env, app.RuntimeEnv)
@@ -156,6 +163,72 @@ func refuseNarrowedReports(opts Options, sel tooling.Selection, fileScoped bool,
 		strings.Join(why, ", "), strings.Join(listing, ", "))
 }
 
+// emitDiagnostics writes a diagnostic event for each finding of a tool that
+// finished: those at or above the operation's failOn, or every one under
+// --events diagnostics=all. Its op_id is the task's. The message is masked as
+// a report's would be.
+func (sc *sharedContext) emitDiagnostics(runOpID string, found []report.ToolFinding) {
+	if len(found) == 0 || !ui.Quiet() {
+		return
+	}
+	var mask *strings.Replacer
+	for _, tf := range found {
+		f := tf.Finding
+		if !f.Reported && !sc.opts.AllDiagnostics {
+			continue
+		}
+		if mask == nil {
+			mask = maskReplacer(sc.secretValues())
+		}
+		ui.Emit(uievent.Event{
+			Type:        uievent.TypeDiagnostic,
+			OpID:        toolOpID(runOpID, tf.TaskID),
+			Tool:        f.Tool,
+			Dir:         tf.Dir,
+			File:        f.Location.Path,
+			Row:         f.Location.Row,
+			Col:         f.Location.Col,
+			EndRow:      f.Location.EndRow,
+			EndCol:      f.Location.EndCol,
+			Severity:    f.Severity,
+			Code:        f.Code,
+			Source:      f.Source,
+			Msg:         mask.Replace(f.Message),
+			Fingerprint: f.Fingerprint,
+			Provenance:  f.Provenance,
+			Reported:    new(f.Reported),
+			Gates:       new(f.Gates),
+		})
+	}
+}
+
+func maskReplacer(secrets []string) *strings.Replacer {
+	pairs := make([]string, 0, 2*len(secrets))
+	for _, s := range secrets {
+		pairs = append(pairs, s, report.Masked)
+	}
+	return strings.NewReplacer(pairs...)
+}
+
+// streamOutcome fails a run whose JSON-L stream could not be written: its
+// consumer read less than the run did. It exits 1 — a broken stderr is not an
+// unwritten report — unless the run was interrupted, and says so on stdout, the
+// one stream left.
+func streamOutcome(err error) error {
+	streamErr := ui.EventStreamFailed()
+	if streamErr == nil {
+		return err
+	}
+	if interrupted, ok := errors.AsType[interruptedError](err); ok {
+		return interrupted
+	}
+	msg := "the JSON-L event stream could not be written: " + streamErr.Error()
+	if err != nil {
+		msg = err.Error() + "\n" + msg
+	}
+	return errors.New(msg)
+}
+
 // exportTarget is one report on its way to disk: the temporary file it is
 // written into beside its path, or stdout.
 type exportTarget struct {
@@ -172,7 +245,7 @@ type exportTarget struct {
 // run with exitcode.Export only when nothing else did: a tool failure (1) and
 // an incomplete run (4) outrank it.
 func (sc *sharedContext) finishReports(operations []config.OperationType, err error) error {
-	if sc.report == nil {
+	if sc.report == nil || len(sc.opts.Reports) == 0 {
 		return err
 	}
 	for _, op := range operations {
@@ -195,7 +268,7 @@ func (sc *sharedContext) finishReports(operations []config.OperationType, err er
 		FailFast:      sc.failFast,
 		Exports:       exports,
 	})
-	report.Mask(run, sc.secrets())
+	report.Mask(run, sc.secretValues())
 
 	var failures []error
 	for i := range targets {

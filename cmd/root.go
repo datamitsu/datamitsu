@@ -17,6 +17,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
+	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/runner"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/sponsor"
@@ -132,12 +133,35 @@ func init() {
 // consumer that parses it.
 func setJSONLStderr(on bool) {
 	if on {
+		// Already a stream (--log-format jsonl, then a report on stdout): it
+		// has said hello once.
+		if ui.Quiet() {
+			return
+		}
 		ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)
 		logger.Route(ui.Emit)
+		emitHello()
 		return
 	}
 	ui.SetEventSink(nil, false)
 	logger.Route(nil)
+}
+
+// emitHello opens a stream with what it may carry, so a reader tells a stream
+// without diagnostic events from one whose run found nothing. The event types
+// are comma-separated: the envelope stays flat.
+func emitHello() {
+	types := uievent.Types()
+	names := make([]string, len(types))
+	for i, t := range types {
+		names[i] = string(t)
+	}
+	ui.Emit(uievent.Event{
+		Type:   uievent.TypeHello,
+		OpID:   "stream",
+		Schema: report.SchemaVersion,
+		Events: strings.Join(names, ","),
+	})
 }
 
 // resolveLogFormat returns the effective status output format. The --log-format
@@ -268,6 +292,12 @@ func Execute() {
 			code = coded.ExitCode()
 		}
 
+		// A stream that could not be written takes no error event either: the
+		// error goes to stdout, the one stream left.
+		if ui.EventStreamFailed() != nil {
+			fmt.Printf("error: %s\n", err)
+			os.Exit(code)
+		}
 		// In JSON-L mode the human error line would be a non-JSON line on the
 		// stderr event stream; emit a typed error event instead so every stderr
 		// line stays valid JSON.

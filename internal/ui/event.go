@@ -50,6 +50,18 @@ func Quiet() bool {
 	return quiet
 }
 
+// EventStreamFailed returns the first error the active event sink met writing
+// its stream, nil when it met none or cannot tell.
+func EventStreamFailed() error {
+	eventMu.RLock()
+	s := eventSink
+	eventMu.RUnlock()
+	if f, ok := s.(interface{ Failed() error }); ok {
+		return f.Failed()
+	}
+	return nil
+}
+
 // sinkActive reports whether a typed event sink is installed. Used by emitters
 // to skip building events (and wrapping readers) when nobody is listening.
 func sinkActive() bool {

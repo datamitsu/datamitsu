@@ -57,6 +57,10 @@ type OperationRecord struct {
 	taskDir func(tooling.Task) string
 	results map[string]tooling.ExecutionResult
 	stopped []Cancel
+	// pending counts, per tool, the planned tasks whose results have not
+	// arrived; flushed marks the tools whose findings were handed out.
+	pending map[string]int
+	flushed map[string]bool
 
 	success  bool
 	duration int64
@@ -73,6 +77,15 @@ func (a *Accumulator) BeginOperation(name string, plan *tooling.ExecutionPlan, t
 		plan:    plan,
 		taskDir: taskDir,
 		results: map[string]tooling.ExecutionResult{},
+		pending: map[string]int{},
+		flushed: map[string]bool{},
+	}
+	if plan != nil {
+		for _, group := range plan.Groups {
+			for _, task := range group.Tasks {
+				rec.pending[task.ToolName]++
+			}
+		}
 	}
 	a.mu.Lock()
 	a.ops = append(a.ops, rec)
@@ -92,16 +105,53 @@ func (a *Accumulator) NotRun(name string) {
 	a.ops = append(a.ops, &OperationRecord{acc: a, name: name})
 }
 
-// AddTask folds one task's result into the operation. Like every method of an
+// ToolFinding is a finding with the task that reported it, as the event
+// stream carries it.
+type ToolFinding struct {
+	TaskID  string
+	Dir     string
+	Finding Finding
+}
+
+// AddTask folds one task's result into the operation. When it is the last
+// planned task of its tool to arrive, it returns every finding of that tool in
+// the operation, with the fingerprints the report will hold: those depend on
+// all of a tool's findings, so a tool's findings are final only once it has
+// finished. Synthetic findings are not among them. Like every method of an
 // OperationRecord it does nothing on a nil record, which is what a run that
-// writes no report holds.
-func (o *OperationRecord) AddTask(result tooling.ExecutionResult) {
+// records nothing holds.
+func (o *OperationRecord) AddTask(result tooling.ExecutionResult) []ToolFinding {
 	if o == nil {
-		return
+		return nil
 	}
 	o.acc.mu.Lock()
 	defer o.acc.mu.Unlock()
 	o.results[result.TaskID] = result
+	o.pending[result.ToolName]--
+	if o.pending[result.ToolName] > 0 {
+		return nil
+	}
+	return o.flushTool(result.ToolName)
+}
+
+// Flush returns the findings of the tools whose last task never arrived — the
+// run stopped before it — as AddTask would have.
+func (o *OperationRecord) Flush() []ToolFinding {
+	if o == nil {
+		return nil
+	}
+	o.acc.mu.Lock()
+	defer o.acc.mu.Unlock()
+	names := make([]string, 0, len(o.pending))
+	for name := range o.pending {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var out []ToolFinding
+	for _, name := range names {
+		out = append(out, o.flushTool(name)...)
+	}
+	return out
 }
 
 // Stopped records a task the run stopped: cancelled after it started, or never
@@ -123,6 +173,23 @@ func (o *OperationRecord) End(success bool, durationMs int64) {
 	o.acc.mu.Lock()
 	defer o.acc.mu.Unlock()
 	o.success, o.duration = success, durationMs
+}
+
+func (o *OperationRecord) flushTool(name string) []ToolFinding {
+	if o.flushed[name] || o.plan == nil {
+		return nil
+	}
+	o.flushed[name] = true
+	tr := o.acc.buildTool(o, name)
+	var out []ToolFinding
+	for _, inv := range tr.Invocations {
+		for _, f := range inv.Findings {
+			if f.Kind != kindSynthetic {
+				out = append(out, ToolFinding{TaskID: inv.TaskID, Dir: inv.Dir, Finding: f})
+			}
+		}
+	}
+	return out
 }
 
 // BuildInfo is what the runner knows about the run as a whole.
@@ -192,16 +259,9 @@ func (a *Accumulator) buildOperation(o *OperationRecord) Operation {
 	tools := map[string]*ToolRun{}
 	for _, group := range o.plan.Groups {
 		for _, task := range group.Tasks {
-			tr := tools[task.ToolName]
-			if tr == nil {
-				tr = a.newToolRun(o.name, task.ToolName)
-				tools[task.ToolName] = tr
+			if tools[task.ToolName] == nil {
+				tools[task.ToolName] = a.buildTool(o, task.ToolName)
 			}
-			var result *tooling.ExecutionResult
-			if r, ok := o.results[task.ID]; ok {
-				result = &r
-			}
-			tr.Invocations = append(tr.Invocations, a.invocations(task, result, o.taskDir, tr)...)
 		}
 	}
 	// A tool with no binary for this host did not run where it was asked to:
@@ -215,12 +275,32 @@ func (a *Accumulator) buildOperation(o *OperationRecord) Operation {
 		tools[s.ToolName] = tr
 	}
 	for _, tr := range tools {
-		sortInvocations(tr.Invocations)
-		settleFindings(tr)
 		op.Tools = append(op.Tools, *tr)
 	}
 	sort.Slice(op.Tools, func(i, j int) bool { return op.Tools[i].Name < op.Tools[j].Name })
 	return op
+}
+
+// buildTool is everything one tool did in an operation: an invocation per
+// process of each of its planned tasks, in plan order, with its findings
+// settled across all of them.
+func (a *Accumulator) buildTool(o *OperationRecord, name string) *ToolRun {
+	tr := a.newToolRun(o.name, name)
+	for _, group := range o.plan.Groups {
+		for _, task := range group.Tasks {
+			if task.ToolName != name {
+				continue
+			}
+			var result *tooling.ExecutionResult
+			if r, ok := o.results[task.ID]; ok {
+				result = &r
+			}
+			tr.Invocations = append(tr.Invocations, a.invocations(task, result, o.taskDir, tr)...)
+		}
+	}
+	sortInvocations(tr.Invocations)
+	settleFindings(tr)
+	return tr
 }
 
 func (a *Accumulator) newToolRun(op, name string) *ToolRun {

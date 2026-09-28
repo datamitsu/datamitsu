@@ -19,18 +19,28 @@ const (
 	allowPartialUsage = "Write a report that lists findings for a narrowed run (named files, a subdirectory, " +
 		"--tools, --file-scoped) instead of refusing it; the report keeps every reason it is incomplete " +
 		"(also via DATAMITSU_ALLOW_PARTIAL)"
+	eventsUsage = "Which findings --log-format jsonl carries as diagnostic events: diagnostics=reported " +
+		"(at or above failOn, the default) or diagnostics=all (also via DATAMITSU_EVENTS)"
+)
+
+// Values of --events and DATAMITSU_EVENTS.
+const (
+	eventsReported = "diagnostics=reported"
+	eventsAll      = "diagnostics=all"
 )
 
 // reportFlags are the report flags of fix, lint and check.
 type reportFlags struct {
 	reports      []string
 	allowPartial bool
+	events       string
 }
 
 func addReportFlags(cmd *cobra.Command, flags *reportFlags) {
 	// StringArray, not StringSlice: a report's options may hold commas.
 	cmd.Flags().StringArrayVar(&flags.reports, "report", nil, reportUsage)
 	cmd.Flags().BoolVar(&flags.allowPartial, "allow-partial", false, allowPartialUsage)
+	cmd.Flags().StringVar(&flags.events, "events", "", eventsUsage)
 }
 
 // failFastWithReport refuses a run that is asked both to stop at the first
@@ -65,6 +75,9 @@ func applyReports(cmd *cobra.Command, flags reportFlags, opts *runner.Options) e
 		return err
 	}
 	opts.Reports, opts.AllowPartial = specs, allowPartial
+	if opts.AllDiagnostics, err = resolveEvents(cmd, flags.events, eff.Events); err != nil {
+		return err
+	}
 	if len(specs) == 0 {
 		return nil
 	}
@@ -83,6 +96,33 @@ func applyReports(cmd *cobra.Command, flags reportFlags, opts *runner.Options) e
 		setJSONLStderr(true)
 	}
 	return nil
+}
+
+// resolveEvents reads --events, or DATAMITSU_EVENTS when the flag is not
+// given; both are checked either way, since a mistyped value would silently
+// narrow what a stream consumer sees.
+func resolveEvents(cmd *cobra.Command, flag, fromEnv string) (bool, error) {
+	all := false
+	for _, v := range []struct {
+		raw, source string
+		use         bool
+	}{
+		{fromEnv, "DATAMITSU_EVENTS", fromEnv != ""},
+		{flag, "--events", cmd.Flags().Changed("events")},
+	} {
+		if !v.use {
+			continue
+		}
+		switch v.raw {
+		case eventsAll:
+			all = true
+		case eventsReported:
+			all = false
+		default:
+			return false, exitcode.UsageErrorf("invalid %s value: %q (must be %s or %s)", v.source, v.raw, eventsReported, eventsAll)
+		}
+	}
+	return all, nil
 }
 
 // resolveAllowPartial takes the flag when given, otherwise the variable, which

@@ -49,6 +49,7 @@ type Effective struct {
 	AllowPartial             string `json:"allowPartial"`
 	Concurrency              int    `json:"concurrency"`
 	ConfigCache              bool   `json:"configCache"`
+	Events                   string `json:"events"`
 	FailFast                 bool   `json:"failFast"`
 	FailFastSource           string `json:"failFastSource"`
 	FailOn                   string `json:"failOn"`
@@ -89,6 +90,7 @@ func Compute() Effective {
 		AllowPartial:             env.AllowPartial(),
 		Concurrency:              env.GetConcurrency(),
 		ConfigCache:              env.ConfigCacheEnabled(),
+		Events:                   env.Events(),
 		FailFast:                 failFast,
 		FailFastSource:           failFastSource,
 		FailOn:                   env.FailOn(),

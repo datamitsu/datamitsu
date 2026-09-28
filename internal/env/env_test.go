@@ -1455,6 +1455,21 @@ func TestAllowPartial(t *testing.T) {
 	}
 }
 
+func TestEvents(t *testing.T) {
+	t.Setenv(events.Name, os.Getenv(events.Name))
+
+	_ = os.Unsetenv(events.Name)
+	if got := Events(); got != "" {
+		t.Errorf("Events() unset = %q, want empty", got)
+	}
+	for _, raw := range []string{"diagnostics=all", "diagnostics=reported", "everything"} {
+		t.Setenv(events.Name, raw)
+		if got := Events(); got != raw {
+			t.Errorf("Events() = %q, want %q returned raw", got, raw)
+		}
+	}
+}
+
 func TestParseBool(t *testing.T) {
 	for _, tt := range []struct {
 		raw       string

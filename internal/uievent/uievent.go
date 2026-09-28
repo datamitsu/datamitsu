@@ -41,7 +41,24 @@ const (
 	// TypeReport records one report a fix, lint or check run was asked to
 	// write: its format, its path, and whether it was written.
 	TypeReport Type = "report"
+	// TypeDiagnostic is one finding of a tool, emitted once the tool has
+	// finished in an operation: by default those at or above the operation's
+	// failOn, every one under --events diagnostics=all.
+	TypeDiagnostic Type = "diagnostic"
+	// TypeHello opens a stream: what it may carry (Events) and the schema its
+	// findings follow (Schema), so that a reader tells "no diagnostic events"
+	// from "zero findings".
+	TypeHello Type = "hello"
 )
+
+// Types lists every event type a stream may carry, in the order a reader is
+// told them.
+func Types() []Type {
+	return []Type{
+		TypeHello, TypePhase, TypeDownload, TypeInstall, TypeChunk, TypeToolRun,
+		TypeError, TypeDone, TypeLog, TypeReport, TypeDiagnostic,
+	}
+}
 
 // Level values for the optional Level field of a log event.
 const (
@@ -118,6 +135,37 @@ type Event struct {
 	// written, failed, refused or omitted, and Msg says why it was not written.
 	Format string `json:"format,omitempty"`
 	Path   string `json:"path,omitempty"`
+
+	// diagnostic: where a finding is, relative to the repository root, with
+	// 1-based rows and columns and an exclusive end column, and what it is.
+	// Msg is its message.
+	File        string `json:"file,omitempty"`
+	Row         int    `json:"row,omitempty"`
+	Col         int    `json:"col,omitempty"`
+	EndRow      int    `json:"end_row,omitempty"`
+	EndCol      int    `json:"end_col,omitempty"`
+	Severity    string `json:"severity,omitempty"`
+	Code        string `json:"code,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+	Provenance  string `json:"provenance,omitempty"`
+	// Reported and Gates are the finding's flags; pointers, so that false is
+	// written on the events that carry them.
+	Reported *bool `json:"reported,omitempty"`
+	Gates    *bool `json:"gates,omitempty"`
+
+	// tool_run's terminal event: the task's findings per level, zero
+	// included, and whether a cache answered for it.
+	FindingsError   *int  `json:"findings_error,omitempty"`
+	FindingsWarning *int  `json:"findings_warning,omitempty"`
+	FindingsInfo    *int  `json:"findings_info,omitempty"`
+	FindingsHint    *int  `json:"findings_hint,omitempty"`
+	Cached          *bool `json:"cached,omitempty"`
+
+	// hello: the schema findings follow and the event types the stream may
+	// carry, comma-separated so the envelope stays flat.
+	Schema string `json:"schema,omitempty"`
+	Events string `json:"events,omitempty"`
 }
 
 // Sink consumes typed events. Implementations MUST be safe for concurrent use

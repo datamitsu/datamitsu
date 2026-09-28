@@ -236,6 +236,64 @@ func TestSettleFindings(t *testing.T) {
 	}
 }
 
+// A tool's findings are handed out once its last planned task arrives — or by
+// Flush when the run stopped before it — with the fingerprints the report
+// holds, and never twice.
+func TestFindingsOfAFinishedTool(t *testing.T) {
+	finding := func(file string, col int) diagnostic.Diagnostic {
+		return diagnostic.Diagnostic{File: abs(file), Row: 1, EndRow: 1, Col: col, EndCol: col, Code: "C", Source: "hadolint", Message: "m", Severity: diagnostic.SeverityError}
+	}
+	a1, a2, b1 := perFileTask("hadolint::1", "a"), perFileTask("hadolint::2", "a"), perFileTask("other::3", "b")
+	b1.ToolName = "other"
+	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{a1, a2, b1}}}}
+	result := func(task tooling.Task, d diagnostic.Diagnostic) tooling.ExecutionResult {
+		return tooling.ExecutionResult{
+			ToolName: task.ToolName, TaskID: task.ID, Success: false,
+			Processes: []tooling.ProcessResult{{
+				ID: task.ID + "#1", Files: task.Files, State: tooling.ProcessRan, ExitCode: new(1),
+				Extraction: tooling.ExtractionParsedFindings, Diagnostics: []diagnostic.Diagnostic{d},
+			}},
+		}
+	}
+
+	acc := NewAccumulator(Options{Root: root})
+	op := acc.BeginOperation("lint", plan, nil)
+	if got := op.AddTask(result(a1, finding("a", 5))); got != nil {
+		t.Fatalf("findings before hadolint finished = %+v", got)
+	}
+	if got := op.AddTask(result(b1, finding("b", 1))); len(got) != 1 || got[0].TaskID != b1.ID {
+		t.Fatalf("findings of other = %+v, want its one finding", got)
+	}
+	got := op.AddTask(result(a2, finding("a", 2)))
+	if len(got) != 2 || got[0].TaskID != a1.ID || got[1].TaskID != a2.ID {
+		t.Fatalf("findings of hadolint = %+v, want both tasks'", got)
+	}
+	if rest := op.Flush(); rest != nil {
+		t.Errorf("Flush after every tool finished = %+v", rest)
+	}
+	// Ordinals count across the two tasks: column 2 is the first.
+	if got[1].Finding.Fingerprint != Fingerprint("hadolint", "C", "a", "row:1", 0) ||
+		got[0].Finding.Fingerprint != Fingerprint("hadolint", "C", "a", "row:1", 1) {
+		t.Errorf("fingerprints = %s, %s", got[0].Finding.Fingerprint, got[1].Finding.Fingerprint)
+	}
+	run := acc.Build(BuildInfo{Selection: Selection{Mode: "all"}})
+	for _, tr := range run.Operations[0].Tools {
+		for _, inv := range tr.Invocations {
+			for _, f := range inv.Findings {
+				if tr.Name == "hadolint" && f.Fingerprint != got[0].Finding.Fingerprint && f.Fingerprint != got[1].Finding.Fingerprint {
+					t.Errorf("the report's fingerprint %s is not an event's", f.Fingerprint)
+				}
+			}
+		}
+	}
+
+	stopped := NewAccumulator(Options{Root: root}).BeginOperation("lint", plan, nil)
+	stopped.AddTask(result(a1, finding("a", 5)))
+	if rest := stopped.Flush(); len(rest) != 1 || rest[0].TaskID != a1.ID {
+		t.Errorf("Flush = %+v, want the finding of the tool the run stopped", rest)
+	}
+}
+
 func TestRelPath(t *testing.T) {
 	tests := []struct {
 		name, path, want string

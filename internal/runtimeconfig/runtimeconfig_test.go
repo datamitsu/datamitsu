@@ -41,6 +41,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		FailOn:                   "warning",
 		Report:                   "json=out/run.json",
 		AllowPartial:             "true",
+		Events:                   "diagnostics=all",
 	}
 
 	data, err := json.Marshal(in)
@@ -76,6 +77,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		"failOn",
 		"report",
 		"allowPartial",
+		"events",
 	}
 	for _, k := range requiredKeys {
 		if _, ok := m[k]; !ok {
@@ -297,6 +299,18 @@ func TestComputeAllowPartial(t *testing.T) {
 			t.Setenv("DATAMITSU_ALLOW_PARTIAL", raw)
 			if eff := Compute(); eff.AllowPartial != raw {
 				t.Errorf("AllowPartial = %q, want %q", eff.AllowPartial, raw)
+			}
+		})
+	}
+}
+
+// DATAMITSU_EVENTS is reported as set; the command layer reads it.
+func TestComputeEvents(t *testing.T) {
+	for _, raw := range []string{"", "diagnostics=all", "bogus"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("DATAMITSU_EVENTS", raw)
+			if eff := Compute(); eff.Events != raw {
+				t.Errorf("Events = %q, want %q", eff.Events, raw)
 			}
 		})
 	}
