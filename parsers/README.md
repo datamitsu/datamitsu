@@ -74,11 +74,13 @@ Each tool is one module under `datamitsu-parsers/src/tools/`. To add one:
    `category` and `kind` — and
    `pub fn parse(stdout: &[u8], stderr: &[u8], exit_code: i32) -> Vec<RawDiagnostic>`,
    with `cargo test` cases beside it and its `SAMPLES`.
-2. Register it: `pub mod <tool>;`, a dispatch arm and a `samples` entry in
-   `src/tools/mod.rs`, its descriptor in `TOOLS` in `src/capabilities.rs`, and its
-   row in `POSITIONS` in `src/contract.rs`. The core checks a configuration's
-   parser key against `describe` before it parses, so a parser missing from `TOOLS`
-   is treated as unknown even though it dispatches.
+2. Register it: `pub mod <tool>;`, a dispatch arm, a `samples` entry and its
+   descriptor in `DESCRIPTORS`, all in `src/tools/mod.rs`, and its row in
+   `POSITIONS` in `src/contract.rs`. The core checks a configuration's parser key
+   against `describe` before it parses, so a parser missing from `DESCRIPTORS` is
+   treated as unknown even though it dispatches. Nothing outside `src/tools/` and
+   `src/contract.rs` changes, so the embedded fallback module, which is built
+   without the tool parsers, need not be rebuilt.
 3. When a configuration wires the parser, record a clean and a finding-bearing run
    of the real tool under `datamitsu-parsers/fixtures/<tool>/` and assert them in
    `src/tools/fixtures.rs` ([fixtures/README.md](datamitsu-parsers/fixtures/README.md)).

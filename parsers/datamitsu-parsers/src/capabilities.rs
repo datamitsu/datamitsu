@@ -13,12 +13,11 @@
 //! declared and actual versions drift. The config declares only url+hash.
 //!
 //! Each real tool owns its `DESCRIPTOR` in its `tools::<tool>` module, co-located
-//! with that tool's parser, and is referenced from [`TOOLS`] below.
+//! with that tool's parser, and is referenced from `tools::DESCRIPTORS`; the
+//! format parsers' are in `format::DESCRIPTORS`.
 
 use crate::diagnostic::json_string;
 use crate::severity::Level;
-#[cfg(feature = "tools")]
-use crate::tools;
 
 /// Capabilities schema version. Bump on an incompatible shape change so the Go
 /// decoder can refuse or adapt. Schema 2 adds each tool's level vocabulary,
@@ -90,127 +89,15 @@ pub(crate) struct ToolCapability {
 	pub(crate) kind: &'static str,
 }
 
-/// The `echo` pipe-test parser's descriptor (defined here since `echo` lives in
-/// the crate root, not in `tools`).
 #[cfg(feature = "tools")]
-const ECHO: ToolCapability = ToolCapability {
-	name: "echo",
-	description: "Pipe-test parser: echoes stdout into a single diagnostic message and the \
-        exit code into `code`. Proves the declare\u{2192}build\u{2192}sign\u{2192}deliver\u{2192}load\u{2192}invoke \
-        pipe end to end; not a real tool.",
-	url: "",
-	operations: &[],
-	severities: &[],
-	column_unit: "",
-	category: "",
-	kind: "tool",
-};
+fn tool_parsers() -> &'static [&'static ToolCapability] {
+	crate::tools::DESCRIPTORS
+}
 
-/// The capability table: the pipe-test `echo` plus one entry per real tool. A new
-/// tool adds its module's `DESCRIPTOR` here (and a `tools::dispatch` arm).
-#[cfg(feature = "tools")]
-pub(crate) const TOOLS: &[&ToolCapability] = &[
-	&ECHO,
-	&tools::actionlint::DESCRIPTOR,
-	&tools::alex::DESCRIPTOR,
-	&tools::ansiblelint::DESCRIPTOR,
-	&tools::bean_check::DESCRIPTOR,
-	&tools::bslint::DESCRIPTOR,
-	&tools::buf::DESCRIPTOR,
-	&tools::buildifier::DESCRIPTOR,
-	&tools::cfn_lint::DESCRIPTOR,
-	&tools::checkmake::DESCRIPTOR,
-	&tools::checkstyle::DESCRIPTOR,
-	&tools::clazy::DESCRIPTOR,
-	&tools::clj_kondo::DESCRIPTOR,
-	&tools::cmake_lint::DESCRIPTOR,
-	&tools::codespell::DESCRIPTOR,
-	&tools::commitlint::DESCRIPTOR,
-	&tools::cppcheck::DESCRIPTOR,
-	&tools::credo::DESCRIPTOR,
-	&tools::cspell::DESCRIPTOR,
-	&tools::cue_fmt::DESCRIPTOR,
-	&tools::dclint::DESCRIPTOR,
-	&tools::deadnix::DESCRIPTOR,
-	&tools::djlint::DESCRIPTOR,
-	&tools::dotenv_linter::DESCRIPTOR,
-	&tools::droast::DESCRIPTOR,
-	&tools::editorconfig_checker::DESCRIPTOR,
-	&tools::erb_lint::DESCRIPTOR,
-	&tools::eslint::DESCRIPTOR,
-	&tools::fish::DESCRIPTOR,
-	&tools::gccdiag::DESCRIPTOR,
-	&tools::gdlint::DESCRIPTOR,
-	&tools::gitleaks::DESCRIPTOR,
-	&tools::gitlint::DESCRIPTOR,
-	&tools::glslc::DESCRIPTOR,
-	&tools::golangci_lint::DESCRIPTOR,
-	&tools::hadolint::DESCRIPTOR,
-	&tools::haml_lint::DESCRIPTOR,
-	&tools::harper_cli::DESCRIPTOR,
-	&tools::knip::DESCRIPTOR,
-	&tools::ktlint::DESCRIPTOR,
-	&tools::kube_linter::DESCRIPTOR,
-	&tools::ltrs::DESCRIPTOR,
-	&tools::markdownlint::DESCRIPTOR,
-	&tools::markdownlint_cli2::DESCRIPTOR,
-	&tools::markuplint::DESCRIPTOR,
-	&tools::mdl::DESCRIPTOR,
-	&tools::mlint::DESCRIPTOR,
-	&tools::mypy::DESCRIPTOR,
-	&tools::npm_groovy_lint::DESCRIPTOR,
-	&tools::opacheck::DESCRIPTOR,
-	&tools::opentofu_validate::DESCRIPTOR,
-	&tools::perlimports::DESCRIPTOR,
-	&tools::phpcs::DESCRIPTOR,
-	&tools::phpmd::DESCRIPTOR,
-	&tools::phpstan::DESCRIPTOR,
-	&tools::pmd::DESCRIPTOR,
-	&tools::proselint::DESCRIPTOR,
-	&tools::protolint::DESCRIPTOR,
-	&tools::puppet_lint::DESCRIPTOR,
-	&tools::pydoclint::DESCRIPTOR,
-	&tools::pylint::DESCRIPTOR,
-	&tools::qmllint::DESCRIPTOR,
-	&tools::reek::DESCRIPTOR,
-	&tools::regal::DESCRIPTOR,
-	&tools::revive::DESCRIPTOR,
-	&tools::rpmspec::DESCRIPTOR,
-	&tools::rstcheck::DESCRIPTOR,
-	&tools::rubocop::DESCRIPTOR,
-	&tools::saltlint::DESCRIPTOR,
-	&tools::selene::DESCRIPTOR,
-	&tools::semgrep::DESCRIPTOR,
-	&tools::solhint::DESCRIPTOR,
-	&tools::spectral::DESCRIPTOR,
-	&tools::sqlfluff::DESCRIPTOR,
-	&tools::sqruff::DESCRIPTOR,
-	&tools::staticcheck::DESCRIPTOR,
-	&tools::statix::DESCRIPTOR,
-	&tools::stylint::DESCRIPTOR,
-	&tools::swiftlint::DESCRIPTOR,
-	&tools::teal::DESCRIPTOR,
-	&tools::terraform_validate::DESCRIPTOR,
-	&tools::terragrunt_validate::DESCRIPTOR,
-	&tools::textidote::DESCRIPTOR,
-	&tools::textlint::DESCRIPTOR,
-	&tools::tfsec::DESCRIPTOR,
-	&tools::tidy::DESCRIPTOR,
-	&tools::trivy::DESCRIPTOR,
-	&tools::tsc::DESCRIPTOR,
-	&tools::twigcs::DESCRIPTOR,
-	&tools::vacuum::DESCRIPTOR,
-	&tools::vale::DESCRIPTOR,
-	&tools::verilator::DESCRIPTOR,
-	&tools::vint::DESCRIPTOR,
-	&tools::write_good::DESCRIPTOR,
-	&tools::yamllint::DESCRIPTOR,
-	&tools::zsh::DESCRIPTOR,
-];
-
-/// A build without the tool parsers describes none.
 #[cfg(not(feature = "tools"))]
-pub(crate) const TOOLS: &[&ToolCapability] = &[];
+fn tool_parsers() -> &'static [&'static ToolCapability] {
+	&[]
+}
 
 #[cfg(feature = "format")]
 fn format_parsers() -> &'static [&'static ToolCapability] {
@@ -225,7 +112,7 @@ fn format_parsers() -> &'static [&'static ToolCapability] {
 /// Every parser this build describes: the tool parsers, then the format
 /// parsers and the sniffer.
 pub(crate) fn described() -> Vec<&'static ToolCapability> {
-	TOOLS.iter().chain(format_parsers()).copied().collect()
+	tool_parsers().iter().chain(format_parsers()).copied().collect()
 }
 
 /// Serialize the module's full capability manifest to JSON.
