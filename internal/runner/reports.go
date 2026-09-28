@@ -91,23 +91,21 @@ func (sc *sharedContext) collectSecrets() *report.Secrets {
 
 // gate is the hook the executor runs over every parsed process: it anchors the
 // process's findings — fingerprints and columns, while the files are on disk —
-// marks those the baseline holds, and then applies the failOn threshold, so
-// that a baselined finding fails nothing and cancels nothing under fail-fast.
-// A fingerprint is matched as the process computes it: its ordinal counts the
-// findings of that process, which is what the report settles too unless two
-// processes of one tool reported one line.
+// marks those the baseline holds (report.BaselineMatcher), and then applies
+// the failOn threshold, so that a baselined finding fails nothing and cancels
+// nothing under fail-fast.
 func (sc *sharedContext) gate() tooling.Gate {
 	threshold := tooling.ThresholdGate(config.Severity(sc.opts.FailOn), sc.severityContract, sc.ignoredFailOn.add)
 	if sc.annotator == nil {
 		return threshold
 	}
-	baseline := sc.opts.Baseline
+	var baseline *report.BaselineMatcher
+	if sc.opts.Baseline != nil {
+		baseline = report.NewBaselineMatcher(sc.opts.Baseline, sc.rootPath)
+	}
 	return func(task tooling.Task, proc *tooling.ProcessResult) tooling.GateDecision {
 		sc.annotator.Annotate(task, proc)
-		for i := range proc.Diagnostics {
-			d := &proc.Diagnostics[i]
-			d.Baselined = d.Anchor != nil && baseline[d.Anchor.Fingerprint]
-		}
+		baseline.Mark(task, proc)
 		return threshold(task, proc)
 	}
 }

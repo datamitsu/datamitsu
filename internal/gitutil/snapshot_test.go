@@ -2,10 +2,12 @@ package gitutil
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -138,6 +140,29 @@ func TestDiffOfDirtyFiles(t *testing.T) {
 	r.write("dirty.txt", "edited again\n")
 	if got := same.Diff(r.snapshot(nil)); len(got) != 0 {
 		t.Errorf("Diff = %v, want none", got)
+	}
+	// Its executable bit is a change, which git tracks too.
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(filepath.Join(r.dir, "dirty.txt"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := same.Diff(r.snapshot(nil)); !reflect.DeepEqual(got, []Change{{"dirty.txt", Modified}}) {
+			t.Errorf("Diff after chmod = %v, want dirty.txt modified", got)
+		}
+	}
+}
+
+// TestTakeStopsWhenCancelled: hashing observes the context, so a cancelled
+// snapshot does not read on.
+func TestTakeStopsWhenCancelled(t *testing.T) {
+	r := committed(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := Take(ctx, r.dir, Environ()); err == nil {
+		t.Error("a cancelled snapshot succeeded")
+	}
+	if _, err := entryOf(ctx, filepath.Join(r.dir, "dirty.txt")); !errors.Is(err, context.Canceled) {
+		t.Errorf("entryOf with a cancelled context = %v, want context.Canceled", err)
 	}
 }
 

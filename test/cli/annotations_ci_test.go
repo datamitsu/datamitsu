@@ -199,6 +199,25 @@ func TestAnnotationsDocumentOnStdout(t *testing.T) {
 					t.Errorf("the document should read back the finding as the tool printed it: %v\n%s", err, res.Stdout)
 				}
 			}
+
+			// The documents the analytics commands print on stdout too.
+			e.run("", nil, "lint", "--report", "json=run.json")
+			for _, cmd := range []struct {
+				args []string
+				// lists marks a document that names the finding.
+				lists bool
+			}{
+				{[]string{"report", "diff", "run.json", "again.json"}, true},
+				{[]string{"report", "diff", "run.json", "again.json", "--format", "markdown"}, false},
+				{[]string{"report", "render", "--input", "run.json", "--format", "markdown"}, true},
+			} {
+				e.p.WriteFile("again.json", e.read("run.json"))
+				res := e.run("", tc.env, cmd.args...)
+				e.wantExit(res, 0)
+				if strings.Contains(res.Stdout, tc.prefix) || (cmd.lists && !strings.Contains(res.Stdout, "task.complete")) {
+					t.Errorf("%v: want the finding without a command:\n%s", cmd.args, res.Stdout)
+				}
+			}
 		})
 	}
 }

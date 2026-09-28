@@ -9,12 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/cienv"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/diff"
 	"github.com/datamitsu/datamitsu/internal/report/render"
+	"github.com/datamitsu/datamitsu/internal/runner"
 
 	"github.com/spf13/cobra"
 )
@@ -90,7 +92,7 @@ func runReportBaseline(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("encode baseline: %w", err)
 	}
-	return writeOutput(cmd.OutOrStdout(), "baseline", reportBaselineOutput, append(data, '\n'))
+	return writeOutput(cmd.OutOrStdout(), "baseline", "json", reportBaselineOutput, append(data, '\n'))
 }
 
 func runReportDiff(cmd *cobra.Command, args []string) error {
@@ -112,14 +114,20 @@ func runReportDiff(cmd *cobra.Command, args []string) error {
 	if err := diff.Write(&out, diff.Diff(before, after), reportDiffFormat); err != nil {
 		return err
 	}
-	return writeOutput(cmd.OutOrStdout(), "diff", reportDiffOutput, out.Bytes())
+	return writeOutput(cmd.OutOrStdout(), "diff", reportDiffFormat, reportDiffOutput, out.Bytes())
 }
 
-// writeOutput writes a document to stdout or, atomically, to path; a file that
-// could not be written is an artifact asked for and not written (exit 5).
-func writeOutput(stdout io.Writer, what, path string, data []byte) error {
+// writeOutput writes a document of format to stdout or, atomically, to path;
+// a file that could not be written is an artifact asked for and not written
+// (exit 5). On stdout in a CI that reads commands anywhere in a line, the
+// document spells their openings so that none runs (runner.CommandGuard).
+func writeOutput(stdout io.Writer, what, format, path string, data []byte) error {
 	if path == render.Stdout {
 		stdoutOwned = true
+		ci, _ := cienv.Current()
+		if guard := runner.CommandGuard("", ci.Vendor); guard != nil {
+			data = guard(format, data)
+		}
 		if _, err := stdout.Write(data); err != nil {
 			return exitcode.ExportError{Err: fmt.Errorf("%s: stdout: %w", what, err)}
 		}

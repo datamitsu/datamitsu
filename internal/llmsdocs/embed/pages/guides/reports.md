@@ -786,12 +786,13 @@ datamitsu lint --report json=out/run.json
 datamitsu report diff .datamitsu-baseline-run.json out/run.json --format markdown
 ```
 
-A finding is matched while its own process is judged, on the fingerprint that
-process computes. Two processes of one tool that each report a finding with
-the same rule on identical lines of one file number them apart only once the
-report settles them across the tool, so the one the report numbers second can
-be baselined by the first's fingerprint; one process per file, the usual case,
-never differs.
+A finding is matched while its own process is judged, before the report has
+numbered the findings of a line across the tool's processes. So the baseline is
+read as a count: holding the fingerprints of n findings of a rule on a line, it
+marks at most n distinct findings of that rule on that line in an operation,
+whichever processes report them — a new finding beside a baselined one is never
+silenced, and a finding two processes both report is one. Which of several
+findings of one rule on one line is marked follows their order on the line.
 
 What else shows a baselined finding: a tool that failed on its exit code shows
 every finding it failed on, baselined ones marked `(baselined)` in the terminal,

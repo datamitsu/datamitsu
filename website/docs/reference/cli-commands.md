@@ -840,7 +840,9 @@ datamitsu lint --baseline .datamitsu-baseline.json
 ```
 
 A finding whose fingerprint the baseline holds is marked while its process is
-judged, before the threshold decides: it is neither reported nor gates, so it
+judged, before the threshold decides — at most as many findings of a rule on a
+line as the baseline holds fingerprints of, whichever processes report them:
+it is neither reported nor gates, so it
 fails nothing, and under fail-fast cancels nothing. The terminal counts it —
 `· 2 baselined` on the tool's line and in the footer — instead of printing it;
 the own JSON marks it `baselined`, SARIF puts it in the result's

@@ -364,7 +364,9 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   `report.LoadBaseline` in `cmd` before anything runs) is matched in the gate
   hook, after `report.Annotator` and before `tooling.ThresholdGate`:
   `Diagnostic.Baselined` makes the threshold neither report nor gate the
-  finding. It is matched on the hook's per-process fingerprint. It never
+  finding. `report.BaselineMatcher` matches by count, not by the hook's
+  per-process fingerprint: at most as many distinct findings of a rule on a
+  line per operation as the baseline holds ordinals of. It never
   touches an exit code. `internal/report/diff` compares two own reports by
   fingerprint per tool; a disappearance is `fixed` only where the second run's
   tool is complete over the whole repository.

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -31,6 +32,8 @@ type entry struct {
 	// hash is the XXH3 of the content, or of a symbolic link's target; ""
 	// for a file the working tree does not hold.
 	hash string
+	// executable is the file's executable bit, which git tracks too.
+	executable bool
 }
 
 // Len is how many dirty files the snapshot holds.
@@ -70,11 +73,12 @@ func Take(ctx context.Context, root string, env []string) (Snapshot, error) {
 		if err := ctx.Err(); err != nil {
 			return Snapshot{}, fmt.Errorf("hash dirty files: %w", err)
 		}
-		hash, err := hashOf(filepath.Join(root, filepath.FromSlash(path)))
+		e, err := entryOf(ctx, filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {
 			return Snapshot{}, fmt.Errorf("hash %s: %w", path, err)
 		}
-		s.entries[path] = entry{tracked: tracked, hash: hash}
+		e.tracked = tracked
+		s.entries[path] = e
 	}
 	return s, nil
 }
@@ -157,32 +161,51 @@ func field(rec string, n int) string {
 	return rest
 }
 
-// hashOf is the XXH3 of a file's content, of a symbolic link's target, or ""
-// when the working tree does not hold the file.
-func hashOf(path string) (string, error) {
+// entryOf is what a snapshot records of a file: the XXH3 of its content, or
+// of a symbolic link's target, and its executable bit; an empty hash when the
+// working tree does not hold it. Reading stops when ctx is done.
+func entryOf(ctx context.Context, path string) (entry, error) {
 	info, err := os.Lstat(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
+		return entry{}, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("stat: %w", err)
+		return entry{}, fmt.Errorf("stat: %w", err)
 	}
 	switch {
 	case info.Mode()&os.ModeSymlink != 0:
 		target, err := os.Readlink(path)
 		if err != nil {
-			return "", fmt.Errorf("read link: %w", err)
+			return entry{}, fmt.Errorf("read link: %w", err)
 		}
-		return "link:" + hashutil.XXH3Hex([]byte(target)), nil
+		return entry{hash: "link:" + hashutil.XXH3Hex([]byte(target))}, nil
 	case info.IsDir():
-		return "dir", nil
+		return entry{hash: "dir"}, nil
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("open: %w", err)
+		return entry{}, fmt.Errorf("open: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-	return hashutil.XXH3Reader(f)
+	hash, err := hashutil.XXH3Reader(stoppableReader{stopped: ctx.Err, r: f})
+	if err != nil {
+		return entry{}, fmt.Errorf("read: %w", err)
+	}
+	return entry{hash: hash, executable: info.Mode()&0o111 != 0}, nil
+}
+
+// stoppableReader stops reading once stopped says why: a large dirty file
+// must not hold a snapshot past its deadline.
+type stoppableReader struct {
+	stopped func() error
+	r       io.Reader
+}
+
+func (s stoppableReader) Read(p []byte) (int, error) {
+	if err := s.stopped(); err != nil {
+		return 0, fmt.Errorf("stopped: %w", err)
+	}
+	return s.r.Read(p) //nolint:wrapcheck // a reader hands io.EOF on as it is
 }
 
 // Change kinds.
@@ -218,7 +241,7 @@ func (s Snapshot) Diff(after Snapshot) []Change {
 			out = append(out, Change{path, Deleted})
 		case !dirtyBefore:
 			out = append(out, Change{path, Modified})
-		case b.hash == a.hash:
+		case b.hash == a.hash && b.executable == a.executable:
 		case b.hash == "":
 			out = append(out, Change{path, Created})
 		case a.hash == "":
