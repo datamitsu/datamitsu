@@ -123,6 +123,19 @@ func TestAStructuredParserThatFindsNoDocumentDidNotRead(t *testing.T) {
 	}
 }
 
+// TestABracketInAMessageIsNoDocument: a compiler line whose message ends with
+// an opening brace is a whole finding, not a JSON document cut off.
+func TestABracketInAMessageIsNoDocument(t *testing.T) {
+	cc := clitest.ShellTool("cc", settle+clitest.RecordRun+"; echo 'a.py:1:1: error: expected {'; exit 1", clitest.ToolOpSpec{})
+	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, cc)
+
+	res := e.run("", nil, "lint", "--report", "json=run.json")
+	e.wantExit(res, 1)
+	if doc := e.read("run.json"); !strings.Contains(doc, `"extraction": "parsed-findings"`) {
+		t.Errorf("the compiler line was not read whole:\n%s", doc)
+	}
+}
+
 // TestFallbackStandsInForADeclaredParser: a declared parser that does not
 // recognize the output hands it to the fallback, and the run says so once.
 func TestFallbackStandsInForADeclaredParser(t *testing.T) {

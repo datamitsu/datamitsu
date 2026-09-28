@@ -165,9 +165,10 @@ fn search<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec<T>>, whole
 	let mut best: Option<((usize, usize), Vec<T>)> = None;
 	let mut envelopes: Option<Vec<T>> = None;
 	let mut after = 0;
+	let mut reports = Reports::new(&text);
 	for (start, end) in spans(&text) {
 		let Some(end) = end else {
-			if whole && runs_to_end(&text[start..]) {
+			if whole && reports.at(start, text.len()) && runs_to_end(&text[start..]) {
 				break;
 			}
 			continue;
@@ -221,34 +222,59 @@ fn spans(text: &str) -> impl Iterator<Item = (usize, Option<usize>)> + '_ {
 }
 
 /// Whether the stream holds a JSON document that cannot be read: a value that
-/// runs to the end of the input without a syntax error, cut off; or one that
-/// opens its line as a report does — an object whose first key follows its
-/// brace, an array of objects — and closes, but does not parse. Prose that
-/// merely holds a bracket breaks off at a character no JSON value takes, and
-/// seldom starts a line with `{"`.
+/// begins as a report does ([`Reports`]) and runs to the end of the input
+/// without a syntax error, cut off, or closes but does not parse. A bracket in
+/// a message — `expected {` — is neither.
 pub(crate) fn broken(bytes: &[u8]) -> bool {
 	let text = String::from_utf8_lossy(bytes);
 	if matches!(parse(&text), Some(Ok(_))) {
 		return false;
 	}
-	let mut line_start = 0;
-	let mut scanned = 0;
-	let broken = spans(&text).any(|(start, end)| {
-		let Some(end) = end else {
-			return runs_to_end(&text[start..]);
-		};
-		if let Some(nl) = text[scanned..start].rfind('\n') {
-			line_start = scanned + nl + 1;
-		}
-		scanned = start;
-		let inner = text[start + 1..end].trim_start();
-		let looks_like_a_report = match text.as_bytes()[start] {
-			b'{' => inner.starts_with('"'),
-			_ => inner.starts_with('{'),
-		};
-		text[line_start..start].trim().is_empty() && looks_like_a_report && matches!(parse(&text[start..end]), Some(Err(_)))
+	let mut reports = Reports::new(&text);
+	let broken = spans(&text).any(|(start, end)| match end {
+		None => reports.at(start, text.len()) && runs_to_end(&text[start..]),
+		Some(end) => reports.at(start, end) && matches!(parse(&text[start..end]), Some(Err(_))),
 	});
 	broken
+}
+
+/// Where a report may begin: a value that opens its line, an object whose
+/// first key follows its brace or an array of objects or arrays, or a bracket
+/// with nothing after it yet. Asked about openers in increasing order, it
+/// keeps the start of the current line as it goes, so a long line is not read
+/// again for every bracket on it.
+struct Reports<'a> {
+	text: &'a str,
+	line_start: usize,
+	scanned: usize,
+}
+
+impl<'a> Reports<'a> {
+	fn new(text: &'a str) -> Self {
+		Reports {
+			text,
+			line_start: 0,
+			scanned: 0,
+		}
+	}
+
+	/// Whether the value that opens at `start` and runs to `end` begins as a
+	/// report does.
+	fn at(&mut self, start: usize, end: usize) -> bool {
+		if let Some(nl) = self.text[self.scanned..start].rfind('\n') {
+			self.line_start = self.scanned + nl + 1;
+		}
+		self.scanned = start;
+		if !self.text[self.line_start..start].trim().is_empty() {
+			return false;
+		}
+		let inner = self.text[start + 1..end].trim_start();
+		inner.is_empty()
+			|| match self.text.as_bytes()[start] {
+				b'{' => inner.starts_with('"'),
+				_ => inner.starts_with('{') || inner.starts_with('['),
+			}
+	}
 }
 
 /// Whether `value` is JSON up to its end and stops there, unfinished.
@@ -608,9 +634,9 @@ mod envelope_tests {
 	fn a_value_that_runs_to_the_end_is_cut() {
 		for out in [
 			&br#"{"version":"2.1.0","runs":[{"results":[{"message""#[..],
-			b"scanning...\n[1, 2",
+			b"scanning...\n  [{\"filePath\": \"a\", \"mess",
 			br#"{"a":"unterminated"#,
-			b"{} then [",
+			b"progress\n{",
 		] {
 			assert!(broken(out), "{}", String::from_utf8_lossy(out));
 		}
@@ -620,6 +646,10 @@ mod envelope_tests {
 			b"Formatted {count} files [ok]",
 			b"{} noise",
 			b"",
+			b"scanning...\n[1, 2",
+			b"{} then [",
+			b"a.c:1:2: error: expected {\n",
+			b"<testsuite><testcase name=\"t\"><failure message=\"expected {\"/></testcase></testsuite>\n",
 		] {
 			assert!(!broken(out), "{}", String::from_utf8_lossy(out));
 		}

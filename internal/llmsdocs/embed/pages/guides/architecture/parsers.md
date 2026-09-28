@@ -397,15 +397,19 @@ that cannot be read or an element left open: its findings may be missing. What a
 cut-off document holds is part of it, not a document of its own — the messages of
 a cut-off ESLint report are not a `json` array, a whole `<testsuite>` inside a
 cut-off `<testsuites>` is not a suite. An XML root counts only where it opens a
-line or follows the XML declaration, outside any CDATA section and comment, so a
-message that quotes `<checkstyle/>` is not a document. A line format is recognized
+line or follows the XML declaration, a comment or a `DOCTYPE` on it, and outside
+any CDATA section and comment, so a message that quotes `<checkstyle/>` is not a
+document. A SARIF result whose message is given by `id` is read from its rule's
+`messageStrings`, or the driver's `globalMessageStrings`, with its `arguments` in
+the placeholders. A line format is recognized
 when one line matches. Each parser reads stdout and stderr, and a structured one
 keeps the findings of every document in each — a command that ran a tool twice
 printed two reports — so a clean report cannot hide findings in another; noise
 around a document is skipped as it is for the tool parsers, however many bracketed
-log lines come before it. A JSON value that opens its line as a report does — an
-object whose first key follows its brace, an array of objects — and closes but does
-not parse is a document that cannot be read, like one cut off. The [parser catalog](../../reference/parser-catalog.md#format-parsers)
+log lines come before it. A JSON value is a document that cannot be read only where
+it begins as a report does — it opens its line, as an object whose first key
+follows its brace or an array of objects — and is cut off, or closes but does not
+parse; a bracket in a message, `expected {`, is neither. The [parser catalog](../../reference/parser-catalog.md#format-parsers)
 names the flag of each tool that prints each shape.
 
 A **declared** parser — a tool's or a format's — that found something recognized

@@ -45,21 +45,25 @@ fn from_log(log: &JsonValue) -> Option<Vec<RawDiagnostic>> {
 	let runs = member(log, "runs").and_then(elements)?;
 	let mut out = Vec::new();
 	for run in runs {
-		let rules = at(run, &["tool", "driver", "rules"]).and_then(elements);
+		let driver = at(run, &["tool", "driver"]);
+		let rules = driver.and_then(|d| member(d, "rules")).and_then(elements);
 		for result in member(run, "results").and_then(elements).into_iter().flatten() {
-			findings(result, rules, &mut out);
+			findings(result, driver, rules, &mut out);
 		}
 	}
 	Some(out)
 }
 
-fn findings(result: &JsonValue, rules: Option<&Vec<JsonValue>>, out: &mut Vec<RawDiagnostic>) {
-	let message =
-		member(result, "message").and_then(|m| member(m, "text").or_else(|| member(m, "markdown")).and_then(text));
-	let Some(message) = message else {
+fn findings(
+	result: &JsonValue,
+	driver: Option<&JsonValue>,
+	rules: Option<&Vec<JsonValue>>,
+	out: &mut Vec<RawDiagnostic>,
+) {
+	let rule = rule_of(result, rules);
+	let Some(message) = message_of(result, rule, driver) else {
 		return;
 	};
-	let rule = rule_of(result, rules);
 	let code = member(result, "ruleId")
 		.and_then(text)
 		.or_else(|| rule.and_then(|r| member(r, "id")).and_then(text))
@@ -102,6 +106,68 @@ fn findings(result: &JsonValue, rules: Option<&Vec<JsonValue>>, out: &mut Vec<Ra
 			..base.clone()
 		});
 	}
+}
+
+/// A result's message: its text (or markdown), or the string its `id` names
+/// among the rule's `messageStrings` or the driver's `globalMessageStrings`,
+/// with each `{n}` replaced by the n-th of its `arguments`.
+fn message_of(result: &JsonValue, rule: Option<&JsonValue>, driver: Option<&JsonValue>) -> Option<String> {
+	let message = member(result, "message")?;
+	let template = match message_text(message) {
+		Some(t) => t,
+		None => {
+			let id = member(message, "id").and_then(text)?;
+			named(rule, "messageStrings", id).or_else(|| named(driver, "globalMessageStrings", id))?
+		}
+	};
+	Some(match member(message, "arguments").and_then(elements) {
+		Some(arguments) => placeholders(template, arguments),
+		None => template.to_string(),
+	})
+}
+
+fn message_text(message: &JsonValue) -> Option<&str> {
+	member(message, "text")
+		.or_else(|| member(message, "markdown"))
+		.and_then(text)
+}
+
+/// The message string `id` among `owner`'s `key` table.
+fn named<'a>(owner: Option<&'a JsonValue>, key: &str, id: &str) -> Option<&'a str> {
+	message_text(member(member(owner?, key)?, id)?)
+}
+
+/// `template` with `{n}` replaced by the n-th argument and `{{`, `}}` by one
+/// brace (SARIF §3.11.5); a placeholder without its argument stays as written.
+fn placeholders(template: &str, arguments: &[JsonValue]) -> String {
+	let mut out = String::with_capacity(template.len());
+	let mut rest = template;
+	while let Some(i) = rest.find(['{', '}']) {
+		out.push_str(&rest[..i]);
+		let tail = &rest[i..];
+		if tail.starts_with("{{") || tail.starts_with("}}") {
+			out.push_str(&tail[..1]);
+			rest = &tail[2..];
+			continue;
+		}
+		let argument = tail
+			.strip_prefix('{')
+			.and_then(|t| t.find('}').map(|close| &t[..close]))
+			.filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+			.and_then(|n| Some((n.len(), arguments.get(n.parse::<usize>().ok()?).and_then(text)?)));
+		match argument {
+			Some((len, value)) => {
+				out.push_str(value);
+				rest = &tail[len + 2..];
+			}
+			None => {
+				out.push_str(&tail[..1]);
+				rest = &tail[1..];
+			}
+		}
+	}
+	out.push_str(rest);
+	out
 }
 
 /// The rule a result names by index, or by id among the driver's rules.
@@ -244,6 +310,20 @@ mod tests {
 		assert_eq!(r.diagnostics[0].severity, Some(severity::INFO));
 		assert_eq!(r.diagnostics[0].file, None);
 		assert_eq!(r.diagnostics[1].severity, None);
+	}
+
+	#[test]
+	fn a_message_given_by_id_is_looked_up() {
+		let log = br#"{"version":"2.1.0","runs":[{"tool":{"driver":{
+			"globalMessageStrings":{"G":{"text":"global {0}"}},
+			"rules":[{"id":"R1","messageStrings":{"M":{"text":"'{0}' is unused in {1}; {{literal}} {2}"}}}]}},
+			"results":[
+				{"ruleId":"R1","message":{"id":"M","arguments":["x","f"]}},
+				{"ruleId":"R1","message":{"id":"G","arguments":["y"]}},
+				{"ruleId":"R1","message":{"id":"missing"}}]}]}"#;
+		let r = parse(log, b"", 0);
+		let messages: Vec<_> = r.diagnostics.iter().map(|d| d.message.as_str()).collect();
+		assert_eq!(messages, ["'x' is unused in f; {literal} {2}", "global y"]);
 	}
 
 	#[test]

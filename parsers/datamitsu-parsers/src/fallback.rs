@@ -226,6 +226,13 @@ mod tests {
 		assert!(r.recognized && r.partial, "a clean stream must not hide a cut-off one");
 		assert!(sniff(cut, b"", 0).partial);
 		assert!(!sniff(clean, b"", 0).partial);
+		for whole in [
+			&b"a.c:1:2: error: expected {\n"[..],
+			b"<testsuite><testcase name=\"t\"><failure message=\"expected {\"/></testcase></testsuite>\n",
+		] {
+			let r = sniff(whole, b"", 1);
+			assert!(r.recognized && !r.partial, "{}", String::from_utf8_lossy(whole));
+		}
 	}
 
 	#[test]

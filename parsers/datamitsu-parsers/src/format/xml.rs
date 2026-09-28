@@ -293,19 +293,23 @@ fn roots(text: &str, root: &str) -> Vec<usize> {
 			opens_line = gap.trim_end().ends_with("?>");
 		}
 		let rest = &text[at..];
+		// A comment and a declaration such as DOCTYPE are prolog markup a root
+		// may follow on the same line; a CDATA section is content.
 		let skipped = if rest.starts_with("<![CDATA[") {
-			Some("]]>")
+			Some(("]]>", false))
 		} else if rest.starts_with("<!--") {
-			Some("-->")
+			Some(("-->", true))
+		} else if rest.starts_with("<!") {
+			Some((">", true))
 		} else {
 			None
 		};
-		if let Some(close) = skipped {
+		if let Some((close, prolog)) = skipped {
 			let Some(end) = rest.find(close) else {
 				break;
 			};
 			from = at + end + close.len();
-			opens_line = false;
+			opens_line &= prolog;
 			continue;
 		}
 		if rest.starts_with(&open) && opens_line {
@@ -429,7 +433,10 @@ mod tests {
 		let text =
 			"<?xml version=\"1.0\"?><checkstyle/>\n  <checkstyle/> <checkstyle/>\nx <checkstyle/>\n<!-- c --><checkstyle/>";
 		let starts: Vec<_> = text.match_indices("<checkstyle").map(|(i, _)| i).collect();
-		assert_eq!(roots(text, "checkstyle"), [starts[0], starts[1]]);
+		assert_eq!(roots(text, "checkstyle"), [starts[0], starts[1], starts[4]]);
+		let prolog = "<?xml version=\"1.0\"?><!-- generated --><!DOCTYPE checkstyle><checkstyle/>";
+		assert_eq!(roots(prolog, "checkstyle").len(), 1);
+		assert!(roots("x <!-- c --><checkstyle/>", "checkstyle").is_empty());
 	}
 
 	#[test]

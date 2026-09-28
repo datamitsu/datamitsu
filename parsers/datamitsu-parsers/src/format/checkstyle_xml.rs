@@ -165,6 +165,12 @@ mod tests {
 	}
 
 	#[test]
+	fn a_comment_or_doctype_before_the_root_on_its_line_is_prolog() {
+		let out = br#"<?xml version="1.0"?><!-- generated --><!DOCTYPE checkstyle><checkstyle><file name="a"><error line="1" message="m"/></file></checkstyle>"#;
+		assert_eq!(parse(out, b"", 0).diagnostics.len(), 1);
+	}
+
+	#[test]
 	fn every_document_in_the_output_counts() {
 		let mut out = b"<checkstyle/>\n".to_vec();
 		out.extend_from_slice(SHELLCHECK);
