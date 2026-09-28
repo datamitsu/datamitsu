@@ -3,6 +3,7 @@ package render
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -140,6 +141,9 @@ func TestTargetCompanionWithoutItsReport(t *testing.T) {
 // A directory target writes a split format's files and removes the ones an
 // earlier run left that this one did not write, and nothing else.
 func TestTargetDirectory(t *testing.T) {
+	run := &report.Run{Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{{
+		Name: "eslint", Complete: true, Invocations: []report.Invocation{{ID: "eslint::1#1", State: "ran", Success: true}},
+	}}}}}
 	dir := filepath.Join(t.TempDir(), "sarif") + "/"
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -153,7 +157,7 @@ func TestTargetDirectory(t *testing.T) {
 	if target.Err != nil {
 		t.Fatal(target.Err)
 	}
-	if err := target.Write(&report.Run{}); err != nil {
+	if err := target.Write(run); err != nil {
 		t.Fatal(err)
 	}
 	entries, _ := os.ReadDir(dir)
@@ -164,7 +168,7 @@ func TestTargetDirectory(t *testing.T) {
 	if !reflect.DeepEqual(got, []string{"datamitsu-1.sarif", "notes.txt"}) {
 		t.Errorf("directory = %v, want the new file and the unrelated one", got)
 	}
-	if data, _ := os.ReadFile(filepath.Join(dir, "datamitsu-1.sarif")); !strings.Contains(string(data), `"runs": []`) {
+	if data, _ := os.ReadFile(filepath.Join(dir, "datamitsu-1.sarif")); !strings.Contains(string(data), `"name": "eslint"`) {
 		t.Errorf("datamitsu-1.sarif = %s", data)
 	}
 
@@ -214,6 +218,41 @@ func TestTargetDirectoryFailureKeepsTheOldFiles(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, []string{"datamitsu-1.sarif", "datamitsu-2.sarif", "datamitsu-3.sarif"}) {
 		t.Errorf("directory = %v, want it as it was", got)
+	}
+}
+
+// A SARIF report that would hold no run — code scanning refuses one — is not
+// written, and an earlier run's file at its path, or in its directory, goes:
+// an upload of it would stand for this run.
+func TestTargetDeclined(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "results.sarif")
+	split := filepath.Join(dir, "split") + "/"
+	if err := os.MkdirAll(split, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{file, filepath.Join(split, "datamitsu-1.sarif"), filepath.Join(split, "keep.txt")} {
+		if err := os.WriteFile(p, []byte("old"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{file, split} {
+		target := Open(Spec{Format: "sarif", Path: path}, nil)
+		if target.Err != nil {
+			t.Fatal(target.Err)
+		}
+		if _, ok := errors.AsType[DeclinedError](target.Write(&report.Run{})); !ok {
+			t.Errorf("%s: a SARIF report without a run was not declined", path)
+		}
+	}
+	entries, _ := os.ReadDir(dir)
+	inSplit, _ := os.ReadDir(split)
+	if len(entries) != 1 || entries[0].Name() != "split" || len(inSplit) != 1 || inSplit[0].Name() != "keep.txt" {
+		t.Errorf("left %v and %v, want the unrelated file alone", entries, inSplit)
+	}
+	var out bytes.Buffer
+	if _, ok := errors.AsType[DeclinedError](Open(Spec{Format: "sarif", Path: Stdout}, &out).Write(&report.Run{})); !ok || out.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing", out.String())
 	}
 }
 
@@ -270,7 +309,11 @@ func TestDescribeAndNotes(t *testing.T) {
 	}
 	run.Operations[0].Tools = run.Operations[0].Tools[1:]
 	notes = Notes(run, []Spec{{Format: "sarif", Path: "r.sarif"}})
-	if len(notes) != 2 || notes[1] != "report: sarif holds no tool run, so an upload of it changes no alert" {
+	if len(notes) != 2 || notes[1] != "report: sarif is not written: it would hold no tool run, which code scanning refuses; every alert stays as it is" {
 		t.Errorf("Notes of a SARIF file without a run = %q", notes)
+	}
+	Describe(run, []Spec{{Format: "sarif", Path: "out/"}})
+	if e := run.Exports[1]; e.Status != report.ExportOmitted || !strings.Contains(e.Detail, "no tool run") {
+		t.Errorf("the export of a SARIF file without a run = %+v, want omitted", e)
 	}
 }

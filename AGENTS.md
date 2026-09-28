@@ -354,11 +354,15 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   reproduces a run's file. What a format adds to `render.Renderer` is an
   optional interface in `render/extensions.go` — `DirRenderer` (a path ending
   in `/`), `Capped` (checked at plan time by `refuseCrowdedReports` and in
-  `report render`), `Omitter`, `Companioned`, `OptionChecker` — and the
+  `report render`), `Omitter`, `Companioned`, `OptionChecker`, `Declining`
+  (writes nothing, `render.DeclinedError`, recorded as `omitted`) — and the
   runner, `render.Describe` (export details) and `render.Notes` (one `WARN`
   line per incomplete tool) find it there. SARIF leaves an incomplete tool
-  out, since code scanning closes the alerts of a tool it no longer holds;
-  never write a partial run of one. Every other new format lists everything
+  out, since code scanning closes the alerts of a tool it no longer holds —
+  even one whose run says it did not succeed — so never write a partial run
+  of one; and it declines a run it would hold no tool of, since code scanning
+  refuses a file without a run. `docs/plans/2026-09-26-unified-results.md` §6
+  records what was measured on GitHub. Every other new format lists everything
   and, when its shape has no field for completeness, is `Companioned`:
   `Target.Write` writes `<path>.completeness.json` beside it, atomically.
 - `--output agent` (`runner/agent.go`) prints each operation from the report's

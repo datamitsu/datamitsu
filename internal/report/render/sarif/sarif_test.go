@@ -296,10 +296,15 @@ func TestSplit(t *testing.T) {
 	}
 
 	empty, err := (Renderer{}).RenderFiles(&report.Run{}, nil)
-	if err != nil || len(empty) != 1 {
-		t.Fatalf("a run without a tool to write = %v, %v; want one file with no run", names(empty), err)
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("a run without a tool to write = %v, %v; want no file", names(empty), err)
 	}
-	validate(t, empty[0].Data)
+	if why := (Renderer{}).Declines(&report.Run{}, nil); why == "" {
+		t.Error("a run without a tool to write is not declined: code scanning refuses a SARIF file without a run")
+	}
+	if why := (Renderer{}).Declines(manyTools(1), nil); why != "" {
+		t.Errorf("a run with a tool is declined: %s", why)
+	}
 
 	for name, want := range map[string]bool{"datamitsu-1.sarif": true, "datamitsu-12.sarif": true, "datamitsu-0.sarif": false, "other.sarif": false, "datamitsu-1.sarif.tmp": false} {
 		if (Renderer{}).Owns(name) != want {

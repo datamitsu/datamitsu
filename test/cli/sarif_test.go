@@ -180,19 +180,35 @@ func TestReportSARIF(t *testing.T) {
 		}
 	})
 
-	// A narrowed run is written, not refused: every tool is incomplete, so
-	// the file holds no run and closes no alert.
+	// A narrowed run is not refused: every tool in it is incomplete, and
+	// code scanning refuses a file without a run, so no file is written — and
+	// an earlier run's at the path goes, since an upload of it would stand for
+	// this run. The export says so, and every alert stays as it is.
 	t.Run("narrowed", func(t *testing.T) {
 		e := sarifProject(t)
-		res := e.run("", nil, "lint", "Dockerfile", "--report", "sarif=r.sarif")
+		e.p.WriteFile("r.sarif", "an earlier run's file")
+		e.p.WriteFile("split/datamitsu-1.sarif", "an earlier run's file")
+		res := e.run("", nil, "lint", "Dockerfile", "--report", "sarif=r.sarif", "--report", "json=run.json", "--allow-partial")
 		e.wantExit(res, 0)
-		if _, doc := e.sarif("r.sarif"); len(doc.Runs) != 0 {
-			t.Errorf("runs = %v, want none for a narrowed run", doc.tools())
+		if _, err := os.Stat(filepath.Join(e.p.Dir, "r.sarif")); !os.IsNotExist(err) {
+			t.Errorf("r.sarif is still there: %v", err)
 		}
 		if !strings.Contains(res.Stderr, "lint tool hadolint is incomplete (narrowed-selection): left out of sarif") ||
-			!strings.Contains(res.Stderr, "WARN report: sarif holds no tool run, so an upload of it changes no alert") {
+			!strings.Contains(res.Stderr, "WARN report: sarif is not written: it would hold no tool run, which code scanning refuses") {
 			t.Errorf("stderr:\n%s", res.Stderr)
 		}
+		if doc := e.read("run.json"); !strings.Contains(doc, `"format": "sarif",
+      "path": "r.sarif",
+      "status": "omitted",`) {
+			t.Errorf("the export of the SARIF report is not omitted:\n%s", doc)
+		}
+
+		split := e.run("", nil, jsonl("lint", "Dockerfile", "--report", "sarif=split/")...)
+		e.wantExit(split, 0)
+		if entries, _ := os.ReadDir(filepath.Join(e.p.Dir, "split")); len(entries) != 0 {
+			t.Errorf("split/ holds %v, want no file", entries)
+		}
+		wantReportEvent(t, clitest.MustParseJSONL(t, split.Stderr), "sarif", "split/", "omitted", "no tool run")
 	})
 }
 

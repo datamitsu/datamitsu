@@ -75,6 +75,16 @@ func (Renderer) OmitsIncompleteTools() bool { return true }
 // ToolsPerFile is how many tools one file holds.
 func (Renderer) ToolsPerFile() int { return RunsPerFile }
 
+// Declines a run without a tool to write: code scanning refuses a SARIF file
+// that holds no run, so an upload of one fails, where no upload changes no
+// alert.
+func (Renderer) Declines(run *report.Run, options map[string]string) string {
+	if len(Runs(run, options)) > 0 {
+		return ""
+	}
+	return "it would hold no tool run, which code scanning refuses; every alert stays as it is"
+}
+
 // WrittenTools is how many runs the file holds: one per tool written.
 func (Renderer) WrittenTools(run *report.Run, options map[string]string) int {
 	return len(Runs(run, options))
@@ -100,11 +110,11 @@ func (Renderer) Render(w io.Writer, run *report.Run, options map[string]string) 
 
 // RenderFiles splits the run into files of at most RunsPerFile runs, tools
 // sorted by name, named datamitsu-1.sarif, datamitsu-2.sarif and so on; a run
-// without a tool to write is one file with none.
+// without a tool to write is no file.
 func (Renderer) RenderFiles(run *report.Run, options map[string]string) ([]common.File, error) {
 	runs := Runs(run, options)
 	var files []common.File
-	for start := 0; start == 0 || start < len(runs); start += RunsPerFile {
+	for start := 0; start < len(runs); start += RunsPerFile {
 		var b bytes.Buffer
 		if err := encode(&b, runs[start:min(start+RunsPerFile, len(runs))]); err != nil {
 			return nil, err

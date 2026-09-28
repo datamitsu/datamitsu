@@ -345,6 +345,19 @@ API against one commit; every SARIF file and API response is archived in that re
 | A forgotten configuration                         | Indistinguishable from a live one in the API (`deletable: true`, empty `warning`). `DELETE /analyses/{id}?confirm_delete` erases the analysis and its alerts outright; without `confirm_delete` the request is refused with 400.                                                                                                                                       |
 | Tool names                                        | Known names are normalized (`eslint` → `ESLint`, `hadolint` → `Hadolint`); grouping is unaffected.                                                                                                                                                                                                                                                                     |
 
+Measured on the same repository on 2026-09-28 by plan 8's live check, with the renderer's own
+files uploaded through the REST API and through `github/codeql-action/upload-sarif` (every file,
+response and workflow log is archived under `plan8/` there):
+
+| Question                                                       | Result                                                                                                                                                                                                                      |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A file without a run                                           | Refused: the REST API answers 400, "Invalid SARIF document: No valid runs found"; through the action the step fails. The renderer writes no such file.                                                                      |
+| A run with no result whose invocation did not succeed          | Its tool's alerts are closed. `executionSuccessful: false` and an error notification only add the analysis warning "unsuccessful tool execution, exit code N". A tool that failed without parsable output must be left out. |
+| A directory given to `upload-sarif`                            | Its files are combined into one upload, refused above twenty runs ("more runs than allowed (21 > 20)"). Each file needs an upload step of its own; two steps of one job, disjoint tools, one category, are accepted.        |
+| The action's `category` input                                  | Ignored for a file whose runs name `automationDetails.id`: the file's category wins.                                                                                                                                        |
+| A `primaryLocationLineHash` the action would compute otherwise | Kept; the action logs one warning per such result.                                                                                                                                                                          |
+| One finding under two categories                               | One alert with an instance per category; it stays open while any category's latest upload holds it.                                                                                                                         |
+
 Consequences: the SARIF renderer writes one run per (category, tool), `automationDetails.id =
 "datamitsu/"`, the fingerprint of R15 into `partialFingerprints.primaryLocationLineHash` (and a
 copy under `datamitsu/v1`), and omits the run of any tool whose completeness is not established

@@ -85,9 +85,14 @@ func TestReportRenderNarrowedFormats(t *testing.T) {
 		t.Run(f.format, func(t *testing.T) {
 			res := e.run("", nil, "report", "render", "--input", "run.json", "--format", f.format, "--output", "out/"+f.file)
 			if f.format == "sarif" {
+				// Not refused, and not written either: every tool is left
+				// out, and code scanning refuses a file without a run.
 				e.wantExit(res, 0)
-				if !strings.Contains(e.read("out/"+f.file), `"runs": []`) {
-					t.Errorf("the SARIF of a narrowed run holds a run:\n%s", e.read("out/"+f.file))
+				if _, err := os.Stat(filepath.Join(e.p.Dir, "out", f.file)); !os.IsNotExist(err) {
+					t.Errorf("the SARIF of a narrowed run was written: %v", err)
+				}
+				if !strings.Contains(res.Stderr, "sarif is not written") {
+					t.Errorf("stderr:\n%s", res.Stderr)
 				}
 				return
 			}

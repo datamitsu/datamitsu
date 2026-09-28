@@ -46,6 +46,31 @@ type Omitter interface {
 	Omitted(run *report.Run, options map[string]string) []report.OmittedTool
 }
 
+// Declining is a format that writes nothing for a run it has nothing to say
+// about — SARIF without a run, which code scanning refuses to take.
+type Declining interface {
+	// Declines says why nothing is written for run; "" when it is.
+	Declines(run *report.Run, options map[string]string) string
+}
+
+// DeclinedError is a report its format wrote nothing for, and why: recorded
+// as omitted, not as a failure to write.
+type DeclinedError struct{ Reason string }
+
+func (e DeclinedError) Error() string { return e.Reason }
+
+// declines is why spec's format writes nothing for run; "" when it writes.
+func declines(spec Spec, run *report.Run) string {
+	r, ok := Lookup(spec.Format)
+	if !ok {
+		return ""
+	}
+	if d, declining := r.(Declining); declining {
+		return d.Declines(run, spec.Options)
+	}
+	return ""
+}
+
 // Capped is a format that holds at most a number of tools in one file; a
 // DirRenderer splits a run with more.
 type Capped interface {
@@ -104,6 +129,9 @@ func Describe(run *report.Run, specs []Spec) {
 			if o, omits := r.(Omitter); omits {
 				e.Omitted = o.Omitted(run, spec.Options)
 			}
+			if why := declines(spec, run); why != "" && e.Status == report.ExportWritten {
+				e.Status, e.Detail = report.ExportOmitted, why
+			}
 		}
 	}
 }
@@ -161,9 +189,8 @@ func Notes(run *report.Run, specs []Spec) []string {
 				findings = append(findings, line)
 			}
 		}
-		if c, capped := r.(Capped); capped && c.WrittenTools(run, spec.Options) == 0 {
-			findings = append(findings, fmt.Sprintf("report: %s holds no tool run, "+
-				"so an upload of it changes no alert", spec.Format))
+		if why := declines(spec, run); why != "" {
+			findings = append(findings, fmt.Sprintf("report: %s is not written: %s", spec.Format, why))
 		}
 	}
 	keys := make([]key, 0, len(notes))

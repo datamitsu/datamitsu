@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -98,7 +99,11 @@ func runReportRender(cmd *cobra.Command, _ []string) error {
 		logger.Logger.Warn(note)
 	}
 	target := render.Open(spec, cmd.OutOrStdout())
-	if err := target.Write(run); err != nil {
+	err = target.Write(run)
+	if _, declined := errors.AsType[render.DeclinedError](err); declined {
+		return nil
+	}
+	if err != nil {
 		return exitcode.ExportError{Err: fmt.Errorf("report %s: %s: %w", spec.Format, spec.Path, err)}
 	}
 	return nil

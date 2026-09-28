@@ -191,7 +191,8 @@ sarif=<path>?category=<name>` writes `<name>/`. The documentation says to set th
   stable and every file goes to the same category (a tool absent from one upload but present in
   another of the same job is untouched by the first and updated by the second, per index §6);
   `sarif=<file>` with more than twenty tools exits 2 before anything runs with the message to use
-  a directory. `upload-sarif` accepts a directory. The 10 MB gzipped cap is documented.
+  a directory. `upload-sarif` accepts a directory, but combines its files into one upload, which GitHub refuses
+  above twenty runs as well (measured 2026-09-28): each file is uploaded by a step of its own. The 10 MB gzipped cap is documented.
 - **Fingerprints.** The R15 value goes into `partialFingerprints.primaryLocationLineHash`, the
   only key GitHub matches on, and is repeated under `datamitsu/v1` for readers that know our
   name. Because the tool is the first fingerprint input, two tools never share an alert.

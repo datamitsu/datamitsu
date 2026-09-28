@@ -282,12 +282,18 @@ jobs:
   not established ([How complete a report is](#how-complete-a-report-is)) is
   not written at all, and its alerts stay as they were. The run says so on
   stderr, one line per tool, and the own JSON records it in the report's
-  `exports` entry (`omitted`). For the same reason a narrowed run is written
-  rather than refused. Named files, a subdirectory or `--file-scoped` leave
-  every tool incomplete, so the file holds no run and changes no alert, and a
-  `WARN` line says the file holds none; `--tools` holds each selected tool that
-  is complete, and leaves the others' alerts alone. A tool with more than 25 000 results is left out too:
-  GitHub would keep the 5 000 most severe and close the alerts of the rest.
+  `exports` entry (`omitted`). That holds for a tool that failed without a
+  parsable finding too: GitHub closes every alert of a tool whose run holds no
+  result, even one whose invocation says it did not succeed. For the same
+  reason a narrowed run is not refused: `--tools` writes each selected tool
+  that is complete and leaves the others' alerts alone, and named files, a
+  subdirectory or `--file-scoped` leave every tool out. GitHub refuses a SARIF
+  file without a run, so a report that would hold none is not written at all:
+  a file an earlier run left at its path, or its directory's
+  `datamitsu-<n>.sarif` files, are removed, the export is recorded as
+  `omitted`, a `WARN` line says so, and every alert stays as it is. A tool with
+  more than 25 000 results is left out too: GitHub would keep the 5 000 most
+  severe and close the alerts of the rest.
 - **Twenty tools per file.** GitHub reads at most twenty runs from one file. A
   path that ends in `/` names a directory: `datamitsu-1.sarif`,
   `datamitsu-2.sarif` and so on, twenty tools each, sorted by name, and the
@@ -304,18 +310,23 @@ jobs:
   `category` input does not change a file that already names one, so a job
   that uploads more than once — a matrix — names its own:
   `--report "sarif=sarif/?category=lint-${{ matrix.os }}"`. Uploads in one
-  category replace each other's alerts tool by tool.
+  category replace each other's alerts tool by tool. An alert is one rule at
+  one fingerprint, whatever the category: the same finding uploaded under two
+  categories is one alert with an instance in each, which stays open until the
+  next upload of every one of them leaves it out.
 - **Findings keep their alerts.** A result's
   `partialFingerprints.primaryLocationLineHash` is the finding's
   [fingerprint](#fingerprints), the key GitHub matches alerts on from one upload
   to the next; two tools never share one. Columns count code points
   (`columnKind: unicodeCodePoints`) and are left out where the report could not
-  convert them.
+  convert them. The upload action computes a fingerprint of its own for every
+  result and, where it differs from datamitsu's, logs a warning and keeps
+  datamitsu's: expect one "Calculated fingerprint … inconsistent" warning per
+  result in the upload step's log.
 - **What else a run holds.** `ruleId` is the finding's rule, or
   `<tool>/unknown` without one, each rule listed once with its documentation
   link; the tool's app version and official URL; one `invocations` entry per
-  process. A finding without a file, and the `synthetic` finding of a tool that
-  failed without a parsable one, are notifications of their invocation: code
+  process. A finding without a file is a notification of its invocation: code
   scanning shows a result only at a location. A file outside the repository is
   an absolute `file://` URI.
 
@@ -330,9 +341,10 @@ Before turning it on:
   (`DELETE /repos/{owner}/{repo}/code-scanning/analyses/{id}?confirm_delete`)
   removes them, and their history with them.
 - `rm -rf` before the run and `hashFiles` on the upload keep a file an earlier
-  step left from passing for this run's: a run refused before it starts
-  (exit 2) writes nothing. `if: always()` uploads the file of a run whose tools
-  failed, which is the one worth reading.
+  step left from passing for this run's, and skip the upload when there is
+  nothing to upload: a run refused before it starts (exit 2) writes nothing,
+  and neither does one whose every tool is left out. `if: always()` uploads the
+  file of a run whose tools failed, which is the one worth reading.
 
 ## Other CI systems
 

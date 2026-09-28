@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -261,7 +262,10 @@ func (sc *sharedContext) writeReports(run *report.Run, targets []*render.Target,
 	var failures []error
 	for _, t := range targets {
 		status, msg := report.ExportWritten, ""
-		if writeErr := t.Write(run); writeErr != nil {
+		writeErr := t.Write(run)
+		if declined, ok := errors.AsType[render.DeclinedError](writeErr); ok {
+			status, msg = report.ExportOmitted, declined.Reason
+		} else if writeErr != nil {
 			status, msg = report.ExportFailed, writeErr.Error()
 			failures = append(failures, fmt.Errorf("report %s: %s: %w", t.Spec.Format, t.Spec.Path, writeErr))
 		}

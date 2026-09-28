@@ -60,11 +60,17 @@ func Open(spec Spec, stdout io.Writer) *Target {
 
 // Write renders run into the target and moves it into place. On failure
 // nothing is left at the path that was not there before; a directory keeps
-// the files written before the one that failed.
+// the files written before the one that failed. A format that declines the
+// run writes nothing and returns a DeclinedError.
 func (t *Target) Write(run *report.Run) error {
-	switch {
-	case t.Err != nil:
+	if t.Err != nil {
 		return t.Err
+	}
+	if why := declines(t.Spec, run); why != "" {
+		t.clear()
+		return DeclinedError{Reason: why}
+	}
+	switch {
 	case t.Spec.Dir() && !t.Spec.Stdout():
 		return t.writeDir(run)
 	case t.tmp == nil:
@@ -107,6 +113,27 @@ func (t *Target) Write(run *report.Run) error {
 		return unwrapPathError(err)
 	}
 	return nil
+}
+
+// clear leaves nothing at a declined target that an earlier run wrote: a
+// file there, or a split format's files in its directory, would be read as
+// this run's.
+func (t *Target) clear() {
+	if t.tmp != nil {
+		_ = t.tmp.Close()
+		_ = os.Remove(t.tmp.Name())
+		if info, err := os.Lstat(t.Spec.Path); err == nil && info.Mode().IsRegular() {
+			_ = os.Remove(t.Spec.Path)
+		}
+	}
+	if t.companion != nil {
+		_ = t.companion.Close()
+		_ = os.Remove(t.companion.Name())
+		_ = os.Remove(common.CompanionPath(t.Spec.Path))
+	}
+	if d, ok := t.renderer.(DirRenderer); ok && t.Spec.Dir() {
+		_ = t.removeOwned(d, nil)
+	}
 }
 
 func fill(f *os.File, render func(io.Writer) error) error {
