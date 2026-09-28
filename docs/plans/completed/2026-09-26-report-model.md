@@ -1,6 +1,6 @@
 # Plan 6: Report model — one record of a run, and the rules every export inherits
 
-**Status:** ready for implementation. Plan 6 of `2026-09-26-unified-results.md`; implements D1,
+**Status:** completed 2026-09-28. Plan 6 of `../2026-09-26-unified-results.md`; implements D1,
 D4, D9, D10 (exit 5), D12/R9, D15, R7 (report side), R8, R11, R15. No decisions open.
 **Date:** 2026-09-26.
 **Depends on:** plan 2 (keep-going, exit 2, cancelled tasks), plan 3 (`Processes`, `FileResults`,
