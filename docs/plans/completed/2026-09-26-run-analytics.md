@@ -1,6 +1,6 @@
 # Plan 10: Run analytics — history, diff and baseline, fix changes, Azure and TeamCity
 
-**Status:** ready for implementation. Plan 10 of `2026-09-26-unified-results.md`; implements
+**Status:** completed 2026-09-29. Plan 10 of `../2026-09-26-unified-results.md`; implements
 D14/R13, the `azure` and `teamcity` modes of D2 and their rows of D6, and closes the analytics
 scope with explicit completion criteria. No decisions open.
 **Date:** 2026-09-26.
