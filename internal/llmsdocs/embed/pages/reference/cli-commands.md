@@ -374,7 +374,8 @@ the rest.
 
 `--output agent` (or `DATAMITSU_OUTPUT=agent`) prints a run for a program that
 reads it, such as a coding agent: no banner, frame, colour or progress, and one
-line per record on stdout.
+line per record on stdout. What the configuration prints while it loads
+(`console.log`) goes to stderr, with the warnings.
 
 ```console
 $ datamitsu check --fail-fast=false --output agent

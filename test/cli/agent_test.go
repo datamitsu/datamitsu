@@ -67,6 +67,22 @@ func TestAgentOutput(t *testing.T) {
 		e.golden("agent_github", res, maskToken)
 	})
 
+	// What a configuration prints while it loads goes to stderr: stdout holds
+	// the records alone.
+	t.Run("config_console", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+		e.p.WriteFile("exec.config.js", "console.log(\"loading\");\nconsole.info(\"still loading\");\n"+e.read("exec.config.js"))
+		res := e.run("", nil, "lint", agentOutput)
+		e.wantExit(res, 0)
+		if res.Stdout != "lint: 1 tools · 1 runs · 0 failed · 0 errors 0 warnings · 0 hidden\n" {
+			t.Errorf("stdout should be the summary line alone:\n%s", res.Stdout)
+		}
+		if !strings.Contains(res.Stderr, "loading") || !strings.Contains(res.Stderr, "still loading") {
+			t.Errorf("the configuration's console output should reach stderr:\n%s", res.Stderr)
+		}
+	})
+
 	// DATAMITSU_TIMINGS reports are human output too.
 	t.Run("timings", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
