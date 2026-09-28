@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/exitcode"
+	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render"
 	"github.com/datamitsu/datamitsu/internal/report/render/json"
@@ -41,9 +43,12 @@ works on another machine and after the checkout changed.
 A format that lists findings is refused for a document of a narrowed run
 (named files, a subdirectory, --file-scoped, --tools) unless --allow-partial,
 exactly as --report is; a document without its completeness fields is read as
-incomplete, never as complete.
+incomplete, never as complete. A format written with a completeness companion
+gets it beside --output, never on stdout, and an --output that ends in / is a
+directory, for a format that splits a run over files (sarif).
 
-  ` + "datamitsu report render --input out/run.json --format json --output -",
+  ` + "datamitsu report render --input out/run.json --format json --output -\n" +
+		"  datamitsu report render --input out/run.json --format sarif --output sarif/",
 	Args: usageArgs(cobra.NoArgs),
 	RunE: runReportRender,
 }
@@ -80,11 +85,25 @@ func runReportRender(cmd *cobra.Command, _ []string) error {
 			"pass --allow-partial to render it with the reasons it is incomplete",
 			reportRenderInput, strings.Join(why, ", "), spec.Format)
 	}
+	if r, _ := render.Lookup(spec.Format); r != nil {
+		if c, capped := r.(render.Capped); capped {
+			if err := render.CheckCapacity(spec, c.WrittenTools(run, spec.Options)); err != nil {
+				return exitcode.UsageError{Err: err}
+			}
+		}
+	}
 	if spec.Stdout() {
 		stdoutOwned = true
 	}
+	for _, note := range render.Notes(run, []render.Spec{spec}) {
+		logger.Logger.Warn(note)
+	}
 	target := render.Open(spec, cmd.OutOrStdout())
-	if err := target.Write(run); err != nil {
+	err = target.Write(run)
+	if _, declined := errors.AsType[render.DeclinedError](err); declined {
+		return nil
+	}
+	if err != nil {
 		return exitcode.ExportError{Err: fmt.Errorf("report %s: %s: %w", spec.Format, spec.Path, err)}
 	}
 	return nil
@@ -100,6 +119,7 @@ func readReport(path string) (*report.Run, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	report.Revise(run)
 	return run, nil
 }
 

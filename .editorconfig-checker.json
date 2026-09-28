@@ -1,6 +1,7 @@
 {
   "Disable": {},
   "Exclude": [
-    "^parsers/datamitsu-parsers/fixtures/[^/]+/"
+    "^parsers/datamitsu-parsers/fixtures/[^/]+/",
+    "^internal/report/render/[^/]+/testdata/schema/"
   ]
 }

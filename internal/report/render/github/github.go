@@ -20,6 +20,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/report"
+	"github.com/datamitsu/datamitsu/internal/report/render/common"
 	"github.com/datamitsu/datamitsu/internal/textpos"
 )
 
@@ -177,7 +178,7 @@ func fromFinding(f report.Finding) Annotation {
 		a.Source = f.Tool
 	}
 	loc := f.Location
-	if loc.Path == "" || isAbsolute(loc.Path) {
+	if loc.Path == "" || common.Outside(loc.Path) {
 		return a
 	}
 	a.File, a.Line = loc.Path, loc.Row
@@ -193,18 +194,6 @@ func fromFinding(f report.Finding) Annotation {
 		}
 	}
 	return a
-}
-
-// isAbsolute reports a path the report left absolute because it lies outside
-// the repository, on this system or the one that wrote the report.
-func isAbsolute(p string) bool {
-	switch {
-	case strings.HasPrefix(p, "/"), strings.HasPrefix(p, `\`):
-		return true
-	case len(p) >= 3 && p[1] == ':' && (p[2] == '\\' || p[2] == '/'):
-		return true
-	}
-	return false
 }
 
 func levelOf(severity string) string {

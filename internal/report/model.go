@@ -99,6 +99,9 @@ const (
 	ReasonParseFailed       Reason = "parse-failed"
 	ReasonTruncated         Reason = "truncated"
 	ReasonUnparsedCacheHit  Reason = "unparsed-cache-hit"
+	// ReasonFailedWithoutFindings: a process exited non-zero and its parser
+	// found nothing in what it printed, so the output was not recognized.
+	ReasonFailedWithoutFindings Reason = "failed-without-findings"
 
 	ReasonToolsFilter      Reason = "tools-filter"
 	ReasonNotNarrowable    Reason = "not-narrowable"
@@ -170,6 +173,9 @@ type AppRef struct {
 	Name    string `json:"name"`
 	Kind    string `json:"kind"`
 	Version string `json:"version,omitempty"`
+	// OfficialURL is where a reader learns about the app: the one it declares,
+	// or the one derived from its declaration.
+	OfficialURL string `json:"officialUrl,omitempty"`
 }
 
 // ParserRef is the output parser a tool declares.
@@ -294,6 +300,17 @@ type Location struct {
 	Precision string `json:"precision"`
 }
 
+// Values of Invocation.FailureKind: the tool failed on its own — a non-zero
+// exit, or a result the executor rejected after it exited — a finding at or
+// above failOn failed a tool that exited 0, the task was cancelled, or it could
+// not be set up.
+const (
+	FailureExit      = "exit"
+	FailureThreshold = "threshold"
+	FailureCancelled = "cancelled"
+	FailureSetup     = "setup"
+)
+
 // Export is one report a run was asked for.
 type Export struct {
 	Format string `json:"format"`
@@ -302,6 +319,21 @@ type Export struct {
 	// Status is written, failed, refused or omitted.
 	Status string `json:"status"`
 	Detail string `json:"detail,omitempty"`
+	// Companion is the completeness companion written beside a report whose
+	// format has no place to say how complete it is.
+	Companion string `json:"companion,omitempty"`
+	// Omitted are the tools a format that leaves out an incomplete tool left
+	// out of the report, with why.
+	Omitted []OmittedTool `json:"omitted,omitempty"`
+}
+
+// OmittedTool is a tool run a report left out.
+type OmittedTool struct {
+	Operation string `json:"operation"`
+	Tool      string `json:"tool"`
+	// Reasons are the tool run's incomplete reasons, or what else kept it out
+	// of the format (too-many-results).
+	Reasons []string `json:"reasons"`
 }
 
 // Export statuses.

@@ -29,6 +29,8 @@ func toolReasons(tr *ToolRun, sel Selection, parsed bool) []Reason {
 		case string(tooling.ProcessRan):
 			if r, ok := extractionReason(tooling.Extraction(inv.Extraction)); ok {
 				set[r] = true
+			} else if failedWithoutFindings(inv) {
+				set[ReasonFailedWithoutFindings] = true
 			}
 		case string(tooling.FileCached), string(tooling.FileVerdictHit):
 			// A pass is recorded for a parsed tool only when its parser ran and
@@ -46,6 +48,38 @@ func toolReasons(tr *ToolRun, sel Selection, parsed bool) []Reason {
 		}
 	}
 	return sortedReasons(set)
+}
+
+// failedWithoutFindings reports a process that failed on its own and whose
+// parser answered with nothing: an answer that does not say what the tool
+// found, which a report that lists findings would read as "clean" — and a
+// service that tracks alerts would close every alert of the tool on. The
+// fallback parser runs on exactly this answer once it exists.
+func failedWithoutFindings(inv Invocation) bool {
+	return inv.Extraction == string(tooling.ExtractionParsedClean) && inv.ExitCode != nil && *inv.ExitCode != 0
+}
+
+// Revise applies to a document read back the completeness rules an earlier
+// build did not know, from the invocation facts the document records: a tool
+// with a process that failed while its parser found nothing was complete
+// before failed-without-findings existed. A document this build wrote is left
+// as it is.
+func Revise(run *Run) {
+	for i := range run.Operations {
+		for j := range run.Operations[i].Tools {
+			tr := &run.Operations[i].Tools[j]
+			if slices.Contains(tr.Incomplete, ReasonFailedWithoutFindings) ||
+				!slices.ContainsFunc(tr.Invocations, func(inv Invocation) bool {
+					return inv.State == string(tooling.ProcessRan) && failedWithoutFindings(inv)
+				}) {
+				continue
+			}
+			tr.Incomplete = append(tr.Incomplete, ReasonFailedWithoutFindings)
+			slices.Sort(tr.Incomplete)
+			tr.Complete = false
+			run.Complete = false
+		}
+	}
 }
 
 func extractionReason(e tooling.Extraction) (Reason, bool) {

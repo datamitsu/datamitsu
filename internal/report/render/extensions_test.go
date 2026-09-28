@@ -1,0 +1,319 @@
+package render
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/report"
+	"github.com/datamitsu/datamitsu/internal/report/render/checkstyle"
+	"github.com/datamitsu/datamitsu/internal/report/render/codequality"
+	"github.com/datamitsu/datamitsu/internal/report/render/common"
+	"github.com/datamitsu/datamitsu/internal/report/render/junit"
+	"github.com/datamitsu/datamitsu/internal/report/render/rdjsonl"
+	"github.com/datamitsu/datamitsu/internal/report/render/sarif"
+)
+
+var (
+	_ DirRenderer   = sarif.Renderer{}
+	_ Capped        = sarif.Renderer{}
+	_ Omitter       = sarif.Renderer{}
+	_ OptionChecker = sarif.Renderer{}
+	_ Companioned   = junit.Renderer{}
+	_ Companioned   = codequality.Renderer{}
+	_ Companioned   = checkstyle.Renderer{}
+	_ Companioned   = rdjsonl.Renderer{}
+)
+
+// companionRenderer stands in for a format without a place for completeness.
+type companionRenderer struct{ fakeRenderer }
+
+func (companionRenderer) Render(w io.Writer, _ *report.Run, _ map[string]string) error {
+	_, err := io.WriteString(w, "findings\n")
+	return err
+}
+
+func (companionRenderer) OmitsIncompleteTools() bool { return false }
+
+func (companionRenderer) Companion(run *report.Run, _ map[string]string) common.Companion {
+	return common.NewCompanion(run, "companioned", []*report.Operation{common.ListedOperation(run)}, nil)
+}
+
+func withCompanion(t *testing.T) {
+	t.Helper()
+	prev := renderers
+	renderers = append(append([]Renderer{}, prev...), companionRenderer{fakeRenderer{name: "companioned"}})
+	t.Cleanup(func() { renderers = prev })
+}
+
+func incompleteRun() *report.Run {
+	return &report.Run{
+		Selection: report.Selection{Mode: "all"},
+		Exports:   []report.Export{{Format: "companioned", Path: "x", Status: "written"}},
+		Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{
+			{Name: "eslint", Complete: true},
+			{Name: "tsc", Incomplete: []report.Reason{"parse-failed"}},
+		}}},
+	}
+}
+
+// A format with a companion writes it beside its file, both atomically; on
+// stdout it has none.
+func TestTargetWritesCompanion(t *testing.T) {
+	withCompanion(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cq.json")
+	target := Open(Spec{Format: "companioned", Path: path}, nil)
+	if target.Err != nil {
+		t.Fatal(target.Err)
+	}
+	if err := target.Write(incompleteRun()); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != "findings\n" {
+		t.Errorf("report = %q", got)
+	}
+	raw, err := os.ReadFile(path + ".completeness.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c common.Companion
+	if err := json.Unmarshal(raw, &c); err != nil {
+		t.Fatal(err)
+	}
+	if c.Schema != "datamitsu.completeness/1" || c.Complete || len(c.Tools) != 2 || c.Tools[1].Incomplete[0] != "parse-failed" {
+		t.Errorf("companion = %s", raw)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
+		t.Errorf("the directory holds %d entries, want the report and its companion", len(entries))
+	}
+
+	var out bytes.Buffer
+	if err := Open(Spec{Format: "companioned", Path: Stdout}, &out).Write(incompleteRun()); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "findings\n" {
+		t.Errorf("stdout = %q, want the report alone", out.String())
+	}
+}
+
+// A report that cannot be moved into place leaves no companion at all: an
+// earlier run's could vouch for a report it does not describe.
+func TestTargetCompanionWithoutItsReport(t *testing.T) {
+	withCompanion(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cq.json")
+	companion := path + ".completeness.json"
+	for _, p := range []string{path, companion} {
+		if err := os.WriteFile(p, []byte(`{"complete": true}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	target := Open(Spec{Format: "companioned", Path: path}, nil)
+	if target.Err != nil {
+		t.Fatal(target.Err)
+	}
+	// Something takes the report's place between opening and writing.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(path, "taken"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := target.Write(incompleteRun()); err == nil {
+		t.Fatal("the report was written over a directory")
+	}
+	if _, err := os.Stat(companion); !os.IsNotExist(err) {
+		t.Errorf("a companion stands without its report: %v", err)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 || entries[0].Name() != "cq.json" {
+		t.Errorf("the directory holds %v, want the directory in the report's place alone", entries)
+	}
+}
+
+// A directory target writes a split format's files and removes the ones an
+// earlier run left that this one did not write, and nothing else.
+func TestTargetDirectory(t *testing.T) {
+	run := &report.Run{Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{{
+		Name: "eslint", Complete: true, Invocations: []report.Invocation{{ID: "eslint::1#1", State: "ran", Success: true}},
+	}}}}}
+	dir := filepath.Join(t.TempDir(), "sarif") + "/"
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"datamitsu-1.sarif", "datamitsu-3.sarif", "notes.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("old"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	target := Open(Spec{Format: "sarif", Path: dir}, nil)
+	if target.Err != nil {
+		t.Fatal(target.Err)
+	}
+	if err := target.Write(run); err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := os.ReadDir(dir)
+	got := make([]string, 0, len(entries))
+	for _, e := range entries {
+		got = append(got, e.Name())
+	}
+	if !reflect.DeepEqual(got, []string{"datamitsu-1.sarif", "notes.txt"}) {
+		t.Errorf("directory = %v, want the new file and the unrelated one", got)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "datamitsu-1.sarif")); !strings.Contains(string(data), `"name": "eslint"`) {
+		t.Errorf("datamitsu-1.sarif = %s", data)
+	}
+
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(blocker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if target := Open(Spec{Format: "sarif", Path: blocker + "/"}, nil); target.Err == nil {
+		t.Error("a file at a directory target opened")
+	}
+}
+
+// A split write that fails while writing leaves the directory as it was: no
+// file of this run beside the files of an earlier one.
+func TestTargetDirectoryFailureKeepsTheOldFiles(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "sarif") + "/"
+	if err := os.MkdirAll(filepath.Join(dir, "datamitsu-2.sarif"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"datamitsu-1.sarif", "datamitsu-3.sarif"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("old"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := &report.Run{Selection: report.Selection{Mode: "all"}, Operations: []report.Operation{{Name: "lint", Ran: true}}}
+	for i := range 21 {
+		name := "tool" + strings.Repeat("x", i)
+		run.Operations[0].Tools = append(run.Operations[0].Tools, report.ToolRun{
+			Name: name, Complete: true,
+			Invocations: []report.Invocation{{ID: name + "::1#1", State: "ran", Success: true}},
+		})
+	}
+	target := Open(Spec{Format: "sarif", Path: dir}, nil)
+	if target.Err != nil {
+		t.Fatal(target.Err)
+	}
+	if err := target.Write(run); err == nil || !strings.Contains(err.Error(), "datamitsu-2.sarif: is a directory") {
+		t.Fatalf("Write error = %v, want datamitsu-2.sarif in the way", err)
+	}
+	entries, _ := os.ReadDir(dir)
+	got := make([]string, 0, len(entries))
+	for _, e := range entries {
+		got = append(got, e.Name())
+		if data, _ := os.ReadFile(filepath.Join(dir, e.Name())); e.Type().IsRegular() && string(data) != "old" {
+			t.Errorf("%s was replaced by a write that failed", e.Name())
+		}
+	}
+	if !reflect.DeepEqual(got, []string{"datamitsu-1.sarif", "datamitsu-2.sarif", "datamitsu-3.sarif"}) {
+		t.Errorf("directory = %v, want it as it was", got)
+	}
+}
+
+// A SARIF report that would hold no run — code scanning refuses one — is not
+// written, and an earlier run's file at its path, or in its directory, goes:
+// an upload of it would stand for this run.
+func TestTargetDeclined(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "results.sarif")
+	split := filepath.Join(dir, "split") + "/"
+	if err := os.MkdirAll(split, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{file, filepath.Join(split, "datamitsu-1.sarif"), filepath.Join(split, "keep.txt")} {
+		if err := os.WriteFile(p, []byte("old"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{file, split} {
+		target := Open(Spec{Format: "sarif", Path: path}, nil)
+		if target.Err != nil {
+			t.Fatal(target.Err)
+		}
+		if _, ok := errors.AsType[DeclinedError](target.Write(&report.Run{})); !ok {
+			t.Errorf("%s: a SARIF report without a run was not declined", path)
+		}
+	}
+	entries, _ := os.ReadDir(dir)
+	inSplit, _ := os.ReadDir(split)
+	if len(entries) != 1 || entries[0].Name() != "split" || len(inSplit) != 1 || inSplit[0].Name() != "keep.txt" {
+		t.Errorf("left %v and %v, want the unrelated file alone", entries, inSplit)
+	}
+	var out bytes.Buffer
+	if _, ok := errors.AsType[DeclinedError](Open(Spec{Format: "sarif", Path: Stdout}, &out).Write(&report.Run{})); !ok || out.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing", out.String())
+	}
+}
+
+func TestCheckCapacity(t *testing.T) {
+	tests := []struct {
+		spec  Spec
+		tools int
+		want  string
+	}{
+		{spec: Spec{Format: "sarif", Path: "a.sarif"}, tools: 20},
+		{spec: Spec{Format: "sarif", Path: "a.sarif"}, tools: 21, want: "report sarif would hold 21 tools in one file, more than the 20 it can: name a directory, sarif=<dir>/"},
+		{spec: Spec{Format: "sarif", Path: "-"}, tools: 21, want: "in stdout"},
+		{spec: Spec{Format: "sarif", Path: "out/"}, tools: 500},
+		{spec: Spec{Format: "json", Path: "a.json"}, tools: 500},
+	}
+	for _, tt := range tests {
+		err := CheckCapacity(tt.spec, tt.tools)
+		if (err == nil) != (tt.want == "") || (err != nil && !strings.Contains(err.Error(), tt.want)) {
+			t.Errorf("CheckCapacity(%+v, %d) = %v, want %q", tt.spec, tt.tools, err, tt.want)
+		}
+	}
+}
+
+// Describe names the companion and the tools a format leaves out in the
+// run's exports; Notes says the same once per tool.
+func TestDescribeAndNotes(t *testing.T) {
+	withCompanion(t)
+	run := incompleteRun()
+	run.Exports = []report.Export{
+		{Format: "companioned", Path: "cq.json", Status: "written"},
+		{Format: "sarif", Path: "out/", Status: "written"},
+	}
+	specs := []Spec{{Format: "companioned", Path: "cq.json"}, {Format: "sarif", Path: "out/"}}
+	Describe(run, specs)
+	if run.Exports[0].Companion != "cq.json.completeness.json" || run.Exports[0].Omitted != nil {
+		t.Errorf("companioned export = %+v", run.Exports[0])
+	}
+	want := []report.OmittedTool{{Operation: "lint", Tool: "tsc", Reasons: []string{"parse-failed"}}}
+	if run.Exports[1].Companion != "" || !reflect.DeepEqual(run.Exports[1].Omitted, want) {
+		t.Errorf("sarif export = %+v", run.Exports[1])
+	}
+
+	notes := Notes(run, specs)
+	wantNotes := []string{"report: lint tool tsc is incomplete (parse-failed): left out of sarif; flagged in the completeness companion of companioned"}
+	if !reflect.DeepEqual(notes, wantNotes) {
+		t.Errorf("Notes = %q, want %q", notes, wantNotes)
+	}
+	notes = Notes(run, []Spec{{Format: "companioned", Path: Stdout}})
+	if len(notes) != 1 || !strings.Contains(notes[0], "listed as if complete by companioned on stdout, which has no companion") {
+		t.Errorf("Notes on stdout = %q", notes)
+	}
+	if notes := Notes(run, []Spec{{Format: "json", Path: "run.json"}}); len(notes) != 0 {
+		t.Errorf("the own JSON says it itself, yet Notes = %q", notes)
+	}
+	run.Operations[0].Tools = run.Operations[0].Tools[1:]
+	notes = Notes(run, []Spec{{Format: "sarif", Path: "r.sarif"}})
+	if len(notes) != 2 || notes[1] != "report: sarif is not written: it would hold no tool run, which code scanning refuses; every alert stays as it is" {
+		t.Errorf("Notes of a SARIF file without a run = %q", notes)
+	}
+	Describe(run, []Spec{{Format: "sarif", Path: "out/"}})
+	if e := run.Exports[1]; e.Status != report.ExportOmitted || !strings.Contains(e.Detail, "no tool run") {
+		t.Errorf("the export of a SARIF file without a run = %+v, want omitted", e)
+	}
+}

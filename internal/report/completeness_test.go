@@ -1,6 +1,7 @@
 package report
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -43,6 +44,15 @@ func TestToolReasons(t *testing.T) {
 			want:        []Reason{ReasonParseFailed, ReasonParserUnavailable, ReasonTruncated},
 		},
 		{
+			name: "a failed process its parser found nothing in", sel: all, parsed: true,
+			invocations: []Invocation{
+				{State: "ran", Coverage: "complete", Extraction: "parsed-clean", ExitCode: new(2)},
+				{State: "ran", Coverage: "complete", Extraction: "parsed-clean", ExitCode: new(0)},
+				{State: "ran", Coverage: "complete", Extraction: "parsed-findings", ExitCode: new(1)},
+			},
+			want: []Reason{ReasonFailedWithoutFindings},
+		},
+		{
 			name: "a cache hit of a parsed tool replays a parsed-clean pass", sel: all, parsed: true,
 			invocations: []Invocation{{State: "cached"}, {State: "verdict-hit"}}, want: []Reason{},
 		},
@@ -63,6 +73,26 @@ func TestToolReasons(t *testing.T) {
 				t.Errorf("toolReasons() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// A document an earlier build wrote called a tool complete although one of
+// its processes failed while its parser found nothing; read back, it is not.
+func TestRevise(t *testing.T) {
+	two := 2
+	run := &Run{Complete: true, Operations: []Operation{{Name: "lint", Ran: true, Tools: []ToolRun{
+		{Name: "a", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{State: "ran", Extraction: "parsed-clean", ExitCode: &two}}},
+		{Name: "b", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{State: "ran", Extraction: "parsed-findings", ExitCode: &two}}},
+	}}}}
+	Revise(run)
+	a, b := run.Operations[0].Tools[0], run.Operations[0].Tools[1]
+	if run.Complete || a.Complete || !reflect.DeepEqual(a.Incomplete, []Reason{ReasonFailedWithoutFindings}) || !b.Complete {
+		t.Errorf("revised run = %+v", run)
+	}
+	before := fmt.Sprint(run)
+	Revise(run)
+	if fmt.Sprint(run) != before {
+		t.Error("revising twice changed the run again")
 	}
 }
 

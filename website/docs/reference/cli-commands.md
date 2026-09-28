@@ -568,9 +568,12 @@ that `config reconcile` runs after writing its files.
 `--report <format>=<path>` writes a report of the run once its last operation
 has ended, whether or not its tools failed — the run that fails is the one a
 pipeline needs to read. The flag is repeatable, one per format: `json`, the
-run's own document, and `markdown`, the same run for a person. The [Reports guide](../guides/reports.md) explains what a report
-holds and how far to trust it; [`report render`](#report-render) writes one
-again, offline, from a run's own JSON.
+run's own document; `markdown`, the same run for a person; `sarif`, the run for
+code scanning; `junit`, the run as test results; `codequality`, GitLab's Code
+Quality report; `checkstyle`, Checkstyle XML; and `rdjsonl`, reviewdog's
+diagnostics. The [Reports guide](../guides/reports.md) explains what a
+report holds and how far to trust it; [`report render`](#report-render) writes
+one again, offline, from a run's own JSON.
 
 ```bash
 # CI: the whole run as one document, uploaded whatever the outcome
@@ -585,6 +588,9 @@ datamitsu lint --report json=out/run.json
 - `-` writes the report to stdout, for one format per run. stdout then carries
   the report alone: the human output is left out, and stderr carries the
   [run events](#run-events) as it does under `--log-format jsonl`.
+- A path that ends in `/` names a directory, for a format that splits a run
+  over several files (`sarif`); any other format given one exits 2. Options
+  follow the path after `?`: `sarif=out/results.sarif?category=linux`.
 - `DATAMITSU_REPORT` is the variable twin, comma-separated:
   `DATAMITSU_REPORT=json=out/run.json`. A `--report` naming the same format
   wins over its entry. `datamitsu config runtime` reports the variable as
@@ -592,9 +598,11 @@ datamitsu lint --report json=out/run.json
 - A report turns fail-fast off: a run that stopped at the first failing tool
   could not list every finding. A report together with `--fail-fast=true`, or
   with `DATAMITSU_FAIL_FAST=true` and no `--fail-fast` flag, exits 2.
-- A format named twice, an unknown format or option, a missing path, and a
-  report combined with `--explain` (which runs nothing) exit 2 before anything
-  runs.
+- A format named twice, an unknown format or option, a missing path, two
+  reports that would write one file — one path twice, a report where another's
+  completeness companion goes, or a file inside a split format's directory —
+  and a report combined with `--explain` (which runs nothing) exit 2 before
+  anything runs.
 - A report that cannot be written prints
   `error: report <format>: <path>: <cause>` and makes the run exit 5 — unless a
   tool failed (exit 1) or the run was incomplete (exit 4), which keep their code;
@@ -607,14 +615,16 @@ A report says how much of the repository its findings stand for. Every tool is
 judged on three facts, and each one that fails adds a reason to the tool's
 `incomplete` list:
 
-| Fact       | Complete when                                                                                                        | Reasons                                                                                  |
-| ---------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| scope      | the run covered the whole repository — no files named, no subdirectory, no `--file-scoped` — and every task its unit | `narrowed-selection`, `partial-unit`                                                     |
-| execution  | every planned task ran to the end                                                                                    | `cancelled`, `not-started`, `setup-failed`, `platform-skip`                              |
-| extraction | every output was read into findings by a parser, or a cache replayed a pass its parser read as clean                 | `no-extraction`, `parser-unavailable`, `parse-failed`, `truncated`, `unparsed-cache-hit` |
+| Fact       | Complete when                                                                                                        | Reasons                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| scope      | the run covered the whole repository — no files named, no subdirectory, no `--file-scoped` — and every task its unit | `narrowed-selection`, `partial-unit`                                                                                |
+| execution  | every planned task ran to the end                                                                                    | `cancelled`, `not-started`, `setup-failed`, `platform-skip`                                                         |
+| extraction | every output was read into findings by a parser, or a cache replayed a pass its parser read as clean                 | `no-extraction`, `parser-unavailable`, `parse-failed`, `truncated`, `unparsed-cache-hit`, `failed-without-findings` |
 
 A tool without an output parser is never complete (`no-extraction`): its exit
-code says whether it passed, not what it found. The run is `complete` when
+code says whether it passed, not what it found. Nor is a tool whose process
+exited non-zero while its parser found nothing in what it printed
+(`failed-without-findings`): the parser did not recognize that output. The run is `complete` when
 every tool is, every operation ran, and nothing was left out at run level:
 `narrowed-selection`, `tools-filter` (with `selection.excludedTools` naming the
 tools `--tools` left out — the selected tools' own runs can still be complete),
@@ -660,6 +670,75 @@ was on disk into code points (`chars`), UTF-8 bytes (`bytes`) and UTF-16 units
 line), or `unknown`, when there was nothing to convert from. A report never holds a command line or
 an environment variable, and nothing caches it: every report is written from
 the run that produced it.
+
+`sarif` writes SARIF 2.1.0 for GitHub code scanning and the other services
+that keep alerts across uploads. It holds one run per tool of the `lint`
+operation (`check` writes its lint, a `fix` run its fix), in the category
+`datamitsu` — `automationDetails.id` `datamitsu/` — or the one
+`?category=<name>` names, and each result carries the finding's fingerprint as
+`partialFingerprints.primaryLocationLineHash`. A tool whose completeness is not
+established is left out rather than listed, and so is a tool with more than
+25 000 results, which GitHub would cut: an upload without a tool leaves that
+tool's alerts as they are. Each tool left out gets one `WARN` line on stderr
+naming why and is recorded in the `omitted` list of the report's entry in
+`exports`. Because it leaves out what is incomplete, `sarif` is written for a
+narrowed run instead of being refused — named files, a subdirectory and
+`--file-scoped` leave every tool incomplete, `--tools` writes the selected tools
+that are complete. Code scanning refuses a SARIF file without a run, so a report
+that would hold none is not written: a file an earlier run left at its path, or
+the `datamitsu-<n>.sarif` files of its directory, are removed, the export is
+`omitted` (a `report` event with that status under `--log-format jsonl`), and a
+`WARN` line says so; nothing is written to stdout either. GitHub reads at most twenty runs from one
+file: `sarif=<dir>/` writes `datamitsu-1.sarif`, `datamitsu-2.sarif` and so on,
+twenty tools each, sorted by name, and removes the `datamitsu-<n>.sarif` files
+an earlier run left there that this one did not write; a file or `-` for a run
+that plans more than twenty tools exits 2 before anything runs. See
+[Code scanning](../guides/reports.md#code-scanning) for the workflow.
+
+`junit` writes JUnit XML: one suite per operation and tool (`<operation>/<tool>`,
+its completeness in `properties`), one case per file the tool answered for, and
+a `<failure>` only for a file with a finding at or above the operation's
+`failOn` that failed its tool — the failure count follows the gate, not the
+findings. Findings below the threshold are a case's `<system-out>`. An
+invocation that failed without such a finding is one extra case named after its
+directory (with the invocation's ID when several share one): a
+`<failure type="exit">` listing its findings, or an
+`<error type="exit">` with the masked tail of its output when it has none
+(never for a `security` tool). Stopped tasks, skipped tools and an operation
+that did not run are `<skipped>` cases. See
+[Test results](../guides/reports.md#test-results-junit).
+
+`codequality` writes GitLab's Code Quality array: one issue per finding of the
+`lint` operation (fix for a `fix` run), with `check_name` `<source>/<rule>`,
+the finding's fingerprint, `severity` `major` for an error, `minor` for a
+warning and `info` below, `categories` `Security` for a `security` tool and
+`Style` otherwise, and a repository-relative `location.path` with `positions`
+in characters, or `lines` where the columns could not be converted. A finding
+without a file or outside the repository cannot be placed and is left out and
+counted. A tool that is not complete is kept. See
+[GitLab Code Quality](../guides/reports.md#gitlab-code-quality).
+
+`checkstyle` writes one `<file>` per file and one `<error>` per finding of the
+`lint` operation (fix for a `fix` run), with `line`, `column` in characters
+where the report could convert it, `severity` `error`, `warning` or `info`,
+`message` and `source` `<source>/<rule>`; a finding without a file is under
+`<file name="">`. `rdjsonl` writes one reviewdog diagnostic per line: the
+message, the path with a range in UTF-8 byte columns (exclusive end, left out
+where they could not be converted), severity `ERROR`, `WARNING` or `INFO`, the
+source with its app's official URL and the rule with its documentation; a
+finding without a file has no location. See
+[Checkstyle](../guides/reports.md#checkstyle) and
+[reviewdog](../guides/reports.md#reviewdog).
+
+A format that lists findings but has no place to say how complete it is —
+`junit`, `codequality`, `checkstyle`, `rdjsonl` — gets a completeness companion
+beside its file,
+`<path>.completeness.json` (`datamitsu.completeness/1`): whether the report is
+complete, the run-level reasons, each tool with its own, the findings the
+format could not carry (`omitted`), and the run's exports.
+A job checks it before it publishes the report. Each incomplete tool also gets
+one `WARN` line on stderr, and the report's entry in `exports` names the
+companion (`companion`). A report on stdout has none.
 
 `markdown` writes the same run for a person, as GitHub renders Markdown: what
 the run covered and whether it is complete, a table of each operation's tools
@@ -972,19 +1051,25 @@ offline:
 datamitsu report render --input <run.json> --format <format> [--output <path>|-]
 ```
 
-| Flag                | Description                                                                           |
-| ------------------- | ------------------------------------------------------------------------------------- |
-| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)              |
-| `--format <format>` | The format to write: `json` or `markdown`; a format's options follow a `?` (required) |
-| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report`   |
-| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                  |
+| Flag                | Description                                                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--input <path>`    | The own JSON document a run wrote with `--report json=<path>` (required)                                                                        |
+| `--format <format>` | The format to write: `json`, `markdown`, `sarif`, `junit`, `codequality`, `checkstyle` or `rdjsonl`; a format's options follow a `?` (required) |
+| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically, like `--report`                                                             |
+| `--allow-partial`   | Render a format that lists findings for a document of a narrowed run                                                                            |
 
 The renderers and the completeness rule are the run's own: a document of a
 narrowed run is refused (exit 2) for a format that lists findings unless
 `--allow-partial`, and a document without its completeness fields is read as
-incomplete, never as complete. The document holds everything a renderer needs,
+incomplete, never as complete — as is a tool an earlier build called complete
+although one of its processes failed while its parser found nothing
+(`failed-without-findings`). The document holds everything a renderer needs,
 so rendering works on another machine and after the checkout changed; `json`
-reproduces the document byte for byte. A document of another schema, or one
+reproduces the document byte for byte, and every other format the file the run
+wrote, its completeness companion included, which is written beside
+`--output` and never on stdout. An `--output` that ends in `/` is a directory,
+for `sarif`; a document with more tools than one SARIF file holds is refused
+(exit 2) for a file or stdout. A document of another schema, or one
 that cannot be read, exits 1; an output that cannot be written exits 5.
 
 ```bash
@@ -993,6 +1078,9 @@ datamitsu report render --input out/run.json --format json
 
 # The same run for a person
 datamitsu report render --input out/run.json --format markdown --output out/run.md
+
+# For code scanning, split into files of twenty tools
+datamitsu report render --input out/run.json --format sarif --output sarif/
 ```
 
 ## config

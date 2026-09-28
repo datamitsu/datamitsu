@@ -589,5 +589,13 @@ export default defineConfig((config) => ({
     "colours",
     "defences",
     "licence",
+    // The optional interfaces a report format adds to render.Renderer: one
+    // that leaves a tool out, one written with a completeness companion.
+    "omitter",
+    "companioned",
+    // encoding/xml's struct tag for an element's character data.
+    "chardata",
+    // reviewdog's filter mode that reports every diagnostic.
+    "nofilter",
   ],
 }));

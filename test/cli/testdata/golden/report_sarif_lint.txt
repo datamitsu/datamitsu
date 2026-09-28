@@ -1,0 +1,76 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "automationDetails": {
+        "id": "datamitsu/"
+      },
+      "columnKind": "unicodeCodePoints",
+      "tool": {
+        "driver": {
+          "name": "hadolint",
+          "informationUri": "https://example.com/hadolint",
+          "rules": [
+            {
+              "id": "DL3006",
+              "shortDescription": {
+                "text": "DL3006"
+              }
+            }
+          ]
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "exitCode": 0,
+          "workingDirectory": {
+            "uri": "./",
+            "uriBaseId": "%SRCROOT%"
+          },
+          "properties": {
+            "datamitsu": {
+              "id": "hadolint::2#1",
+              "state": "ran",
+              "extraction": "parsed-findings"
+            }
+          }
+        }
+      ],
+      "results": [
+        {
+          "ruleId": "DL3006",
+          "ruleIndex": 0,
+          "level": "warning",
+          "message": {
+            "text": "Always tag the version of an image explicitly"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "Dockerfile",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 1,
+                  "startColumn": 1,
+                  "endLine": 1
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "datamitsu/v1": "9f687dcb779d9609b5a6a17a72fde8629ddf00f81dc0b8a4fe7e14bce7fdfe8d",
+            "primaryLocationLineHash": "9f687dcb779d9609b5a6a17a72fde8629ddf00f81dc0b8a4fe7e14bce7fdfe8d"
+          },
+          "properties": {
+            "provenance": "parser",
+            "gates": false
+          }
+        }
+      ]
+    }
+  ]
+}

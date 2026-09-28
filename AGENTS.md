@@ -312,7 +312,8 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   else failed (1 > 4 > 5).
 - Completeness is per tool, from scope, execution and extraction
   (`internal/report/completeness.go`); a tool without a parser is never
-  complete. A report that lists findings (every renderer whose
+  complete, nor one with a process that exited non-zero while its parser
+  answered with nothing (`failed-without-findings`). A report that lists findings (every renderer whose
   `OmitsIncompleteTools` is false) is refused with exit 2 for a run narrowed at
   plan time unless `--allow-partial`, and any report turns fail-fast off; an
   explicit `--fail-fast=true` or `DATAMITSU_FAIL_FAST=true` with a report exits 2.
@@ -346,6 +347,24 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   which of them still match framed output. The step summary is the `markdown`
   renderer's `Write` with a budget — 1 MiB less what the file already holds —
   appended best-effort before the annotations, so their notice can name it.
+- The interchange formats share `internal/report/render/common`: a format
+  that lists one operation writes lint, or fix for a fix-only run
+  (`common.ListedOperation`); columns come only from the model's precomputed
+  spans (`common.RegionOf`), never from the checkout, so `report render`
+  reproduces a run's file. What a format adds to `render.Renderer` is an
+  optional interface in `render/extensions.go` — `DirRenderer` (a path ending
+  in `/`), `Capped` (checked at plan time by `refuseCrowdedReports` and in
+  `report render`), `Omitter`, `Companioned`, `OptionChecker`, `Declining`
+  (writes nothing, `render.DeclinedError`, recorded as `omitted`) — and the
+  runner, `render.Describe` (export details) and `render.Notes` (one `WARN`
+  line per incomplete tool) find it there. SARIF leaves an incomplete tool
+  out, since code scanning closes the alerts of a tool it no longer holds —
+  even one whose run says it did not succeed — so never write a partial run
+  of one; and it declines a run it would hold no tool of, since code scanning
+  refuses a file without a run. `docs/plans/2026-09-26-unified-results.md` §6
+  records what was measured on GitHub. Every other new format lists everything
+  and, when its shape has no field for completeness, is `Companioned`:
+  `Target.Write` writes `<path>.completeness.json` beside it, atomically.
 - `--output agent` (`runner/agent.go`) prints each operation from the report's
   record of it (`OperationRecord.Operation`, masked) through `report.Visible`;
   `ui.SetMuted` turns every human rendering off for it.
