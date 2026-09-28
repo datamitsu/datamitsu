@@ -172,7 +172,7 @@ func operation(op report.Operation) []part {
 		}
 	}
 
-	shown, hidden := findings(op)
+	shown, hidden, baselined := findings(op)
 	if len(shown) > 0 {
 		add(0, "\n#### Findings\n")
 	}
@@ -191,6 +191,9 @@ func operation(op report.Operation) []part {
 	}
 	if hidden.total() > 0 {
 		add(0, "\n_%s below the threshold not listed._\n", hidden.String())
+	}
+	if baselined > 0 {
+		add(0, "\n_%s held by the baseline not listed._\n", count(baselined, "finding", "findings"))
 	}
 
 	if len(op.Skipped) > 0 || len(op.Cancelled) > 0 {
@@ -312,21 +315,25 @@ func levelsOf(tr report.ToolRun) levels {
 
 // findings is what the terminal shows of an operation (report.Visible), with
 // the synthetic finding of a tool that failed without one, and a count of the
-// rest.
-func findings(op report.Operation) (shown []report.Finding, hidden levels) {
+// rest: below the threshold, and held by the run's baseline.
+func findings(op report.Operation) (shown []report.Finding, hidden levels, baselined int) {
 	for _, tr := range op.Tools {
 		for _, inv := range tr.Invocations {
 			s, h := report.Visible(inv)
 			shown = append(shown, s...)
 			for _, f := range h {
-				hidden.add(f.Severity)
+				if f.Baselined {
+					baselined++
+				} else {
+					hidden.add(f.Severity)
+				}
 			}
 			if f, ok := report.Synthetic(inv); ok {
 				shown = append(shown, f)
 			}
 		}
 	}
-	return shown, hidden
+	return shown, hidden, baselined
 }
 
 type fileGroup struct {
@@ -462,6 +469,12 @@ func codes(names []string) string {
 	}
 	return strings.Join(out, ", ")
 }
+
+// Escape is tool text as the document writes it: inert Markdown on one line.
+func Escape(s string) string { return escape(s) }
+
+// Code is s as the document writes a path or a name: inline code on one line.
+func Code(s string) string { return code(s) }
 
 // escape makes tool text inert Markdown on one line: no emphasis, link,
 // heading, table cell or HTML it could open.

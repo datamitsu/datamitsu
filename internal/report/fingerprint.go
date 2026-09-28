@@ -19,7 +19,10 @@ import (
 //
 // The message is not an input, so rewording one does not turn every alert
 // into "fixed" and "new"; the tool comes first, so two tools never share one.
-const fingerprintPrefix = "dmfp1"
+
+// FingerprintVersion names the fingerprint input, whose first part it is: a
+// baseline and a diff compare fingerprints of one version only.
+const FingerprintVersion = "dmfp1"
 
 // Fingerprint bases: what a fingerprint rests on.
 const (
@@ -46,7 +49,7 @@ func RowHash(row int) string {
 // Fingerprint is the 64-character lowercase hex identity of a finding.
 func Fingerprint(tool, code, relPath, lineHash string, ordinal int) string {
 	h := sha256.New()
-	for i, part := range []string{fingerprintPrefix, tool, code, relPath, lineHash, strconv.Itoa(ordinal)} {
+	for i, part := range []string{FingerprintVersion, tool, code, relPath, lineHash, strconv.Itoa(ordinal)} {
 		if i > 0 {
 			h.Write([]byte{0})
 		}

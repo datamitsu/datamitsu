@@ -43,6 +43,20 @@ func TestThresholdGate(t *testing.T) {
 			reported: []bool{false}, gates: []bool{false},
 		},
 		{
+			name: "a baselined error", contract: true,
+			findings: []diagnostic.Diagnostic{
+				{Message: "old", Severity: diagnostic.SeverityError, Baselined: true},
+				{Message: "new", Severity: diagnostic.SeverityError},
+			},
+			wantFailed: true, wantReason: "1 finding at or above failOn=error",
+			reported: []bool{false, true}, gates: []bool{false, true},
+		},
+		{
+			name: "only baselined errors", contract: true,
+			findings: []diagnostic.Diagnostic{{Message: "old", Severity: diagnostic.SeverityError, Baselined: true}},
+			reported: []bool{false}, gates: []bool{false},
+		},
+		{
 			name: "failOn warning", own: config.SeverityWarning, contract: true,
 			findings:   findingsAt(diagnostic.SeverityWarning, diagnostic.SeverityInfo, diagnostic.SeverityError),
 			wantFailed: true, wantReason: "2 findings at or above failOn=warning",

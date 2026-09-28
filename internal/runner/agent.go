@@ -56,6 +56,7 @@ func (sc *sharedContext) printAgentOperation(a agentOperation) {
 	report.MaskAll(&op, sc.secretValues())
 	var b strings.Builder
 	var shown, hidden levelCounts
+	baselined := 0
 	stopped := map[string]bool{}
 	for _, c := range op.Cancelled {
 		stopped[c.TaskID] = true
@@ -64,7 +65,7 @@ func (sc *sharedContext) printAgentOperation(a agentOperation) {
 		unrun := map[string][]string{}
 		var order []string
 		for _, inv := range tr.Invocations {
-			agentInvocation(&b, tr, inv, &shown, &hidden)
+			agentInvocation(&b, tr, inv, &shown, &hidden, &baselined)
 			notRun := inv.State == string(tooling.ProcessNotStarted) || inv.State == string(tooling.ProcessCancelled)
 			if !notRun || stopped[inv.TaskID] {
 				continue
@@ -100,6 +101,9 @@ func (sc *sharedContext) printAgentOperation(a agentOperation) {
 		summary += fmt.Sprintf(" %d info %d hints", shown[2], shown[3])
 	}
 	summary += fmt.Sprintf(" · %d hidden", hidden.total())
+	if baselined > 0 {
+		summary += fmt.Sprintf(" · %d baselined", baselined)
+	}
 	if a.note != "" {
 		summary += " · " + a.note
 	}
@@ -117,14 +121,18 @@ func skipText(s report.Skip) string {
 	return tooling.SkippedTool{ToolName: s.Tool, Reason: reasons[s.Reason], Detail: s.Detail}.ReasonText()
 }
 
-func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocation, shown, hidden *levelCounts) {
+func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocation, shown, hidden *levelCounts, baselined *int) {
 	visible, below := report.Visible(inv)
 	for _, f := range visible {
 		shown.add(severityOf(f.Severity))
 		record(b, agentFinding(f))
 	}
 	for _, f := range below {
-		hidden.add(severityOf(f.Severity))
+		if f.Baselined {
+			*baselined++
+		} else {
+			hidden.add(severityOf(f.Severity))
+		}
 	}
 	label := agentLabel(tr.Name, inv.Dir)
 	var failure string

@@ -7,6 +7,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
+	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render"
 	"github.com/datamitsu/datamitsu/internal/runner"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
@@ -29,6 +30,28 @@ const (
 	outputUsage = "How the run shows its results: human (frames, colour, progress) or agent (one line per finding " +
 		"the terminal would show, one summary line per operation; also via DATAMITSU_OUTPUT)"
 )
+
+const baselineUsage = "Gate only on findings the baseline does not hold: a document of 'report baseline', or a run's " +
+	"own JSON report. A finding it holds is neither reported nor gates; a tool that exits non-zero still fails"
+
+func addBaselineFlag(cmd *cobra.Command, path *string) {
+	cmd.Flags().StringVar(path, "baseline", "", baselineUsage)
+}
+
+// applyBaseline loads the baseline a run is matched against before anything
+// runs: one that cannot be read, or holds another schema or fingerprints of
+// another version, is a usage error.
+func applyBaseline(path string, opts *runner.Options) error {
+	if path == "" {
+		return nil
+	}
+	set, _, err := report.LoadBaseline(path)
+	if err != nil {
+		return exitcode.UsageErrorf("invalid --baseline: %w", err)
+	}
+	opts.Baseline = set
+	return nil
+}
 
 // Values of --events and DATAMITSU_EVENTS.
 const (

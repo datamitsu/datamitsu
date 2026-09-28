@@ -168,6 +168,7 @@ datamitsu check [files...]
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 | `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
 | `--output <mode>`            | How the run shows its results: `human` (the default) or `agent`, one line per finding for a program that reads the run (see [Agent output](#agent-output))                                                      |
+| `--baseline <file>`          | Gate only on findings the baseline does not hold: a [`report baseline`](#report-baseline) document or a run's own JSON; a tool that exits non-zero still fails (see [Baselines](#baselines))                    |
 
 **Examples:**
 
@@ -781,6 +782,33 @@ in the document. This catches what the environment names; a secret a tool
 prints that no variable holds is not caught, which is why a security tool's
 output is withheld altogether.
 
+### Baselines
+
+`lint --baseline <file>` and `check --baseline <file>` gate only on findings the
+baseline does not hold. The file is a [`report baseline`](#report-baseline)
+document or a run's own JSON, whose findings are taken as one; it is read
+before anything runs, and one that cannot be read, of another schema, or of
+fingerprints of another version exits 2.
+
+```bash
+datamitsu lint --baseline .datamitsu-baseline.json
+```
+
+A finding whose fingerprint the baseline holds is marked while its process is
+judged, before the threshold decides: it is neither reported nor gates, so it
+fails nothing, and under fail-fast cancels nothing. The terminal counts it —
+`· 2 baselined` on the tool's line and in the footer — instead of printing it;
+the own JSON marks it `baselined`, SARIF puts it in the result's
+`properties.baselined`, JUnit lists it in `<system-out>` marked `(baselined)`,
+and Markdown and `--output agent` count it.
+
+The exit code of a tool is untouched: a tool that exits non-zero still fails the
+run, and its frame shows the baselined findings it failed on, marked
+`(baselined)`. Most linters exit 1 on the findings they print, so a baseline
+makes a run fail only on new findings when the tool exits 0 and the gate
+decides: give the tool its exit-zero flag — `--exit-zero`, `--exit-code 0` —
+and let `failOn` gate. See [Baselines](../guides/reports.md#baselines).
+
 ### GitHub annotations
 
 In a GitHub Actions job `fix`, `lint` and `check` print the run's findings as
@@ -1009,6 +1037,7 @@ datamitsu lint [files...]
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 | `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
 | `--output <mode>`            | How the run shows its results: `human` (the default) or `agent`, one line per finding for a program that reads the run (see [Agent output](#agent-output))                                                      |
+| `--baseline <file>`          | Gate only on findings the baseline does not hold: a [`report baseline`](#report-baseline) document or a run's own JSON; a tool that exits non-zero still fails (see [Baselines](#baselines))                    |
 
 **Examples:**
 
@@ -1093,6 +1122,74 @@ datamitsu report render --input out/run.json --format markdown --output out/run.
 
 # For code scanning, split into files of twenty tools
 datamitsu report render --input out/run.json --format sarif --output sarif/
+```
+
+`history` renders too: it appends the document's line to `--output`.
+
+### report baseline
+
+Write the fingerprints of every finding a run reported as a baseline,
+`datamitsu.baseline/1`, which [`lint --baseline`](#baselines) and
+`check --baseline` read:
+
+```bash
+datamitsu report baseline <run.json> [--output <path>|-]
+```
+
+| Flag              | Description                                                                  |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `--output <path>` | Where to write the baseline; `-`, the default, is stdout. Written atomically |
+
+The baseline holds the fingerprint version (`fingerprint`: `dmfp1`), when it
+was made (`createdAt`, from `SOURCE_DATE_EPOCH` when set), the build and
+configuration of the run it was made from, that run's start, commit and ref,
+whether it was complete with the reasons of the run and its tools (`source`),
+and the sorted fingerprints of every finding of every operation, whatever its
+level; a tool that failed without findings adds none. A run that was not
+complete is taken with one `WARN` line: its baseline holds fewer fingerprints,
+which only suppresses fewer findings. A document that cannot be read, or of
+another schema, exits 1; an output that cannot be written exits 5.
+
+```bash
+datamitsu lint --report json=out/run.json
+datamitsu report baseline out/run.json --output .datamitsu-baseline.json
+```
+
+### report diff
+
+Compare the findings of two runs' own JSON documents by fingerprint, tool by
+tool:
+
+```bash
+datamitsu report diff <before.json> <after.json> [--format json|markdown] [--output <path>|-]
+```
+
+| Flag                | Description                                                          |
+| ------------------- | -------------------------------------------------------------------- |
+| `--format <format>` | `json` (the default), `datamitsu.diff/1`, or `markdown` for a person |
+| `--output <path>`   | Where to write it; `-`, the default, is stdout. Written atomically   |
+
+Each document contributes the operation a report lists — `lint`, or `fix` for a
+fix-only run. A finding is:
+
+| Class        | When                                                                                                |
+| ------------ | --------------------------------------------------------------------------------------------------- |
+| `new`        | only the second run holds it                                                                        |
+| `unchanged`  | both hold it, on the same row                                                                       |
+| `moved`      | both hold it, on another row (`beforeRow` names the first run's)                                    |
+| `fixed`      | only the first run holds it, and the second run covered the whole repository with the tool complete |
+| `unknown`    | only the first run holds it, and the second did not look everywhere: the tool's reasons say why     |
+| `unobserved` | every finding of a tool only one run holds (`status`: `before-only` or `after-only`)                |
+
+The document counts each class per tool and in `summary`, and lists every
+finding with its fingerprint, level, rule, message, path and row. For two
+complete runs the counts are symmetric: what one direction calls `new` the other
+calls `fixed`. The command exits 0 whatever it finds; a document that cannot be
+read, or of another schema, exits 1, an unknown `--format` 2, and an output that
+cannot be written 5.
+
+```bash
+datamitsu report diff main.json branch.json --format markdown
 ```
 
 ## config

@@ -360,6 +360,14 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   fail-fast off, and an explicit `--fail-fast=true` or
   `DATAMITSU_FAIL_FAST=true` beside one exits 2; a `NoFindings` format
   (`history`) does neither.
+- A baseline (`report.Baseline`, `datamitsu.baseline/1`, loaded by
+  `report.LoadBaseline` in `cmd` before anything runs) is matched in the gate
+  hook, after `report.Annotator` and before `tooling.ThresholdGate`:
+  `Diagnostic.Baselined` makes the threshold neither report nor gate the
+  finding. It is matched on the hook's per-process fingerprint. It never
+  touches an exit code. `internal/report/diff` compares two own reports by
+  fingerprint per tool; a disappearance is `fixed` only where the second run's
+  tool is complete over the whole repository.
 - `history` is `render.Appending`: `Target` opens its file with `O_APPEND` and
   writes the run's line in one write, never replacing the file. A line
   (`report.HistoryLine`, `datamitsu.history/1`) holds counts and durations

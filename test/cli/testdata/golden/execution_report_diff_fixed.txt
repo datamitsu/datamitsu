@@ -1,0 +1,84 @@
+exit code: 0
+===STDOUT===
+{
+  "schema": "datamitsu.diff/1",
+  "fingerprint": "dmfp1",
+  "before": {
+    "startedAt": "<TS>",
+    "operation": "lint",
+    "selection": "all",
+    "complete": false,
+    "incomplete": []
+  },
+  "after": {
+    "startedAt": "<TS>",
+    "operation": "lint",
+    "selection": "all",
+    "complete": false,
+    "incomplete": []
+  },
+  "summary": {
+    "new": 0,
+    "fixed": 1,
+    "unchanged": 0,
+    "moved": 0,
+    "unknown": 0,
+    "unobserved": 0
+  },
+  "tools": [
+    {
+      "name": "alpha",
+      "status": "compared",
+      "complete": false,
+      "incomplete": [
+        "no-extraction"
+      ],
+      "counts": {
+        "new": 0,
+        "fixed": 0,
+        "unchanged": 0,
+        "moved": 0,
+        "unknown": 0,
+        "unobserved": 0
+      },
+      "new": [],
+      "fixed": [],
+      "unchanged": [],
+      "moved": [],
+      "unknown": [],
+      "unobserved": []
+    },
+    {
+      "name": "hadolint",
+      "status": "compared",
+      "complete": true,
+      "incomplete": [],
+      "counts": {
+        "new": 0,
+        "fixed": 1,
+        "unchanged": 0,
+        "moved": 0,
+        "unknown": 0,
+        "unobserved": 0
+      },
+      "new": [],
+      "fixed": [
+        {
+          "fingerprint": "9f687dcb779d9609b5a6a17a72fde8629ddf00f81dc0b8a4fe7e14bce7fdfe8d",
+          "severity": "warning",
+          "source": "hadolint",
+          "code": "DL3006",
+          "message": "Always tag the version of an image explicitly",
+          "path": "Dockerfile",
+          "row": 1
+        }
+      ],
+      "unchanged": [],
+      "moved": [],
+      "unknown": [],
+      "unobserved": []
+    }
+  ]
+}
+
+===STDERR===

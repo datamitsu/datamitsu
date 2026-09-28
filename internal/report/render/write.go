@@ -146,6 +146,29 @@ func (t *Target) clear() {
 	}
 }
 
+// WriteFile writes data to path as a report is written: into a temporary
+// file beside it, renamed over it once complete, directories created.
+func WriteFile(path string, data []byte) error {
+	tmp, err := createBeside(path)
+	if err != nil {
+		return err
+	}
+	err = fill(tmp, func(w io.Writer) error {
+		if _, err := w.Write(data); err != nil {
+			return fmt.Errorf("write: %w", err)
+		}
+		return nil
+	})
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+		return unwrapPathError(err)
+	}
+	return nil
+}
+
 // writeAppend adds the run's entry to the end of its file in one write, which
 // a local file system keeps whole beside another process appending to the
 // same file; a network file system may not.

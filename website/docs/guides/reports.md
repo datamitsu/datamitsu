@@ -641,6 +641,61 @@ agree whenever one process reports the findings of a line, which is every tool
 that runs once per file and every tool whose findings name the files it was
 given.
 
+## Baselines
+
+A project that adopts a linter with hundreds of findings cannot fix them in the
+change that adds it. A baseline lets the run fail only on what is new: it holds
+the fingerprints of the findings a run reported, and a later run given it
+neither reports those findings nor lets them gate.
+
+```bash
+datamitsu lint --report json=out/run.json
+datamitsu report baseline out/run.json --output .datamitsu-baseline.json
+datamitsu lint --baseline .datamitsu-baseline.json
+```
+
+Commit the baseline beside the configuration. A finding is matched by its
+[fingerprint](#fingerprints), so it stays baselined when lines are inserted
+above it and when its message is reworded; it becomes new when its rule, its
+file or the text of its line changes. A baseline made from an incomplete run —
+narrowed, a tool cancelled or unread — holds fewer fingerprints: it is written
+with a warning and suppresses fewer findings, never more.
+
+**A baseline cannot silence an exit code.** The tool's exit code still gates: a
+tool that exits non-zero fails the run whatever the baseline holds, and its
+frame shows the baselined findings it failed on. ESLint, golangci-lint and most
+linters exit 1 on the findings they print, so for a baseline to make the run
+fail only on new findings, the tool has to exit 0 on findings and leave the
+decision to the threshold: add its exit-zero flag to the operation's `args` —
+`--exit-zero` for Ruff, Flake8 and Pylint, `--issues-exit-code=0` for
+golangci-lint — and keep the operation's
+[`failOn`](../reference/configuration-api.md#failing-on-findings-failon). The
+threshold gates only where the tool's parser module declares the severity
+contract; elsewhere a tool that exits 0 passes whatever it found.
+
+**Baselines rot.** A committed baseline hides its findings for as long as it
+exists. Regenerate it on purpose — after a sweep that fixed some of them, so it
+stops hiding them — never on a schedule, which would bake every new finding in.
+`report diff` against the current run shows what it still hides:
+
+```bash
+datamitsu report diff .datamitsu-baseline-run.json out/run.json --format markdown
+```
+
+A baseline takes a run's own JSON as well, so keeping the run a baseline was
+made from lets `report diff` compare it with any later run.
+
+## Comparing two runs
+
+`datamitsu report diff <before.json> <after.json>` compares two own reports by
+fingerprint, tool by tool: `new`, `unchanged`, `moved` (another row), `fixed`,
+`unknown` and `unobserved`. A finding that disappeared is `fixed` only when the
+second run covered the whole repository and the tool was complete in it; when
+the tool was cancelled, narrowed or unread it is `unknown`, with the reasons,
+because the second run did not look. A tool only one run holds is `unobserved`.
+`--format markdown` writes it for a pull request comment. See
+[`report diff`](../reference/cli-commands.md#report-diff).
+
 ## Rendering a report later
 
 `datamitsu report render` reads a run's own JSON and writes it in a format,

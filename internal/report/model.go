@@ -265,6 +265,9 @@ type Finding struct {
 	// the annotations and Markdown list (ShownMask): decided in the process
 	// that reported it, before duplicates across processes were dropped.
 	Shown bool `json:"shown"`
+	// Baselined marks a finding whose fingerprint the run's --baseline held:
+	// it is neither reported nor gates, whatever its level.
+	Baselined bool `json:"baselined,omitempty"`
 	// Kind is issue, security for a tool whose category is security, or
 	// synthetic for the one finding that stands for a tool that failed
 	// without a parsable one.

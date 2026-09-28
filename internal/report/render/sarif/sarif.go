@@ -257,7 +257,7 @@ func toolRun(tr *report.ToolRun, automationID string) Run {
 				"primaryLocationLineHash": f.Fingerprint,
 				"datamitsu/v1":            f.Fingerprint,
 			},
-			Properties: ResultProperties{Provenance: f.Provenance, Gates: f.Gates},
+			Properties: ResultProperties{Provenance: f.Provenance, Gates: f.Gates, Baselined: f.Baselined},
 		})
 	}
 	return r

@@ -44,7 +44,8 @@ func (e *ThresholdError) Error() string { return e.Reason }
 // the embedded fallback — declares the severity contract, which contract
 // answers per module. A process whose module does not
 // is judged by its exit code alone, and when its threshold is not the default
-// ignored is told the tool, so a threshold nobody enforces is not silent.
+// ignored is told the tool, so a threshold nobody enforces is not silent. A
+// finding the run's baseline holds (Baselined) is neither reported nor gates.
 func ThresholdGate(global config.Severity, contract func(module string) bool, ignored func(tool string)) Gate {
 	return func(task Task, proc *ProcessResult) GateDecision {
 		failOn := config.EffectiveFailOn(task.OpConfig, global)
@@ -60,7 +61,7 @@ func ThresholdGate(global config.Severity, contract func(module string) bool, ig
 		var gating []int
 		for i := range proc.Diagnostics {
 			d := &proc.Diagnostics[i]
-			d.Reported = d.Severity <= level
+			d.Reported = d.Severity <= level && !d.Baselined
 			d.Gates = d.Reported && active
 			if d.Gates {
 				gating = append(gating, i)

@@ -543,6 +543,7 @@ func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun)
 		Severity:         d.Severity.String(),
 		Reported:         d.Reported,
 		Gates:            d.Gates,
+		Baselined:        d.Baselined,
 		Kind:             kindIssue,
 		Message:          string(tooling.StripCSI([]byte(d.Message))),
 		Provenance:       provenanceParser,

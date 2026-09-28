@@ -35,10 +35,11 @@ func now() time.Time {
 
 // startReport begins recording the run when something reads what it found: a
 // report to write, a JSON-L stream to carry diagnostic events, annotations, a
-// step summary or an agent's records to print.
+// step summary or an agent's records to print, or a baseline to match
+// fingerprints against.
 func (sc *sharedContext) startReport() {
 	reads := len(sc.opts.Reports) > 0 || ui.Quiet() || sc.annotations.mode == AnnotationsGitHub ||
-		sc.wantsStepSummary() || sc.agentOutput()
+		sc.wantsStepSummary() || sc.agentOutput() || sc.opts.Baseline != nil
 	if !reads {
 		return
 	}
@@ -86,15 +87,23 @@ func (sc *sharedContext) collectSecrets() *report.Secrets {
 
 // gate is the hook the executor runs over every parsed process: it anchors the
 // process's findings — fingerprints and columns, while the files are on disk —
-// and then applies the failOn threshold, so that a fingerprint exists before
-// the threshold decides.
+// marks those the baseline holds, and then applies the failOn threshold, so
+// that a baselined finding fails nothing and cancels nothing under fail-fast.
+// A fingerprint is matched as the process computes it: its ordinal counts the
+// findings of that process, which is what the report settles too unless two
+// processes of one tool reported one line.
 func (sc *sharedContext) gate() tooling.Gate {
 	threshold := tooling.ThresholdGate(config.Severity(sc.opts.FailOn), sc.severityContract, sc.ignoredFailOn.add)
 	if sc.annotator == nil {
 		return threshold
 	}
+	baseline := sc.opts.Baseline
 	return func(task tooling.Task, proc *tooling.ProcessResult) tooling.GateDecision {
 		sc.annotator.Annotate(task, proc)
+		for i := range proc.Diagnostics {
+			d := &proc.Diagnostics[i]
+			d.Baselined = d.Anchor != nil && baseline[d.Anchor.Fingerprint]
+		}
 		return threshold(task, proc)
 	}
 }
@@ -201,6 +210,7 @@ func (sc *sharedContext) emitDiagnostics(runOpID string, found []report.ToolFind
 			Provenance:  f.Provenance,
 			Reported:    new(f.Reported),
 			Gates:       new(f.Gates),
+			Baselined:   f.Baselined,
 		}
 		ui.Emit(e)
 	}

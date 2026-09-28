@@ -1,0 +1,5 @@
+exit code: 2
+===STDOUT===
+
+===STDERR===
+error: invalid --baseline: not a baseline: version.json holds fingerprints of version "dmfp2", and this build computes "dmfp1": make it again with `datamitsu report baseline`

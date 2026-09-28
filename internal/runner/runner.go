@@ -1311,6 +1311,9 @@ type Options struct {
 	// Output is how the run shows its results: human, or agent for a program
 	// that reads them; empty is human.
 	Output string
+	// Baseline holds the fingerprints of findings the run neither reports nor
+	// gates on; nil matches none.
+	Baseline report.BaselineSet
 }
 
 // validate rejects unknown flag values. Rank() reads an unvalidated string
@@ -1515,9 +1518,9 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 		// Reserve a fixed-width slot for the duration so anything after it (the run
 		// count) stays in a stable column instead of floating with the duration
 		// width. Pad only when something follows, to avoid trailing whitespace.
-		views, hidden := groupViews(group)
+		views, hidden, baselined := groupViews(group)
 		durStr := ui.FormatDurationShort(group.wallTime)
-		if group.totalRuns > 1 || group.failedRuns > 0 || detailed || hidden.total() > 0 {
+		if group.totalRuns > 1 || group.failedRuns > 0 || detailed || hidden.total() > 0 || baselined > 0 {
 			durStr = fmt.Sprintf("%-*s", durationColWidth, durStr)
 		}
 		line := clr.Faint("┃ ") + status + " " + nameDisplay + strings.Repeat(" ", pad) + heatDuration(group.wallTime, maxMs, durStr)
@@ -1529,6 +1532,9 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 		}
 		if hidden.total() > 0 {
 			line += "  " + clr.Faint("· "+hidden.String())
+		}
+		if baselined > 0 {
+			line += "  " + clr.Faint(fmt.Sprintf("· %d baselined", baselined))
 		}
 		if detailed {
 			line += "  " + clr.Faint(toolDetail(group))
@@ -1549,15 +1555,17 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 }
 
 // groupViews is viewOf for every execution of a tool, and the findings they
-// leave out between them.
-func groupViews(group toolExecutionGroup) ([]taskView, levelCounts) {
+// leave out between them: below the threshold, and held by the baseline.
+func groupViews(group toolExecutionGroup) ([]taskView, levelCounts, int) {
 	views := make([]taskView, len(group.executions))
 	var hidden levelCounts
+	baselined := 0
 	for i, exec := range group.executions {
 		views[i] = viewOf(exec.result)
 		hidden.merge(views[i].hidden)
+		baselined += views[i].baselined
 	}
-	return views, hidden
+	return views, hidden, baselined
 }
 
 // heatFloorMs is the duration below which a tool is always shown "cool" (faint):
@@ -1621,6 +1629,9 @@ func formatDiagnosticRelativeTo(d diagnostic.Diagnostic, baseDir string) string 
 	line := fmt.Sprintf("%s %s %s", clr.Faint(loc), severityColor(d.Severity)(d.Severity.String()), d.Message)
 	if d.Code != "" {
 		line += " " + clr.Faint("["+d.Code+"]")
+	}
+	if d.Baselined {
+		line += " " + clr.Faint("(baselined)")
 	}
 	return line
 }
@@ -1805,13 +1816,15 @@ func printFramed(border func(a ...any) string, label, text string) {
 }
 
 // printHiddenLine closes a frame with what it left out: the findings below the
-// threshold, counted rather than dropped.
+// threshold and those the baseline held, counted rather than dropped.
 func printHiddenLine(view taskView, result tooling.ExecutionResult, border func(a ...any) string) {
-	if view.hidden.total() == 0 {
-		return
+	if view.hidden.total() > 0 {
+		fmt.Printf("  %s  %s\n", border("│"),
+			clr.Faint(fmt.Sprintf("+ %s hidden (failOn=%s)", view.hidden.String(), failOnOf(result))))
 	}
-	fmt.Printf("  %s  %s\n", border("│"),
-		clr.Faint(fmt.Sprintf("+ %s hidden (failOn=%s)", view.hidden.String(), failOnOf(result))))
+	if view.baselined > 0 {
+		fmt.Printf("  %s  %s\n", border("│"), clr.Faint(fmt.Sprintf("+ %d baselined", view.baselined)))
+	}
 }
 
 // gatingFindings counts the findings that failed a process that exited 0.
@@ -1869,14 +1882,21 @@ func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, 
 		colored += clr.Faint(cancelText)
 	}
 	var hidden levelCounts
+	baselined := 0
 	for _, group := range toolGroups {
-		_, groupHidden := groupViews(group)
+		_, groupHidden, groupBaselined := groupViews(group)
 		hidden.merge(groupHidden)
+		baselined += groupBaselined
 	}
 	if hidden.total() > 0 {
 		hiddenText := fmt.Sprintf(" · %s hidden", hidden.String())
 		plain += hiddenText
 		colored += clr.Faint(hiddenText)
+	}
+	if baselined > 0 {
+		baselinedText := fmt.Sprintf(" · %d baselined", baselined)
+		plain += baselinedText
+		colored += clr.Faint(baselinedText)
 	}
 	if skipped > 0 {
 		skipText := fmt.Sprintf(" · %d skipped", skipped)

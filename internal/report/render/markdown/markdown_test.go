@@ -201,3 +201,18 @@ func TestCode(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderCountsBaselined(t *testing.T) {
+	f := issue("src/a.ts", 3, "error", false, "old")
+	f.Baselined = true
+	run := &report.Run{Selection: report.Selection{Mode: "all"}, Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{
+		{Name: "eslint", Invocations: []report.Invocation{{State: "ran", Success: true, Findings: []report.Finding{f}}}},
+	}}}}
+	var out bytes.Buffer
+	if err := (Renderer{}).Render(&out, run, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "_1 finding held by the baseline not listed._") || strings.Contains(out.String(), "below the threshold") {
+		t.Errorf("the baselined finding should be counted apart:\n%s", out.String())
+	}
+}
