@@ -144,11 +144,17 @@ func setJSONLStderr(on bool) {
 			return
 		}
 		ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)
+		// Masked from its first event: a failure before a run records its
+		// own secrets — a config that does not load — still quotes paths and
+		// values. A run extends the masker with its configuration's.
+		hostSecrets := report.SecretValues(env.EnvironAll())
+		ui.SetEventMask(func(e *uievent.Event) { report.MaskAll(e, hostSecrets) })
 		logger.Route(ui.Emit)
 		emitHello()
 		return
 	}
 	ui.SetEventSink(nil, false)
+	ui.SetEventMask(nil)
 	logger.Route(nil)
 }
 

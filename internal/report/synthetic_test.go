@@ -6,6 +6,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
@@ -113,14 +114,29 @@ func TestOutputTailCutThroughASecret(t *testing.T) {
 	}
 }
 
-// A tool whose parser module the run never described may be a security tool:
-// its output is withheld, as a security tool's is.
+// A tool whose parser the run could not describe — its module never loaded,
+// or does not list the key — may be a security tool: its output is withheld,
+// as a security tool's is.
 func TestOutputTailOfAToolOfUnknownCategory(t *testing.T) {
-	acc := NewAccumulator(Options{Root: root, Tools: config.MapOfTools{
-		"scanner": {OutputParser: &config.OutputParser{Module: "missing", Parser: "scanner"}},
-		"plain":   {},
-	}})
-	for name, want := range map[string]string{"scanner": "", "plain": "boom\n"} {
+	acc := NewAccumulator(Options{
+		Root: root,
+		Tools: config.MapOfTools{
+			"scanner":  {OutputParser: &config.OutputParser{Module: "missing", Parser: "scanner"}},
+			"unlisted": {OutputParser: &config.OutputParser{Module: "core", Parser: "no-such-parser"}},
+			"linter":   {OutputParser: &config.OutputParser{Module: "core", Parser: "linter"}},
+			"plain":    {},
+		},
+		Parsers: func(module, parser string) (parsermanager.ParserFacts, bool) {
+			if module != "core" {
+				return parsermanager.ParserFacts{}, false
+			}
+			if parser == "linter" {
+				return parsermanager.ParserFacts{Tool: parsermanager.ToolCapability{Name: parser}}, true
+			}
+			return parsermanager.ParserFacts{}, true
+		},
+	})
+	for name, want := range map[string]string{"scanner": "", "unlisted": "", "linter": "boom\n", "plain": "boom\n"} {
 		tr := acc.newToolRun("lint", name)
 		task := perFileTask(name+"::1", "a")
 		task.ToolName, task.Tool = name, acc.opts.Tools[name]

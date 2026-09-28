@@ -442,9 +442,11 @@ the task that reported it:
 
 `file` is relative to the repository root, rows and columns are 1-based and
 `end_col` is exclusive; `fingerprint` is the finding's
-[report fingerprint](#reports). While a run records findings — a report was asked
-for, or the stream is on — every event of the stream is masked as a report is,
-`op_id` included, so a task's events still share one. By
+[report fingerprint](#reports). Every event of a JSON-L stream is masked as a
+report is, `op_id` included, from its first line with the values the
+environment names, and once a run has loaded its configuration with its apps'
+and operations' values and those its tools were started with; a task's events
+still share one `op_id`. By
 default only the findings at or above the operation's `failOn` are emitted —
 what the terminal shows. `--events diagnostics=all` (or
 `DATAMITSU_EVENTS=diagnostics=all`) emits every finding, with `reported` and

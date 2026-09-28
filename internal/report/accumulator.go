@@ -327,7 +327,8 @@ func (a *Accumulator) newToolRun(op, name string) *ToolRun {
 				tr.Parser.ColumnUnit = facts.Tool.ColumnUnit
 				tr.GateActive = facts.Contract
 				tr.Category = facts.Tool.Category
-				tr.mayHoldSecrets = facts.Tool.Category == categorySecurity
+				// A module that does not list the key says nothing about it.
+				tr.mayHoldSecrets = facts.Tool.Name == "" || facts.Tool.Category == categorySecurity
 			}
 		}
 	}

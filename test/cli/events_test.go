@@ -250,6 +250,14 @@ func TestEventsMaskSecrets(t *testing.T) {
 	if strings.Contains(res.Stderr, secret) || strings.Contains(e.read("run.json"), secret) {
 		t.Errorf("the stream or the report holds the secret:\n%s", res.Stderr)
 	}
+
+	// A run that fails before it records anything — its configuration does
+	// not load — is masked with what the host environment names.
+	failed := clitest.Run(t, clitest.RunOptions{Dir: e.p.Dir, CacheDir: e.cache, Env: []string{"DATAMITSU_TEST_TOKEN=" + secret}},
+		"--no-auto-config", "--config", "missing-"+secret+".js", "--log-format", "jsonl", "lint", "--report", "json=run.json")
+	if failed.ExitCode != 1 || strings.Contains(failed.Stderr, secret) || !strings.Contains(failed.Stderr, "missing-***.js") {
+		t.Errorf("exit %d, stream:\n%s\nwant 1 and the config path masked", failed.ExitCode, failed.Stderr)
+	}
 }
 
 // findingFingerprints maps the code of each finding of a report document to its
