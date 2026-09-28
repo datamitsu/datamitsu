@@ -736,6 +736,21 @@ configuration pinned to an older module keeps working; its tools simply declare
 none of the above. A module that declares a schema newer than any the core knows
 is read as the newest one the core knows.
 
+#### Older modules
+
+A module a configuration pins always parses its own tools, however old it is. The
+[fallback](#three-layers) runs only on its triggers — no parser, a key the module
+does not list, a parse error, an answer that did not recognize the output, or an
+empty array under a non-zero exit — and never because a module is old. A module of
+response ABI 1 is supported while the latest wrapper release pins one, and for at
+least two minor releases after the wrapper moves to a newer one.
+
+An older module cannot say whether it recognized an output and has no format
+parsers. That is reported where someone can act on it, once per module: on stderr
+by `datamitsu config show` (for the modules already in the store; it fetches
+nothing) and `datamitsu devtools parsers list`, and in a run's debug log (`-v`) —
+never in a plain run, whose user cannot change a pin a wrapper chose.
+
 To debug a parser against a real `datamitsu lint` run, pass **`--no-parse`** (or set
 `DATAMITSU_NO_PARSE`): a failure frame shows each tool's raw output instead of its
 parsed findings, so you can see exactly what the parser was given. The flag changes

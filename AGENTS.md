@@ -280,6 +280,14 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   asks). A stdout-mode formatter's stdout reaches no parser; a line format the
   fallback recognized keeps only lines naming a file on disk. The runner always
   wires a parser, since the fallback needs no configuration.
+- The core reads parse answers of ABI 1 (an array) and 2 (an object) and
+  descriptor schemas 1–3, a newer schema as the newest known, unknown fields
+  ignored (`parsermanager.DecodeResponse`, `normalizeSchema`); the released
+  module in `testdata/released`, `echo.wasm` and a hand-assembled later-release
+  module (`compat_test.go`) hold it to that. An ABI 1 module stays supported
+  while the latest wrapper release pins one and two minor releases after; an
+  outdated one is named by `config show`, `devtools parsers list` and `-v`,
+  never by a plain run.
 - A change under `parsers/` rebuilds `internal/parsermanager/testdata/echo.wasm`
   and regenerates `website/docs/reference/parser-catalog.md` in the same change,
   both through `task build:parsers:fixture`

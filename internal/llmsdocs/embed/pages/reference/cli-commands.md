@@ -1608,6 +1608,9 @@ is how to tell which contract a pinned module carries (see
 [levels](../guides/architecture/parsers.md#levels)). A module built with
 descriptor schema 3 also lists its format parsers and the `fallback` sniffer,
 each marked `format` ([format parsers](../guides/architecture/parsers.md#format-parsers)).
+A module older than schema 3 is named once on stderr with a `note:` line, as
+`datamitsu config show` names one already in the store
+([older modules](../guides/architecture/parsers.md#older-modules)).
 Both accept:
 
 - `--json` — machine-readable output, for driving configs or build pipelines.

@@ -331,6 +331,20 @@ func runParsersList(cmd *cobra.Command, _ []string) error {
 			return fmt.Errorf("write conflict: %w", err)
 		}
 	}
+	return writeOutdatedNotes(cmd.ErrOrStderr(), cat.Modules)
+}
+
+// writeOutdatedNotes says, once per module, which described modules are older
+// than the newest descriptor schema.
+func writeOutdatedNotes(w io.Writer, modules []parsermanager.CatalogModule) error {
+	for _, m := range modules {
+		if !m.Outdated() {
+			continue
+		}
+		if _, err := fmt.Fprintln(w, color.New(color.FgYellow).Sprint("note: ")+m.OutdatedNote()); err != nil {
+			return fmt.Errorf("write note: %w", err)
+		}
+	}
 	return nil
 }
 

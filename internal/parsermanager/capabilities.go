@@ -3,7 +3,12 @@ package parsermanager
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 // Capabilities is a parser module's self-description, returned by its WASM
@@ -81,6 +86,38 @@ type OperationRecipe struct {
 type ParserCatalog struct {
 	Tools     []CatalogTool `json:"tools"`
 	Conflicts []string      `json:"conflicts,omitempty"`
+	// Modules are the distinct modules described, each once, under the first
+	// parsers entry (alphabetically) that declares it.
+	Modules []CatalogModule `json:"modules,omitempty"`
+}
+
+// CatalogModule is one distinct module a catalog described.
+type CatalogModule struct {
+	Parser        string `json:"parser"`
+	Module        string `json:"module"`
+	Version       string `json:"version"`
+	SchemaVersion int    `json:"schemaVersion"`
+}
+
+// Outdated reports a module older than the newest descriptor schema this core
+// reads: it still parses its tools, and cannot say whether it recognized an
+// output.
+func (m CatalogModule) Outdated() bool {
+	return m.SchemaVersion < SchemaNewest
+}
+
+// OutdatedNote says what a module older than the newest descriptor schema
+// leaves out, for the surfaces that report it: config show, devtools parsers
+// list, and a verbose run.
+func (m CatalogModule) OutdatedNote() string {
+	return fmt.Sprintf("parser module %q (%s %s) is descriptor schema %d, older than %d: it still parses its tools, "+
+		"but cannot say whether it recognized an output and has no format parsers; the fallback built into "+
+		"datamitsu reads what it answers with nothing on a failure. A newer module release carries both",
+		m.Parser, m.Module, m.Version, m.SchemaVersion, SchemaNewest)
+}
+
+func moduleOf(parser string, caps Capabilities) CatalogModule {
+	return CatalogModule{Parser: parser, Module: caps.Module, Version: caps.Version, SchemaVersion: caps.SchemaVersion}
 }
 
 // CatalogTool is one entry of a ParserCatalog: a tool plus which configured
@@ -123,7 +160,10 @@ func DescribeLocal(ctx context.Context, wasm []byte) (Capabilities, error) {
 // CatalogFromCapabilities flattens a single module's capabilities into a catalog,
 // attributing every tool to the given parser name. Used by the --wasm path.
 func CatalogFromCapabilities(parserName string, caps Capabilities) *ParserCatalog {
-	cat := &ParserCatalog{Tools: make([]CatalogTool, 0, len(caps.Tools))}
+	cat := &ParserCatalog{
+		Tools:   make([]CatalogTool, 0, len(caps.Tools)),
+		Modules: []CatalogModule{moduleOf(parserName, caps)},
+	}
 	for _, t := range caps.Tools {
 		cat.Tools = append(cat.Tools, CatalogTool{
 			ToolCapability: t,
@@ -151,6 +191,7 @@ func (m *Manager) ListCapabilities(ctx context.Context) (*ParserCatalog, error) 
 	capsByKey := make(map[string]Capabilities) // content key -> describe result (once)
 	seen := make(map[string]CatalogTool)       // tool name -> winning entry
 	var conflicts []string
+	var modules []CatalogModule
 
 	for _, name := range names {
 		p := m.parsers[name]
@@ -163,6 +204,7 @@ func (m *Manager) ListCapabilities(ctx context.Context) (*ParserCatalog, error) 
 			}
 			caps = c
 			capsByKey[key] = c
+			modules = append(modules, moduleOf(name, c))
 		}
 		for _, t := range caps.Tools {
 			entry := CatalogTool{
@@ -187,12 +229,41 @@ func (m *Manager) ListCapabilities(ctx context.Context) (*ParserCatalog, error) 
 		}
 	}
 
-	cat := &ParserCatalog{Tools: make([]CatalogTool, 0, len(seen)), Conflicts: conflicts}
+	cat := &ParserCatalog{Tools: make([]CatalogTool, 0, len(seen)), Conflicts: conflicts, Modules: modules}
 	for _, e := range seen {
 		cat.Tools = append(cat.Tools, e)
 	}
 	sortCatalog(cat)
 	return cat, nil
+}
+
+// DescribeStored describes the declared modules already in the store, whose
+// bytes still match their declared hash, without fetching anything: a
+// configuration read offline says what it can about the modules it pins.
+func DescribeStored(ctx context.Context, parsers config.MapOfParsers) []CatalogModule {
+	names := make([]string, 0, len(parsers))
+	for name := range parsers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var out []CatalogModule
+	for _, name := range names {
+		p := parsers[name]
+		path := filepath.Join(moduleDir(name, p), wasmFileName)
+		if binmanager.VerifyFileHashPublic(path, p.Hash, binmanager.BinHashTypeSHA256) != nil {
+			continue
+		}
+		wasm, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		caps, err := DescribeLocal(ctx, wasm)
+		if err != nil {
+			continue
+		}
+		out = append(out, moduleOf(name, caps))
+	}
+	return out
 }
 
 // sortCatalog orders tools by name for a stable, byte-reproducible listing.

@@ -435,6 +435,9 @@ func (m *Manager) describeOnce(ctx context.Context, module string) (moduleFacts,
 			return nil, moduleUnavailableError{err}
 		}
 		m.releaseReset(ctx, module, inst)
+		if described := moduleOf(module, caps); described.Outdated() {
+			log.Debug(described.OutdatedNote())
+		}
 		facts = moduleFacts{parsers: make(map[string]bool, len(caps.Tools)), contract: caps.SeverityContract(), caps: caps}
 		for _, t := range caps.Tools {
 			facts.parsers[t.Name] = true
