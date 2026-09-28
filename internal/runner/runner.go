@@ -97,6 +97,8 @@ type planExecutor interface {
 	SetParser(parser tooling.DiagnosticParser)
 	SetParserModules(parsers config.MapOfParsers)
 	SetGate(gate tooling.Gate)
+	SetEnvObserver(observe func(environ []string))
+	AssignTaskIDs(plan *tooling.ExecutionPlan)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
 	TaskDir(task tooling.Task) string
 }
@@ -159,10 +161,9 @@ type sharedContext struct {
 	fileScoped bool
 	// report records the run for its reports; nil when it writes none.
 	report *report.Accumulator
-	// secrets are the values reports and diagnostic events mask, collected
-	// once (secretValues).
-	secrets     []string
-	secretsOnce sync.Once
+	// secrets are the values reports and diagnostic events mask: the host's
+	// and the configuration's up front, then each tool process's own.
+	secrets *report.Secrets
 	// annotator anchors each parsed process's findings for the report, in the
 	// gate hook; nil when nothing reads them.
 	annotator *report.Annotator
@@ -411,6 +412,9 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		return nil
 	}
 
+	// Named now, not by Execute: a setup failure below still leaves every
+	// planned task with the identity a report and an event refer to it by.
+	sc.executor.AssignTaskIDs(plan)
 	opRecord := sc.beginReportOperation(operation, plan)
 	opDuration := int64(0)
 	defer func() { opRecord.End(retErr == nil, opDuration) }()

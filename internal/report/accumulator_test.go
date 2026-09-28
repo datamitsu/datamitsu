@@ -294,6 +294,15 @@ func TestFindingsOfAFinishedTool(t *testing.T) {
 	}
 }
 
+// A message a structured format carried with escaped colour codes reaches the
+// report without them.
+func TestFindingMessageIsPlainText(t *testing.T) {
+	f := NewAccumulator(Options{Root: root}).finding("t", diagnostic.Diagnostic{Message: "\x1b[31merror\x1b[0m: bad"}, &ToolRun{})
+	if f.Message != "error: bad" {
+		t.Errorf("message = %q, want it without ANSI sequences", f.Message)
+	}
+}
+
 func TestRelPath(t *testing.T) {
 	tests := []struct {
 		name, path, want string

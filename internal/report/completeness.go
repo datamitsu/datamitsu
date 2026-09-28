@@ -99,7 +99,9 @@ func judge(run *Run, tools config.MapOfTools) {
 			for _, r := range tr.Incomplete {
 				set[r] = true
 			}
-			for _, r := range toolReasons(tr, run.Selection, tools[tr.Name].OutputParser != nil) {
+			tool := tools[tr.Name]
+			parsed := parsesOutput(tool, tool.Operations[config.OperationType(op.Name)])
+			for _, r := range toolReasons(tr, run.Selection, parsed) {
 				set[r] = true
 			}
 			tr.Incomplete = sortedReasons(set)

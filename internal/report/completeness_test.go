@@ -125,6 +125,41 @@ func TestJudge(t *testing.T) {
 	}
 }
 
+// A formatter whose stdout is the file's new content declares a parser for its
+// lint operation only: a cache hit of its fix replays an exit code, never a
+// parsed-clean pass.
+func TestJudgeCachedStdoutFormatter(t *testing.T) {
+	tools := config.MapOfTools{"fmt": {
+		OutputParser: &config.OutputParser{Module: "m", Parser: "p"},
+		Operations: map[config.OperationType]config.ToolOperation{
+			config.OpFix:  {Output: config.ToolOutputStdout},
+			config.OpLint: {},
+		},
+	}}
+	cached := []Invocation{{State: "cached"}}
+	run := Run{Selection: Selection{Mode: "all"}, Operations: []Operation{
+		{Name: "fix", Ran: true, Tools: []ToolRun{{Name: "fmt", Invocations: cached}}},
+		{Name: "lint", Ran: true, Tools: []ToolRun{{Name: "fmt", Invocations: cached}}},
+	}}
+	judge(&run, tools)
+	if fix := run.Operations[0].Tools[0]; !reflect.DeepEqual(fix.Incomplete, []Reason{ReasonUnparsedCacheHit}) {
+		t.Errorf("the formatter's fix = %v, want unparsed-cache-hit", fix.Incomplete)
+	}
+	if lint := run.Operations[1].Tools[0]; !lint.Complete {
+		t.Errorf("the formatter's lint = %v, want complete", lint.Incomplete)
+	}
+
+	task := perFileTask("fmt::1", "a")
+	task.OpConfig.Output = config.ToolOutputStdout
+	result := tooling.ExecutionResult{
+		TaskID: task.ID, Success: true, Cached: true,
+		FileResults: []tooling.FileResult{{File: abs("a"), State: tooling.FileCached, Success: true}},
+	}
+	if inv := NewAccumulator(Options{Root: root}).invocations(task, &result, nil, &ToolRun{})[0]; inv.Extraction != "none" {
+		t.Errorf("a stdout formatter's cache hit claims extraction %s", inv.Extraction)
+	}
+}
+
 func TestExcludedTools(t *testing.T) {
 	tools := config.MapOfTools{
 		"a":     {Operations: map[config.OperationType]config.ToolOperation{config.OpLint: {}}},

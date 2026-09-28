@@ -1,6 +1,8 @@
 package report
 
 import (
+	"path/filepath"
+
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/textpos"
 	"github.com/datamitsu/datamitsu/internal/tooling"
@@ -56,6 +58,10 @@ func (a *Annotator) columnUnit(task tooling.Task) textpos.Unit {
 func (a *Annotator) anchor(d diagnostic.Diagnostic, unit textpos.Unit) *diagnostic.Anchor {
 	if d.File == "" {
 		return &diagnostic.Anchor{Basis: BasisNone, Precision: textpos.Unknown}
+	}
+	// A file outside the repository is not read: it rests on its row.
+	if filepath.IsAbs(RelPath(a.root, d.File)) {
+		return &diagnostic.Anchor{Basis: BasisRow, LineHash: RowHash(d.Row), Precision: textpos.Unknown}
 	}
 	start, err := a.lines.LineAt(d.File, d.Row)
 	if err != nil {

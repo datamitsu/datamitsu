@@ -93,6 +93,7 @@ func applyReports(cmd *cobra.Command, flags reportFlags, opts *runner.Options) e
 	// A report on stdout owns it: human output goes, and stderr carries the
 	// JSON-L events instead.
 	if slices.ContainsFunc(specs, render.Spec.Stdout) {
+		stdoutOwned = true
 		setJSONLStderr(true)
 	}
 	return nil

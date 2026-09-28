@@ -55,6 +55,7 @@ log level to debug, so info and debug log events appear as well.`,
 	// stdout for framed JSON-RPC, so nothing human/log may reach it. This runs
 	// after cobra.OnInitialize, so it unconditionally overrides --log-format.
 	PersistentPreRun: func(_ *cobra.Command, _ []string) {
+		stdoutOwned = true
 		setJSONLStderr(true)
 	},
 	RunE: runLsp,

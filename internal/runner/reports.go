@@ -45,19 +45,24 @@ func (sc *sharedContext) startReport() {
 	if sc.parserMgr != nil {
 		opts.Parsers = sc.parserMgr.DescribedParser
 	}
+	sc.secrets = sc.collectSecrets()
+	opts.Secrets = sc.secrets
+	sc.executor.SetEnvObserver(func(environ []string) { sc.secrets.Add(environ) })
 	sc.report = report.NewAccumulator(opts)
 	sc.annotator = report.NewAnnotator(sc.rootPath, opts.Parsers)
 }
 
 // secretValues are the values a report and the event stream mask: those of
-// the host's variables and of every app's and operation's env whose names say
-// they hold a secret. Computed once per run.
+// the host's variables, of every app's and operation's env, and of the
+// environment every tool process got, whose names say they hold a secret.
 func (sc *sharedContext) secretValues() []string {
-	sc.secretsOnce.Do(func() { sc.secrets = sc.collectSecrets() })
-	return sc.secrets
+	return sc.secrets.Values()
 }
 
-func (sc *sharedContext) collectSecrets() []string {
+// collectSecrets starts the values to mask with what is known before any tool
+// runs; the environment each process is built with adds its own, placeholders
+// expanded.
+func (sc *sharedContext) collectSecrets() *report.Secrets {
 	var envs []map[string]string
 	for _, app := range sc.cfg.Apps {
 		envs = append(envs, app.Env, app.RuntimeEnv)
@@ -67,7 +72,9 @@ func (sc *sharedContext) collectSecrets() []string {
 			envs = append(envs, op.Env)
 		}
 	}
-	return report.SecretValues(env.EnvironAll(), envs...)
+	secrets := &report.Secrets{}
+	secrets.Add(env.EnvironAll(), envs...)
+	return secrets
 }
 
 // gate is the hook the executor runs over every parsed process: it anchors the

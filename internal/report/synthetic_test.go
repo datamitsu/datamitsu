@@ -77,10 +77,31 @@ func TestOutputTail(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.proc.OutputTail = []byte(tt.tail)
-			if got := outputTail(tt.proc, tt.category); got != tt.want {
+			if got := outputTail(tt.proc, tt.category, 0); got != tt.want {
 				t.Errorf("outputTail() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// A tail cut from a longer output through a secret keeps no part of it: masking
+// cannot recognize a fragment, so the fragment is not kept.
+func TestOutputTailCutThroughASecret(t *testing.T) {
+	const secret = "abcdefgh12"
+	output := strings.Repeat("y", 100) + secret + strings.Repeat("x", tooling.OutputTailBytes-6)
+	cut := []byte(output[len(output)-tooling.OutputTailBytes:])
+	if !strings.HasPrefix(string(cut), secret[4:]) {
+		t.Fatalf("the fixture does not cut through the secret: %q", cut[:10])
+	}
+	proc := tooling.ProcessResult{State: tooling.ProcessRan, ExitCode: new(1), OutputTail: cut}
+	var secrets Secrets
+	secrets.Add([]string{"API_TOKEN=" + secret})
+	tail := outputTail(proc, "", secrets.longest())
+	if strings.Contains(tail, secret[4:]) || len(tail) != tooling.OutputTailBytes-(len(secret)-1) {
+		t.Errorf("tail keeps %d bytes starting %q; want the fragment gone", len(tail), tail[:min(10, len(tail))])
+	}
+	if untouched := outputTail(tooling.ProcessResult{State: tooling.ProcessRan, ExitCode: new(1), OutputTail: []byte("short " + secret)}, "", secrets.longest()); untouched != "short "+secret {
+		t.Errorf("a tail that was not cut lost bytes: %q", untouched)
 	}
 }
 

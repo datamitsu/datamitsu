@@ -392,9 +392,9 @@ for example `run-1:eslint:packages/web:3`. A task's `tool_run` start, its `chunk
 events, its `error` and its closing `tool_run` share it, and no other task's
 events do.
 
-The stream opens with a `hello` event on every command that writes one, so a
-reader can tell a stream without `diagnostic` events from a run that found
-nothing:
+A `--log-format jsonl` stream opens with a `hello` event, whatever the
+command, so a reader can tell a stream without `diagnostic` events from a run
+that found nothing:
 
 ```json
 {
@@ -448,8 +448,14 @@ what the terminal shows. `--events diagnostics=all` (or
 finding a report lists for a tool that failed without findings is never an
 event.
 
-A stream that could not be written — a closed or full stderr — fails the run:
-it exits 1 and says so on stdout, the one stream left.
+A stream that could not be written — a closed or full stderr — fails the
+command, whichever it is and however it ended otherwise: it exits 1 and says so
+on stdout, the one stream left, unless stdout carries the command's own data (a
+report written to `-`, the language server's JSON-RPC, `source`'s shell code).
+
+`--verbose` adds datamitsu's debug log lines to the stream as `log` events;
+they name the commands datamitsu runs and quote what tools printed. Keep it off
+a stream that is published.
 
 A `tool_run` with `status: "skip"` ends the chain of a tool the run stopped,
 and is never a failure. Its `msg` says what happened and why:
@@ -1962,7 +1968,7 @@ the directory it was started in.
 ### lsp events
 
 Every stderr line is one JSON object carrying `type` and `op_id`, with
-`--verbose` or without. The stream opens with a `hello` event, as every JSON-L
+`--verbose` or without. The stream opens with a `hello` event, as a `--log-format jsonl`
 stream does (see [Run events](#run-events)). The language server never emits
 `diagnostic` events: an editor gets findings through `publishDiagnostics`. It
 emits:

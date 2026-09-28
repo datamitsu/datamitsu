@@ -75,6 +75,11 @@ it is stamped with comes from `SOURCE_DATE_EPOCH` when that is set.
 - **Nothing from a cache.** A report is never stored and never replayed; each is
   written from the run that produced it.
 
+The same holds for the JSON-L stream's events. `--verbose` is the exception you
+ask for: it adds datamitsu's debug log lines, which name the commands it runs
+and quote what tools printed, as `log` events — keep it off a stream that is
+published.
+
 A tool that exits non-zero without a finding its parser could read is not
 listed as clean: it gets one `synthetic` finding of level `error` and no
 location — `tsc exited 2 without parsable findings`, or
@@ -115,20 +120,27 @@ Two rules keep a report from claiming more than it holds:
   could not list every finding, so a report runs everything to the end, and a
   report together with an explicit `--fail-fast=true` is refused.
 
-A report left on its path by an earlier run is not deleted. A pipeline that
-uploads the report whatever the outcome still fails on the exit code of the run:
+A report left on its path by an earlier run is not deleted: it is the user's
+file. A run that is refused, or whose report could not be written, leaves it
+there, so a pipeline that uploads the report whatever the outcome removes it
+first — then an old report cannot pass for the new one — and fails on the exit
+code of the run:
 
 ```yaml
+- run: rm -f out/run.json
 - run: datamitsu lint --report json=out/run.json
 - if: always()
   uses: actions/upload-artifact@v4
   with:
     name: datamitsu-report
     path: out/run.json
+    if-no-files-found: warn
 ```
 
-The job fails on the lint step's exit code, and the upload step runs anyway;
-exit 5 on the lint step means the report itself could not be written.
+The job fails on the lint step's exit code, and the upload step runs anyway. A
+tool failure (1) outranks a report that could not be written (5), so a missing
+file on a failed step is reported by the upload, and by the step's own
+`error: report json: …` line.
 
 ## Fingerprints
 
@@ -153,8 +165,8 @@ ordinal     = position among the tool's findings with the same rule on the same 
 - **Paths are relative to the repository root with `/`**, so one finding has one
   fingerprint on Windows and elsewhere.
 
-When the file cannot be read — it was deleted, or lies outside the repository —
-the row stands in for the line, and `fingerprintBasis` says `row` instead of
+When the file cannot be read — it was deleted, or lies outside the repository,
+which is never read — the row stands in for the line, and `fingerprintBasis` says `row` instead of
 `line`; a finding without a file rests on nothing (`none`). The fingerprint is
 SHA-256 rather than a faster hash because it is not an internal key: another
 system stores it and compares it with the next upload's.
@@ -166,6 +178,13 @@ UTF-16 units (`utf16`), so a report rendered later needs no source. `precision`
 is `exact`; `ascii` when no unit was declared but the line is ASCII, where every
 unit counts alike; or `unknown` when there was nothing to convert from, and a
 consumer that needs another unit then leaves the column out.
+
+A report settles a finding's ordinal once its tool has finished, across all
+of the tool's processes. The fingerprint a finding has while its own process is
+judged — before the threshold decides — is counted within that process; the two
+agree whenever one process reports the findings of a line, which is every tool
+that runs once per file and every tool whose findings name the files it was
+given.
 
 ## Rendering a report later
 

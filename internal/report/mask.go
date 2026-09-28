@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -21,10 +22,30 @@ const minSecretLength = 8
 // _KEY, in any letter case — and that are at least eight characters long.
 // Sorted longest first, so a secret that contains another is replaced whole.
 func SecretValues(environ []string, envs ...map[string]string) []string {
-	seen := map[string]bool{}
+	var s Secrets
+	s.Add(environ, envs...)
+	return s.Values()
+}
+
+// Secrets collects the values to mask as a run reveals them: the host's
+// environment and the configuration up front, then the environment of every
+// tool process as it is built, where placeholders have their values. It is
+// safe for concurrent use; the zero value is empty.
+type Secrets struct {
+	mu     sync.Mutex
+	values map[string]bool
+}
+
+// Add keeps the secret-looking values of environ and envs (see SecretValues).
+func (s *Secrets) Add(environ []string, envs ...map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.values == nil {
+		s.values = map[string]bool{}
+	}
 	add := func(name, value string) {
 		if utf8.RuneCountInString(value) >= minSecretLength && secretName(name) {
-			seen[value] = true
+			s.values[value] = true
 		}
 	}
 	for _, kv := range environ {
@@ -37,10 +58,19 @@ func SecretValues(environ []string, envs ...map[string]string) []string {
 			add(name, value)
 		}
 	}
-	out := make([]string, 0, len(seen))
-	for v := range seen {
+}
+
+// Values returns what was collected, longest first.
+func (s *Secrets) Values() []string {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	out := make([]string, 0, len(s.values))
+	for v := range s.values {
 		out = append(out, v)
 	}
+	s.mu.Unlock()
 	sort.Slice(out, func(i, j int) bool {
 		if len(out[i]) != len(out[j]) {
 			return len(out[i]) > len(out[j])
@@ -48,6 +78,14 @@ func SecretValues(environ []string, envs ...map[string]string) []string {
 		return out[i] < out[j]
 	})
 	return out
+}
+
+// longest is the length of the longest secret, 0 when there is none.
+func (s *Secrets) longest() int {
+	if values := s.Values(); len(values) > 0 {
+		return len(values[0])
+	}
+	return 0
 }
 
 func secretName(name string) bool {

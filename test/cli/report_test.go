@@ -106,6 +106,18 @@ func TestReportJSON(t *testing.T) {
 		e.goldenReport("tool_failed", doc)
 	})
 
+	// A setup failure before the tools ran still names every planned task.
+	t.Run("setup_failed", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""},
+			clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")})
+		res := e.run("", nil, "lint", "--report", "json=run.json")
+		e.wantExit(res, 1)
+		doc, _ := e.report("run.json")
+		if !strings.Contains(doc, `"id": "installer::1#0"`) || !strings.Contains(doc, `"taskId": "installer::1"`) {
+			t.Errorf("the tool that never ran has no task identity:\n%s", doc)
+		}
+	})
+
 	t.Run("stdout", func(t *testing.T) {
 		e := reportProject(t)
 		res := e.run("", nil, "lint", "--report", "json=-")
@@ -307,12 +319,20 @@ func TestReportMasksSecrets(t *testing.T) {
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec,
 		clitest.ShellTool("leaky", settle+clitest.RecordRun+`; echo "using $DATAMITSU_TEST_TOKEN"; exit 3`, clitest.ToolOpSpec{}),
 		parsedTool(leakyFinding, 0),
+		// The operation's env names a secret whose value exists only once
+		// {root} is expanded.
+		clitest.ShellTool("creds", settle+clitest.RecordRun+`; echo "reading $SERVICE_CREDENTIALS"; exit 4`,
+			clitest.ToolOpSpec{Env: map[string]string{"SERVICE_CREDENTIALS": "{root}/private/credentials.json"}}),
 	))
 	res := e.run("", []string{"DATAMITSU_TEST_TOKEN=" + secret}, "lint", "--report", "json=run.json")
 	e.wantExit(res, 1)
+	raw := e.read("run.json")
 	doc, _ := e.report("run.json")
 	if strings.Contains(doc, secret) {
 		t.Errorf("the report holds the secret:\n%s", doc)
+	}
+	if strings.Contains(raw, "private/credentials.json") || !strings.Contains(raw, `"outputTail": "reading ***\n"`) {
+		t.Errorf("the report holds the expanded credentials path:\n%s", raw)
 	}
 	for _, want := range []string{
 		`"message": "token *** in the image"`, `"outputTail": "using ***\n"`,

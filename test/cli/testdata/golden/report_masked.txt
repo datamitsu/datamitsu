@@ -23,6 +23,84 @@
       "cancelled": [],
       "tools": [
         {
+          "name": "creds",
+          "app": {
+            "name": "creds",
+            "kind": "shell"
+          },
+          "parser": null,
+          "failOn": "error",
+          "gateActive": false,
+          "category": "",
+          "complete": false,
+          "incomplete": [
+            "no-extraction"
+          ],
+          "invocations": [
+            {
+              "id": "creds::1#1",
+              "taskId": "creds::1",
+              "dir": "",
+              "scope": "repository",
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
+              "wholeUnit": true,
+              "state": "ran",
+              "exitCode": 4,
+              "success": false,
+              "failureKind": "exit",
+              "durationMs": <DUR>,
+              "extraction": "none",
+              "provenance": "none",
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "state": "ran",
+                  "success": false,
+                  "exitCode": 4
+                },
+                {
+                  "path": "exec.config.js",
+                  "state": "ran",
+                  "success": false,
+                  "exitCode": 4
+                },
+                {
+                  "path": "fixture.marker",
+                  "state": "ran",
+                  "success": false,
+                  "exitCode": 4
+                }
+              ],
+              "findings": [
+                {
+                  "fingerprint": "ec54fdca7a9615ca7968c94c021b91e4fbd0d9e19e40fc19a6261aa88c4ae1bf",
+                  "fingerprintBasis": "none",
+                  "tool": "creds",
+                  "source": "creds",
+                  "severity": "error",
+                  "reported": false,
+                  "gates": true,
+                  "kind": "synthetic",
+                  "message": "creds exited 4 without parsable findings",
+                  "location": {
+                    "path": "",
+                    "row": 0,
+                    "endRow": 0,
+                    "col": 0,
+                    "endCol": 0,
+                    "unit": "",
+                    "precision": "unknown"
+                  },
+                  "provenance": "synthetic"
+                }
+              ],
+              "outputTail": "reading ***\n"
+            }
+          ]
+        },
+        {
           "name": "hadolint",
           "app": {
             "name": "hadolint",
@@ -41,8 +119,8 @@
           "incomplete": [],
           "invocations": [
             {
-              "id": "hadolint::1#1",
-              "taskId": "hadolint::1",
+              "id": "hadolint::2#1",
+              "taskId": "hadolint::2",
               "dir": "",
               "scope": "per-file",
               "granularity": "file",
@@ -119,8 +197,8 @@
           ],
           "invocations": [
             {
-              "id": "leaky::2#1",
-              "taskId": "leaky::2",
+              "id": "leaky::3#1",
+              "taskId": "leaky::3",
               "dir": "",
               "scope": "repository",
               "granularity": "repo",

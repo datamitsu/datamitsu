@@ -147,31 +147,56 @@ func TestEventsCounters(t *testing.T) {
 	}
 }
 
-// A stream that cannot be written fails the run with exit 1, and the error
-// goes to stdout: a broken stderr is not an unwritten report.
+// A stream that cannot be written fails the command with exit 1 — a run that
+// passed, a plan, any other command — and the error goes to stdout: a broken
+// stderr is not an unwritten report.
 func TestEventsBrokenStream(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("/dev/full is Linux's; the property that a failed stream fails the run is left unverified here")
 	}
 	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
 		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+	for _, args := range [][]string{{"lint"}, {"lint", "--explain"}, {"config", "runtime"}} {
+		t.Run(strings.Join(args, "_"), func(t *testing.T) {
+			full, err := os.OpenFile("/dev/full", os.O_WRONLY, 0)
+			if err != nil {
+				t.Skipf("/dev/full: %v", err)
+			}
+			t.Cleanup(func() { _ = full.Close() })
+
+			var stdout bytes.Buffer
+			cmd := exec.Command(clitest.BuildOnce(t), append([]string{"--no-auto-config", "--config", e.cfg, "--log-format", "jsonl"}, args...)...)
+			cmd.Dir = e.p.Dir
+			cmd.Env = clitest.BaseEnv(e.cache)
+			cmd.Stdout, cmd.Stderr = &stdout, full
+			err = cmd.Run()
+			if code := clitest.ExitCodeOf(err); code != 1 {
+				t.Fatalf("exit code = %d, want 1\n%s", code, stdout.String())
+			}
+			if !strings.Contains(stdout.String(), "error: the JSON-L event stream could not be written") {
+				t.Errorf("stdout = %q, want the stream's error", stdout.String())
+			}
+		})
+	}
+
+	// A report on stdout owns it: the command still fails, and writes nothing
+	// after the report.
 	full, err := os.OpenFile("/dev/full", os.O_WRONLY, 0)
 	if err != nil {
 		t.Skipf("/dev/full: %v", err)
 	}
 	t.Cleanup(func() { _ = full.Close() })
-
 	var stdout bytes.Buffer
-	cmd := exec.Command(clitest.BuildOnce(t), "--no-auto-config", "--config", e.cfg, "--log-format", "jsonl", "lint")
+	cmd := exec.Command(clitest.BuildOnce(t), "--no-auto-config", "--config", e.cfg, "lint", "--report", "json=-")
 	cmd.Dir = e.p.Dir
 	cmd.Env = clitest.BaseEnv(e.cache)
 	cmd.Stdout, cmd.Stderr = &stdout, full
-	err = cmd.Run()
-	if code := clitest.ExitCodeOf(err); code != 1 {
-		t.Fatalf("exit code = %d, want 1\n%s", code, stdout.String())
+	if code := clitest.ExitCodeOf(cmd.Run()); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
 	}
-	if !strings.Contains(stdout.String(), "error: the JSON-L event stream could not be written") {
-		t.Errorf("stdout = %q, want the stream's error", stdout.String())
+	var doc map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &doc); err != nil {
+		t.Errorf("stdout is not the report alone: %v\n%s", err, stdout.String())
 	}
 }
 

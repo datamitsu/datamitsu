@@ -161,6 +161,40 @@ func TestFingerprintFallbacks(t *testing.T) {
 	}
 }
 
+// A file outside the repository is never read, even when it could be: it
+// rests on its row.
+func TestAnnotateOutsideTheRoot(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	path := writeFile(t, outside, "shared.go", "package shared\n")
+	got := annotated(t, root, "t", "utf-8", diagnostic.Diagnostic{File: path, Row: 1, EndRow: 1, Col: 1, EndCol: 2})[0].Anchor
+	if got.Basis != BasisRow || got.LineHash != RowHash(1) || got.Chars != nil {
+		t.Errorf("anchor of a file outside the root = %+v, want the row", got)
+	}
+}
+
+// The fingerprint a process's findings have in the gate hook is the one the
+// report settles on when one process reports a line's findings.
+func TestGateFingerprintIsTheReports(t *testing.T) {
+	root := t.TempDir()
+	path := writeFile(t, root, "src/b.js", "let x = y == z;\n")
+	one := diagnostic.Diagnostic{File: path, Row: 1, EndRow: 1, Col: 11, EndCol: 13, Code: "eqeqeq", Source: "eslint", Message: "m", Severity: diagnostic.SeverityError}
+	two := one
+	two.Col, two.EndCol = 7, 8
+	ds := annotated(t, root, "eslint", "utf-16", one, two)
+
+	acc := NewAccumulator(Options{Root: root})
+	tr := &ToolRun{Name: "eslint", Invocations: []Invocation{{ID: "eslint::1#1"}}}
+	for _, d := range ds {
+		tr.Invocations[0].Findings = append(tr.Invocations[0].Findings, acc.finding("eslint", d, tr))
+	}
+	settleFindings(tr)
+	for i, f := range tr.Invocations[0].Findings {
+		if f.Fingerprint != ds[i].Anchor.Fingerprint {
+			t.Errorf("finding %d: report %s, gate %s", i, f.Fingerprint, ds[i].Anchor.Fingerprint)
+		}
+	}
+}
+
 // A finding over several lines converts its end column on its last line; one
 // whose last line is missing keeps its fingerprint and loses its spans.
 func TestAnnotateAcrossLines(t *testing.T) {

@@ -37,13 +37,19 @@ func syntheticFinding(tool string, proc tooling.ProcessResult, category string) 
 }
 
 // outputTail is what a failed invocation printed last, for the own JSON. A
-// security tool's output is withheld: it may hold what the tool found.
-func outputTail(proc tooling.ProcessResult, category string) string {
+// security tool's output is withheld: it may hold what the tool found. A tail
+// cut from a longer output loses its first longestSecret-1 bytes, where a
+// secret that straddled the cut would have left a part masking cannot match.
+func outputTail(proc tooling.ProcessResult, category string, longestSecret int) string {
 	failed := (proc.State == tooling.ProcessRan && !proc.Success) || proc.State == tooling.ProcessSetupFailed
 	if !failed || category == categorySecurity || len(proc.OutputTail) == 0 {
 		return ""
 	}
-	tail := tooling.StripCSI(proc.OutputTail)
+	tail := proc.OutputTail
+	if len(tail) >= tooling.OutputTailBytes && longestSecret > 1 {
+		tail = tail[min(longestSecret-1, len(tail)):]
+	}
+	tail = tooling.StripCSI(tail)
 	// The tail was cut at a byte count, possibly inside a character.
 	for len(tail) > 0 && !utf8.RuneStart(tail[0]) {
 		tail = tail[1:]

@@ -87,6 +87,7 @@ type Executor struct {
 	parser               DiagnosticParser     // Optional: parses tool output into diagnostics
 	parserModules        config.MapOfParsers  // the declared parser modules, for the verdict identity
 	gate                 Gate                 // Optional: fails a process on its parsed findings
+	envObserver          func(environ []string)
 
 	// cmdInfos memoizes command resolution for the lifetime of one Execute; it is
 	// nil outside one (FormatContent), which resolves directly.
@@ -251,6 +252,20 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan) ([]GroupExe
 
 	log.Debug("execution plan completed", zap.Int("totalGroups", len(results)))
 	return results, nil
+}
+
+// SetEnvObserver wires a function handed the environment of every tool process
+// the executor builds, as the process gets it — placeholders expanded, app and
+// operation env layered. It is called concurrently.
+func (e *Executor) SetEnvObserver(observe func(environ []string)) {
+	e.envObserver = observe
+}
+
+// AssignTaskIDs names the tasks of plan as Execute does, so a caller can refer
+// to them before execution starts — or when it never does. Execute names them
+// again, identically.
+func (e *Executor) AssignTaskIDs(plan *ExecutionPlan) {
+	e.assignTaskIDs(plan)
 }
 
 // TaskDir is the directory a task runs in, relative to the git root, as its
@@ -667,6 +682,9 @@ func (e *Executor) buildCommand(ctx context.Context, cmdInfo *binmanager.Command
 
 	cmd.Dir = workingDir
 	cmd.Env = toolenv.Apply(cmd.Environ(), inherited, cmdInfo.Env, toolOpEnv)
+	if e.envObserver != nil {
+		e.envObserver(cmd.Env)
+	}
 
 	log.Debug("buildCommand", zap.Int("countOfArgs", len(cmd.Args)), zap.String("dir", cmd.Dir), zap.String("path", cmd.Path), zap.Strings("args", cmd.Args))
 

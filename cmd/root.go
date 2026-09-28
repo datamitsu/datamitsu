@@ -61,6 +61,10 @@ var (
 	noParse bool
 	// logFormat selects the status output encoding ("" defers to env: console|jsonl)
 	logFormat string
+	// stdoutOwned marks a command whose stdout carries data a reader parses —
+	// a report written to "-", JSON-RPC, shell code — so no error text may go
+	// there.
+	stdoutOwned bool
 )
 
 // agentHelpNotice is addressed to an AI agent reading this help. It is phrased
@@ -282,6 +286,12 @@ func Execute() {
 	// progress container repaint, and before any os.Exit below.
 	flushTrace()
 
+	// A JSON-L stream its reader could not get is a failure of the command,
+	// whatever the command did: the reader saw less than happened.
+	if streamErr := ui.EventStreamFailed(); err == nil && streamErr != nil {
+		err = fmt.Errorf("the JSON-L event stream could not be written: %w", streamErr)
+	}
+
 	if err != nil {
 		// A tool failing, a caller mistake and a run that did not cover what it
 		// was asked to cover are different outcomes, and CI needs to tell them
@@ -293,9 +303,13 @@ func Execute() {
 		}
 
 		// A stream that could not be written takes no error event either: the
-		// error goes to stdout, the one stream left.
+		// error goes to stdout, the one stream left — unless stdout carries the
+		// command's own data (a report, JSON-RPC, shell code), where a line of
+		// text would corrupt what a reader parses.
 		if ui.EventStreamFailed() != nil {
-			fmt.Printf("error: %s\n", err)
+			if !stdoutOwned {
+				fmt.Printf("error: %s\n", err)
+			}
 			os.Exit(code)
 		}
 		// In JSON-L mode the human error line would be a non-JSON line on the

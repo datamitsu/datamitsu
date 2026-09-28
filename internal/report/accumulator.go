@@ -30,6 +30,9 @@ type Options struct {
 	// Parsers answers for the parser modules the run described; nil when none
 	// is configured.
 	Parsers ParserFacts
+	// Secrets are the values the run masks; an output tail cut through one
+	// loses the part that could hold it.
+	Secrets *Secrets
 }
 
 // Accumulator collects a run's operations as they happen. The runner feeds it
@@ -353,7 +356,7 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 	if taskDir != nil {
 		base.Dir = taskDir(task)
 	}
-	parsed := task.Tool.OutputParser != nil
+	parsed := parsesOutput(task.Tool, task.OpConfig)
 
 	if result == nil {
 		inv := base
@@ -398,7 +401,7 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 		if f, ok := syntheticFinding(task.ToolName, proc, tr.Category); ok {
 			inv.Findings = append(inv.Findings, f)
 		}
-		inv.OutputTail = outputTail(proc, tr.Category)
+		inv.OutputTail = outputTail(proc, tr.Category, a.opts.Secrets.longest())
 		out = append(out, inv)
 	}
 	// A process given no path answers for every file no other process and no
@@ -503,7 +506,7 @@ func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun)
 		Reported:         d.Reported,
 		Gates:            d.Gates,
 		Kind:             kindIssue,
-		Message:          d.Message,
+		Message:          string(tooling.StripCSI([]byte(d.Message))),
 		Provenance:       provenanceParser,
 		Location: Location{
 			Path:      a.rel(d.File),
@@ -594,6 +597,13 @@ func RelPath(root, path string) string {
 		return path
 	}
 	return rel
+}
+
+// parsesOutput reports whether the output of op is read by the tool's parser:
+// a formatter's stdout is file content, which no parser reads, so its cache
+// hits replay an exit code, not a parsed-clean pass.
+func parsesOutput(tool config.Tool, op config.ToolOperation) bool {
+	return tool.OutputParser != nil && op.Output != config.ToolOutputStdout
 }
 
 func plannedFiles(task tooling.Task) []string {

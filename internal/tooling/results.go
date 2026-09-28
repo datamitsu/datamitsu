@@ -14,11 +14,11 @@ func (r *ExecutionResult) addNotStarted(files []string) {
 	}
 }
 
-// outputTail is the last outputTailBytes of output, copied so it does not pin
+// outputTail is the last OutputTailBytes of output, copied so it does not pin
 // the whole capture.
 func outputTail(output []byte) []byte {
-	if len(output) > outputTailBytes {
-		output = output[len(output)-outputTailBytes:]
+	if len(output) > OutputTailBytes {
+		output = output[len(output)-OutputTailBytes:]
 	}
 	return bytes.Clone(output)
 }
