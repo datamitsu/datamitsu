@@ -72,9 +72,18 @@ func RelativeURI(p string) string {
 }
 
 // FileURI is an absolute path as a file:// URI: "/a b/c" is
-// "file:///a%20b/c" and `C:\a\b` is "file:///C:/a/b".
+// "file:///a%20b/c", `C:\a\b` is "file:///C:/a/b" and `\\host\share\c` is
+// "file://host/share/c". A backslash separates only in a Windows path; in any
+// other it is part of a name.
 func FileURI(p string) string {
-	p = strings.ReplaceAll(p, `\`, "/")
+	windows := strings.HasPrefix(p, `\`) || (len(p) >= 3 && p[1] == ':' && (p[2] == '\\' || p[2] == '/'))
+	if windows {
+		p = strings.ReplaceAll(p, `\`, "/")
+	}
+	host := ""
+	if rest, unc := strings.CutPrefix(p, "//"); unc && windows {
+		host, p, _ = strings.Cut(rest, "/")
+	}
 	segments := strings.Split(strings.TrimPrefix(p, "/"), "/")
 	for i, s := range segments {
 		if i == 0 && len(s) == 2 && s[1] == ':' {
@@ -82,7 +91,7 @@ func FileURI(p string) string {
 		}
 		segments[i] = url.PathEscape(s)
 	}
-	return "file:///" + strings.Join(segments, "/")
+	return "file://" + url.PathEscape(host) + "/" + strings.Join(segments, "/")
 }
 
 // Region is where a finding points, in the unit a format counts columns in.

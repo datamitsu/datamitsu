@@ -100,6 +100,20 @@ func TestReportJUnit(t *testing.T) {
 		}
 	})
 
+	// A tool that could not be installed never started: its task is a
+	// skipped case, not an empty suite.
+	t.Run("not_installed", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": ""},
+			clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")})
+		res := e.run("", nil, "lint", "--report", "junit=junit.xml")
+		e.wantExit(res, 1)
+		doc := e.junit("junit.xml")
+		if !strings.Contains(doc, `<testsuite name="lint/installer" tests="1" failures="0" errors="0" skipped="1"`) ||
+			!strings.Contains(doc, `<skipped message="not started"/>`) {
+			t.Errorf("the suite of a tool that never started:\n%s", doc)
+		}
+	})
+
 	// On stdout there is no companion, and the warning says so.
 	t.Run("stdout", func(t *testing.T) {
 		e := reportProject(t)

@@ -146,6 +146,17 @@ func TestReportSARIF(t *testing.T) {
 		}
 	})
 
+	// --tools narrows the run, not the selected tools' own runs: a selected
+	// tool that is complete is written, and the others' alerts are left alone.
+	t.Run("tools", func(t *testing.T) {
+		e := sarifProject(t)
+		res := e.run("", nil, "lint", "--tools", "hadolint", "--report", "sarif=r.sarif")
+		e.wantExit(res, 0)
+		if _, doc := e.sarif("r.sarif"); strings.Join(doc.tools(), ",") != "hadolint" {
+			t.Errorf("runs = %v, want the selected hadolint", doc.tools())
+		}
+	})
+
 	// A narrowed run is written, not refused: every tool is incomplete, so
 	// the file holds no run and closes no alert.
 	t.Run("narrowed", func(t *testing.T) {

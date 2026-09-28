@@ -355,6 +355,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 	out = append(out, sortedCases(files)...)
 	out = append(out, own...)
 	var stopped []*testCase
+	listed := map[string]bool{}
 	for _, c := range cancelled {
 		if c.Tool != tr.Name {
 			continue
@@ -363,7 +364,23 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		if c.Started {
 			state = "cancelled"
 		}
+		listed[c.TaskID] = true
 		stopped = append(stopped, &testCase{className: tr.Name, name: c.TaskID, skipped: state + ": " + c.Cause})
+	}
+	// A task the run never reached for a reason of its own — the tools could
+	// not be installed — has no stop record; it did not run all the same.
+	for _, inv := range tr.Invocations {
+		state := "not started"
+		switch {
+		case listed[inv.TaskID]:
+			continue
+		case inv.State == string(tooling.ProcessCancelled):
+			state = "cancelled"
+		case inv.State != string(tooling.ProcessNotStarted):
+			continue
+		}
+		listed[inv.TaskID] = true
+		stopped = append(stopped, &testCase{className: tr.Name, name: inv.TaskID, skipped: state})
 	}
 	sort.SliceStable(stopped, func(i, j int) bool { return stopped[i].name < stopped[j].name })
 	return append(out, stopped...)

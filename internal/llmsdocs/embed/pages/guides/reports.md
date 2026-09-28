@@ -280,8 +280,10 @@ jobs:
   not written at all, and its alerts stay as they were. The run says so on
   stderr, one line per tool, and the own JSON records it in the report's
   `exports` entry (`omitted`). For the same reason a narrowed run is written
-  rather than refused: every tool in it is incomplete, so its file holds no run
-  and changes no alert, and a `WARN` line says the file holds none. A tool with more than 25 000 results is left out too:
+  rather than refused. Named files, a subdirectory or `--file-scoped` leave
+  every tool incomplete, so the file holds no run and changes no alert, and a
+  `WARN` line says the file holds none; `--tools` holds each selected tool that
+  is complete, and leaves the others' alerts alone. A tool with more than 25 000 results is left out too:
   GitHub would keep the 5 000 most severe and close the alerts of the rest.
 - **Twenty tools per file.** GitHub reads at most twenty runs from one file. A
   path that ends in `/` names a directory: `datamitsu-1.sarif`,
@@ -362,7 +364,9 @@ failed:
   finding without a file is on its process's case too. A failed tsc run over a
   project fails one case, not every file in it.
 - **Skipped cases** for what did not run: `cancelled: fail-fast` and
-  `not started: fail-fast` for the tasks the run stopped, `skip: true`,
+  `not started: fail-fast` for the tasks the run stopped, `not started` for
+  one it never reached on its own account (its tool could not be installed),
+  `skip: true`,
   `platform-skip` and `narrowed` for the tools the planner skipped, and
   `did not run` for an operation that never started.
 
@@ -375,6 +379,7 @@ GitLab reads the report from `artifacts:reports:junit`:
 ```yaml
 lint:
   script:
+    - rm -rf reports
     - datamitsu lint --fail-fast=false --report junit=reports/junit.xml
   after_script:
     # GitLab reads a test missing from the report as fixed.
@@ -395,6 +400,7 @@ Azure Pipelines publishes it with `PublishTestResults@2`:
 
 ```yaml
 steps:
+  - script: rm -rf reports
   - script: datamitsu lint --fail-fast=false --report junit=reports/junit.xml
   - script: jq -e .complete reports/junit.xml.completeness.json || rm -f reports/junit.xml
     condition: always()
@@ -409,6 +415,7 @@ CircleCI reads every JUnit file under the directory `store_test_results` names:
 
 ```yaml
 steps:
+  - run: rm -rf reports
   - run: datamitsu lint --fail-fast=false --report junit=reports/datamitsu/junit.xml
   - run:
       when: always
@@ -423,6 +430,7 @@ the suite's `BUILDKITE_ANALYTICS_TOKEN`:
 ```yaml
 steps:
   - command: |
+      rm -f junit.xml junit.xml.completeness.json
       status=0
       datamitsu lint --fail-fast=false --report junit=junit.xml || status=$?
       jq -e .complete junit.xml.completeness.json || rm -f junit.xml
@@ -440,6 +448,7 @@ pipelines:
   default:
     - step:
         script:
+          - rm -rf test-results
           - status=0
           - datamitsu lint --fail-fast=false --report junit=test-results/datamitsu.xml || status=$?
           - jq -e .complete test-results/datamitsu.xml.completeness.json || rm -f test-results/datamitsu.xml
@@ -456,6 +465,7 @@ brings in and what it fixes:
 ```yaml
 lint:
   script:
+    - rm -f gl-code-quality.json junit.xml *.completeness.json
     - datamitsu lint --fail-fast=false --report codequality=gl-code-quality.json --report junit=junit.xml
   after_script:
     # An incomplete report would show every finding it misses as fixed.

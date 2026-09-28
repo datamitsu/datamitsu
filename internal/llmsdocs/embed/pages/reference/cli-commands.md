@@ -677,8 +677,10 @@ established is left out rather than listed, and so is a tool with more than
 tool's alerts as they are. Each tool left out gets one `WARN` line on stderr
 naming why and is recorded in the `omitted` list of the report's entry in
 `exports`. Because it leaves out what is incomplete, `sarif` is written for a
-narrowed run instead of being refused; a file that holds no tool run gets a
-`WARN` line of its own. GitHub reads at most twenty runs from one
+narrowed run instead of being refused — named files, a subdirectory and
+`--file-scoped` leave every tool incomplete, `--tools` writes the selected tools
+that are complete — and a file that holds no tool run gets a `WARN` line of its
+own. GitHub reads at most twenty runs from one
 file: `sarif=<dir>/` writes `datamitsu-1.sarif`, `datamitsu-2.sarif` and so on,
 twenty tools each, sorted by name, and removes the `datamitsu-<n>.sarif` files
 an earlier run left there that this one did not write; a file or `-` for a run

@@ -49,6 +49,9 @@ func TestURIs(t *testing.T) {
 		{"/home/me/a b.go", "file:///home/me/a%20b.go"},
 		{`C:\work\a.go`, "file:///C:/work/a.go"},
 		{"D:/work/a.go", "file:///D:/work/a.go"},
+		{`/tmp/a\b.go`, "file:///tmp/a%5Cb.go"},
+		{`\\host\share\a.go`, "file://host/share/a.go"},
+		{`\work\a.go`, "file:///work/a.go"},
 	} {
 		if got := FileURI(tt.path); got != tt.want {
 			t.Errorf("FileURI(%q) = %q, want %q", tt.path, got, tt.want)

@@ -173,7 +173,7 @@ func sampleRun() *report.Run {
 							}},
 						}},
 					},
-					{Name: "knip", FailOn: "error", Incomplete: []report.Reason{"cancelled"}, Invocations: []report.Invocation{{ID: "knip:pkg:5#1", State: "cancelled", Files: []report.FileResult{{Path: "pkg/x.ts", State: "cancelled"}}}}},
+					{Name: "knip", FailOn: "error", Incomplete: []report.Reason{"cancelled"}, Invocations: []report.Invocation{{ID: "knip:pkg:5#1", TaskID: "knip:pkg:5", State: "cancelled", Files: []report.FileResult{{Path: "pkg/x.ts", State: "cancelled"}}}}},
 				},
 			},
 			{Name: "fix"},
@@ -371,6 +371,23 @@ func TestFailureAfterExitZero(t *testing.T) {
 	c := s.testCase(t, ".")
 	if c.Error == nil || c.Error.Message != "exit 0" || c.Error.Text != "empty output" || s.Errors != 1 {
 		t.Errorf("suite = %+v, want the invocation's error case", s)
+	}
+}
+
+// A task the run never reached without a stop record — its tools could not
+// be installed — is still a skipped case, not an empty suite.
+func TestNotStartedWithoutStopRecord(t *testing.T) {
+	run := &report.Run{Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{{
+		Name: "installer", FailOn: "error", Incomplete: []report.Reason{"not-started"},
+		Invocations: []report.Invocation{{
+			ID: "installer::1#0", TaskID: "installer::1", State: "not-started",
+			Files: []report.FileResult{{Path: "a", State: "not-started"}},
+		}},
+	}}}}}
+	doc, _ := decode(t, run)
+	s := doc.suite(t, "lint/installer")
+	if s.Tests != 1 || s.Skipped != 1 || s.Cases[0].Name != "installer::1" || s.Cases[0].Skipped.Message != "not started" {
+		t.Errorf("suite = %+v, want one skipped case for the task", s)
 	}
 }
 
