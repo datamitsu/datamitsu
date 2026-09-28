@@ -244,6 +244,9 @@ func initSharedContext(
 	stdoutDocument := sc.explainLevel == "json" || slices.ContainsFunc(opts.Reports, render.Spec.Stdout)
 	sc.annotations = resolveAnnotations(opts.Annotations, sc.ci.Vendor, ui.Quiet(), stdoutDocument)
 	toolText = neutralizerOf(sc.annotations.mode, sc.ci.Vendor)
+	if commandPrefixes(sc.annotations.mode, sc.ci.Vendor) != nil {
+		logger.SetConsoleFilter(toolText)
+	}
 
 	// Get cwd
 	var err error
@@ -424,6 +427,11 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		sc.recordCoverage(plan)
 
 		output := formatExecutionPlan(plan, sc.rootPath, sc.cwdPath, operation, sc.explainLevel)
+		if guard := CommandGuard(sc.annotations.mode, sc.ci.Vendor); guard != nil && sc.explainLevel == "json" {
+			output = string(guard("json", []byte(output)))
+		} else {
+			output = toolText(output)
+		}
 		fmt.Println(output)
 		return nil
 	}

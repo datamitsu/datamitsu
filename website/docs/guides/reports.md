@@ -523,9 +523,11 @@ datamitsu lint --fail-fast=false
   In either CI — whatever `--annotations` says — and in either mode, datamitsu
   rewrites the prefix, with a space, in every line it prints that holds tool
   output or a repository path: raw output, parsed messages, command lines,
-  directories, file names, progress labels, agent records and the JSON-L
-  events. That is one space of difference in a raw line. TeamCity's results
-  block is also wrapped in `disableServiceMessages` … `enableServiceMessages`.
+  directories, file names, progress labels, agent records, the debug log of
+  `--verbose`, the plan of `--explain`, the annotations of another CI and the
+  JSON-L events. That is one space of difference in a raw line. TeamCity's
+  results block is also wrapped in `disableServiceMessages` …
+  `enableServiceMessages`.
 - **A document on stdout keeps its meaning.** A report written to stdout (`-`),
   by a run or by `report render`, has the bracket after `##vso` and
   `##teamcity` spelled `\u005b` in a JSON format and `&#91;` in an XML one,
@@ -794,8 +796,10 @@ numbered the findings of a line across the tool's processes. So the baseline is
 read as a count: holding the fingerprints of n findings of a rule on a line, it
 marks at most n distinct findings of that rule on that line in an operation,
 whichever processes report them — a new finding beside a baselined one is never
-silenced, and a finding two processes both report is one. Which of several
-findings of one rule on one line is marked follows their order on the line.
+silenced, and a finding two processes both report is one. Which of several findings of one rule on one line is marked follows their
+order on the line within one process, and the order the processes are judged
+across processes: the fingerprint cannot say which of them is the old one, only
+how many there were.
 
 What else shows a baselined finding: a tool that failed on its exit code shows
 every finding it failed on, baselined ones marked `(baselined)` in the terminal,

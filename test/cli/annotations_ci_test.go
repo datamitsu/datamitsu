@@ -139,11 +139,23 @@ func TestAnnotationsCIModes(t *testing.T) {
 	if strings.Contains(res.Stdout, "##vso[task.logissue") {
 		t.Errorf("--annotations off printed issues:\n%s", res.Stdout)
 	}
+
+	// Another CI's annotations printed in TeamCity keep its messages out, and
+	// so does the debug log, which carries the tools' output.
+	res = e.run("", teamcityEnv, "--verbose", "lint", "--annotations", "github", "--fail-fast=false")
+	e.wantExit(res, 1)
+	if strings.Contains(res.Stdout, "##teamcity[") || strings.Contains(res.Stderr, "##teamcity[") {
+		t.Errorf("a service message reached the log:\n%s\n%s", res.Stdout, res.Stderr)
+	}
+	if !strings.Contains(res.Stdout, "::error file=Dockerfile") {
+		t.Errorf("the GitHub annotations should print:\n%s", res.Stdout)
+	}
 }
 
 // TestAnnotationsRepositoryNames: a directory whose name is a command — a pull
 // request can add one — prints broken wherever the run names it: a frame's
-// directory lines, the progress labels, the event stream.
+// directory lines, the progress labels, the event stream, the debug log and
+// the plan.
 func TestAnnotationsRepositoryNames(t *testing.T) {
 	for _, tc := range []struct {
 		name, dir, prefix string
@@ -155,11 +167,25 @@ func TestAnnotationsRepositoryNames(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newExecProject(t, map[string]string{tc.dir + "/pkg.marker": ""}, packagesSpec,
 				clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Scope: "per-project"}))
-			for _, args := range [][]string{{"lint"}, {"--log-format", "jsonl", "lint", "--annotations", tc.name}} {
+			for _, args := range [][]string{
+				{"lint"},
+				{"--log-format", "jsonl", "lint", "--annotations", tc.name},
+				{"--verbose", "lint"},
+				{"lint", "--explain"},
+				{"lint", "--explain=json"},
+			} {
 				res := e.run("", tc.env, args...)
-				e.wantExit(res, 1)
+				if args[len(args)-1] == "--explain=json" {
+					var plan any
+					if err := json.Unmarshal([]byte(res.Stdout), &plan); err != nil || !strings.Contains(fmt.Sprint(plan), tc.dir) {
+						t.Errorf("the plan should name the directory as it is, read back: %v\n%s", err, res.Stdout)
+					}
+				}
+				if !strings.Contains(args[len(args)-1], "--explain") {
+					e.wantExit(res, 1)
+				}
 				broken := strings.Replace(tc.dir, tc.prefix, strings.TrimSuffix(tc.prefix, "[")+" [", 1)
-				if !strings.Contains(res.Stdout+res.Stderr, broken) {
+				if !strings.Contains(args[len(args)-1], "=json") && !strings.Contains(res.Stdout+res.Stderr, broken) {
 					t.Errorf("%v: the directory should be named, broken:\n%s\n%s", args, res.Stdout, res.Stderr)
 				}
 				for _, stream := range []string{res.Stdout, res.Stderr} {

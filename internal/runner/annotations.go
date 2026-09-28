@@ -228,6 +228,7 @@ func (sc *sharedContext) printAnnotations(ctx context.Context, run *report.Run, 
 	if sc.annotations.mode == AnnotationsOff || !sc.annotations.executed || run == nil {
 		return
 	}
+	var out bytes.Buffer
 	switch sc.annotations.mode {
 	case AnnotationsGitHub:
 		candidates := github.Candidates(run)
@@ -235,17 +236,32 @@ func (sc *sharedContext) printAnnotations(ctx context.Context, run *report.Run, 
 		if github.Overflows(candidates) {
 			touched = touchedOrWhy(TouchedFiles(ctx, sc.rootPath, sc.ci, sc.ciRuntime))
 		}
-		_ = github.Print(os.Stdout, github.Select(candidates, touched), rest)
+		_ = github.Print(&out, github.Select(candidates, touched), rest)
 	case AnnotationsAzure:
 		candidates := azure.Candidates(run)
 		var touched map[string]bool
 		if azure.Overflows(candidates) {
 			touched = touchedOrWhy(AzureTouchedFiles(ctx, sc.rootPath, sc.ci))
 		}
-		_ = azure.Print(os.Stdout, azure.Select(candidates, touched), rest)
+		_ = azure.Print(&out, azure.Select(candidates, touched), rest)
 	case AnnotationsTeamCity:
-		_ = teamcity.Print(os.Stdout, teamcity.Build(teamcity.Candidates(run)))
+		_ = teamcity.Print(&out, teamcity.Build(teamcity.Candidates(run)))
 	}
+	fmt.Print(foreignCommandsBroken(sc.annotations.mode, sc.ci.Vendor, out.String()))
+}
+
+// foreignCommandsBroken breaks, in annotations of mode printed in the CI of
+// vendor, the commands of every other CI that reads them anywhere in a line:
+// GitHub's escaping keeps "##teamcity[" in a message, where TeamCity would
+// read it. The mode's own commands stay.
+func foreignCommandsBroken(mode, vendor, text string) string {
+	own := map[string]string{AnnotationsAzure: azure.CommandPrefix, AnnotationsTeamCity: teamcity.MessagePrefix}[mode]
+	for _, prefix := range commandPrefixes(mode, vendor) {
+		if prefix != own {
+			text = strings.ReplaceAll(text, prefix, strings.TrimSuffix(prefix, "[")+" [")
+		}
+	}
+	return text
 }
 
 // touchedOrWhy says, when the touched files are unknown, why their priority

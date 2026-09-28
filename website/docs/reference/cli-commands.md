@@ -969,7 +969,8 @@ start, on stdout and stderr, and has no way to suspend that. Under `TF_BUILD` �
 whatever `--annotations` says — and in `azure` mode, every line the run prints
 that holds tool output or a repository path — raw output, a parsed message, a
 command line, a directory, a file name, a progress label, an agent record or
-tail, a JSON-L event — has `##vso[` rewritten to `##vso [`, so no tool and no
+tail, a JSON-L event, a `--verbose` log line, an `--explain` plan, a GitHub
+annotation printed there — has `##vso[` rewritten to `##vso [`, so no tool and no
 file name can set a variable, upload a file or fail the task through
 datamitsu's output. That alters a line of raw output by one space. A report
 written to stdout — by the run or by `report render` — is a document that has to
