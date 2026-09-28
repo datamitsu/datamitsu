@@ -526,9 +526,10 @@ datamitsu lint --fail-fast=false
   directories, file names, progress labels, agent records and the JSON-L
   events. That is one space of difference in a raw line. TeamCity's results
   block is also wrapped in `disableServiceMessages` … `enableServiceMessages`.
-- **Keep documents off stdout there.** A report written to stdout (`-`) is a
-  document and is not rewritten: a finding's message in it reaches the log as
-  it is. Write reports to files in Azure Pipelines and TeamCity.
+- **A document on stdout keeps its meaning.** A report written to stdout (`-`),
+  by a run or by `report render`, has the bracket after `##vso` and
+  `##teamcity` spelled `\u005b` in a JSON format and `&#91;` in an XML one,
+  which read back as the same text; Markdown and `patch` get the space.
 - **A run killed in the middle** — a second interrupt, a timeout that kills the
   process — leaves TeamCity's reading suspended for the rest of the build step,
   as it leaves GitHub's stop-commands region open; a run interrupted once

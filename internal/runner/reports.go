@@ -234,6 +234,7 @@ func (sc *sharedContext) buildReport(operations []config.OperationType) (*report
 	exports := make([]report.Export, 0, len(targets)+1)
 	for i, spec := range sc.opts.Reports {
 		targets[i] = render.Open(spec, os.Stdout)
+		targets[i].Guard = CommandGuard(sc.annotations.mode, sc.ci.Vendor)
 		e := report.Export{Format: spec.Format, Path: spec.Path, Status: report.ExportWritten}
 		if err := targets[i].Err; err != nil {
 			e.Status, e.Detail = report.ExportFailed, err.Error()

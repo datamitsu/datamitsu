@@ -67,6 +67,9 @@ func Take(ctx context.Context, root string, env []string) (Snapshot, error) {
 	}
 	s := Snapshot{entries: make(map[string]entry, len(paths))}
 	for path, tracked := range paths {
+		if err := ctx.Err(); err != nil {
+			return Snapshot{}, fmt.Errorf("hash dirty files: %w", err)
+		}
 		hash, err := hashOf(filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {
 			return Snapshot{}, fmt.Errorf("hash %s: %w", path, err)

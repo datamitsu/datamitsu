@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/gitutil"
@@ -95,5 +96,36 @@ func TestAgentChanges(t *testing.T) {
 				t.Errorf("agentChanges = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestSnapshotBoundedAfterAnInterruption: a snapshot running when the run is
+// interrupted goes on for the grace period, then stops.
+func TestSnapshotBoundedAfterAnInterruption(t *testing.T) {
+	prevTake, prevGrace := takeSnapshot, snapshotGrace
+	t.Cleanup(func() { takeSnapshot, snapshotGrace = prevTake, prevGrace })
+	snapshotGrace = 50 * time.Millisecond
+	started := make(chan struct{}, 2)
+	takeSnapshot = func(ctx context.Context, _ string, _ []string) (gitutil.Snapshot, error) {
+		started <- struct{}{}
+		if len(started) == 1 {
+			return gitutil.Snapshot{}, nil
+		}
+		<-ctx.Done()
+		return gitutil.Snapshot{}, ctx.Err()
+	}
+	task := tooling.Task{ID: "fmt::1", ToolName: "fmt", Operation: config.OpFix}
+	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{task}}}}
+	rec := report.NewAccumulator(report.Options{}).BeginOperation(string(config.OpFix), plan, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cb := (&sharedContext{rootPath: t.TempDir()}).stepCallback(ctx, config.OpFix, rec)
+	time.AfterFunc(20*time.Millisecond, cancel)
+	begin := time.Now()
+	cb(1, plan.Groups[0].Tasks)
+	if took := time.Since(begin); took > 2*time.Second {
+		t.Fatalf("the snapshot ran %s after the interruption", took)
+	}
+	if op := rec.Operation(); op.ChangesObserved || op.ChangesReason != report.ChangesSnapshotFailed {
+		t.Errorf("observed %v, reason %q; want the snapshot to have failed", op.ChangesObserved, op.ChangesReason)
 	}
 }

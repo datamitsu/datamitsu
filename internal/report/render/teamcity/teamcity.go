@@ -25,14 +25,14 @@ import (
 	"github.com/datamitsu/datamitsu/internal/report/render/github"
 )
 
-// messagePrefix starts every service message.
-const messagePrefix = "##teamcity["
+// MessagePrefix starts every service message.
+const MessagePrefix = "##teamcity["
 
 // DisableServiceMessages and EnableServiceMessages suspend and resume the
 // reading of service messages for the rest of the build step.
 const (
-	DisableServiceMessages = messagePrefix + "disableServiceMessages]"
-	EnableServiceMessages  = messagePrefix + "enableServiceMessages]"
+	DisableServiceMessages = MessagePrefix + "disableServiceMessages]"
+	EnableServiceMessages  = MessagePrefix + "enableServiceMessages]"
 )
 
 // identityLimit is the longest identity a buildProblem takes.
@@ -76,7 +76,7 @@ func Build(candidates []github.Annotation) Messages {
 	}
 	for _, a := range sorted(candidates) {
 		if a.Synthetic {
-			problems = append(problems, messagePrefix+fmt.Sprintf("buildProblem description='%s' identity='%s']",
+			problems = append(problems, MessagePrefix+fmt.Sprintf("buildProblem description='%s' identity='%s']",
 				Escape(a.Message), Identity(a.Tool)))
 			continue
 		}
@@ -93,7 +93,7 @@ func Build(candidates []github.Annotation) Messages {
 		if a.Line > 0 {
 			props += " line='" + strconv.Itoa(a.Line) + "'"
 		}
-		inspections = append(inspections, messagePrefix+"inspection "+props+" SEVERITY='"+Severity(a.Severity)+"']")
+		inspections = append(inspections, MessagePrefix+"inspection "+props+" SEVERITY='"+Severity(a.Severity)+"']")
 	}
 	m.Lines = append(m.Lines, inspections...)
 	m.Lines = append(m.Lines, problems...)
@@ -150,7 +150,7 @@ func inspectionType(a github.Annotation, id, url string) string {
 	if description == "" {
 		description = a.Title()
 	}
-	return messagePrefix + fmt.Sprintf("inspectionType id='%s' name='%s' description='%s' category='%s']",
+	return MessagePrefix + fmt.Sprintf("inspectionType id='%s' name='%s' description='%s' category='%s']",
 		Escape(id), Escape(name), Escape(description), Escape(toolOf(a)))
 }
 
@@ -216,7 +216,7 @@ func Escape(s string) string {
 // prefix anywhere in a line, reads none of them, not even one that turns the
 // reading back on.
 func Neutralize(line string) string {
-	return strings.ReplaceAll(line, messagePrefix, "##teamcity [")
+	return strings.ReplaceAll(line, MessagePrefix, "##teamcity [")
 }
 
 // Print writes m, one message per line, then — when findings without a file

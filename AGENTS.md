@@ -425,7 +425,9 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   breaks `##vso[` or `##teamcity[` with a space — frames, frame context,
   stopped and unrun lines, the target line, progress labels, agent records and
   tails, and every JSON-L event through the event mask; new output of that kind
-  must too. TeamCity's results block is
+  must too. A document on stdout cannot take a space: `render.Target.Guard`
+  (`runner.CommandGuard`, `render.GuardCommands`) spells the bracket `\u005b`
+  in JSON and `&#91;` in XML, which decode to the same text. TeamCity's results block is
   also wrapped in `disableServiceMessages` … `enableServiceMessages` by
   `openCommandRegion`/`closeCommandRegion`.
 - The interchange formats share `internal/report/render/common`: a format

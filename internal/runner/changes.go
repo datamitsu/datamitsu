@@ -13,9 +13,9 @@ import (
 // takeSnapshot is gitutil.Take; tests replace it.
 var takeSnapshot = gitutil.Take
 
-// snapshotGrace bounds a snapshot taken after the run was interrupted, whose
-// context no longer stops it.
-const snapshotGrace = 10 * time.Second
+// snapshotGrace is how long a snapshot may still run once the run was
+// interrupted, before or while it runs; a variable so a test can shorten it.
+var snapshotGrace = 10 * time.Second
 
 // stepCallback observes what a fix operation changes: a snapshot of the
 // working tree before its first step and after every step — the tasks of one
@@ -31,14 +31,12 @@ func (sc *sharedContext) stepCallback(ctx context.Context, operation config.Oper
 	}
 	env := gitutil.Environ()
 	snapshot := func() (gitutil.Snapshot, error) {
-		// A snapshot after an interruption must still run, for a while: the
-		// run's context is cancelled by then.
-		snapCtx := context.WithoutCancel(ctx)
-		if ctx.Err() != nil {
-			var cancel context.CancelFunc
-			snapCtx, cancel = context.WithTimeout(snapCtx, snapshotGrace)
-			defer cancel()
-		}
+		// A snapshot after an interruption must still run — a formatter may
+		// have written part of its files — but for a while only.
+		snapCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+		defer cancel()
+		stop := context.AfterFunc(ctx, func() { time.AfterFunc(snapshotGrace, cancel) })
+		defer stop()
 		return takeSnapshot(snapCtx, sc.rootPath, env)
 	}
 	before, err := snapshot()

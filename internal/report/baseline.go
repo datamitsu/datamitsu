@@ -48,12 +48,13 @@ type BaselineCI struct {
 type BaselineSet map[string]bool
 
 // NewBaseline is the baseline of run: the fingerprint of every finding it
-// reported in any operation, whatever its level. A synthetic finding stands
-// for a failure, not a finding, and is not held.
+// reported in any operation, whatever its level, under the run's fingerprint
+// version (FingerprintVersion for a document that states none). A synthetic
+// finding stands for a failure, not a finding, and is not held.
 func NewBaseline(run *Run, createdAt time.Time) Baseline {
 	b := Baseline{
 		Schema:      BaselineSchema,
-		Fingerprint: FingerprintVersion,
+		Fingerprint: run.Fingerprint,
 		CreatedAt:   createdAt.UTC(),
 		Datamitsu:   run.Datamitsu,
 		Source: BaselineSource{
@@ -63,6 +64,9 @@ func NewBaseline(run *Run, createdAt time.Time) Baseline {
 			Incomplete: IncompleteReasons(run),
 		},
 		Fingerprints: []string{},
+	}
+	if b.Fingerprint == "" {
+		b.Fingerprint = FingerprintVersion
 	}
 	for fp := range fingerprintsOf(run) {
 		b.Fingerprints = append(b.Fingerprints, fp)

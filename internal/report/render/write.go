@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render/common"
@@ -30,6 +31,9 @@ type Target struct {
 	// appendTo is the file an appending format adds its entry to.
 	appendTo *os.File
 	stdout   io.Writer
+	// Guard rewrites a document written to stdout before it is written; nil
+	// writes it as rendered (see GuardCommands).
+	Guard func(format string, data []byte) []byte
 	// Err is why the target could not be opened; nil when it was.
 	Err error
 }
@@ -81,11 +85,15 @@ func (t *Target) Write(run *report.Run) error {
 	case t.appendTo != nil:
 		return t.writeAppend(run)
 	case t.tmp == nil:
-		w := bufio.NewWriter(t.stdout)
-		if err := t.renderer.Render(w, run, t.Spec.Options); err != nil {
+		var buf bytes.Buffer
+		if err := t.renderer.Render(&buf, run, t.Spec.Options); err != nil {
 			return err
 		}
-		if err := w.Flush(); err != nil {
+		data := buf.Bytes()
+		if t.Guard != nil {
+			data = t.Guard(t.Spec.Format, data)
+		}
+		if _, err := t.stdout.Write(data); err != nil {
 			return fmt.Errorf("write report: %w", err)
 		}
 		return nil
@@ -144,6 +152,26 @@ func (t *Target) clear() {
 	if d, ok := t.renderer.(DirRenderer); ok && t.Spec.Dir() {
 		_ = t.removeOwned(d, nil)
 	}
+}
+
+// GuardCommands rewrites, in a document of format, every command a CI that
+// reads commands anywhere in a line would run — prefixes are their openings,
+// such as "##vso[" — so that the document means what it meant: a JSON document
+// spells the bracket \u005b and an XML one &#91;, which read back as the same
+// text; any other format, text for a person, gets a space before it.
+func GuardCommands(format string, data []byte, prefixes []string) []byte {
+	for _, prefix := range prefixes {
+		head := strings.TrimSuffix(prefix, "[")
+		replacement := head + " ["
+		switch format {
+		case "json", "sarif", "codequality", "rdjsonl", "history":
+			replacement = head + `\u005b`
+		case "junit", "checkstyle":
+			replacement = head + "&#91;"
+		}
+		data = bytes.ReplaceAll(data, []byte(prefix), []byte(replacement))
+	}
+	return data
 }
 
 // WriteFile writes data to path as a report is written: into a temporary

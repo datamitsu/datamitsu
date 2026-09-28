@@ -29,9 +29,9 @@ const (
 // Budget is how many issues of one type the agent keeps from a task.
 const Budget = 10
 
-// commandPrefix starts every logging command; the agent looks for it
+// CommandPrefix starts every logging command; the agent looks for it
 // anywhere in a line.
-const commandPrefix = "##vso["
+const CommandPrefix = "##vso["
 
 // Candidates is everything a run can log as an issue: the errors and warnings
 // of github.Candidates — what the terminal shows, each finding once, and the
@@ -112,7 +112,7 @@ func Command(a github.Annotation) string {
 	if title := a.Title(); title != "" {
 		props = append(props, "code="+Escape(title))
 	}
-	return commandPrefix + "task.logissue " + strings.Join(props, ";") + "]" + Escape(Neutralize(a.Message))
+	return CommandPrefix + "task.logissue " + strings.Join(props, ";") + "]" + Escape(Neutralize(a.Message))
 }
 
 // Escape escapes a property value or a message as the agent unescapes them:
@@ -127,7 +127,7 @@ var escaper = strings.NewReplacer("%", "%AZP25", ";", "%3B", "\r", "%0D", "\n", 
 // becomes "##vso [" — so that the agent, which finds the prefix anywhere in a
 // line, runs none of them.
 func Neutralize(line string) string {
-	return strings.ReplaceAll(line, commandPrefix, "##vso [")
+	return strings.ReplaceAll(line, CommandPrefix, "##vso [")
 }
 
 // Print writes sel as logging commands, one per line, then — when anything did

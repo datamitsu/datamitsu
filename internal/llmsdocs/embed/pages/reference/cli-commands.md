@@ -796,7 +796,9 @@ output.
 `patch` writes the unified diffs the formatters that write their result on
 stdout applied, captured while both versions existed, in the order they were
 applied: a file two formatters changed one after the other has two hunks, the
-first formatter's first, and `git apply` or `patch -p1` takes the file. A tool
+first formatter's first, and `git apply` or `patch -p1` takes the file — a
+name that holds a control character, a quote or a backslash is quoted as git
+quotes it. A tool
 that writes its files itself leaves no patch; its changes carry `patch: false`.
 Patches hold source text, so they are captured only when `--report patch=` is
 asked for, and the run's `json` then holds them too, masked like everything
@@ -965,8 +967,10 @@ command line, a directory, a file name, a progress label, an agent record or
 tail, a JSON-L event — has `##vso[` rewritten to `##vso [`, so no tool and no
 file name can set a variable, upload a file or fail the task through
 datamitsu's output. That alters a line of raw output by one space. A report
-written to stdout is a document and is not rewritten: write reports to files
-there.
+written to stdout — by the run or by `report render` — is a document that has to
+keep its meaning: a JSON format spells the bracket `\u005b` and an XML format
+`&#91;`, which read back as the same text, and Markdown and `patch` get the
+space.
 
 Under `TEAMCITY_VERSION` the run reports its findings as TeamCity inspections:
 an `inspectionType` once per tool and rule (`id` `<tool>/<rule>`, the rule's
@@ -1250,7 +1254,8 @@ was made (`createdAt`, from `SOURCE_DATE_EPOCH` when set), the build and
 configuration of the run it was made from, that run's start, commit and ref,
 whether it was complete with the reasons of the run and its tools (`source`),
 and the sorted fingerprints of every finding of every operation, whatever its
-level; a tool that failed without findings adds none. A run that was not
+level; a tool that failed without findings adds none. A document of
+fingerprints of another version exits 2. A run that was not
 complete is taken with one `WARN` line: its baseline holds fewer fingerprints,
 which only suppresses fewer findings. A document that cannot be read, or of
 another schema, exits 1; an output that cannot be written exits 5.

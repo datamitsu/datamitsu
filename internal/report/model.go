@@ -12,6 +12,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/gitutil"
+
 	"github.com/datamitsu/datamitsu/internal/textpos"
 )
 
@@ -210,18 +212,18 @@ func (op Operation) AllChanges() []Change {
 // existed before nor after.
 func netChange(steps []Change) (Change, bool) {
 	first, last := steps[0], steps[len(steps)-1]
-	existed := first.Kind != "created"
-	exists := last.Kind != "deleted"
+	existed := first.Kind != gitutil.Created
+	exists := last.Kind != gitutil.Deleted
 	c := last
 	switch {
 	case !existed && !exists:
 		return Change{}, false
 	case !existed:
-		c.Kind = "created"
+		c.Kind = gitutil.Created
 	case !exists:
-		c.Kind = "deleted"
-	case last.Kind != "reverted":
-		c.Kind = "modified"
+		c.Kind = gitutil.Deleted
+	case last.Kind != gitutil.Reverted:
+		c.Kind = gitutil.Modified
 	}
 	return c, true
 }

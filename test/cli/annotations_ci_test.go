@@ -3,6 +3,8 @@
 package cli_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -168,6 +170,33 @@ func TestAnnotationsRepositoryNames(t *testing.T) {
 							t.Errorf("%v: the directory's name printed as a command: %q", args, line)
 						}
 					}
+				}
+			}
+		})
+	}
+}
+
+// TestAnnotationsDocumentOnStdout: a report written to stdout in either CI
+// keeps its meaning while no line of it holds a command the CI would run.
+func TestAnnotationsDocumentOnStdout(t *testing.T) {
+	for _, tc := range []struct {
+		name, format, prefix string
+		env                  []string
+	}{
+		{"azure_json", "json", "##vso[", azureEnv},
+		{"teamcity_junit", "junit", "##teamcity[", teamcityEnv},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := ciProject(t)
+			res := e.run("", tc.env, "lint", "--report", tc.format+"=-")
+			e.wantExit(res, 1)
+			if strings.Contains(res.Stdout, tc.prefix) || strings.Contains(res.Stderr, tc.prefix) {
+				t.Errorf("a command reached the log:\n%s\n%s", res.Stdout, res.Stderr)
+			}
+			if tc.format == "json" {
+				var doc map[string]any
+				if err := json.Unmarshal([]byte(res.Stdout), &doc); err != nil || !strings.Contains(fmt.Sprint(doc), "##vso[task.complete") {
+					t.Errorf("the document should read back the finding as the tool printed it: %v\n%s", err, res.Stdout)
 				}
 			}
 		})

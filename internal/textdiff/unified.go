@@ -30,7 +30,7 @@ func Unified(path, before, after string) string {
 		return ""
 	}
 	var out strings.Builder
-	fmt.Fprintf(&out, "--- a/%s\n+++ b/%s\n", path, path)
+	fmt.Fprintf(&out, "--- %s\n+++ %s\n", quotePath("a/"+path), quotePath("b/"+path))
 	for start := 0; start < len(changes); {
 		end := start + 1
 		for end < len(changes) && changes[end].a1-changes[end-1].a2 <= 2*contextLines {
@@ -85,6 +85,39 @@ func writeHunk(out *strings.Builder, a, b []string, changes []change) {
 	for ; pos < aEnd; pos++ {
 		writeLine(out, ' ', a[pos])
 	}
+}
+
+// quotePath writes a name as a patch header holds it: as it is, or — when it
+// holds a control character, a quote or a backslash, which would end or bend
+// the header — quoted and escaped the way git quotes a path, which git apply
+// and patch read back.
+func quotePath(name string) string {
+	if !strings.ContainsFunc(name, func(r rune) bool { return r < 0x20 || r == 0x7f || r == '"' || r == '\\' }) {
+		return name
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for i := range len(name) {
+		switch c := name[i]; c {
+		case '"', '\\':
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		default:
+			if c < 0x20 || c == 0x7f {
+				fmt.Fprintf(&b, "\\%03o", c)
+				continue
+			}
+			b.WriteByte(c)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
 }
 
 // hunkRange is "start,count" 1-based, "start" alone for one line, and the line

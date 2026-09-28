@@ -152,6 +152,17 @@ func TestReportBaseline(t *testing.T) {
 		}
 		e.wantExit(e.run("", nil, "report", "baseline"), 2)
 		e.wantExit(e.run("", nil, "report", "baseline", "missing.json"), 1)
+
+		// A report of fingerprints of another version is neither a baseline
+		// nor made into one.
+		e.run("", nil, "lint", "--report", "json=out/run.json")
+		v2 := strings.Replace(e.read("out/run.json"), `"fingerprint": "dmfp1"`, `"fingerprint": "dmfp2"`, 1)
+		if !strings.Contains(v2, `"dmfp2"`) {
+			t.Fatalf("the report states no fingerprint version:\n%s", v2)
+		}
+		e.p.WriteFile("out/v2.json", v2)
+		e.wantExit(e.run("", nil, "report", "baseline", "out/v2.json"), 2)
+		e.wantExit(e.run("", nil, "lint", "--baseline", "out/v2.json"), 2)
 	})
 }
 

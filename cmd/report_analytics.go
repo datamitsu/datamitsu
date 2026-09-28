@@ -74,6 +74,10 @@ func runReportBaseline(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if run.Fingerprint != report.FingerprintVersion {
+		return exitcode.UsageErrorf("report baseline: %s holds fingerprints of version %q, and this build computes %q",
+			args[0], run.Fingerprint, report.FingerprintVersion)
+	}
 	if !run.Complete {
 		logger.Logger.Warn(fmt.Sprintf("report baseline: the run of %s is incomplete (%s): the baseline holds only "+
 			"the fingerprints it found, and suppresses no finding it missed", args[0], reasonList(run)))

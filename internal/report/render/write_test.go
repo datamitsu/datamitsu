@@ -2,6 +2,8 @@ package render
 
 import (
 	"bytes"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"io"
 	"os"
@@ -137,5 +139,35 @@ func TestTargetAppends(t *testing.T) {
 	}
 	if target := Open(Spec{Format: "history", Path: filepath.Dir(path)}, nil); target.Err == nil || !strings.Contains(target.Err.Error(), "is a directory") {
 		t.Errorf("Open of a directory = %v, want is a directory", target.Err)
+	}
+}
+
+// TestGuardCommands: a document on stdout keeps its meaning — JSON and XML
+// read back the same text — while no line holds a command a CI would run.
+func TestGuardCommands(t *testing.T) {
+	prefixes := []string{"##vso[", "##teamcity["}
+	const msg = "x ##vso[task.setvariable variable=a]1 ##teamcity[buildProblem]"
+	data, _ := json.Marshal(map[string]string{"message": msg})
+	guarded := GuardCommands("json", data, prefixes)
+	var back map[string]string
+	if err := json.Unmarshal(guarded, &back); err != nil || back["message"] != msg {
+		t.Errorf("json read back %q, %v; want %q", back["message"], err, msg)
+	}
+	xmlDoc := []byte("<e message=\"" + msg + "\">" + msg + "</e>")
+	var el struct {
+		Message string `xml:"message,attr"`
+		Text    string `xml:",chardata"`
+	}
+	if err := xml.Unmarshal(GuardCommands("junit", xmlDoc, prefixes), &el); err != nil || el.Message != msg || el.Text != msg {
+		t.Errorf("xml read back %+v, %v; want %q", el, err, msg)
+	}
+	for _, format := range []string{"json", "junit", "markdown", "patch"} {
+		out := string(GuardCommands(format, []byte(msg), prefixes))
+		if strings.Contains(out, "##vso[") || strings.Contains(out, "##teamcity[") {
+			t.Errorf("%s: %q still holds a command", format, out)
+		}
+	}
+	if got := string(GuardCommands("markdown", []byte(msg), prefixes)); got != "x ##vso [task.setvariable variable=a]1 ##teamcity [buildProblem]" {
+		t.Errorf("markdown = %q", got)
 	}
 }

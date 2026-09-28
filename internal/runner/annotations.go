@@ -117,21 +117,42 @@ func resolveAnnotations(requested, vendor string, quiet, stdoutDocument bool) an
 // with every command broken.
 var toolText = func(line string) string { return line }
 
-// neutralizerOf is toolText for a run in the CI of vendor that prints the
-// annotations of mode: a CI that reads commands anywhere in a line reads them
-// in whatever the run prints, annotations or not.
+// commandPrefixes are the openings of the commands a run in the CI of vendor
+// that prints the annotations of mode must keep out of what it prints: a CI
+// that reads commands anywhere in a line reads them in whatever the run prints,
+// annotations or not.
+func commandPrefixes(mode, vendor string) []string {
+	var prefixes []string
+	if mode == AnnotationsAzure || vendor == cienv.VendorAzure {
+		prefixes = append(prefixes, azure.CommandPrefix)
+	}
+	if mode == AnnotationsTeamCity || vendor == cienv.VendorTeamCity {
+		prefixes = append(prefixes, teamcity.MessagePrefix)
+	}
+	return prefixes
+}
+
+// neutralizerOf is toolText for commandPrefixes: each opening gets a space
+// before its bracket.
 func neutralizerOf(mode, vendor string) func(string) string {
-	azureCommands := mode == AnnotationsAzure || vendor == cienv.VendorAzure
-	teamcityMessages := mode == AnnotationsTeamCity || vendor == cienv.VendorTeamCity
+	prefixes := commandPrefixes(mode, vendor)
 	return func(line string) string {
-		if azureCommands {
-			line = azure.Neutralize(line)
-		}
-		if teamcityMessages {
-			line = teamcity.Neutralize(line)
+		for _, prefix := range prefixes {
+			line = strings.ReplaceAll(line, prefix, strings.TrimSuffix(prefix, "[")+" [")
 		}
 		return line
 	}
+}
+
+// CommandGuard is the render.Target guard of a document written to stdout in
+// the CI of vendor that prints the annotations of mode; nil where no CI reads
+// commands in it.
+func CommandGuard(mode, vendor string) func(format string, data []byte) []byte {
+	prefixes := commandPrefixes(mode, vendor)
+	if len(prefixes) == 0 {
+		return nil
+	}
+	return func(format string, data []byte) []byte { return render.GuardCommands(format, data, prefixes) }
 }
 
 // commandToken ends the stop-commands region: unguessable, so no tool output
