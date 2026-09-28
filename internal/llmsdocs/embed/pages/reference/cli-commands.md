@@ -457,9 +457,10 @@ command, whichever it is and however it ended otherwise: it exits 1 and says so
 on stdout, the one stream left, unless stdout carries the command's own data (a
 report written to `-`, the language server's JSON-RPC, `source`'s shell code).
 
-`--verbose` adds datamitsu's debug log lines to the stream as `log` events;
-they name the commands datamitsu runs and quote what tools printed. Keep it off
-a stream that is published.
+`--verbose` adds datamitsu's debug log lines to the stream as `log` events,
+with what a tool printed and the arguments it ran with withheld
+(`"<withheld>"`): a stream is what a pipeline publishes. The console keeps
+them.
 
 A `tool_run` with `status: "skip"` ends the chain of a tool the run stopped,
 and is never a failure. Its `msg` says what happened and why:

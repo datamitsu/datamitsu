@@ -143,6 +143,13 @@ var fieldEncoderConfig = zapcore.EncoderConfig{
 	SkipLineEnding: true,
 }
 
+// withheldFields are the fields a routed log line never carries: a tool's
+// captured output and the arguments it ran with. A JSON-L stream is what a
+// pipeline publishes, and a security tool's output may hold the secret it
+// found — no masking can recognize one no variable held. The console, read by
+// the person who ran the command, keeps them.
+var withheldFields = map[string]bool{"output": true, "args": true, "outputArgs": true}
+
 // routedMessage is the entry message followed by its fields — With's first, then
 // the call's — as one compact JSON object in the order they were added, as the
 // console line shows them. A namespace no field lands in is left out.
@@ -163,6 +170,9 @@ func routedMessage(msg string, with, fields []zapcore.Field) string {
 				ns.AddTo(enc)
 			}
 			pending = pending[:0]
+			if withheldFields[f.Key] {
+				f = zap.String(f.Key, "<withheld>")
+			}
 			f.AddTo(enc)
 			added++
 		}

@@ -73,10 +73,10 @@ it is stamped with comes from `SOURCE_DATE_EPOCH` when that is set.
 - **Nothing from a cache.** A report is never stored and never replayed; each is
   written from the run that produced it.
 
-The same holds for the JSON-L stream's events. `--verbose` is the exception you
-ask for: it adds datamitsu's debug log lines, which name the commands it runs
-and quote what tools printed, as `log` events — keep it off a stream that is
-published.
+The same holds for the JSON-L stream's events. Under `--verbose` the stream
+carries datamitsu's debug log lines too, as `log` events, with what a tool
+printed and the arguments it ran with withheld; the console keeps them for the
+person who ran the command.
 
 A tool that exits non-zero without a finding its parser could read is not
 listed as clean: it gets one `synthetic` finding of level `error` and no

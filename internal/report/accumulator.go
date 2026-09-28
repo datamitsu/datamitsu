@@ -545,7 +545,7 @@ func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun)
 // numbers the rest across all of its invocations, which is what makes two
 // findings on one line of one file distinct however the tool's work was split.
 func settleFindings(tr *ToolRun) {
-	seen := map[fingerprintInput]bool{}
+	first := map[fingerprintInput][2]int{}
 	var in []fingerprintInput
 	var at [][2]int
 	for i := range tr.Invocations {
@@ -555,10 +555,15 @@ func settleFindings(tr *ToolRun) {
 			input := f.input()
 			// A synthetic finding stands for its own invocation, never for
 			// another's, however alike their failures read.
-			if f.Kind != kindSynthetic && seen[input] {
+			if pos, dup := first[input]; dup && f.Kind != kindSynthetic {
+				// The same finding may weigh more where it came from a process
+				// that failed; the one listed says what the strongest said.
+				strongest(&tr.Invocations[pos[0]].Findings[pos[1]], f)
 				continue
 			}
-			seen[input] = true
+			if f.Kind != kindSynthetic {
+				first[input] = [2]int{i, len(kept)}
+			}
 			kept = append(kept, f)
 		}
 		inv.Findings = kept
@@ -571,6 +576,18 @@ func settleFindings(tr *ToolRun) {
 		tr.Invocations[at[k][0]].Findings[at[k][1]].Fingerprint = fp
 	}
 }
+
+// strongest makes kept say the most any of its duplicates said: the more
+// severe level, and reported or gating when one of them was.
+func strongest(kept *Finding, dup Finding) {
+	if severityRank[dup.Severity] < severityRank[kept.Severity] {
+		kept.Severity = dup.Severity
+	}
+	kept.Reported = kept.Reported || dup.Reported
+	kept.Gates = kept.Gates || dup.Gates
+}
+
+var severityRank = map[string]int{"error": 1, "warning": 2, "info": 3, "hint": 4}
 
 // input is what the finding's fingerprint is computed from.
 func (f Finding) input() fingerprintInput {

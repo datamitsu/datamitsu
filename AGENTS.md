@@ -295,7 +295,10 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   `synthetic` finding with a structured message and no output. `ui.SetEventMask`
   masks every JSON-L event the same way, `op_id` included, so a task's events
   still correlate: `setJSONLStderr` installs it with the host environment's
-  values, and a run replaces it with its `report.Secrets`.
+  values, and a run replaces it with its `report.Secrets`. A log line routed
+  to the stream withholds its `output`, `args` and `outputArgs` fields
+  (`logger.withheldFields`); the console keeps them. Name a new debug field that
+  carries tool output or argv one of those.
 - A finding's fingerprint (`report.Fingerprint`) is SHA-256 over
   `dmfp1 NUL tool NUL code NUL relPath NUL lineHash NUL ordinal`; its message is
   not an input. The runner computes it — with the columns in every unit

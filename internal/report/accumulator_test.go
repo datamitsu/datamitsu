@@ -303,6 +303,29 @@ func TestFindingMessageIsPlainText(t *testing.T) {
 	}
 }
 
+// Duplicates from two processes are listed once, with the most any of them
+// said: the error a failed process reported is not lost behind the warning a
+// passing one reported first.
+func TestSettleFindingsKeepsTheStrongest(t *testing.T) {
+	finding := func(severity string, reported, gates bool) Finding {
+		return Finding{
+			Tool: "t", Code: "C", Source: "t", Message: "m", lineHash: "h", Severity: severity,
+			Reported: reported, Gates: gates, Location: Location{Path: "a", Row: 1, Col: 1},
+		}
+	}
+	tr := &ToolRun{Invocations: []Invocation{
+		{ID: "t::1#1", Findings: []Finding{finding("warning", false, false)}},
+		{ID: "t::1#2", Findings: []Finding{finding("error", true, true)}},
+	}}
+	settleFindings(tr)
+	if len(tr.Invocations[1].Findings) != 0 {
+		t.Fatalf("the duplicate was kept: %+v", tr.Invocations[1].Findings)
+	}
+	if got := tr.Invocations[0].Findings[0]; got.Severity != "error" || !got.Reported || !got.Gates {
+		t.Errorf("kept finding = %+v, want the error, reported and gating", got)
+	}
+}
+
 func TestRelPath(t *testing.T) {
 	tests := []struct {
 		name, path, want string

@@ -149,6 +149,14 @@ func TestRoutedMessage(t *testing.T) {
 			want: "msg",
 		},
 		{
+			name: "a tool's output and arguments are withheld",
+			fields: []zapcore.Field{
+				zap.String("tool", "gitleaks"), zap.String("output", "leak: found-value"),
+				zap.Strings("args", []string{"--token", "s3cr3t"}), zap.Strings("outputArgs", []string{"x"}),
+			},
+			want: `msg {"tool":"gitleaks","output":"<withheld>","args":"<withheld>","outputArgs":"<withheld>"}`,
+		},
+		{
 			name:   "a namespace nests the fields after it",
 			with:   []zapcore.Field{zap.String("top", "x"), zap.Namespace("cmd")},
 			fields: []zapcore.Field{zap.String("tool", "eslint")},
