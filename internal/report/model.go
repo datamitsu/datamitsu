@@ -8,7 +8,11 @@
 // function of one run.
 package report
 
-import "time"
+import (
+	"time"
+
+	"github.com/datamitsu/datamitsu/internal/textpos"
+)
 
 // SchemaVersion names the shape of a Run document. A reader rejects any other.
 const SchemaVersion = "datamitsu.report/1"
@@ -209,11 +213,16 @@ type FileResult struct {
 
 // Finding is one thing a tool reported.
 type Finding struct {
-	Tool     string `json:"tool"`
-	Source   string `json:"source"`
-	Code     string `json:"code,omitempty"`
-	RuleURL  string `json:"ruleUrl,omitempty"`
-	Severity string `json:"severity"`
+	// Fingerprint identifies the finding across runs, independently of the
+	// lines around it: 64 lowercase hex characters (see Fingerprint).
+	Fingerprint string `json:"fingerprint"`
+	// FingerprintBasis is what the fingerprint rests on: line, row or none.
+	FingerprintBasis string `json:"fingerprintBasis"`
+	Tool             string `json:"tool"`
+	Source           string `json:"source"`
+	Code             string `json:"code,omitempty"`
+	RuleURL          string `json:"ruleUrl,omitempty"`
+	Severity         string `json:"severity"`
 	// Reported marks a finding at or above its operation's failOn: what the
 	// terminal shows.
 	Reported bool `json:"reported"`
@@ -224,6 +233,10 @@ type Finding struct {
 	Message    string   `json:"message"`
 	Location   Location `json:"location"`
 	Provenance string   `json:"provenance"`
+
+	// lineHash is the fingerprint's line component, kept to settle ordinals
+	// across a tool's invocations.
+	lineHash string
 }
 
 // Location is where a finding points. Rows and columns are 1-based and EndCol
@@ -240,6 +253,16 @@ type Location struct {
 	// Unit is the column unit the parser declares: utf-8, utf-16, utf-32, or
 	// "" when it was not measured.
 	Unit string `json:"unit"`
+	// Chars, Bytes and Utf16 are the columns in code points, UTF-8 bytes and
+	// UTF-16 units, computed while the file was on disk; absent when Precision
+	// is unknown.
+	Chars *textpos.Span `json:"chars,omitempty"`
+	Bytes *textpos.Span `json:"bytes,omitempty"`
+	Utf16 *textpos.Span `json:"utf16,omitempty"`
+	// Precision is exact, ascii (no unit, but an ASCII line) or unknown (no
+	// unit on a line that is not ASCII, or no line to read), in which case a
+	// renderer that needs another unit leaves the column out.
+	Precision string `json:"precision"`
 }
 
 // Export is one report a run was asked for.

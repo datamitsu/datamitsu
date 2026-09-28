@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
+	"github.com/datamitsu/datamitsu/internal/textpos"
 )
 
 // Severity is the normalized 1–4 scale shared by parsers, this contract, and LSP
@@ -84,6 +85,29 @@ type Diagnostic struct {
 	// what fails a run on its own. A process parsed by a module that predates
 	// the severity contract has none.
 	Gates bool `json:"gates,omitempty"`
+	// Anchor is what a report needs of the finding's place in its file, taken
+	// while the file was on disk; nil when nothing asked for it.
+	Anchor *Anchor `json:"-"`
+}
+
+// Anchor ties a finding to the text it points at rather than to its row, so
+// that it survives lines inserted above it, and carries its columns in every
+// unit a consumer counts in.
+type Anchor struct {
+	// Fingerprint identifies the finding across runs. The gate hook computes
+	// it within one process; a report settles it across all the processes of a
+	// tool, which only differs when two of them reported one line.
+	Fingerprint string
+	// Basis is what the fingerprint rests on: line (the text of its start
+	// line), row (its row number, when the file could not be read) or none
+	// (a finding without a file).
+	Basis string
+	// LineHash is the fingerprint's line component.
+	LineHash string
+	// Chars, Bytes and UTF16 are the finding's columns in code points, UTF-8
+	// bytes and UTF-16 units; nil when Precision is unknown.
+	Chars, Bytes, UTF16 *textpos.Span
+	Precision           textpos.Precision
 }
 
 // Resolve fills the core's defaults over a parser's nullable RawDiagnostic. source

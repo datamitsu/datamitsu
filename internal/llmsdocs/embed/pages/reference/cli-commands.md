@@ -504,7 +504,19 @@ Each tool lists its app as configured, its parser module and its threshold, and
 one invocation per process: its task, state, exit code, extraction outcome, the
 files it answered for and the findings it reported, with paths relative to the
 repository root. The files a cache answered appear as one `cached` or
-`verdict-hit` invocation of their task. A report never holds a command line or
+`verdict-hit` invocation of their task.
+
+Every finding carries a `fingerprint` that identifies it across runs: SHA-256
+over the tool, the rule, the path and the text of the finding's first line, and
+its position among the findings the tool reported with the same rule on the
+same line. A line inserted above a finding moves its row, not its fingerprint,
+and rewording a message changes neither. `fingerprintBasis` says what the
+fingerprint rests on: `line`, `row` when the file could not be read, `none` for
+a finding without a file. A finding's `location` gives its columns as the tool
+counted them, in the `unit` its parser declares, and converted while the file
+was on disk into code points (`chars`), UTF-8 bytes (`bytes`) and UTF-16 units
+(`utf16`); `precision` is `exact`, `ascii` (no unit declared, but an ASCII
+line), or `unknown`, when there was nothing to convert from. A report never holds a command line or
 an environment variable, and nothing caches it: every report is written from
 the run that produced it.
 

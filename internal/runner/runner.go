@@ -159,6 +159,9 @@ type sharedContext struct {
 	fileScoped bool
 	// report records the run for its reports; nil when it writes none.
 	report *report.Accumulator
+	// annotator anchors each parsed process's findings for the report, in the
+	// gate hook; nil when nothing reads them.
+	annotator *report.Annotator
 	// startedAt stamps the report: SOURCE_DATE_EPOCH or the clock at the
 	// start of the run.
 	startedAt time.Time
@@ -314,9 +317,11 @@ func initSharedContext(
 		sc.parseProblems = newParseProblems()
 		sc.executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
 		sc.ignoredFailOn = &toolSet{}
-		sc.executor.SetGate(tooling.ThresholdGate(config.Severity(opts.FailOn), sc.severityContract, sc.ignoredFailOn.add))
 	}
 	sc.startReport()
+	if sc.parserMgr != nil {
+		sc.executor.SetGate(sc.gate())
+	}
 
 	// All configured tools are known here, so the result column width is fixed
 	// once and shared across every operation (so fix and lint blocks align).

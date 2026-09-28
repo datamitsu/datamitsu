@@ -30,7 +30,7 @@
 **Strict separation between internal and external hashing:**
 
 - **XXH3-128** (github.com/zeebo/xxh3):
-  - All internal cache keys, invalidation keys, fingerprints
+  - All internal cache keys, invalidation keys, internal fingerprints
   - Config hashes (binmanager, runtimemanager, verifycache)
   - Per-file content tracking in execution cache
   - Path hashing (git root, project paths, URL→cache filename)
@@ -41,11 +41,16 @@
   - All hashes that come from external sources (release manifests, lock files)
   - Mandatory for binaries, JARs, archives, remote configs
   - Industry standard, published by upstream projects
+  - Identifiers that leave the process and that another system stores and
+    compares: the finding fingerprint (`report.Fingerprint`, `dmfp1`), which
+    code scanning keeps as an alert's identity across uploads
 
 **The dividing line:** if a hash is compared against a value from the internet
 or any untrusted source, it MUST be a cryptographic hash. If a hash exists
 only locally as a cache key or fingerprint and is never compared with an
-external value, it MUST be XXH3-128.
+external value, it MUST be XXH3-128. An identifier that lives in another
+system's database is not an internal fingerprint: it is written into a report
+and compared there, so it is SHA-256.
 
 **Forbidden:**
 
@@ -279,6 +284,13 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 - A report carries no argv and no environment: `Command` and every environment
   value stay out of the model, an app is referenced by name, kind and configured
   version. A report is never stored in any cache.
+- A finding's fingerprint (`report.Fingerprint`) is SHA-256 over
+  `dmfp1 NUL tool NUL code NUL relPath NUL lineHash NUL ordinal`; its message is
+  not an input. The runner computes it — with the columns in every unit
+  (`internal/textpos`) — in the gate hook, before the threshold decides
+  (`report.Annotator`), and the report settles ordinals across a tool's
+  processes. Changing the input turns every code-scanning alert into
+  "fixed" and "new"; `fingerprint_test.go` pins golden vectors.
 - Reports are written after the last operation whatever its outcome, atomically;
   a report that was not written exits `exitcode.Export` (5) only when nothing
   else failed (1 > 4 > 5).

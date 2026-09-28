@@ -12,6 +12,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
+	"github.com/datamitsu/datamitsu/internal/textpos"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
@@ -215,6 +216,7 @@ func (a *Accumulator) buildOperation(o *OperationRecord) Operation {
 	}
 	for _, tr := range tools {
 		sortInvocations(tr.Invocations)
+		settleFindings(tr)
 		op.Tools = append(op.Tools, *tr)
 	}
 	sort.Slice(op.Tools, func(i, j int) bool { return op.Tools[i].Name < op.Tools[j].Name })
@@ -408,23 +410,34 @@ func (a *Accumulator) fileResult(fr tooling.FileResult) FileResult {
 
 func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun) Finding {
 	f := Finding{
-		Tool:       tool,
-		Source:     d.Source,
-		Code:       d.Code,
-		RuleURL:    d.URL,
-		Severity:   d.Severity.String(),
-		Reported:   d.Reported,
-		Gates:      d.Gates,
-		Kind:       kindIssue,
-		Message:    d.Message,
-		Provenance: provenanceParser,
+		FingerprintBasis: BasisNone,
+		Tool:             tool,
+		Source:           d.Source,
+		Code:             d.Code,
+		RuleURL:          d.URL,
+		Severity:         d.Severity.String(),
+		Reported:         d.Reported,
+		Gates:            d.Gates,
+		Kind:             kindIssue,
+		Message:          d.Message,
+		Provenance:       provenanceParser,
 		Location: Location{
-			Path:   a.rel(d.File),
-			Row:    d.Row,
-			EndRow: d.EndRow,
-			Col:    d.Col,
-			EndCol: d.EndCol,
+			Path:      a.rel(d.File),
+			Row:       d.Row,
+			EndRow:    d.EndRow,
+			Col:       d.Col,
+			EndCol:    d.EndCol,
+			Precision: string(textpos.Unknown),
 		},
+	}
+	f.lineHash = inputOf(tool, f.Location.Path, d).lineHash
+	switch {
+	case d.Anchor != nil:
+		f.FingerprintBasis = d.Anchor.Basis
+		f.Location.Chars, f.Location.Bytes, f.Location.Utf16 = d.Anchor.Chars, d.Anchor.Bytes, d.Anchor.UTF16
+		f.Location.Precision = string(d.Anchor.Precision)
+	case d.File != "":
+		f.FingerprintBasis = BasisRow
 	}
 	if tr.Parser != nil {
 		f.Location.Unit = tr.Parser.ColumnUnit
@@ -433,6 +446,44 @@ func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun)
 		f.Kind = kindSecurity
 	}
 	return f
+}
+
+// settleFindings drops the findings of a tool that one of its invocations
+// already reported — overlapping chunks, or units that share a file — and
+// numbers the rest across all of its invocations, which is what makes two
+// findings on one line of one file distinct however the tool's work was split.
+func settleFindings(tr *ToolRun) {
+	seen := map[fingerprintInput]bool{}
+	var in []fingerprintInput
+	var at [][2]int
+	for i := range tr.Invocations {
+		inv := &tr.Invocations[i]
+		kept := inv.Findings[:0]
+		for _, f := range inv.Findings {
+			input := f.input()
+			if seen[input] {
+				continue
+			}
+			seen[input] = true
+			kept = append(kept, f)
+		}
+		inv.Findings = kept
+		for j, f := range inv.Findings {
+			in = append(in, f.input())
+			at = append(at, [2]int{i, j})
+		}
+	}
+	for k, fp := range fingerprints(in) {
+		tr.Invocations[at[k][0]].Findings[at[k][1]].Fingerprint = fp
+	}
+}
+
+// input is what the finding's fingerprint is computed from.
+func (f Finding) input() fingerprintInput {
+	return fingerprintInput{
+		tool: f.Tool, code: f.Code, relPath: f.Location.Path, lineHash: f.lineHash,
+		row: f.Location.Row, col: f.Location.Col, source: f.Source, message: f.Message,
+	}
 }
 
 // rel is a path as every export writes it: relative to the repository root

@@ -121,6 +121,8 @@
               ],
               "findings": [
                 {
+                  "fingerprint": "9f687dcb779d9609b5a6a17a72fde8629ddf00f81dc0b8a4fe7e14bce7fdfe8d",
+                  "fingerprintBasis": "line",
                   "tool": "hadolint",
                   "source": "hadolint",
                   "code": "DL3006",
@@ -135,7 +137,20 @@
                     "endRow": 1,
                     "col": 1,
                     "endCol": 1,
-                    "unit": ""
+                    "unit": "",
+                    "chars": {
+                      "start": 1,
+                      "end": 1
+                    },
+                    "bytes": {
+                      "start": 1,
+                      "end": 1
+                    },
+                    "utf16": {
+                      "start": 1,
+                      "end": 1
+                    },
+                    "precision": "ascii"
                   },
                   "provenance": "parser"
                 }

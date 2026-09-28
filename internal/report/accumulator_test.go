@@ -123,10 +123,14 @@ func TestInvocationsOfATask(t *testing.T) {
 	if len(first.Files) != 1 || first.Files[0].Path != "b/Dockerfile" || *first.Files[0].ExitCode != 1 {
 		t.Errorf("files of the process = %+v, want b/Dockerfile exited 1", first.Files)
 	}
+	// Never anchored, so it rests on its row.
 	wantFinding := Finding{
-		Tool: "hadolint", Source: "hadolint", Code: "DL3000", RuleURL: "https://example.test/DL3000",
+		Fingerprint:      Fingerprint("hadolint", "DL3000", "b/Dockerfile", "row:3", 0),
+		FingerprintBasis: "row",
+		Tool:             "hadolint", Source: "hadolint", Code: "DL3000", RuleURL: "https://example.test/DL3000",
 		Severity: "error", Reported: true, Gates: true, Kind: "security", Message: "m", Provenance: "parser",
-		Location: Location{Path: "b/Dockerfile", Row: 3, EndRow: 3, Col: 1, EndCol: 5, Unit: "utf-32"},
+		Location: Location{Path: "b/Dockerfile", Row: 3, EndRow: 3, Col: 1, EndCol: 5, Unit: "utf-32", Precision: "unknown"},
+		lineHash: "row:3",
 	}
 	if len(first.Findings) != 1 || !reflect.DeepEqual(first.Findings[0], wantFinding) {
 		t.Errorf("findings = %+v, want %+v", first.Findings, wantFinding)
@@ -204,6 +208,31 @@ func TestWholeUnitProcessClaimsTheUnit(t *testing.T) {
 	}
 	if got := []string{invocations[0].Files[0].Path, invocations[0].Files[1].Path}; !reflect.DeepEqual(got, []string{"pkg/a.ts", "pkg/b.ts"}) {
 		t.Errorf("files = %v, want both, sorted", got)
+	}
+}
+
+// A finding two processes of one tool both reported is listed once, by the
+// first, and ordinals count across the tool's processes: the fingerprints do
+// not depend on how its work was split.
+func TestSettleFindings(t *testing.T) {
+	finding := func(col int) Finding {
+		return Finding{
+			Tool: "eslint", Code: "eqeqeq", Source: "eslint", Message: "m", lineHash: "h",
+			Location: Location{Path: "a.js", Row: 5, Col: col},
+		}
+	}
+	tr := &ToolRun{Invocations: []Invocation{
+		{ID: "eslint::1#1", Findings: []Finding{finding(7)}},
+		{ID: "eslint::1#2", Findings: []Finding{finding(3), finding(7)}},
+	}}
+	settleFindings(tr)
+	first, second := tr.Invocations[0].Findings, tr.Invocations[1].Findings
+	if len(first) != 1 || len(second) != 1 || second[0].Location.Col != 3 {
+		t.Fatalf("findings = %+v, %+v; want the duplicate dropped from the second process", first, second)
+	}
+	if first[0].Fingerprint != Fingerprint("eslint", "eqeqeq", "a.js", "h", 1) ||
+		second[0].Fingerprint != Fingerprint("eslint", "eqeqeq", "a.js", "h", 0) {
+		t.Errorf("fingerprints = %s, %s; want ordinals by column across both processes", first[0].Fingerprint, second[0].Fingerprint)
 	}
 }
 

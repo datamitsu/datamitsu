@@ -47,6 +47,22 @@ func (sc *sharedContext) startReport() {
 		opts.Parsers = sc.parserMgr.DescribedParser
 	}
 	sc.report = report.NewAccumulator(opts)
+	sc.annotator = report.NewAnnotator(sc.rootPath, opts.Parsers)
+}
+
+// gate is the hook the executor runs over every parsed process: it anchors the
+// process's findings — fingerprints and columns, while the files are on disk —
+// and then applies the failOn threshold, so that a fingerprint exists before
+// the threshold decides.
+func (sc *sharedContext) gate() tooling.Gate {
+	threshold := tooling.ThresholdGate(config.Severity(sc.opts.FailOn), sc.severityContract, sc.ignoredFailOn.add)
+	if sc.annotator == nil {
+		return threshold
+	}
+	return func(task tooling.Task, proc *tooling.ProcessResult) tooling.GateDecision {
+		sc.annotator.Annotate(task, proc)
+		return threshold(task, proc)
+	}
 }
 
 // beginReportOperation records that operation started with plan; nil when the
