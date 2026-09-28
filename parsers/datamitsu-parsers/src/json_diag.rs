@@ -120,23 +120,35 @@ pub fn from_json(bytes: &[u8], attrs: &Attrs, sev: SeverityMap) -> Vec<RawDiagno
 /// beats discarding a run's findings over a cut-off tail.
 #[cfg(feature = "tools")]
 pub fn extract_lenient<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Vec<T>) -> Vec<T> {
-	find_envelope(bytes, |v| Some(extract(v))).unwrap_or_default()
+	search(bytes, |v| Some(extract(v)), false).unwrap_or_default()
 }
 
 /// Like [`extract_lenient`], for a format recognized by its envelope rather than
 /// by its findings: `extract` answers `None` for a document that is not the
 /// format's envelope, and so does this when no document in the stream is one.
 /// A document that parses but is not an envelope is skipped, so a `{}` in the
-/// noise cannot stand in for the report.
+/// noise cannot stand in for the report. A value inside a document cut off
+/// before it closes is part of that document, not one of its own: the search
+/// ends at the cut, so the messages array of a cut-off ESLint report is not
+/// read as another format.
 pub fn find_envelope<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec<T>>) -> Option<Vec<T>> {
+	search(bytes, extract, true)
+}
+
+/// The best document `extract` makes something of; with `whole`, only among
+/// the documents before the first one cut off.
+fn search<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec<T>>, whole: bool) -> Option<Vec<T>> {
 	let text = String::from_utf8_lossy(bytes);
 	if let Ok(v) = text.parse::<JsonValue>() {
 		DOCUMENT_SEEN.with(|seen| seen.set(true));
 		return extract(&v);
 	}
 	let mut best: Option<((usize, usize), Vec<T>)> = None;
-	for start in openers(&text) {
-		let Some(end) = balanced_end(&text, start) else {
+	for (start, end) in spans(&text) {
+		let Some(end) = end else {
+			if whole && runs_to_end(&text[start..]) {
+				break;
+			}
 			continue;
 		};
 		let Ok(value) = text[start..end].parse::<JsonValue>() else {
@@ -154,16 +166,26 @@ pub fn find_envelope<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec
 	best.map(|(_, out)| out)
 }
 
-/// The openers of the values [`find_envelope`] tries, bounded so pathological
-/// input (a log full of braces) cannot make parsing quadratic over a large
-/// buffer.
-fn openers(text: &str) -> impl Iterator<Item = usize> + '_ {
-	const MAX_ATTEMPTS: usize = 16;
+/// Each value opener in `text` with the end of its balanced span, `None` when
+/// it never closes. Bounded by the bytes the scans read rather than by the
+/// openers, so a log whose every line starts `[INFO]` still reaches the
+/// document after it, while one full of braces that never close cannot make
+/// parsing quadratic over a large buffer.
+fn spans(text: &str) -> impl Iterator<Item = (usize, Option<usize>)> + '_ {
+	const BUDGET_PER_BYTE: usize = 16;
+	let budget = text.len().saturating_mul(BUDGET_PER_BYTE).max(1 << 16);
+	let mut spent = 0usize;
 	text
 		.char_indices()
 		.filter(|(_, c)| *c == '[' || *c == '{')
-		.map(|(i, _)| i)
-		.take(MAX_ATTEMPTS)
+		.map_while(move |(start, _)| {
+			if spent > budget {
+				return None;
+			}
+			let end = balanced_end(text, start);
+			spent += end.unwrap_or(text.len()) - start;
+			Some((start, end))
+		})
 }
 
 /// Whether the stream holds a JSON document cut off before it closes: a value
@@ -174,13 +196,15 @@ pub(crate) fn cut(bytes: &[u8]) -> bool {
 	if text.parse::<JsonValue>().is_ok() {
 		return false;
 	}
-	let cut = openers(&text).any(|start| {
-		balanced_end(&text, start).is_none()
-			&& text[start..]
-				.parse::<JsonValue>()
-				.is_err_and(|e| e.to_string().ends_with("Unexpected EOF"))
-	});
+	let cut = spans(&text).any(|(start, end)| end.is_none() && runs_to_end(&text[start..]));
 	cut
+}
+
+/// Whether `value` is JSON up to its end and stops there, unfinished.
+fn runs_to_end(value: &str) -> bool {
+	value
+		.parse::<JsonValue>()
+		.is_err_and(|e| e.to_string().ends_with("Unexpected EOF"))
 }
 
 /// Byte index just past the value opening at `start`, or `None` if it never
@@ -441,6 +465,20 @@ trailing"#;
 #[cfg(test)]
 mod envelope_tests {
 	use super::*;
+
+	#[test]
+	fn a_document_after_many_bracketed_log_lines_is_found() {
+		let mut out = "[INFO] progress\n".repeat(500);
+		out.push_str(r#"{"version":"2.1.0","runs":[]}"#);
+		let found = find_envelope(out.as_bytes(), |v| member(v, "runs").map(|_| vec![()]));
+		assert_eq!(found, Some(vec![()]));
+	}
+
+	#[test]
+	fn braces_that_never_close_cost_a_bounded_scan() {
+		let out = "{ ".repeat(200_000);
+		assert!(spans(&out).count() < 400);
+	}
 
 	#[test]
 	fn a_value_that_runs_to_the_end_is_cut() {

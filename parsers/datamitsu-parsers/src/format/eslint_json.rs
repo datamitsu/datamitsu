@@ -29,12 +29,9 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 };
 
 pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Response {
-	for stream in [stdout, stderr] {
-		if let Some(diags) = crate::json_diag::find_envelope(stream, envelope) {
-			return Response::recognized(DESCRIPTOR.name, diags);
-		}
-	}
-	Response::unrecognized(DESCRIPTOR.name)
+	super::each_stream(DESCRIPTOR.name, stdout, stderr, |s| {
+		crate::json_diag::find_envelope(s, envelope)
+	})
 }
 
 /// The findings of an ESLint report in `stream`, read leniently: whatever
@@ -122,6 +119,13 @@ fn severity_of(v: Option<&JsonValue>) -> Option<u8> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn a_cut_off_report_is_read_as_no_format() {
+		let cut = br#"[{"filePath":"/a.js","messages":[{"ruleId":"r","severity":2,"message":"m","line":1,"column":1}]"#;
+		assert!(!parse(cut, b"", 1).recognized);
+		assert!(!crate::fallback::sniff(cut, b"", 1).recognized);
+	}
 
 	pub(super) const REPORT: &[u8] = br#"[{"filePath":"/x/a.js","messages":[{"ruleId":"semi","severity":1,"message":"Missing semicolon.","line":1,"column":10,"endLine":1,"endColumn":11}]},{"filePath":"/x/b.js","messages":[]}]"#;
 

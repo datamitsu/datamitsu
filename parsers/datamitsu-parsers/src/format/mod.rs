@@ -7,8 +7,7 @@
 //! count: a SARIF log with no result, an ESLint report whose files have no
 //! message, a `<checkstyle/>` with no file are recognized and clean. A bare `[]`
 //! or `{}` has no envelope and is not. A line format is recognized when at least
-//! one line matches. Each parser reads stdout, and stderr when stdout does not
-//! hold its format.
+//! one line matches. Each parser reads both stdout and stderr.
 
 pub mod azure_logissue;
 pub mod checkstyle_xml;
@@ -26,6 +25,7 @@ pub mod sarif;
 mod xml;
 
 use crate::capabilities::ToolCapability;
+use crate::diagnostic::RawDiagnostic;
 use crate::response::Response;
 
 /// The format parsers' descriptors, the sniffer's among them.
@@ -82,6 +82,22 @@ pub fn dispatch(key: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opti
 		stderr,
 		exit_code,
 	))
+}
+
+/// The answer of a structured format `read` finds in each stream: recognized
+/// when either holds its document, with the findings of both, so a clean
+/// document on stdout cannot hide one with findings on stderr.
+fn each_stream(
+	key: &str,
+	stdout: &[u8],
+	stderr: &[u8],
+	read: impl Fn(&[u8]) -> Option<Vec<RawDiagnostic>>,
+) -> Response {
+	let found: Vec<_> = [stdout, stderr].into_iter().filter_map(read).collect();
+	if found.is_empty() {
+		return Response::unrecognized(key);
+	}
+	Response::recognized(key, found.into_iter().flatten().collect())
 }
 
 /// Whether `stream` holds a document that begins and cannot be read whole: a
@@ -180,6 +196,19 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	#[test]
+	fn a_structured_format_reads_the_document_of_each_stream() {
+		let clean = br#"{"version":"2.1.0","runs":[]}"#;
+		let found = br#"{"version":"2.1.0","runs":[{"results":[{"level":"error","message":{"text":"m"}}]}]}"#;
+		for (out, err) in [(&clean[..], &found[..]), (found, clean)] {
+			let r = dispatch("fallback", out, err, 0).expect("the sniffer");
+			assert_eq!((r.format.as_str(), r.diagnostics.len()), ("sarif", 1));
+		}
+		let checkstyle = br#"<checkstyle><file name="a"><error line="1" message="m"/></file></checkstyle>"#;
+		let r = dispatch("checkstyle-xml", b"<checkstyle/>", checkstyle, 0).expect("a format");
+		assert_eq!(r.diagnostics.len(), 1);
 	}
 
 	#[test]

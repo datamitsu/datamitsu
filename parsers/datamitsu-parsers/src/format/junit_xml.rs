@@ -37,12 +37,12 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 };
 
 pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Response {
-	for stream in [stdout, stderr] {
-		if let Doc::Whole(diags) = document(&String::from_utf8_lossy(stream)) {
-			return Response::recognized(DESCRIPTOR.name, diags);
+	super::each_stream(DESCRIPTOR.name, stdout, stderr, |s| {
+		match document(&String::from_utf8_lossy(s)) {
+			Doc::Whole(diags) => Some(diags),
+			_ => None,
 		}
-	}
-	Response::unrecognized(DESCRIPTOR.name)
+	})
 }
 
 /// The test case a failure belongs to.
@@ -256,6 +256,13 @@ at open()</error></testcase><testcase classname="tests.test_b" name="test_skip">
 		let cut = &PYTEST[..PYTEST.len() - 150];
 		assert!(!parse(cut, b"", 1).recognized);
 		assert!(broken(&String::from_utf8_lossy(cut)));
+	}
+
+	#[test]
+	fn a_failure_left_open_breaks_the_document() {
+		let out = br#"<testsuite><testcase name="t"><failure message="lost"></testsuite>"#;
+		assert!(!parse(out, b"", 0).recognized);
+		assert!(broken(&String::from_utf8_lossy(out)));
 	}
 
 	#[test]

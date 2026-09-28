@@ -6,8 +6,9 @@
 //! knows no namespaces (a prefixed name stays one name) and no DTD: a
 //! declaration, a processing instruction and a comment are skipped whole. Input
 //! it cannot read — a `<` whose tag never closes, a tag without a name or with
-//! malformed attributes — ends the token stream there, so a document cut off
-//! or malformed never reaches its closing root tag.
+//! malformed attributes, an end tag that does not close the element open —
+//! ends the token stream there, so a document cut off or malformed never
+//! reaches its closing root tag.
 
 use crate::diagnostic::RawDiagnostic;
 
@@ -31,11 +32,23 @@ pub(crate) enum Token<'a> {
 pub(crate) struct Tokenizer<'a> {
 	src: &'a str,
 	pos: usize,
+	/// The elements open at `pos`, innermost last.
+	open: Vec<&'a str>,
 }
 
 impl<'a> Tokenizer<'a> {
 	pub(crate) fn new(src: &'a str) -> Self {
-		Tokenizer { src, pos: 0 }
+		Tokenizer {
+			src,
+			pos: 0,
+			open: Vec::new(),
+		}
+	}
+
+	/// End the token stream: what follows cannot be read.
+	fn stop(&mut self) -> Option<Token<'a>> {
+		self.pos = self.src.len();
+		None
 	}
 
 	/// Skip to the end of `close` after the current position; false when it
@@ -59,7 +72,11 @@ impl<'a> Tokenizer<'a> {
 		let inner = &rest[1..end];
 		self.pos += end + 1;
 		if let Some(name) = inner.strip_prefix('/') {
-			return Some(Token::End { name: name.trim() });
+			let name = name.trim();
+			if self.open.pop() != Some(name) {
+				return self.stop();
+			}
+			return Some(Token::End { name });
 		}
 		let (inner, self_closing) = match inner.strip_suffix('/') {
 			Some(inner) => (inner, true),
@@ -68,11 +85,14 @@ impl<'a> Tokenizer<'a> {
 		let name_end = inner.find(|c: char| c.is_ascii_whitespace()).unwrap_or(inner.len());
 		let attrs = attributes(&inner[name_end..]).filter(|_| name_end > 0);
 		let Some(attrs) = attrs else {
-			self.pos = self.src.len();
-			return None;
+			return self.stop();
 		};
+		let name = &inner[..name_end];
+		if !self_closing {
+			self.open.push(name);
+		}
 		Some(Token::Start {
-			name: &inner[..name_end],
+			name,
 			attrs,
 			self_closing,
 		})
@@ -354,6 +374,13 @@ mod tests {
 			assert_eq!(tokens(bad).len(), 1, "{bad}");
 		}
 		assert_eq!(tokens("<a\n  x='1'\n  y=\"2\"\n/>").len(), 1);
+	}
+
+	#[test]
+	fn an_end_tag_must_close_the_element_open() {
+		assert_eq!(tokens("<a><b></a></b>").len(), 2);
+		assert_eq!(tokens("<a></wrong></a>").len(), 1);
+		assert_eq!(tokens("<a><b/></a>").len(), 3);
 	}
 
 	#[test]

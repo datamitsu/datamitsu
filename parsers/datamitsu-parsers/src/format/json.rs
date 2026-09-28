@@ -31,12 +31,9 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 };
 
 pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Response {
-	for stream in [stdout, stderr] {
-		if let Some(diags) = json_diag::find_envelope(stream, from_array) {
-			return Response::recognized(DESCRIPTOR.name, diags);
-		}
-	}
-	Response::unrecognized(DESCRIPTOR.name)
+	super::each_stream(DESCRIPTOR.name, stdout, stderr, |s| {
+		json_diag::find_envelope(s, from_array)
+	})
 }
 
 fn from_array(v: &JsonValue) -> Option<Vec<RawDiagnostic>> {

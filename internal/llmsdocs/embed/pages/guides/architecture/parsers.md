@@ -391,14 +391,16 @@ A structured format is recognized by its envelope, whatever it holds: a SARIF lo
 without a result, an ESLint report whose files have no message, a `<checkstyle/>`
 without a file are recognized and clean. A bare `[]` or `{}` has no envelope and is
 not, nor is a document cut off before it closes, JSON or XML, or XML with a tag
-that cannot be read: its findings may be missing. An XML root counts only where it
-opens a line or follows the XML declaration, outside any CDATA section and
-comment, so a message that quotes `<checkstyle/>` is not a document; and a whole
-`<testsuite>` inside a `<testsuites>` cut off before it closes is part of that
-document, not one of its own. A line
-format is recognized when one line matches. Each parser reads stdout, and stderr
-when stdout does not hold its format; noise around a document is skipped as it is
-for the tool parsers. The [parser catalog](../../reference/parser-catalog.md#format-parsers)
+that cannot be read or an element left open: its findings may be missing. What a
+cut-off document holds is part of it, not a document of its own — the messages of
+a cut-off ESLint report are not a `json` array, a whole `<testsuite>` inside a
+cut-off `<testsuites>` is not a suite. An XML root counts only where it opens a
+line or follows the XML declaration, outside any CDATA section and comment, so a
+message that quotes `<checkstyle/>` is not a document. A line format is recognized
+when one line matches. Each parser reads stdout and stderr, and a structured one
+keeps the findings of the document in each, so a clean report on one stream cannot
+hide findings on the other; noise around a document is skipped as it is for the
+tool parsers, however many bracketed log lines come before it. The [parser catalog](../../reference/parser-catalog.md#format-parsers)
 names the flag of each tool that prints each shape.
 
 A **declared** parser — a tool's or a format's — that found something recognized

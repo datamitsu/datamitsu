@@ -29,12 +29,12 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 };
 
 pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Response {
-	for stream in [stdout, stderr] {
-		if let Doc::Whole(diags) = document(&String::from_utf8_lossy(stream)) {
-			return Response::recognized(DESCRIPTOR.name, diags);
+	super::each_stream(DESCRIPTOR.name, stdout, stderr, |s| {
+		match document(&String::from_utf8_lossy(s)) {
+			Doc::Whole(diags) => Some(diags),
+			_ => None,
 		}
-	}
-	Response::unrecognized(DESCRIPTOR.name)
+	})
 }
 
 /// Whether `text` holds a Checkstyle document that cannot be read whole.
@@ -151,6 +151,17 @@ mod tests {
 		assert!(!parse(cut, b"", 1).recognized);
 		assert!(broken(&String::from_utf8_lossy(cut)));
 		assert!(!broken(&String::from_utf8_lossy(SHELLCHECK)));
+	}
+
+	#[test]
+	fn an_element_left_open_or_closed_twice_breaks_the_document() {
+		for out in [
+			&br#"<checkstyle><file name="a"></wrong></checkstyle>"#[..],
+			br#"<checkstyle><file name="a"><error line="1" message="m"></checkstyle>"#,
+		] {
+			assert!(!parse(out, b"", 0).recognized, "{}", String::from_utf8_lossy(out));
+			assert!(broken(&String::from_utf8_lossy(out)));
+		}
 	}
 
 	#[test]
