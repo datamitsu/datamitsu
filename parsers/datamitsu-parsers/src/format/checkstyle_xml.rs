@@ -7,7 +7,7 @@ use crate::diagnostic::RawDiagnostic;
 use crate::response::Response;
 use crate::severity::{self, Level};
 
-use super::xml::{attr, roots, Token, Tokenizer};
+use super::xml::{attr, Doc, Token, Tokenizer};
 
 const LEVELS: &[Level] = &[
 	Level("error", severity::ERROR),
@@ -30,30 +30,35 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 
 pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Response {
 	for stream in [stdout, stderr] {
-		if let Some(diags) = document(&String::from_utf8_lossy(stream)) {
+		if let Doc::Whole(diags) = document(&String::from_utf8_lossy(stream)) {
 			return Response::recognized(DESCRIPTOR.name, diags);
 		}
 	}
 	Response::unrecognized(DESCRIPTOR.name)
 }
 
-/// The findings of the Checkstyle document in `text`, which starts at a
-/// `<checkstyle>` tag opening a line; `None` when there is none, or it is cut
-/// off before its root closes.
-fn document(text: &str) -> Option<Vec<RawDiagnostic>> {
-	roots(text, "checkstyle").find_map(from)
+/// Whether `text` holds a Checkstyle document that cannot be read whole.
+pub(crate) fn broken(text: &str) -> bool {
+	document(text) == Doc::Broken
 }
 
-fn from(text: &str) -> Option<Vec<RawDiagnostic>> {
+/// The Checkstyle document in `text`, which starts at a `<checkstyle>` tag
+/// opening a line.
+fn document(text: &str) -> Doc {
+	super::xml::document(text, "checkstyle", from)
+}
+
+fn from(text: &str) -> Doc {
 	let mut tokens = Tokenizer::new(text);
-	match tokens.next()? {
-		Token::Start {
+	match tokens.next() {
+		Some(Token::Start {
 			name: "checkstyle",
 			self_closing: true,
 			..
-		} => return Some(Vec::new()),
-		Token::Start { name: "checkstyle", .. } => {}
-		_ => return None,
+		}) => return Doc::Whole(Vec::new()),
+		Some(Token::Start { name: "checkstyle", .. }) => {}
+		Some(_) => return Doc::Not,
+		None => return Doc::Broken,
 	}
 	let mut file: Option<String> = None;
 	let mut out = Vec::new();
@@ -82,11 +87,11 @@ fn from(text: &str) -> Option<Vec<RawDiagnostic>> {
 					..RawDiagnostic::default()
 				});
 			}
-			Token::End { name: "checkstyle" } => return Some(out),
+			Token::End { name: "checkstyle" } => return Doc::Whole(out),
 			_ => {}
 		}
 	}
-	None
+	Doc::Broken
 }
 
 #[cfg(test)]
@@ -144,6 +149,16 @@ mod tests {
 	fn a_truncated_document_is_not_recognized() {
 		let cut = &SHELLCHECK[..SHELLCHECK.len() / 2];
 		assert!(!parse(cut, b"", 1).recognized);
+		assert!(broken(&String::from_utf8_lossy(cut)));
+		assert!(!broken(&String::from_utf8_lossy(SHELLCHECK)));
+	}
+
+	#[test]
+	fn a_malformed_tag_breaks_the_document() {
+		let out =
+			br#"<checkstyle><file name="a"><error line="1" message="m"/><error line="2" message=bad/></file></checkstyle>"#;
+		assert!(!parse(out, b"", 1).recognized);
+		assert!(broken(&String::from_utf8_lossy(out)));
 	}
 
 	#[test]

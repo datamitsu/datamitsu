@@ -134,15 +134,8 @@ pub fn find_envelope<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec
 		DOCUMENT_SEEN.with(|seen| seen.set(true));
 		return extract(&v);
 	}
-	// Bounded so pathological input (a log full of braces) cannot make parsing
-	// quadratic over a large buffer.
-	const MAX_ATTEMPTS: usize = 16;
 	let mut best: Option<((usize, usize), Vec<T>)> = None;
-	for (start, _) in text
-		.char_indices()
-		.filter(|(_, c)| *c == '[' || *c == '{')
-		.take(MAX_ATTEMPTS)
-	{
+	for start in openers(&text) {
 		let Some(end) = balanced_end(&text, start) else {
 			continue;
 		};
@@ -159,6 +152,35 @@ pub fn find_envelope<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec
 		}
 	}
 	best.map(|(_, out)| out)
+}
+
+/// The openers of the values [`find_envelope`] tries, bounded so pathological
+/// input (a log full of braces) cannot make parsing quadratic over a large
+/// buffer.
+fn openers(text: &str) -> impl Iterator<Item = usize> + '_ {
+	const MAX_ATTEMPTS: usize = 16;
+	text
+		.char_indices()
+		.filter(|(_, c)| *c == '[' || *c == '{')
+		.map(|(i, _)| i)
+		.take(MAX_ATTEMPTS)
+}
+
+/// Whether the stream holds a JSON document cut off before it closes: a value
+/// that runs to the end of the input without a syntax error. Prose that
+/// merely holds a bracket breaks off at a character no JSON value takes.
+pub(crate) fn cut(bytes: &[u8]) -> bool {
+	let text = String::from_utf8_lossy(bytes);
+	if text.parse::<JsonValue>().is_ok() {
+		return false;
+	}
+	let cut = openers(&text).any(|start| {
+		balanced_end(&text, start).is_none()
+			&& text[start..]
+				.parse::<JsonValue>()
+				.is_err_and(|e| e.to_string().ends_with("Unexpected EOF"))
+	});
+	cut
 }
 
 /// Byte index just past the value opening at `start`, or `None` if it never
@@ -419,6 +441,27 @@ trailing"#;
 #[cfg(test)]
 mod envelope_tests {
 	use super::*;
+
+	#[test]
+	fn a_value_that_runs_to_the_end_is_cut() {
+		for out in [
+			&br#"{"version":"2.1.0","runs":[{"results":[{"message""#[..],
+			b"scanning...\n[1, 2",
+			br#"{"a":"unterminated"#,
+			b"{} then [",
+		] {
+			assert!(cut(out), "{}", String::from_utf8_lossy(out));
+		}
+		for out in [
+			&br#"{"version":"2.1.0","runs":[]}"#[..],
+			b"[INFO] done\n",
+			b"Formatted {count} files [ok]",
+			b"{} noise",
+			b"",
+		] {
+			assert!(!cut(out), "{}", String::from_utf8_lossy(out));
+		}
+	}
 
 	fn tagged(v: &JsonValue) -> Option<Vec<u32>> {
 		member(v, "tag").and_then(position).map(|t| vec![t])

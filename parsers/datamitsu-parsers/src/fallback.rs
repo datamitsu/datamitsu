@@ -59,11 +59,14 @@ pub fn sniff(stdout: &[u8], stderr: &[u8], exit_code: i32) -> Response {
 /// `diagnostics` out of the output and, with `own`, found its own format in it.
 ///
 /// A parser that found something recognized the output. One that found
-/// nothing did not when the output holds findings in a standard format — the
-/// tool printed another format than the parser reads, and the core's fallback
-/// is what reads it. Otherwise it recognized the output when its own format was
-/// there, or when the run exited 0: a clean run may print nothing, or a summary
-/// no format describes, and neither is a shape the parser missed.
+/// nothing did not when the output holds a document it cannot read whole — a
+/// JSON value or an XML document cut off, or XML with a tag that cannot be
+/// read — which may have held findings, nor when it holds findings in a
+/// standard format: the tool printed another format than the parser reads,
+/// and the core's fallback is what reads it. Otherwise it recognized the
+/// output when its own format was there, or when the run exited 0: a clean
+/// run may print nothing, or a summary no format describes, and neither is a
+/// shape the parser missed.
 pub(crate) fn declared(
 	key: &str,
 	diagnostics: Vec<RawDiagnostic>,
@@ -75,7 +78,10 @@ pub(crate) fn declared(
 	if !diagnostics.is_empty() {
 		return Response::recognized(key, diagnostics);
 	}
-	if !sniff(stdout, stderr, exit_code).diagnostics.is_empty() {
+	if crate::format::unfinished(stdout)
+		|| crate::format::unfinished(stderr)
+		|| !sniff(stdout, stderr, exit_code).diagnostics.is_empty()
+	{
 		return Response::unrecognized(key);
 	}
 	if own || exit_code == 0 {
@@ -187,6 +193,14 @@ mod tests {
 		assert!(declared("gcc", vec![], false, b"0 issues.\n", b"", 0).recognized);
 		assert!(!declared("gcc", vec![], false, b"0 issues.\n", b"", 1).recognized);
 		assert!(declared("mypy", vec![], false, b"", b"", 0).recognized);
+	}
+
+	#[test]
+	fn a_declared_parser_does_not_recognize_a_document_cut_off_on_a_clean_exit() {
+		let cut = br#"{"version":"2.1.0","runs":[{"results":[{"message":{"text":"m"}}"#;
+		assert!(!declared("sarif", vec![], false, cut, b"", 0).recognized);
+		assert!(!declared("eslint", vec![], true, cut, b"", 0).recognized);
+		assert!(!declared("gcc", vec![], false, b"", b"<checkstyle>\n<file name=\"a\">", 0).recognized);
 	}
 
 	#[test]

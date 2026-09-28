@@ -241,6 +241,17 @@ mod tests {
 		assert_eq!((sniffed.format.as_str(), sniffed.diagnostics.len()), ("gcc", 1));
 	}
 
+	#[cfg(feature = "tools")]
+	#[test]
+	fn a_cut_off_document_is_not_recognized_on_a_clean_exit() {
+		let cut = br#"[{"filePath":"/a.js","messages":[{"message":"m","severity":2}"#;
+		for key in ["eslint", "eslint-json", "sarif"] {
+			let r = answer(key, cut, b"", 0);
+			assert!(!r.recognized, "{key}");
+		}
+		assert!(answer("eslint", b"[]", b"", 0).recognized);
+	}
+
 	#[test]
 	fn alloc_dealloc_round_trips() {
 		let ptr = alloc(16);

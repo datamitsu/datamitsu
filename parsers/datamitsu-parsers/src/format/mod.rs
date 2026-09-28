@@ -84,6 +84,17 @@ pub fn dispatch(key: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opti
 	))
 }
 
+/// Whether `stream` holds a document that begins and cannot be read whole: a
+/// JSON value cut off before it closes, or a Checkstyle or JUnit document cut
+/// off or holding a tag that cannot be read. What it held cannot all be known.
+pub(crate) fn unfinished(stream: &[u8]) -> bool {
+	if crate::json_diag::cut(stream) {
+		return true;
+	}
+	let text = String::from_utf8_lossy(stream);
+	checkstyle_xml::broken(&text) || junit_xml::broken(&text)
+}
+
 /// A format parser's contract samples (`SAMPLES`), by key.
 #[cfg(test)]
 pub(crate) fn samples(key: &str) -> Option<&'static [crate::contract::Sample]> {
@@ -140,6 +151,35 @@ mod tests {
 		let sarif = br#"{"version":"2.1.0","runs":[{"results":[{"level":"error","message":{"text":"m"}}]}]}"#;
 		let r = dispatch("gcc", sarif, b"", 0).expect("a format");
 		assert!(!r.recognized, "a clean exit must not hide another format's findings");
+	}
+
+	#[test]
+	fn a_document_cut_off_is_not_recognized_whatever_the_exit_code() {
+		let sarif = br#"{"version":"2.1.0","runs":[{"results":[{"level":"error","message":{"text":"m"}}]}]}"#;
+		let checkstyle = br#"<checkstyle version="4.3"><file name="a"><error line="1" message="m"/></file></checkstyle>"#;
+		let junit = br#"<testsuites><testsuite name="s"><testcase name="t"><failure message="m"/></testcase></testsuite></testsuites>"#;
+		for (key, whole) in [
+			("sarif", &sarif[..]),
+			(
+				"codeclimate",
+				br#"[{"check_name":"c","description":"d","location":{"path":"a","lines":{"begin":1}}}]"#,
+			),
+			(
+				"eslint-json",
+				br#"[{"filePath":"/a.js","messages":[{"message":"m","severity":2}]}]"#,
+			),
+			("json", br#"[{"message":"m","line":2}]"#),
+			("checkstyle-xml", checkstyle),
+			("junit-xml", junit),
+		] {
+			let cut = &whole[..whole.len() - 12];
+			for key in [key, "gcc"] {
+				for (out, err) in [(cut, &b""[..]), (&b""[..], cut)] {
+					let r = dispatch(key, out, err, 0).expect("a format");
+					assert!(!r.recognized, "{key} recognized a cut-off document at exit 0");
+				}
+			}
+		}
 	}
 
 	#[test]

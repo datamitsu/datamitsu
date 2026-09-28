@@ -15,7 +15,7 @@ use crate::diagnostic::RawDiagnostic;
 use crate::response::Response;
 use crate::severity::{self, Level};
 
-use super::xml::{attr, roots, Token, Tokenizer};
+use super::xml::{attr, Doc, Token, Tokenizer};
 
 const LEVELS: &[Level] = &[
 	Level("error", severity::ERROR),
@@ -38,7 +38,7 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 
 pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Response {
 	for stream in [stdout, stderr] {
-		if let Some(diags) = document(&String::from_utf8_lossy(stream)) {
+		if let Doc::Whole(diags) = document(&String::from_utf8_lossy(stream)) {
 			return Response::recognized(DESCRIPTOR.name, diags);
 		}
 	}
@@ -62,22 +62,27 @@ struct Open {
 	text: String,
 }
 
-/// The findings of the JUnit document in `text`, whose root opens a line;
-/// `None` when there is none, or it is cut off before its root closes.
-fn document(text: &str) -> Option<Vec<RawDiagnostic>> {
-	roots(text, "testsuite").find_map(from)
+/// Whether `text` holds a JUnit document that cannot be read whole.
+pub(crate) fn broken(text: &str) -> bool {
+	document(text) == Doc::Broken
 }
 
-fn from(text: &str) -> Option<Vec<RawDiagnostic>> {
+/// The JUnit document in `text`, whose root opens a line.
+fn document(text: &str) -> Doc {
+	super::xml::document(text, "testsuite", from)
+}
+
+fn from(text: &str) -> Doc {
 	let mut tokens = Tokenizer::new(text);
-	let root = match tokens.next()? {
-		Token::Start {
+	let root = match tokens.next() {
+		Some(Token::Start {
 			name,
 			self_closing: true,
 			..
-		} if name == "testsuites" || name == "testsuite" => return Some(Vec::new()),
-		Token::Start { name, .. } if name == "testsuites" || name == "testsuite" => name,
-		_ => return None,
+		}) if name == "testsuites" || name == "testsuite" => return Doc::Whole(Vec::new()),
+		Some(Token::Start { name, .. }) if name == "testsuites" || name == "testsuite" => name,
+		Some(_) => return Doc::Not,
+		None => return Doc::Broken,
 	};
 	// A testsuite root may hold testsuites of its own.
 	let mut depth = 1;
@@ -137,13 +142,13 @@ fn from(text: &str) -> Option<Vec<RawDiagnostic>> {
 			Token::End { name } if name == root => {
 				depth -= 1;
 				if depth == 0 {
-					return Some(out);
+					return Doc::Whole(out);
 				}
 			}
 			_ => {}
 		}
 	}
-	None
+	Doc::Broken
 }
 
 fn finding(case: &Case, failure: Open) -> Option<RawDiagnostic> {
@@ -250,6 +255,28 @@ at open()</error></testcase><testcase classname="tests.test_b" name="test_skip">
 	fn a_truncated_suite_is_not_recognized() {
 		let cut = &PYTEST[..PYTEST.len() - 150];
 		assert!(!parse(cut, b"", 1).recognized);
+		assert!(broken(&String::from_utf8_lossy(cut)));
+	}
+
+	#[test]
+	fn a_whole_inner_suite_does_not_stand_for_a_cut_off_document() {
+		let cut = br#"<testsuites>
+  <testsuite name="a"><testcase name="t1"/></testsuite>
+  <testsuite name="b"><testcase name="t2"><failure message="two"/>"#;
+		assert!(!parse(cut, b"", 1).recognized);
+		assert!(broken(&String::from_utf8_lossy(cut)));
+	}
+
+	#[test]
+	fn a_document_quoted_in_a_failure_is_part_of_it() {
+		let out = br#"<testsuite name="x">
+<testcase name="t"><failure message="lint failed"><![CDATA[
+<checkstyle/>
+]]></failure></testcase>
+</testsuite>"#;
+		let r = crate::fallback::sniff(out, b"", 1);
+		assert_eq!((r.format.as_str(), r.diagnostics.len()), ("junit-xml", 1));
+		assert!(!crate::format::checkstyle_xml::parse(out, b"", 1).recognized);
 	}
 
 	#[test]

@@ -388,18 +388,24 @@ own is parsed by naming the format its flag selects:
 A structured format is recognized by its envelope, whatever it holds: a SARIF log
 without a result, an ESLint report whose files have no message, a `<checkstyle/>`
 without a file are recognized and clean. A bare `[]` or `{}` has no envelope and is
-not, nor is a document cut off before it closes, JSON or XML: its findings may be
-missing. An XML root counts only where it opens a line or follows the XML
-declaration, so a message that quotes `<checkstyle/>` is not a document. A line
+not, nor is a document cut off before it closes, JSON or XML, or XML with a tag
+that cannot be read: its findings may be missing. An XML root counts only where it
+opens a line or follows the XML declaration, outside any CDATA section and
+comment, so a message that quotes `<checkstyle/>` is not a document; and a whole
+`<testsuite>` inside a `<testsuites>` cut off before it closes is part of that
+document, not one of its own. A line
 format is recognized when one line matches. Each parser reads stdout, and stderr
 when stdout does not hold its format; noise around a document is skipped as it is
 for the tool parsers. The [parser catalog](../../reference/parser-catalog.md#format-parsers)
 names the flag of each tool that prints each shape.
 
 A **declared** parser — a tool's or a format's — that found something recognized
-the output. One that found nothing did not when the output holds findings in a
+the output. One that found nothing did not, whatever the exit code, when the output
+holds a document that cannot be read whole — a JSON value or an XML document cut
+off before it closes, or XML with a tag that cannot be read — since its findings
+may be in the part that could not be read; nor when the output holds findings in a
 standard format (the tool printed another format than the parser reads, and the
-fallback reads it); otherwise it recognized the output when its own format was
+fallback reads it). Otherwise it recognized the output when its own format was
 there — its envelope, or for a JSON tool parser any JSON document — or when the
 run exited 0: a clean run may print nothing, or a summary no format describes. What
 remains, a failed run whose output held nothing either parser reads, is not
