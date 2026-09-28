@@ -16,7 +16,7 @@ import (
 )
 
 var reportUsage = "Write a report once the run ends, failed or not: <format>=<path>, or <format>=- for stdout " +
-	"(repeatable; formats: " + strings.Join(render.Names(), ", ") + "; turns fail-fast off; also via DATAMITSU_REPORT)"
+	"(repeatable; formats: " + strings.Join(render.Names(), ", ") + "; one that lists findings turns fail-fast off; also via DATAMITSU_REPORT)"
 
 const (
 	allowPartialUsage = "Write a report that lists findings for a narrowed run (named files, a subdirectory, " +
@@ -167,9 +167,10 @@ func failFastWithReport(source string) error {
 // cannot be read is a usage error, flag or variable alike: a report asked for
 // and silently not written is what a pipeline cannot notice.
 //
-// A report turns fail-fast off: a run that stops at the first failure cannot
-// report a complete list. Fail-fast asked for explicitly — the flag, or
-// DATAMITSU_FAIL_FAST — together with a report is a usage error. It runs after
+// A report that lists findings turns fail-fast off: a run that stops at the
+// first failure cannot report a complete list. Fail-fast asked for explicitly —
+// the flag, or DATAMITSU_FAIL_FAST — together with such a report is a usage
+// error; a report of counts (history) leaves fail-fast alone. It runs after
 // applyFailFast, whose flag it reads from opts.
 func applyReports(cmd *cobra.Command, flags reportFlags, opts *runner.Options) error {
 	eff, err := runtimeconfig.Get()
@@ -192,13 +193,15 @@ func applyReports(cmd *cobra.Command, flags reportFlags, opts *runner.Options) e
 		return nil
 	}
 
-	switch {
-	case opts.FailFast != nil && *opts.FailFast:
-		return failFastWithReport("--fail-fast=true")
-	case opts.FailFast == nil && eff.FailFastSource == runtimeconfig.FailFastSourceEnv && eff.FailFast:
-		return failFastWithReport("DATAMITSU_FAIL_FAST=true")
+	if render.ListsFindings(specs) {
+		switch {
+		case opts.FailFast != nil && *opts.FailFast:
+			return failFastWithReport("--fail-fast=true")
+		case opts.FailFast == nil && eff.FailFastSource == runtimeconfig.FailFastSourceEnv && eff.FailFast:
+			return failFastWithReport("DATAMITSU_FAIL_FAST=true")
+		}
+		opts.FailFast = new(false)
 	}
-	opts.FailFast = new(false)
 
 	// A report on stdout owns it: human output goes, and stderr carries the
 	// JSON-L events instead.

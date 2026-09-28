@@ -354,9 +354,16 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   declared one or the embedded fallback — is never complete, nor one with a
   process that exited non-zero while the parser that recognized its output found
   nothing in it (`failed-without-findings`). A report that lists findings (every renderer whose
-  `OmitsIncompleteTools` is false) is refused with exit 2 for a run narrowed at
-  plan time unless `--allow-partial`, and any report turns fail-fast off; an
-  explicit `--fail-fast=true` or `DATAMITSU_FAIL_FAST=true` with a report exits 2.
+  `OmitsIncompleteTools` is false and that is not `render.NoFindings`) is refused
+  with exit 2 for a run narrowed at plan time unless `--allow-partial`. Every
+  format that lists findings — `render.ListsFindings`, SARIF included — turns
+  fail-fast off, and an explicit `--fail-fast=true` or
+  `DATAMITSU_FAIL_FAST=true` beside one exits 2; a `NoFindings` format
+  (`history`) does neither.
+- `history` is `render.Appending`: `Target` opens its file with `O_APPEND` and
+  writes the run's line in one write, never replacing the file. A line
+  (`report.HistoryLine`, `datamitsu.history/1`) holds counts and durations
+  only — no finding, no path, none of a selection's paths.
 - Under `--log-format jsonl` the runner emits one flat `diagnostic` event per
   reported finding (every finding under `--events diagnostics=all`) once the
   finding's tool has finished in the operation — `OperationRecord.AddTask`

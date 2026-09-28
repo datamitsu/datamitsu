@@ -163,7 +163,7 @@ datamitsu check [files...]
 | `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
 | `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
 | `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
-| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; one that lists findings turns fail-fast off (see [Reports](#reports))                                                               |
 | `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 | `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
@@ -253,7 +253,7 @@ effective value as `failFast`, and where it came from as `failFastSource`
 `false`, `1` or `0` is refused.
 
 In CI, run `datamitsu lint --fail-fast=false`: one run then reports every
-failing tool. A [report](#reports) turns fail-fast off by itself. When a later operation fails for another reason than an earlier
+failing tool. A [report](#reports) that lists findings turns fail-fast off by itself. When a later operation fails for another reason than an earlier
 one — lint cannot install its tools after fix failed — both reasons are
 reported. A tool that runs once per file and is interrupted after one of its
 files failed stays a failure; the files it did not reach make the run
@@ -567,8 +567,9 @@ has ended, whether or not its tools failed — the run that fails is the one a
 pipeline needs to read. The flag is repeatable, one per format: `json`, the
 run's own document; `markdown`, the same run for a person; `sarif`, the run for
 code scanning; `junit`, the run as test results; `codequality`, GitLab's Code
-Quality report; `checkstyle`, Checkstyle XML; and `rdjsonl`, reviewdog's
-diagnostics. The [Reports guide](../guides/reports.md) explains what a
+Quality report; `checkstyle`, Checkstyle XML; `rdjsonl`, reviewdog's
+diagnostics; and `history`, one line of counts appended to a trend file.
+The [Reports guide](../guides/reports.md) explains what a
 report holds and how far to trust it; [`report render`](#report-render) writes
 one again, offline, from a run's own JSON.
 
@@ -592,9 +593,11 @@ datamitsu lint --report json=out/run.json
   `DATAMITSU_REPORT=json=out/run.json`. A `--report` naming the same format
   wins over its entry. `datamitsu config runtime` reports the variable as
   `report`.
-- A report turns fail-fast off: a run that stopped at the first failing tool
-  could not list every finding. A report together with `--fail-fast=true`, or
-  with `DATAMITSU_FAIL_FAST=true` and no `--fail-fast` flag, exits 2.
+- A report that lists findings — every format but `history` — turns fail-fast
+  off: a run that stopped at the first failing tool could not list every
+  finding. Such a report together with `--fail-fast=true`, or with
+  `DATAMITSU_FAIL_FAST=true` and no `--fail-fast` flag, exits 2. `history`
+  leaves fail-fast as it is.
 - A format named twice, an unknown format or option, a missing path, two
   reports that would write one file — one path twice, a report where another's
   completeness companion goes, or a file inside a split format's directory —
@@ -748,6 +751,17 @@ tools skipped and the tasks stopped, and each incomplete tool with its reasons.
 It carries no tool output: a tool that failed without findings is its
 structured message. It lists findings, so it is refused for a narrowed run like
 `json`.
+
+`history` appends one line, `datamitsu.history/1`, to the file it names —
+creating it and its directories the first time, never replacing it: when the
+run started, the build and configuration, the CI job's vendor, commit and ref,
+what the run covered (`selection`: `mode`, `fileScoped`, `toolsFiltered`),
+whether it was complete and ran fail-fast, and per operation and tool the
+processes that ran, the files a cache answered, the invocations that failed,
+completeness with its reasons and the findings per level. It holds no finding,
+no path and none of the paths the run was given, so a narrowed run writes it
+without `--allow-partial`, and it leaves fail-fast alone. The line is appended
+in one write. See [History](../guides/reports.md#history).
 
 A tool that exits non-zero without a finding its parser could read is listed
 with one `synthetic` finding of level `error` and no location, whose message
@@ -953,7 +967,7 @@ datamitsu fix [files...]
 | `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
 | `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
 | `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
-| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; one that lists findings turns fail-fast off (see [Reports](#reports))                                                               |
 | `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 | `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |
@@ -990,7 +1004,7 @@ datamitsu lint [files...]
 | `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
 | `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
 | `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
-| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; turns fail-fast off (see [Reports](#reports))                                                                                       |
+| `--report <format>=<path>`   | Write a report once the run ends, failed or not; `-` is stdout; repeatable; one that lists findings turns fail-fast off (see [Reports](#reports))                                                               |
 | `--events <what>`            | Which findings `--log-format jsonl` emits as `diagnostic` events: `diagnostics=reported` (default) or `diagnostics=all` (see [Run events](#run-events))                                                         |
 | `--allow-partial`            | Write a report that lists findings for a narrowed run instead of refusing the run (see [Reports](#reports))                                                                                                     |
 | `--annotations <mode>`       | Print the run's findings as GitHub workflow annotations once it ends: `auto` (the default), `github` or `off` (see [GitHub annotations](#github-annotations))                                                   |

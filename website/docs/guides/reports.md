@@ -22,8 +22,10 @@ tools, the findings the terminal would show and what the run left out; `sarif`
 writes it for GitHub code scanning ([Code scanning](#code-scanning)); `junit`,
 `codequality`, `checkstyle` and `rdjsonl` write it for the CI systems and
 review tools that read test results, code quality reports, Checkstyle and
-reviewdog's diagnostics ([Other CI systems](#other-ci-systems)). The flags, the variable twins and the
-exit codes are in the [CLI reference](../reference/cli-commands.md#reports).
+reviewdog's diagnostics ([Other CI systems](#other-ci-systems)); `history`
+appends one line of counts per run to a trend file ([History](#history)). The
+flags, the variable twins and the exit codes are in the
+[CLI reference](../reference/cli-commands.md#reports).
 
 ## What a report holds
 
@@ -665,6 +667,72 @@ A document of a narrowed run is refused for a format that lists findings unless
 `--allow-partial`, as the run would have been — `sarif` is written, without its
 incomplete tools — and a document without its completeness fields is read as
 incomplete. A companion is written beside `--output`, never on stdout.
+
+## History
+
+A report answers what is wrong now. `history` answers how the numbers move:
+each run appends one line to a file you name, `datamitsu.history/1`, and a trend
+is whatever you build from those lines — a spreadsheet, a chart, a CI job that
+compares the last two.
+
+```bash
+datamitsu lint --report history=.datamitsu-history/lint.jsonl
+```
+
+A line holds counts and durations, never a finding, a path or the paths a run
+was given, so the file can be kept, shared and committed:
+
+```json
+{
+  "schema": "datamitsu.history/1",
+  "startedAt": "2026-09-28T10:00:00Z",
+  "datamitsu": { "version": "0.4.0", "configuration": "my config" },
+  "ci": { "vendor": "github", "sha": "3f2a…", "ref": "refs/heads/main" },
+  "selection": { "mode": "all", "fileScoped": false, "toolsFiltered": false },
+  "complete": true,
+  "failFast": false,
+  "operations": [
+    {
+      "name": "lint",
+      "ran": true,
+      "success": true,
+      "durationMs": 7900,
+      "tools": [
+        {
+          "name": "eslint",
+          "runs": 3,
+          "cached": 120,
+          "failed": 0,
+          "complete": true,
+          "incomplete": [],
+          "findings": { "error": 0, "warning": 4, "info": 0, "hint": 0 }
+        }
+      ]
+    }
+  ]
+}
+```
+
+(shown indented; the file holds each entry on one line). `runs` counts the
+processes a tool ran, `cached` the files a cache answered, `failed` the
+invocations that failed, and `findings` every finding by level, whether or not
+it was shown.
+
+- **The file is yours.** It is written only where you name it — never under
+  datamitsu's cache — created on the first run, and never rewritten: each run
+  adds its line in one append, which a local file system keeps whole beside
+  another run appending to the same file; on a network file system that is
+  best effort.
+- **A narrowed run writes it too.** A line lists no finding, so it cannot pass
+  for the findings of the repository: its `selection` and `complete` say what
+  the run covered, and `--allow-partial` is not needed. For the same reason it
+  leaves fail-fast as it is — a line of a run that stopped at the first failure
+  says `failFast: true` and `complete: false`.
+- **Compare like with like.** Counts of a narrowed or incomplete run are not
+  the repository's. A tool without a parser of its own is complete on a cold
+  run and `unparsed-cache-hit` on a warm one, where the cache replayed a pass
+  no parser read: that is the cache at work, not a regression, which the
+  tool's `incomplete` reasons tell apart.
 
 ## Findings as they happen
 

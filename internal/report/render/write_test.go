@@ -108,3 +108,34 @@ func TestTargetCannotOpen(t *testing.T) {
 		t.Error("an unknown format opened")
 	}
 }
+
+// TestTargetAppends: an appending format adds its entry to the file an earlier
+// run left, creating the file and its directories the first time, and never
+// replaces it.
+func TestTargetAppends(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "trend", "history.jsonl")
+	for range 2 {
+		target := Open(Spec{Format: "history", Path: path}, nil)
+		if target.Err != nil {
+			t.Fatal(target.Err)
+		}
+		if err := target.Write(&report.Run{Schema: report.SchemaVersion}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], `{"schema":"datamitsu.history/1"`) || lines[0] != lines[1] {
+		t.Errorf("the file holds %q, want two identical history lines", data)
+	}
+	entries, _ := os.ReadDir(filepath.Dir(path))
+	if len(entries) != 1 {
+		t.Errorf("the directory holds %d entries, want the file alone", len(entries))
+	}
+	if target := Open(Spec{Format: "history", Path: filepath.Dir(path)}, nil); target.Err == nil || !strings.Contains(target.Err.Error(), "is a directory") {
+		t.Errorf("Open of a directory = %v, want is a directory", target.Err)
+	}
+}
