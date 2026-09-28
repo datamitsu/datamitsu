@@ -1615,6 +1615,9 @@ Both accept:
 - `--json` — machine-readable output, for driving configs or build pipelines.
 - `--wasm <path>` — describe a local `.wasm` file directly, with no config or
   network access (handy in CI and release tooling).
+- `--embedded` — describe the fallback parser module built into this binary
+  (format parsers and the `fallback` sniffer only), with no config or network
+  access ([the embedded fallback](../guides/architecture/parsers.md#the-embedded-fallback)).
 
 ```bash
 # Human-readable catalog of all tools the configured parsers can parse
@@ -1642,6 +1645,24 @@ and `--wasm <path>` to use a local module instead of a configured one.
 # Run eslint through datamitsu, then parse its JSON into diagnostics
 datamitsu exec eslint -- --format json file.js \
   | datamitsu devtools parsers run eslint --wasm ./datamitsu_parsers.wasm --exit-code 1
+
+# Run a format parser of the fallback built into this binary
+datamitsu exec shellcheck -- -f checkstyle script.sh \
+  | datamitsu devtools parsers run checkstyle-xml --embedded --exit-code 1
+```
+
+`sniff [<file>|-]` runs the sniffer of the built-in fallback over a captured output
+(a file, or stdin with `-` or no argument) and prints the standard format it
+recognized and the findings it read, or `no standard format recognized`. It is how
+to check which format key a tool's flag produces before declaring it as
+`outputParser.parser`. `--stderr-file` and `--exit-code` pass the tool's other
+stream and exit code; `--json` prints the whole answer.
+
+```bash
+ruff check --output-format sarif src > out.sarif
+datamitsu devtools parsers sniff out.sarif
+# format: sarif (1 finding)
+#   src/a.py:1:8 error [F401] `os` imported but unused
 ```
 
 `prefetch` downloads and SHA-256 verifies the configured parser modules into the

@@ -1,13 +1,22 @@
-Show full capability detail for one parsed tool
+Run the sniffer of the fallback parser module built into this binary over a
+tool's captured output — a file, or stdin with - or no argument — and print the
+standard format it recognized and the findings it read. The core runs the same
+fallback on the output of a tool whose output no declared parser recognized.
+
+It is how to check a tool's format flag before declaring the format key as its
+outputParser.parser: pass --stderr-file and --exit-code as the tool left them.
+
+  ruff check --output-format sarif src > out.sarif
+  datamitsu devtools parsers sniff out.sarif
 
 Usage:
-  datamitsu devtools parsers inspect <tool> [flags]
+  datamitsu devtools parsers sniff [<file>|-] [flags]
 
 Flags:
-      --embedded      Describe the fallback parser module built into this binary instead of the configured parsers
-  -h, --help          help for inspect
-      --json          Emit machine-readable JSON instead of the rendered view
-      --wasm string   Describe a local .wasm module file instead of the configured parsers
+      --exit-code int        The tool's exit code
+  -h, --help                 help for sniff
+      --json                 Emit the fallback's whole answer as JSON
+      --stderr-file string   File holding the tool's stderr
 
 Global Flags:
       --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)

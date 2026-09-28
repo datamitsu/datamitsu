@@ -280,7 +280,20 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   it with `rustup toolchain install` and run cargo in `parsers/`, where rustup
   finds the file. `parsers/embedded.lock` and the digest in
   `parsers/embedded.Dockerfile` name the same release; a Rust upgrade changes
-  the three together.
+  the three together, with the embedded module.
+- `internal/parsermanager/embedded/fallback.wasm` is the format-only build of the
+  crate (`--no-default-features --features format`) the core serves under the
+  reserved module name `embedded` and runs as its fallback. It is part of the
+  binary, not a distribution channel: never read a configuration's module from it
+  or pin it anywhere. It is committed only with its CI byte gate: change it only
+  through `task build:parsers:embedded` (a digest-pinned container) or the gate's
+  `embedded-fallback-wasm` artifact, together with `fallback.wasm.sources`
+  (`go run ./internal/parsermanager/embedded/cmd/sourcehash`), at most once per
+  stack. A file the format build compiles is listed in
+  `parsers/datamitsu-parsers/embedded-sources.txt`; the tool parsers are not in
+  it, so editing one needs no rebuild. The crate keeps `tinyjson` as its only
+  dependency — the XML formats are read by a hand-written tokenizer — and gets no
+  build script.
 
 ## Reports
 
@@ -390,6 +403,12 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 **Breaking change: usage errors exit 2** — an unknown flag, a flag or `DATAMITSU_*` value a command does not accept, a missing required flag, flags that cannot be combined, a wrong number of positional arguments, and a combination refused before anything runs (`--require-coverage` with `--tools`) exited 1 like a failed tool and now exit 2 (`exitcode.Usage`, `internal/exitcode`), with the same messages. A script that tested `== 1` for them must test `== 2`. `llms` keeps its own 2 and 3; an unknown command (`datamitsu bogus`) still exits 1.
 
 **Breaking change: `--fail-on-skip` exits 4** — a tool skipped for having no binary for the host made `--fail-on-skip` exit 1, like a failed tool, and now exits 4 (`exitcode.Coverage`), the code of `--require-coverage`: both say the run did not look at everything. A tool failure still wins (exit 1), and when `--fail-on-skip` and `--require-coverage` both fail, both messages are printed and the run exits 4 once.
+
+**Breaking change: the parser module name `embedded` is reserved** — the core
+serves the fallback parser module it embeds under that name, so a `parsers`
+entry named `embedded`, or an `outputParser.module` naming it, now fails the
+configuration load (`config.ReservedParserModule`, checked by `ValidateParsers`
+and `ValidateTools`). Rename such an entry and the tools that reference it.
 
 **Breaking change: dangling managed config tools fail the load** — `ManagedConfig.tools` naming a tool that is not configured was a warning and is now a config error, because the association decides what `ejectConfigs` moves. A config that deletes a tool but keeps its managed config fails to load; declare the tool with `skip: true` instead.
 

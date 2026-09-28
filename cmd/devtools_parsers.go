@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
 
 	"github.com/fatih/color"
@@ -23,8 +24,10 @@ Each module self-describes (via its ` + "`describe`" + ` export) which tools it 
 how to invoke each, and its build-injected version. Results are deduplicated across
 every configured parser — a module declared by N tools is described once.
 
-Use --json for machine-readable output (to drive configs or build pipelines), or
---wasm <path> to describe a local .wasm file without any config or network access.`,
+Use --json for machine-readable output (to drive configs or build pipelines),
+--wasm <path> to describe a local .wasm file without any config or network access,
+or --embedded for the fallback module built into this binary. sniff shows which
+standard format that fallback reads in a captured output.`,
 }
 
 var parsersListCmd = &cobra.Command{
@@ -59,6 +62,23 @@ and the nullable diagnostics (the core fills defaults later).
 	RunE: runParsersRun,
 }
 
+var parsersSniffCmd = &cobra.Command{
+	Use:   "sniff [<file>|-]",
+	Short: "Show which standard format the built-in fallback reads in a captured tool output",
+	Long: `Run the sniffer of the fallback parser module built into this binary over a
+tool's captured output — a file, or stdin with - or no argument — and print the
+standard format it recognized and the findings it read. The core runs the same
+fallback on the output of a tool whose output no declared parser recognized.
+
+It is how to check a tool's format flag before declaring the format key as its
+outputParser.parser: pass --stderr-file and --exit-code as the tool left them.
+
+  ruff check --output-format sarif src > out.sarif
+  datamitsu devtools parsers sniff out.sarif`,
+	Args: usageArgs(cobra.MaximumNArgs(1)),
+	RunE: runParsersSniff,
+}
+
 var parsersPrefetchCmd = &cobra.Command{
 	Use:   "prefetch [module...]",
 	Short: "Download + verify parser modules into the store (for OCI-bundle builds / airgap)",
@@ -74,23 +94,32 @@ runtime — no compilation, fetch only.`,
 	RunE: runParsersPrefetch,
 }
 
-// addParsersFlags gives each leaf the same --json / --wasm pair (read per-RunE so
-// there is no shared mutable flag state between the two commands).
+// addParsersFlags gives each leaf the same --json / --wasm / --embedded flags
+// (read per-RunE so there is no shared mutable flag state between the
+// commands).
 func addParsersFlags(c *cobra.Command) {
 	c.Flags().Bool("json", false, "Emit machine-readable JSON instead of the rendered view")
 	c.Flags().String("wasm", "", "Describe a local .wasm module file instead of the configured parsers")
+	c.Flags().Bool("embedded", false, "Describe the fallback parser module built into this binary instead of the configured parsers")
+	c.MarkFlagsMutuallyExclusive("wasm", "embedded")
 }
 
 func init() {
 	addParsersFlags(parsersListCmd)
 	addParsersFlags(parsersInspectCmd)
 	parsersRunCmd.Flags().String("wasm", "", "Local .wasm module to run (instead of the configured parser)")
+	parsersRunCmd.Flags().Bool("embedded", false, "Run the fallback parser module built into this binary (instead of the configured parser)")
+	parsersRunCmd.MarkFlagsMutuallyExclusive("wasm", "embedded")
 	parsersRunCmd.Flags().String("module", "", "Which parsers entry (module) to load; defaults to the parser name")
 	parsersRunCmd.Flags().String("stderr-file", "", "File holding the tool's stderr (some parsers read it, e.g. cue_fmt)")
 	parsersRunCmd.Flags().Int("exit-code", 0, "The tool's exit code")
+	parsersSniffCmd.Flags().Bool("json", false, "Emit the fallback's whole answer as JSON")
+	parsersSniffCmd.Flags().String("stderr-file", "", "File holding the tool's stderr")
+	parsersSniffCmd.Flags().Int("exit-code", 0, "The tool's exit code")
 	parsersCmd.AddCommand(parsersListCmd)
 	parsersCmd.AddCommand(parsersInspectCmd)
 	parsersCmd.AddCommand(parsersRunCmd)
+	parsersCmd.AddCommand(parsersSniffCmd)
 	parsersCmd.AddCommand(parsersPrefetchCmd)
 	devtoolsCmd.AddCommand(parsersCmd)
 }
@@ -145,7 +174,9 @@ func runParsersRun(cmd *cobra.Command, args []string) error {
 	ec := int32(exitCode)
 
 	var resp parsermanager.Response
-	if wasmPath, _ := cmd.Flags().GetString("wasm"); wasmPath != "" {
+	if embedded, _ := cmd.Flags().GetBool("embedded"); embedded {
+		resp, err = parsermanager.ParseEmbedded(ctx, tool, stdout, stderr, ec)
+	} else if wasmPath, _ := cmd.Flags().GetString("wasm"); wasmPath != "" {
 		wasm, readErr := os.ReadFile(wasmPath)
 		if readErr != nil {
 			return fmt.Errorf("read wasm module: %w", readErr)
@@ -172,10 +203,92 @@ func runParsersRun(cmd *cobra.Command, args []string) error {
 	return writeJSONIndent(cmd.OutOrStdout(), resp)
 }
 
-// loadParserCatalog builds the catalog either from a local --wasm file (fully
-// offline) or by describing every configured parser (deduplicated).
+// runParsersSniff reads a captured output and prints what the embedded sniffer
+// makes of it.
+func runParsersSniff(cmd *cobra.Command, args []string) error {
+	var stdout []byte
+	var err error
+	if len(args) == 0 || args[0] == "-" {
+		stdout, err = io.ReadAll(cmd.InOrStdin())
+	} else {
+		stdout, err = os.ReadFile(args[0])
+	}
+	if err != nil {
+		return fmt.Errorf("read the output: %w", err)
+	}
+	var stderr []byte
+	if p, _ := cmd.Flags().GetString("stderr-file"); p != "" {
+		if stderr, err = os.ReadFile(p); err != nil {
+			return fmt.Errorf("read stderr file: %w", err)
+		}
+	}
+	exitCode, _ := cmd.Flags().GetInt("exit-code")
+	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.
+	resp, err := parsermanager.ParseEmbedded(cmd.Context(), parsermanager.FallbackParser, stdout, stderr, int32(exitCode))
+	if err != nil {
+		return err
+	}
+	out := cmd.OutOrStdout()
+	if jsonOut, _ := cmd.Flags().GetBool("json"); jsonOut {
+		return writeJSONIndent(out, resp)
+	}
+	if _, err := fmt.Fprint(out, renderSniff(resp)); err != nil {
+		return fmt.Errorf("write sniff result: %w", err)
+	}
+	return nil
+}
+
+// renderSniff is the human view of the sniffer's answer: the format, then one
+// line per finding.
+func renderSniff(resp parsermanager.Response) string {
+	if !resp.Recognized {
+		return "no standard format recognized\n"
+	}
+	var b strings.Builder
+	noun := "findings"
+	if len(resp.Diagnostics) == 1 {
+		noun = "finding"
+	}
+	fmt.Fprintf(&b, "format: %s (%d %s)\n", resp.Format, len(resp.Diagnostics), noun)
+	for _, d := range resp.Diagnostics {
+		fmt.Fprintf(&b, "  %s", sniffLocation(d))
+		if d.Severity != nil {
+			fmt.Fprintf(&b, " %s", diagnostic.Severity(*d.Severity))
+		}
+		if d.Code != nil {
+			fmt.Fprintf(&b, " [%s]", *d.Code)
+		}
+		fmt.Fprintf(&b, " %s\n", strings.ReplaceAll(d.Message, "\n", " "))
+	}
+	return b.String()
+}
+
+func sniffLocation(d parsermanager.RawDiagnostic) string {
+	loc := "-"
+	if d.File != nil {
+		loc = *d.File
+	}
+	if d.Row != nil {
+		loc += fmt.Sprintf(":%d", *d.Row)
+		if d.Col != nil {
+			loc += fmt.Sprintf(":%d", *d.Col)
+		}
+	}
+	return loc
+}
+
+// loadParserCatalog builds the catalog from a local --wasm file or the
+// embedded fallback (both fully offline), or by describing every configured
+// parser (deduplicated).
 func loadParserCatalog(cmd *cobra.Command) (*parsermanager.ParserCatalog, error) {
 	ctx := cmd.Context()
+	if embedded, _ := cmd.Flags().GetBool("embedded"); embedded {
+		caps, err := parsermanager.DescribeEmbedded(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("describe the embedded module: %w", err)
+		}
+		return parsermanager.CatalogFromCapabilities("(embedded)", caps), nil
+	}
 	if wasmPath, _ := cmd.Flags().GetString("wasm"); wasmPath != "" {
 		data, err := os.ReadFile(wasmPath)
 		if err != nil {

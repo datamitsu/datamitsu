@@ -21,6 +21,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ociartifact"
+	"github.com/datamitsu/datamitsu/internal/parsermanager/embedded"
 	"github.com/datamitsu/datamitsu/internal/trace"
 
 	"github.com/tetratelabs/wazero"
@@ -46,6 +47,15 @@ var (
 
 // wasmFileName is the fixed name of the module inside its content-addressed dir.
 const wasmFileName = "module.wasm"
+
+// EmbeddedModule is the name a Manager serves the fallback module built into
+// datamitsu under, beside the declared ones. No `parsers` entry may take it.
+const EmbeddedModule = config.ReservedParserModule
+
+// FallbackParser is the key of the sniffer, which the core runs only on the
+// embedded module: the fallback is versioned with the binary, whichever module
+// a configuration pins.
+const FallbackParser = "fallback"
 
 // Manager resolves parser names to verified, on-disk WASM modules and serves
 // ready-to-use instances. It compiles each module once (the expensive step) into
@@ -265,6 +275,25 @@ func (m *Manager) ParseOutput(
 	return resp, nil
 }
 
+// Fallback runs the sniffer of the embedded module over a tool's output: the
+// answer of the first standard format that recognized it. It shares the
+// Manager's compile-once runtime and instance pool with the declared modules.
+func (m *Manager) Fallback(ctx context.Context, stdout, stderr []byte, exitCode int32) (Response, error) {
+	return m.ParseOutput(ctx, EmbeddedModule, FallbackParser, stdout, stderr, exitCode)
+}
+
+// DescribeEmbedded describes the embedded fallback module; it needs no
+// configuration and no network.
+func DescribeEmbedded(ctx context.Context) (Capabilities, error) {
+	return DescribeLocal(ctx, embedded.Module())
+}
+
+// ParseEmbedded runs the parser key of the embedded fallback module over a
+// tool's output, as ParseLocal does for a module file.
+func ParseEmbedded(ctx context.Context, key string, stdout, stderr []byte, exitCode int32) (Response, error) {
+	return ParseLocal(ctx, embedded.Module(), key, stdout, stderr, exitCode)
+}
+
 // Acquire returns a ready-to-use parser instance for module: it downloads and
 // SHA-256 verifies the module on first use, compiles it once into the shared
 // runtime (cached), and instantiates a fresh, isolated instance. Each instance
@@ -272,11 +301,11 @@ func (m *Manager) ParseOutput(
 // caller owns Close. This is the "give me a parser" seam — callers do not care
 // how the instance is produced.
 func (m *Manager) Acquire(ctx context.Context, module string) (*ParserRuntime, error) {
-	p, ok := m.parsers[module]
+	src, ok := m.source(module)
 	if !ok {
 		return nil, fmt.Errorf("parser %q is not declared", module)
 	}
-	compiled, err := m.compiledFor(ctx, module, p)
+	compiled, err := m.compiledFor(ctx, module, src)
 	if err != nil {
 		return nil, err
 	}
@@ -313,11 +342,11 @@ func (m *Manager) Prewarm(ctx context.Context, modules []string) error {
 			continue
 		}
 		seen[module] = true
-		p, ok := m.parsers[module]
+		src, ok := m.source(module)
 		if !ok {
 			continue // an undeclared reference is a config-validation concern, not ours
 		}
-		if _, err := m.compiledFor(ctx, module, p); err != nil {
+		if _, err := m.compiledFor(ctx, module, src); err != nil {
 			return fmt.Errorf("prewarm parser %q: %w", module, err)
 		}
 	}
@@ -486,19 +515,42 @@ func (m *Manager) release(ctx context.Context, module string, inst *ParserRuntim
 // instanceKey is the pool key for a module: its content key, so a re-pinned
 // module never draws an instance compiled from the bytes it replaced.
 func (m *Manager) instanceKey(module string) (string, bool) {
+	src, ok := m.source(module)
+	return src.key, ok
+}
+
+// moduleSource is where a module's bytes come from, and the content key they
+// are compiled and pooled under.
+type moduleSource struct {
+	key  string
+	load func(ctx context.Context) ([]byte, error)
+}
+
+// source resolves module: a declared `parsers` entry, fetched and verified,
+// or the embedded fallback, whose bytes are part of the binary.
+func (m *Manager) source(module string) (moduleSource, bool) {
+	if module == EmbeddedModule {
+		return moduleSource{
+			key:  "embedded-" + embedded.ContentKey(),
+			load: func(context.Context) ([]byte, error) { return embedded.Module(), nil },
+		}, true
+	}
 	p, ok := m.parsers[module]
 	if !ok {
-		return "", false
+		return moduleSource{}, false
 	}
-	return cacheKey(p), true
+	return moduleSource{
+		key:  cacheKey(p),
+		load: func(ctx context.Context) ([]byte, error) { return m.LoadWASMBytes(ctx, module) },
+	}, true
 }
 
 // compiledFor returns module's CompiledModule, compiling it exactly once. The
 // compile (download+verify+read+CompileModule) runs under a singleflight keyed by
 // the content key, so concurrent callers for the same module share one compile;
 // the short mu critical sections only touch the cache and lazily-created runtime.
-func (m *Manager) compiledFor(ctx context.Context, module string, p config.Parser) (wazero.CompiledModule, error) {
-	key := cacheKey(p)
+func (m *Manager) compiledFor(ctx context.Context, module string, src moduleSource) (wazero.CompiledModule, error) {
+	key := src.key
 
 	m.mu.Lock()
 	if cm := m.compiled[key]; cm != nil {
@@ -516,7 +568,7 @@ func (m *Manager) compiledFor(ctx context.Context, module string, p config.Parse
 		}
 		m.mu.Unlock()
 
-		wasm, err := m.LoadWASMBytes(ctx, module) // download+verify (singleflight) + read
+		wasm, err := src.load(ctx) // download+verify (singleflight) + read
 		if err != nil {
 			return nil, err
 		}

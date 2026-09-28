@@ -84,6 +84,11 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - The parser module name `embedded` is reserved for the
+  fallback built into datamitsu: a `parsers` entry named `embedded`, or an
+  `outputParser.module` naming it, fails the load
+  (`datamitsu llms reference/configuration-api`). Rename such an entry and the
+  tools that name it.
 - **after v0.3.1** - `outputParser.parser` accepts a format key — `sarif`,
   `codeclimate`, `eslint-json`, `json`, `checkstyle-xml`, `junit-xml`,
   `github-annotations`, `azure-logissue`, `msvc`, `gcc` — for a tool without a

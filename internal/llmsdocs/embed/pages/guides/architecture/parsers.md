@@ -284,7 +284,7 @@ Parsers are a Rust workspace compiled to the `wasm32-unknown-unknown` target as 
 freestanding `cdylib`. There is no `wasm-bindgen` — a small **manual-memory ABI**
 keeps the artifact small. Each tool is **one module** under `src/tools/<tool>.rs`,
 co-locating its parser with its `describe` recipe. A single dispatcher matches on
-the tool name, so adding a tool is one `match` arm + one module + one `TOOLS` row.
+the tool name, so adding a tool is one `match` arm + one module + one `DESCRIPTORS` row.
 
 Parsers are **hand-written**, porting the logic faithfully from the upstream
 [none-ls](https://github.com/nvimtools/none-ls.nvim) builtin or
@@ -346,6 +346,57 @@ table and answers with the first that recognizes the output, named by its format
 It recognizes only what a format matched, exit code or not — it guesses, and a guess
 needs evidence.
 
+### The embedded fallback
+
+The binary carries one module of its own: the format parsers and the sniffer,
+built from the same crate without the tool parsers (the crate's `format` feature
+alone, about 180 KiB). The core serves it under the module name `embedded`, beside
+the declared ones — compiled once, pooled, described like them — and runs its
+`fallback` key on output no declared parser recognized; it never runs a declared
+module's `fallback`, so the fallback's version is always the binary's. `embedded`
+is reserved: a `parsers` entry may not take the name, and no `outputParser` may
+name it. `datamitsu devtools parsers list --embedded` describes it,
+`devtools parsers run <key> --embedded` runs one of its parsers, and
+`devtools parsers sniff <file>` shows which format its sniffer reads in a captured
+output.
+
+The module's content key — an XXH3 of its bytes — is part of the per-file cache
+key and of the unit verdict identity: every development build reports the version
+`dev`, and a pass recorded over what one build's fallback parsed must not be
+replayed by a build whose fallback parses differently.
+
+The bytes are committed as `internal/parsermanager/embedded/fallback.wasm`, and
+two checks keep them honest:
+
+- **A CI job rebuilds them and compares, byte for byte.** `task
+build:parsers:embedded` builds the module in a `linux/amd64` container from a
+  digest-pinned `rust` image, as the caller's user, with a separate target
+  directory and the cargo home, the toolchain's sources and the workspace
+  remapped to fixed paths; built twice on one machine, or natively with the same
+  flags, it gives the same SHA-256. The Rust release is one fact in three files —
+  `parsers/rust-toolchain.toml`, `parsers/embedded.lock` and the image digest in
+  `parsers/embedded.Dockerfile` — and the build refuses to run when they disagree
+  or when the image's `rustc -vV` names another release. The job
+  (`Embedded Parser Module` in `pr-checks.yml`) runs the same build and, when the
+  result differs from the committed module, uploads it as the
+  `embedded-fallback-wasm` artifact and fails.
+- **A Go test compares the sources with the fingerprint committed beside the
+  module.** `parsers/datamitsu-parsers/embedded-sources.txt` lists every file the
+  build reads; `fallback.wasm.sources` holds their XXH3 fingerprint (sorted paths,
+  each `path NUL length NUL bytes NUL`, CRLF read as LF), written by
+  `go run ./internal/parsermanager/embedded/cmd/sourcehash`. A listed source that
+  changed without a rebuild fails `go test` with "embedded module is stale", with
+  no Rust needed to notice; a change to a tool parser does not, since the tool
+  parsers are not in the build. The test also fails when a file the build
+  compiles is missing from the list.
+
+To change a format parser: edit the crate, run `task build:parsers:embedded`
+(Docker), and commit the module with its `fallback.wasm.sources`. Without Docker,
+push the source change, download the `embedded-fallback-wasm` artifact of the
+failed job, commit it as `fallback.wasm`, and run the `sourcehash` command. A
+Rust upgrade changes the toolchain file, the lock, the digest and the module in
+one change.
+
 The two XML formats are read by a tokenizer written for them (start and end tags,
 attributes, text, CDATA, the predefined entities and character references; no
 namespaces, no DTD), so the module keeps `tinyjson` as its only dependency.
@@ -374,8 +425,12 @@ transparency log on any fetch path. Both signatures are for **out-of-band**
 verification: a maintainer runs `cosign verify-blob` on `checksums.txt`, or
 `cosign verify` on the artifact reference, decides the module is trustworthy, and
 writes its SHA-256 into a config. From that point the config's `hash` is the only
-trust root the binary has — which is also why the core embeds no per-version WASM
-hash, so parsers can update independently of the core binary.
+trust root the binary has for a declared module, which is why the core pins no
+module version of its own: the public module updates independently of the core
+binary. The one module the binary does carry, the
+[embedded fallback](#the-embedded-fallback), is part of the binary and versioned
+with it — it is not a distribution channel, and no configuration's module ever
+comes from it.
 
 :::warning `signer` is rejected, not ignored
 Setting `oci.signer` is a **config error at load**, on a parser's `oci` and on

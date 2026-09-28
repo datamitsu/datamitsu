@@ -1157,6 +1157,11 @@ Keeping `module` and `parser` separate is what makes multiple module versions
 work: declare `parsers: { core: {…v2}, core_legacy: {…v1} }` and point each tool's
 `outputParser.module` at the version it needs.
 
+`embedded` is reserved: it is the fallback parser module built into datamitsu
+([the embedded fallback](../guides/architecture/parsers.md#the-embedded-fallback)),
+so a `parsers` entry cannot take the name and `outputParser.module` cannot name
+it; either fails the configuration load.
+
 `parser` also accepts a **format key**, for a tool that has no parser of its own
 but prints a standard format on request. Pass the tool the flag that selects the
 format and name the format:

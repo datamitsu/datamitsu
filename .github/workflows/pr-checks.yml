@@ -165,6 +165,37 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: false
           tags: datamitsu:pr-${{ github.event.pull_request.number }}-alpine
+  embedded-parsers:
+    name: Embedded Parser Module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-environment
+      # The container build task build:parsers:embedded runs: the three files
+      # that name the Rust release agree, the image runs that rustc, and the
+      # module it builds must be the committed one, byte for byte. Nobody needs
+      # Docker or Rust to fix a failure: the rebuilt module is the artifact.
+      - name: Rebuild the embedded parser module in its container
+        run: pnpm dm exec task -- build:parsers:embedded:module
+      - id: compare
+        name: Compare it with the committed module
+        run: |
+          if cmp parsers/target-embedded/wasm32-unknown-unknown/release/datamitsu_parsers.wasm internal/parsermanager/embedded/fallback.wasm; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.compare.outputs.stale == 'true'
+        name: Upload the rebuilt module
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: embedded-fallback-wasm
+          path: parsers/target-embedded/wasm32-unknown-unknown/release/datamitsu_parsers.wasm
+      - if: steps.compare.outputs.stale == 'true'
+        name: Fail on a stale module
+        run: |
+          echo "::error::the embedded fallback module is stale; download the artifact of this run and commit it as internal/parsermanager/embedded/fallback.wasm with go run ./internal/parsermanager/embedded/cmd/sourcehash, or run task build:parsers:embedded"
+          exit 1
   lint:
     name: Lint
     permissions:

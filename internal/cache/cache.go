@@ -19,6 +19,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/parsermanager/embedded"
 	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/shamaton/msgpack/v2"
 	"go.uber.org/zap"
@@ -662,8 +663,15 @@ func withoutThresholds(cfg config.Config) config.Config {
 	return cfg
 }
 
+// embeddedParserKey identifies the fallback parser module the binary embeds.
+// Every development build reports the version "dev", and a pass recorded over
+// what one build's fallback parsed must not be replayed by a build whose
+// fallback parses differently.
+var embeddedParserKey = embedded.ContentKey
+
 // calculateInvalidationKey calculates an XXH3-128 hash from the datamitsu
-// version, the cache semantics, the full config JSON and the selected tools.
+// version, the cache semantics, the embedded fallback parser, the full config
+// JSON and the selected tools.
 //
 // invalidateOn used to be folded in here and no longer is. It was broken —
 // paths resolved against the git root, so packages/*/tsconfig.json read as
@@ -678,7 +686,7 @@ func calculateInvalidationKey(
 	// Build a single byte slice with all components separated by \0
 	var parts [][]byte
 
-	parts = append(parts, []byte(ldflags.Version), []byte(cacheSemantics))
+	parts = append(parts, []byte(ldflags.Version), []byte(cacheSemantics), []byte(embeddedParserKey()))
 
 	// Add config hash (serialize entire config)
 	configBytes, err := json.Marshal(withoutThresholds(cfg))

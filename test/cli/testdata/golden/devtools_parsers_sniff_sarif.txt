@@ -1,0 +1,2 @@
+format: sarif (1 finding)
+  src/a.py:1:8 error [F401] `os` imported but unused

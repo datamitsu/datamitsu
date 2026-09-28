@@ -14,6 +14,7 @@ Usage:
   datamitsu devtools parsers run <tool> [flags]
 
 Flags:
+      --embedded             Run the fallback parser module built into this binary (instead of the configured parser)
       --exit-code int        The tool's exit code
   -h, --help                 help for run
       --module string        Which parsers entry (module) to load; defaults to the parser name
