@@ -32,6 +32,7 @@ var observationExcluded = map[string]bool{
 var executionOnly = map[string]bool{
 	failFast.Name: true,
 	failOn.Name:   true,
+	report.Name:   true,
 }
 
 // environExcluded is the source-mode staleness key's exclusion list: the

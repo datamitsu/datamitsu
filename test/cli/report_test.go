@@ -1,0 +1,208 @@
+package cli_test
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/clitest"
+)
+
+// This file freezes --report: the document a run writes, when it is written,
+// and the exit code of a report that could not be.
+
+// reportDurationRE masks what a document measured: the durations are real.
+var reportDurationRE = regexp.MustCompile(`"durationMs": \d+`)
+
+// reportProject is a repository with a passing tool and a parsed tool that
+// exits 0 on a warning, so a document holds a clean invocation and a finding.
+func reportProject(t *testing.T, extra ...string) *execProject {
+	t.Helper()
+	e := newExecProject(t, map[string]string{"fixture.marker": "", "Dockerfile": "FROM debian\n"}, fixtureSpec)
+	spec := fixtureSpec
+	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
+	tools := append([]string{
+		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}),
+		parsedTool(hadolintFinding, 0),
+	}, extra...)
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, tools...))
+	return e
+}
+
+// report reads a document the run wrote and returns it normalized, with its
+// decoded form.
+func (e *execProject) report(rel string) (string, map[string]any) {
+	e.t.Helper()
+	raw := e.read(rel)
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(raw), &doc); err != nil {
+		e.t.Fatalf("%s is not JSON: %v\n%s", rel, err, raw)
+	}
+	return e.normalize(reportDurationRE.ReplaceAllString(raw, `"durationMs": <DUR>`)), doc
+}
+
+func (e *execProject) goldenReport(name, doc string) {
+	e.t.Helper()
+	clitest.AssertGolden(e.t, "report_"+name, doc)
+}
+
+func operationsOf(t *testing.T, doc map[string]any) []map[string]any {
+	t.Helper()
+	raw, _ := doc["operations"].([]any)
+	out := make([]map[string]any, 0, len(raw))
+	for _, op := range raw {
+		m, _ := op.(map[string]any)
+		out = append(out, m)
+	}
+	return out
+}
+
+// TestReportJSON: a run writes its own document once its last operation has
+// ended, stamped with SOURCE_DATE_EPOCH, whether or not a tool failed.
+func TestReportJSON(t *testing.T) {
+	t.Run("lint", func(t *testing.T) {
+		e := reportProject(t)
+		res := e.run("", nil, "lint", "--report", "json=out/run.json")
+		e.wantExit(res, 0)
+		doc, decoded := e.report("out/run.json")
+		const stamp = "2023-11-14T22:13:20Z"
+		if decoded["startedAt"] != stamp || decoded["endedAt"] != stamp {
+			t.Errorf("startedAt, endedAt = %v, %v; want both %s from SOURCE_DATE_EPOCH", decoded["startedAt"], decoded["endedAt"], stamp)
+		}
+		for _, leak := range []string{`"command"`, `"args"`, "MARKERS"} {
+			if strings.Contains(doc, leak) {
+				t.Errorf("the document carries %s; argv and the environment never enter a report:\n%s", leak, doc)
+			}
+		}
+		e.goldenReport("lint", doc)
+		e.golden("report_lint", res)
+	})
+
+	// check writes one document for both of its operations.
+	t.Run("check", func(t *testing.T) {
+		e := reportProject(t, clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Operation: "fix"}))
+		res := e.run("", nil, "check", "--report", "json=run.json")
+		e.wantExit(res, 0)
+		doc, decoded := e.report("run.json")
+		ops := operationsOf(t, decoded)
+		if len(ops) != 2 || ops[0]["name"] != "fix" || ops[1]["name"] != "lint" {
+			t.Errorf("operations = %v, want fix then lint", ops)
+		}
+		e.goldenReport("check", doc)
+	})
+
+	// The run that fails is the one a pipeline uploads.
+	t.Run("tool_failed", func(t *testing.T) {
+		e := reportProject(t, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{}))
+		res := e.run("", nil, "lint", "--report", "json=run.json")
+		e.wantExit(res, 1)
+		doc, decoded := e.report("run.json")
+		if ops := operationsOf(t, decoded); len(ops) != 1 || ops[0]["success"] != false {
+			t.Errorf("operations = %v, want one failed lint", ops)
+		}
+		e.goldenReport("tool_failed", doc)
+	})
+
+	t.Run("stdout", func(t *testing.T) {
+		e := reportProject(t)
+		res := e.run("", nil, "lint", "--report", "json=-")
+		e.wantExit(res, 0)
+		var decoded map[string]any
+		if err := json.Unmarshal([]byte(res.Stdout), &decoded); err != nil {
+			t.Fatalf("stdout is not the document alone: %v\n%s", err, res.Stdout)
+		}
+		if decoded["schema"] != "datamitsu.report/1" {
+			t.Errorf("schema = %v, want datamitsu.report/1", decoded["schema"])
+		}
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantReportEvent(t, events, "json", "-", "written", "")
+	})
+
+	t.Run("event", func(t *testing.T) {
+		e := reportProject(t)
+		res := e.run("", nil, jsonl("lint", "--report", "json=run.json")...)
+		e.wantExit(res, 0)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		clitest.AssertChains(t, events)
+		wantReportEvent(t, events, "json", "run.json", "written", "")
+	})
+}
+
+// TestReportNotWritten: a report that cannot be written exits 5 when nothing
+// else failed and leaves the exit code of a failed tool alone, printing why
+// either way.
+func TestReportNotWritten(t *testing.T) {
+	t.Run("exit_5", func(t *testing.T) {
+		e := reportProject(t)
+		e.p.WriteFile("blocker", "a file, not a directory\n")
+		res := e.run("", nil, "lint", "--report", "json=blocker/run.json")
+		e.wantExit(res, 5)
+		if !strings.Contains(res.Stderr, "error: report json: blocker/run.json: not a directory") {
+			t.Errorf("stderr should say which report was not written and why:\n%s", res.Stderr)
+		}
+		e.golden("report_not_written", res)
+	})
+
+	t.Run("tool_failure_wins", func(t *testing.T) {
+		e := reportProject(t, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{}))
+		e.p.WriteFile("blocker", "a file, not a directory\n")
+		res := e.run("", []string{"DATAMITSU_REPORT=json=ok.json"}, "lint", "--report", "json=blocker/run.json")
+		e.wantExit(res, 1)
+		if !strings.Contains(res.Stderr, "error: report json: blocker/run.json: not a directory") {
+			t.Errorf("the failed write should still be printed:\n%s", res.Stderr)
+		}
+		if _, err := os.Stat(filepath.Join(e.p.Dir, "ok.json")); err == nil {
+			t.Error("the flag names json, so DATAMITSU_REPORT's json entry should have been dropped")
+		}
+	})
+
+	t.Run("event", func(t *testing.T) {
+		e := reportProject(t)
+		e.p.WriteFile("blocker", "a file, not a directory\n")
+		res := e.run("", nil, jsonl("lint", "--report", "json=blocker/run.json")...)
+		e.wantExit(res, 5)
+		events := clitest.MustParseJSONL(t, res.Stderr)
+		wantReportEvent(t, events, "json", "blocker/run.json", "failed", "not a directory")
+	})
+}
+
+// TestReportUsage: a report asked for in a way that cannot be read is refused
+// before anything runs, from the flag and the variable alike.
+func TestReportUsage(t *testing.T) {
+	cases := []struct {
+		name string
+		env  []string
+		args []string
+	}{
+		{name: "env_unknown_format", env: []string{"DATAMITSU_REPORT=yaml=out.yaml"}, args: []string{"lint"}},
+		{name: "env_no_path", env: []string{"DATAMITSU_REPORT=json"}, args: []string{"lint"}},
+		{name: "flag_unknown_option", args: []string{"lint", "--report", "json=out.json?category=x"}},
+		{name: "flag_twice", args: []string{"lint", "--report", "json=a.json", "--report", "json=b.json"}},
+		{name: "with_explain", args: []string{"lint", "--explain", "--report", "json=out.json"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := reportProject(t)
+			res := e.run("", tc.env, tc.args...)
+			e.wantExit(res, 2)
+			e.wantMarker("alpha", "")
+			e.golden("report_usage_"+tc.name, res)
+		})
+	}
+}
+
+func wantReportEvent(t *testing.T, events []clitest.Event, format, path, status, msg string) {
+	t.Helper()
+	got := eventsOf(events, func(e clitest.Event) bool { return e.Type == "report" })
+	if len(got) != 1 {
+		t.Fatalf("report events = %+v, want one", got)
+	}
+	e := got[0]
+	if e.Fields["format"] != format || e.Fields["path"] != path || e.Status != status || !strings.Contains(e.Msg, msg) {
+		t.Errorf("report event = %v, want format %s, path %s, status %s, msg containing %q", e.Fields, format, path, status, msg)
+	}
+}

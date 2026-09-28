@@ -199,10 +199,16 @@ func TestConfigRuntimeFailFast(t *testing.T) {
 	}
 }
 
-// TestConfigRuntimeFailOn: `datamitsu config runtime | jq .failOn` reports the
-// global failOn raise, empty when DATAMITSU_FAIL_ON is not set.
-func TestConfigRuntimeFailOn(t *testing.T) {
-	for _, tc := range []struct{ env, want string }{{"", ""}, {"DATAMITSU_FAIL_ON=warning", "warning"}} {
+// TestConfigRuntimeExecutionVariables: `datamitsu config runtime` reports the
+// execution-only variables of fix, lint and check as they are set, empty when
+// they are not — `jq .failOn`, `jq .report`. The command layer validates them.
+func TestConfigRuntimeExecutionVariables(t *testing.T) {
+	for _, tc := range []struct{ key, env, want string }{
+		{"failOn", "", ""},
+		{"failOn", "DATAMITSU_FAIL_ON=warning", "warning"},
+		{"report", "", ""},
+		{"report", "DATAMITSU_REPORT=json=out/run.json", "json=out/run.json"},
+	} {
 		var env []string
 		if tc.env != "" {
 			env = []string{tc.env}
@@ -215,8 +221,8 @@ func TestConfigRuntimeFailOn(t *testing.T) {
 		if err := json.Unmarshal([]byte(res.Stdout), &eff); err != nil {
 			t.Fatalf("invalid JSON: %v\nstdout:\n%s", err, res.Stdout)
 		}
-		if got, ok := eff["failOn"].(string); !ok || got != tc.want {
-			t.Errorf("with %q, runtime[failOn] = %v, want %q", tc.env, eff["failOn"], tc.want)
+		if got, ok := eff[tc.key].(string); !ok || got != tc.want {
+			t.Errorf("with %q, runtime[%s] = %v, want %q", tc.env, tc.key, eff[tc.key], tc.want)
 		}
 	}
 }

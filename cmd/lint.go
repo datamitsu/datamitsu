@@ -18,6 +18,7 @@ var (
 	lintRequireCov    string
 	lintFailFast      bool
 	lintFailOn        string
+	lintReports       reportFlags
 )
 
 var lintCmd = &cobra.Command{
@@ -46,6 +47,7 @@ func init() {
 	lintCmd.Flags().StringVar(&lintRequireCov, "require-coverage", "", "Exit non-zero unless the run answered completely (unit|repo)")
 	addFailFastFlag(lintCmd, &lintFailFast)
 	addFailOnFlag(lintCmd, &lintFailOn)
+	addReportFlags(lintCmd, &lintReports)
 	rootCmd.AddCommand(lintCmd)
 }
 
@@ -55,6 +57,9 @@ func runLint(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if err := applyFailFast(cmd, lintFailFast, &opts); err != nil {
+		return err
+	}
+	if err := applyReports(lintReports, &opts); err != nil {
 		return err
 	}
 	err := runner.Run(config.OpLint, args, lintExplain, lintFileScoped, lintSelectedTools, lintFailOnSkip,

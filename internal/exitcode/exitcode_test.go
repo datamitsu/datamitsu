@@ -24,6 +24,7 @@ func TestErrorsCarryTheirCode(t *testing.T) {
 		{name: "usage", err: UsageErrorf("invalid --widen-to value: %s", "Repo"), code: Usage, msg: "invalid --widen-to value: Repo"},
 		{name: "usage wrapping", err: UsageError{Err: fmt.Errorf("parse: %w", fs.ErrInvalid)}, code: Usage, msg: "parse: invalid argument"},
 		{name: "coverage", err: CoverageErrorf("--require-coverage=repo: %s", "narrowed"), code: Coverage, msg: "--require-coverage=repo: narrowed"},
+		{name: "export", err: ExportError{Err: fmt.Errorf("report json: out.json: %w", fs.ErrPermission)}, code: Export, msg: "report json: out.json: permission denied"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -46,7 +47,7 @@ func TestErrorsCarryTheirCode(t *testing.T) {
 }
 
 func TestCodes(t *testing.T) {
-	if Usage != 2 || Coverage != 4 {
-		t.Errorf("Usage = %d, Coverage = %d; the documented codes are 2 and 4", Usage, Coverage)
+	if Usage != 2 || Coverage != 4 || Export != 5 {
+		t.Errorf("Usage = %d, Coverage = %d, Export = %d; the documented codes are 2, 4 and 5", Usage, Coverage, Export)
 	}
 }

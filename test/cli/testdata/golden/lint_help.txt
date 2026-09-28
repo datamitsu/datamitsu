@@ -18,6 +18,7 @@ Flags:
       --fail-on-skip                 Exit non-zero if any tool is skipped because its binary is unavailable for this platform
       --file-scoped                  Only process git staged files
   -h, --help                         help for lint
+      --report stringArray           Write a report once the run ends, failed or not: <format>=<path>, or <format>=- for stdout (repeatable; formats: json; also via DATAMITSU_REPORT)
       --require-coverage string      Exit non-zero unless the run answered completely (unit|repo)
       --tools string                 Comma-separated list of tools to run (for debugging)
       --widen-to string              Limit how far work may widen beyond the selection (target|unit|repo)

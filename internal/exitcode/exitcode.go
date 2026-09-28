@@ -4,7 +4,8 @@
 // each other.
 //
 // A pipeline can then tell "you called it wrong" (Usage) from "the code is
-// bad" (1) from "we did not look at everything" (Coverage).
+// bad" (1) from "we did not look at everything" (Coverage) from "an artifact
+// you asked for is missing" (Export).
 package exitcode
 
 import "fmt"
@@ -16,6 +17,10 @@ const (
 	// Coverage is the code of a run that did not cover what it was asked to
 	// (--require-coverage, --fail-on-skip).
 	Coverage = 4
+	// Export is the code of a run that could not write an artifact it was
+	// explicitly asked for (--report). A tool failure and an incomplete run
+	// outrank it: 1 > 4 > 5.
+	Export = 5
 )
 
 // UsageError is a caller mistake. It exits Usage with the wrapped message.
@@ -48,3 +53,14 @@ func (CoverageError) ExitCode() int { return Coverage }
 func CoverageErrorf(format string, args ...any) error {
 	return CoverageError{Err: fmt.Errorf(format, args...)}
 }
+
+// ExportError reports an explicitly requested artifact that was not written. It
+// exits Export with the wrapped message.
+type ExportError struct{ Err error }
+
+func (e ExportError) Error() string { return e.Err.Error() }
+
+func (e ExportError) Unwrap() error { return e.Err }
+
+// ExitCode implements the interface the exit site checks with errors.As.
+func (ExportError) ExitCode() int { return Export }

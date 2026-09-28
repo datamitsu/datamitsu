@@ -18,6 +18,7 @@ var (
 	fixRequireCov    string
 	fixFailFast      bool
 	fixFailOn        string
+	fixReports       reportFlags
 )
 
 var fixCmd = &cobra.Command{
@@ -46,6 +47,7 @@ func init() {
 	fixCmd.Flags().StringVar(&fixRequireCov, "require-coverage", "", "Exit non-zero unless the run answered completely (unit|repo)")
 	addFailFastFlag(fixCmd, &fixFailFast)
 	addFailOnFlag(fixCmd, &fixFailOn)
+	addReportFlags(fixCmd, &fixReports)
 	rootCmd.AddCommand(fixCmd)
 }
 
@@ -55,6 +57,9 @@ func runFix(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if err := applyFailFast(cmd, fixFailFast, &opts); err != nil {
+		return err
+	}
+	if err := applyReports(fixReports, &opts); err != nil {
 		return err
 	}
 	err := runner.Run(config.OpFix, args, fixExplain, fixFileScoped, fixSelectedTools, fixFailOnSkip,

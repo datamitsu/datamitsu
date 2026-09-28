@@ -38,6 +38,9 @@ const (
 	// language server), which has no terminal to print it to, or a log line
 	// while stderr is a JSON-L stream. Level says how loud it is.
 	TypeLog Type = "log"
+	// TypeReport records one report a fix, lint or check run was asked to
+	// write: its format, its path, and whether it was written.
+	TypeReport Type = "report"
 )
 
 // Level values for the optional Level field of a log event.
@@ -76,7 +79,7 @@ type Event struct {
 	Type   Type   `json:"type"`             // discriminator, always set
 	OpID   string `json:"op_id"`            // correlation id, always set
 	TS     int64  `json:"ts"`               // unix milliseconds
-	Status string `json:"status,omitempty"` // start | progress | done | fail | skip
+	Status string `json:"status,omitempty"` // start | progress | done | fail | skip; a report: written | failed | refused | omitted
 
 	// Identity.
 	Op   string `json:"op,omitempty"`   // operation name for phase/done (fix, lint)
@@ -110,6 +113,11 @@ type Event struct {
 	// Complete, on the run-level done, says the run executed everything it
 	// planned: every operation ran and no task was cancelled or left unstarted.
 	Complete *bool `json:"complete,omitempty"`
+
+	// report: the format and the path a report was asked for. Status is
+	// written, failed, refused or omitted, and Msg says why it was not written.
+	Format string `json:"format,omitempty"`
+	Path   string `json:"path,omitempty"`
 }
 
 // Sink consumes typed events. Implementations MUST be safe for concurrent use

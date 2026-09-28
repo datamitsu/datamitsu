@@ -1,0 +1,5 @@
+exit code: 2
+===STDOUT===
+
+===STDERR===
+error: invalid DATAMITSU_REPORT value: "json" is not <format>=<path>

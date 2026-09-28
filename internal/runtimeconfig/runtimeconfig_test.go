@@ -39,6 +39,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		FailFast:                 true,
 		FailFastSource:           FailFastSourceDefault,
 		FailOn:                   "warning",
+		Report:                   "json=out/run.json",
 	}
 
 	data, err := json.Marshal(in)
@@ -72,6 +73,7 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		"failFast",
 		"failFastSource",
 		"failOn",
+		"report",
 	}
 	for _, k := range requiredKeys {
 		if _, ok := m[k]; !ok {
@@ -267,6 +269,20 @@ func TestComputeFailOn(t *testing.T) {
 			t.Setenv("DATAMITSU_FAIL_ON", raw)
 			if eff := Compute(); eff.FailOn != raw {
 				t.Errorf("FailOn = %q, want %q", eff.FailOn, raw)
+			}
+		})
+	}
+}
+
+// The reports of a run are a runtime parameter of every fix, lint and check:
+// `datamitsu config runtime` reports DATAMITSU_REPORT as set, "" when it is not.
+// The command layer refuses a value it cannot parse.
+func TestComputeReport(t *testing.T) {
+	for _, raw := range []string{"", "json=out/run.json", "json=a.json,sarif=b.sarif", "bogus"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("DATAMITSU_REPORT", raw)
+			if eff := Compute(); eff.Report != raw {
+				t.Errorf("Report = %q, want %q", eff.Report, raw)
 			}
 		})
 	}

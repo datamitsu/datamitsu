@@ -38,7 +38,8 @@ go test ./test/cli/ -run TestVersionGolden
 ```
 
 The suite is fully offline and hermetic: each run gets a clean env
-(`DATAMITSU_OFFLINE=1`, `DATAMITSU_NO_OCI=1`, `NO_COLOR=1`, no inherited
+(`DATAMITSU_OFFLINE=1`, `DATAMITSU_NO_OCI=1`, `NO_COLOR=1`, a fixed
+`SOURCE_DATE_EPOCH` that every report is stamped with, no inherited
 `DATAMITSU_*`, `CI`, `TERM`, CI-system markers such as `GITHUB_ACTIONS`,
 agent-session markers such as `CLAUDECODE` or `CODEX_*`, `FORCE_COLOR` or
 `CLICOLOR_FORCE`), an isolated `DATAMITSU_CACHE_DIR`, and a `git init`-ed temp

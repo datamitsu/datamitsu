@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
+	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/datamitsu/datamitsu/internal/uievent"
@@ -43,6 +44,11 @@ func (t stoppedTask) state() string {
 
 func (t stoppedTask) eventMsg() string {
 	return t.state() + ": " + string(t.cause)
+}
+
+// cancel is the task as a report lists it.
+func (t stoppedTask) cancel() report.Cancel {
+	return report.Cancel{TaskID: t.taskID, Tool: t.tool, Dir: t.dir, Started: t.started, Cause: string(t.cause)}
 }
 
 func (t stoppedTask) label() string {

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 
@@ -1419,5 +1420,46 @@ func TestFailOn(t *testing.T) {
 		if got := FailOn(); got != raw {
 			t.Errorf("FailOn() = %q, want %q returned raw", got, raw)
 		}
+	}
+}
+
+// DATAMITSU_REPORT comes back exactly as set: the command layer parses it, and a
+// value it cannot read is refused rather than dropped.
+func TestReport(t *testing.T) {
+	t.Setenv(report.Name, os.Getenv(report.Name))
+
+	_ = os.Unsetenv(report.Name)
+	if got := Report(); got != "" {
+		t.Errorf("Report() unset = %q, want empty", got)
+	}
+	for _, raw := range []string{"json=out/run.json", "json=a.json,sarif=b.sarif", "json", " =x "} {
+		t.Setenv(report.Name, raw)
+		if got := Report(); got != raw {
+			t.Errorf("Report() = %q, want %q returned raw", got, raw)
+		}
+	}
+}
+
+func TestSourceDateEpoch(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want time.Time
+		ok   bool
+	}{
+		{raw: "", ok: false},
+		{raw: "1700000000", want: time.Date(2023, 11, 14, 22, 13, 20, 0, time.UTC), ok: true},
+		{raw: " 0 ", want: time.Unix(0, 0).UTC(), ok: true},
+		{raw: "-1", ok: false},
+		{raw: "1.5", ok: false},
+		{raw: "yesterday", ok: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			t.Setenv(sourceDateEpoch, tt.raw)
+			got, ok := SourceDateEpoch()
+			if ok != tt.ok || !got.Equal(tt.want) || (ok && got.Location() != time.UTC) {
+				t.Errorf("SourceDateEpoch() = %v, %v; want %v, %v in UTC", got, ok, tt.want, tt.ok)
+			}
+		})
 	}
 }

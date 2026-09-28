@@ -1,0 +1,185 @@
+{
+  "schema": "datamitsu.report/1",
+  "datamitsu": {
+    "version": "<VERSION>",
+    "configuration": "datamitsu.config"
+  },
+  "startedAt": "<TS>",
+  "endedAt": "<TS>",
+  "selection": {
+    "mode": "all",
+    "fileScoped": false
+  },
+  "failFast": true,
+  "operations": [
+    {
+      "name": "lint",
+      "ran": true,
+      "success": false,
+      "durationMs": <DUR>,
+      "skipped": [],
+      "cancelled": [
+        {
+          "taskId": "hadolint::3",
+          "tool": "hadolint",
+          "dir": "",
+          "started": false,
+          "cause": "fail-fast"
+        }
+      ],
+      "tools": [
+        {
+          "name": "alpha",
+          "app": {
+            "name": "alpha",
+            "kind": "shell"
+          },
+          "parser": null,
+          "failOn": "error",
+          "gateActive": false,
+          "category": "",
+          "invocations": [
+            {
+              "id": "alpha::1#1",
+              "taskId": "alpha::1",
+              "dir": "",
+              "scope": "repository",
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
+              "wholeUnit": true,
+              "state": "ran",
+              "exitCode": 0,
+              "success": true,
+              "failureKind": "",
+              "durationMs": <DUR>,
+              "extraction": "none",
+              "provenance": "none",
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                },
+                {
+                  "path": "exec.config.js",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                },
+                {
+                  "path": "fixture.marker",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                }
+              ],
+              "findings": []
+            }
+          ]
+        },
+        {
+          "name": "beta",
+          "app": {
+            "name": "beta",
+            "kind": "shell"
+          },
+          "parser": null,
+          "failOn": "error",
+          "gateActive": false,
+          "category": "",
+          "invocations": [
+            {
+              "id": "beta::2#1",
+              "taskId": "beta::2",
+              "dir": "",
+              "scope": "repository",
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
+              "wholeUnit": true,
+              "state": "ran",
+              "exitCode": 1,
+              "success": false,
+              "failureKind": "exit",
+              "durationMs": <DUR>,
+              "extraction": "none",
+              "provenance": "none",
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "state": "ran",
+                  "success": false,
+                  "exitCode": 1
+                },
+                {
+                  "path": "exec.config.js",
+                  "state": "ran",
+                  "success": false,
+                  "exitCode": 1
+                },
+                {
+                  "path": "fixture.marker",
+                  "state": "ran",
+                  "success": false,
+                  "exitCode": 1
+                }
+              ],
+              "findings": []
+            }
+          ]
+        },
+        {
+          "name": "hadolint",
+          "app": {
+            "name": "hadolint",
+            "kind": "shell"
+          },
+          "parser": {
+            "module": "core",
+            "parser": "hadolint"
+          },
+          "failOn": "error",
+          "gateActive": false,
+          "category": "",
+          "invocations": [
+            {
+              "id": "hadolint::3#0",
+              "taskId": "hadolint::3",
+              "dir": "",
+              "scope": "per-file",
+              "granularity": "file",
+              "arity": "one",
+              "coverage": "complete",
+              "wholeUnit": false,
+              "state": "not-started",
+              "exitCode": null,
+              "success": false,
+              "failureKind": "",
+              "durationMs": <DUR>,
+              "extraction": "none",
+              "provenance": "none",
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "state": "not-started",
+                  "success": false,
+                  "exitCode": null
+                }
+              ],
+              "findings": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "exports": [
+    {
+      "format": "json",
+      "path": "run.json",
+      "status": "written"
+    }
+  ]
+}

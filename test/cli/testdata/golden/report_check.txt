@@ -1,0 +1,209 @@
+{
+  "schema": "datamitsu.report/1",
+  "datamitsu": {
+    "version": "<VERSION>",
+    "configuration": "datamitsu.config"
+  },
+  "startedAt": "<TS>",
+  "endedAt": "<TS>",
+  "selection": {
+    "mode": "all",
+    "fileScoped": false
+  },
+  "failFast": true,
+  "operations": [
+    {
+      "name": "fix",
+      "ran": true,
+      "success": true,
+      "durationMs": <DUR>,
+      "skipped": [],
+      "cancelled": [],
+      "tools": [
+        {
+          "name": "gamma",
+          "app": {
+            "name": "gamma",
+            "kind": "shell"
+          },
+          "parser": null,
+          "failOn": "error",
+          "gateActive": false,
+          "category": "",
+          "invocations": [
+            {
+              "id": "gamma::1#1",
+              "taskId": "gamma::1",
+              "dir": "",
+              "scope": "repository",
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
+              "wholeUnit": true,
+              "state": "ran",
+              "exitCode": 0,
+              "success": true,
+              "failureKind": "",
+              "durationMs": <DUR>,
+              "extraction": "none",
+              "provenance": "none",
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                },
+                {
+                  "path": "exec.config.js",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                },
+                {
+                  "path": "fixture.marker",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                }
+              ],
+              "findings": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "lint",
+      "ran": true,
+      "success": true,
+      "durationMs": <DUR>,
+      "skipped": [],
+      "cancelled": [],
+      "tools": [
+        {
+          "name": "alpha",
+          "app": {
+            "name": "alpha",
+            "kind": "shell"
+          },
+          "parser": null,
+          "failOn": "error",
+          "gateActive": false,
+          "category": "",
+          "invocations": [
+            {
+              "id": "alpha::1#1",
+              "taskId": "alpha::1",
+              "dir": "",
+              "scope": "repository",
+              "granularity": "repo",
+              "arity": "none",
+              "coverage": "complete",
+              "wholeUnit": true,
+              "state": "ran",
+              "exitCode": 0,
+              "success": true,
+              "failureKind": "",
+              "durationMs": <DUR>,
+              "extraction": "none",
+              "provenance": "none",
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                },
+                {
+                  "path": "exec.config.js",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                },
+                {
+                  "path": "fixture.marker",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                }
+              ],
+              "findings": []
+            }
+          ]
+        },
+        {
+          "name": "hadolint",
+          "app": {
+            "name": "hadolint",
+            "kind": "shell"
+          },
+          "parser": {
+            "module": "core",
+            "parser": "hadolint",
+            "version": "0.1.0",
+            "schema": 2
+          },
+          "failOn": "error",
+          "gateActive": true,
+          "category": "",
+          "invocations": [
+            {
+              "id": "hadolint::2#1",
+              "taskId": "hadolint::2",
+              "dir": "",
+              "scope": "per-file",
+              "granularity": "file",
+              "arity": "one",
+              "coverage": "complete",
+              "wholeUnit": false,
+              "state": "ran",
+              "exitCode": 0,
+              "success": true,
+              "failureKind": "",
+              "durationMs": <DUR>,
+              "extraction": "parsed-findings",
+              "provenance": "parser",
+              "files": [
+                {
+                  "path": "Dockerfile",
+                  "state": "ran",
+                  "success": true,
+                  "exitCode": 0
+                }
+              ],
+              "findings": [
+                {
+                  "tool": "hadolint",
+                  "source": "hadolint",
+                  "code": "DL3006",
+                  "severity": "warning",
+                  "reported": false,
+                  "gates": false,
+                  "kind": "issue",
+                  "message": "Always tag the version of an image explicitly",
+                  "location": {
+                    "path": "Dockerfile",
+                    "row": 1,
+                    "endRow": 1,
+                    "col": 1,
+                    "endCol": 1,
+                    "unit": ""
+                  },
+                  "provenance": "parser"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "exports": [
+    {
+      "format": "json",
+      "path": "run.json",
+      "status": "written"
+    }
+  ]
+}

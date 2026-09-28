@@ -179,11 +179,13 @@ func BaseEnv(cacheDir string) []string {
 		env = append(env, kv)
 	}
 	// Deterministic, hermetic, offline. GOCOVERDIR routes counters to the shared
-	// cover dir; NO_COLOR + piped (non-TTY) streams force plain output. A
-	// developer's personal git ignore file must not change what the binary walks.
+	// cover dir; NO_COLOR + piped (non-TTY) streams force plain output;
+	// SOURCE_DATE_EPOCH fixes the time a report is stamped with. A developer's
+	// personal git ignore file must not change what the binary walks.
 	env = append(env,
 		"GOCOVERDIR="+CoverDir(),
 		"NO_COLOR=1",
+		"SOURCE_DATE_EPOCH="+SourceDateEpoch,
 		"DATAMITSU_CACHE_DIR="+cacheDir,
 		"DATAMITSU_OFFLINE=1",
 		"DATAMITSU_NO_OCI=1",
@@ -214,8 +216,11 @@ func strippedKey(key string) bool {
 // terminal detection, and the CI-system markers datamitsu itself may read.
 var ambientKeys = map[string]struct{}{
 	"CI": {}, "TERM": {}, "NO_COLOR": {}, "GOCOVERDIR": {},
-	"TF_BUILD": {}, "TEAMCITY_VERSION": {},
+	"TF_BUILD": {}, "TEAMCITY_VERSION": {}, "SOURCE_DATE_EPOCH": {},
 }
+
+// SourceDateEpoch is the SOURCE_DATE_EPOCH every run gets: 2023-11-14T22:13:20Z.
+const SourceDateEpoch = "1700000000"
 
 // ExitCodeOf extracts the process exit code from an error returned by
 // (*exec.Cmd).Run: 0 for nil, the real code for an *exec.ExitError, and -1 for
