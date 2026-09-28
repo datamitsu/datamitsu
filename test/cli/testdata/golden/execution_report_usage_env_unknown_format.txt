@@ -2,4 +2,4 @@ exit code: 2
 ===STDOUT===
 
 ===STDERR===
-error: invalid DATAMITSU_REPORT value: unknown report format "yaml" (must be checkstyle, codequality, history, json, junit, markdown, rdjsonl, sarif)
+error: invalid DATAMITSU_REPORT value: unknown report format "yaml" (must be checkstyle, codequality, history, json, junit, markdown, patch, rdjsonl, sarif)

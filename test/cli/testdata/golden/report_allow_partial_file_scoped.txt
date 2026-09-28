@@ -23,7 +23,9 @@
       "durationMs": <DUR>,
       "skipped": [],
       "cancelled": [],
-      "tools": []
+      "tools": [],
+      "changesObserved": false,
+      "changesReason": "no-fix-task"
     }
   ],
   "exports": [

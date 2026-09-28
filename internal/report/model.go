@@ -9,6 +9,7 @@
 package report
 
 import (
+	"sort"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/textpos"
@@ -122,7 +123,86 @@ type Operation struct {
 	// Cancelled are the tasks the run stopped before they finished.
 	Cancelled []Cancel  `json:"cancelled"`
 	Tools     []ToolRun `json:"tools"`
+	// ChangesObserved reports that the files the operation's tools changed
+	// were observed, within ChangesScope: Changes and every invocation's
+	// changes are all of them. When it is false, ChangesReason says why, and
+	// no list stands for "nothing changed"; the changes seen before an
+	// observation failed are kept.
+	ChangesObserved bool          `json:"changesObserved"`
+	ChangesReason   string        `json:"changesReason,omitempty"`
+	ChangesDetail   string        `json:"changesDetail,omitempty"`
+	ChangesScope    *ChangesScope `json:"changesScope,omitempty"`
+	// Changes are the changed files no invocation of the step that changed
+	// them was given.
+	Changes []Change `json:"changes,omitempty"`
 }
+
+// ChangesScope is what the observation of an operation's changes covers.
+type ChangesScope struct {
+	// Tracked and Untracked files under the repository root are observed;
+	// Ignored files and the contents of Submodules and nested repositories
+	// are not.
+	Tracked    bool `json:"tracked"`
+	Untracked  bool `json:"untracked"`
+	Ignored    bool `json:"ignored"`
+	Submodules bool `json:"submodules"`
+	// Renames says how a renamed file is reported: deleted+created.
+	Renames string `json:"renames"`
+}
+
+// ObservedScope is the scope of every observation: the working tree as the
+// version control status reports it.
+var ObservedScope = ChangesScope{Tracked: true, Untracked: true, Renames: "deleted+created"}
+
+// Change is one file an operation changed.
+type Change struct {
+	// Path is relative to the repository root with "/".
+	Path string `json:"path"`
+	// Kind is created, modified, deleted, or reverted: a file that differed
+	// from the index before and matches it after.
+	Kind string `json:"kind"`
+	// Patch reports that the invocation's file result holds the change's
+	// patch; a tool that writes files itself leaves none.
+	Patch bool `json:"patch"`
+}
+
+// AllChanges is every file op changed — attributed to an invocation or not —
+// sorted by path, each once.
+func (op Operation) AllChanges() []Change {
+	seen := map[string]bool{}
+	var out []Change
+	add := func(cs []Change) {
+		for _, c := range cs {
+			if !seen[c.Path] {
+				seen[c.Path] = true
+				out = append(out, c)
+			}
+		}
+	}
+	add(op.Changes)
+	for _, tr := range op.Tools {
+		for _, inv := range tr.Invocations {
+			add(inv.Changes)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out
+}
+
+// Why an operation's changes were not observed.
+const (
+	// ChangesNoFixTask: the operation holds no fix task — lint, or a fix
+	// that planned nothing — so no snapshot was taken.
+	ChangesNoFixTask = "no-fix-task"
+	// ChangesNotRun: the run never reached the operation.
+	ChangesNotRun = "not-run"
+	// ChangesNotExecuted: no task ran — the tools could not be set up.
+	ChangesNotExecuted = "not-executed"
+	// ChangesSnapshotFailed: the working tree's status could not be read —
+	// no version control binary, no repository, or a failed status;
+	// ChangesDetail says which.
+	ChangesSnapshotFailed = "snapshot-failed"
+)
 
 // Skip is a tool the planner left out of an operation.
 type Skip struct {
@@ -229,6 +309,12 @@ type Invocation struct {
 	Provenance string       `json:"provenance"`
 	Files      []FileResult `json:"files"`
 	Findings   []Finding    `json:"findings"`
+	// Step is the step of its operation the invocation ran in, counted from
+	// 1: the invocations of one step ran together over disjoint files, after
+	// every earlier step. It is recorded for a fix operation; 0 elsewhere.
+	Step int `json:"step,omitempty"`
+	// Changes are the files of the invocation its step changed.
+	Changes []Change `json:"changes,omitempty"`
 	// OutputTail is the last 4 KiB of what a failed invocation printed,
 	// without ANSI sequences and masked; never for a tool whose category is
 	// security. Only the own JSON carries it.
@@ -242,6 +328,10 @@ type FileResult struct {
 	State    string `json:"state"`
 	Success  bool   `json:"success"`
 	ExitCode *int   `json:"exitCode"`
+	// Patch is the unified diff a formatter that writes its result on stdout
+	// applied to the file, taken while both versions existed and masked; only
+	// in a run asked for --report patch.
+	Patch string `json:"patch,omitempty"`
 }
 
 // Finding is one thing a tool reported.

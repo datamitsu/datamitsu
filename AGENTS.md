@@ -368,6 +368,19 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   touches an exit code. `internal/report/diff` compares two own reports by
   fingerprint per tool; a disappearance is `fixed` only where the second run's
   tool is complete over the whole repository.
+- A fix operation's changes (R13) come from `internal/gitutil` snapshots
+  (`git --no-optional-locks status --porcelain=v2 -z`, XXH3 of every dirty
+  file) taken by `runner.stepCallback`: before the first step and after every
+  step `Executor.SetStepCallback` reports — a step is one parallel group,
+  whose tasks' file sets are disjoint — with `context.WithoutCancel`, so a
+  cancelled step is observed too. `OperationRecord.Step/Changed` feed the
+  report, which attributes a change to the step's invocation whose files hold
+  it (`Invocation.Changes`) or to the operation. A snapshot that fails leaves
+  `changesObserved: false` with a reason; never write an empty list for
+  "unobserved". Patches exist only when `--report patch` sets
+  `Executor.SetCapturePatches`: the stdout-formatter path diffs while both
+  versions exist (`textdiff.Unified`), because `textdiff.Edit` keeps only the
+  new text.
 - `history` is `render.Appending`: `Target` opens its file with `O_APPEND` and
   writes the run's line in one write, never replacing the file. A line
   (`report.HistoryLine`, `datamitsu.history/1`) holds counts and durations

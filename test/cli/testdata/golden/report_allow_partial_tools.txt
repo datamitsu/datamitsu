@@ -112,7 +112,9 @@
             }
           ]
         }
-      ]
+      ],
+      "changesObserved": false,
+      "changesReason": "no-fix-task"
     }
   ],
   "exports": [

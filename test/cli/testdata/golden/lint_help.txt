@@ -23,7 +23,7 @@ Flags:
       --file-scoped                  Only process git staged files
   -h, --help                         help for lint
       --output string                How the run shows its results: human (frames, colour, progress) or agent (one line per finding the terminal would show, one summary line per operation; also via DATAMITSU_OUTPUT) (default "human")
-      --report stringArray           Write a report once the run ends, failed or not: <format>=<path>, or <format>=- for stdout (repeatable; formats: checkstyle, codequality, history, json, junit, markdown, rdjsonl, sarif; one that lists findings turns fail-fast off; also via DATAMITSU_REPORT)
+      --report stringArray           Write a report once the run ends, failed or not: <format>=<path>, or <format>=- for stdout (repeatable; formats: checkstyle, codequality, history, json, junit, markdown, patch, rdjsonl, sarif; one that lists findings turns fail-fast off; also via DATAMITSU_REPORT)
       --require-coverage string      Exit non-zero unless the run answered completely (unit|repo)
       --tools string                 Comma-separated list of tools to run (for debugging)
       --widen-to string              Limit how far work may widen beyond the selection (target|unit|repo)

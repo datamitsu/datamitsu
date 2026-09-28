@@ -21,6 +21,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/report/render/json"
 	"github.com/datamitsu/datamitsu/internal/report/render/junit"
 	"github.com/datamitsu/datamitsu/internal/report/render/markdown"
+	"github.com/datamitsu/datamitsu/internal/report/render/patch"
 	"github.com/datamitsu/datamitsu/internal/report/render/rdjsonl"
 	"github.com/datamitsu/datamitsu/internal/report/render/sarif"
 )
@@ -47,6 +48,7 @@ var renderers = []Renderer{
 	checkstyle.Renderer{},
 	rdjsonl.Renderer{},
 	history.Renderer{},
+	patch.Renderer{},
 }
 
 // Lookup finds a format by the name --report spells it with.

@@ -1,0 +1,6 @@
+exit code: 0
+===STDOUT===
+fix changed 3 files: a.txt, b.txt, dirty.txt
+fix: 1 tools · 1 runs · 0 failed · 0 errors 0 warnings · 0 hidden
+
+===STDERR===

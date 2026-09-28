@@ -45,6 +45,9 @@ These operations are intentionally separate. Never treat them as synonyms.
 - `datamitsu check` - run fix then lint
   - As an agent: `datamitsu check --fail-fast=false --output agent` runs every
     tool to the end and prints one line per finding, without frames or colour
+  - Its `fix changed N files: …` line names the files the fix rewrote: read
+    them again before editing them. `fix changes not observed` means any file
+    may have changed
   - In CI: `datamitsu lint --fail-fast=false` — CI runs `lint`; `fix` and
     `check` change the working tree
 - `datamitsu exec <app>` - run a managed tool raw: no parsing, no findings, no

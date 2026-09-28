@@ -216,3 +216,31 @@ func TestRenderCountsBaselined(t *testing.T) {
 		t.Errorf("the baselined finding should be counted apart:\n%s", out.String())
 	}
 }
+
+func TestRenderChangedFiles(t *testing.T) {
+	fix := report.Operation{
+		Name: "fix", Ran: true, ChangesObserved: true, Changes: []report.Change{{Path: "b.ts", Kind: "created"}},
+		Tools: []report.ToolRun{{Name: "prettier", Invocations: []report.Invocation{{
+			State: "ran", Success: true,
+			Changes: []report.Change{{Path: "a.ts", Kind: "modified", Patch: true}},
+		}}}},
+	}
+	unobserved := report.Operation{Name: "fix", Ran: true, ChangesReason: "snapshot-failed", ChangesDetail: "no repository"}
+	lint := report.Operation{Name: "lint", Ran: true, ChangesReason: report.ChangesNoFixTask}
+	var out bytes.Buffer
+	run := &report.Run{Selection: report.Selection{Mode: "all"}, Operations: []report.Operation{fix, lint}}
+	if err := (Renderer{}).Render(&out, run, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "#### Changed files\n\n- `a.ts` modified\n- `b.ts` created\n") || strings.Count(out.String(), "Changed files") != 1 {
+		t.Errorf("want the fix's changed files, and none for lint:\n%s", out.String())
+	}
+	out.Reset()
+	run.Operations = []report.Operation{unobserved}
+	if err := (Renderer{}).Render(&out, run, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "_Not observed: snapshot-failed: no repository._") {
+		t.Errorf("want the reason the changes were not observed:\n%s", out.String())
+	}
+}

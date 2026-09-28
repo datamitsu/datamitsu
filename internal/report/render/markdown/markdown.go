@@ -214,6 +214,10 @@ func operation(op report.Operation) []part {
 		}
 	}
 
+	if text := changedFiles(op); text != "" {
+		add(0, "%s", text)
+	}
+
 	var incomplete []report.ToolRun
 	for _, tr := range op.Tools {
 		if !tr.Complete {
@@ -231,6 +235,36 @@ func operation(op report.Operation) []part {
 		}
 	}
 	return parts
+}
+
+// changedFiles is the section of a fix operation listing the files it
+// changed, or saying why they were not observed; "" for an operation that
+// observes none.
+func changedFiles(op report.Operation) string {
+	if op.Name != "fix" || op.ChangesReason == report.ChangesNoFixTask {
+		return ""
+	}
+	changes := op.AllChanges()
+	var b strings.Builder
+	b.WriteString("\n#### Changed files\n\n")
+	if !op.ChangesObserved {
+		why := op.ChangesReason
+		if op.ChangesDetail != "" {
+			why += ": " + op.ChangesDetail
+		}
+		fmt.Fprintf(&b, "_Not observed: %s._\n", escape(why))
+		if len(changes) == 0 {
+			return b.String()
+		}
+		b.WriteString("\n")
+	} else if len(changes) == 0 {
+		b.WriteString("_None._\n")
+		return b.String()
+	}
+	for _, c := range changes {
+		fmt.Fprintf(&b, "- %s %s\n", code(c.Path), escape(c.Kind))
+	}
+	return b.String()
 }
 
 func status(tr report.ToolRun) string {

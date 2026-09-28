@@ -35,6 +35,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render"
+	"github.com/datamitsu/datamitsu/internal/report/render/patch"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
@@ -95,10 +96,9 @@ type planExecutor interface {
 	SetResultCallback(cb tooling.ResultCallback)
 	SetTaskStartCallback(cb tooling.TaskStartCallback)
 	SetFileProgressCallback(cb tooling.FileProgressCallback)
-	SetParser(parser tooling.DiagnosticParser)
-	SetParserModules(parsers config.MapOfParsers)
 	SetGate(gate tooling.Gate)
 	SetEnvObserver(observe func(environ []string))
+	SetStepCallback(cb tooling.StepCallback)
 	AssignTaskIDs(plan *tooling.ExecutionPlan)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
 	TaskDir(task tooling.Task) string
@@ -324,14 +324,16 @@ func initSharedContext(
 	// skipped (reported, not fatal) rather than letting EnsureTools hard-fail —
 	// and so they appear in --explain, which never reaches the install step.
 	planner.SetPlatformChecker(binMgr)
-	sc.executor = tooling.NewExecutor(sc.rootPath, false, sc.failFast, binMgr, sc.projectCache)
-	sc.executor.SetParserModules(sc.cfg.Parsers)
+	executor := tooling.NewExecutor(sc.rootPath, false, sc.failFast, binMgr, sc.projectCache)
+	executor.SetParserModules(sc.cfg.Parsers)
 	// Output is always parsed: by a declared parser, and otherwise by the
 	// fallback built into the binary. --no-parse only changes what a failure
 	// frame shows: what the run records must not depend on it.
 	sc.parserMgr = parsermanager.New(sc.cfg.Parsers)
 	sc.parseProblems = newParseProblems()
-	sc.executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
+	executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
+	executor.SetCapturePatches(slices.ContainsFunc(opts.Reports, func(s render.Spec) bool { return s.Format == patch.Name }))
+	sc.executor = executor
 	sc.ignoredFailOn = &toolSet{}
 	sc.startReport()
 	sc.executor.SetGate(sc.gate())
@@ -429,6 +431,9 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// planned task with the identity a report and an event refer to it by.
 	sc.executor.AssignTaskIDs(plan)
 	opRecord := sc.beginReportOperation(operation, plan)
+	if operation == config.OpFix && len(plan.Groups) > 0 {
+		opRecord.ChangesNotObserved(report.ChangesNotExecuted, "")
+	}
 	opDuration := int64(0)
 	defer func() { opRecord.End(retErr == nil, opDuration) }()
 
@@ -744,6 +749,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		}
 	}
 
+	sc.executor.SetStepCallback(sc.stepCallback(ctx, operation, opRecord))
 	execSpan := trace.Start(trace.CatExec, "executePlan")
 	results, execErr := sc.executor.Execute(ctx, plan)
 	execSpan.EndWith(trace.A("groups", len(plan.Groups)))

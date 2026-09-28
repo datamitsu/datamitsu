@@ -641,6 +641,54 @@ agree whenever one process reports the findings of a line, which is every tool
 that runs once per file and every tool whose findings name the files it was
 given.
 
+## Changed files
+
+A `fix` changes the working tree, and whoever reads its result — an agent that
+holds the files in memory, a job that commits the fix — has to know which files.
+The report records them: a snapshot of the working tree is taken before the
+first group of tools that run together and after every group, and each file
+whose state moved between two of them is a change, `created`, `modified`,
+`deleted` or `reverted` (a dirty file a formatter restored to what the commit
+holds).
+
+```mermaid
+graph LR
+    S0["snapshot"] --> G1["group 1: prettier, gofmt"]
+    G1 --> S1["snapshot"]
+    S1 --> G2["group 2: eslint --fix"]
+    G2 --> S2["snapshot"]
+```
+
+The tools of one group ran over disjoint files, so a change between two
+snapshots belongs to the tool of that group that was given the file — it is
+listed on that invocation — and to the operation when none was. A snapshot is
+taken after a group that failed or was cancelled too: a formatter may have
+written part of its files.
+
+- **What is observed.** Tracked and untracked files under the repository root,
+  as `git status` lists them. Ignored files and the contents of submodules and
+  nested repositories are not; a rename is a deletion and a creation.
+  `changesScope` says so in the report.
+- **What "not observed" means.** Without git, outside a repository, or when a
+  status fails, `changesObserved` is `false` with the reason — never an empty
+  list that would read as "nothing changed". A `lint` operation takes no
+  snapshot (`no-fix-task`).
+- **For an agent.** `--output agent` prints
+  `fix changed 2 files: src/a.ts, src/b.ts` — read those files again before
+  editing them — or `fix changes not observed: <reason>`, after which every file
+  the fix could have touched has to be read again.
+- **For a person.** The Markdown report and the step summary list the changed
+  files under the fix operation.
+
+`--report patch=<path>` writes the diffs the formatters that write their result
+on stdout applied, in the order they were applied, as one patch `git apply`
+takes. A tool that rewrites files itself leaves no patch; its files are among
+the changes with `patch: false`.
+
+The snapshot costs one `git status` per group: on a repository of about 1 800
+tracked files, 5–8 ms with a fresh index and about 40 ms when every file's
+timestamp moved since the index was written.
+
 ## Baselines
 
 A project that adopts a linter with hundreds of findings cannot fix them in the

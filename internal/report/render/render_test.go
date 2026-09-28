@@ -39,7 +39,7 @@ func TestParseSpec(t *testing.T) {
 		{raw: "fake=r.sarif?category=", want: Spec{Format: "fake", Path: "r.sarif", Options: map[string]string{"category": ""}}},
 		{raw: "json", wantErr: `"json" is not <format>=<path>`},
 		{raw: "=out.json", wantErr: "is not <format>=<path>"},
-		{raw: "yaml=out.yaml", wantErr: `unknown report format "yaml" (must be checkstyle, codequality, fake, history, json, junit, markdown, rdjsonl, sarif)`},
+		{raw: "yaml=out.yaml", wantErr: `unknown report format "yaml" (must be checkstyle, codequality, fake, history, json, junit, markdown, patch, rdjsonl, sarif)`},
 		{raw: "json=", wantErr: "report json needs a path"},
 		{raw: "json=?x=1", wantErr: "report json needs a path"},
 		{raw: "json=a.json?x=1", wantErr: `report json takes no option, got "x"`},
@@ -114,7 +114,7 @@ func TestParseSpecs(t *testing.T) {
 }
 
 func TestNamesAndLookup(t *testing.T) {
-	want := []string{"checkstyle", "codequality", "history", "json", "junit", "markdown", "rdjsonl", "sarif"}
+	want := []string{"checkstyle", "codequality", "history", "json", "junit", "markdown", "patch", "rdjsonl", "sarif"}
 	if got := Names(); !reflect.DeepEqual(got, want) {
 		t.Errorf("Names() = %v, want %v", got, want)
 	}

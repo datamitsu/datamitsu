@@ -380,6 +380,7 @@ line per record on stdout. What the configuration prints while it loads
 
 ```console
 $ datamitsu check --fail-fast=false --output agent
+fix changed 2 files: src/a.ts, src/b.ts
 fix: 3 tools · 4 runs · 0 failed · 0 errors 0 warnings · 0 hidden
 src/a.ts:3:7: error eslint(no-unused-vars): 'x' is assigned a value but never used.
 src/b.ts:9:1: error eslint(no-var): Unexpected var, use let or const instead.
@@ -406,9 +407,15 @@ check · done in 9.40s · fix 1.10s · lint 7.90s · setup 400ms
 - **What did not run** — a task stopped or never started, the files a tool that
   runs once per file left unchecked, a tool the planner skipped — is one line
   each, as the human block words it.
+- **The files a fix changed** are one line before its summary,
+  `fix changed <N> files: <path>, <path>` — an agent that holds any of them in
+  memory reads them again. When they could not be observed (see
+  [Reports](#reports)) the line is `fix changes not observed: <reason>`,
+  followed by the files seen before the observation stopped.
 - **Each operation ends** with
   `<op>: <tools> tools · <runs> runs · <failed> failed · <E> errors <W> warnings · <H> hidden`,
-  `<H>` counting the findings below the threshold, and `check` with its closing
+  `<H>` counting the findings below the threshold, and `·  baselined` when a
+  [baseline](#baselines) held some, and `check` with its closing
   wall-clock line. The exit code is the run's.
 
 Fail-fast stays the default: add `--fail-fast=false` to see every failure at
@@ -569,7 +576,8 @@ pipeline needs to read. The flag is repeatable, one per format: `json`, the
 run's own document; `markdown`, the same run for a person; `sarif`, the run for
 code scanning; `junit`, the run as test results; `codequality`, GitLab's Code
 Quality report; `checkstyle`, Checkstyle XML; `rdjsonl`, reviewdog's
-diagnostics; and `history`, one line of counts appended to a trend file.
+diagnostics; `history`, one line of counts appended to a trend file; and
+`patch`, the diffs a fix's formatters applied.
 The [Reports guide](../guides/reports.md) explains what a
 report holds and how far to trust it; [`report render`](#report-render) writes
 one again, offline, from a run's own JSON.
@@ -594,11 +602,11 @@ datamitsu lint --report json=out/run.json
   `DATAMITSU_REPORT=json=out/run.json`. A `--report` naming the same format
   wins over its entry. `datamitsu config runtime` reports the variable as
   `report`.
-- A report that lists findings — every format but `history` — turns fail-fast
+- A report that lists findings — every format but `history` and `patch` — turns fail-fast
   off: a run that stopped at the first failing tool could not list every
   finding. Such a report together with `--fail-fast=true`, or with
   `DATAMITSU_FAIL_FAST=true` and no `--fail-fast` flag, exits 2. `history`
-  leaves fail-fast as it is.
+  and `patch` leave fail-fast as it is.
 - A format named twice, an unknown format or option, a missing path, two
   reports that would write one file — one path twice, a report where another's
   completeness companion goes, or a file inside a split format's directory —
@@ -763,6 +771,37 @@ completeness with its reasons and the findings per level. It holds no finding,
 no path and none of the paths the run was given, so a narrowed run writes it
 without `--allow-partial`, and it leaves fail-fast alone. The line is appended
 in one write. See [History](../guides/reports.md#history).
+
+A `fix` operation records the files its tools changed. A snapshot of the working
+tree — `git status --porcelain=v2` over tracked and untracked files, without
+optional locks, plus a hash of each file it lists — is taken before the first
+group of tools that run together and after every group, a failed or cancelled
+one included. Each file whose state moved between two snapshots is a change:
+`created`, `modified`, `deleted`, or `reverted` for a file that differed from
+the index before and matches it after — a formatter that restored what the
+commit holds. A change is listed on the invocation of that group whose files
+hold it, and on the operation (`changes`) when none does. `changesObserved` says
+whether the changes were observed and `changesScope` what that covers: ignored
+files and the contents of submodules and nested repositories are not observed,
+and a rename is a deletion and a creation. When they were not observed,
+`changesReason` says why — `no-fix-task` for `lint` and a fix that planned
+nothing, `not-run`, `not-executed` when the tools could not be set up,
+`snapshot-failed` (with `changesDetail`) when git is missing, the root is not a
+repository, or a status failed — and no list stands for "nothing changed";
+changes seen before a snapshot failed are kept. Snapshots are taken only when
+the run records anything: a report, a JSON-L stream, annotations or agent
+output.
+
+`patch` writes the unified diffs the formatters that write their result on
+stdout applied, captured while both versions existed, in the order they were
+applied: a file two formatters changed one after the other has two hunks, the
+first formatter's first, and `git apply` or `patch -p1` takes the file. A tool
+that writes its files itself leaves no patch; its changes carry `patch: false`.
+Patches hold source text, so they are captured only when `--report patch=` is
+asked for, and the run's `json` then holds them too, masked like everything
+else, which lets `report render --format patch` write them again. Like
+`history`, `patch` lists no finding: a narrowed run writes it, and it leaves
+fail-fast alone.
 
 A tool that exits non-zero without a finding its parser could read is listed
 with one `synthetic` finding of level `error` and no location, whose message
