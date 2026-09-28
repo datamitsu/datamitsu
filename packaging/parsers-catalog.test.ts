@@ -65,7 +65,7 @@ test("renderCatalogMarkdown: levels, column unit and category from a schema-2 mo
     tools: [
       {
         category: "security",
-        columnUnit: "utf8",
+        columnUnit: "utf-16",
         description: "d",
         kind: "tool",
         module: "m",
@@ -97,9 +97,35 @@ test("renderCatalogMarkdown: levels, column unit and category from a schema-2 mo
       },
     ],
   });
-  assert.match(md, /\| `scanner` \| — \| `HIGH`, `LOW` \| utf-8 \| security \| d \| — \|/);
+  assert.match(md, /\| `scanner` \| — \| `HIGH`, `LOW` \| utf-16 \| security \| d \| — \|/);
   assert.match(md, /\| `plain` \| — \| none \| — \| — \| d \| — \|/);
   assert.match(md, /\| `old` \| — \| — \| — \| — \| d \| — \|/);
+});
+
+test("renderCatalogMarkdown: format parsers get their own table and leave the tool count", () => {
+  const md = renderCatalogMarkdown({
+    tools: [
+      ...sample.tools,
+      {
+        description: "SARIF 2.1.0",
+        kind: "format",
+        module: "datamitsu-parsers",
+        name: "sarif",
+        operations: {},
+        severities: ["error", "warning", "note"],
+        url: "https://example.test/sarif",
+        version: "0.1.0",
+      },
+    ],
+  });
+  assert.match(md, /\*\*2 tools\*\*/);
+  assert.match(md, /\n## Format parsers\n/);
+  assert.match(
+    md,
+    /\| `sarif` \| `error`, `warning`, `note` \| SARIF 2\.1\.0 \| \[link\]\(https:\/\/example\.test\/sarif\) \|/,
+  );
+  const toolTable = md.slice(0, md.indexOf("## Format parsers"));
+  assert.ok(!toolTable.includes("`sarif`"), "a format is not a tool row");
 });
 
 test("renderCatalogMarkdown: deterministic (no timestamp)", () => {

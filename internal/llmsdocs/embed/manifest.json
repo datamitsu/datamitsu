@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "6808710cf006eb15d7f6212f2d66cef6",
+  "pageSetHash": "7c053fb799d24ea151cbc6ce801c8d91",
   "pages": [
     {
       "slug": "about",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 40194,
-      "contentHash": "e11068d96dfa0a7270db0213dd2d58d8"
+      "bytes": 43477,
+      "contentHash": "7b5d8ba95e4a5d546d363388cd6c4d76"
     },
     {
       "slug": "guides/architecture/planner",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 153749,
-      "contentHash": "61a0c173f10be1b45e7984d00f88f76b"
+      "bytes": 153938,
+      "contentHash": "4d806e172b5920a57dbb05d84ae3c66b"
     },
     {
       "slug": "reference/comparison",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 79514,
-      "contentHash": "237c7ce64951a4e09ec9df550733e953"
+      "bytes": 81101,
+      "contentHash": "59493b49cd50c5390687f07f0a148aea"
     },
     {
       "slug": "reference/ignore-rules",
@@ -505,8 +505,8 @@
       "url": "https://datamitsu.com/docs/reference/parser-catalog.md",
       "title": "Parser Catalog",
       "description": "Tools whose output the bundled datamitsu WASM parser module turns into diagnostics",
-      "bytes": 49600,
-      "contentHash": "c24f15c379b05d9ebfe47e42df7b5a00"
+      "bytes": 58636,
+      "contentHash": "3d1b10f5af70aa2648d2056083458c04"
     },
     {
       "slug": "reference/template-placeholders",

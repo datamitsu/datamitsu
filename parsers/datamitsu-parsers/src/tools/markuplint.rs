@@ -5,9 +5,9 @@
 //! `ruleId`, `severity` (`error`, `warning` or `info`) and `message`. It prints
 //! a start only, so no end is reported. The builtin sets a constant
 //! `source = "markuplint"` and runs against a temp file (`$FILENAME`).
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {

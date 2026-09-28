@@ -7,9 +7,6 @@
 //! the upstream none-ls builtin / efm errorformat. The JSON-output class shares the
 //! `json_diag` helper (its one external crate, `tinyjson`).
 
-// Shared helper for the JSON-output tool class (not a tool itself).
-pub mod json_diag;
-
 pub mod actionlint;
 pub mod alex;
 pub mod ansiblelint;
@@ -221,6 +218,23 @@ pub(crate) fn samples(tool: &str) -> Option<&'static [crate::contract::Sample]> 
 }
 
 use crate::diagnostic::RawDiagnostic;
+use crate::response::Response;
+
+/// The answer of the tool parser `tool`; `None` when this module has none.
+///
+/// A tool parser recognized its tool's output when it found a finding, when
+/// the tool exited 0 — a clean run may print a summary or nothing, and neither
+/// is an unknown shape — or, for a JSON tool, when it found a JSON document at
+/// all. What remains, a failed run whose output held nothing it reads, is not
+/// recognized, and the core then hands the output to the sniffer.
+pub fn answer(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Option<Response> {
+	crate::json_diag::begin_parse();
+	let diags = dispatch(tool, stdout, stderr, exit_code)?;
+	if diags.is_empty() && exit_code != 0 && !crate::json_diag::document_seen() {
+		return Some(Response::unrecognized(tool));
+	}
+	Some(Response::recognized(tool, diags))
+}
 
 /// Dispatch a real tool parser by name. Returns `None` when this module has no
 /// parser for `tool`, so the caller can fall back (echo / unknown).

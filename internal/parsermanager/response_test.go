@@ -127,9 +127,37 @@ func TestParseAnswersOfTheCommittedModules(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseLocal() error = %v", err)
 			}
-			if failed.ABI == 1 && failed.Recognized {
-				t.Errorf("an empty ABI 1 answer on a failure = %+v, want not recognized", failed)
+			if failed.Recognized {
+				t.Errorf("an empty answer on a failure = %+v, want not recognized", failed)
 			}
 		})
+	}
+}
+
+// TestTheCurrentModuleAnswersInABI2 reads echo.wasm, the module this crate
+// builds today: an object that names the key it read.
+func TestTheCurrentModuleAnswersInABI2(t *testing.T) {
+	ctx := context.Background()
+	wasm := echoWASM(t)
+	caps, err := DescribeLocal(ctx, wasm)
+	if err != nil {
+		t.Fatalf("DescribeLocal() error = %v", err)
+	}
+	if caps.SchemaVersion != SchemaABI2 || caps.ABI != 2 {
+		t.Fatalf("describe = schema %d abi %d, want %d and 2", caps.SchemaVersion, caps.ABI, SchemaABI2)
+	}
+	resp, err := ParseLocal(ctx, wasm, "sarif", []byte(`{"version":"2.1.0","runs":[]}`), nil, 1)
+	if err != nil {
+		t.Fatalf("ParseLocal() error = %v", err)
+	}
+	if resp.ABI != 2 || !resp.Recognized || resp.Format != "sarif" || len(resp.Diagnostics) != 0 {
+		t.Errorf("a clean SARIF log = %+v, want recognized, format sarif, no diagnostics", resp)
+	}
+	resp, err = ParseLocal(ctx, wasm, "fallback", []byte("a.c:1:2: error: m\n"), nil, 1)
+	if err != nil {
+		t.Fatalf("ParseLocal() error = %v", err)
+	}
+	if !resp.Recognized || resp.Format != "gcc" || len(resp.Diagnostics) != 1 {
+		t.Errorf("the sniffer = %+v, want gcc with one finding", resp)
 	}
 }

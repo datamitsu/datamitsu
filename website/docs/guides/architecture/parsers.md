@@ -309,7 +309,54 @@ spanning the parsing-difficulty classes — a representative few:
 | `echo`          | pipe-test only                             | —              |
 
 The single `.wasm` dispatches all of them by name (`tool.outputParser`). JSON
-tools share one `from_json` helper (`tools/json_diag.rs`), so each is a few lines.
+tools share one `from_json` helper (`src/json_diag.rs`), so each is a few lines.
+
+## Format parsers
+
+Many tools print a standard format on request. The module carries one parser per
+such shape, dispatched by key like a tool parser, so a tool without a parser of its
+own is parsed by naming the format its flag selects:
+
+| Key                  | Recognizes                                                                    |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `sarif`              | a JSON object with `version` and a `runs` array                               |
+| `codeclimate`        | a JSON array whose every element has `check_name` and `location.path`         |
+| `eslint-json`        | a JSON array whose every element has `filePath` and a `messages` array        |
+| `json`               | a JSON array whose every element has `message` and `line` (none-ls's default) |
+| `checkstyle-xml`     | a document whose root is `<checkstyle>`                                       |
+| `junit-xml`          | a document whose root is `<testsuites>` or `<testsuite>`                      |
+| `github-annotations` | a line `::error …::message` (also `warning`, `notice`)                        |
+| `azure-logissue`     | a line `##vso[task.logissue type=…;…]message`                                 |
+| `msvc`               | a line `path(line,col): error CODE: message`                                  |
+| `gcc`                | a line `path:line:col: level: message`, or `path:line: message`               |
+
+A structured format is recognized by its envelope, whatever it holds: a SARIF log
+without a result, an ESLint report whose files have no message, a `<checkstyle/>`
+without a file are recognized and clean. A bare `[]` or `{}` has no envelope and is
+not. A line format is recognized when one line matches. Each parser reads stdout,
+and stderr when stdout does not hold its format; noise around a JSON document is
+skipped as it is for the tool parsers, and a truncated XML document yields the
+findings before the cut. The [parser catalog](../../reference/parser-catalog.md#format-parsers)
+names the flag of each tool that prints each shape.
+
+A **declared** parser — a tool's or a format's — recognized a run that exited 0,
+whatever it printed: a clean run may print nothing or a summary no format
+describes, and neither is an unknown shape. What it did not recognize is a failed
+run whose output held nothing of its format.
+
+The key `fallback` is the **sniffer**: it tries the formats in the order of the
+table and answers with the first that recognizes the output, named by its format.
+It recognizes only what a format matched, exit code or not — it guesses, and a guess
+needs evidence.
+
+The two XML formats are read by a tokenizer written for them (start and end tags,
+attributes, text, CDATA, the predefined entities and character references; no
+namespaces, no DTD), so the module keeps `tinyjson` as its only dependency.
+
+A tool's own format is usually richer than a standard one, and its parser reads it
+without a conversion in between. Prefer a tool's parser when the module has one, a
+format key when the tool prints a standard shape; the line formats carry only a
+file, a line, a column, a level and the text.
 
 ### Sign
 
@@ -516,7 +563,8 @@ exported `parse`, then read and free the output buffer. The raw bytes are passed
 preserved; the parser decides whether to split. The JSON result deserializes into
 nullable Go structs (pointer fields, so a field the tool omitted stays `nil`).
 
-The answer comes in one of two forms, and the core reads both:
+The answer comes in one of two forms, and the core reads both; the module this
+core is built with answers in the second:
 
 | ABI | Answer                                                          | Recognized                                              |
 | --- | --------------------------------------------------------------- | ------------------------------------------------------- |

@@ -47,10 +47,13 @@ export interface ParserCatalog {
 const cell = (s: string): string => s.replaceAll("\n", " ").replaceAll(/([|<{}])/g, "\\$1");
 
 export function renderCatalogMarkdown(cat: ParserCatalog): string {
-  // Drop the internal `echo` pipe-test parser; sort for a stable page.
-  const tools = (cat.tools ?? [])
+  // Drop the internal `echo` pipe-test parser; sort for a stable page. Format
+  // parsers read a standard shape any tool may print and get a table of their own.
+  const sorted = (cat.tools ?? [])
     .filter((t) => t.name !== "echo")
     .sort((a, b) => a.name.localeCompare(b.name));
+  const tools = sorted.filter((t) => t.kind !== "format");
+  const formats = sorted.filter((t) => t.kind === "format");
 
   // The module version is deliberately absent from the page. It is injected at
   // build time (`DATAMITSU_PARSERS_VERSION`, falling back to the crate version),
@@ -102,6 +105,26 @@ export function renderCatalogMarkdown(cat: ParserCatalog): string {
       `| \`${t.name}\` | ${modes} | ${cell(levels(t))} | ${t.columnUnit || "—"} | ${t.category || "—"} | ` +
         `${cell(t.description)} | ${upstream} |`,
     );
+  }
+
+  if (formats.length > 0) {
+    lines.push(
+      "",
+      "## Format parsers",
+      "",
+      "Many tools print a standard format on request. These parsers read one such shape " +
+        "whatever tool printed it, under the same `outputParser.parser` field; " +
+        "`fallback` tries them all in turn and answers with the first that recognizes the " +
+        "output ([format parsers](../guides/architecture/parsers.md#format-parsers)). A format counts " +
+        "columns in whatever unit the tool that printed it does, so none declares one.",
+      "",
+      "| Parser | Levels | Description | Specification |",
+      "| ------ | ------ | ----------- | ------------- |",
+    );
+    for (const t of formats) {
+      const spec = t.url ? `[link](${t.url})` : "—";
+      lines.push(`| \`${t.name}\` | ${cell(levels(t))} | ${cell(t.description)} | ${spec} |`);
+    }
   }
 
   return lines.join("\n") + "\n";

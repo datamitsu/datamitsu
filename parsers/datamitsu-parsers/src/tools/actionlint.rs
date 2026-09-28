@@ -9,9 +9,9 @@
 //! `from_stderr = true` is wrong for this invocation), so read stdout first and
 //! fall back to stderr only when stdout is empty.
 
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "actionlint",

@@ -45,7 +45,7 @@ fn severity_of(level: &str) -> Option<u8> {
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
 	// Lenient: vale runs over a whole repository, where anything else writing to
 	// stdout would otherwise cost every diagnostic in the run.
-	crate::tools::json_diag::extract_lenient(stdout, from_report)
+	crate::json_diag::extract_lenient(stdout, from_report)
 }
 
 /// vale names the buffer it read from stdin `stdin.<ext>`; a file of that name

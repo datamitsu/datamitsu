@@ -7,9 +7,9 @@
 //! has one, and there is no column or end position.
 use tinyjson::JsonValue;
 
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 use crate::severity;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {

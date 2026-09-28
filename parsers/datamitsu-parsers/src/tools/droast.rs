@@ -65,7 +65,7 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 };
 
 pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
-	let mut out = crate::tools::json_diag::extract_lenient(stdout, from_report);
+	let mut out = crate::json_diag::extract_lenient(stdout, from_report);
 	out.extend(from_stderr(stderr));
 	out
 }

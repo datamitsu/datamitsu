@@ -17,12 +17,15 @@
 //!   cannot skip the audit.
 //! - **Descriptor.** Every tool declares a column unit or sits on
 //!   [`UNKNOWN_COLUMN_UNITS`], and every category and kind is a known one.
+//!
+//! The format parsers and the sniffer are held to the same checks. None of them
+//! has a column unit: a format carries whatever unit the tool that printed it
+//! counts in, so they are all on the unknown list.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::capabilities::{ToolCapability, TOOLS};
+use crate::capabilities::{described, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::tools;
 
 /// One output of a tool, as the core would hand it to the parser.
 #[derive(Clone, Copy)]
@@ -44,6 +47,7 @@ const CATEGORIES: &[&str] = &["security"];
 /// list. Among the tools the reference configuration wires, checkmake and
 /// dotenv-linter print no column, and dclint and hadolint print column 1 for
 /// every finding, so no measurement can tell their unit.
+#[cfg(feature = "tools")]
 const UNKNOWN_COLUMN_UNITS: &[&str] = &[
 	"alex",
 	"ansiblelint",
@@ -138,6 +142,7 @@ const UNKNOWN_COLUMN_UNITS: &[&str] = &[
 /// passes the value through; "exclusive" names the column after the span.
 /// "Unverified" marks a convention taken from the tool's documentation or the
 /// ported builtin without a run of the tool.
+#[cfg(feature = "tools")]
 const POSITIONS: &[(&str, &str)] = &[
 	("actionlint", "1-based line and column; end_column is the last column of the span (inclusive), +1; filepath names the file"),
 	("alex", "1-based line and column with an end line and an exclusive end column"),
@@ -236,24 +241,114 @@ const POSITIONS: &[(&str, &str)] = &[
 	("zsh", "1-based line only"),
 ];
 
+/// The format parsers' column units, all unknown: a format counts in the unit
+/// of whichever tool printed it.
+const FORMAT_UNKNOWN_COLUMN_UNITS: &[&str] = &[
+	"azure-logissue",
+	"checkstyle-xml",
+	"codeclimate",
+	"eslint-json",
+	"fallback",
+	"gcc",
+	"github-annotations",
+	"json",
+	"junit-xml",
+	"msvc",
+	"sarif",
+];
+
+/// The position audit of the format parsers.
+const FORMAT_POSITIONS: &[(&str, &str)] = &[
+	("azure-logissue", "1-based linenumber and columnnumber, no end"),
+	("checkstyle-xml", "1-based line and column, no end"),
+	(
+		"codeclimate",
+		"1-based lines.begin/end, or positions begin/end line and column, passed through",
+	),
+	("eslint-json", "1-based line and column; endColumn exclusive"),
+	("fallback", "the positions of the format it picks"),
+	("gcc", "1-based line and column, no end"),
+	(
+		"github-annotations",
+		"1-based line and col; endLine and endColumn passed through",
+	),
+	("json", "line, column, endLine and endColumn passed through as printed"),
+	(
+		"junit-xml",
+		"the test case's 1-based line, or the line and column of a path:line:col classname; no end",
+	),
+	("msvc", "1-based line and column, no end"),
+	(
+		"sarif",
+		"1-based startLine and startColumn; endColumn exclusive by the specification",
+	),
+];
+
+#[cfg(not(feature = "tools"))]
+const UNKNOWN_COLUMN_UNITS: &[&str] = &[];
+
+#[cfg(not(feature = "tools"))]
+const POSITIONS: &[(&str, &str)] = &[];
+
+/// Every parser whose column unit is unknown, in this build.
+fn unknown_column_units() -> Vec<&'static str> {
+	[FORMAT_UNKNOWN_COLUMN_UNITS, UNKNOWN_COLUMN_UNITS].concat()
+}
+
+/// The position audit of every parser in this build.
+fn positions() -> Vec<(&'static str, &'static str)> {
+	[FORMAT_POSITIONS, POSITIONS].concat()
+}
+
 fn real_tools() -> impl Iterator<Item = &'static ToolCapability> {
-	TOOLS.iter().copied().filter(|t| t.name != "echo")
+	described().into_iter().filter(|t| t.name != "echo")
 }
 
 /// Every sample of `tool`: its module's own and its recorded fixtures.
 fn samples_of(tool: &str) -> Vec<Sample> {
-	let mut out: Vec<Sample> = tools::samples(tool).unwrap_or(&[]).to_vec();
-	out.extend(
-		tools::fixtures::recorded()
-			.into_iter()
-			.filter(|(key, _)| *key == tool)
-			.map(|(_, s)| s),
-	);
-	out
+	[own_samples(tool).unwrap_or(&[]).to_vec(), recorded(tool)].concat()
+}
+
+/// The recorded runs of `tool`: a tool's own, or those of tools printing a
+/// format.
+fn recorded(tool: &str) -> Vec<Sample> {
+	recordings()
+		.into_iter()
+		.filter(|(key, _)| *key == tool)
+		.map(|(_, s)| s)
+		.collect()
+}
+
+#[cfg(feature = "tools")]
+fn recordings() -> Vec<(&'static str, Sample)> {
+	[crate::tools::fixtures::recorded(), crate::format::fixtures::recorded()].concat()
+}
+
+#[cfg(not(feature = "tools"))]
+fn recordings() -> Vec<(&'static str, Sample)> {
+	crate::format::fixtures::recorded()
+}
+
+fn own_samples(tool: &str) -> Option<&'static [Sample]> {
+	#[cfg(feature = "tools")]
+	if let Some(s) = crate::tools::samples(tool) {
+		return Some(s);
+	}
+	crate::format::samples(tool)
 }
 
 fn parse(tool: &str, s: &Sample) -> Vec<RawDiagnostic> {
-	tools::dispatch(tool, s.stdout, s.stderr, s.exit).expect("a parser the module dispatches")
+	crate::answer(tool, s.stdout, s.stderr, s.exit).diagnostics
+}
+
+/// The source file of a parser.
+fn source_of(t: &ToolCapability) -> String {
+	let src = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+	match (t.kind, t.name) {
+		("format", "fallback") => format!("{src}/fallback.rs"),
+		("format", name) => format!("{src}/format/{}.rs", name.replace('-', "_")),
+		(_, name) => format!("{src}/tools/{name}.rs"),
+	}
 }
 
 /// Collects every violation of one check, so a failing run names every parser
@@ -277,7 +372,7 @@ impl Violations {
 fn every_tool_has_samples() {
 	let mut v = Violations::default();
 	for t in real_tools() {
-		v.check(tools::samples(t.name).is_some_and(|s| !s.is_empty()), || {
+		v.check(own_samples(t.name).is_some_and(|s| !s.is_empty()), || {
 			format!("{}: no SAMPLES", t.name)
 		});
 	}
@@ -308,11 +403,10 @@ fn levels_come_only_from_the_vocabulary() {
 
 #[test]
 fn a_parser_names_a_level_only_in_its_vocabulary() {
-	let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src/tools");
 	let mut v = Violations::default();
 	for t in real_tools() {
-		let path = format!("{dir}/{}.rs", t.name);
-		let source = std::fs::read_to_string(&path).expect("the tool's module");
+		let path = source_of(t);
+		let source = std::fs::read_to_string(&path).expect("the parser's module");
 		let code = source.split("#[cfg(test)]").next().unwrap_or("");
 		for (n, line) in code.lines().enumerate() {
 			let names_a_level = ["ERROR", "WARNING", "INFO", "HINT"]
@@ -330,7 +424,7 @@ fn a_parser_names_a_level_only_in_its_vocabulary() {
 fn every_vocabulary_is_well_formed() {
 	let mut v = Violations::default();
 	let mut names = BTreeSet::new();
-	for &t in TOOLS {
+	for t in described() {
 		v.check(names.insert(t.name), || format!("{}: described twice", t.name));
 		let mut tokens = BTreeSet::new();
 		for l in t.severities {
@@ -391,8 +485,9 @@ fn an_end_never_precedes_its_start() {
 #[test]
 fn every_parser_is_in_the_position_audit() {
 	let mut v = Violations::default();
-	let audited: BTreeMap<&str, &str> = POSITIONS.iter().copied().collect();
-	v.check(audited.len() == POSITIONS.len(), || {
+	let positions = positions();
+	let audited: BTreeMap<&str, &str> = positions.iter().copied().collect();
+	v.check(audited.len() == positions.len(), || {
 		"a parser is audited twice".to_string()
 	});
 	for t in real_tools() {
@@ -401,7 +496,7 @@ fn every_parser_is_in_the_position_audit() {
 		});
 	}
 	for name in audited.keys() {
-		v.check(TOOLS.iter().any(|t| t.name == *name), || {
+		v.check(described().iter().any(|t| t.name == *name), || {
 			format!("{name}: audited but not described")
 		});
 	}
@@ -411,10 +506,9 @@ fn every_parser_is_in_the_position_audit() {
 #[test]
 fn every_descriptor_declares_a_known_unit_category_and_kind() {
 	let mut v = Violations::default();
-	let unknown: BTreeSet<&str> = UNKNOWN_COLUMN_UNITS.iter().copied().collect();
-	v.check(unknown.len() == UNKNOWN_COLUMN_UNITS.len(), || {
-		"a parser is listed twice".to_string()
-	});
+	let listed = unknown_column_units();
+	let unknown: BTreeSet<&str> = listed.iter().copied().collect();
+	v.check(unknown.len() == listed.len(), || "a parser is listed twice".to_string());
 	for t in real_tools() {
 		v.check(!t.column_unit.is_empty() || unknown.contains(t.name), || {
 			format!("{}: no column unit and not on UNKNOWN_COLUMN_UNITS", t.name)
@@ -429,7 +523,11 @@ fn every_descriptor_declares_a_known_unit_category_and_kind() {
 		v.check(t.category.is_empty() || CATEGORIES.contains(&t.category), || {
 			format!("{}: unknown category {:?}", t.name, t.category)
 		});
-		v.check(t.kind == "tool", || format!("{}: kind {:?}", t.name, t.kind));
+		let format = crate::format::DESCRIPTORS.iter().any(|f| f.name == t.name);
+		let want = if format { "format" } else { "tool" };
+		v.check(t.kind == want, || {
+			format!("{}: kind {:?}, want {want:?}", t.name, t.kind)
+		});
 	}
 	v.assert_none("descriptors");
 }

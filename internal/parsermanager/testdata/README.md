@@ -3,8 +3,9 @@
 ## `echo.wasm`
 
 A build of the current crate, `parsers/datamitsu-parsers`, with every parser it
-carries. Despite the name it is not an echo-only module: `echo` is one of its
-dispatch keys. It is the module the core's current contract is tested against —
+carries — the tool parsers, the format parsers and the sniffer (`fallback`) — at
+descriptor schema 3, answering in response ABI 2. Despite the name it is not an
+echo-only module: `echo` is one of its dispatch keys. It is the module the core's current contract is tested against —
 `runtime_test.go`, the pool tests, `internal/runner/parser_test.go` (served over
 `httptest`), the `devtools parsers` tests of `cmd` and `test/cli`, and the
 execution scenarios of `test/cli`, which seed it into an offline store

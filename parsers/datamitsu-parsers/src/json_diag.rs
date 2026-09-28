@@ -1,4 +1,5 @@
-//! Shared JSON → diagnostics helper for the JSON-output tool class.
+//! Shared JSON → diagnostics helper for the JSON-output tool class and the
+//! JSON formats.
 //!
 //! Mirrors none-ls's `h.diagnostics.from_json`: a tool emits a JSON array (or a
 //! single object) of diagnostics, and each object's fields map by name onto a
@@ -10,9 +11,28 @@
 //! crate we accept, because hand-rolling a correct JSON parser (escapes, unicode,
 //! nesting) is a known footgun and ~25 tools emit JSON.
 
+use std::cell::Cell;
 use std::collections::HashMap;
 
 use tinyjson::JsonValue;
+
+thread_local! {
+	/// Whether the parse under way found a JSON document in the output: a JSON
+	/// tool parser's criterion for recognizing what it read, even when the
+	/// document holds no finding. Cleared by [`begin_parse`] before every parse.
+	static DOCUMENT_SEEN: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Forget whether an earlier parse found a JSON document.
+pub(crate) fn begin_parse() {
+	DOCUMENT_SEEN.with(|seen| seen.set(false));
+}
+
+/// Whether the parse under way found a JSON document.
+#[cfg(feature = "tools")]
+pub(crate) fn document_seen() -> bool {
+	DOCUMENT_SEEN.with(Cell::get)
+}
 
 use crate::diagnostic::RawDiagnostic;
 
@@ -54,6 +74,7 @@ pub type SeverityMap = fn(&str) -> Option<u8>;
 /// Parse a JSON array — or a single object — of diagnostics. An object missing
 /// the message field is skipped (message is the one required field). Invalid JSON
 /// yields no diagnostics rather than an error.
+#[cfg(feature = "tools")]
 pub fn from_json(bytes: &[u8], attrs: &Attrs, sev: SeverityMap) -> Vec<RawDiagnostic> {
 	extract_lenient(bytes, |value| {
 		let mut out = Vec::new();
@@ -97,9 +118,20 @@ pub fn from_json(bytes: &[u8], attrs: &Attrs, sev: SeverityMap) -> Vec<RawDiagno
 /// A document that never closes yields nothing from that opener; a truncation
 /// that leaves whole inner elements intact can still yield those elements, which
 /// beats discarding a run's findings over a cut-off tail.
+#[cfg(feature = "tools")]
 pub fn extract_lenient<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Vec<T>) -> Vec<T> {
+	find_envelope(bytes, |v| Some(extract(v))).unwrap_or_default()
+}
+
+/// Like [`extract_lenient`], for a format recognized by its envelope rather than
+/// by its findings: `extract` answers `None` for a document that is not the
+/// format's envelope, and so does this when no document in the stream is one.
+/// A document that parses but is not an envelope is skipped, so a `{}` in the
+/// noise cannot stand in for the report.
+pub fn find_envelope<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Option<Vec<T>>) -> Option<Vec<T>> {
 	let text = String::from_utf8_lossy(bytes);
 	if let Ok(v) = text.parse::<JsonValue>() {
+		DOCUMENT_SEEN.with(|seen| seen.set(true));
 		return extract(&v);
 	}
 	// Bounded so pathological input (a log full of braces) cannot make parsing
@@ -117,13 +149,16 @@ pub fn extract_lenient<T>(bytes: &[u8], extract: impl Fn(&JsonValue) -> Vec<T>) 
 		let Ok(value) = text[start..end].parse::<JsonValue>() else {
 			continue;
 		};
-		let out = extract(&value);
+		DOCUMENT_SEEN.with(|seen| seen.set(true));
+		let Some(out) = extract(&value) else {
+			continue;
+		};
 		let rank = (out.len(), end - start);
 		if best.as_ref().is_none_or(|(best_rank, _)| rank > *best_rank) {
 			best = Some((rank, out));
 		}
 	}
-	best.map(|(_, out)| out).unwrap_or_default()
+	best.map(|(_, out)| out)
 }
 
 /// Byte index just past the value opening at `start`, or `None` if it never
@@ -210,6 +245,43 @@ fn get_u32(map: &HashMap<String, JsonValue>, key: &str) -> Option<u32> {
 	}
 }
 
+/// The member `key` of an object; `None` for anything else.
+pub(crate) fn member<'a>(v: &'a JsonValue, key: &str) -> Option<&'a JsonValue> {
+	match v {
+		JsonValue::Object(m) => m.get(key),
+		_ => None,
+	}
+}
+
+/// The member at `path`, one key per level.
+pub(crate) fn at<'a>(v: &'a JsonValue, path: &[&str]) -> Option<&'a JsonValue> {
+	path.iter().try_fold(v, |v, key| member(v, key))
+}
+
+/// The elements of an array.
+pub(crate) fn elements(v: &JsonValue) -> Option<&Vec<JsonValue>> {
+	match v {
+		JsonValue::Array(a) => Some(a),
+		_ => None,
+	}
+}
+
+/// A string value.
+pub(crate) fn text(v: &JsonValue) -> Option<&str> {
+	match v {
+		JsonValue::String(s) => Some(s),
+		_ => None,
+	}
+}
+
+/// A line or column value: a non-negative integer.
+pub(crate) fn position(v: &JsonValue) -> Option<u32> {
+	match v {
+		JsonValue::Number(n) => crate::numconv::json_u32(*n),
+		_ => None,
+	}
+}
+
 fn num_to_string(n: f64) -> String {
 	if n.is_finite() && n.fract() == 0.0 {
 		(n as i64).to_string()
@@ -218,7 +290,7 @@ fn num_to_string(n: f64) -> String {
 	}
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "tools"))]
 mod tests {
 	use super::*;
 	use crate::severity;
@@ -341,5 +413,30 @@ trailing"#;
 		let out = from_json(logged, &Attrs::defaults(), sev);
 		assert_eq!(out.len(), 1);
 		assert_eq!(out[0].message, "real");
+	}
+}
+
+#[cfg(test)]
+mod envelope_tests {
+	use super::*;
+
+	fn tagged(v: &JsonValue) -> Option<Vec<u32>> {
+		member(v, "tag").and_then(position).map(|t| vec![t])
+	}
+
+	#[test]
+	fn finds_the_envelope_behind_documents_that_are_not_one() {
+		let out = find_envelope(br#"log {"level":"info"} [1,2] then {"tag":7} done"#, tagged);
+		assert_eq!(out, Some(vec![7]));
+	}
+
+	#[test]
+	fn no_envelope_is_none_and_a_document_is_still_seen() {
+		begin_parse();
+		assert_eq!(find_envelope(br#"{"level":"info"}"#, tagged), None);
+		assert!(DOCUMENT_SEEN.with(Cell::get));
+		begin_parse();
+		assert_eq!(find_envelope(b"no json at all", tagged), None);
+		assert!(!DOCUMENT_SEEN.with(Cell::get));
 	}
 }

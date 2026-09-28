@@ -49,7 +49,7 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
 	// Lenient: `--debug` logs to stdout through console.debug, ahead of the report.
-	crate::tools::json_diag::extract_lenient(stdout, from_report)
+	crate::json_diag::extract_lenient(stdout, from_report)
 }
 
 fn from_report(value: &JsonValue) -> Vec<RawDiagnostic> {

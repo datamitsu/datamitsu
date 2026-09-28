@@ -275,6 +275,9 @@ func renderToolLine(t parsermanager.CatalogTool) string {
 		fmt.Fprintf(&b, "  %s\n", color.New(color.FgBlue).Sprint(t.URL))
 	}
 	var facts []string
+	if t.Kind == "format" {
+		facts = append(facts, "format")
+	}
 	if levels, ok := levelsText(t); ok {
 		facts = append(facts, "levels: "+levels)
 	}

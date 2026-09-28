@@ -123,6 +123,14 @@ func TestRenderTool_SchemaFields(t *testing.T) {
 			tool:   parsermanager.ToolCapability{Name: "old"},
 			absent: []string{"levels", "columns", "category", "kind"},
 		},
+		{
+			name: "schema 3 format parser",
+			tool: parsermanager.ToolCapability{
+				Name: "sarif", Severities: []string{"error", "warning", "note"}, Kind: "format",
+			},
+			wantLine:   "  format · levels: error, warning, note\n",
+			wantDetail: []string{"kind:     format"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

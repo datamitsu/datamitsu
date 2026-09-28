@@ -4,9 +4,9 @@
 //! `--json` prints an array of `{id, message, filename, linenumber, line,
 //! severity}`; `severity` is the rule's level (`VERY_HIGH` … `INFO`). The line
 //! is 1-based and no column is printed.
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {

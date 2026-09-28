@@ -1607,7 +1607,10 @@ level words the tool prints (`levels`, `none` when it prints none), the unit it
 counts columns in where that was measured (`columns`), and whether it is a
 security scanner (`category`); an older module shows none of these lines, which
 is how to tell which contract a pinned module carries (see
-[levels](../guides/architecture/parsers.md#levels)). Both accept:
+[levels](../guides/architecture/parsers.md#levels)). A module built with
+descriptor schema 3 also lists its format parsers and the `fallback` sniffer,
+each marked `format` ([format parsers](../guides/architecture/parsers.md#format-parsers)).
+Both accept:
 
 - `--json` — machine-readable output, for driving configs or build pipelines.
 - `--wasm <path>` — describe a local `.wasm` file directly, with no config or
