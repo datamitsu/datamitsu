@@ -27,6 +27,9 @@ export default defineConfig((config) => ({
     // website/docs. Checking it again would only add a second place to fix the
     // same word — and any edit here would break the snapshot's content hash.
     "internal/llmsdocs/embed/**",
+    // The Zed extension's language list: other projects' language names, copied
+    // exactly as Zed matches them, not our prose.
+    "editors/zed/extension.toml",
   ],
   // Misspellings on purpose: fixtures for the `datamitsu llms` did-you-mean
   // suggester, whose whole job is to map a typo back to the right page. They are
@@ -602,5 +605,11 @@ export default defineConfig((config) => ({
     "chardata",
     // reviewdog's filter mode that reports every diagnostic.
     "nofilter",
+    // The Zed extension's build target and the Rust APIs it unpacks and hashes
+    // a release with: flate2, tar's Header::set_cksum, u8::is_ascii_hexdigit.
+    "wasip",
+    "flate",
+    "cksum",
+    "hexdigit",
   ],
 }));

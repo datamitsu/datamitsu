@@ -1,0 +1,29 @@
+[package]
+name = "datamitsu-zed"
+version = "0.0.0"
+edition = "2024"
+description = "Zed extension that formats files with the project's datamitsu config through `datamitsu lsp`."
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+flate2 = "1.1.10"
+serde = { version = "1.0.229", features = ["derive"] }
+sha2 = "0.11.0"
+tar = { version = "0.4.46", default-features = false }
+zed_extension_api = "0.7.0"
+# Held at 6: zip 7 and later depend on typed-path, which turns on a nightly-only
+# feature on wasm32-wasip2, so the extension would not build on stable Rust.
+zip = { version = "=6.0.0", default-features = false, features = ["deflate-flate2"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[profile.release]
+opt-level = "s"
+strip = true
+lto = true
+codegen-units = 1

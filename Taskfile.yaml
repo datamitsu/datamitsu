@@ -93,6 +93,10 @@ tasks:
       - task: gen:parsers-doc
     desc: Build the public parser module into internal/parsermanager/testdata/echo.wasm, the module the core's tests run, and regenerate the catalog doc
     dir: parsers
+  build:zed:
+    cmds:
+      - cargo build --release --target wasm32-wasip2 --manifest-path editors/zed/Cargo.toml
+    desc: Build the Zed extension to a WebAssembly component, as Zed does for a dev extension
   # ── Demo ──
   demo:capture:
     cmds:
