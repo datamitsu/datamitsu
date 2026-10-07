@@ -1421,7 +1421,7 @@ func TestRunPullRuntimes_NodeLookupFailureNonZeroExit(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-zero exit (error) when the node LTS lookup fails")
 	}
-	if !strings.Contains(err.Error(), "some runtimes failed to update") {
+	if err.Error() != "1 of 1 runtimes failed: node" {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -1879,5 +1879,39 @@ func TestIntegration_JSONGeneration(t *testing.T) {
 		if !info.ExtractDir {
 			t.Errorf("JVM linux/amd64/%s: ExtractDir should be true", libc)
 		}
+	}
+}
+
+func TestRuntimesToPull(t *testing.T) {
+	got := runtimesToPull("")
+	want := []string{"pnpm", "bun", "go", "jvm", "node", "uv"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("runtimesToPull(\"\") = %v, want %v", got, want)
+	}
+	if got := runtimesToPull("node"); len(got) != 1 || got[0] != "node" {
+		t.Errorf("runtimesToPull(\"node\") = %v, want [node]", got)
+	}
+}
+
+// The runtimes file is written with the keys of every object sorted.
+func TestWriteRuntimesJSON_SortedKeys(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "runtimes.json")
+	runtimes := RuntimesJSON{
+		"uv":  {Kind: "uv", Mode: "managed"},
+		"bun": {Kind: "bun", Mode: "managed"},
+	}
+	if err := writeRuntimesJSON(path, runtimes); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if strings.Index(text, `"bun"`) > strings.Index(text, `"uv"`) {
+		t.Errorf("runtimes not in alphabetical order:\n%s", text)
+	}
+	if strings.Index(text, `"kind"`) > strings.Index(text, `"mode"`) {
+		t.Errorf("keys of an entry not sorted:\n%s", text)
 	}
 }

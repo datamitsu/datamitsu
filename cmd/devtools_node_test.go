@@ -91,40 +91,6 @@ func TestWriteNodeAppsJSON(t *testing.T) {
 	}
 }
 
-func TestUpdateNodeAppsJSON(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "nodeApps.json")
-
-	initial := nodeAppsJSON{
-		"cspell": {PackageName: "cspell", Version: "9.7.0"},
-		"mmdc":   {PackageName: "@mermaid-js/mermaid-cli", Version: "11.12.0"},
-	}
-	if err := writeNodeAppsJSON(path, initial); err != nil {
-		t.Fatal(err)
-	}
-
-	results := []npmVersionResult{
-		{Name: "cspell", PackageName: "cspell", CurrentVersion: "9.7.0", LatestVersion: "9.8.0", UpdateNeeded: true},
-		{Name: "mmdc", PackageName: "@mermaid-js/mermaid-cli", CurrentVersion: "11.12.0", LatestVersion: "11.12.0", UpdateNeeded: false},
-	}
-
-	if err := updateNodeAppsJSON(path, results); err != nil {
-		t.Fatalf("updateNodeAppsJSON failed: %v", err)
-	}
-
-	updated, err := readNodeAppsJSON(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if updated["cspell"].Version != "9.8.0" {
-		t.Errorf("expected cspell version '9.8.0', got %q", updated["cspell"].Version)
-	}
-	if updated["mmdc"].Version != "11.12.0" {
-		t.Errorf("expected mmdc version '11.12.0' (unchanged), got %q", updated["mmdc"].Version)
-	}
-}
-
 func TestPullNodeCommand_RequiresExactlyOneArg(t *testing.T) {
 	if pullNodeCmd.Args == nil {
 		t.Fatal("expected Args validator to be set (cobra.ExactArgs(1))")
@@ -153,67 +119,5 @@ func TestPullNodeCommand_FileDoesNotExist(t *testing.T) {
 	}
 	if string(data) != "{}\n" {
 		t.Errorf("expected empty JSON object, got %q", string(data))
-	}
-}
-
-func TestPullNodeCommand_AlwaysFetchDescriptions(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "nodeApps.json")
-
-	if err := ensureNodeAppsJSONExists(path); err != nil {
-		t.Fatalf("ensureNodeAppsJSONExists failed: %v", err)
-	}
-
-	results := []npmVersionResult{
-		{
-			Name:           "cspell",
-			PackageName:    "cspell",
-			CurrentVersion: "9.7.0",
-			LatestVersion:  "9.8.0",
-			UpdateNeeded:   true,
-			Description:    "A spell checker for code",
-		},
-	}
-
-	if err := updateNodeAppsJSON(path, results); err != nil {
-		t.Fatalf("updateNodeAppsJSON failed: %v", err)
-	}
-
-	apps, err := readNodeAppsJSON(path)
-	if err != nil {
-		t.Fatalf("readNodeAppsJSON failed: %v", err)
-	}
-
-	if apps["cspell"].Description != "A spell checker for code" {
-		t.Errorf("expected description 'A spell checker for code', got %q", apps["cspell"].Description)
-	}
-}
-
-func TestUpdateNodeAppsJSON_NoUpdates(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "nodeApps.json")
-
-	initial := nodeAppsJSON{
-		"cspell": {PackageName: "cspell", Version: "9.7.0"},
-	}
-	if err := writeNodeAppsJSON(path, initial); err != nil {
-		t.Fatal(err)
-	}
-
-	results := []npmVersionResult{
-		{Name: "cspell", PackageName: "cspell", CurrentVersion: "9.7.0", LatestVersion: "9.7.0", UpdateNeeded: false},
-	}
-
-	if err := updateNodeAppsJSON(path, results); err != nil {
-		t.Fatalf("updateNodeAppsJSON failed: %v", err)
-	}
-
-	updated, err := readNodeAppsJSON(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if updated["cspell"].Version != "9.7.0" {
-		t.Errorf("expected version unchanged '9.7.0', got %q", updated["cspell"].Version)
 	}
 }

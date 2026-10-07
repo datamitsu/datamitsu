@@ -5,168 +5,122 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
-func TestGetLatestTemurinMajorVersion(t *testing.T) {
-	t.Run("successful fetch returns most_recent_feature_release", func(t *testing.T) {
-		releases := temurinReleaseVersions{
-			MostRecentFeatureRelease: 25,
-			AvailableReleases:        []int{25, 24, 21, 17},
-		}
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(releases)
-		}))
-		defer server.Close()
+func serveTemurin(t *testing.T, handler http.HandlerFunc) string {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	origClient := temurinHTTPClient
+	temurinHTTPClient = server.Client()
+	t.Cleanup(func() { temurinHTTPClient = origClient })
+	return server.URL
+}
 
-		origClient := temurinHTTPClient
-		temurinHTTPClient = server.Client()
-		defer func() { temurinHTTPClient = origClient }()
+func TestGetTemurinMajorVersions(t *testing.T) {
+	t.Run("lists feature releases newest first from the most recent one", func(t *testing.T) {
+		// The real API lists available_releases oldest first.
+		url := serveTemurin(t, func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(temurinReleaseVersions{
+				MostRecentFeatureRelease: 27,
+				AvailableReleases:        []int{8, 11, 17, 21, 25, 26, 27},
+			})
+		})
 
-		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), server.URL)
+		versions, err := getTemurinMajorVersionsFromURL(context.Background(), url)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if version != "25" {
-			t.Errorf("expected '25', got '%s'", version)
+		if got := strings.Join(versions, ","); got != "27,26,25,21,17,11,8" {
+			t.Errorf("versions = %s, want 27,26,25,21,17,11,8", got)
 		}
 	})
 
-	t.Run("falls back to available_releases when most_recent is zero", func(t *testing.T) {
-		releases := temurinReleaseVersions{
-			MostRecentFeatureRelease: 0,
-			AvailableReleases:        []int{24, 21, 17},
-		}
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(releases)
-		}))
-		defer server.Close()
+	t.Run("empty releases is an error", func(t *testing.T) {
+		url := serveTemurin(t, func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(temurinReleaseVersions{})
+		})
 
-		origClient := temurinHTTPClient
-		temurinHTTPClient = server.Client()
-		defer func() { temurinHTTPClient = origClient }()
-
-		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), server.URL)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if version != "24" {
-			t.Errorf("expected '24', got '%s'", version)
-		}
-	})
-
-	t.Run("empty releases returns fallback", func(t *testing.T) {
-		releases := temurinReleaseVersions{}
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(releases)
-		}))
-		defer server.Close()
-
-		origClient := temurinHTTPClient
-		temurinHTTPClient = server.Client()
-		defer func() { temurinHTTPClient = origClient }()
-
-		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), server.URL)
+		versions, err := getTemurinMajorVersionsFromURL(context.Background(), url)
 		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if version != temurinFallbackMajorVersion {
-			t.Errorf("expected fallback '%s', got '%s'", temurinFallbackMajorVersion, version)
+			t.Fatalf("expected error, got versions %v", versions)
 		}
 	})
 
-	t.Run("server error returns fallback", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	t.Run("server error is an error", func(t *testing.T) {
+		url := serveTemurin(t, func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("internal error"))
-		}))
-		defer server.Close()
+		})
 
-		origClient := temurinHTTPClient
-		temurinHTTPClient = server.Client()
-		defer func() { temurinHTTPClient = origClient }()
-
-		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), server.URL)
+		versions, err := getTemurinMajorVersionsFromURL(context.Background(), url)
 		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if version != temurinFallbackMajorVersion {
-			t.Errorf("expected fallback '%s', got '%s'", temurinFallbackMajorVersion, version)
+			t.Fatalf("expected error, got versions %v", versions)
 		}
 	})
 
-	t.Run("invalid JSON returns fallback", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
+	t.Run("invalid JSON is an error", func(t *testing.T) {
+		url := serveTemurin(t, func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write([]byte("not json"))
-		}))
-		defer server.Close()
+		})
 
-		origClient := temurinHTTPClient
-		temurinHTTPClient = server.Client()
-		defer func() { temurinHTTPClient = origClient }()
-
-		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), server.URL)
+		versions, err := getTemurinMajorVersionsFromURL(context.Background(), url)
 		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if version != temurinFallbackMajorVersion {
-			t.Errorf("expected fallback '%s', got '%s'", temurinFallbackMajorVersion, version)
+			t.Fatalf("expected error, got versions %v", versions)
 		}
 	})
 
-	t.Run("connection error returns fallback", func(t *testing.T) {
-		version, err := getLatestTemurinMajorVersionFromURL(context.Background(), "http://127.0.0.1:1")
+	t.Run("connection error is an error", func(t *testing.T) {
+		versions, err := getTemurinMajorVersionsFromURL(context.Background(), "http://127.0.0.1:1")
 		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if version != temurinFallbackMajorVersion {
-			t.Errorf("expected fallback '%s', got '%s'", temurinFallbackMajorVersion, version)
+			t.Fatalf("expected error, got versions %v", versions)
 		}
 	})
 }
 
-func TestExtractMajorVersion(t *testing.T) {
-	t.Run("prefers most_recent_feature_release", func(t *testing.T) {
-		releases := temurinReleaseVersions{
-			MostRecentFeatureRelease: 25,
-			AvailableReleases:        []int{24, 21},
-		}
-		got := extractMajorVersion(releases)
-		if got != "25" {
-			t.Errorf("expected '25', got '%s'", got)
-		}
-	})
-
-	t.Run("falls back to first available_release", func(t *testing.T) {
-		releases := temurinReleaseVersions{
-			MostRecentFeatureRelease: 0,
-			AvailableReleases:        []int{21, 17},
-		}
-		got := extractMajorVersion(releases)
-		if got != "21" {
-			t.Errorf("expected '21', got '%s'", got)
-		}
-	})
-
-	t.Run("empty returns empty", func(t *testing.T) {
-		got := extractMajorVersion(temurinReleaseVersions{})
-		if got != "" {
-			t.Errorf("expected empty, got '%s'", got)
-		}
-	})
-
-	t.Run("negative most_recent ignored", func(t *testing.T) {
-		releases := temurinReleaseVersions{
-			MostRecentFeatureRelease: -1,
-			AvailableReleases:        []int{25},
-		}
-		got := extractMajorVersion(releases)
-		if got != "25" {
-			t.Errorf("expected '25', got '%s'", got)
-		}
-	})
+func TestExtractMajorVersions(t *testing.T) {
+	tests := []struct {
+		name     string
+		releases temurinReleaseVersions
+		want     string
+	}{
+		{
+			name:     "leaves out versions above the most recent feature release",
+			releases: temurinReleaseVersions{MostRecentFeatureRelease: 25, AvailableReleases: []int{21, 25, 26}},
+			want:     "25,21",
+		},
+		{
+			name:     "adds a most recent release the list lacks",
+			releases: temurinReleaseVersions{MostRecentFeatureRelease: 25, AvailableReleases: []int{21, 17}},
+			want:     "25,21,17",
+		},
+		{
+			name:     "orders the list without a most recent release",
+			releases: temurinReleaseVersions{AvailableReleases: []int{17, 24, 21}},
+			want:     "24,21,17",
+		},
+		{
+			name:     "negative most recent is ignored",
+			releases: temurinReleaseVersions{MostRecentFeatureRelease: -1, AvailableReleases: []int{25}},
+			want:     "25",
+		},
+		{
+			name:     "duplicates and non-positive values are dropped",
+			releases: temurinReleaseVersions{MostRecentFeatureRelease: 25, AvailableReleases: []int{25, 0, 21, 21}},
+			want:     "25,21",
+		},
+		{
+			name: "empty is empty",
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := strings.Join(extractMajorVersions(tt.releases), ","); got != tt.want {
+				t.Errorf("extractMajorVersions() = %q, want %q", got, tt.want)
+			}
+		})
+	}
 }

@@ -38,6 +38,19 @@ const (
 	BinContentTypeZst    BinContentType = "zst"
 )
 
+// IsDirectoryArchive reports whether the format holds a file tree that extractDir can unpack: a
+// tar in any compression, or a zip. A bare binary or a single compressed file has no tree.
+func (t BinContentType) IsDirectoryArchive() bool {
+	switch t {
+	case BinContentTypeTarGz, BinContentTypeTarBz2, BinContentTypeTarXz, BinContentTypeTarZst, BinContentTypeTar, BinContentTypeZip:
+		return true
+	case BinContentTypeBinary, BinContentTypeGz, BinContentTypeBz2, BinContentTypeXz, BinContentTypeZst:
+		return false
+	default:
+		return false
+	}
+}
+
 // BinaryOsArchInfo describes a downloadable binary for one OS/arch, including its
 // source URL, verification hash and extraction details.
 type BinaryOsArchInfo struct {
@@ -49,9 +62,11 @@ type BinaryOsArchInfo struct {
 
 	// Path to binary inside archive (if archive)
 	// Example: "myapp-v1.0.0/bin/myapp" or just "myapp"
+	// With ExtractDir it is the command inside the extracted directory, and required.
 	BinaryPath *string `json:"binaryPath,omitempty"`
 
-	// ExtractDir extracts the entire archive to a directory instead of a single binary.
-	// Used for runtimes like JDK that need the full directory tree (bin/, lib/, etc.).
+	// ExtractDir extracts the entire archive to a directory instead of a single binary,
+	// for runtimes like JDK and for tools like protoc that read files beside their
+	// binary (include/). What runs is BinaryPath inside that directory.
 	ExtractDir bool `json:"extractDir,omitempty"`
 }
