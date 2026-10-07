@@ -3,8 +3,10 @@
 package detector
 
 import (
+	"cmp"
 	"net/url"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -15,16 +17,19 @@ import (
 // DetectBinaryPath attempts to determine the binary path within an archive
 // Uses simple heuristics - if uncertain, returns nil for manual completion
 func DetectBinaryPath(appName string, filename string, contentType binmanager.BinContentType, osType syslist.OsType) *string {
-	return DetectBinaryPathWithHistory(appName, filename, contentType, osType, nil)
+	return DetectBinaryPathWithHistory(appName, filename, contentType, osType, "", "", nil)
 }
 
-// DetectBinaryPathWithHistory attempts to determine the binary path within an archive
-// using historical data from previous versions of the same app
+// DetectBinaryPathWithHistory attempts to determine the binary path within an
+// archive, learning the layout from the entries an earlier release of the same
+// app recorded for this OS.
 func DetectBinaryPathWithHistory(
 	appName string,
 	filename string,
 	contentType binmanager.BinContentType,
 	osType syslist.OsType,
+	archType syslist.ArchType,
+	libc string,
 	historicalBinaries binmanager.MapOfBinaries,
 ) *string {
 	// For non-archive types, no binary path needed
@@ -32,12 +37,10 @@ func DetectBinaryPathWithHistory(
 		return nil
 	}
 
-	// Try to learn from historical data first
-	if historicalPattern := extractBinaryPathPattern(historicalBinaries, osType, filename); historicalPattern != nil {
-		return historicalPattern
+	if historical := historicalBinaryPath(historicalBinaries, osType, archType, libc, filename); historical != nil {
+		return historical
 	}
 
-	// Fallback to heuristic-based detection
 	return detectBinaryPathHeuristic(appName, filename, osType)
 }
 
@@ -80,30 +83,141 @@ func detectBinaryPathHeuristic(appName string, filename string, osType syslist.O
 	return nil
 }
 
-// extractBinaryPathPattern analyzes historical binaries for the same app
-// and extracts a common pattern to use for new versions
-func extractBinaryPathPattern(historicalBinaries binmanager.MapOfBinaries, osType syslist.OsType, filename string) *string {
-	var paths, sameAsset []string
-	for _, libcMap := range historicalBinaries[osType] {
-		for _, binInfo := range libcMap {
-			if binInfo.BinaryPath == nil {
+// historicalEntry is one binary an earlier release recorded: the asset it
+// came from, the path it named inside that asset, and the platform it served.
+type historicalEntry struct {
+	asset string
+	path  string
+	arch  syslist.ArchType
+	libc  string
+}
+
+// historicalBinaryPath adapts a path recorded for an earlier release of the
+// app to the new asset. An asset published under the same name as before keeps
+// its layout. Otherwise the closest entry lends its layout — the same
+// os/arch/libc first, then the same os/arch, then the same OS — with the new
+// asset's name or version substituted. A borrowed layout that names another
+// architecture or libc than the asset is skipped: it was recorded for a
+// different asset, and taking it is how darwin/amd64 came to point into the
+// aarch64 directory.
+func historicalBinaryPath(history binmanager.MapOfBinaries, osType syslist.OsType, archType syslist.ArchType, libc, filename string) *string {
+	var entries []historicalEntry
+	for arch, libcMap := range history[osType] {
+		for entryLibc, info := range libcMap {
+			if info.BinaryPath == nil {
 				continue
 			}
-			paths = append(paths, *binInfo.BinaryPath)
-			if assetName(binInfo.URL) == filename {
-				sameAsset = append(sameAsset, *binInfo.BinaryPath)
-			}
+			entries = append(entries, historicalEntry{
+				asset: assetName(info.URL),
+				path:  *info.BinaryPath,
+				arch:  arch,
+				libc:  entryLibc,
+			})
+		}
+	}
+	closeness := func(e historicalEntry) int {
+		switch {
+		case e.arch == archType && e.libc == libc:
+			return 0
+		case e.arch == archType:
+			return 1
+		default:
+			return 2
+		}
+	}
+	slices.SortFunc(entries, func(a, b historicalEntry) int {
+		return cmp.Or(
+			cmp.Compare(closeness(a), closeness(b)),
+			cmp.Compare(a.path, b.path),
+			cmp.Compare(a.arch, b.arch),
+			cmp.Compare(a.libc, b.libc),
+		)
+	})
+
+	for _, e := range entries {
+		if e.asset == filename {
+			return &e.path
+		}
+	}
+	for _, e := range entries {
+		derived := derivePath(e, filename)
+		if pathContradictsAsset(derived, archType, libc, filename) {
+			continue
+		}
+		return &derived
+	}
+	return nil
+}
+
+// derivePath adapts the path an earlier asset recorded to the new asset name.
+// A path component that repeats the old asset's stem, as in
+// tombi-cli-1.5.0-x86_64-unknown-linux-gnu/tombi, becomes the new stem, which
+// carries version, architecture and libc at once. Otherwise only a version
+// found in the path is replaced, and a path without one is kept as it is.
+func derivePath(entry historicalEntry, filename string) string {
+	oldStem, newStem := archiveStem(entry.asset), archiveStem(filename)
+	if oldStem != "" && oldStem != newStem {
+		parts := strings.Split(entry.path, "/")
+		if i := slices.Index(parts, oldStem); i >= 0 {
+			parts[i] = newStem
+			return strings.Join(parts, "/")
 		}
 	}
 
-	// An asset published under the same name as before keeps its layout.
-	if len(sameAsset) > 0 {
-		slices.Sort(sameAsset)
-		return &sameAsset[0]
+	newVersion := extractVersion(filename)
+	oldVersion, oldPart := extractVersionFromPath(entry.path)
+	if newVersion == "" || oldVersion == "" || oldVersion == newVersion {
+		return entry.path
 	}
+	newPart := strings.Replace(oldPart, oldVersion, newVersion, 1)
+	return strings.Replace(entry.path, oldPart, newPart, 1)
+}
 
-	slices.Sort(paths)
-	return findCommonPattern(paths, filename)
+// pathContradictsAsset reports whether a layout borrowed from another entry
+// names an architecture other than the requested one, or a libc other than
+// the asset's own (or, for an asset that names none, the requested one). Each
+// path component is read without its version, so the digits of "tool-1.386.0"
+// are not an architecture, and a libc token counts only where an architecture
+// or Linux is named beside it, the way a target triple does: "gnu" or "musl"
+// in a directory an application named after itself says nothing about the
+// platform.
+func pathContradictsAsset(path string, archType syslist.ArchType, libc, filename string) bool {
+	assetLibc := DetectLibcFromFilename(filename)
+	for part := range strings.SplitSeq(path, "/") {
+		token := withoutVersion(part)
+		for arch := range ArchPatterns {
+			if arch != archType && MatchArch(token, arch) {
+				return true
+			}
+		}
+		pathLibc := DetectLibcFromFilename(token)
+		if pathLibc == "" || (!HasAnyArchIndicator(token) && !linuxTokenPattern.MatchString(token)) {
+			continue
+		}
+		switch {
+		case assetLibc != "":
+			if pathLibc != assetLibc {
+				return true
+			}
+		case libc == "glibc" || libc == "musl":
+			if pathLibc != libc {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// linuxTokenPattern names Linux without naming a libc: the OS pattern also
+// accepts "alpine" and "musl", which cannot corroborate themselves.
+var linuxTokenPattern = regexp.MustCompile(`(?i)(linux|ubuntu)`)
+
+// withoutVersion removes the version a path component carries.
+func withoutVersion(part string) string {
+	if version := extractVersionFromString(part); version != "" {
+		return strings.Replace(part, version, "", 1)
+	}
+	return part
 }
 
 func assetName(rawURL string) string {
@@ -114,56 +228,19 @@ func assetName(rawURL string) string {
 	return path.Base(u.Path)
 }
 
-// findCommonPattern finds a common pattern among historical paths
-// and applies it to the new filename
-func findCommonPattern(paths []string, newFilename string) *string {
-	if len(paths) == 0 {
-		return nil
-	}
+// archiveSuffixes are the archive extensions an asset name can carry, the
+// compound ones first so ".tar.gz" is stripped whole.
+var archiveSuffixes = []string{".tar.bz2", ".tar.zst", ".tar.gz", ".tar.xz", ".tgz", ".txz", ".tbz", ".tar", ".zip"}
 
-	newVersion := extractVersion(newFilename)
-	if newVersion == "" {
-		return stableUnversionedPath(paths)
-	}
-
-	for _, p := range paths {
-		oldVersion, oldPart := extractVersionFromPath(p)
-		if oldVersion == "" {
-			continue
-		}
-
-		if oldVersion == newVersion {
-			return &p
-		}
-
-		newPart := strings.Replace(oldPart, oldVersion, newVersion, 1)
-		pattern := strings.Replace(p, oldPart, newPart, 1)
-		return &pattern
-	}
-
-	return &paths[0]
-}
-
-// stableUnversionedPath returns the one path all historical entries agree on,
-// provided it names neither a version nor a platform. Such a path, like
-// "buf/bin/buf", describes a layout that holds across releases and across the
-// architectures of one OS, so it applies to an asset name that carries no
-// version to substitute. A path naming a platform ("tool_linux_amd64") belongs
-// to one asset only.
-func stableUnversionedPath(paths []string) *string {
-	stable := paths[0]
-	for _, p := range paths {
-		if p != stable {
-			return nil
+// archiveStem returns the asset name without its archive extension.
+func archiveStem(filename string) string {
+	lower := strings.ToLower(filename)
+	for _, suffix := range archiveSuffixes {
+		if strings.HasSuffix(lower, suffix) {
+			return filename[:len(filename)-len(suffix)]
 		}
 	}
-	if version, _ := extractVersionFromPath(stable); version != "" {
-		return nil
-	}
-	if HasAnyOSIndicator(stable) || HasAnyArchIndicator(stable) {
-		return nil
-	}
-	return &stable
+	return filename
 }
 
 // extractVersionFromPath extracts version string from a path
@@ -236,14 +313,7 @@ func isValidVersion(s string) bool {
 // extractVersion attempts to extract version string from filename
 // Returns empty string if no clear version found
 func extractVersion(filename string) string {
-	// Remove extension
-	name := strings.TrimSuffix(filename, ".tar.gz")
-	name = strings.TrimSuffix(name, ".tar.xz")
-	name = strings.TrimSuffix(name, ".zip")
-	name = strings.TrimSuffix(name, ".tgz")
-	name = strings.TrimSuffix(name, ".txz")
-
-	return extractVersionFromString(name)
+	return extractVersionFromString(archiveStem(filename))
 }
 
 // isDigit checks if byte is a digit
