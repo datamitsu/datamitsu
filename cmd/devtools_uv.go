@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 
+	"github.com/datamitsu/datamitsu/internal/jsonsort"
 	"github.com/datamitsu/datamitsu/internal/registry"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 
@@ -90,6 +91,7 @@ func runPullUV(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Minimum release age: %s\n", minAgeBanner(minAge))
 	fmt.Printf("Checking %d PyPI packages...\n\n", len(names))
+	enableRetryNotices()
 
 	var results []pypiVersionResult
 	maxNameLen := 0
@@ -99,7 +101,14 @@ func runPullUV(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	for _, name := range names {
+	// With --update, a package whose entry changes is saved before the next
+	// lookup, so a later failure or an interrupted run costs nothing already
+	// pulled; a package that fails keeps its previous entry.
+	write := uvUpdateFlag && !uvDryRunFlag
+	updatedCount := 0
+	counterWidth := len(strconv.Itoa(len(names)))
+	for i, name := range names {
+		counter := fmt.Sprintf("[%*d/%d]", counterWidth, i+1, len(names))
 		entry := apps[name]
 		result := pypiVersionResult{
 			Name:           name,
@@ -111,13 +120,13 @@ func runPullUV(cmd *cobra.Command, args []string) error {
 		switch {
 		case err != nil:
 			result.Error = err.Error()
-			fmt.Printf("  %-*s  %s  -> error: %v\n", maxNameLen, name, result.CurrentVersion, err)
+			fmt.Printf("  %s %-*s  %s  -> error: %v\n", counter, maxNameLen, name, result.CurrentVersion, err)
 		case info == nil:
 			// No version is old enough under the active min-age cutoff: skip with
 			// a warning and keep the current version (no error, no update).
 			fmt.Fprintf(os.Stderr,
-				"  %-*s  %s  -> warning: no version at least %d minutes old; keeping current\n",
-				maxNameLen, name, result.CurrentVersion, minAge)
+				"  %s %-*s  %s  -> warning: no version at least %d minutes old; keeping current\n",
+				counter, maxNameLen, name, result.CurrentVersion, minAge)
 		default:
 			result.LatestVersion = info.Version
 			result.UpdateNeeded = info.Version != entry.Version
@@ -127,7 +136,7 @@ func runPullUV(cmd *cobra.Command, args []string) error {
 			if result.UpdateNeeded {
 				status = "-> " + info.Version
 			}
-			line := fmt.Sprintf("  %-*s  %s  %s", maxNameLen, name, result.CurrentVersion, status)
+			line := fmt.Sprintf("  %s %-*s  %s  %s", counter, maxNameLen, name, result.CurrentVersion, status)
 			if info.Description != "" {
 				line += "  " + info.Description
 			}
@@ -135,22 +144,41 @@ func runPullUV(cmd *cobra.Command, args []string) error {
 		}
 
 		results = append(results, result)
+
+		if !write || result.Error != "" {
+			continue
+		}
+		next := applyUVResult(entry, result)
+		if next == entry {
+			continue
+		}
+		apps[name] = next
+		if err := writeUVAppsJSON(file, apps); err != nil {
+			fmt.Fprintf(os.Stderr, "The run stopped at %s; the packages after it were not attempted.\n", name)
+			return fmt.Errorf("error updating %s after %s: %w", file, name, err)
+		}
+		if result.UpdateNeeded {
+			updatedCount++
+		}
 	}
 
-	if uvUpdateFlag && !uvDryRunFlag {
-		if err := updateUVAppsJSON(file, results); err != nil {
-			return fmt.Errorf("error updating %s: %w", file, err)
+	if write {
+		if updatedCount > 0 {
+			fmt.Printf("\n✓ Updated %d versions in %s\n", updatedCount, file)
+		} else {
+			fmt.Printf("\nNo updates to write to %s\n", file)
 		}
 	}
 
 	printUVSummary(results)
 
+	var failed []failedPackage
 	for _, r := range results {
 		if r.Error != "" {
-			return errors.New("some packages failed to fetch from registry")
+			failed = append(failed, failedPackage{name: r.Name, pkg: r.PackageName, err: r.Error})
 		}
 	}
-	return nil
+	return reportFailedPackages(file, len(results), failed)
 }
 
 func printUVSummary(results []pypiVersionResult) {
@@ -221,7 +249,7 @@ func readUVAppsJSON(path string) (uvAppsJSON, error) {
 }
 
 func writeUVAppsJSON(path string, apps uvAppsJSON) error {
-	data, err := json.MarshalIndent(apps, "", "  ")
+	data, err := jsonsort.MarshalIndent(apps, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling: %w", err)
 	}
@@ -251,39 +279,14 @@ func writeUVAppsJSON(path string, apps uvAppsJSON) error {
 	return nil
 }
 
-func updateUVAppsJSON(path string, results []pypiVersionResult) error {
-	existing, err := readUVAppsJSON(path)
-	if err != nil {
-		return fmt.Errorf("failed to read existing %s: %w", path, err)
+// applyUVResult is the entry a successful lookup leaves: the latest version
+// when it moved, and the registry's description unless the registry has none.
+func applyUVResult(entry uvAppEntry, r pypiVersionResult) uvAppEntry {
+	if r.UpdateNeeded {
+		entry.Version = r.LatestVersion
 	}
-	apps := make(uvAppsJSON, len(results))
-	updatedCount := 0
-	for _, r := range results {
-		version := r.CurrentVersion
-		if r.Error == "" && r.UpdateNeeded {
-			version = r.LatestVersion
-			updatedCount++
-		}
-		desc := r.Description
-		if desc == "" && existing != nil {
-			if e, ok := existing[r.Name]; ok {
-				desc = e.Description
-			}
-		}
-		apps[r.Name] = uvAppEntry{
-			PackageName: r.PackageName,
-			Version:     version,
-			Description: desc,
-		}
+	if r.Description != "" {
+		entry.Description = r.Description
 	}
-
-	if err := writeUVAppsJSON(path, apps); err != nil {
-		return err
-	}
-	if updatedCount > 0 {
-		fmt.Printf("\n✓ Updated %d versions in %s\n", updatedCount, path)
-	} else {
-		fmt.Printf("\nNo updates to write to %s\n", path)
-	}
-	return nil
+	return entry
 }

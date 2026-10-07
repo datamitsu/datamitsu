@@ -3,8 +3,10 @@ package cmd
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/gittest"
+	"github.com/datamitsu/datamitsu/internal/httpretry"
 )
 
 // TestMain drops git's repository-discovery variables so the tests below act on
@@ -26,6 +28,9 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("DATAMITSU_CACHE_DIR", cacheDir); err != nil {
 		panic(err)
 	}
+	// Every registry and GitHub request retries transient failures; a test
+	// that serves an error must not sit through the production backoff.
+	httpretry.RetryBase, httpretry.RetryMax = time.Millisecond, 4*time.Millisecond
 
 	code := m.Run()
 	_ = os.RemoveAll(cacheDir)

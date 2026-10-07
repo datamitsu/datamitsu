@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -329,5 +330,40 @@ func assertOfflineError(t *testing.T, res clitest.Result, wantMsg string) {
 	if strings.Contains(res.Stderr, "Usage:") || strings.Contains(res.Stdout, "Usage:") {
 		t.Errorf("runtime error printed usage block (SilenceUsage broken):\nstdout:\n%s\nstderr:\n%s",
 			res.Stdout, res.Stderr)
+	}
+}
+
+// TestDevtoolsPullGithubReportsFailures locks the failure contract of a pull:
+// every app is attempted, each failure is listed with its stage and error, the
+// file is left as it was, and the process exits non-zero. The hermetic offline
+// environment makes every GitHub request fail before it leaves the machine.
+func TestDevtoolsPullGithubReportsFailures(t *testing.T) {
+	p := clitest.NewProject(t)
+	state := `{"apps":{"alpha":{"owner":"o","repo":"alpha","tag":"v1"},"beta":{"owner":"o","repo":"beta","tag":"v2"}},"binaries":{}}` + "\n"
+	path := p.WriteFile("githubApps.json", state)
+
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "pull-github", "githubApps.json")
+	if res.ExitCode != 1 {
+		t.Fatalf("exit = %d, want 1\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+	for _, want := range []string{
+		"2 of 2 apps failed and are left as they were in githubApps.json",
+		"alpha (release v1): ",
+		"beta (release v2): ",
+		"error: 2 of 2 apps failed",
+	} {
+		if !strings.Contains(res.Stderr, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, res.Stderr)
+		}
+	}
+	if strings.Contains(res.Stdout, "✓ Processed") {
+		t.Errorf("stdout claims success:\n%s", res.Stdout)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != state {
+		t.Errorf("file changed by a run in which every app failed:\n%s", after)
 	}
 }
