@@ -15,6 +15,8 @@ func newTestCache(t *testing.T) *Cache {
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
+	// Stops the debounced save before TempDir removes the directory under it.
+	t.Cleanup(c.Shutdown)
 	return c
 }
 
@@ -93,12 +95,14 @@ func TestDeletedVerdictStaysDeletedAcrossSave(t *testing.T) {
 	if err := first.Save(); err != nil {
 		t.Fatalf("first save: %v", err)
 	}
+	first.Shutdown()
 
 	second, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
 	second.DeleteVerdict("k")
 	if err := second.Save(); err != nil {
 		t.Fatalf("second save: %v", err)
 	}
+	second.Shutdown()
 
 	reloaded, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
 	if !reloaded.ShouldRunVerdict("k", "x", testTTL) {
@@ -116,12 +120,14 @@ func TestSaveTakesOverAStaleCacheFile(t *testing.T) {
 	if err := old.Save(); err != nil {
 		t.Fatalf("save with the first config: %v", err)
 	}
+	old.Shutdown()
 
 	fresh, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"b"}}, nil, zap.NewNop())
 	fresh.AfterVerdict("k2", VerdictEntry{Tool: "tsc", InputHash: "y"})
 	if err := fresh.Save(); err != nil {
 		t.Fatalf("save after a config change must succeed, got: %v", err)
 	}
+	fresh.Shutdown()
 
 	reloaded, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"b"}}, nil, zap.NewNop())
 	if reloaded.ShouldRunVerdict("k2", "y", testTTL) {
@@ -142,6 +148,7 @@ func TestSaveMergesVerdictsFromDisk(t *testing.T) {
 	if err := first.Save(); err != nil {
 		t.Fatalf("first save: %v", err)
 	}
+	first.Shutdown()
 
 	second, err := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
 	if err != nil {
@@ -151,6 +158,7 @@ func TestSaveMergesVerdictsFromDisk(t *testing.T) {
 	if err := second.Save(); err != nil {
 		t.Fatalf("second save: %v", err)
 	}
+	second.Shutdown()
 
 	reloaded, err := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
 	if err != nil {

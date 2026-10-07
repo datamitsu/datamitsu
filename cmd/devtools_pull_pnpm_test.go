@@ -317,31 +317,33 @@ func TestPreservePNPMRuntimeRefDefaultsForNewEntry(t *testing.T) {
 	}
 }
 
-func TestValidatePNPMRuntimeRefs(t *testing.T) {
+func TestValidatePNPMRuntimeRef(t *testing.T) {
 	nodeEntry := buildNodeRuntimeJSON(&NodeRuntimeData{NodeVersion: "26.7.0"}, nil)
 	pnpmEntry := buildPNPMRuntimeJSON(&PNPMRuntimeData{PNPMVersion: "12.3.4"}, testPNPMBinaries())
 
 	tests := []struct {
 		name     string
 		runtimes RuntimesJSON
+		entry    *RuntimeJSON
 		wantErr  string
 	}{
-		{"reference resolves", RuntimesJSON{"node": nodeEntry, "pnpm": pnpmEntry}, ""},
-		{"pnpm entry missing", RuntimesJSON{"node": nodeEntry}, "does not define"},
-		{"reference names another kind", RuntimesJSON{"node": nodeEntry, "pnpm": {Kind: "uv", Mode: "managed"}}, "kind"},
+		{"reference resolves", RuntimesJSON{"pnpm": pnpmEntry}, nodeEntry, ""},
+		{"pnpm entry missing", RuntimesJSON{}, nodeEntry, "does not define"},
+		{"reference names another kind", RuntimesJSON{"pnpm": {Kind: "uv", Mode: "managed"}}, nodeEntry, "kind"},
+		{"entry without a reference", RuntimesJSON{}, pnpmEntry, ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validatePNPMRuntimeRefs(tt.runtimes)
+			err := validatePNPMRuntimeRef(tt.runtimes, tt.entry.Kind, tt.entry)
 			if tt.wantErr == "" {
 				if err != nil {
-					t.Fatalf("validatePNPMRuntimeRefs() error = %v, want nil", err)
+					t.Fatalf("validatePNPMRuntimeRef() error = %v, want nil", err)
 				}
 				return
 			}
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("validatePNPMRuntimeRefs() error = %v, want one mentioning %q", err, tt.wantErr)
+				t.Fatalf("validatePNPMRuntimeRef() error = %v, want one mentioning %q", err, tt.wantErr)
 			}
 		})
 	}
