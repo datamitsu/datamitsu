@@ -2,11 +2,8 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
@@ -56,24 +53,9 @@ func getLatestGoReleaseFromURL(ctx context.Context, url string) (*GoRelease, err
 	if err := httpx.GuardOffline("Go release lookup"); err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build request: %w", err)
-	}
-	resp, err := goDevHTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch Go releases: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return nil, fmt.Errorf("go.dev returned status %d: %s", resp.StatusCode, string(body))
-	}
-
 	var releases []goDevRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&releases); err != nil {
-		return nil, fmt.Errorf("failed to decode Go releases: %w", err)
+	if err := getJSON(ctx, goDevHTTPClient, "go.dev", url, 10<<20, &releases); err != nil {
+		return nil, fmt.Errorf("failed to fetch Go releases: %w", err)
 	}
 
 	rel := highestStableGoRelease(releases)

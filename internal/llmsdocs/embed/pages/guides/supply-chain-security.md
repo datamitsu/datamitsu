@@ -68,7 +68,7 @@ The global default is **10080 minutes (7 days)**. It applies to every command th
 | `pull-uv`       | PyPI                                                  |
 | `pull-runtimes` | npm (pnpm), GitHub (Bun, uv, and JVM binary releases) |
 
-Major-version-line lookups are **not** age-filtered, because they select a release _line_ rather than a specific build: the Node.js LTS line and Python stable line (endoflife.date), the Temurin major version (Adoptium API), and the Go release listing (go.dev). Only the concrete binary release or package version chosen within those lines passes through the age filter.
+Major-version-line lookups are **not** age-filtered, because they select a release _line_ rather than a specific build: the Node.js LTS line and Python stable line (endoflife.date), the Temurin major version (Adoptium API), and the Go release listing (go.dev). Only the concrete binary release or package version chosen within those lines passes through the age filter. When the newest Temurin feature release has no build old enough yet — in the days after it ships, its only GA build is younger than the cutoff — the JVM pull takes the previous feature release instead.
 
 ### The `--min-age` flag
 
@@ -93,11 +93,13 @@ Each command prints the effective cutoff in its status banner (`Minimum release 
 
 ### When no release is old enough
 
+A GitHub release list is read a page at a time, and a page with nothing old enough and stable sends the lookup to the next one, up to ten pages (300 releases): a repository that publishes nightly or early-access builds as prereleases does not hide its last stable release.
+
 If every available release is younger than the cutoff, datamitsu's behavior depends on whether a safe fallback exists:
 
 - **`pull-github`** — an _existing_ app keeps its current tag with a warning; a _new_ app (no prior binary) is a **hard error**, since there is nothing safe to pin.
 - **`pull-node` / `pull-uv`** — the package is skipped with a warning and keeps its current version.
-- **`pull-runtimes`** — a hard error, since runtimes must resolve to a concrete version.
+- **`pull-runtimes`** — a hard error for that runtime, since runtimes must resolve to a concrete version; it keeps its previous entry, and the other runtimes are still saved.
 
 The error message always points at the `--min-age 0` escape hatch.
 

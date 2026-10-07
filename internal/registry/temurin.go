@@ -1,19 +1,17 @@
 package registry
 
 import (
+	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/httpx"
 )
-
-const temurinFallbackMajorVersion = "25"
 
 type temurinReleaseVersions struct {
 	MostRecentFeatureRelease int   `json:"most_recent_feature_release"`
@@ -22,50 +20,45 @@ type temurinReleaseVersions struct {
 
 var temurinHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
-// GetLatestTemurinMajorVersion returns the most recent Temurin (Eclipse Adoptium)
-// feature-release major version, falling back to a pinned version on failure.
-func GetLatestTemurinMajorVersion(ctx context.Context) (string, error) {
-	return getLatestTemurinMajorVersionFromURL(ctx, "https://api.adoptium.net/v3/info/available_releases")
+// GetTemurinMajorVersions returns the Temurin (Eclipse Adoptium) feature
+// releases, newest first, starting at the most recent one. A caller walks down
+// the list: the newest feature release can be too young for the minimum
+// release age in the days after it ships.
+func GetTemurinMajorVersions(ctx context.Context) ([]string, error) {
+	return getTemurinMajorVersionsFromURL(ctx, "https://api.adoptium.net/v3/info/available_releases")
 }
 
-func getLatestTemurinMajorVersionFromURL(ctx context.Context, url string) (string, error) {
+func getTemurinMajorVersionsFromURL(ctx context.Context, url string) ([]string, error) {
 	if err := httpx.GuardOffline("Temurin release lookup"); err != nil {
-		return temurinFallbackMajorVersion, err
+		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return temurinFallbackMajorVersion, fmt.Errorf("failed to build request: %w", err)
-	}
-	resp, err := temurinHTTPClient.Do(req)
-	if err != nil {
-		return temurinFallbackMajorVersion, fmt.Errorf("failed to fetch Temurin releases: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return temurinFallbackMajorVersion, fmt.Errorf("adoptium API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
 	var releases temurinReleaseVersions
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&releases); err != nil {
-		return temurinFallbackMajorVersion, fmt.Errorf("failed to decode Temurin releases: %w", err)
+	if err := getJSON(ctx, temurinHTTPClient, "adoptium API", url, 10<<20, &releases); err != nil {
+		return nil, fmt.Errorf("failed to fetch Temurin releases: %w", err)
 	}
 
-	version := extractMajorVersion(releases)
-	if version == "" {
-		return temurinFallbackMajorVersion, errors.New("no major version found in Temurin releases")
+	versions := extractMajorVersions(releases)
+	if len(versions) == 0 {
+		return nil, errors.New("no major version found in Temurin releases")
 	}
-
-	return version, nil
+	return versions, nil
 }
 
-func extractMajorVersion(releases temurinReleaseVersions) string {
+// extractMajorVersions orders the feature releases newest first, whatever
+// order the API lists them in, and leaves out any above the most recent one.
+func extractMajorVersions(releases temurinReleaseVersions) []string {
+	majors := slices.Clone(releases.AvailableReleases)
 	if releases.MostRecentFeatureRelease > 0 {
-		return strconv.Itoa(releases.MostRecentFeatureRelease)
+		majors = append(majors, releases.MostRecentFeatureRelease)
+		majors = slices.DeleteFunc(majors, func(v int) bool { return v > releases.MostRecentFeatureRelease })
 	}
-	if len(releases.AvailableReleases) > 0 {
-		return strconv.Itoa(releases.AvailableReleases[0])
+	majors = slices.DeleteFunc(majors, func(v int) bool { return v <= 0 })
+	slices.SortFunc(majors, func(a, b int) int { return cmp.Compare(b, a) })
+	majors = slices.Compact(majors)
+
+	versions := make([]string, len(majors))
+	for i, v := range majors {
+		versions[i] = strconv.Itoa(v)
 	}
-	return ""
+	return versions
 }
