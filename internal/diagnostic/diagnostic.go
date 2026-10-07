@@ -85,6 +85,10 @@ type Diagnostic struct {
 	// what fails a run on its own. A process parsed by a module that predates
 	// the severity contract has none.
 	Gates bool `json:"gates,omitempty"`
+	// Baselined marks a finding whose fingerprint the run's baseline holds:
+	// set before the gate decides, which then neither reports it nor lets it
+	// gate.
+	Baselined bool `json:"baselined,omitempty"`
 	// Anchor is what a report needs of the finding's place in its file, taken
 	// while the file was on disk; nil when nothing asked for it.
 	Anchor *Anchor `json:"-"`

@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "408eeb17ec10a6ce75c1d4ddfaed1df2",
+  "pageSetHash": "558b3b232382e9ba3aafeb99d77b580e",
   "pages": [
     {
       "slug": "about",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 17804,
-      "contentHash": "d9f40c31f60219fb36bcb6361497eef1"
+      "bytes": 19148,
+      "contentHash": "2e1dfd8e71531e693467ff1583cbbc5c"
     },
     {
       "slug": "guides/architecture",
@@ -325,8 +325,8 @@
       "url": "https://datamitsu.com/docs/guides/reports.md",
       "title": "Reports",
       "description": "One record of a fix, lint or check run — what it holds, what it never contains, how complete it says it is, and how its findings keep their identity across runs",
-      "bytes": 33559,
-      "contentHash": "cbf46dbe236c25305d8331211bfed3e7"
+      "bytes": 45685,
+      "contentHash": "696531d46e862bb53a081c04c05ff45a"
     },
     {
       "slug": "guides/runtime-management",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 159684,
-      "contentHash": "24a55839bdb8f0afb62098220fe59bcc"
+      "bytes": 175636,
+      "contentHash": "d77f257b582a88913355c2ce99d220d1"
     },
     {
       "slug": "reference/comparison",

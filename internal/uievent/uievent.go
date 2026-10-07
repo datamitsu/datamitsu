@@ -153,6 +153,8 @@ type Event struct {
 	// written on the events that carry them.
 	Reported *bool `json:"reported,omitempty"`
 	Gates    *bool `json:"gates,omitempty"`
+	// Baselined is set on a finding the run's baseline held.
+	Baselined bool `json:"baselined,omitempty"`
 
 	// tool_run's terminal event: the task's findings per level, zero
 	// included, and whether a cache answered for it.

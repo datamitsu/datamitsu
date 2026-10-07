@@ -116,7 +116,7 @@ func describeFiles(task Task, result *ExecutionResult, fallback FileState) {
 					fr.Success = !g.all && !g.files[file]
 				}
 				if len(proc.Files) == 1 {
-					fr.Edits = proc.edits
+					fr.Edits, fr.Patch = proc.edits, proc.patch
 				}
 			}
 		}

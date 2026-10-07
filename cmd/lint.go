@@ -19,6 +19,7 @@ var (
 	lintFailFast      bool
 	lintFailOn        string
 	lintReports       reportFlags
+	lintBaseline      string
 )
 
 var lintCmd = &cobra.Command{
@@ -48,6 +49,7 @@ func init() {
 	addFailFastFlag(lintCmd, &lintFailFast)
 	addFailOnFlag(lintCmd, &lintFailOn)
 	addReportFlags(lintCmd, &lintReports)
+	addBaselineFlag(lintCmd, &lintBaseline)
 	rootCmd.AddCommand(lintCmd)
 }
 
@@ -69,6 +71,9 @@ func runLint(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if err := applyOutput(cmd, lintReports, &opts); err != nil {
+		return err
+	}
+	if err := applyBaseline(lintBaseline, &opts); err != nil {
 		return err
 	}
 	err := runner.Run(config.OpLint, args, lintExplain, lintFileScoped, lintSelectedTools, lintFailOnSkip,

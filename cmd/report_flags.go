@@ -7,6 +7,8 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
+	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render"
 	"github.com/datamitsu/datamitsu/internal/runner"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
@@ -16,7 +18,7 @@ import (
 )
 
 var reportUsage = "Write a report once the run ends, failed or not: <format>=<path>, or <format>=- for stdout " +
-	"(repeatable; formats: " + strings.Join(render.Names(), ", ") + "; turns fail-fast off; also via DATAMITSU_REPORT)"
+	"(repeatable; formats: " + strings.Join(render.Names(), ", ") + "; one that lists findings turns fail-fast off; also via DATAMITSU_REPORT)"
 
 const (
 	allowPartialUsage = "Write a report that lists findings for a narrowed run (named files, a subdirectory, " +
@@ -24,11 +26,40 @@ const (
 		"(also via DATAMITSU_ALLOW_PARTIAL)"
 	eventsUsage = "Which findings --log-format jsonl carries as diagnostic events: diagnostics=reported " +
 		"(at or above failOn, the default) or diagnostics=all (also via DATAMITSU_EVENTS)"
-	annotationsUsage = "Print the run's findings as workflow annotations once it ends: auto (github in a GitHub Actions job, " +
-		"unless stdout carries a document or --log-format jsonl is on), github or off (also via DATAMITSU_ANNOTATIONS)"
+	annotationsUsage = "Print the run's findings as CI annotations once it ends: auto (github in a GitHub Actions job, " +
+		"azure in Azure Pipelines, teamcity in TeamCity, unless stdout carries a document or --log-format jsonl is on), " +
+		"github, azure, teamcity or off (also via DATAMITSU_ANNOTATIONS)"
 	outputUsage = "How the run shows its results: human (frames, colour, progress) or agent (one line per finding " +
 		"the terminal would show, one summary line per operation; also via DATAMITSU_OUTPUT)"
 )
+
+const baselineUsage = "Gate only on findings the baseline does not hold: a document of 'report baseline', or a run's " +
+	"own JSON report. A finding it holds is neither reported nor gates; a tool that exits non-zero still fails"
+
+func addBaselineFlag(cmd *cobra.Command, path *string) {
+	cmd.Flags().StringVar(path, "baseline", "", baselineUsage)
+}
+
+// applyBaseline loads the baseline a run is matched against before anything
+// runs: one that cannot be read, or holds another schema or fingerprints of
+// another version, is a usage error. A run's own report taken as one warns
+// when that run was incomplete, as report baseline does: it holds fewer
+// fingerprints, and suppresses fewer findings.
+func applyBaseline(path string, opts *runner.Options) error {
+	if path == "" {
+		return nil
+	}
+	b, err := report.LoadBaseline(path)
+	if err != nil {
+		return exitcode.UsageErrorf("invalid --baseline: %w", err)
+	}
+	if b.FromReport && !b.Complete {
+		logger.Logger.Warn(fmt.Sprintf("--baseline: the run of %s is incomplete (%s): it suppresses only the findings it found",
+			path, reasonNames(b.Incomplete)))
+	}
+	opts.Baseline = b.Set
+	return nil
+}
 
 // Values of --events and DATAMITSU_EVENTS.
 const (
@@ -121,23 +152,23 @@ func applyAnnotations(cmd *cobra.Command, flags reportFlags, explain string, opt
 		}
 		mode = v.raw
 	}
-	if mode == runner.AnnotationsGitHub {
+	if explicit := mode != runner.AnnotationsAuto && mode != runner.AnnotationsOff; explicit {
 		switch {
 		case slices.ContainsFunc(opts.Reports, render.Spec.Stdout):
-			return exitcode.UsageErrorf("--annotations github cannot be combined with a report written to stdout (-): " +
-				"the workflow commands would land in the document")
+			return exitcode.UsageErrorf("--annotations %s cannot be combined with a report written to stdout (-): "+
+				"the commands would land in the document", mode)
 		case isJSONExplain(explain):
-			return exitcode.UsageErrorf("--annotations github cannot be combined with --explain=json: " +
-				"the workflow commands would land in the plan")
+			return exitcode.UsageErrorf("--annotations %s cannot be combined with --explain=json: "+
+				"the commands would land in the plan", mode)
 		}
 	}
 	opts.Annotations = mode
-	// Beside a stream only an explicit github prints annotations; the
-	// stream's hello says which.
+	// Beside a stream only an explicit mode prints annotations; the stream's
+	// hello says which.
 	if ui.Quiet() {
 		streamAnnotations = runner.AnnotationsOff
-		if mode == runner.AnnotationsGitHub {
-			streamAnnotations = runner.AnnotationsGitHub
+		if mode != runner.AnnotationsAuto {
+			streamAnnotations = mode
 		}
 	}
 	return nil
@@ -167,9 +198,10 @@ func failFastWithReport(source string) error {
 // cannot be read is a usage error, flag or variable alike: a report asked for
 // and silently not written is what a pipeline cannot notice.
 //
-// A report turns fail-fast off: a run that stops at the first failure cannot
-// report a complete list. Fail-fast asked for explicitly — the flag, or
-// DATAMITSU_FAIL_FAST — together with a report is a usage error. It runs after
+// A report that lists findings turns fail-fast off: a run that stops at the
+// first failure cannot report a complete list. Fail-fast asked for explicitly —
+// the flag, or DATAMITSU_FAIL_FAST — together with such a report is a usage
+// error; a report of counts (history) leaves fail-fast alone. It runs after
 // applyFailFast, whose flag it reads from opts.
 func applyReports(cmd *cobra.Command, flags reportFlags, opts *runner.Options) error {
 	eff, err := runtimeconfig.Get()
@@ -192,13 +224,15 @@ func applyReports(cmd *cobra.Command, flags reportFlags, opts *runner.Options) e
 		return nil
 	}
 
-	switch {
-	case opts.FailFast != nil && *opts.FailFast:
-		return failFastWithReport("--fail-fast=true")
-	case opts.FailFast == nil && eff.FailFastSource == runtimeconfig.FailFastSourceEnv && eff.FailFast:
-		return failFastWithReport("DATAMITSU_FAIL_FAST=true")
+	if render.ListsFindings(specs) {
+		switch {
+		case opts.FailFast != nil && *opts.FailFast:
+			return failFastWithReport("--fail-fast=true")
+		case opts.FailFast == nil && eff.FailFastSource == runtimeconfig.FailFastSourceEnv && eff.FailFast:
+			return failFastWithReport("DATAMITSU_FAIL_FAST=true")
+		}
+		opts.FailFast = new(false)
 	}
-	opts.FailFast = new(false)
 
 	// A report on stdout owns it: human output goes, and stderr carries the
 	// JSON-L events instead.

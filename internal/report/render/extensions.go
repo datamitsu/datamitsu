@@ -53,6 +53,35 @@ type Declining interface {
 	Declines(run *report.Run, options map[string]string) string
 }
 
+// NoFindings is a format that lists no finding — history's counts, the
+// patches a fix applied. A run narrowed at plan time writes it, and asking for
+// it leaves fail-fast as it is: it cannot read as the findings of the
+// repository, however little the run covered.
+type NoFindings interface {
+	ListsNoFindings()
+}
+
+// Appending is a format whose file collects one entry per run: the run appends
+// its entry, in one write, instead of replacing the file.
+type Appending interface {
+	Appends()
+}
+
+// ListsFindings reports whether any of specs lists findings.
+func ListsFindings(specs []Spec) bool {
+	for _, s := range specs {
+		if r, ok := Lookup(s.Format); ok && !listsNoFindings(r) {
+			return true
+		}
+	}
+	return false
+}
+
+func listsNoFindings(r Renderer) bool {
+	_, ok := r.(NoFindings)
+	return ok
+}
+
 // DeclinedError is a report its format wrote nothing for, and why: recorded
 // as omitted, not as a failure to write.
 type DeclinedError struct{ Reason string }

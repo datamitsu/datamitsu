@@ -19,8 +19,10 @@ tools, the findings the terminal would show and what the run left out; `sarif`
 writes it for GitHub code scanning ([Code scanning](#code-scanning)); `junit`,
 `codequality`, `checkstyle` and `rdjsonl` write it for the CI systems and
 review tools that read test results, code quality reports, Checkstyle and
-reviewdog's diagnostics ([Other CI systems](#other-ci-systems)). The flags, the variable twins and the
-exit codes are in the [CLI reference](../reference/cli-commands.md#reports).
+reviewdog's diagnostics ([Other CI systems](#other-ci-systems)); `history`
+appends one line of counts per run to a trend file ([History](#history)). The
+flags, the variable twins and the exit codes are in the
+[CLI reference](../reference/cli-commands.md#reports).
 
 ## What a report holds
 
@@ -56,8 +58,16 @@ graph TD
 - **Findings** — the rule, the level, whether it is at or above the threshold
   (`reported`), whether it failed its tool (`gates`) and whether the terminal
   shows it (`shown`, which the annotations, `markdown` and `--output agent`
-  follow), the message, where it is — the path relative to the repository
-  root, 1-based rows and columns with an exclusive end — and its fingerprint.
+  follow), whether a [baseline](#baselines) held it (`baselined`), the
+  message, where it is — the path relative to the repository root, 1-based
+  rows and columns with an exclusive end — and its fingerprint, whose version
+  the run states (`fingerprint`).
+- **Changes** — for a `fix`, the files it changed (see
+  [Changed files](#changed-files)): on each invocation, with the `step` it ran
+  in, and on the operation for a file no invocation was given; whether they
+  were observed (`changesObserved`, `changesReason`) and within what
+  (`changesScope`). A file result holds the `patch` a formatter applied when
+  `--report patch` was asked for.
 
 Everything is sorted, so one run gives one document byte for byte, and the time
 it is stamped with comes from `SOURCE_DATE_EPOCH` when that is set.
@@ -477,6 +487,53 @@ pipelines:
           - exit "$status"
 ```
 
+### Azure Pipelines and TeamCity
+
+Both read commands from the log, so the run needs no step of its own: under
+`TF_BUILD` it logs each error and warning as an issue of the task, under
+`TEAMCITY_VERSION` it reports each finding as an inspection and each tool that
+failed without one as a build problem.
+
+```yaml
+# azure-pipelines.yml
+steps:
+  - checkout: self
+    fetchDepth: 0 # the target branch, for touched-file priority
+  - script: datamitsu lint --fail-fast=false --report json=$(Build.ArtifactStagingDirectory)/run.json
+    displayName: lint
+```
+
+```text
+# TeamCity command line build step
+datamitsu lint --fail-fast=false
+```
+
+- **Azure keeps ten issues of each type per task.** Findings in the files the
+  pull request touched come first — they are read from
+  `origin/<target branch>`, so fetch it — and a plain line says how many did not
+  fit and where they are; `info` and `hint` have no issue type and are left out.
+  Publish the JSON report as an artifact for the rest.
+- **TeamCity keeps everything.** Inspections appear in the build's Inspections
+  tab; a finding without a file cannot be an inspection and is counted instead.
+- **No tool output issues a command.** Azure runs `##vso[` wherever it appears
+  in a line, TeamCity reads `##teamcity[` the same way, on stdout and stderr.
+  In either CI — whatever `--annotations` says — and in either mode, datamitsu
+  rewrites the prefix, with a space, in every line it prints that holds tool
+  output or a repository path: raw output, parsed messages, command lines,
+  directories, file names, progress labels, agent records, the debug log of
+  `--verbose`, the plan of `--explain`, the annotations of another CI and the
+  JSON-L events. That is one space of difference in a raw line. TeamCity's
+  results block is also wrapped in `disableServiceMessages` …
+  `enableServiceMessages`.
+- **A document on stdout keeps its meaning.** A report written to stdout (`-`),
+  by a run or by `report render`, has the bracket after `##vso` and
+  `##teamcity` spelled `\u005b` in a JSON format and `&#91;` in an XML one,
+  which read back as the same text; Markdown and `patch` get the space.
+- **A run killed in the middle** — a second interrupt, a timeout that kills the
+  process — leaves TeamCity's reading suspended for the rest of the build step,
+  as it leaves GitHub's stop-commands region open; a run interrupted once
+  closes it.
+
 ### GitLab Code Quality
 
 `--report codequality=<path>` writes GitLab's Code Quality report, the array
@@ -636,6 +693,129 @@ agree whenever one process reports the findings of a line, which is every tool
 that runs once per file and every tool whose findings name the files it was
 given.
 
+## Changed files
+
+A `fix` changes the working tree, and whoever reads its result — an agent that
+holds the files in memory, a job that commits the fix — has to know which files.
+The report records them: a snapshot of the working tree is taken before the
+first group of tools that run together and after every group, and each file
+whose state moved between two of them is a change, `created`, `modified`,
+`deleted` or `reverted` (a dirty file a formatter restored to what the commit
+holds).
+
+```mermaid
+graph LR
+    S0["snapshot"] --> G1["group 1: prettier, gofmt"]
+    G1 --> S1["snapshot"]
+    S1 --> G2["group 2: eslint --fix"]
+    G2 --> S2["snapshot"]
+```
+
+The tools of one group ran over disjoint files, so a change between two
+snapshots belongs to the tool of that group that was given the file — it is
+listed on that invocation — and to the operation when none was. A snapshot is
+taken after a group that failed or was cancelled too: a formatter may have
+written part of its files.
+
+- **What is observed.** Tracked and untracked files under the repository root,
+  as `git status` lists them. Ignored files and the contents of submodules and
+  nested repositories are not; a rename is a deletion and a creation.
+  `changesScope` says so in the report.
+- **What "not observed" means.** Without git, outside a repository, or when a
+  status fails, `changesObserved` is `false` with the reason — never an empty
+  list that would read as "nothing changed". A `lint` operation takes no
+  snapshot (`no-fix-task`).
+- **For an agent.** `--output agent` prints
+  `fix changed 2 files: src/a.ts, src/b.ts` — read those files again before
+  editing them — or `fix changes not observed: <reason>`, after which every file
+  the fix could have touched has to be read again.
+- **For a person.** The Markdown report and the step summary list the changed
+  files under the fix operation.
+
+`--report patch=<path>` writes the diffs the formatters that write their result
+on stdout applied, in the order they were applied, as one patch `git apply`
+takes. A tool that rewrites files itself leaves no patch; its files are among
+the changes with `patch: false`.
+
+What datamitsu itself rewrites before the tools run — the `.datamitsuignore`
+normalization — happens before the first snapshot and is not among the changes.
+
+The snapshot costs one `git status` per group: on a repository of about 1 800
+tracked files, 5–8 ms with a fresh index and about 40 ms when every file's
+timestamp moved since the index was written.
+
+## Baselines
+
+A project that adopts a linter with hundreds of findings cannot fix them in the
+change that adds it. A baseline lets the run fail only on what is new: it holds
+the fingerprints of the findings a run reported, and a later run given it
+neither reports those findings nor lets them gate.
+
+```bash
+datamitsu lint --report json=.datamitsu-baseline-run.json
+datamitsu report baseline .datamitsu-baseline-run.json --output .datamitsu-baseline.json
+datamitsu lint --baseline .datamitsu-baseline.json
+```
+
+Commit the baseline beside the configuration, and the run it was made from if
+you want to compare later runs with it. `--baseline` takes a run's own JSON as
+well, and a run that was not complete warns there too. A finding is matched by its
+[fingerprint](#fingerprints), so it stays baselined when lines are inserted
+above it and when its message is reworded; it becomes new when its rule, its
+file or the text of its line changes. A baseline made from an incomplete run —
+narrowed, a tool cancelled or unread — holds fewer fingerprints: it is written
+with a warning and suppresses fewer findings, never more.
+
+**A baseline cannot silence an exit code.** The tool's exit code still gates: a
+tool that exits non-zero fails the run whatever the baseline holds, and its
+frame shows the baselined findings it failed on. ESLint, golangci-lint and most
+linters exit 1 on the findings they print, so for a baseline to make the run
+fail only on new findings, the tool has to exit 0 on findings and leave the
+decision to the threshold: add its exit-zero flag to the operation's `args` —
+`--exit-zero` for Ruff, Flake8 and Pylint, `--issues-exit-code=0` for
+golangci-lint — and keep the operation's
+[`failOn`](../reference/configuration-api.md#failing-on-findings-failon). The
+threshold gates only where the tool's parser module declares the severity
+contract; elsewhere a tool that exits 0 passes whatever it found.
+
+**Baselines rot.** A committed baseline hides its findings for as long as it
+exists. Regenerate it on purpose — after a sweep that fixed some of them, so it
+stops hiding them — never on a schedule, which would bake every new finding in.
+`report diff` against the current run shows what it still hides:
+
+```bash
+datamitsu lint --report json=out/run.json
+datamitsu report diff .datamitsu-baseline-run.json out/run.json --format markdown
+```
+
+A finding is matched while its own process is judged, before the report has
+numbered the findings of a line across the tool's processes. So the baseline is
+read as a count: holding the fingerprints of n findings of a rule on a line, it
+marks at most n distinct findings of that rule on that line in an operation,
+whichever processes report them — a new finding beside a baselined one is never
+silenced, and a finding two processes both report is one. Which of several findings of one rule on one line is marked follows their
+order on the line within one process, and the order the processes are judged
+across processes: the fingerprint cannot say which of them is the old one, only
+how many there were.
+
+What else shows a baselined finding: a tool that failed on its exit code shows
+every finding it failed on, baselined ones marked `(baselined)` in the terminal,
+JUnit and Markdown; the annotations and `--output agent` show them unmarked.
+SARIF, GitLab Code Quality, Checkstyle and rdjsonl list every finding, as they
+list those below the threshold; SARIF marks a baselined one in
+`properties.baselined`.
+
+## Comparing two runs
+
+`datamitsu report diff <before.json> <after.json>` compares two own reports by
+fingerprint, tool by tool: `new`, `unchanged`, `moved` (another row), `fixed`,
+`unknown` and `unobserved`. A finding that disappeared is `fixed` only when the
+second run covered the whole repository and the tool was complete in it; when
+the tool was cancelled, narrowed or unread it is `unknown`, with the reasons,
+because the second run did not look. A tool only one run holds is `unobserved`.
+`--format markdown` writes it for a pull request comment. See
+[`report diff`](../reference/cli-commands.md#report-diff).
+
 ## Rendering a report later
 
 `datamitsu report render` reads a run's own JSON and writes it in a format,
@@ -662,6 +842,72 @@ A document of a narrowed run is refused for a format that lists findings unless
 `--allow-partial`, as the run would have been — `sarif` is written, without its
 incomplete tools — and a document without its completeness fields is read as
 incomplete. A companion is written beside `--output`, never on stdout.
+
+## History
+
+A report answers what is wrong now. `history` answers how the numbers move:
+each run appends one line to a file you name, `datamitsu.history/1`, and a trend
+is whatever you build from those lines — a spreadsheet, a chart, a CI job that
+compares the last two.
+
+```bash
+datamitsu lint --report history=.datamitsu-history/lint.jsonl
+```
+
+A line holds counts and durations, never a finding, a path or the paths a run
+was given, so the file can be kept, shared and committed:
+
+```json
+{
+  "schema": "datamitsu.history/1",
+  "startedAt": "2026-09-28T10:00:00Z",
+  "datamitsu": { "version": "0.4.0", "configuration": "my config" },
+  "ci": { "vendor": "github", "sha": "3f2a…", "ref": "refs/heads/main" },
+  "selection": { "mode": "all", "fileScoped": false, "toolsFiltered": false },
+  "complete": true,
+  "failFast": false,
+  "operations": [
+    {
+      "name": "lint",
+      "ran": true,
+      "success": true,
+      "durationMs": 7900,
+      "tools": [
+        {
+          "name": "eslint",
+          "runs": 3,
+          "cached": 120,
+          "failed": 0,
+          "complete": true,
+          "incomplete": [],
+          "findings": { "error": 0, "warning": 4, "info": 0, "hint": 0 }
+        }
+      ]
+    }
+  ]
+}
+```
+
+(shown indented; the file holds each entry on one line). `runs` counts the
+processes a tool ran, `cached` the files a cache answered, `failed` the
+invocations that failed, and `findings` every finding by level, whether or not
+it was shown.
+
+- **The file is yours.** It is written only where you name it — never under
+  datamitsu's cache — created on the first run, and never rewritten: each run
+  adds its line in one append, which a local file system keeps whole beside
+  another run appending to the same file; on a network file system that is
+  best effort.
+- **A narrowed run writes it too.** A line lists no finding, so it cannot pass
+  for the findings of the repository: its `selection` and `complete` say what
+  the run covered, and `--allow-partial` is not needed. For the same reason it
+  leaves fail-fast as it is — a line of a run that stopped at the first failure
+  says `failFast: true` and `complete: false`.
+- **Compare like with like.** Counts of a narrowed or incomplete run are not
+  the repository's. A tool without a parser of its own is complete on a cold
+  run and `unparsed-cache-hit` on a warm one, where the cache replayed a pass
+  no parser read: that is the cache at work, not a regression, which the
+  tool's `incomplete` reasons tell apart.
 
 ## Findings as they happen
 

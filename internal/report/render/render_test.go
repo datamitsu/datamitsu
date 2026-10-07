@@ -39,7 +39,7 @@ func TestParseSpec(t *testing.T) {
 		{raw: "fake=r.sarif?category=", want: Spec{Format: "fake", Path: "r.sarif", Options: map[string]string{"category": ""}}},
 		{raw: "json", wantErr: `"json" is not <format>=<path>`},
 		{raw: "=out.json", wantErr: "is not <format>=<path>"},
-		{raw: "yaml=out.yaml", wantErr: `unknown report format "yaml" (must be checkstyle, codequality, fake, json, junit, markdown, rdjsonl, sarif)`},
+		{raw: "yaml=out.yaml", wantErr: `unknown report format "yaml" (must be checkstyle, codequality, fake, history, json, junit, markdown, patch, rdjsonl, sarif)`},
 		{raw: "json=", wantErr: "report json needs a path"},
 		{raw: "json=?x=1", wantErr: "report json needs a path"},
 		{raw: "json=a.json?x=1", wantErr: `report json takes no option, got "x"`},
@@ -114,7 +114,7 @@ func TestParseSpecs(t *testing.T) {
 }
 
 func TestNamesAndLookup(t *testing.T) {
-	want := []string{"checkstyle", "codequality", "json", "junit", "markdown", "rdjsonl", "sarif"}
+	want := []string{"checkstyle", "codequality", "history", "json", "junit", "markdown", "patch", "rdjsonl", "sarif"}
 	if got := Names(); !reflect.DeepEqual(got, want) {
 		t.Errorf("Names() = %v, want %v", got, want)
 	}
@@ -130,5 +130,32 @@ func TestNamesAndLookup(t *testing.T) {
 	// Markdown lists findings: a narrowed run refuses it as it refuses json.
 	if got := Listing([]Spec{{Format: "markdown"}}); !reflect.DeepEqual(got, []string{"markdown"}) {
 		t.Errorf("Listing(markdown) = %v, want it listed", got)
+	}
+}
+
+// TestListsFindings: a report of counts is written for a narrowed run and
+// leaves fail-fast alone; one that lists findings, even one that omits an
+// incomplete tool, turns fail-fast off.
+func TestListsFindings(t *testing.T) {
+	tests := []struct {
+		formats []string
+		want    bool
+	}{
+		{formats: []string{"history"}, want: false},
+		{formats: []string{"sarif"}, want: true},
+		{formats: []string{"history", "json"}, want: true},
+		{formats: nil, want: false},
+	}
+	for _, tt := range tests {
+		specs := make([]Spec, 0, len(tt.formats))
+		for _, f := range tt.formats {
+			specs = append(specs, Spec{Format: f})
+		}
+		if got := ListsFindings(specs); got != tt.want {
+			t.Errorf("ListsFindings(%v) = %v, want %v", tt.formats, got, tt.want)
+		}
+	}
+	if got := Listing([]Spec{{Format: "history"}}); len(got) != 0 {
+		t.Errorf("Listing(history) = %v, want it written for a narrowed run", got)
 	}
 }

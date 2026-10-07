@@ -141,6 +141,26 @@ A task that failed on its own and stopped short — the rest of a per-file loop 
 
 When a run is asked for a report (`--report`), the runner folds every task's result into one record as the task completes, and builds the document once the last operation has ended: operations, then the tools of each, then one invocation per process with the files it answered for and the findings it reported, plus the tasks the planner skipped and the run stopped. Every renderer reads that record and nothing else, which is what lets a report of `check` be one document and a report be written after a failure. The record holds no command line and no environment, and is never cached. See the [Reports guide](../reports.md) and [Reports](../../reference/cli-commands.md#reports).
 
+### Snapshots around the steps of a fix
+
+Inside a priority group the parallel groups run one after another, and the tasks of one parallel group run over disjoint file sets. Each parallel group is a **step**, numbered from 1 through the operation. When a run records anything and the operation is `fix`, the runner snapshots the working tree — `git status --porcelain=v2 -z --untracked-files=all` without optional locks, plus a hash of each file it lists — right before the first step and after every step, including one that failed or was cancelled, and attributes what moved between two snapshots to the task of that step whose files hold it:
+
+```mermaid
+sequenceDiagram
+    participant R as Runner
+    participant E as Executor
+    R->>R: snapshot 0
+    R->>E: Execute(plan)
+    E->>E: step 1 (tasks over disjoint files)
+    E->>R: step 1 ended
+    R->>R: snapshot 1, diff 0→1 → step 1's tasks
+    E->>E: step 2
+    E->>R: step 2 ended
+    R->>R: snapshot 2, diff 1→2 → step 2's tasks
+```
+
+A snapshot that cannot be taken stops the observation for the rest of the operation, which then says it was not observed; `lint` takes none. A formatter that writes its result on stdout is applied by the executor itself, which keeps the unified diff of the change when `--report patch` asks for it — the only moment both versions exist.
+
 **Example scenario:**
 
 ```

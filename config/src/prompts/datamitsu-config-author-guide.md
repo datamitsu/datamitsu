@@ -84,6 +84,13 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - `lint --baseline` and `check --baseline` gate only on the
+  findings a baseline does not hold, but never override a tool's exit code
+  (`datamitsu llms guides/reports`). Nothing changes for a configuration that
+  does not need baselines. One meant for a project that adopts them lets a
+  linter exit 0 on its findings — its exit-zero argument in the operation's
+  `args` — and gates with the operation's `failOn`, where the tool's parser
+  module declares the severity contract.
 - **after v0.3.1** - Output no declared parser recognized is read by the
   fallback built into datamitsu, which tries the standard formats
   (`datamitsu llms guides/architecture/parsers`). A tool without an

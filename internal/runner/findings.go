@@ -93,8 +93,10 @@ func sortFindings(ds []diagnostic.Diagnostic) {
 type taskView struct {
 	// shown are the findings a frame prints, sorted.
 	shown []diagnostic.Diagnostic
-	// hidden counts the findings the terminal does not print.
-	hidden levelCounts
+	// hidden counts the findings below the threshold the terminal does not
+	// print, baselined those the run's baseline held.
+	hidden    levelCounts
+	baselined int
 	// unenforced marks a passed task whose findings print in a yellow frame:
 	// a threshold was asked for, and a parser module that predates the
 	// severity contract left the verdict to the exit code.
@@ -111,17 +113,20 @@ func viewOf(result tooling.ExecutionResult) taskView {
 	var v taskView
 	for _, proc := range result.Processes {
 		for i, visible := range visibleMask(proc) {
-			if visible {
-				v.shown = append(v.shown, proc.Diagnostics[i])
-			} else {
-				v.hidden.add(proc.Diagnostics[i].Severity)
+			switch d := proc.Diagnostics[i]; {
+			case visible:
+				v.shown = append(v.shown, d)
+			case d.Baselined:
+				v.baselined++
+			default:
+				v.hidden.add(d.Severity)
 			}
 		}
 	}
 	sortFindings(v.shown)
 	v.unenforced = result.Success && len(v.shown) > 0
 	if (!result.Success || v.unenforced) && (parsingDisabled() || !usableDiagnostics(result)) {
-		v.raw, v.shown, v.hidden = true, nil, levelCounts{}
+		v.raw, v.shown, v.hidden, v.baselined = true, nil, levelCounts{}, 0
 	}
 	return v
 }

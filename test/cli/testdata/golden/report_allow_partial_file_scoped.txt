@@ -1,5 +1,6 @@
 {
   "schema": "datamitsu.report/1",
+  "fingerprint": "dmfp1",
   "datamitsu": {
     "version": "<VERSION>",
     "configuration": "datamitsu.config"
@@ -23,7 +24,9 @@
       "durationMs": <DUR>,
       "skipped": [],
       "cancelled": [],
-      "tools": []
+      "tools": [],
+      "changesObserved": false,
+      "changesReason": "no-fix-task"
     }
   ],
   "exports": [

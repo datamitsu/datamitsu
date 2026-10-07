@@ -277,6 +277,7 @@ type ProcessResult struct {
 	ThresholdFailed bool
 
 	edits []textdiff.Edit // the formatting edits a per-file process applied
+	patch string          // their unified diff, when the executor captures patches
 }
 
 // FileResult is what became of one file a task was planned with.
@@ -294,6 +295,10 @@ type FileResult struct {
 	// Edits are the diff-in-core edits applied to the file; nil when it was left
 	// unchanged.
 	Edits []textdiff.Edit
+	// Patch is the unified diff of those edits, captured while the file's
+	// content before them was still known; "" unless the executor captures
+	// patches.
+	Patch string
 }
 
 // ExecutionResult represents the result of a task execution. Its aggregate

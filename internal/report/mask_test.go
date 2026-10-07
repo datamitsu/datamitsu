@@ -100,8 +100,25 @@ func TestMaskMapValues(t *testing.T) {
 		Options map[string]string
 	}
 	h := holder{Options: map[string]string{"k": "x-abcdefgh"}}
-	maskValue(reflect.ValueOf(&h).Elem(), strings.NewReplacer("abcdefgh", Masked))
+	rewriteValue(reflect.ValueOf(&h).Elem(), strings.NewReplacer("abcdefgh", Masked).Replace)
 	if h.Options["k"] != "x-***" {
 		t.Errorf("map value = %q, want it masked", h.Options["k"])
 	}
+}
+
+func TestRewriteAll(t *testing.T) {
+	type inner struct{ Text string }
+	type outer struct {
+		Name  string
+		Items []inner
+		Ptr   *inner
+		skip  string
+	}
+	v := outer{Name: "a#", Items: []inner{{"b#"}}, Ptr: &inner{"c#"}, skip: "d#"}
+	RewriteAll(&v, func(s string) string { return strings.ReplaceAll(s, "#", "!") })
+	if v.Name != "a!" || v.Items[0].Text != "b!" || v.Ptr.Text != "c!" || v.skip != "d#" {
+		t.Errorf("RewriteAll = %+v, want every exported string rewritten", v)
+	}
+	RewriteAll(v, strings.ToUpper)
+	RewriteAll(&v, nil)
 }

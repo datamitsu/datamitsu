@@ -153,6 +153,21 @@ func TestFormattingPipelineEndToEnd(t *testing.T) {
 	if string(got) != "alpha\nbar\ngamma\ndelta\n" {
 		t.Errorf("unexpected formatted content: %q", got)
 	}
+	if patch := result.FileResults[0].Patch; patch != "" {
+		t.Errorf("a patch was captured though none was asked for:\n%s", patch)
+	}
+
+	// Asked for, the patch is taken while both versions exist, named by the
+	// file's path relative to the root.
+	if err := os.WriteFile(file, []byte(original), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	executor.SetCapturePatches(true)
+	result = executor.executeTask(context.Background(), task)
+	wantPatch := "--- a/src.txt\n+++ b/src.txt\n@@ -1,4 +1,4 @@\n alpha\n-foo\n+bar\n gamma\n delta\n"
+	if len(result.FileResults) != 1 || result.FileResults[0].Patch != wantPatch {
+		t.Errorf("patch = %q, want %q", result.FileResults[0].Patch, wantPatch)
+	}
 }
 
 // TestFormattingPipelineNoChange asserts the no-op path: a formatter that returns

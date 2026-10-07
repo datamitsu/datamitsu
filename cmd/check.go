@@ -19,6 +19,7 @@ var (
 	checkFailFast      bool
 	checkFailOn        string
 	checkReports       reportFlags
+	checkBaseline      string
 )
 
 var checkCmd = &cobra.Command{
@@ -48,6 +49,7 @@ func init() {
 	addFailFastFlag(checkCmd, &checkFailFast)
 	addFailOnFlag(checkCmd, &checkFailOn)
 	addReportFlags(checkCmd, &checkReports)
+	addBaselineFlag(checkCmd, &checkBaseline)
 	rootCmd.AddCommand(checkCmd)
 }
 
@@ -69,6 +71,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if err := applyOutput(cmd, checkReports, &opts); err != nil {
+		return err
+	}
+	if err := applyBaseline(checkBaseline, &opts); err != nil {
 		return err
 	}
 	err := runner.RunSequential(

@@ -2,6 +2,7 @@ package render
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render/common"
@@ -26,7 +28,12 @@ type Target struct {
 	// companion is the temporary file of the completeness companion; nil for
 	// a format without one, and on stdout.
 	companion *os.File
-	stdout    io.Writer
+	// appendTo is the file an appending format adds its entry to.
+	appendTo *os.File
+	stdout   io.Writer
+	// Guard rewrites a document written to stdout before it is written; nil
+	// writes it as rendered (see GuardCommands).
+	Guard func(format string, data []byte) []byte
 	// Err is why the target could not be opened; nil when it was.
 	Err error
 }
@@ -46,6 +53,8 @@ func Open(spec Spec, stdout io.Writer) *Target {
 	case spec.Stdout():
 	case spec.Dir():
 		t.Err = makeDir(spec.Path)
+	case appends(r):
+		t.appendTo, t.Err = openAppend(spec.Path)
 	default:
 		t.tmp, t.Err = createBeside(spec.Path)
 		if _, companioned := r.(Companioned); companioned && t.Err == nil {
@@ -73,12 +82,18 @@ func (t *Target) Write(run *report.Run) error {
 	switch {
 	case t.Spec.Dir() && !t.Spec.Stdout():
 		return t.writeDir(run)
+	case t.appendTo != nil:
+		return t.writeAppend(run)
 	case t.tmp == nil:
-		w := bufio.NewWriter(t.stdout)
-		if err := t.renderer.Render(w, run, t.Spec.Options); err != nil {
+		var buf bytes.Buffer
+		if err := t.renderer.Render(&buf, run, t.Spec.Options); err != nil {
 			return err
 		}
-		if err := w.Flush(); err != nil {
+		data := buf.Bytes()
+		if t.Guard != nil {
+			data = t.Guard(t.Spec.Format, data)
+		}
+		if _, err := t.stdout.Write(data); err != nil {
 			return fmt.Errorf("write report: %w", err)
 		}
 		return nil
@@ -119,6 +134,9 @@ func (t *Target) Write(run *report.Run) error {
 // file there, or a split format's files in its directory, would be read as
 // this run's.
 func (t *Target) clear() {
+	if t.appendTo != nil {
+		_ = t.appendTo.Close()
+	}
 	if t.tmp != nil {
 		_ = t.tmp.Close()
 		_ = os.Remove(t.tmp.Name())
@@ -134,6 +152,85 @@ func (t *Target) clear() {
 	if d, ok := t.renderer.(DirRenderer); ok && t.Spec.Dir() {
 		_ = t.removeOwned(d, nil)
 	}
+}
+
+// GuardCommands rewrites, in a document of format, every command a CI that
+// reads commands anywhere in a line would run — prefixes are their openings,
+// such as "##vso[" — so that the document means what it meant: a JSON document
+// spells the bracket \u005b and an XML one &#91;, which read back as the same
+// text; any other format, text for a person, gets a space before it.
+func GuardCommands(format string, data []byte, prefixes []string) []byte {
+	for _, prefix := range prefixes {
+		head := strings.TrimSuffix(prefix, "[")
+		replacement := head + " ["
+		switch format {
+		case "json", "sarif", "codequality", "rdjsonl", "history":
+			replacement = head + `\u005b`
+		case "junit", "checkstyle":
+			replacement = head + "&#91;"
+		}
+		data = bytes.ReplaceAll(data, []byte(prefix), []byte(replacement))
+	}
+	return data
+}
+
+// WriteFile writes data to path as a report is written: into a temporary
+// file beside it, renamed over it once complete, directories created.
+func WriteFile(path string, data []byte) error {
+	tmp, err := createBeside(path)
+	if err != nil {
+		return err
+	}
+	err = fill(tmp, func(w io.Writer) error {
+		if _, err := w.Write(data); err != nil {
+			return fmt.Errorf("write: %w", err)
+		}
+		return nil
+	})
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+		return unwrapPathError(err)
+	}
+	return nil
+}
+
+// writeAppend adds the run's entry to the end of its file in one write, which
+// a local file system keeps whole beside another process appending to the
+// same file; a network file system may not.
+func (t *Target) writeAppend(run *report.Run) error {
+	var buf bytes.Buffer
+	err := t.renderer.Render(&buf, run, t.Spec.Options)
+	if err == nil {
+		_, err = t.appendTo.Write(buf.Bytes())
+	}
+	if closeErr := t.appendTo.Close(); err == nil {
+		err = closeErr
+	}
+	return unwrapPathError(err)
+}
+
+func appends(r Renderer) bool {
+	_, ok := r.(Appending)
+	return ok
+}
+
+// openAppend opens the file an appending format adds to, creating it and its
+// directories when missing, with the mode the umask gives a new file.
+func openAppend(path string) (*os.File, error) {
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
+		return nil, errors.New("is a directory")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, unwrapPathError(err)
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o666)
+	if err != nil {
+		return nil, unwrapPathError(err)
+	}
+	return f, nil
 }
 
 func fill(f *os.File, render func(io.Writer) error) error {

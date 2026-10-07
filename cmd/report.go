@@ -6,11 +6,13 @@ import (
 	"os"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/cienv"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render"
 	"github.com/datamitsu/datamitsu/internal/report/render/json"
+	"github.com/datamitsu/datamitsu/internal/runner"
 
 	"github.com/spf13/cobra"
 )
@@ -99,6 +101,8 @@ func runReportRender(cmd *cobra.Command, _ []string) error {
 		logger.Logger.Warn(note)
 	}
 	target := render.Open(spec, cmd.OutOrStdout())
+	ci, _ := cienv.Current()
+	target.Guard = runner.CommandGuard("", ci.Vendor)
 	err = target.Write(run)
 	if _, declined := errors.AsType[render.DeclinedError](err); declined {
 		return nil

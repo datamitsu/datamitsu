@@ -1,5 +1,6 @@
 {
   "schema": "datamitsu.report/1",
+  "fingerprint": "dmfp1",
   "datamitsu": {
     "version": "<VERSION>",
     "configuration": "datamitsu.config"
@@ -73,11 +74,20 @@
                   "exitCode": 0
                 }
               ],
-              "findings": []
+              "findings": [],
+              "step": 1
             }
           ]
         }
-      ]
+      ],
+      "changesObserved": true,
+      "changesScope": {
+        "tracked": true,
+        "untracked": true,
+        "ignored": false,
+        "submodules": false,
+        "renames": "deleted+created"
+      }
     },
     {
       "name": "lint",
@@ -224,7 +234,9 @@
             }
           ]
         }
-      ]
+      ],
+      "changesObserved": false,
+      "changesReason": "no-fix-task"
     }
   ],
   "exports": [

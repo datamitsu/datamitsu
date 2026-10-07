@@ -539,10 +539,10 @@ func findingsAtOrAbove(n int, failOn string) string {
 	return fmt.Sprintf("%d %s at or above failOn=%s", n, noun, failOn)
 }
 
-// line is one finding as a case lists it: "path:row:col: severity
+// findingLine is one finding as a case lists it: "path:row:col: severity
 // source(code): message", the column in code points and only where the report
 // could convert it, the location left out for a finding without a file.
-func line(f report.Finding) string {
+func findingLine(f report.Finding) string {
 	rule := common.SourceOf(f)
 	if f.Code != "" {
 		rule += "(" + f.Code + ")"
@@ -560,6 +560,15 @@ func line(f report.Finding) string {
 		}
 	}
 	return where + ": " + text
+}
+
+// line is findingLine, marked when the run's baseline held the finding.
+func line(f report.Finding) string {
+	text := findingLine(f)
+	if f.Baselined {
+		text += " (baselined)"
+	}
+	return text
 }
 
 func seconds(ms report.Millis) string {

@@ -103,6 +103,8 @@ type Result struct {
 type ResultProperties struct {
 	Provenance string `json:"provenance"`
 	Gates      bool   `json:"gates"`
+	// Baselined marks a result the run's baseline held.
+	Baselined bool `json:"baselined,omitempty"`
 }
 
 // Location is where a result points.

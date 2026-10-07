@@ -7,6 +7,8 @@ Usage:
   datamitsu report [command]
 
 Available Commands:
+  baseline    Write the baseline of a run's own JSON report
+  diff        Compare the findings of two runs' own JSON reports
   render      Render a run's own JSON report into a report format, offline
 
 Flags:
