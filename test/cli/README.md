@@ -15,6 +15,12 @@ The reusable harness lives in [`internal/clitest`](../../internal/clitest):
 - `project.go` — temp git repo + config writers (`NewProject`,
   `WriteMinimalConfig`, `WriteOverlayConfig`, `WriteDatamitsuIgnore`).
 - `golden.go` — output normalization + golden compare (`AssertGolden`).
+- `shell.go` — `sh` scripts as tools (`ShellTool`, `ShellConfig`) and the
+  marker files they record their runs in (`MarkerDir`, `Project.Marker`).
+- `jsonl.go` — the `--log-format jsonl` stream: `ParseJSONL`, causal chain
+  checks (`AssertChains`) and golden normalization (`NormalizeJSONL`).
+- `parsers.go` — `SeedParserModule`, which places a WASM parser module in a
+  run's store so an offline run loads it without a fetch.
 
 A second, **gated** OCI-seeded tier lives in [`test/e2e`](../e2e) — see below.
 
@@ -33,8 +39,12 @@ go test ./test/cli/ -run TestVersionGolden
 
 The suite is fully offline and hermetic: each run gets a clean env
 (`DATAMITSU_OFFLINE=1`, `DATAMITSU_NO_OCI=1`, `NO_COLOR=1`, no inherited
-`DATAMITSU_*`/`CI`/`TERM`), an isolated `DATAMITSU_CACHE_DIR`, and a `git init`-ed
-temp CWD. No network is required.
+`DATAMITSU_*`, `CI`, `TERM`, CI-system markers such as `GITHUB_ACTIONS`,
+agent-session markers such as `CLAUDECODE` or `CODEX_*`, `FORCE_COLOR` or
+`CLICOLOR_FORCE`), an isolated `DATAMITSU_CACHE_DIR`, and a `git init`-ed temp
+CWD. No network is required. A golden recorded in a CI job or an agent session
+is therefore the same as one recorded in a plain shell; a test that needs one
+of those variables sets it through `RunOptions.Env`.
 
 > The embedded `internal/config/config.js` is checked in, so `go build` (and
 > therefore the harness's instrumented build) works without a prior `pnpm build`.
@@ -56,6 +66,44 @@ go test ./test/cli/ -run TestConfigShow -update
 Always review the resulting `git diff` of the golden files — `-update` accepts
 whatever the binary currently prints, so an unintended behavior change will show
 up as a golden diff to inspect, not a silent pass.
+
+## Execution characterization
+
+[`execution_test.go`](execution_test.go) freezes what `check`, `fix` and `lint`
+do when tools actually run — where fail-fast stops a run, what a failure
+prints, the JSON-L stream, the cache footer and the exit codes — so a change to
+the executor or the runner shows up as a reviewable golden diff. Its goldens are
+`testdata/golden/execution_*.txt`, each holding the exit code, stdout and
+stderr of one run.
+
+- **Tools are `sh` scripts.** `clitest.ShellTool(name, script, spec)` declares
+  a tool whose app is `sh -c <script> <name>`: the script sees its tool name as
+  `$0`, the operation's arguments from `$1`, and the marker directory as
+  `$MARKERS`. `clitest.RecordRun` appends `<tool> <first argument>` to
+  `.markers/<tool>`, so a test asserts whether a process ran with
+  `Project.Marker` instead of reading logs. The marker directory ignores its
+  own content, so markers never enter a later run's file set or cache keys.
+  Every scenario skips on Windows and wherever no `sh` is on `PATH`.
+- **A scenario that a later plan changes says so.** Its comment names the plan
+  of `docs/plans/2026-09-26-unified-results.md` that changes the behaviour;
+  that plan changes the assertion, or adds a twin beside it (a
+  `--fail-fast=false` run, say), and regenerates the golden in the same change.
+- **Event streams are asserted causally.** `clitest.AssertChains` checks that
+  every `tool_run` start has a terminal event (except for the tools a scenario
+  names as orphaned), that an operation's `phase` precedes its `tool_run`
+  events, and that each operation ends with exactly one `done`, after all its
+  `tool_run` events, whose `runs` counts the terminal ones. Parallel
+  scenarios never assert line order: `NormalizeJSONL` sets `ts` to `0` and a
+  present `duration_ms` to `1`, and the golden's lines are sorted.
+- **What the goldens leave out.** Progress lines (`→ …`) are dropped: they are
+  throttled display that carries whichever label the last parallel callback
+  set. Duration text is masked including the padding after it. Every script
+  sleeps 10ms first, because a process faster than a millisecond reports a
+  duration of 0, which `omitempty` drops from its JSON-L event.
+- **Parser modules are seeded, not fetched.** `clitest.SeedParserModule` copies
+  a module into the run's store at its content-addressed path and returns the
+  `parsers` declaration carrying its real SHA-256; the offline run loads it
+  from there.
 
 ## Contract completeness gate
 

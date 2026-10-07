@@ -1,0 +1,23 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ fix <RULE>
+┃ fixture
+┃
+┃ ✗ fixer   <DUR> (1 failed)
+  ┌─ fixer [repository] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; echo "$0: failed"; exit 1 fixer
+  │  Exit code: 1
+  │  Duration:  <DUR>
+  │
+  │  fixer: failed
+  └<RULE>
+
+┗━ 1 tools · 1 runs · done in <DUR> · 1 failed <RULE>
+
+===STDERR===
+error: operation failed
