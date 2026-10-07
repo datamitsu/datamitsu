@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
@@ -423,6 +424,7 @@ func filterSkippedVersionCheckEntries(entries []versionCheckEntry, sm *verifycac
 
 func runVerifyAll(cmd *cobra.Command, args []string) error {
 	ctx := commandContext(cmd)
+	enableRetryNotices()
 
 	SkipRemoteConfig = verifyNoRemoteFlag
 	defer func() { SkipRemoteConfig = false }()
@@ -684,13 +686,20 @@ func verifyBinaryOrDir(ctx context.Context, info binmanager.BinaryOsArchInfo) er
 	}
 
 	if info.ExtractDir {
-		return verifyExtractDir(ctx, info.URL, info.Hash, hashType, info.ContentType)
+		return verifyExtractDir(ctx, info.URL, info.Hash, hashType, info.ContentType, info.BinaryPath)
 	}
 
 	return binmanager.VerifyBinaryExtraction(ctx, info.URL, info.Hash, hashType, info.ContentType, info.BinaryPath)
 }
 
-func verifyExtractDir(ctx context.Context, url, hash string, hashType binmanager.BinHashType, contentType binmanager.BinContentType) error {
+// verifyExtractDir downloads an extractDir entry, unpacks the whole tree and checks the command
+// it names: binaryPath must be an executable inside the tree, since that is what runs. An entry
+// without one only has to unpack to something.
+func verifyExtractDir(ctx context.Context, url, hash string, hashType binmanager.BinHashType, contentType binmanager.BinContentType, binaryPath *string) error {
+	if hash == "" {
+		return errors.New("hash is empty: verification requires a non-empty hash")
+	}
+
 	tempDir, err := os.MkdirTemp("", "datamitsu-verify-dir-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
@@ -699,12 +708,9 @@ func verifyExtractDir(ctx context.Context, url, hash string, hashType binmanager
 
 	downloadedPath, err := binmanager.DownloadFileForVerify(ctx, url, tempDir)
 	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
+		return err
 	}
 
-	if hash == "" {
-		return errors.New("hash is empty: verification requires a non-empty hash")
-	}
 	if err := binmanager.VerifyFileHashPublic(downloadedPath, hash, hashType); err != nil {
 		return fmt.Errorf("hash verification failed: %w", err)
 	}
@@ -712,6 +718,13 @@ func verifyExtractDir(ctx context.Context, url, hash string, hashType binmanager
 	extractedDir, err := binmanager.ExtractDirForVerify(downloadedPath, contentType, tempDir)
 	if err != nil {
 		return fmt.Errorf("extraction failed: %w", err)
+	}
+
+	if binaryPath != nil {
+		if err := binmanager.CheckExtractedExecutable(filepath.Join(extractedDir, filepath.FromSlash(*binaryPath))); err != nil {
+			return fmt.Errorf("binaryPath %q: %w", *binaryPath, err)
+		}
+		return nil
 	}
 
 	entries, err := os.ReadDir(extractedDir)

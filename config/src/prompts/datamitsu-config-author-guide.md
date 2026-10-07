@@ -164,12 +164,46 @@ configuration should do about it.
   end. A CI step or script of the configuration's repository that expects 1
   from a mistaken invocation or from `--fail-on-skip` expects 2 or 4 instead;
   CI runs `datamitsu lint --fail-fast=false`.
+- **after v0.3.1** - Every `devtools pull-*` command that writes its file saves
+  it after each entry that changed, so a failed or interrupted run keeps what it
+  already pulled; `pull-runtimes` no longer discards the runtimes that succeeded
+  when one fails, and pulls pnpm first. The JVM runtime takes the previous
+  Temurin feature release while the newest has no build past the minimum
+  release age, and a GitHub release lookup reads past a first page of
+  prereleases. Commit the successful part of a failed pull and rerun the rest.
+- **after v0.3.1** - Every `devtools pull-*` command works through its entries in
+  alphabetical order with a `[n/N]` counter and writes its file with the keys
+  of every object sorted. The first pull after upgrading rewrites an existing
+  registry in that order; commit that diff on its own.
+- **after v0.3.1** - Every `devtools pull-*` command retries transient failures,
+  prints each retry, reports every app or package that still failed and exits
+  with status 1 when any did. `pull-github` no longer stops at a brand-new app
+  without an old-enough release; it records the failure and goes on. Under
+  `--verify-extraction` a platform whose asset cannot be downloaded fails the
+  app instead of being dropped or handed to the next asset, and signature,
+  certificate, provenance and SBOM files are never candidates. Let a CI job
+  fail on the exit code instead of grepping the log, run large pulls with
+  `GITHUB_TOKEN` set, and rerun a failed pull: every `pull-*` command keeps a
+  failed entry's previous state.
+- **after v0.3.1** - `extractDir: true` on a binary app runs `binaryPath` inside
+  the extracted directory instead of failing on the directory itself, and
+  requires `binaryPath` and a tar or zip `contentType`; `devtools verify-all`
+  checks that path is an executable. Set it for a tool that reads files beside
+  its binary, such as protoc and its `include/`, after loading the registry,
+  together with the exact `binaryPath` (`bin/protoc`): `pull-github` writes
+  neither the flag nor a path it could only guess, and a guessed path that
+  passes single-file verification fails a directory install. See
+  `datamitsu llms guides/binary-management`.
 - **after v0.3.1** - `devtools verify-all` and `pull-github --verify-extraction`
   fail when a `binaryPath` extracts something other than an executable, such as
   a completion script. `pull-github` keeps a `binaryPath` fixed by hand when the
-  asset's name does not change, and detects builds named only `alpine`. Point
-  any failing `binaryPath` at the real binary; drop hand-added entries that the
-  next `pull-github` now detects.
+  asset's name does not change, derives the next one from the entry of the same
+  os/arch/libc, and detects builds named only `alpine`, `win64`, `win` or
+  `.exe`; it never records an illumos, Solaris, NetBSD or Android build for
+  Linux, skips installers (`*-setup.exe`, `.msix`, `.dmg`) and prefers the
+  asset named after the app when a release holds several programs. Point any
+  failing `binaryPath` at the real binary; drop hand-added or hand-corrected
+  entries that the next `pull-github` now detects.
 - **after v0.3.1** - `datamitsu config lockfile` resolves transitive
   dependencies within the minimum release age: uv records the window in the
   lock, and a Go app fails on a module younger than it. Existing locks still
