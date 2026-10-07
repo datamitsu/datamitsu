@@ -2,10 +2,7 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
@@ -54,27 +51,12 @@ func getUVSupportedPythonVersionsFromURL(ctx context.Context, url string) (map[s
 	if err := httpx.GuardOffline("uv Python metadata lookup"); err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build request: %w", err)
-	}
-	resp, err := uvPythonHTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch uv Python metadata: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return nil, fmt.Errorf("uv Python metadata request to %s returned status %d: %s", url, resp.StatusCode, string(body))
-	}
-
 	// The table is a few MiB and grows with every CPython release, so the cap is
 	// well above the current size rather than the 10 MiB used for the small
 	// endoflife.date payloads.
 	var entries map[string]uvPythonEntry
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<20)).Decode(&entries); err != nil {
-		return nil, fmt.Errorf("failed to decode uv Python metadata: %w", err)
+	if err := getJSON(ctx, uvPythonHTTPClient, "uv Python metadata", url, 64<<20, &entries); err != nil {
+		return nil, fmt.Errorf("failed to fetch uv Python metadata from %s: %w", url, err)
 	}
 
 	versions := filterStableCPythonVersions(entries)
