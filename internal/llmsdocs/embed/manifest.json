@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 56,
-  "pageSetHash": "ac36b6317e0501d5d80b30d8c23599f6",
+  "pageSetHash": "1d2f06d0ba1ab1a87717faafeb5dfd75",
   "pages": [
     {
       "slug": "about",
@@ -271,8 +271,8 @@
       "url": "https://datamitsu.com/docs/guides/binary-management.md",
       "title": "Binary Management",
       "description": "How datamitsu downloads, verifies, and stores binary apps",
-      "bytes": 7796,
-      "contentHash": "faf7ec064c06c64c78b77f6fdef94c46"
+      "bytes": 9278,
+      "contentHash": "e39289ddbf991c3357e9ee89235eb250"
     },
     {
       "slug": "guides/config-inspector",
@@ -343,8 +343,8 @@
       "url": "https://datamitsu.com/docs/guides/supply-chain-security.md",
       "title": "Supply Chain Security",
       "description": "How datamitsu enforces supply chain integrity for Bun, pnpm, UV, and Go dependencies",
-      "bytes": 28057,
-      "contentHash": "4f5f6940fc943db5c20461a65b083242"
+      "bytes": 28623,
+      "contentHash": "62602daf8c95ba0f8114c40bed3f8e7a"
     },
     {
       "slug": "guides/tooling-system",
@@ -397,8 +397,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 35881,
-      "contentHash": "cddf0994e9f7661df4aaeaecd3ad90e0"
+      "bytes": 39696,
+      "contentHash": "8f9b465637bdd4114b04265600ca6b82"
     },
     {
       "slug": "how-to/manage-cache",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 108464,
-      "contentHash": "666b11d4ccefaa3bf1ba48b49bff0822"
+      "bytes": 112837,
+      "contentHash": "d3a68e9c128405daaa2c8e199b9ac945"
     },
     {
       "slug": "reference/comparison",
@@ -469,8 +469,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 75244,
-      "contentHash": "69f152d172100b4ab10d59d6cf8ac11a"
+      "bytes": 75353,
+      "contentHash": "8cb6b006fad3d8e417cf3943002401d8"
     },
     {
       "slug": "reference/ignore-rules",

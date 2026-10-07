@@ -155,22 +155,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 						if !isValidLibcKey(libc) {
 							errs = append(errs, fmt.Sprintf("app %q (%s): libc key %q is not valid; must be one of: glibc, musl, unknown", appName, platform, libc))
 						}
-						if info.URL == "" {
-							errs = append(errs, fmt.Sprintf("app %q (%s): url is required", appName, platform))
-						}
-						if info.Hash == "" {
-							errs = append(errs, fmt.Sprintf("app %q (%s): hash is required", appName, platform))
-						} else if !isValidSHA256Hex(info.Hash) {
-							errs = append(errs, fmt.Sprintf("app %q (%s): hash must be a valid SHA-256 hex string (64 lowercase hex characters)", appName, platform))
-						}
-						if info.HashType != nil && !binmanager.IsAllowedDownloadHashType(*info.HashType) {
-							errs = append(errs, fmt.Sprintf("app %q (%s): hash type %q is not allowed for downloads; use sha256", appName, platform, *info.HashType))
-						}
-						if info.BinaryPath != nil {
-							if err := validateSafeRelativePath(*info.BinaryPath, "binaryPath"); err != nil {
-								errs = append(errs, fmt.Sprintf("app %q (%s): %v", appName, platform, err))
-							}
-						}
+						errs = append(errs, validateBinaryEntry(appName, platform, info)...)
 					}
 				}
 			}
@@ -441,6 +426,40 @@ func isValidVersionString(s string) bool {
 		return false
 	}
 	return safeVersionPattern.MatchString(s)
+}
+
+// validateBinaryEntry checks one platform entry of a binary app: its download, its hash, and
+// what runs from it.
+func validateBinaryEntry(appName, platform string, info binmanager.BinaryOsArchInfo) []string {
+	var errs []string
+	if info.URL == "" {
+		errs = append(errs, fmt.Sprintf("app %q (%s): url is required", appName, platform))
+	}
+	if info.Hash == "" {
+		errs = append(errs, fmt.Sprintf("app %q (%s): hash is required", appName, platform))
+	} else if !isValidSHA256Hex(info.Hash) {
+		errs = append(errs, fmt.Sprintf("app %q (%s): hash must be a valid SHA-256 hex string (64 lowercase hex characters)", appName, platform))
+	}
+	if info.HashType != nil && !binmanager.IsAllowedDownloadHashType(*info.HashType) {
+		errs = append(errs, fmt.Sprintf("app %q (%s): hash type %q is not allowed for downloads; use sha256", appName, platform, *info.HashType))
+	}
+	if info.BinaryPath != nil {
+		if err := validateSafeRelativePath(*info.BinaryPath, "binaryPath"); err != nil {
+			errs = append(errs, fmt.Sprintf("app %q (%s): %v", appName, platform, err))
+		}
+	}
+	if info.ExtractDir {
+		switch {
+		case info.BinaryPath == nil:
+			errs = append(errs, fmt.Sprintf("app %q (%s): extractDir requires binaryPath, the command inside the extracted directory", appName, platform))
+		case filepath.Clean(*info.BinaryPath) == ".":
+			errs = append(errs, fmt.Sprintf("app %q (%s): binaryPath %q names the extracted directory itself, not a file inside it", appName, platform, *info.BinaryPath))
+		}
+		if !info.ContentType.IsDirectoryArchive() {
+			errs = append(errs, fmt.Sprintf("app %q (%s): extractDir requires an archive contentType (tar, tar.gz, tar.bz2, tar.xz, tar.zst or zip), not %q", appName, platform, info.ContentType))
+		}
+	}
+	return errs
 }
 
 func validateSafeRelativePath(p string, fieldName string) error {

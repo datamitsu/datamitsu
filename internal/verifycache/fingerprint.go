@@ -17,8 +17,9 @@ func fingerprintFields(fields ...string) string {
 
 // extractionCheck names what verifying a download checks. A result recorded
 // under a weaker check must not be skipped as passed, so it changes whenever
-// the check gets stricter: "executable" added the executable-format check.
-const extractionCheck = "executable"
+// the check gets stricter: "executable" added the executable-format check,
+// "executable-in-tree" applied it to the binaryPath of an extractDir entry.
+const extractionCheck = "executable-in-tree"
 
 // FingerprintBinary returns the verification fingerprint for a managed binary.
 func FingerprintBinary(url, hash, hashType, contentType, binaryPath string, extractDir bool, os, arch, libc string) string {

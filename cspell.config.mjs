@@ -60,6 +60,16 @@ export default defineConfig((config) => ({
     // The Docusaurus anchor of the inheritEnv heading, which the generated
     // tool-environment page links to from Go.
     "inheritenv",
+    // Operating systems the release detector recognises only to leave alone,
+    // and the attestation and installer formats it filters out of a release.
+    "illumos",
+    "minisig",
+    "intoto",
+    "msix",
+    "msixbundle",
+    "appxbundle",
+    // The package that writes the pull commands' files with sorted keys.
+    "jsonsort",
     // A shell-literal expectation in internal/shellquote: `$'a\xffb'`. The
     // trailing "b" is load-bearing — it is a hex digit, and the test asserts
     // that a shell stops the \x escape after exactly two digits rather than
