@@ -27,6 +27,7 @@ var expectedTopLevelCommands = []string{
 	"lint",
 	"llms",
 	"lsp",
+	"report",
 	"source",
 	"store",
 	"version",

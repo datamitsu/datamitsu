@@ -2,13 +2,13 @@ package tooling
 
 import "bytes"
 
-// stripCSI returns b without its ANSI control sequences (ESC [ parameters,
+// StripCSI returns b without its ANSI control sequences (ESC [ parameters,
 // intermediates, final byte). A sequence that never reaches a final byte loses
 // what it had consumed and nothing more: the text after a malformed escape can
 // be the finding a parser must see. b itself is never modified: callers keep
 // the raw stream for the failure frame, and it can share memory with what they
 // display.
-func stripCSI(b []byte) []byte {
+func StripCSI(b []byte) []byte {
 	i := bytes.IndexByte(b, 0x1b)
 	if i < 0 {
 		return b

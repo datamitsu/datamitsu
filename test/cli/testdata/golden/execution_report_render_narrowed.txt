@@ -1,0 +1,5 @@
+exit code: 2
+===STDOUT===
+
+===STDERR===
+error: the run of run.json was narrowed (files named), so report json would not list every finding: pass --allow-partial to render it with the reasons it is incomplete

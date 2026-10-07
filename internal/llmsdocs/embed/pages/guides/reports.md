@@ -1,0 +1,207 @@
+# Reports
+
+> One record of a fix, lint or check run — what it holds, what it never contains, how complete it says it is, and how its findings keep their identity across runs
+
+A report is the record of one `fix`, `lint` or `check` run: which tools ran, on
+which files, what they found, and how sure datamitsu is that the list is
+complete. Every report format is written from that one record, so two formats of
+one run never disagree, and a report is written after a run that failed as well
+as after one that passed — the run that fails is the one a pipeline needs to
+read.
+
+```bash
+datamitsu lint --report json=out/run.json
+```
+
+`json` writes datamitsu's own document, `datamitsu.report/1`, which carries
+everything the record holds. The flags, the variable twins and the exit codes
+are in the [CLI reference](../reference/cli-commands.md#reports).
+
+## What a report holds
+
+```mermaid
+graph TD
+    R["run: selection, failFast, complete, incomplete, exports"] --> O["operations: fix, lint"]
+    O --> T["tools: app, parser, failOn, complete, incomplete"]
+    T --> I["invocations: one per process — state, exit code, extraction"]
+    I --> F["files: path, state"]
+    I --> D["findings: fingerprint, rule, level, message, location"]
+```
+
+- **The run** — what it was asked to cover (`selection`: the whole repository,
+  a subdirectory, named files, a `--tools` filter), whether fail-fast was on,
+  whether the run is complete, and every report it was asked for with its
+  status.
+- **Operations** — `fix` and `lint` in the order they ran; `check` writes one
+  document holding both. An operation the run never reached is listed with
+  `ran: false`. Each lists the tools the planner skipped, with the reason, and
+  the tasks the run stopped.
+- **Tools** — the app a tool ran as configured (name, kind, pinned version),
+  its output parser and the version of the module that read its output, the
+  threshold its findings were judged by (`failOn`), and whether that threshold
+  was enforced.
+- **Invocations** — one per process a task planned: its state (`ran`,
+  `cancelled`, `not-started`, `setup-failed`), its exit code, whether and how
+  its output was read into findings, the files it answered for and the findings
+  it reported. The files a cache answered appear as one `cached` or
+  `verdict-hit` invocation of their task.
+- **Findings** — the rule, the level, whether it is at or above the threshold
+  (`reported`) and whether it failed its tool (`gates`), the message, where it
+  is — the path relative to the repository root, 1-based rows and columns with
+  an exclusive end — and its fingerprint.
+
+Everything is sorted, so one run gives one document byte for byte, and the time
+it is stamped with comes from `SOURCE_DATE_EPOCH` when that is set.
+
+## What a report never contains
+
+- **No command line and no environment.** An app is named by its name, kind and
+  pinned version; the arguments a tool ran with and the variables it saw stay
+  out. (`--explain=json`, a plan for debugging on your own machine, keeps the
+  arguments.)
+- **No secret the environment names.** Before a report is written, the value of
+  every variable — in the environment, and in every app's and operation's `env`
+  — whose name contains `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL`, or ends
+  in `_KEY`, and that is at least 8 characters long, is replaced by `***`
+  wherever it appears. This is best effort: a secret a tool prints that no
+  variable holds is not caught.
+- **No output of a security tool.** A failed invocation keeps the last 4 KiB of
+  its output in the own JSON (`outputTail`), without colour codes and masked —
+  except for a tool whose parser module puts it in the `security` category,
+  whose output is never kept, nor that of a tool whose parser the run could not
+  describe — its module did not load, or does not list it — which may be one.
+- **Nothing from a cache.** A report is never stored and never replayed; each is
+  written from the run that produced it.
+
+The same holds for the JSON-L stream's events. Under `--verbose` the stream
+carries datamitsu's debug log lines too, as `log` events, with what a tool
+printed and the arguments it ran with withheld; the console keeps them for the
+person who ran the command.
+
+A tool that exits non-zero without a finding its parser could read is not
+listed as clean: it gets one `synthetic` finding of level `error` and no
+location — `tsc exited 2 without parsable findings`, or
+`gitleaks failed (exit 1); output withheld for a security tool` — whose message
+carries none of the tool's output.
+
+## How complete a report is
+
+A report that lists no finding for a tool means "clean" only when the tool
+covered what the report claims. Every tool is judged on three facts, and each
+one that fails adds a reason to its `incomplete` list:
+
+| Fact       | Complete when                                                                                        | Reasons                                                                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| scope      | the run covered the whole repository and every task its whole unit                                   | `narrowed-selection`, `partial-unit`                                                     |
+| execution  | every planned task ran to the end                                                                    | `cancelled`, `not-started`, `setup-failed`, `platform-skip`                              |
+| extraction | every output was read into findings by a parser, or a cache replayed a pass its parser read as clean | `no-extraction`, `parser-unavailable`, `parse-failed`, `truncated`, `unparsed-cache-hit` |
+
+A complete result in one project says nothing about the projects a narrowed run
+left out, which is why scope needs the whole repository. A tool without an output
+parser is never complete: its exit code says whether it passed, not what it
+found.
+
+The run is `complete` when every tool is, every operation ran, and the run left
+nothing out: a narrowed selection, a `--tools` filter (the tools it left out are
+listed as `selection.excludedTools`; the selected tools can still be complete),
+a tool that could not be narrowed, an operation that did not run. A tool
+disabled with `skip: true` counts against nothing.
+
+Two rules keep a report from claiming more than it holds:
+
+- **A narrowed run is refused.** A report that lists findings, asked for from
+  a run narrowed before it starts — files named, a subdirectory, `--file-scoped`,
+  `--tools` — would read as the findings of the repository. The run exits 2
+  before anything runs. `--allow-partial` writes it anyway, with every reason in
+  the document; it never makes the run complete.
+- **A report turns fail-fast off.** A run that stopped at the first failing tool
+  could not list every finding, so a report runs everything to the end, and a
+  report together with an explicit `--fail-fast=true` is refused.
+
+A report left on its path by an earlier run is not deleted: it is the user's
+file. A run that is refused, or whose report could not be written, leaves it
+there, so a pipeline that uploads the report whatever the outcome removes it
+first — then an old report cannot pass for the new one — and fails on the exit
+code of the run:
+
+```yaml
+- run: rm -f out/run.json
+- run: datamitsu lint --report json=out/run.json
+- if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: datamitsu-report
+    path: out/run.json
+    if-no-files-found: warn
+```
+
+The job fails on the lint step's exit code, and the upload step runs anyway. A
+tool failure (1) outranks a report that could not be written (5), so a missing
+file on a failed step is reported by the upload, and by the step's own
+`error: report json: …` line.
+
+## Fingerprints
+
+Every finding carries a `fingerprint`, 64 hexadecimal characters that identify
+it across runs, so that a service tracking alerts can tell a finding that stayed
+from one that was fixed and one that is new:
+
+```text
+fingerprint = sha256("dmfp1" NUL tool NUL rule NUL path NUL lineHash NUL ordinal)
+lineHash    = sha256(the finding's first line, without trailing whitespace)
+ordinal     = position among the tool's findings with the same rule on the same line
+```
+
+- **A line inserted above a finding moves its row, not its fingerprint:** the
+  line's text is hashed, not its number.
+- **A reworded message changes nothing:** the message is not an input.
+- **Two findings of one rule on one line stay two:** the ordinal counts them by
+  column, across every process of the tool, so how a tool's work was split into
+  processes does not change it. A finding two processes both reported is listed
+  once.
+- **Two tools never share one:** the tool comes first.
+- **Paths are relative to the repository root with `/`**, so one finding has one
+  fingerprint on Windows and elsewhere.
+
+When the file cannot be read — it was deleted, or lies outside the repository,
+which is never read — the row stands in for the line, and `fingerprintBasis` says `row` instead of
+`line`; a finding without a file rests on nothing (`none`). The fingerprint is
+SHA-256 rather than a faster hash because it is not an internal key: another
+system stores it and compares it with the next upload's.
+
+The columns of a finding are the ones its tool printed, in the unit its parser
+declares (`unit`: `utf-8`, `utf-16` or `utf-32`). While the file is still on
+disk they are converted into code points (`chars`), UTF-8 bytes (`bytes`) and
+UTF-16 units (`utf16`), so a report rendered later needs no source. `precision`
+is `exact`; `ascii` when no unit was declared but the line is ASCII, where every
+unit counts alike; or `unknown` when there was nothing to convert from, and a
+consumer that needs another unit then leaves the column out.
+
+A report settles a finding's ordinal once its tool has finished, across all
+of the tool's processes. The fingerprint a finding has while its own process is
+judged — before the threshold decides — is counted within that process; the two
+agree whenever one process reports the findings of a line, which is every tool
+that runs once per file and every tool whose findings name the files it was
+given.
+
+## Rendering a report later
+
+`datamitsu report render` reads a run's own JSON and writes it in a format,
+offline, through the same renderers and the same completeness rule:
+
+```bash
+datamitsu report render --input out/run.json --format json --output -
+```
+
+The document holds everything a renderer needs, so this works on another
+machine and after the checkout changed. A document of a narrowed run is refused
+for a format that lists findings unless `--allow-partial`, as the run would have
+been, and a document without its completeness fields is read as incomplete.
+
+## Findings as they happen
+
+Under `--log-format jsonl` the same findings arrive as `diagnostic` events, one
+per finding, once its tool has finished — by default those at or above the
+operation's `failOn`, every one with `--events diagnostics=all`. Each carries
+the finding's fingerprint, the same one the report holds. See
+[Run events](../reference/cli-commands.md#run-events).

@@ -1,0 +1,5 @@
+exit code: 2
+===STDOUT===
+
+===STDERR===
+error: invalid DATAMITSU_ALLOW_PARTIAL value: "yes" (must be true, false, 1 or 0)

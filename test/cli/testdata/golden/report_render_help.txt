@@ -1,0 +1,31 @@
+Render the own JSON document a run wrote with --report json=<path> into a
+report format, as the run would have written it: the same renderers, and the
+same completeness rule. The document holds everything a renderer needs, so this
+works on another machine and after the checkout changed.
+
+A format that lists findings is refused for a document of a narrowed run
+(named files, a subdirectory, --file-scoped, --tools) unless --allow-partial,
+exactly as --report is; a document without its completeness fields is read as
+incomplete, never as complete.
+
+  datamitsu report render --input out/run.json --format json --output -
+
+Usage:
+  datamitsu report render [flags]
+
+Flags:
+      --allow-partial   Render a format that lists findings for a document of a narrowed run
+      --format string   The format to write: json; a format's options follow a ?
+  -h, --help            help for render
+      --input string    The own JSON document to read (datamitsu.report/1)
+      --output string   Where to write it; - is stdout (default "-")
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --log-format string       Status output format: console or jsonl (also via DATAMITSU_LOG_FORMAT)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+      --no-parse                Show tools' raw output instead of parsed findings; parsing still runs (also via DATAMITSU_NO_PARSE)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

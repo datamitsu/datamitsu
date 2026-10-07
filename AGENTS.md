@@ -30,7 +30,7 @@
 **Strict separation between internal and external hashing:**
 
 - **XXH3-128** (github.com/zeebo/xxh3):
-  - All internal cache keys, invalidation keys, fingerprints
+  - All internal cache keys, invalidation keys, internal fingerprints
   - Config hashes (binmanager, runtimemanager, verifycache)
   - Per-file content tracking in execution cache
   - Path hashing (git root, project paths, URL→cache filename)
@@ -41,11 +41,16 @@
   - All hashes that come from external sources (release manifests, lock files)
   - Mandatory for binaries, JARs, archives, remote configs
   - Industry standard, published by upstream projects
+  - Identifiers that leave the process and that another system stores and
+    compares: the finding fingerprint (`report.Fingerprint`, `dmfp1`), which
+    code scanning keeps as an alert's identity across uploads
 
 **The dividing line:** if a hash is compared against a value from the internet
 or any untrusted source, it MUST be a cryptographic hash. If a hash exists
 only locally as a cache key or fingerprint and is never compared with an
-external value, it MUST be XXH3-128.
+external value, it MUST be XXH3-128. An identifier that lives in another
+system's database is not an internal fingerprint: it is written into a report
+and compared there, so it is SHA-256.
 
 **Forbidden:**
 
@@ -84,7 +89,7 @@ on Intel i9-14900K it is 26× faster.
 2. Add getter function in `internal/env/env.go`
 3. Add tests in `internal/env/env_test.go`
 4. Use the getter everywhere else
-5. Decide whether the variable belongs in the source-mode staleness fingerprint. `env.Environ()` returns **every** `DATAMITSU_*` variable and the farm's staleness key hashes it, so a new variable invalidates baked farms by default — which is correct for anything that changes what datamitsu produces. A variable that only records _which_ farm a shell activated must be added to `environExcluded` in `internal/env/environ.go`, or every command in an activated shell reports the manifest stale and re-bakes. `internal/env/environ.go` holds **three** lists: `observationExcluded` (`DATAMITSU_TRACE`, `DATAMITSU_TRACE_DIR`, `DATAMITSU_CONFIG_CACHE`) drops a variable from every fingerprint; `executionOnly` (`DATAMITSU_FAIL_FAST`, `DATAMITSU_FAIL_ON`) names the variables that change what one `fix`/`lint`/`check` run prints or how far it goes, never what a farm contains; and `environExcluded` — the observation-only ones, the execution-only ones and the activation markers — gates only the source-mode staleness key. An execution-only variable is **not** observation-only: config JS may read it, so it stays in `env.EnvironAll()` and in `facts().env`. `env.EnvironAll()`, the whole-environment fingerprint the config-evaluation cache key hashes, excludes only `observationExcluded` — and `facts().env`, the environment config JS reads, is filtered by the same list (`env.ObservationOnly`). The two must stay aligned: anything config JS can branch on has to be able to move that key, so a variable dropped from the fingerprint must also be hidden from config JS or it becomes a config input that no cache key can distinguish. Only a variable that changes what datamitsu _reports about itself_, never what it produces, belongs in `observationExcluded`.
+5. Decide whether the variable belongs in the source-mode staleness fingerprint. `env.Environ()` returns **every** `DATAMITSU_*` variable and the farm's staleness key hashes it, so a new variable invalidates baked farms by default — which is correct for anything that changes what datamitsu produces. A variable that only records _which_ farm a shell activated must be added to `environExcluded` in `internal/env/environ.go`, or every command in an activated shell reports the manifest stale and re-bakes. `internal/env/environ.go` holds **three** lists: `observationExcluded` (`DATAMITSU_TRACE`, `DATAMITSU_TRACE_DIR`, `DATAMITSU_CONFIG_CACHE`) drops a variable from every fingerprint; `executionOnly` (`DATAMITSU_FAIL_FAST`, `DATAMITSU_FAIL_ON`, `DATAMITSU_REPORT`, `DATAMITSU_ALLOW_PARTIAL`, `DATAMITSU_EVENTS`) names the variables that change what one `fix`/`lint`/`check` run prints or how far it goes, never what a farm contains; and `environExcluded` — the observation-only ones, the execution-only ones and the activation markers — gates only the source-mode staleness key. An execution-only variable is **not** observation-only: config JS may read it, so it stays in `env.EnvironAll()` and in `facts().env`. `env.EnvironAll()`, the whole-environment fingerprint the config-evaluation cache key hashes, excludes only `observationExcluded` — and `facts().env`, the environment config JS reads, is filtered by the same list (`env.ObservationOnly`). The two must stay aligned: anything config JS can branch on has to be able to move that key, so a variable dropped from the fingerprint must also be hidden from config JS or it becomes a config input that no cache key can distinguish. Only a variable that changes what datamitsu _reports about itself_, never what it produces, belongs in `observationExcluded`.
 
 **Examples:**
 
@@ -270,6 +275,57 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   (`internal/parsermanager/testdata/README.md`); the released module in
   `testdata/released` is never rebuilt.
 
+## Reports
+
+- `internal/report` is the one record of a `fix`/`lint`/`check` run (`report.Run`,
+  schema `datamitsu.report/1`); every `--report` format is a renderer over it
+  (`internal/report/render/<format>`, registered in `render.renderers`) and
+  reads nothing else, so `datamitsu report render` gives the run's own output
+  offline. A new consumer of a run's results reads the model, never
+  `ExecutionResult`. `render.Open`/`Target.Write` is the one atomic writer.
+- A report carries no argv and no environment: `Command` and every environment
+  value stay out of the model, an app is referenced by name, kind and configured
+  version. A report is never stored in any cache.
+- `report.Mask` replaces secret-looking values (`report.SecretValues`: the host
+  environment, app `env`/`runtimeEnv` and operation `env`) in every string field
+  of the built `Run`, by reflection, so a new field is masked without being
+  listed. Captured output reaches a report only as a failed invocation's
+  `outputTail`, never for a `security`-category tool or one whose parser
+  module the run never described; a tool that fails without findings gets one
+  `synthetic` finding with a structured message and no output. `ui.SetEventMask`
+  masks every JSON-L event the same way, `op_id` included, so a task's events
+  still correlate: `setJSONLStderr` installs it with the host environment's
+  values, and a run replaces it with its `report.Secrets`. A log line routed
+  to the stream withholds its `output`, `args` and `outputArgs` fields
+  (`logger.withheldFields`); the console keeps them. Name a new debug field that
+  carries tool output or argv one of those.
+- A finding's fingerprint (`report.Fingerprint`) is SHA-256 over
+  `dmfp1 NUL tool NUL code NUL relPath NUL lineHash NUL ordinal`; its message is
+  not an input. The runner computes it — with the columns in every unit
+  (`internal/textpos`) — in the gate hook, before the threshold decides
+  (`report.Annotator`), and the report settles ordinals across a tool's
+  processes. Changing the input turns every code-scanning alert into
+  "fixed" and "new"; `fingerprint_test.go` pins golden vectors.
+- Reports are written after the last operation whatever its outcome, atomically;
+  a report that was not written exits `exitcode.Export` (5) only when nothing
+  else failed (1 > 4 > 5).
+- Completeness is per tool, from scope, execution and extraction
+  (`internal/report/completeness.go`); a tool without a parser is never
+  complete. A report that lists findings (every renderer whose
+  `OmitsIncompleteTools` is false) is refused with exit 2 for a run narrowed at
+  plan time unless `--allow-partial`, and any report turns fail-fast off; an
+  explicit `--fail-fast=true` or `DATAMITSU_FAIL_FAST=true` with a report exits 2.
+- Under `--log-format jsonl` the runner emits one flat `diagnostic` event per
+  reported finding (every finding under `--events diagnostics=all`) once the
+  finding's tool has finished in the operation — `OperationRecord.AddTask`
+  returns a tool's findings when its last planned task arrives, `Flush` the
+  rest — so an event's fingerprint is the report's. `uievent.Event` stays flat:
+  new fields are `omitempty`, pointers where false or zero must be written, set
+  only on the events that carry them. Every stream `setJSONLStderr` opens (`--log-format jsonl`, `lsp`, a report
+  on stdout) starts with `hello` and absorbs `SIGPIPE`, so a closed reader fails
+  a write instead of killing the run; a stream the sink could not write fails the run with exit
+  1 and the error on stdout (`JSONLSink.Failed`, `ui.EventStreamFailed`).
+
 ## Product Stage
 
 - Project is in `alpha`.
@@ -292,7 +348,7 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 
 **Breaking change: a finding at or above `failOn` fails a tool that exits 0** — every `fix` and `lint` operation has a threshold, `failOn` (`config.Severity`, default `error`). The runner wires `tooling.ThresholdGate` through `Executor.SetGate`; after `parseFileDiagnostics` it marks each finding `Reported` (at or above the operation's effective threshold, `config.EffectiveFailOn` of `failOn` and `--fail-on`/`DATAMITSU_FAIL_ON`) and `Gates` (reported, and the module that parsed it declares the severity contract — descriptor schema 2, `Manager.SeverityContract`). A process that exited 0 with a gating finding fails (`ThresholdError`, `ProcessResult.ThresholdFailed`, `FailureReasonThreshold`), stops a per-file loop under fail-fast, and fails only the files its gating findings name. So with the default, a tool that exits 0 on a finding its parser reads as an error now fails the run — semgrep without `--error`, trivy without `--exit-code`. A non-zero exit fails at any threshold; nothing turns a failure into a pass. A module before the contract gates nothing, and a run in which such a module parsed an operation whose threshold is not the default warns once: `failOn ignored for <tools>: parser module predates the severity contract`.
 
-**Breaking change: tools run by `fix|lint|check` no longer see `GITHUB_ACTIONS`, agent markers or `FORCE_COLOR`, and always get `NO_COLOR=1`; use `inheritEnv`** — `buildCommand` builds every tool environment with `toolenv.Apply`: the process environment without the names and prefixes in `internal/toolenv/list.go` (`GITHUB_ACTIONS`, the AI agent markers, `FORCE_COLOR`, `CLICOLOR_FORCE`), the operation's `inheritEnv` pairs, the app's and the operation's `env`, then `NO_COLOR=1`, which `env` and `inheritEnv` cannot name. `CI` and every other CI variable stay, and `exec` is untouched. The list is the only copy: it generates `website/docs/reference/tool-environment.md` (`task gen:toolenv-doc`, checked by `TestDocMatchesTheCommittedPage`), the blackbox harness strips it too, and `agent_detection_test.go` pins it against oxlint's agent detection at a recorded upstream commit — a name oxlint reads is either stripped or kept with a reason. The `inheritEnv` values a task resolved are part of its verdict identity (`dmv3`) and of its per-file cache name (`<tool>+env:<xxh3>`). Parsers read a tool's output with ANSI sequences stripped (`stripCSI`); the frame keeps them.
+**Breaking change: tools run by `fix|lint|check` no longer see `GITHUB_ACTIONS`, agent markers or `FORCE_COLOR`, and always get `NO_COLOR=1`; use `inheritEnv`** — `buildCommand` builds every tool environment with `toolenv.Apply`: the process environment without the names and prefixes in `internal/toolenv/list.go` (`GITHUB_ACTIONS`, the AI agent markers, `FORCE_COLOR`, `CLICOLOR_FORCE`), the operation's `inheritEnv` pairs, the app's and the operation's `env`, then `NO_COLOR=1`, which `env` and `inheritEnv` cannot name. `CI` and every other CI variable stay, and `exec` is untouched. The list is the only copy: it generates `website/docs/reference/tool-environment.md` (`task gen:toolenv-doc`, checked by `TestDocMatchesTheCommittedPage`), the blackbox harness strips it too, and `agent_detection_test.go` pins it against oxlint's agent detection at a recorded upstream commit — a name oxlint reads is either stripped or kept with a reason. The `inheritEnv` values a task resolved are part of its verdict identity (`dmv3`) and of its per-file cache name (`<tool>+env:<xxh3>`). Parsers read a tool's output with ANSI sequences stripped (`StripCSI`); the frame keeps them.
 
 ## Project Overview
 

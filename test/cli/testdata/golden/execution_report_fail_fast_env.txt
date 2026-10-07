@@ -1,0 +1,5 @@
+exit code: 2
+===STDOUT===
+
+===STDERR===
+error: --report cannot be combined with DATAMITSU_FAIL_FAST=true: a run that stops at the first failing tool cannot list every finding

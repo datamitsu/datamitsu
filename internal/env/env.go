@@ -439,6 +439,55 @@ func FailOn() string {
 	return os.Getenv(failOn.Name)
 }
 
+// Report returns DATAMITSU_REPORT exactly as set, "" when unset: the reports a
+// fix, lint or check run writes, as comma-separated format=path pairs. It has
+// no fallback — a report asked for and silently not written is what the
+// variable exists to prevent — so the command layer parses it and exits 2 on a
+// value it cannot read.
+func Report() string {
+	return os.Getenv(report.Name)
+}
+
+// AllowPartial returns DATAMITSU_ALLOW_PARTIAL exactly as set, "" when unset.
+// The command layer reads it as true, 1, false or 0 and exits 2 on anything
+// else: a mistyped value must not decide silently whether a narrowed run's
+// report is written.
+func AllowPartial() string {
+	return os.Getenv(allowPartial.Name)
+}
+
+// Events returns DATAMITSU_EVENTS exactly as set, "" when unset. The command
+// layer accepts diagnostics=reported and diagnostics=all and exits 2 on
+// anything else.
+func Events() string {
+	return os.Getenv(events.Name)
+}
+
+// ParseBool reads the boolean spelling datamitsu's variables accept: true or
+// 1, false or 0, case-insensitive and trimmed.
+func ParseBool(raw string) (value, ok bool) {
+	return parseFailFast(raw)
+}
+
+// sourceDateEpoch is the reproducible-builds convention naming the time an
+// artifact is stamped with.
+const sourceDateEpoch = "SOURCE_DATE_EPOCH"
+
+// SourceDateEpoch returns SOURCE_DATE_EPOCH as a UTC time, and whether it held
+// a whole number of seconds since the Unix epoch. Unset or invalid leaves the
+// clock to decide.
+func SourceDateEpoch() (time.Time, bool) {
+	raw := strings.TrimSpace(os.Getenv(sourceDateEpoch))
+	if raw == "" {
+		return time.Time{}, false
+	}
+	secs, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || secs < 0 {
+		return time.Time{}, false
+	}
+	return time.Unix(secs, 0).UTC(), true
+}
+
 // NoParse reports whether a failure shows the tools' raw output instead of
 // their parsed findings — the env twin of the --no-parse flag. Parsing itself
 // still runs.

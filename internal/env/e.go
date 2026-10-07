@@ -186,6 +186,30 @@ var (
 		Description:  "Raise every fix/lint/check operation's failOn to this level (error, warning, info or hint); never lowers one; the --fail-on flag wins",
 	}
 
+	// report is execution-only: it names the files one fix/lint/check run
+	// writes its report to, never what datamitsu installs or produces.
+	report = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_REPORT",
+		DefaultValue: "",
+		Description:  "Reports a fix/lint/check run writes, as comma-separated format=path pairs (json=out/run.json); a --report flag naming the same format wins",
+	}
+
+	// allowPartial is execution-only: it lets one run write a listing report
+	// for a narrowed selection, never what datamitsu installs or produces.
+	allowPartial = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_ALLOW_PARTIAL",
+		DefaultValue: "",
+		Description:  "Write a report that lists findings for a narrowed fix/lint/check run instead of refusing it (true or 1, false or 0); the --allow-partial flag wins",
+	}
+
+	// events is execution-only: it decides which findings one run's JSON-L
+	// stream carries, never what datamitsu installs or produces.
+	events = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_EVENTS",
+		DefaultValue: "",
+		Description:  "Which findings the JSON-L stream of fix/lint/check carries as diagnostic events: diagnostics=reported (at or above failOn, the default) or diagnostics=all; the --events flag wins",
+	}
+
 	noParse = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_PARSE",
 		DefaultValue: "",

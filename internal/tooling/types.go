@@ -233,8 +233,9 @@ const (
 	FileSetupFailed FileState = "setup-failed"
 )
 
-// outputTailBytes bounds ProcessResult.OutputTail.
-const outputTailBytes = 4 << 10
+// OutputTailBytes bounds ProcessResult.OutputTail: a tail of this length was
+// cut from a longer output.
+const OutputTailBytes = 4 << 10
 
 // ProcessResult is one process a task planned to spawn: one per file in
 // per-file mode, one per chunk in batch mode. Cached files have none.

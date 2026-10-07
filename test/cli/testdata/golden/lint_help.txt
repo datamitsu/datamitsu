@@ -12,12 +12,15 @@ Usage:
   datamitsu lint [files...] [flags]
 
 Flags:
+      --allow-partial                Write a report that lists findings for a narrowed run (named files, a subdirectory, --tools, --file-scoped) instead of refusing it; the report keeps every reason it is incomplete (also via DATAMITSU_ALLOW_PARTIAL)
+      --events string                Which findings --log-format jsonl carries as diagnostic events: diagnostics=reported (at or above failOn, the default) or diagnostics=all (also via DATAMITSU_EVENTS)
       --explain string[="summary"]   Show execution plan without running (summary|detailed|json)
       --fail-fast                    Stop at the first failing tool; --fail-fast=false runs everything to the end (also via DATAMITSU_FAIL_FAST) (default true)
       --fail-on string               Fail on findings at this level or above in every operation (error|warning|info|hint); raises an operation's failOn, never lowers it (also via DATAMITSU_FAIL_ON)
       --fail-on-skip                 Exit non-zero if any tool is skipped because its binary is unavailable for this platform
       --file-scoped                  Only process git staged files
   -h, --help                         help for lint
+      --report stringArray           Write a report once the run ends, failed or not: <format>=<path>, or <format>=- for stdout (repeatable; formats: json; turns fail-fast off; also via DATAMITSU_REPORT)
       --require-coverage string      Exit non-zero unless the run answered completely (unit|repo)
       --tools string                 Comma-separated list of tools to run (for debugging)
       --widen-to string              Limit how far work may widen beyond the selection (target|unit|repo)

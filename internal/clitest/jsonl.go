@@ -98,6 +98,8 @@ func MustParseJSONL(tb testing.TB, stderr string) []Event {
 //   - a skip that closes a start says the task was cancelled, one that stands
 //     alone says it was not started;
 //   - a chunk event belongs to a task that started and has not yet ended;
+//   - a diagnostic event belongs to a task that has ended, of an operation
+//     that has not;
 //   - an operation's phase start precedes every tool_run of that operation;
 //   - every operation that started ends with exactly one done, which follows
 //     all of the operation's tool_run events, reports as runs the number of its
@@ -207,6 +209,21 @@ func AssertChains(tb testing.TB, events []Event) {
 		}
 	}
 	assertChunks(tb, events)
+	for i, e := range events {
+		if e.Type != "diagnostic" {
+			continue
+		}
+		run, ok := operationOf(e.OpID)
+		c := chains[e.OpID]
+		switch done := doneAt[run]; {
+		case !ok || c == nil:
+			tb.Errorf("clitest: diagnostic %q belongs to no task", e.OpID)
+		case !endedBefore(events, e.OpID, i):
+			tb.Errorf("clitest: diagnostic %q precedes the end of its task", e.OpID)
+		case len(done) > 0 && done[0] < i:
+			tb.Errorf("clitest: diagnostic %q follows the done of %q", e.OpID, run)
+		}
+	}
 
 	for run, start := range phaseAt {
 		done := doneAt[run]
@@ -262,6 +279,17 @@ func assertChunks(tb testing.TB, events []Event) {
 			}
 		}
 	}
+}
+
+// endedBefore reports whether the task opID ended — its terminal tool_run —
+// before events[at]: a tool's findings are emitted once the tool finished.
+func endedBefore(events []Event, opID string, at int) bool {
+	for _, e := range events[:at] {
+		if e.Type == "tool_run" && e.OpID == opID && e.Terminal() {
+			return true
+		}
+	}
+	return false
 }
 
 func isRunDone(e Event) bool {

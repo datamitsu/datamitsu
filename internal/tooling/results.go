@@ -14,11 +14,11 @@ func (r *ExecutionResult) addNotStarted(files []string) {
 	}
 }
 
-// outputTail is the last outputTailBytes of output, copied so it does not pin
+// outputTail is the last OutputTailBytes of output, copied so it does not pin
 // the whole capture.
 func outputTail(output []byte) []byte {
-	if len(output) > outputTailBytes {
-		output = output[len(output)-outputTailBytes:]
+	if len(output) > OutputTailBytes {
+		output = output[len(output)-OutputTailBytes:]
 	}
 	return bytes.Clone(output)
 }
@@ -40,9 +40,9 @@ func cachedOf(planned, toProcess []string) []string {
 	return cached
 }
 
-// wholeUnit reports whether a task's argv carries no file path, so its one
+// WholeUnit reports whether a task's argv carries no file path, so its one
 // process answers for the unit rather than for the files that selected it.
-func wholeUnit(task Task) bool {
+func WholeUnit(task Task) bool {
 	if config.RunsPerFile(task.OpConfig, len(task.Files)) {
 		return false
 	}
@@ -60,7 +60,7 @@ func wholeUnit(task Task) bool {
 // is the state of a file no process and no cache accounts for. It numbers the
 // processes, so it runs once every process is recorded.
 func describeFiles(task Task, result *ExecutionResult, fallback FileState) {
-	result.WholeUnit = wholeUnit(task)
+	result.WholeUnit = WholeUnit(task)
 	result.UnitDir = result.RelativeDir
 	if config.InferGranularity(task.OpConfig) != config.GranularityFile {
 		result.UnitDir = task.UnitDir
@@ -155,7 +155,7 @@ func gatedFilesOf(proc ProcessResult) gatedFiles {
 // describeVerdictHit is describeFiles for a unit whose verdict held: the verdict
 // answers for every member, not only for the files that selected the task.
 func describeVerdictHit(task Task, result *ExecutionResult) {
-	result.WholeUnit = wholeUnit(task)
+	result.WholeUnit = WholeUnit(task)
 	result.UnitDir = task.UnitDir
 	result.Files = cleanPaths(task.UnitMembers)
 	result.FileResults = make([]FileResult, 0, len(result.Files))
