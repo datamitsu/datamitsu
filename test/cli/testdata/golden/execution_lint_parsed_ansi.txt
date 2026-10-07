@@ -1,0 +1,23 @@
+exit code: 1
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✗ yamllint  <DUR> (1 failed)
+  ┌─ yamllint [repository] (run #1) <RULE>
+  │  Cwd:       <TMP>
+  │  Command:   sh -c sleep 0.01; echo "$0 $1" >> "$MARKERS/$0"; printf 'stdin:3:0: [\033[<DUR>error\033[<DUR>] too many blank lines (3 > 0) (empty-lines)\n'; exit 1 yamllint a.yaml
+  │  Exit code: 1
+  │  Duration:  <DUR>
+  │
+  │  a.yaml:3:1 error too many blank lines (3 > 0) [empty-lines]
+  └<RULE>
+
+┗━ 1 tools · 1 runs · done in <DUR> · 1 failed · cache 0% <RULE>
+
+===STDERR===
+error: operation failed

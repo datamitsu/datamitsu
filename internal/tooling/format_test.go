@@ -2,6 +2,8 @@ package tooling
 
 import (
 	"context"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -91,5 +93,33 @@ func TestFormatContent_EmptyStdoutForNonEmptyContentIsError(t *testing.T) {
 
 	if _, _, err := e.FormatContent(context.Background(), formatTask("sink", dir), dir+"/f.txt", []byte("data\n")); err == nil {
 		t.Error("expected error when formatter produces empty stdout for non-empty content")
+	}
+}
+
+// The language server's format lane hands its formatter the environment fix
+// does: stripped, the operation's inheritEnv and env layered, NO_COLOR=1 last.
+func TestFormatContent_ToolEnvironment(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the formatter is an sh script")
+	}
+	for _, kv := range []string{"CI=true", "GITHUB_ACTIONS=true", "AI_AGENT=claude", "FORCE_COLOR=3", "NO_COLOR=0", "MODE=host"} {
+		name, value, _ := strings.Cut(kv, "=")
+		t.Setenv(name, value)
+	}
+	dir := t.TempDir()
+	e := NewExecutor(dir, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
+		"probe": shellApp(`cat >/dev/null; printf 'CI=%s GITHUB_ACTIONS=%s AI_AGENT=%s FORCE_COLOR=%s NO_COLOR=%s MODE=%s\n' ` +
+			`"$CI" "$GITHUB_ACTIONS" "$AI_AGENT" "$FORCE_COLOR" "$NO_COLOR" "$MODE"`),
+	}}, nil)
+	task := formatTask("probe", dir)
+	task.OpConfig.InheritEnv = []string{"GITHUB_ACTIONS", "MODE"}
+	task.OpConfig.Env = map[string]string{"MODE": "op"}
+
+	candidate, _, err := e.FormatContent(context.Background(), task, dir+"/f.txt", []byte("x\n"))
+	if err != nil {
+		t.Fatalf("FormatContent: %v", err)
+	}
+	if want := "CI=true GITHUB_ACTIONS=true AI_AGENT= FORCE_COLOR= NO_COLOR=1 MODE=op\n"; string(candidate) != want {
+		t.Errorf("the formatter saw %q, want %q", candidate, want)
 	}
 }

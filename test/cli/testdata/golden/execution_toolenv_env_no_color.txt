@@ -1,0 +1,6 @@
+exit code: 1
+===STDOUT===
+
+===STDERR===
+error: failed to load config: config validation failed:
+  tool "probe" operation "lint": env "NO_COLOR": datamitsu sets NO_COLOR=1 for every tool fix, lint and check run; it cannot be set

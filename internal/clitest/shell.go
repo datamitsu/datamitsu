@@ -3,6 +3,7 @@ package clitest
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,6 +39,9 @@ type ToolOpSpec struct {
 	// the module ParserModule (SeededParserModule when empty).
 	Parser       string
 	ParserModule string
+	// Env joins MARKERS in the operation's env and may override it.
+	Env        map[string]string
+	InheritEnv []string
 }
 
 // ShellTool returns the config JS that declares a tool whose app is
@@ -58,11 +62,16 @@ func ShellTool(name, script string, op ToolOpSpec) string {
 		args = []string{}
 	}
 
+	env := map[string]string{"MARKERS": "{root}/" + MarkerDirName}
+	maps.Copy(env, op.Env)
 	opJS := map[string]any{
 		"app":   name,
 		"args":  args,
 		"scope": scope,
-		"env":   map[string]string{"MARKERS": "{root}/" + MarkerDirName},
+		"env":   env,
+	}
+	if len(op.InheritEnv) > 0 {
+		opJS["inheritEnv"] = op.InheritEnv
 	}
 	if len(op.Globs) > 0 {
 		opJS["globs"] = op.Globs

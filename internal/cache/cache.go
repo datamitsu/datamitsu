@@ -621,7 +621,11 @@ func (c *Cache) Clear() error {
 //   - c1v1: a lint pass means "nothing to report": for a tool with an output
 //     parser it is recorded only when the parser ran and found nothing, at any
 //     level, whatever the exit code.
-const cacheSemantics = "c1v1"
+//   - d3v1: a pass comes from a tool run without the variables that switch its
+//     output format and with NO_COLOR=1 (internal/toolenv), whose output the
+//     parser read without ANSI sequences. A pass recorded before could stand
+//     for findings printed in a format the parser read as clean.
+const cacheSemantics = "d3v1"
 
 // calculateInvalidationKey calculates an XXH3-128 hash from the datamitsu
 // version, the cache semantics, the full config JSON and the selected tools.

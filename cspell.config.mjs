@@ -57,6 +57,9 @@ export default defineConfig((config) => ({
     // and the Go package that does it.
     "WCAG",
     "inspectortheme",
+    // The Docusaurus anchor of the inheritEnv heading, which the generated
+    // tool-environment page links to from Go.
+    "inheritenv",
     // Operating systems the release detector recognises only to leave alone,
     // and the attestation and installer formats it filters out of a release.
     "illumos",

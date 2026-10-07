@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/gittest"
+	"github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 // DefaultTimeout bounds a single CLI invocation so a hung subprocess fails the
@@ -193,35 +194,28 @@ func BaseEnv(cacheDir string) []string {
 // strippedKey reports whether an inherited environment variable must be dropped
 // from the clean base env: every DATAMITSU_* var (so the harness is the only
 // source of datamitsu config), the variables that steer mode, color or output
-// detection in datamitsu or in the tools it runs (ambientKeys, ambientPrefixes),
-// inherited command-scope git config (which would outrank gittest.Env), and the
-// keys BaseEnv sets explicitly (avoid duplicate, ambiguous entries). A golden
-// recorded inside a CI job or an agent session would otherwise differ from one
-// recorded in a plain shell; a scenario that needs one of these variables sets
-// it through RunOptions.Env.
+// detection in datamitsu or in the tools it runs (ambientKeys, and everything
+// toolenv strips from a tool), inherited command-scope git config (which would
+// outrank gittest.Env), and the keys BaseEnv sets explicitly (avoid duplicate,
+// ambiguous entries). A golden recorded inside a CI job or an agent session
+// would otherwise differ from one recorded in a plain shell; a scenario that
+// needs one of these variables sets it through RunOptions.Env.
 func strippedKey(key string) bool {
 	if _, ok := ambientKeys[key]; ok {
 		return true
 	}
-	for _, prefix := range ambientPrefixes {
-		if strings.HasPrefix(key, prefix) {
-			return true
-		}
+	if strings.HasPrefix(key, "DATAMITSU_") || toolenv.Stripped(key) {
+		return true
 	}
 	return gittest.IsCommandScopeKey(key)
 }
 
-// ambientKeys are stripped by exact name: CI and terminal detection, the
-// CI-system markers, the agent-session markers and the color overrides.
+// ambientKeys are stripped by exact name on top of toolenv's list: CI and
+// terminal detection, and the CI-system markers datamitsu itself may read.
 var ambientKeys = map[string]struct{}{
 	"CI": {}, "TERM": {}, "NO_COLOR": {}, "GOCOVERDIR": {},
-	"GITHUB_ACTIONS": {}, "TF_BUILD": {}, "TEAMCITY_VERSION": {},
-	"AI_AGENT": {}, "AGENT": {}, "CLAUDECODE": {}, "CLAUDE_CODE": {}, "CLAUDE_CODE_CHILD_SESSION": {},
-	"GEMINI_CLI": {}, "CURSOR_AGENT": {}, "OPENCODE": {}, "AUGMENT_AGENT": {},
-	"FORCE_COLOR": {}, "CLICOLOR_FORCE": {},
+	"TF_BUILD": {}, "TEAMCITY_VERSION": {},
 }
-
-var ambientPrefixes = []string{"DATAMITSU_", "CODEX_", "COPILOT_", "JUNIE_"}
 
 // ExitCodeOf extracts the process exit code from an error returned by
 // (*exec.Cmd).Run: 0 for nil, the real code for an *exec.ExitError, and -1 for

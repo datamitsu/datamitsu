@@ -7,13 +7,9 @@
 //  4. CLICOLOR=0 env var set by user -> disable colors
 //  5. Fall back to terminal capability detection (is stdout a TTY?)
 //
-// For child process color preservation, we use env hints (FORCE_COLOR=1,
-// CLICOLOR_FORCE=1) rather than PTY or streaming approaches. This preserves
-// the single-print-layer architecture where the executor captures output
-// and the runner prints it once. Child processes detect a pipe (not TTY)
-// since their stdout goes to a buffer, so env hints tell them to emit
-// ANSI sequences anyway. The runner passes through these sequences when
-// printing to the actual terminal.
+// It decides datamitsu's own output only. The tools fix, lint and check run
+// get NO_COLOR=1 whatever this says (internal/toolenv): their output is read
+// by a parser.
 package color
 
 import (
@@ -67,29 +63,6 @@ func Init() {
 	} else {
 		color.NoColor = false
 	}
-}
-
-// ChildEnvHints returns environment variables to set on child processes
-// to preserve color output. Only returns hints when color is enabled
-// and the user hasn't explicitly set these variables.
-func ChildEnvHints() map[string]string {
-	if !Enabled() {
-		return nil
-	}
-
-	hints := make(map[string]string)
-
-	// Only set FORCE_COLOR if user hasn't already set it
-	if _, ok := os.LookupEnv("FORCE_COLOR"); !ok {
-		hints["FORCE_COLOR"] = "1"
-	}
-
-	// Only set CLICOLOR_FORCE if user hasn't already set it
-	if _, ok := os.LookupEnv("CLICOLOR_FORCE"); !ok {
-		hints["CLICOLOR_FORCE"] = "1"
-	}
-
-	return hints
 }
 
 // Convenience color/style functions for runner service output. Each wraps its

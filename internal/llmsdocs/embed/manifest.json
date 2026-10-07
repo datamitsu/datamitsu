@@ -4,8 +4,8 @@
   "license": "MIT",
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
-  "pageCount": 55,
-  "pageSetHash": "307c5b2ce97cc7698e1906132eb1baa1",
+  "pageCount": 56,
+  "pageSetHash": "1d2f06d0ba1ab1a87717faafeb5dfd75",
   "pages": [
     {
       "slug": "about",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 27352,
-      "contentHash": "f159fa7425623e3aa8356c0391f9b981"
+      "bytes": 28036,
+      "contentHash": "2cd0b031edacbe531e700e32c7b7d9a2"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 15663,
-      "contentHash": "fb5d87b9e26e5b1419bb738323703180"
+      "bytes": 16569,
+      "contentHash": "65ddf8df55a127e2bde96324e66af900"
     },
     {
       "slug": "guides/architecture",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 32362,
-      "contentHash": "80e3f21d1695263776985a955105790b"
+      "bytes": 32695,
+      "contentHash": "55d3a0914f3f43ef13a08ce311cec3e1"
     },
     {
       "slug": "guides/architecture/planner",
@@ -352,8 +352,8 @@
       "url": "https://datamitsu.com/docs/guides/tooling-system.md",
       "title": "Tooling System",
       "description": "Understanding the fix, lint, and check operations in datamitsu",
-      "bytes": 10786,
-      "contentHash": "487170c6898b0e03b935d9959f64a1e0"
+      "bytes": 11046,
+      "contentHash": "551b5ad56a3caa9b1047d00a078ff1a4"
     },
     {
       "slug": "guides/using-wrappers",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 112046,
-      "contentHash": "9a60faa5a1acb2895eb24c848a2d5afb"
+      "bytes": 112837,
+      "contentHash": "d3a68e9c128405daaa2c8e199b9ac945"
     },
     {
       "slug": "reference/comparison",
@@ -469,8 +469,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 73052,
-      "contentHash": "d8ff81b71e1afaf5a207ad2dd47b74ab"
+      "bytes": 75353,
+      "contentHash": "8cb6b006fad3d8e417cf3943002401d8"
     },
     {
       "slug": "reference/ignore-rules",
@@ -507,6 +507,15 @@
       "description": "Reference for template placeholders in tool operation arguments and environment values",
       "bytes": 8905,
       "contentHash": "56efaf7c3b764244b30d7c4940e91a61"
+    },
+    {
+      "slug": "reference/tool-environment",
+      "aliases": [],
+      "url": "https://datamitsu.com/docs/reference/tool-environment.md",
+      "title": "Tool Environment",
+      "description": "What datamitsu removes from and sets in the environment of the tools that fix, lint and check run",
+      "bytes": 9395,
+      "contentHash": "27870459b205917dff814107606759d7"
     }
   ]
 }

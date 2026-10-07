@@ -223,6 +223,10 @@ export function getConfig(input) {
 - Putting formatters and linters at the same priority: formatters modify files, so linters might see stale content if they run simultaneously.
 - Putting all tools at different priorities: this forces fully sequential execution, losing parallelism between independent tools.
 
+## The Environment a Tool Receives
+
+A tool started by `fix`, `lint` or `check` — the language server's format lane included — gets the environment datamitsu was started with, minus the variables that make tools change what they print: `GITHUB_ACTIONS`, the AI agent markers and `FORCE_COLOR`/`CLICOLOR_FORCE`. The variables its operation names in [`inheritEnv`](../../reference/configuration-api.md#inheriting-host-variables-inheritenv) come back with the host's values, the app's `env` and then the operation's `env` are layered on top, and `NO_COLOR=1` is set last, where nothing can override it. `CI` and every other CI variable pass through. Before a parser reads the output, ANSI sequences a tool printed anyway are removed; the failure frame keeps them. `datamitsu exec` does none of this. The generated [Tool Environment](../../reference/tool-environment.md) page lists every variable and why.
+
 ## Progress Tracking
 
 The executor reports progress differently depending on the environment:

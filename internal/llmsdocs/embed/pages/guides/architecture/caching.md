@@ -181,6 +181,14 @@ rewriting its copy in `.datamitsu/configs/`, is then a miss for that tool on eve
 file, while every other tool's entries stay valid. Folding the digest into the
 cache-wide invalidation key instead would discard all of them.
 
+An operation that hands its tool host variables through
+[`inheritEnv`](../../reference/configuration-api.md#inheriting-host-variables-inheritenv)
+records its passes the same way, under the tool name plus a digest of the
+`NAME=value` pairs the tool was started with — `reporter+env:<xxh3>`. The
+invalidation key hashes the configuration, which names the variables but never
+holds their values, so without it a pass recorded under one value would answer
+for another. A variable the host does not set adds nothing to the name.
+
 ### Why separate Lint and Fix tracking
 
 Lint and fix are independent operations with different semantics. A file can pass lint without needing a fix, or be fixed without being re-linted yet. Tracking them separately enables precise cache behavior:
@@ -226,7 +234,8 @@ with `GO`, `CARGO`, `RUST`, `NODE_`, `NPM_`, `PYTHON`, `PIP_`, `UV_`, `JAVA_`, `
 `ESLINT_`, `RUFF_`, `TF_`, or `TFLINT_`.
 
 A verdict is stored under the operation's identity: the tool, the operation, the unit, the
-granularity and arity, the raw `args`, the declared `env`, and — because the parser decides
+granularity and arity, the raw `args`, the declared `env`, the host values it inherits through
+`inheritEnv`, and — because the parser decides
 whether a lint run reported anything — the SHA-256 of the parser module the tool's
 `outputParser` names and the parser key. Pinning another module misses every verdict it did not
 decide.
@@ -413,9 +422,11 @@ plus its guards form a closed input set.
 If a result may depend on sibling files or shared config, prefer unit granularity
 and declare the extra guards. Declaring file granularity is a performance claim:
 it is correct only when each file's result stands alone. Per-file entries contain
-the file content, effective config, datamitsu version, and tool selection, but do
-not fold in inherited process environment; use unit granularity or disable the
-cache when such an environment value can change the answer.
+the file content, effective config, datamitsu version, and tool selection, and
+the values of the variables the operation names in `inheritEnv`, but do not fold
+in the rest of the inherited process environment; name such a variable in
+`inheritEnv`, use unit granularity or disable the cache when its value can change
+the answer.
 
 ## Concurrency Model
 

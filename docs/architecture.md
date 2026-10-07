@@ -499,7 +499,7 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 - Runtime-managed apps stored in `{store}/.apps/{kind}/{app}/{hash}/` with isolated environments
 - `DATAMITSU_MAX_PARALLEL_WORKERS` defaults to a dynamic CPU-based value: `max(4, floor(NumCPU * 0.75))`, capped at 16. Set this env var to override.
 - **No forced CI=true**: The tool never overrides CI environment variable. Child processes inherit the system's CI state naturally.
-- **Layered env merge order** (in executor.buildCommand): OS env -> color hints -> app env (cmdInfo.Env) -> ToolOperation.Env. Later layers override earlier ones.
+- **Layered env merge order** (in executor.buildCommand, through `toolenv.Apply`): OS env without the variables `internal/toolenv` strips (`GITHUB_ACTIONS`, AI agent markers, `FORCE_COLOR`, `CLICOLOR_FORCE`) -> the operation's `inheritEnv` pairs, resolved once per task -> app env (cmdInfo.Env) -> ToolOperation.Env -> `NO_COLOR=1`. Later layers override earlier ones; nothing overrides `NO_COLOR=1`. `exec` does not go through it. The stripped list lives only in `internal/toolenv/list.go`, which also generates `website/docs/reference/tool-environment.md` (`task gen:toolenv-doc`).
 - **ToolOperation.Env**: Per-tool-per-operation environment variables can be set in JS config via `env` field on tool operations.
 
 ### Color Support
@@ -507,7 +507,7 @@ Uses uber-go/zap structured logging throughout. Logger initialization in [intern
 - Color utilities in [internal/color/](internal/color/) using `github.com/fatih/color`
 - Respects user environment variables in order: `NO_COLOR` (disables), `FORCE_COLOR` (enables), `CLICOLOR_FORCE` (enables), `CLICOLOR=0` (disables), then falls back to TTY detection
 - Never overrides user-set color env vars; only sets defaults when absent
-- Child process color hints: when color is enabled and user hasn't set `FORCE_COLOR`/`CLICOLOR_FORCE`, these are injected into child process environments so they emit ANSI despite writing to buffers
+- Tools run by fix, lint and check get `NO_COLOR=1` and no colour hints, whatever datamitsu's own colour setting: their output is read by a parser, which receives it with ANSI sequences stripped (`stripCSI` in `parseFileDiagnostics`)
 - `clr.Init()` is called in `cmd/root.go Execute()` at startup
 
 ### Output Architecture (Single-Print-Layer Rule)

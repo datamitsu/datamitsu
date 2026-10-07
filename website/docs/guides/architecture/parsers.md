@@ -137,6 +137,11 @@ tools report on stderr — `tsc` falls back to it, `cue_fmt` uses it exclusively
 but they arrive as separate buffers, so wrapper noise on one can never interleave
 into the other's JSON.
 
+Both buffers reach the module without their ANSI control sequences (the `ESC [`
+sequences that set a colour, move the cursor or erase a line). A tool that colours its output even into a pipe
+would otherwise put an escape between a line parser and the position or level it
+reads. The failure frame still shows what the tool printed.
+
 ## The Pipeline
 
 A parser travels through six stages, from a config declaration to a result

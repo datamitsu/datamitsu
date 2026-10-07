@@ -65,3 +65,4 @@ Standard llms.txt form: `datamitsu llms --web`.
 - [JavaScript API](reference/js-api): Programmatic API reference for the @datamitsu/datamitsu npm package
 - [Parser Catalog](reference/parser-catalog): Tools whose output the bundled datamitsu WASM parser module turns into diagnostics
 - [Template Placeholders](reference/template-placeholders): Reference for template placeholders in tool operation arguments and environment values
+- [Tool Environment](reference/tool-environment): What datamitsu removes from and sets in the environment of the tools that fix, lint and check run

@@ -55,6 +55,8 @@ datamitsu exec <appName> [args...]
 
 When called without arguments, lists all available tools grouped by type (binary, uv, node, jvm, go, shell).
 
+`exec` hands the app the environment it was started with, unchanged: in a GitHub Actions job a tool run through `exec` sees `GITHUB_ACTIONS` and prints its own annotations. `fix`, `lint` and `check` do not — they strip the variables that switch a tool's output format and set `NO_COLOR=1` (see [Tool Environment](./tool-environment.md)).
+
 An app is installed on demand the first time you `exec` it. If that app declares `links`, its `.datamitsu/` symlinks are created at the same time — this is how a `lazy: true` link-app that `init` deferred gets its managed-config links on first use.
 
 **Examples:**
@@ -183,6 +185,13 @@ datamitsu lint --fail-on-skip
 # See every failure at once instead of stopping at the first
 datamitsu check --fail-fast=false
 ```
+
+`check`, `fix` and `lint` start every tool without `GITHUB_ACTIONS`, the AI agent
+markers and `FORCE_COLOR`, and with `NO_COLOR=1`, so a tool prints the format its
+parser reads whether the run is in CI, under an agent or in a terminal. `CI`
+passes through. An operation gets a stripped variable back with
+[`inheritEnv`](./configuration-api.md#inheriting-host-variables-inheritenv); the
+[Tool Environment](./tool-environment.md) page lists them all.
 
 `check` closes with the wall clock of the whole command:
 
