@@ -1,0 +1,5 @@
+exit code: 1
+===STDOUT===
+
+===STDERR===
+error: --require-coverage cannot be combined with --tools: the assertion would only cover the selected subset

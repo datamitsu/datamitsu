@@ -2,7 +2,16 @@
 
 <!-- cspell:ignore WHATWG -->
 
-**Status:** draft — awaiting owner decisions (§9).
+**Status:** draft — awaiting owner decisions (§9). **Amended 2026-09-26** by
+`2026-09-26-unified-results.md` §7: Stage 0 is owned by `2026-09-26-diagnostics-foundation.md`
+(C1, C2, the cache-semantics key component, `ParseFailed`, the `Resolve` fixes, absolute `File`,
+single-file stamping, the clean-output fixtures, `--no-parse` as display-only — its D12 accepted),
+together with the `Files`/`Cached` fields of Stage 1 and the `WholeUnit`/`UnitDir` fields of Stage
+2a (§4.4) and Stage 2b's per-task identity in the executor callbacks; D9 (C1 as a core rule) is
+closed as accepted; §4.5's `columnUnit` ships with module release 1 of
+`2026-09-26-severity-contract.md`; Stage 3's "report found, empty" ABI item is superseded by ABI
+v2 (`recognized`) in `2026-09-26-parser-formats-and-fallback.md`. The stage tables below are kept
+as written; read them with those substitutions.
 **Date:** 2026-09-24.
 **Related code:** `internal/lsp` (server, session, transport, policy, protocol), `cmd/lsp.go`,
 `internal/tooling/executor.go`, `internal/cache/cache.go`, `internal/diagnostic`,

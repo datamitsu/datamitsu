@@ -1,0 +1,13 @@
+exit code: 0
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+┏━ lint <RULE>
+┃ fixture
+┃
+┃ ✓ hadolint  <DUR>
+┗━ 1 tools · 1 runs · done in <DUR> · cache 100% <RULE>
+
+===STDERR===

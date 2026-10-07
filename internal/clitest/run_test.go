@@ -88,6 +88,34 @@ func TestBaseEnvStripsAndSetsVars(t *testing.T) {
 	}
 }
 
+// TestBaseEnvStripsAmbientMarkers pins the CI, agent-session and color markers
+// a golden must not inherit from the shell that records it.
+func TestBaseEnvStripsAmbientMarkers(t *testing.T) {
+	stripped := []string{
+		"GITHUB_ACTIONS", "TF_BUILD", "TEAMCITY_VERSION",
+		"AI_AGENT", "AGENT", "CLAUDECODE", "CLAUDE_CODE", "CLAUDE_CODE_CHILD_SESSION",
+		"GEMINI_CLI", "CURSOR_AGENT", "OPENCODE", "AUGMENT_AGENT",
+		"CODEX_SANDBOX", "CODEX_THREAD_ID", "COPILOT_CLI", "JUNIE_DATA",
+		"FORCE_COLOR", "CLICOLOR_FORCE",
+	}
+	kept := []string{"CLAUDE_CODE_ENTRYPOINT", "AGENTS", "GITHUB_TOKEN", "CLICOLOR", "CODEX"}
+	for _, key := range append(append([]string{}, stripped...), kept...) {
+		t.Setenv(key, "1")
+	}
+
+	got := envMap(BaseEnv(t.TempDir()))
+	for _, key := range stripped {
+		if _, ok := got[key]; ok {
+			t.Errorf("BaseEnv leaked %s", key)
+		}
+	}
+	for _, key := range kept {
+		if got[key] != "1" {
+			t.Errorf("BaseEnv dropped %s, which is neither a listed name nor under a listed prefix", key)
+		}
+	}
+}
+
 func TestBaseEnvHasNoDuplicateSetKeys(t *testing.T) {
 	// Even if a set key is also inherited, BaseEnv must emit exactly one entry
 	// for it (the harness value), so child processes see an unambiguous value.
