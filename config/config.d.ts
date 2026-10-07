@@ -1463,11 +1463,17 @@ declare global {
     }
 
     interface BinaryOsArchInfo {
+      /**
+       * Path of the binary inside the archive, such as "tool-1.2.3/bin/tool". With `extractDir` it
+       * is the command inside the extracted directory, and required.
+       */
       binaryPath?: string;
       contentType: BinContentType;
       /**
-       * When true, extracts the entire archive to a directory instead of a single binary. Used for
-       * runtimes like JDK that need the full directory tree (bin/, lib/, etc.).
+       * When true, extracts the entire archive to a directory instead of a single binary: for
+       * runtimes like JDK that need the full directory tree (bin/, lib/, etc.), and for tools like
+       * protoc that read files beside their binary (include/). What runs is `binaryPath` inside
+       * that directory; the contentType must be a tar or zip archive.
        */
       extractDir?: boolean;
 

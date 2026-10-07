@@ -377,8 +377,8 @@ interface BinaryOsArchInfo {
   hash: string; // SHA-256 hash (mandatory)
   hashType?: "sha256"; // Optional assertion; SHA-256 is the only accepted type
   contentType: BinContentType;
-  binaryPath?: string; // Path to binary within archive
-  extractDir?: boolean; // Extract entire archive to directory
+  binaryPath?: string; // Path to binary within archive; with extractDir, the command inside the directory (required)
+  extractDir?: boolean; // Extract entire archive to directory and run binaryPath inside it (tar or zip only)
 }
 ```
 
