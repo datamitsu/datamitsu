@@ -328,7 +328,7 @@ func TestExecuteBatchDryRun(t *testing.T) {
 
 // TestExecuteBatchChunksParallelCancelled pins that a pre-cancelled context
 // short-circuits every chunk and reports the run as cancelled, not a genuine
-// tool failure.
+// tool failure. The caller cancelled it, not fail-fast: an interruption.
 func TestExecuteBatchChunksParallelCancelled(t *testing.T) {
 	e := NewExecutor("/repo", true, false, nil, nil)
 	cmdInfo := &binmanager.CommandInfo{Type: "binary", Command: "tool"}
@@ -346,7 +346,7 @@ func TestExecuteBatchChunksParallelCancelled(t *testing.T) {
 	if res.Success {
 		t.Errorf("expected failure under cancelled context, got success")
 	}
-	if !res.Cancelled || res.FailureReason != FailureReasonCancelled {
+	if !res.Cancelled || res.FailureReason != FailureReasonInterrupted {
 		t.Errorf("expected cancelled classification, got Cancelled=%v reason=%v", res.Cancelled, res.FailureReason)
 	}
 }

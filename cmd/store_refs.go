@@ -35,7 +35,7 @@ Managed runtime binaries declared by the effective config are included. Package
 manager dependencies fetched later by pnpm, uv, or Go are not individual
 entries; their exact versions and integrity data live in each app's mandatory
 lock file.`,
-	Args: cobra.NoArgs,
+	Args: usageArgs(cobra.NoArgs),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runStoreRefs(commandContext(cmd))
 	},

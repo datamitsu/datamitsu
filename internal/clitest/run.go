@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,6 +17,10 @@ import (
 // DefaultTimeout bounds a single CLI invocation so a hung subprocess fails the
 // test instead of blocking the whole suite.
 const DefaultTimeout = 60 * time.Second
+
+// interruptGrace is how long an interrupted binary has to stop its tools, which
+// it gives five seconds, before it is killed.
+const interruptGrace = 10 * time.Second
 
 // RunOptions configures a single subprocess invocation of the datamitsu binary.
 type RunOptions struct {
@@ -52,6 +57,26 @@ type Result struct {
 // timeout fails the test rather than returning.
 func Run(tb testing.TB, opts RunOptions, args ...string) Result {
 	tb.Helper()
+	return Start(tb, opts, args...).Wait()
+}
+
+// Process is a run of the binary started by Start and not yet waited for.
+type Process struct {
+	tb             testing.TB
+	cmd            *exec.Cmd
+	timedOut       func() bool
+	cancel         context.CancelFunc
+	timeout        time.Duration
+	args           []string
+	stdout, stderr bytes.Buffer
+	waited         bool
+}
+
+// Start runs the binary like Run without waiting for it, so a test can act on
+// the running process — send it a signal — before collecting its Result with
+// Wait. Starting it fails the test.
+func Start(tb testing.TB, opts RunOptions, args ...string) *Process {
+	tb.Helper()
 	bin := BuildOnce(tb)
 
 	cacheDir := opts.CacheDir
@@ -64,30 +89,73 @@ func Run(tb testing.TB, opts RunOptions, args ...string) Result {
 		timeout = DefaultTimeout
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 
+	p := &Process{
+		tb:       tb,
+		timedOut: func() bool { return errors.Is(ctx.Err(), context.DeadlineExceeded) },
+		cancel:   cancel,
+		timeout:  timeout,
+		args:     args,
+	}
 	// G204: bin is the harness-built binary and args come from test code, not
 	// untrusted input.
-	cmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec
-	cmd.Dir = opts.Dir
-	cmd.Env = append(BaseEnv(cacheDir), opts.Env...)
-	if opts.Stdin != "" {
-		cmd.Stdin = strings.NewReader(opts.Stdin)
+	p.cmd = exec.CommandContext(ctx, bin, args...) //nolint:gosec
+	// The tools run in process groups of their own, so killing the binary
+	// would orphan them: a timeout or an early cleanup interrupts it, which
+	// makes it stop them, and kills it only if it has not exited by then.
+	p.cmd.Cancel = func() error {
+		if err := p.cmd.Process.Signal(os.Interrupt); err != nil {
+			return p.cmd.Process.Kill()
+		}
+		return nil
 	}
+	p.cmd.WaitDelay = interruptGrace
+	p.cmd.Dir = opts.Dir
+	p.cmd.Env = append(BaseEnv(cacheDir), opts.Env...)
+	if opts.Stdin != "" {
+		p.cmd.Stdin = strings.NewReader(opts.Stdin)
+	}
+	p.cmd.Stdout = &p.stdout
+	p.cmd.Stderr = &p.stderr
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	if err := p.cmd.Start(); err != nil {
+		cancel()
+		tb.Fatalf("clitest: start `datamitsu %s`: %v", strings.Join(args, " "), err)
+	}
+	tb.Cleanup(func() {
+		if !p.waited {
+			cancel()
+			_ = p.cmd.Wait()
+		}
+	})
+	return p
+}
 
-	err := cmd.Run()
-	if ctx.Err() == context.DeadlineExceeded {
-		tb.Fatalf("clitest: `datamitsu %s` timed out after %s\n--- stdout ---\n%s\n--- stderr ---\n%s",
-			strings.Join(args, " "), timeout, stdout.String(), stderr.String())
+// Signal delivers sig to the binary alone, not to the tools it started: they
+// run in their own process groups, as they do under a terminal's Ctrl-C.
+func (p *Process) Signal(sig os.Signal) error {
+	if err := p.cmd.Process.Signal(sig); err != nil {
+		return fmt.Errorf("clitest: signal %s: %w", sig, err)
+	}
+	return nil
+}
+
+// Wait waits for the process to exit and returns what it wrote and its exit
+// code. A process that outlives its timeout fails the test.
+func (p *Process) Wait() Result {
+	p.tb.Helper()
+	defer p.cancel()
+
+	p.waited = true
+	err := p.cmd.Wait()
+	if p.timedOut() {
+		p.tb.Fatalf("clitest: `datamitsu %s` timed out after %s\n--- stdout ---\n%s\n--- stderr ---\n%s",
+			strings.Join(p.args, " "), p.timeout, p.stdout.String(), p.stderr.String())
 	}
 
 	return Result{
-		Stdout:   stdout.String(),
-		Stderr:   stderr.String(),
+		Stdout:   p.stdout.String(),
+		Stderr:   p.stderr.String(),
 		ExitCode: ExitCodeOf(err),
 		Err:      err,
 	}

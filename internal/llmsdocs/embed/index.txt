@@ -33,7 +33,7 @@ Standard llms.txt form: `datamitsu llms --web`.
 - [Quick Start](getting-started/quick-start): Get up and running with datamitsu in minutes
 - [Caching Strategy](guides/architecture/caching): How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely
 - [File Discovery & Project Detection](guides/architecture/discovery): How datamitsu walks the repository tree respecting .gitignore rules and detects project boundaries for monorepo-aware tool execution
-- [Parallel Execution](guides/architecture/execution): How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast semantics
+- [Parallel Execution](guides/architecture/execution): How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode
 - [Internal Architecture](guides/architecture): Overview of datamitsu's internal execution model - file discovery, task planning, parallel execution, and caching
 - [WASM Output Parsers](guides/architecture/parsers): How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting
 - [Task Planning](guides/architecture/planner): How datamitsu groups files into prioritized task batches with overlap detection and CWD-subtree restriction

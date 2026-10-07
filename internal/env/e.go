@@ -170,6 +170,14 @@ var (
 		Description:  "Reuse the evaluated config chain from disk (set to 0 to always re-evaluate)",
 	}
 
+	// failFast is execution-only: it decides how far a fix/lint/check run goes
+	// after a failure, never what datamitsu installs or what a farm contains.
+	failFast = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_FAIL_FAST",
+		DefaultValue: "true",
+		Description:  "Stop fix/lint/check at the first failing tool (true) or run everything to the end (false); the --fail-fast flag wins",
+	}
+
 	noParse = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_NO_PARSE",
 		DefaultValue: "",

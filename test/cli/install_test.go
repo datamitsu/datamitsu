@@ -32,8 +32,8 @@ globalThis.getMinVersion = () => "0.0.0";
 `
 
 // TestInstallNoTargets locks the contract that `install` with neither an app
-// name nor a --runtime is a usage-independent runtime error: exit 1 with a clear
-// message and no usage block (SilenceUsage). Note the message names what to
+// name nor a --runtime is a usage error: exit 2 with a clear message and no
+// usage block (SilenceUsage). Note the message names what to
 // provide ("specify at least one app name or --runtime <name>"), not the
 // plan-era phrasing "nothing to install" — this characterizes the real output.
 func TestInstallNoTargets(t *testing.T) {
@@ -42,8 +42,8 @@ func TestInstallNoTargets(t *testing.T) {
 
 	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "install")
-	if res.ExitCode != 1 {
-		t.Fatalf("`install` (no targets) exit = %d, want 1\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
+	if res.ExitCode != 2 {
+		t.Fatalf("`install` (no targets) exit = %d, want 2\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
 	}
 	if !strings.Contains(res.Stderr, "specify at least one app name or --runtime") {
 		t.Errorf("stderr should explain what to provide:\n%s", res.Stderr)

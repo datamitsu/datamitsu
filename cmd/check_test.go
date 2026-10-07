@@ -27,6 +27,7 @@ func TestCheckCommandFlags(t *testing.T) {
 		{"explain", ""},
 		{"file-scoped", "false"},
 		{"tools", ""},
+		{"fail-fast", "true"},
 	}
 
 	for _, tt := range tests {

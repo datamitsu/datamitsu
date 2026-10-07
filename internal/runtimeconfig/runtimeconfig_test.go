@@ -2,6 +2,7 @@ package runtimeconfig
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -35,6 +36,8 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		OCIRegistry:              "ghcr.io",
 		Offline:                  true,
 		Timings:                  false,
+		FailFast:                 true,
+		FailFastSource:           FailFastSourceDefault,
 	}
 
 	data, err := json.Marshal(in)
@@ -65,6 +68,8 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		"startupTimings",
 		"forceGitSubprocess",
 		"timings",
+		"failFast",
+		"failFastSource",
 	}
 	for _, k := range requiredKeys {
 		if _, ok := m[k]; !ok {
@@ -222,5 +227,59 @@ func TestComputeLspFormatTimeout(t *testing.T) {
 	t.Setenv("DATAMITSU_LSP_FORMAT_TIMEOUT_MS", "0")
 	if eff := Compute(); eff.LspFormatTimeoutMs != 0 {
 		t.Errorf("LspFormatTimeoutMs = %d with the override 0, want 0", eff.LspFormatTimeoutMs)
+	}
+}
+
+// Whether a failing tool stops the run is a runtime parameter of every fix, lint
+// and check, so `datamitsu config runtime` reports it and where it came from.
+// An invalid value falls back to the default; the command layer rejects it.
+func TestComputeFailFast(t *testing.T) {
+	tests := []struct {
+		name       string
+		raw        string
+		wantValue  bool
+		wantSource string
+	}{
+		{name: "default", raw: "", wantValue: FailFast, wantSource: FailFastSourceDefault},
+		{name: "env false", raw: "false", wantValue: false, wantSource: FailFastSourceEnv},
+		{name: "env explicit true", raw: "1", wantValue: true, wantSource: FailFastSourceEnv},
+		{name: "invalid", raw: "yes", wantValue: FailFast, wantSource: FailFastSourceDefault},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("DATAMITSU_FAIL_FAST", tt.raw)
+			eff := Compute()
+			if eff.FailFast != tt.wantValue || eff.FailFastSource != tt.wantSource {
+				t.Errorf("FailFast = %v from %q, want %v from %q", eff.FailFast, eff.FailFastSource, tt.wantValue, tt.wantSource)
+			}
+		})
+	}
+}
+
+func TestFailFastMatchesConstant(t *testing.T) {
+	t.Setenv("DATAMITSU_FAIL_FAST", "")
+	if value, _ := env.FailFast(); value != FailFast {
+		t.Errorf("env.FailFast() = %v, want the canonical %v", value, FailFast)
+	}
+}
+
+// The serialized snapshot is what scripts read with jq: the same value must
+// always encode to the same bytes.
+func TestEffectiveJSONIsStable(t *testing.T) {
+	t.Setenv("DATAMITSU_FAIL_FAST", "false")
+	eff := Compute()
+	first, err := json.Marshal(eff)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	second, err := json.Marshal(eff)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if string(first) != string(second) {
+		t.Errorf("two encodings of one snapshot differ:\n%s\n%s", first, second)
+	}
+	if !strings.Contains(string(first), `"failFast":false,"failFastSource":"env"`) {
+		t.Errorf("snapshot does not report the override and its source:\n%s", first)
 	}
 }

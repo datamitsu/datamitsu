@@ -34,7 +34,7 @@ If the file does not exist, an empty JSON file is created.
 Example:
   datamitsu devtools pull-node config/src/nodeApps.json
   datamitsu devtools pull-node config/src/nodeApps.json --update`,
-	Args: cobra.ExactArgs(1),
+	Args: usageArgs(cobra.ExactArgs(1)),
 	RunE: runPullNode,
 }
 

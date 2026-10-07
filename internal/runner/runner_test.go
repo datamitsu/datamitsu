@@ -908,7 +908,7 @@ func TestPrintOverallSummary(t *testing.T) {
 	oldStdout := os.Stdout
 	os.Stdout = w
 
-	printOperationFooter(toolGroups, 5000, 0, 0, 0)
+	printOperationFooter(toolGroups, 5000, 0, 0, 0, 0, "")
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1475,21 +1475,43 @@ func (f *fakePlanner) SeedFiles(_ []string)              {}
 func (f *fakePlanner) GetDetectedProjectTypes() []string { return []string{"go"} }
 func (f *fakePlanner) GetTimings() *timing.Timings       { return timing.New() }
 
-// fakeExecutor records when Execute is called (relative to EnsureTools).
+// fakeExecutor records when Execute is called (relative to EnsureTools). Without
+// preset results it reports every planned task as passed, as a real run that
+// reached them all would.
 type fakeExecutor struct {
-	order   *[]string
-	called  bool
-	results []tooling.GroupExecutionResult
+	order    *[]string
+	called   bool
+	results  []tooling.GroupExecutionResult
+	onResult tooling.ResultCallback
 }
 
-func (f *fakeExecutor) SetResultCallback(tooling.ResultCallback)             {}
+func (f *fakeExecutor) TaskDir(tooling.Task) string { return "" }
+
+func (f *fakeExecutor) SetResultCallback(cb tooling.ResultCallback)          { f.onResult = cb }
 func (f *fakeExecutor) SetTaskStartCallback(tooling.TaskStartCallback)       {}
 func (f *fakeExecutor) SetFileProgressCallback(tooling.FileProgressCallback) {}
 func (f *fakeExecutor) SetParser(tooling.DiagnosticParser)                   {}
-func (f *fakeExecutor) Execute(_ context.Context, _ *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error) {
+func (f *fakeExecutor) Execute(_ context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error) {
 	f.called = true
 	*f.order = append(*f.order, "execute")
-	return f.results, nil
+	results := f.results
+	if results == nil {
+		for _, group := range plan.Groups {
+			g := tooling.GroupExecutionResult{Priority: group.Priority, Success: true}
+			for _, task := range group.Tasks {
+				g.Results = append(g.Results, tooling.ExecutionResult{ToolName: task.ToolName, Success: true})
+			}
+			results = append(results, g)
+		}
+	}
+	for _, group := range results {
+		for _, r := range group.Results {
+			if f.onResult != nil {
+				f.onResult(r)
+			}
+		}
+	}
+	return results, nil
 }
 
 // fakeEnsurer records the names passed and optionally returns an error.

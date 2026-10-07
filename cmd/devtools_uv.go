@@ -34,7 +34,7 @@ If the file does not exist, an empty JSON file is created.
 Example:
   datamitsu devtools pull-uv config/src/uvApps.json
   datamitsu devtools pull-uv config/src/uvApps.json --update`,
-	Args: cobra.ExactArgs(1),
+	Args: usageArgs(cobra.ExactArgs(1)),
 	RunE: runPullUV,
 }
 

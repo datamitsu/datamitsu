@@ -122,7 +122,7 @@ without them, a missing name looks identical to a name that was never declared.
 
 This command resolves and reports; it never downloads and never re-bakes the
 farm. Use ` + ldflags.PackageName + ` source refresh for that.`,
-	Args: cobra.NoArgs,
+	Args: usageArgs(cobra.NoArgs),
 	RunE: func(cmd *cobra.Command, _ []string) error { return runSourceStatus(cmd) },
 }
 

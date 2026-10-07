@@ -30,14 +30,14 @@ Use --json for machine-readable output (to drive configs or build pipelines), or
 var parsersListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List every tool the configured parser modules can parse (deduplicated)",
-	Args:  cobra.NoArgs,
+	Args:  usageArgs(cobra.NoArgs),
 	RunE:  runParsersList,
 }
 
 var parsersInspectCmd = &cobra.Command{
 	Use:   "inspect <tool>",
 	Short: "Show full capability detail for one parsed tool",
-	Args:  cobra.ExactArgs(1),
+	Args:  usageArgs(cobra.ExactArgs(1)),
 	RunE:  runParsersInspect,
 }
 
@@ -54,7 +54,7 @@ uses them (e.g. cue_fmt reads stderr). Resolves the module from --wasm (a local
 
   pnpm dm exec eslint -- --format json file.js | \
     datamitsu devtools parsers run eslint --wasm ./datamitsu_parsers.wasm`,
-	Args: cobra.ExactArgs(1),
+	Args: usageArgs(cobra.ExactArgs(1)),
 	RunE: runParsersRun,
 }
 

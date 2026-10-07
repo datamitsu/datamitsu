@@ -16,4 +16,6 @@ exit code: 0
 ┃ ✓ linter    <DUR>
 ┗━ 1 tools · 1 runs · done in <DUR> · cache 50% <RULE>
 
+┗━ check · done in <DUR> · fix <DUR> · lint <DUR> · setup <DUR> <RULE>
+
 ===STDERR===

@@ -89,12 +89,17 @@ stderr of one run.
   that plan changes the assertion, or adds a twin beside it (a
   `--fail-fast=false` run, say), and regenerates the golden in the same change.
 - **Event streams are asserted causally.** `clitest.AssertChains` checks that
-  every `tool_run` start has a terminal event (except for the tools a scenario
-  names as orphaned), that an operation's `phase` precedes its `tool_run`
-  events, and that each operation ends with exactly one `done`, after all its
-  `tool_run` events, whose `runs` counts the terminal ones. Parallel
+  every `tool_run` start has a terminal event (`done`, `fail`, or `skip` with
+  `cancelled: …` for a task the run stopped while it ran), that a task that
+  never started has a lone `skip` with `not started: …`, that an operation's
+  `phase` precedes its `tool_run` events, and that each operation ends with
+  exactly one `done`, after all its `tool_run` events, whose `runs` counts the
+  `done` and `fail` ones and whose `cancelled` counts the `skip` ones. Parallel
   scenarios never assert line order: `NormalizeJSONL` sets `ts` to `0` and a
   present `duration_ms` to `1`, and the golden's lines are sorted.
+- **Signals.** `clitest.Start` runs the binary without waiting for it, so a
+  scenario can send it a signal (`Process.Signal`) before collecting its
+  result with `Process.Wait`.
 - **What the goldens leave out.** Progress lines (`→ …`) are dropped: they are
   throttled display that carries whichever label the last parallel callback
   set. Duration text is masked including the padding after it. Every script

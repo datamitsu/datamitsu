@@ -31,7 +31,7 @@ regardless of file modification times, system users, or creation location.
 Example:
   datamitsu devtools pack-inline-archive ./my-config
   ARCHIVE=$(datamitsu devtools pack-inline-archive ./my-config)`,
-	Args: cobra.ExactArgs(1),
+	Args: usageArgs(cobra.ExactArgs(1)),
 	RunE: runPackInlineArchive,
 }
 

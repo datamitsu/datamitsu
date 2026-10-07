@@ -40,6 +40,12 @@ func (t *Timings) IsEnabled() bool {
 	return t.enabled
 }
 
+// Elapsed is the wall-clock time since New, whether or not DATAMITSU_TIMINGS
+// enabled the stage report.
+func (t *Timings) Elapsed() time.Duration {
+	return time.Since(t.started)
+}
+
 // Start begins timing a new stage and returns a function to end it
 // Usage: defer timings.Start("stage name")()
 func (t *Timings) Start(name string) func() {

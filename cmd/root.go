@@ -73,11 +73,12 @@ const agentHelpNotice = "AI agents: this binary ships documentation for its exac
 	" describe a different version."
 
 var rootCmd = &cobra.Command{
-	Use:           ldflags.PackageName,
-	Short:         ldflags.PackageName + " - configuration management tool",
-	Long:          "A tool for managing configuration and binaries\n\n" + agentHelpNotice + "\n\n" + sponsor.StaticLine(),
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	Use:               ldflags.PackageName,
+	Short:             ldflags.PackageName + " - configuration management tool",
+	Long:              "A tool for managing configuration and binaries\n\n" + agentHelpNotice + "\n\n" + sponsor.StaticLine(),
+	SilenceUsage:      true,
+	SilenceErrors:     true,
+	PersistentPreRunE: validateFlagConstraints,
 }
 
 func init() {
@@ -105,6 +106,8 @@ func init() {
 		// to the same console|jsonl vocabulary.
 		setJSONLStderr(resolveLogFormat() == "jsonl")
 	})
+
+	rootCmd.SetFlagErrorFunc(flagUsageError)
 
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
 		"Enable debug-level logging (default level is warn)")
@@ -256,10 +259,10 @@ func Execute() {
 	flushTrace()
 
 	if err != nil {
-		// A tool failing and a run that did not cover what it was asked to cover
-		// are different outcomes, and CI needs to tell them apart. Everything
-		// keeps exiting 1 unless it says otherwise, so existing pipelines are
-		// unaffected.
+		// A tool failing, a caller mistake and a run that did not cover what it
+		// was asked to cover are different outcomes, and CI needs to tell them
+		// apart. An error exits 1 unless it carries its own code
+		// (internal/exitcode).
 		code := 1
 		if coded, ok := errors.AsType[CodedError](err); ok {
 			code = coded.ExitCode()

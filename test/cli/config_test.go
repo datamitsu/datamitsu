@@ -138,6 +138,9 @@ func TestConfigRuntime(t *testing.T) {
 	if eff["timings"] != false {
 		t.Errorf("runtime[timings] = %v, want false", eff["timings"])
 	}
+	if eff["failFast"] != true || eff["failFastSource"] != "default" {
+		t.Errorf("runtime[failFast] = %v from %v, want true from default", eff["failFast"], eff["failFastSource"])
+	}
 	// Present but machine/platform dependent — assert existence only.
 	for _, k := range []string{"maxParallelWorkers", "libc"} {
 		if _, ok := eff[k]; !ok {
@@ -177,6 +180,22 @@ func TestConfigRuntimeEnvOverride(t *testing.T) {
 				t.Errorf("with %s, runtime[%q] = %v, want %v", tc.env, tc.key, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestConfigRuntimeFailFast is the documented way to check what a run will do
+// after a failure: `DATAMITSU_FAIL_FAST=false datamitsu config runtime | jq .failFast`.
+func TestConfigRuntimeFailFast(t *testing.T) {
+	res := clitest.Run(t, clitest.RunOptions{Env: []string{"DATAMITSU_FAIL_FAST=false"}}, "config", "runtime")
+	if res.ExitCode != 0 {
+		t.Fatalf("`config runtime` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+	var eff map[string]any
+	if err := json.Unmarshal([]byte(res.Stdout), &eff); err != nil {
+		t.Fatalf("invalid JSON: %v\nstdout:\n%s", err, res.Stdout)
+	}
+	if eff["failFast"] != false || eff["failFastSource"] != "env" {
+		t.Errorf("runtime[failFast] = %v from %v, want false from env", eff["failFast"], eff["failFastSource"])
 	}
 }
 

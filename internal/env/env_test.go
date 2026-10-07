@@ -1357,3 +1357,50 @@ func TestConfigCacheEnabled(t *testing.T) {
 		})
 	}
 }
+
+// DATAMITSU_FAIL_FAST has two spellings per value. Anything else falls back to
+// the default and reports itself unset, so a caller can tell an explicit true
+// from an implied one; CheckFailFast is what rejects the invalid value.
+func TestFailFast(t *testing.T) {
+	t.Setenv(failFast.Name, os.Getenv(failFast.Name))
+
+	tests := []struct {
+		name      string
+		raw       string
+		unset     bool
+		wantValue bool
+		wantSet   bool
+		wantErr   bool
+	}{
+		{name: "unset", unset: true, wantValue: true},
+		{name: "empty", raw: "", wantValue: true},
+		{name: "true", raw: "true", wantValue: true, wantSet: true},
+		{name: "one", raw: "1", wantValue: true, wantSet: true},
+		{name: "false", raw: "false", wantValue: false, wantSet: true},
+		{name: "zero", raw: "0", wantValue: false, wantSet: true},
+		{name: "upper case", raw: "FALSE", wantValue: false, wantSet: true},
+		{name: "padded", raw: " true ", wantValue: true, wantSet: true},
+		{name: "yes", raw: "yes", wantValue: true, wantErr: true},
+		{name: "off", raw: "off", wantValue: true, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.unset {
+				_ = os.Unsetenv(failFast.Name)
+			} else {
+				t.Setenv(failFast.Name, tt.raw)
+			}
+			value, set := FailFast()
+			if value != tt.wantValue || set != tt.wantSet {
+				t.Errorf("FailFast() = (%v, %v), want (%v, %v)", value, set, tt.wantValue, tt.wantSet)
+			}
+			err := CheckFailFast()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("CheckFailFast() = %v, want an error: %v", err, tt.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), failFast.Name) {
+				t.Errorf("CheckFailFast() = %q, want it to name %s", err, failFast.Name)
+			}
+		})
+	}
+}

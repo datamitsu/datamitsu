@@ -159,35 +159,76 @@ func TestStoreClearRefusesDangerousPath(t *testing.T) {
 func TestStoreSeedArgValidation(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
+	broken := p.WriteFile("broken.config.js", "export default {")
 
 	cases := []struct {
-		name string
-		args []string
-		want string
+		name     string
+		cfg      string
+		args     []string
+		want     string
+		wantExit int
 	}{
 		{
-			name: "bare-tag-without-resolve",
-			args: []string{"store", "seed", "ghcr.io/owner/repo:latest"},
-			want: "a tag reference does not pin content",
+			name:     "malformed-digest-with-broken-config",
+			cfg:      broken,
+			args:     []string{"store", "seed", "example.invalid/owner/repo@bad"},
+			want:     `reference "example.invalid/owner/repo@bad"`,
+			wantExit: 2,
 		},
 		{
-			name: "unpinned-reference",
-			args: []string{"store", "seed", "ghcr.io-owner-repo"},
-			want: "must be pinned as <ref>@sha256:<digest>",
+			name:     "bare-tag-without-resolve",
+			args:     []string{"store", "seed", "ghcr.io/owner/repo:latest"},
+			want:     "a tag reference does not pin content",
+			wantExit: 2,
 		},
 		{
-			name: "no-arg-no-oci",
-			args: []string{"store", "seed"},
-			want: "no oci bundle declared in the effective config",
+			name:     "unpinned-reference",
+			args:     []string{"store", "seed", "ghcr.io-owner-repo"},
+			want:     "must be pinned as <ref>@sha256:<digest>",
+			wantExit: 2,
+		},
+		{
+			name:     "malformed-digest",
+			args:     []string{"store", "seed", "example.invalid/owner/repo@bad"},
+			want:     `reference "example.invalid/owner/repo@bad"`,
+			wantExit: 2,
+		},
+		{
+			name:     "digest-reference-without-host",
+			args:     []string{"store", "seed", "owner/repo@sha256:" + strings.Repeat("a", 64)},
+			want:     `oci: ref "owner/repo"`,
+			wantExit: 2,
+		},
+		{
+			name:     "uppercase-digest",
+			args:     []string{"store", "seed", "example.invalid/owner/repo@sha256:" + strings.Repeat("A", 64)},
+			want:     "64 lowercase hex characters",
+			wantExit: 2,
+		},
+		{
+			name:     "malformed-reference-with-resolve-tag",
+			args:     []string{"store", "seed", "--resolve-tag", "bad:latest"},
+			want:     `reference "bad"`,
+			wantExit: 2,
+		},
+		{
+			name:     "no-arg-no-oci",
+			args:     []string{"store", "seed"},
+			want:     "no oci bundle declared in the effective config",
+			wantExit: 1,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			args := append([]string{"--no-auto-config", "--config", cfg}, tc.args...)
+			config := cfg
+			if tc.cfg != "" {
+				config = tc.cfg
+			}
+			args := append([]string{"--no-auto-config", "--config", config}, tc.args...)
 			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
-			if res.ExitCode == 0 {
-				t.Fatalf("`%s` exit = 0, want non-zero\nstdout:\n%s",
-					strings.Join(tc.args, " "), res.Stdout)
+			if res.ExitCode != tc.wantExit {
+				t.Fatalf("`%s` exit = %d, want %d\nstdout:\n%s\nstderr:\n%s",
+					strings.Join(tc.args, " "), res.ExitCode, tc.wantExit, res.Stdout, res.Stderr)
 			}
 			if !strings.Contains(res.Stderr, tc.want) {
 				t.Errorf("stderr should contain %q:\n%s", tc.want, res.Stderr)

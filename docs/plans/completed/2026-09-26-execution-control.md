@@ -1,7 +1,7 @@
 # Plan 2: Execution control — keep-going, `check` wall clock, and the exit-code contract
 
-**Status:** ready for implementation. Plan 2 of `2026-09-26-unified-results.md`; implements D17,
-D18, D22 and the execution-side half of R7. No decisions open.
+**Status:** completed 2026-09-27. Plan 2 of `../2026-09-26-unified-results.md`; implements D17,
+D18, D22 and the execution-side half of R7.
 **Date:** 2026-09-26.
 **Depends on:** plan 1 (the goldens it changes). **Unblocks:** plan 3 (they edit the same
 per-file loop), plan 6 (keep-going, exit 2, cancelled tasks in the result).

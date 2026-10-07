@@ -17,7 +17,8 @@ exit code: 1
   │  alpha: failed
   └<RULE>
 
-┗━ 1 tools · 1 runs · done in <DUR> · 1 failed <RULE>
+┃ ⊘ beta   not started (fail-fast)
+┗━ 1 tools · 1 runs · done in <DUR> · 1 failed · 1 cancelled <RULE>
 
 ===STDERR===
 error: operation failed

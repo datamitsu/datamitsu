@@ -1,11 +1,13 @@
 package runner
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
@@ -47,7 +49,26 @@ func TestOptionsValidate(t *testing.T) {
 			if !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("validate() = %v, want it to mention %q", err, tt.wantErr)
 			}
+			if !isUsageError(err) {
+				t.Errorf("validate() = %v, want a usage error (exit %d)", err, exitcode.Usage)
+			}
 		})
+	}
+}
+
+func isUsageError(err error) bool {
+	coded, ok := errors.AsType[interface {
+		error
+		ExitCode() int
+	}](err)
+	return ok && coded.ExitCode() == exitcode.Usage
+}
+
+// --require-coverage with --tools is refused before anything runs: the caller
+// asked for an assertion the run cannot make, a usage error.
+func TestRequireCoverageWithToolsIsAUsageError(t *testing.T) {
+	if !isUsageError(errRequireCoverageWithTools) {
+		t.Errorf("errRequireCoverageWithTools = %v, want a usage error (exit %d)", errRequireCoverageWithTools, exitcode.Usage)
 	}
 }
 

@@ -84,6 +84,12 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - Usage errors exit 2 and `--fail-on-skip` exits 4, both
+  once 1; a failed tool still exits 1. `fix`, `lint` and `check` take
+  `--fail-fast=false` (`DATAMITSU_FAIL_FAST=false`) to run every tool to the
+  end. A CI step or script of the configuration's repository that expects 1
+  from a mistaken invocation or from `--fail-on-skip` expects 2 or 4 instead;
+  CI runs `datamitsu lint --fail-fast=false`.
 - **after v0.3.1** - Every `devtools pull-*` command that writes its file saves
   it after each entry that changed, so a failed or interrupted run keeps what it
   already pulled; `pull-runtimes` no longer discards the runtimes that succeeded

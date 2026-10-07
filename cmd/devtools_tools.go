@@ -22,14 +22,14 @@ its output parser. Use --json for machine-readable output.`,
 var toolsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all configured tools with their operations and project types",
-	Args:  cobra.NoArgs,
+	Args:  usageArgs(cobra.NoArgs),
 	RunE:  runToolsList,
 }
 
 var toolsInspectCmd = &cobra.Command{
 	Use:   "inspect <name>",
 	Short: "Show full configuration detail for one tool",
-	Args:  cobra.ExactArgs(1),
+	Args:  usageArgs(cobra.ExactArgs(1)),
 	RunE:  runToolsInspect,
 }
 

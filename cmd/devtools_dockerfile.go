@@ -9,6 +9,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/dockerfile"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/ocidigest"
 	"github.com/datamitsu/datamitsu/internal/target"
@@ -57,7 +58,7 @@ binary, pinned by digest when it can be resolved (best-effort: --offline, an
 unreachable registry, or a non-release build leave the FROM line unpinned with a
 warning). The output file is fully overwritten on each run — it is a generated
 artifact you own and may hand-edit, but hand-edits are lost on regeneration.`,
-	Args: cobra.NoArgs,
+	Args: usageArgs(cobra.NoArgs),
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runDockerfile(commandContext(cmd), cmd)
 	},
@@ -81,11 +82,6 @@ func init() {
 }
 
 func runDockerfile(ctx context.Context, cmd *cobra.Command) error {
-	cfg, _, _, err := loadConfigWithPaths(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
 	labels, err := parseLabels(dockerfileLabels)
 	if err != nil {
 		return err
@@ -104,6 +100,11 @@ func runDockerfile(ctx context.Context, cmd *cobra.Command) error {
 	envVars, err := parseEnv(dockerfileEnv)
 	if err != nil {
 		return err
+	}
+
+	cfg, _, _, err := loadConfigWithPaths(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// The image targets musl on Alpine and glibc otherwise; binary apps without a
@@ -262,7 +263,7 @@ func parseArgs(flag string, pairs []string) (map[string]string, error) {
 	for _, pair := range pairs {
 		key, value, _ := strings.Cut(pair, "=")
 		if key == "" {
-			return nil, fmt.Errorf("invalid --%s %q: want name or name=value", flag, pair)
+			return nil, exitcode.UsageErrorf("invalid --%s %q: want name or name=value", flag, pair)
 		}
 		m[key] = value
 	}
@@ -276,7 +277,7 @@ func parseKeyValues(flag string, pairs []string) (map[string]string, error) {
 	for _, pair := range pairs {
 		key, value, ok := strings.Cut(pair, "=")
 		if !ok || key == "" {
-			return nil, fmt.Errorf("invalid --%s %q: want key=value", flag, pair)
+			return nil, exitcode.UsageErrorf("invalid --%s %q: want key=value", flag, pair)
 		}
 		m[key] = value
 	}

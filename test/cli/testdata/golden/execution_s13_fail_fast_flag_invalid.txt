@@ -1,0 +1,5 @@
+exit code: 2
+===STDOUT===
+
+===STDERR===
+error: invalid argument "maybe" for "--fail-fast" flag: strconv.ParseBool: parsing "maybe": invalid syntax

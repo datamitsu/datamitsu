@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 55,
-  "pageSetHash": "356c9a64a86bb2fdc56592b05f7d171a",
+  "pageSetHash": "819a97921421196061d19edcf3141dc8",
   "pages": [
     {
       "slug": "about",
@@ -223,9 +223,9 @@
       "aliases": [],
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
-      "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast semantics",
-      "bytes": 10471,
-      "contentHash": "c9988c71c1d35e3bf2b505ab0c515cbc"
+      "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
+      "bytes": 13722,
+      "contentHash": "58327231ad49dbda81806913ff08aeff"
     },
     {
       "slug": "guides/architecture",
@@ -236,7 +236,7 @@
       "title": "Internal Architecture",
       "description": "Overview of datamitsu's internal execution model - file discovery, task planning, parallel execution, and caching",
       "bytes": 3849,
-      "contentHash": "fb0f6e928ab8e07c8f2c644d31f6ba84"
+      "contentHash": "cb39179e263d8c4da5e84a80ef85f600"
     },
     {
       "slug": "guides/architecture/parsers",
@@ -262,8 +262,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/startup.md",
       "title": "Startup and Config Load",
       "description": "What every datamitsu invocation pays before the first tool runs - the config-load cost model, the git-root memo, and how to measure it",
-      "bytes": 19941,
-      "contentHash": "e62386088a50c776f91de4ab5e8cd460"
+      "bytes": 20069,
+      "contentHash": "cf22195dee8793c2e9c965a3e217e1b4"
     },
     {
       "slug": "guides/binary-management",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 12209,
-      "contentHash": "8551cc1a836f77516d04a4d65c91a9b5"
+      "bytes": 12339,
+      "contentHash": "39e9971c978ef92e88fe029b0e962e1b"
     },
     {
       "slug": "guides/managed-configs",
@@ -352,8 +352,8 @@
       "url": "https://datamitsu.com/docs/guides/tooling-system.md",
       "title": "Tooling System",
       "description": "Understanding the fix, lint, and check operations in datamitsu",
-      "bytes": 10534,
-      "contentHash": "43e4264bbcf2ae2a854eac6a23c89a5a"
+      "bytes": 10786,
+      "contentHash": "487170c6898b0e03b935d9959f64a1e0"
     },
     {
       "slug": "guides/using-wrappers",
@@ -451,8 +451,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 98917,
-      "contentHash": "acb48f5572bb9503c3523b3190b221d7"
+      "bytes": 111148,
+      "contentHash": "e1dc35eeff81c1f7b779e68ad452c193"
     },
     {
       "slug": "reference/comparison",

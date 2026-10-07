@@ -551,8 +551,8 @@ func TestSourceWithoutAShellIsAnError(t *testing.T) {
 	writeAutoConfig(p)
 
 	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "source")
-	if res.ExitCode == 0 {
-		t.Fatalf("bare `source` exited 0:\n%s", res.Stdout)
+	if res.ExitCode != 2 {
+		t.Fatalf("bare `source` exited %d, want 2 (a usage error):\n%s", res.ExitCode, res.Stdout)
 	}
 	if res.Stdout != "" {
 		t.Errorf("bare `source` wrote to stdout, which would be eval'd:\n%s", res.Stdout)
@@ -571,8 +571,8 @@ func TestSourceUnknownShell(t *testing.T) {
 	writeAutoConfig(p)
 
 	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "source", "powershell")
-	if res.ExitCode == 0 {
-		t.Fatalf("`source powershell` exited 0:\n%s", res.Stdout)
+	if res.ExitCode != 2 {
+		t.Fatalf("`source powershell` exited %d, want 2 (a usage error):\n%s", res.ExitCode, res.Stdout)
 	}
 	if strings.Contains(res.Stdout, "PATH=") {
 		t.Errorf("`source powershell` emitted activation code:\n%s", res.Stdout)
@@ -599,8 +599,8 @@ func TestSourceNoAutoConfigIsRefused(t *testing.T) {
 	writeAutoConfig(p)
 
 	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "--no-auto-config", "source", "bash")
-	if res.ExitCode == 0 {
-		t.Fatalf("`--no-auto-config source bash` exited 0:\n%s", res.Stdout)
+	if res.ExitCode != 2 {
+		t.Fatalf("`--no-auto-config source bash` exited %d, want 2 (a usage error):\n%s", res.ExitCode, res.Stdout)
 	}
 	if res.Stdout != "" {
 		t.Errorf("`--no-auto-config source bash` wrote to stdout on failure:\n%s", res.Stdout)
