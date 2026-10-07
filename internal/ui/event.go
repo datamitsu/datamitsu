@@ -16,6 +16,7 @@ var (
 	eventMu   sync.RWMutex
 	eventSink uievent.Sink
 	quiet     bool
+	muted     bool
 	eventMask func(*uievent.Event)
 )
 
@@ -63,6 +64,24 @@ func Quiet() bool {
 	eventMu.RLock()
 	defer eventMu.RUnlock()
 	return quiet
+}
+
+// SetMuted turns the human rendering off without a typed stream in its place:
+// --output agent prints records of its own, and wants no banner, progress or
+// status line around them.
+func SetMuted(on bool) {
+	eventMu.Lock()
+	muted = on
+	eventMu.Unlock()
+}
+
+// Muted reports whether the human rendering is off: in JSON-L mode, or for an
+// agent's output. Callers that print human output directly consult it; those
+// that must tell a JSON-L stream apart consult Quiet.
+func Muted() bool {
+	eventMu.RLock()
+	defer eventMu.RUnlock()
+	return quiet || muted
 }
 
 // EventStreamFailed returns the first error the active event sink met writing

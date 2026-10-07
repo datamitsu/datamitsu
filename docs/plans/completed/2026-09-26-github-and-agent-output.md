@@ -1,6 +1,6 @@
 # Plan 7: GitHub and agent output — annotations, step summary, Markdown, `--output agent`
 
-**Status:** ready for implementation. Plan 7 of `2026-09-26-unified-results.md`; implements D2
+**Status:** completed 2026-09-28. Plan 7 of `../2026-09-26-unified-results.md`; implements D2
 (the `github` mode; plan 10 adds `azure` and `teamcity`), D16, the agent side of D19, R10, and
 the argv audit of R11. No decisions open.
 **Date:** 2026-09-26.

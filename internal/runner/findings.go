@@ -7,6 +7,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
@@ -62,21 +63,11 @@ func visibleFindings(proc tooling.ProcessResult) []diagnostic.Diagnostic {
 	return shown
 }
 
+// visibleMask is report.ShownMask over a process, the one rule every output
+// that shows what a person sees applies; the report records it per finding as
+// Shown.
 func visibleMask(proc tooling.ProcessResult) []bool {
-	mask := make([]bool, len(proc.Diagnostics))
-	failed := proc.State == tooling.ProcessRan && !proc.Success
-	unenforced := !proc.GateActive && proc.FailOn != "" && proc.FailOn != config.DefaultFailOn
-	anyReported := false
-	for i, d := range proc.Diagnostics {
-		mask[i] = d.Reported && (failed || unenforced)
-		anyReported = anyReported || d.Reported
-	}
-	if failed && !anyReported {
-		for i := range mask {
-			mask[i] = true
-		}
-	}
-	return mask
+	return report.ShownOf(proc)
 }
 
 func sortFindings(ds []diagnostic.Diagnostic) {

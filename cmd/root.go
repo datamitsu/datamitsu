@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -139,7 +140,7 @@ func init() {
 func setJSONLStderr(on bool) {
 	if on {
 		// Already a stream (--log-format jsonl, then a report on stdout): it
-		// has said hello once.
+		// says hello once.
 		if ui.Quiet() {
 			return
 		}
@@ -147,35 +148,62 @@ func setJSONLStderr(on bool) {
 		// process: the run still ends, writes its reports and says why on
 		// stdout.
 		absorbBrokenPipe()
-		ui.SetEventSink(uievent.NewJSONLSink(os.Stderr), true)
+		stream = &helloFirst{JSONLSink: uievent.NewJSONLSink(os.Stderr)}
+		ui.SetEventSink(stream, true)
 		// Masked from its first event: a failure before a run records its
 		// own secrets — a config that does not load — still quotes paths and
 		// values. A run extends the masker with its configuration's.
 		hostSecrets := report.SecretValues(env.EnvironAll())
 		ui.SetEventMask(func(e *uievent.Event) { report.MaskAll(e, hostSecrets) })
 		logger.Route(ui.Emit)
-		emitHello()
 		return
 	}
+	stream = nil
 	ui.SetEventSink(nil, false)
 	ui.SetEventMask(nil)
 	logger.Route(nil)
 }
 
-// emitHello opens a stream with what it may carry, so a reader tells a stream
-// without diagnostic events from one whose run found nothing. The event types
-// are comma-separated: the envelope stays flat.
-func emitHello() {
-	types := uievent.Types()
-	names := make([]string, len(types))
-	for i, t := range types {
-		names[i] = string(t)
-	}
-	ui.Emit(uievent.Event{
-		Type:   uievent.TypeHello,
-		OpID:   "stream",
-		Schema: report.SchemaVersion,
-		Events: strings.Join(names, ","),
+// stream is the JSON-L stream stderr carries; nil when it carries none.
+var stream *helloFirst
+
+// streamAnnotations is the annotation mode a fix, lint or check run settled
+// beside the stream, for its hello; "" for any other command.
+var streamAnnotations string
+
+// helloFirst opens a stream with its hello event right before the first
+// other event, or when the command ends without one: a stream opens before
+// the command reads its flags, and the hello says what the command then
+// settled — whether stdout carries workflow annotations.
+type helloFirst struct {
+	*uievent.JSONLSink
+
+	once sync.Once
+}
+
+// Emit writes e, after the hello when it is the stream's first event.
+func (h *helloFirst) Emit(e uievent.Event) {
+	h.open()
+	h.JSONLSink.Emit(e)
+}
+
+// open writes the hello, once: what the stream may carry, so a reader tells a
+// stream without diagnostic events from one whose run found nothing. The event
+// types are comma-separated: the envelope stays flat.
+func (h *helloFirst) open() {
+	h.once.Do(func() {
+		types := uievent.Types()
+		names := make([]string, len(types))
+		for i, t := range types {
+			names[i] = string(t)
+		}
+		h.JSONLSink.Emit(uievent.Event{
+			Type:        uievent.TypeHello,
+			OpID:        "stream",
+			Schema:      report.SchemaVersion,
+			Events:      strings.Join(names, ","),
+			Annotations: streamAnnotations,
+		})
 	})
 }
 
@@ -296,6 +324,10 @@ func Execute() {
 	// After the display is torn down so the summary is not overwritten by a
 	// progress container repaint, and before any os.Exit below.
 	flushTrace()
+	// A stream that carried nothing else still says hello.
+	if stream != nil {
+		stream.open()
+	}
 
 	// A JSON-L stream its reader could not get is a failure of the command,
 	// whatever the command did: the reader saw less than happened.

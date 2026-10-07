@@ -1,0 +1,8 @@
+exit code: 1
+===STDOUT===
+alpha exited 1 without parsable findings
+  │  alpha: failed
+lint: 2 tools · 2 runs · 1 failed · 0 errors 0 warnings · 0 hidden
+
+===STDERR===
+error: operation failed

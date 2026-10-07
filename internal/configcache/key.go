@@ -71,7 +71,9 @@ type ConfigInputs struct {
 
 // Facts is the JS-visible subset of internal/facts.Facts. The environment is
 // deliberately NOT here — it enters the key through Inputs.Environ, whole and
-// sorted, because config JS reads all of it through facts().env.
+// sorted, because config JS reads all of it through facts().env. Neither is
+// facts().ci: it is derived from that same environment, so the key already
+// moves with every value it could take.
 type Facts struct {
 	BinaryCommand string
 	BinaryPath    string

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/cienv"
 	"github.com/datamitsu/datamitsu/internal/gittest"
 	"github.com/datamitsu/datamitsu/internal/toolenv"
 )
@@ -195,15 +196,20 @@ func BaseEnv(cacheDir string) []string {
 
 // strippedKey reports whether an inherited environment variable must be dropped
 // from the clean base env: every DATAMITSU_* var (so the harness is the only
-// source of datamitsu config), the variables that steer mode, color or output
-// detection in datamitsu or in the tools it runs (ambientKeys, and everything
-// toolenv strips from a tool), inherited command-scope git config (which would
-// outrank gittest.Env), and the keys BaseEnv sets explicitly (avoid duplicate,
+// source of datamitsu config), every variable datamitsu reads to detect a CI
+// (cienv.Variables), the variables that steer mode, color or output detection
+// in datamitsu or in the tools it runs (ambientKeys, and everything toolenv
+// strips from a tool), inherited command-scope git config (which would outrank
+// gittest.Env), and the keys BaseEnv sets explicitly (avoid duplicate,
 // ambiguous entries). A golden recorded inside a CI job or an agent session
-// would otherwise differ from one recorded in a plain shell; a scenario that
-// needs one of these variables sets it through RunOptions.Env.
+// would otherwise differ from one recorded in a plain shell — and a run inside
+// a GitHub job would append to that job's step summary; a scenario that needs
+// one of these variables sets it through RunOptions.Env.
 func strippedKey(key string) bool {
 	if _, ok := ambientKeys[key]; ok {
+		return true
+	}
+	if _, ok := ciKeys[key]; ok {
 		return true
 	}
 	if strings.HasPrefix(key, "DATAMITSU_") || toolenv.Stripped(key) {
@@ -212,12 +218,19 @@ func strippedKey(key string) bool {
 	return gittest.IsCommandScopeKey(key)
 }
 
-// ambientKeys are stripped by exact name on top of toolenv's list: CI and
-// terminal detection, and the CI-system markers datamitsu itself may read.
+// ambientKeys are stripped by exact name on top of toolenv's and cienv's
+// lists: terminal detection and the keys BaseEnv sets.
 var ambientKeys = map[string]struct{}{
-	"CI": {}, "TERM": {}, "NO_COLOR": {}, "GOCOVERDIR": {},
-	"TF_BUILD": {}, "TEAMCITY_VERSION": {}, "SOURCE_DATE_EPOCH": {},
+	"TERM": {}, "NO_COLOR": {}, "GOCOVERDIR": {}, "SOURCE_DATE_EPOCH": {},
 }
+
+var ciKeys = func() map[string]struct{} {
+	keys := map[string]struct{}{}
+	for _, name := range cienv.Variables() {
+		keys[name] = struct{}{}
+	}
+	return keys
+}()
 
 // SourceDateEpoch is the SOURCE_DATE_EPOCH every run gets: 2023-11-14T22:13:20Z.
 const SourceDateEpoch = "1700000000"

@@ -163,9 +163,12 @@ type Event struct {
 	Cached          *bool `json:"cached,omitempty"`
 
 	// hello: the schema findings follow and the event types the stream may
-	// carry, comma-separated so the envelope stays flat.
-	Schema string `json:"schema,omitempty"`
-	Events string `json:"events,omitempty"`
+	// carry, comma-separated so the envelope stays flat; for a fix, lint or
+	// check run, Annotations is github when stdout carries workflow
+	// annotations and off when it does not.
+	Schema      string `json:"schema,omitempty"`
+	Events      string `json:"events,omitempty"`
+	Annotations string `json:"annotations,omitempty"`
 }
 
 // Sink consumes typed events. Implementations MUST be safe for concurrent use

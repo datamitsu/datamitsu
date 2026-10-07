@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "a69113c1a9e2cf8c25df2f94e43bce69",
+  "pageSetHash": "b05be5b725bd916f6d42eb26d31164d2",
   "pages": [
     {
       "slug": "about",
@@ -325,8 +325,8 @@
       "url": "https://datamitsu.com/docs/guides/reports.md",
       "title": "Reports",
       "description": "One record of a fix, lint or check run — what it holds, what it never contains, how complete it says it is, and how its findings keep their identity across runs",
-      "bytes": 11328,
-      "contentHash": "dd47ca99241fcc90ec6768f1edd73148"
+      "bytes": 14275,
+      "contentHash": "321f55b6a85ad4341e6eed7c7514eed6"
     },
     {
       "slug": "guides/runtime-management",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 138211,
-      "contentHash": "db67190c712f2ce2fd5991551b7cfcbb"
+      "bytes": 150516,
+      "contentHash": "97f5cdb018668ef109f132d363f6f0f3"
     },
     {
       "slug": "reference/comparison",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 77291,
-      "contentHash": "e96fc6de031983cc34775d47d62867e8"
+      "bytes": 79623,
+      "contentHash": "a828baf9b778b74e064f9b377626ad45"
     },
     {
       "slug": "reference/ignore-rules",

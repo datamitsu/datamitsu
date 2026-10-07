@@ -14,14 +14,15 @@ datamitsu lint --report json=out/run.json
 ```
 
 `json` writes datamitsu's own document, `datamitsu.report/1`, which carries
-everything the record holds. The flags, the variable twins and the exit codes
+everything the record holds; `markdown` writes the same run for a person — the
+tools, the findings the terminal would show and what the run left out. The flags, the variable twins and the exit codes
 are in the [CLI reference](../reference/cli-commands.md#reports).
 
 ## What a report holds
 
 ```mermaid
 graph TD
-    R["run: selection, failFast, complete, incomplete, exports"] --> O["operations: fix, lint"]
+    R["run: selection, failFast, complete, incomplete, exports, ci"] --> O["operations: fix, lint"]
     O --> T["tools: app, parser, failOn, complete, incomplete"]
     T --> I["invocations: one per process — state, exit code, extraction"]
     I --> F["files: path, state"]
@@ -30,8 +31,11 @@ graph TD
 
 - **The run** — what it was asked to cover (`selection`: the whole repository,
   a subdirectory, named files, a `--tools` filter), whether fail-fast was on,
-  whether the run is complete, and every report it was asked for with its
-  status.
+  whether the run is complete, every report it was asked for with its
+  status, and the CI job it ran in (`ci`: the `vendor` — empty outside CI —
+  and the commit, ref, base branch and pull request number the vendor names,
+  as [`facts().ci`](../reference/configuration-api.md#platform-information)
+  reads them).
 - **Operations** — `fix` and `lint` in the order they ran; `check` writes one
   document holding both. An operation the run never reached is listed with
   `ran: false`. Each lists the tools the planner skipped, with the reason, and
@@ -46,9 +50,10 @@ graph TD
   it reported. The files a cache answered appear as one `cached` or
   `verdict-hit` invocation of their task.
 - **Findings** — the rule, the level, whether it is at or above the threshold
-  (`reported`) and whether it failed its tool (`gates`), the message, where it
-  is — the path relative to the repository root, 1-based rows and columns with
-  an exclusive end — and its fingerprint.
+  (`reported`), whether it failed its tool (`gates`) and whether the terminal
+  shows it (`shown`, which the annotations, `markdown` and `--output agent`
+  follow), the message, where it is — the path relative to the repository
+  root, 1-based rows and columns with an exclusive end — and its fingerprint.
 
 Everything is sorted, so one run gives one document byte for byte, and the time
 it is stamped with comes from `SOURCE_DATE_EPOCH` when that is set.
@@ -139,6 +144,61 @@ The job fails on the lint step's exit code, and the upload step runs anyway. A
 tool failure (1) outranks a report that could not be written (5), so a missing
 file on a failed step is reported by the upload, and by the step's own
 `error: report json: …` line.
+
+## In GitHub Actions
+
+CI runs `lint`: `fix` and `check` change the working tree, which a pipeline has
+no one to review. A job that annotates a pull request, keeps every finding and
+fails on the exit code of the run:
+
+```yaml
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - run: rm -f out/run.json
+      - run: datamitsu lint --fail-fast=false --report json=out/run.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: datamitsu-report
+          path: out/run.json
+          if-no-files-found: warn
+```
+
+- **Annotations need nothing.** In a GitHub Actions job the run prints its
+  findings as workflow commands, which GitHub shows in the Checks tab and on the
+  changed lines of the pull request
+  ([GitHub annotations](../reference/cli-commands.md#github-annotations)).
+  GitHub keeps ten of each type per step: the findings in the files the pull
+  request touched come first, then one per file, and a notice counts the rest
+  and names where they are. Several datamitsu commands in one step
+  share those ten.
+- **The step summary holds the rest.** The run appends its `markdown` report
+  to the job's summary page, as much of it as fits in the 1 MiB GitHub takes
+  from a step; `json` holds everything.
+- **`fetch-depth: 2`** fetches the base branch's tip, the first parent of the
+  merge commit a `pull_request` checks out, which is how the run learns which
+  files the pull request touched. Without it the order is the same, less that
+  priority, and one `info` line says so.
+- **`--fail-fast=false`** runs every tool, so the annotations and the report
+  cover the whole repository; the report turns fail-fast off by itself.
+- **`if: always()`** uploads the report of the run that failed, which is the one
+  worth reading; `rm -f` first keeps an old report from passing for the new one.
+
+A tool's own output never becomes an annotation: the run prints it inside a
+`::stop-commands::` region, and a tool that would print its own workflow
+commands when it sees `GITHUB_ACTIONS` does not see it
+([Tool Environment](../reference/tool-environment.md)). The problem matchers of
+`actions/setup-go` and `actions/setup-node` still read every line; the only
+ones that can match what the run prints are `go` and `eslint-compact`, on a
+tool's raw output in their formats, which GitHub then annotates without a
+location.
 
 ## Fingerprints
 

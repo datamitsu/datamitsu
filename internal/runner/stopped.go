@@ -119,7 +119,7 @@ func emitStopped(runOpID string, t stoppedTask) {
 // ×N count: a per-file tool never reached over a thousand files is one fact,
 // not a thousand lines.
 func printStoppedTasks(stopped []stoppedTask, nameWidth int) {
-	if ui.Quiet() || len(stopped) == 0 {
+	if ui.Muted() || len(stopped) == 0 {
 		return
 	}
 	type line struct {
@@ -175,7 +175,7 @@ func unrunFiles(result tooling.ExecutionResult) []string {
 // (fail-fast): a.txt, b.txt" line per task that left files unchecked, naming
 // up to three of them relative to the repository root.
 func printUnrunFiles(results []tooling.GroupExecutionResult, root string, nameWidth int, cause stopCause) {
-	if ui.Quiet() {
+	if ui.Muted() {
 		return
 	}
 	const shown = 3

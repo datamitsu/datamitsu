@@ -1,0 +1,13 @@
+exit code: 1
+===STDOUT===
+::stop-commands::<TOKEN>
+beta exited 1 without parsable findings
+  │  ::error title=x::y
+Dockerfile:1:1: error hadolint(DL3006): Always tag the version of an image explicitly\n::error::injected
+lint: 2 tools · 2 runs · 2 failed · 1 errors 0 warnings · 0 hidden
+::<TOKEN>::
+::error file=Dockerfile,line=1,col=1,title=hadolint(DL3006)::Always tag the version of an image explicitly%0A::error::injected
+::error title=beta::beta exited 1 without parsable findings
+
+===STDERR===
+error: operation failed

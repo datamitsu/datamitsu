@@ -39,6 +39,20 @@ type Run struct {
 	// Exports lists every report the run was asked for, with the status each
 	// had when this document was written.
 	Exports []Export `json:"exports"`
+	// CI is the continuous-integration job the run ran in; its vendor is ""
+	// outside CI.
+	CI CIEnvironment `json:"ci"`
+}
+
+// CIEnvironment identifies a CI job and the change it built: identifiers only.
+type CIEnvironment struct {
+	// Vendor is github, gitlab, azure, teamcity, buildkite, bitbucket,
+	// jenkins, circleci, gitea, generic, or "".
+	Vendor   string `json:"vendor"`
+	SHA      string `json:"sha,omitempty"`
+	Ref      string `json:"ref,omitempty"`
+	BaseRef  string `json:"baseRef,omitempty"`
+	PRNumber string `json:"prNumber,omitempty"`
 }
 
 // Producer names the datamitsu build and the configuration a run came from.
@@ -237,6 +251,10 @@ type Finding struct {
 	Reported bool `json:"reported"`
 	// Gates marks a finding that made its invocation fail.
 	Gates bool `json:"gates"`
+	// Shown marks a finding the terminal shows, and so what agent output,
+	// the annotations and Markdown list (ShownMask): decided in the process
+	// that reported it, before duplicates across processes were dropped.
+	Shown bool `json:"shown"`
 	// Kind is issue, security for a tool whose category is security, or
 	// synthetic for the one finding that stands for a tool that failed
 	// without a parsable one.

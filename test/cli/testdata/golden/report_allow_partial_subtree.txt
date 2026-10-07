@@ -39,5 +39,8 @@
       "path": "run.json",
       "status": "written"
     }
-  ]
+  ],
+  "ci": {
+    "vendor": ""
+  }
 }

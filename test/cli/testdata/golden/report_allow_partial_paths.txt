@@ -143,6 +143,7 @@
                   "severity": "warning",
                   "reported": false,
                   "gates": false,
+                  "shown": false,
                   "kind": "issue",
                   "message": "Always tag the version of an image explicitly",
                   "location": {
@@ -181,5 +182,8 @@
       "path": "run.json",
       "status": "written"
     }
-  ]
+  ],
+  "ci": {
+    "vendor": ""
+  }
 }

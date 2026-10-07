@@ -1862,6 +1862,7 @@ const info = facts();
 // info.isInGitRepo → true/false
 // info.isMonorepo  → true/false
 // info.env      → process environment, except observation-only datamitsu variables
+// info.ci       → { vendor, isCI, isPR, sha, ref, baseRef, prNumber }
 ```
 
 `facts().env` omits `DATAMITSU_TRACE`, `DATAMITSU_TRACE_DIR`, and
@@ -1869,6 +1870,37 @@ const info = facts();
 caching and cannot change what config produces. The config-evaluation key hashes
 the same remaining environment, so a result cannot be reused across distinct
 values the config was allowed to observe.
+
+`facts().ci` says which continuous-integration system runs the job, read from
+the variables each vendor sets for its own jobs, and the identifiers of the
+change it builds:
+
+| Field      | Value                                                                                                                                               |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vendor`   | `github`, `gitlab`, `azure`, `teamcity`, `buildkite`, `bitbucket`, `jenkins`, `circleci`, `gitea`; `generic` when only `CI` is set; `""` outside CI |
+| `isCI`     | `true` under any of them — a vendor's own marker, or `CI` set to anything but `false` or `0`                                                        |
+| `isPR`     | `true` when the job builds a pull or merge request                                                                                                  |
+| `sha`      | the commit the job builds — on a GitHub pull request, the merge commit                                                                              |
+| `ref`      | the ref the job builds, as the vendor names it                                                                                                      |
+| `baseRef`  | the branch a pull or merge request targets, when the vendor says                                                                                    |
+| `prNumber` | the pull or merge request number, when the vendor says                                                                                              |
+
+Gitea and Forgejo set `GITHUB_ACTIONS=true` as well, and read as `gitea`: they
+support neither GitHub's annotations nor its step summary. `facts().ci` is read
+from the same environment as `facts().env`, so the config-evaluation key already
+tells two of its values apart. Prefer it to `facts().env.CI`, which misses
+Azure Pipelines and TeamCity, whose jobs do not set `CI`:
+
+```javascript
+const toolsConfig = {
+  trufflehog: {
+    name: "trufflehog",
+    skip: !facts().ci.isCI,
+    skipReason: "runs in CI only",
+    operations: { lint: { app: "trufflehog", scope: "repository" } },
+  },
+};
+```
 
 ## Security Requirements
 

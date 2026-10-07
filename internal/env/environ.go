@@ -35,6 +35,8 @@ var executionOnly = map[string]bool{
 	report.Name:       true,
 	allowPartial.Name: true,
 	events.Name:       true,
+	annotations.Name:  true,
+	output.Name:       true,
 }
 
 // environExcluded is the source-mode staleness key's exclusion list: the

@@ -84,6 +84,13 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.3.1** - `facts().ci` says which CI runs the job: `vendor`
+  (`github`, `gitlab`, `azure`, `teamcity`, … or `generic`), `isCI`, `isPR`,
+  `sha`, `ref`, `baseRef` and `prNumber`
+  (`datamitsu llms reference/configuration-api`). Branch on
+  `facts().ci.isCI` instead of `facts().env.CI`, which Azure Pipelines and
+  TeamCity do not set. A wrapper that forks `config.d.ts` declares `ci` on
+  `Facts` too.
 - **after v0.3.1** - A tool operation takes `failOn` (`error` by default,
   `warning`, `info`, `hint`), the lowest level of parsed finding that fails the
   run on top of the tool's exit code; `--fail-on`/`DATAMITSU_FAIL_ON` raise it

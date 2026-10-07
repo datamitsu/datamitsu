@@ -34,7 +34,7 @@ func (e *Engine) initConsole() {
 			if ui.Quiet() {
 				logger.Logger.Debug(argsToString(call.Arguments), zap.String("source", "js"), zap.String("level", "log"))
 			} else {
-				fmt.Println(argsToString(call.Arguments))
+				_, _ = fmt.Fprintln(consoleOut(), argsToString(call.Arguments))
 			}
 			return goja.Undefined()
 		},
@@ -43,7 +43,7 @@ func (e *Engine) initConsole() {
 			if ui.Quiet() {
 				logger.Logger.Debug(argsToString(call.Arguments), zap.String("source", "js"), zap.String("level", "info"))
 			} else {
-				fmt.Println(clr.Cyan("[info]"), argsToString(call.Arguments))
+				_, _ = fmt.Fprintln(consoleOut(), clr.Cyan("[info]"), argsToString(call.Arguments))
 			}
 			return goja.Undefined()
 		},
@@ -71,4 +71,13 @@ func (e *Engine) initConsole() {
 			return goja.Undefined()
 		},
 	})
+}
+
+// consoleOut is where console.log and console.info write: stdout, unless an
+// agent's records own it (ui.Muted without a JSON-L stream), then stderr.
+func consoleOut() *os.File {
+	if ui.Muted() {
+		return os.Stderr
+	}
+	return os.Stdout
 }

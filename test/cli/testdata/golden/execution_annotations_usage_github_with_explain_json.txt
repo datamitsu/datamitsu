@@ -1,0 +1,5 @@
+exit code: 2
+===STDOUT===
+
+===STDERR===
+error: --annotations github cannot be combined with --explain=json: the workflow commands would land in the plan

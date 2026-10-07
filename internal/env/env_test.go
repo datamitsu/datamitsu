@@ -1470,6 +1470,36 @@ func TestEvents(t *testing.T) {
 	}
 }
 
+func TestAnnotations(t *testing.T) {
+	t.Setenv(annotations.Name, os.Getenv(annotations.Name))
+
+	_ = os.Unsetenv(annotations.Name)
+	if got := Annotations(); got != "" {
+		t.Errorf("Annotations() unset = %q, want empty", got)
+	}
+	for _, raw := range []string{"auto", "github", "off", "GitHub "} {
+		t.Setenv(annotations.Name, raw)
+		if got := Annotations(); got != raw {
+			t.Errorf("Annotations() = %q, want %q returned raw", got, raw)
+		}
+	}
+}
+
+func TestOutput(t *testing.T) {
+	t.Setenv(output.Name, os.Getenv(output.Name))
+
+	_ = os.Unsetenv(output.Name)
+	if got := Output(); got != "" {
+		t.Errorf("Output() unset = %q, want empty", got)
+	}
+	for _, raw := range []string{"human", "agent", "Agent "} {
+		t.Setenv(output.Name, raw)
+		if got := Output(); got != raw {
+			t.Errorf("Output() = %q, want %q returned raw", got, raw)
+		}
+	}
+}
+
 func TestParseBool(t *testing.T) {
 	for _, tt := range []struct {
 		raw       string

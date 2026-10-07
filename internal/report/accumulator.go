@@ -169,6 +169,19 @@ func (o *OperationRecord) Stopped(c Cancel) {
 	o.stopped = append(o.stopped, c)
 }
 
+// Operation is the operation as a report lists it, built from what was
+// recorded so far, for a consumer that shows an operation as soon as its
+// tasks have ended; its success and duration are those End recorded, if it
+// was called. It is not masked.
+func (o *OperationRecord) Operation() Operation {
+	if o == nil {
+		return Operation{}
+	}
+	o.acc.mu.Lock()
+	defer o.acc.mu.Unlock()
+	return o.acc.buildOperation(o)
+}
+
 // End records whether the operation succeeded and how long its tools took, the
 // "done in" of its footer.
 func (o *OperationRecord) End(success bool, durationMs int64) {
@@ -206,6 +219,7 @@ type BuildInfo struct {
 	Selection     Selection
 	FailFast      bool
 	Exports       []Export
+	CI            CIEnvironment
 }
 
 // Build turns what was recorded into a Run, sorted so that one input always
@@ -222,6 +236,7 @@ func (a *Accumulator) Build(info BuildInfo) *Run {
 		FailFast:   info.FailFast,
 		Operations: make([]Operation, 0, len(a.ops)),
 		Exports:    append([]Export{}, info.Exports...),
+		CI:         info.CI,
 	}
 	names := make([]string, 0, len(a.ops))
 	for _, op := range a.ops {
@@ -317,9 +332,9 @@ func (a *Accumulator) newToolRun(op, name string) *ToolRun {
 		FailOn:      string(config.EffectiveFailOn(toolOp, a.opts.FailOn)),
 		Invocations: []Invocation{},
 	}
+	tr.mayHoldSecrets = withholdsOutput(tool, a.opts.Parsers)
 	if p := tool.OutputParser; p != nil {
 		tr.Parser = &ParserRef{Module: p.Module, Parser: p.Parser}
-		tr.mayHoldSecrets = true
 		if a.opts.Parsers != nil {
 			if facts, ok := a.opts.Parsers(p.Module, p.Parser); ok {
 				tr.Parser.Version = facts.Version
@@ -327,12 +342,26 @@ func (a *Accumulator) newToolRun(op, name string) *ToolRun {
 				tr.Parser.ColumnUnit = facts.Tool.ColumnUnit
 				tr.GateActive = facts.Contract
 				tr.Category = facts.Tool.Category
-				// A module that does not list the key says nothing about it.
-				tr.mayHoldSecrets = facts.Tool.Name == "" || facts.Tool.Category == categorySecurity
 			}
 		}
 	}
 	return tr
+}
+
+// withholdsOutput reports a tool whose output no output of a run may carry:
+// one its parser module puts in the security category, whose output may be
+// the secret it found, and one with a parser the run never described — its
+// module did not load, or does not list the key — which may be one.
+func withholdsOutput(tool config.Tool, parsers ParserFacts) bool {
+	p := tool.OutputParser
+	if p == nil {
+		return false
+	}
+	if parsers == nil {
+		return true
+	}
+	facts, ok := parsers(p.Module, p.Parser)
+	return !ok || facts.Tool.Name == "" || facts.Tool.Category == categorySecurity
 }
 
 func (a *Accumulator) appRef(name string) AppRef {
@@ -400,8 +429,11 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 				inv.Files = append(inv.Files, a.fileResult(fr))
 			}
 		}
-		for _, d := range proc.Diagnostics {
-			inv.Findings = append(inv.Findings, a.finding(task.ToolName, d, tr))
+		shown := ShownOf(proc)
+		for i, d := range proc.Diagnostics {
+			f := a.finding(task.ToolName, d, tr)
+			f.Shown = shown[i]
+			inv.Findings = append(inv.Findings, f)
 		}
 		if f, ok := syntheticFinding(task.ToolName, proc, tr.Category); ok {
 			inv.Findings = append(inv.Findings, f)
@@ -549,12 +581,17 @@ func settleFindings(tr *ToolRun) {
 	// failed: the one listed is the strongest, in the invocation that reported
 	// it, and the first of equals.
 	best := map[fingerprintInput][2]int{}
+	// A finding the terminal showed in any of its invocations is shown once,
+	// wherever it is listed: what is shown does not depend on which duplicate
+	// was kept.
+	shown := map[fingerprintInput]bool{}
 	for i, inv := range tr.Invocations {
 		for j, f := range inv.Findings {
 			if f.Kind == kindSynthetic {
 				continue
 			}
 			input := f.input()
+			shown[input] = shown[input] || f.Shown
 			if pos, seen := best[input]; !seen || stronger(f, tr.Invocations[pos[0]].Findings[pos[1]]) {
 				best[input] = [2]int{i, j}
 			}
@@ -570,6 +607,9 @@ func settleFindings(tr *ToolRun) {
 			// another's, however alike their failures read.
 			if f.Kind != kindSynthetic && best[f.input()] != [2]int{i, j} {
 				continue
+			}
+			if f.Kind != kindSynthetic {
+				f.Shown = shown[f.input()]
 			}
 			kept = append(kept, f)
 		}
