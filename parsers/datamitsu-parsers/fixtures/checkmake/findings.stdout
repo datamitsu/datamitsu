@@ -1,0 +1,6 @@
+1:minphony:Required target "all" is missing from the Makefile.
+
+1:minphony:Required target "clean" is missing from the Makefile.
+
+1:minphony:Required target "test" is missing from the Makefile.
+

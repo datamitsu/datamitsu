@@ -17,7 +17,7 @@ These flags apply to all commands:
 | `--binary-command <name>` | Override the binary command name. Also settable via `DATAMITSU_BINARY_COMMAND`                         |
 | `--log-format <format>`   | Status output format: `console` or newline-delimited `jsonl`. Also settable via `DATAMITSU_LOG_FORMAT` |
 | `--no-oci`                | Disable OCI bundle store seeding. Also settable via `DATAMITSU_NO_OCI`                                 |
-| `--no-parse`              | Skip output parsers and show raw tool output. Also settable via `DATAMITSU_NO_PARSE`                   |
+| `--no-parse`              | Show raw tool output instead of parsed findings; parsing still runs. Also via `DATAMITSU_NO_PARSE`     |
 | `-v`, `--verbose`         | Enable debug-level logging for this invocation                                                         |
 
 With `--log-format=jsonl`, status and progress go to stderr as typed JSON events,
@@ -269,6 +269,18 @@ process at once. A signal that arrives while the configuration is still loading,
 before the run has started, ends the process at once too, with no report. The `(N failed)` counts never include stopped tools, and a
 tool stopped in several places of one kind shares one line with a `×N` count.
 
+A tool that runs once per file stops at its first failing file under fail-fast,
+and the files it never reached are named under its failure:
+
+```console
+┃ ✗ alpha  12ms  (1 failed)
+  …
+┃ ⊘ alpha  2 files not run (fail-fast): src/b.txt, src/c.txt
+```
+
+The line names up to three files, relative to the repository root, and counts
+the rest.
+
 ### Run events
 
 With `--log-format=jsonl`, `fix`, `lint` and `check` write their progress to
@@ -281,6 +293,14 @@ stderr as typed events, one JSON object per line:
 | `chunk`    | A tool finished a unit of its work: `index` of `total`                                                  |
 | `error`    | A tool failed: `tool`, `dir`, `msg`                                                                     |
 | `done`     | The operation ended, with its summary                                                                   |
+
+Every task — one tool in one directory, or one file of a tool that runs once
+per file — has an `op_id` of its own: the operation's `op_id` followed by
+`:<tool>:<dir>:<seq>`, where `dir` is relative to the repository root (empty for
+the root) and `seq` numbers the operation's planned tasks from 1 in plan order,
+for example `run-1:eslint:packages/web:3`. A task's `tool_run` start, its `chunk`
+events, its `error` and its closing `tool_run` share it, and no other task's
+events do.
 
 A `tool_run` with `status: "skip"` ends the chain of a tool the run stopped,
 and is never a failure. Its `msg` says what happened and why:
@@ -1673,7 +1693,8 @@ the distinct tools with a failed task; `runs` counts the tasks that ran and
 projects therefore gives `runs: 2` and `failed: 1`. A counter or `duration_ms`
 that is zero is left out of the line rather than written as `0`: read a missing
 one as zero. A `tool_run` op id is the format request's op id followed by
-`:<tool>:<dir>`, so a consumer can attribute every task to its request. Every
+`:<tool>:<dir>:<seq>`, `seq` numbering the tasks of one priority group from 1,
+so a consumer can attribute every task to its request. Every
 task that starts also gets its closing `tool_run`, in a cancelled request too. A
 cancelled request's `done` has `status: "fail"`, `success: false` and
 `msg: "cancelled"`: there is no separate status for it.
@@ -1884,7 +1905,7 @@ from the same shell function that runs an activation through `eval`.
 | `DATAMITSU_NO_SPONSOR`            | Suppress sponsor messages (any non-empty value)                                                       | -                                                   |
 | `DATAMITSU_OFFLINE`               | Refuse all network access (any non-empty value; requires a pre-seeded store)                          | -                                                   |
 | `DATAMITSU_NO_OCI`                | Disable OCI bundle store **seeding** (any non-empty value; twin of `--no-oci`)                        | -                                                   |
-| `DATAMITSU_NO_PARSE`              | Skip output parsers and show tools' raw output (any non-empty value; twin of `--no-parse`)            | -                                                   |
+| `DATAMITSU_NO_PARSE`              | Show tools' raw output instead of parsed findings; parsing still runs (twin of `--no-parse`)          | -                                                   |
 | `DATAMITSU_LIBC`                  | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection        | auto-detected                                       |
 | `DATAMITSU_OCI_REGISTRY`          | Registry host for base-image digest resolution in `devtools dockerfile`                               | `ghcr.io`                                           |
 | `DATAMITSU_PARSERS_DIR`           | Override directory for downloaded WASM output-parser modules                                          | `{store}/.parsers`                                  |

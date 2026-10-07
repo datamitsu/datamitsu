@@ -4,15 +4,24 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
+	"github.com/datamitsu/datamitsu/internal/tooling"
+
+	"go.uber.org/zap"
 )
 
 func TestParsingDisabled(t *testing.T) {
@@ -58,7 +67,7 @@ func TestDiagnosticParser_EndToEnd(t *testing.T) {
 		"core": {URL: srv.URL, Hash: hex.EncodeToString(sum[:])},
 	})
 	t.Cleanup(func() { _ = mgr.Close(context.Background()) })
-	parser := newDiagnosticParser(mgr)
+	parser := newDiagnosticParser(mgr, newParseProblems())
 
 	eslintJSON := []byte(`[{"filePath":"a.js","messages":[` +
 		`{"ruleId":"no-undef","severity":2,"message":"'z' is not defined.","line":2,"column":25,"endLine":2,"endColumn":26},` +
@@ -88,4 +97,163 @@ func TestDiagnosticParser_EndToEnd(t *testing.T) {
 	if diags[1].Source != "eslint" {
 		t.Errorf("source = %q, want eslint", diags[1].Source)
 	}
+}
+
+// TestDiagnosticParser_Unavailable: a key the module does not list, and a
+// module that cannot load, are reported as unavailable — never as an empty,
+// clean parse — and recorded for the run's warnings.
+func TestDiagnosticParser_Unavailable(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+	wasm, err := os.ReadFile(filepath.Join("..", "parsermanager", "testdata", "echo.wasm"))
+	if err != nil {
+		t.Fatalf("read wasm fixture: %v", err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(wasm)
+	}))
+	t.Cleanup(srv.Close)
+	sum := sha256.Sum256(wasm)
+	mgr := parsermanager.New(config.MapOfParsers{
+		"core":   {URL: srv.URL, Hash: hex.EncodeToString(sum[:])},
+		"broken": {URL: srv.URL, Hash: strings.Repeat("0", 64)},
+	})
+	t.Cleanup(func() { _ = mgr.Close(context.Background()) })
+	problems := newParseProblems()
+	parser := newDiagnosticParser(mgr, problems)
+
+	for _, c := range []struct{ module, key, tool string }{
+		{"core", "no-such-parser", "alpha"},
+		{"core", "no-such-parser", "beta"},
+		{"broken", "hadolint", "gamma"},
+		{"broken", "hadolint", "gamma"},
+		{"broken", "yamllint", "delta"},
+	} {
+		diags, err := parser.Parse(context.Background(), c.module, c.key, c.tool, []byte("x"), nil, 1)
+		if _, ok := errors.AsType[*tooling.ParserUnavailableError](err); !ok {
+			t.Errorf("%s/%s: err = %v, want a ParserUnavailableError", c.module, c.key, err)
+		}
+		if len(diags) != 0 {
+			t.Errorf("%s/%s: diagnostics = %+v, want none", c.module, c.key, diags)
+		}
+	}
+
+	got := problems.pending()
+	if len(got) != 2 {
+		t.Fatalf("pending = %q, want one warning for the module and one for the key", got)
+	}
+	if !strings.HasPrefix(got[0], `parser module "broken" could not be loaded, so 2 tool(s) that use it ran without parsing `+
+		`and their lint passes are not cached; `+
+		`"datamitsu devtools parsers prefetch" fetches it ahead of a run: `) {
+		t.Errorf("module warning = %q", got[0])
+	}
+	if want := `parser module "core" has no parser "no-such-parser", so the output of alpha, beta is not parsed ` +
+		`and its lint passes are not cached`; got[1] != want {
+		t.Errorf("key warning = %q, want %q", got[1], want)
+	}
+	if again := problems.pending(); len(again) != 0 {
+		t.Errorf("a problem is reported once per run, got %q again", again)
+	}
+}
+
+func TestParseProblems_FailedParseOncePerTool(t *testing.T) {
+	problems := newParseProblems()
+	problems.parseFailed("hadolint", errors.New("first"))
+	problems.parseFailed("hadolint", errors.New("second"))
+	problems.parseFailed("eslint", errors.New("boom"))
+	want := []string{"output parser failed for eslint: boom", "output parser failed for hadolint: first"}
+	if got := problems.pending(); !slices.Equal(got, want) {
+		t.Errorf("pending = %q, want %q", got, want)
+	}
+	problems.parseFailed("hadolint", errors.New("third"))
+	if got := problems.pending(); len(got) != 0 {
+		t.Errorf("a tool already reported this run is not reported again, got %q", got)
+	}
+}
+
+// failingModules loads every module and knows every key, and fails every parse
+// the way a module does whose output the core cannot decode.
+type failingModules struct{}
+
+func (failingModules) HasParser(context.Context, string, string) (bool, error) { return true, nil }
+
+func (failingModules) ParseOutput(context.Context, string, string, []byte, []byte, int32) ([]parsermanager.RawDiagnostic, error) {
+	return nil, errors.New("decode parser output: unexpected end of JSON input")
+}
+
+type shellApps map[string]*binmanager.CommandInfo
+
+func (a shellApps) GetBinaryPath(context.Context, string) (string, error) { return "", os.ErrNotExist }
+
+func (a shellApps) GetCommandInfo(_ context.Context, app string) (*binmanager.CommandInfo, error) {
+	return a[app], nil
+}
+
+// TestParseFailureThroughTheExecutor follows a parse that fails in a loaded
+// module through the whole path: the process is parse-failed, the task reports
+// ParseFailed, no pass is cached, and the run warns once for the tool however
+// many of its invocations failed.
+func TestParseFailureThroughTheExecutor(t *testing.T) {
+	root := t.TempDir()
+	files := make([]string, 0, 2)
+	for _, name := range []string{"a.txt", "b.txt"} {
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, []byte(name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, path)
+	}
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{}, nil, zap.NewNop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := tooling.NewExecutor(root, false, false, shellApps{
+		"hadolint": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "exit 0"}},
+	}, c)
+	problems := newParseProblems()
+	executor.SetParser(newDiagnosticParser(failingModules{}, problems))
+
+	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{{
+		ToolName:    "hadolint",
+		Tool:        config.Tool{Name: "hadolint", OutputParser: &config.OutputParser{Module: "core", Parser: "hadolint"}},
+		Operation:   config.OpLint,
+		OpConfig:    config.ToolOperation{App: "hadolint", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
+		Files:       files,
+		ProjectPath: root,
+	}}}}}
+	results, err := executor.Execute(context.Background(), plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := results[0].Results[0]
+	if !result.Success || !result.ParseFailed {
+		t.Errorf("Success = %v, ParseFailed = %v, want a passing task whose output was not parsed", result.Success, result.ParseFailed)
+	}
+	for _, proc := range result.Processes {
+		if proc.Extraction != tooling.ExtractionParseFailed || !strings.Contains(proc.ParseError, "unexpected end of JSON input") {
+			t.Errorf("process %s: Extraction = %s, ParseError = %q", proc.ID, proc.Extraction, proc.ParseError)
+		}
+	}
+	for _, file := range files {
+		if !c.Check(file, "hadolint", cache.OperationLint, observeFile(t, file), true) {
+			t.Errorf("%s: a pass was cached for output that was not parsed", file)
+		}
+	}
+	want := []string{"output parser failed for hadolint: decode parser output: unexpected end of JSON input"}
+	if got := problems.pending(); !slices.Equal(got, want) {
+		t.Errorf("warnings = %q, want %q", got, want)
+	}
+}
+
+func observeFile(t *testing.T, path string) cache.Seen {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	hash, err := hashutil.XXH3Reader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cache.Seen{Hash: hash}
 }

@@ -17,6 +17,7 @@ exit code: 1
   │  alpha: bad1.txt failed
   └<RULE>
 
+┃ ⊘ alpha  2 files not run (fail-fast): bad2.txt, ok.txt
 ┗━ 1 tools · 1 runs · done in <DUR> · 1 failed · cache 0% <RULE>
 
 ===STDERR===

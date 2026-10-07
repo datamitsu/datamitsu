@@ -71,18 +71,3 @@ func TestToolDetail(t *testing.T) {
 		}
 	})
 }
-
-func TestActiveToolDir(t *testing.T) {
-	saved := activeTools
-	defer func() { activeTools = saved }()
-
-	activeTools = map[string]map[string]bool{
-		"eslint": {"packages/web": true},
-	}
-	if got := activeToolDir("eslint"); got != "packages/web" {
-		t.Errorf("activeToolDir(eslint) = %q, want packages/web", got)
-	}
-	if got := activeToolDir("absent"); got != "" {
-		t.Errorf("activeToolDir(absent) = %q, want empty", got)
-	}
-}

@@ -6,7 +6,11 @@
 // one reviewable place (analysis.md §1, the none-ls/efm intersection).
 package diagnostic
 
-import "github.com/datamitsu/datamitsu/internal/parsermanager"
+import (
+	"path/filepath"
+
+	"github.com/datamitsu/datamitsu/internal/parsermanager"
+)
 
 // Severity is the normalized 1–4 scale shared by parsers, this contract, and LSP
 // DiagnosticSeverity (1=Error … 4=Hint), so values map 1:1 across the boundary.
@@ -42,21 +46,32 @@ func (s Severity) String() string {
 	}
 }
 
-// Diagnostic is the core's finalized diagnostic: every position is present and
-// **1-based** (matching tool output and the CLI; the future LSP layer converts to
-// 0-based at its boundary), and severity is resolved. It is produced from a
-// parser's nullable RawDiagnostic by Resolve — never constructed by a parser.
+// Diagnostic is the core's finalized diagnostic. It is produced from a parser's
+// nullable RawDiagnostic by Resolve — never constructed by a parser — and every
+// consumer after the terminal (an editor, a report, a CI annotation) relies on
+// one contract for its positions and path, whatever the tool printed:
+//   - Row and Col are 1-based. The future LSP layer converts to 0-based at its
+//     boundary.
+//   - EndRow and EndCol are 1-based and EndCol is exclusive: the span stops
+//     before the column it names. A span with no extent is a point, EndRow ==
+//     Row and EndCol == Col.
+//   - File is absolute and cleaned once the executor has resolved it against
+//     the working directory of the process that reported it (AbsPath).
+//
+// The core cannot tell a 0-based positive column from a 1-based one, or an
+// inclusive end from an exclusive one; those are corrected in the parser that
+// reports them.
 type Diagnostic struct {
 	// File is the path the diagnostic belongs to. Most tool formats drop the
-	// filename, so the executor stamps the file it linted; formats that do name
-	// one per diagnostic (eslint's filePath) report it through the parser, which
-	// is what makes batch runs over many files attributable. Empty when neither
-	// source knows it.
+	// filename, so the executor stamps the one file a process was given;
+	// formats that do name one per diagnostic (eslint's filePath) report it
+	// through the parser, which is what makes batch runs over many files
+	// attributable. Empty when neither source knows it.
 	File     string   `json:"file,omitempty"`
 	Row      int      `json:"row"`      // 1-based start line
 	Col      int      `json:"col"`      // 1-based start column
 	EndRow   int      `json:"endRow"`   // 1-based end line
-	EndCol   int      `json:"endCol"`   // 1-based end column
+	EndCol   int      `json:"endCol"`   // 1-based end column, exclusive
 	Severity Severity `json:"severity"` // resolved 1–4
 	Message  string   `json:"message"`  // the one always-present field
 	Source   string   `json:"source"`   // originating tool (e.g. "hadolint")
@@ -66,17 +81,32 @@ type Diagnostic struct {
 // Resolve fills the core's defaults over a parser's nullable RawDiagnostic. source
 // is the tool name the parser ran for; a Source the parser set itself (e.g.
 // cue_fmt) takes precedence. Defaults follow the none-ls/efm intersection:
-//   - missing row/col → 1 (both projects coerce 0 → 1);
-//   - missing end_row → row, missing end_col → col (a point span);
+//   - a missing or 0 row/col → 1 (several parsers emit 0 for "no position");
+//   - an end column without an end row → on the start row, the span most
+//     tools mean by a column range;
+//   - an end without a column, or one before the start, → a point at the
+//     start: a column the tool did not print would be invented;
+//   - a 0 end row/col → 1, before that comparison;
 //   - missing/out-of-range severity → fallbackSeverity.
+//
+// The file is left as the parser reported it: only the executor knows the
+// working directory a relative path is relative to.
 func Resolve(raw parsermanager.RawDiagnostic, source string) Diagnostic {
-	row := derefU32(raw.Row, 1)
-	col := derefU32(raw.Col, 1)
+	row := position(raw.Row, 1)
+	col := position(raw.Col, 1)
+	endRow, endCol := row, col
+	if raw.EndCol != nil {
+		endRow = position(raw.EndRow, row)
+		endCol = position(raw.EndCol, col)
+		if endRow < row || (endRow == row && endCol < col) {
+			endRow, endCol = row, col
+		}
+	}
 	d := Diagnostic{
 		Row:      row,
 		Col:      col,
-		EndRow:   derefU32(raw.EndRow, row),
-		EndCol:   derefU32(raw.EndCol, col),
+		EndRow:   endRow,
+		EndCol:   endCol,
 		Severity: fallbackSeverity,
 		Message:  raw.Message,
 		Source:   source,
@@ -98,6 +128,21 @@ func Resolve(raw parsermanager.RawDiagnostic, source string) Diagnostic {
 	return d
 }
 
+// AbsPath is the path contract of Diagnostic.File: a path a tool reported
+// relative to the working directory of its process is joined onto it, and an
+// absolute one is cleaned, so "./x", "x" and "<dir>/x" name one file. An empty
+// path stays empty.
+func AbsPath(file, workingDir string) string {
+	switch {
+	case file == "":
+		return ""
+	case filepath.IsAbs(file):
+		return filepath.Clean(file)
+	default:
+		return filepath.Join(workingDir, file)
+	}
+}
+
 // ResolveAll resolves a parser's whole output for one tool.
 func ResolveAll(raws []parsermanager.RawDiagnostic, source string) []Diagnostic {
 	if len(raws) == 0 {
@@ -110,10 +155,13 @@ func ResolveAll(raws []parsermanager.RawDiagnostic, source string) []Diagnostic 
 	return out
 }
 
-// derefU32 returns the pointed-to value as an int, or def when nil.
-func derefU32(p *uint32, def int) int {
-	if p == nil {
+func position(p *uint32, def int) int {
+	switch {
+	case p == nil:
 		return def
+	case *p == 0:
+		return 1
+	default:
+		return int(*p)
 	}
-	return int(*p)
 }

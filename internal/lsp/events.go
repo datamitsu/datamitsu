@@ -138,9 +138,9 @@ func countTasks(groups []tooling.TaskGroup) int {
 }
 
 // toolRunOpID correlates a task's tool_run and error events with its request,
-// in the runner's <op>:<tool>:<dir> shape.
-func toolRunOpID(opID, tool, dir string) string {
-	return opID + ":" + tool + ":" + dir
+// in the runner's <op>:<task id> shape; a task ID is <tool>:<dir>:<seq>.
+func toolRunOpID(opID, taskID string) string {
+	return opID + ":" + taskID
 }
 
 func terminalStatus(success bool) string {

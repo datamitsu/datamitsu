@@ -39,15 +39,27 @@ var guardNames = []string{
 // are deterministic functions of unitDir and the root, both already in the
 // vector, so expanding first would only bake absolute paths in and orphan every
 // entry when the repository moves.
-func verdictIdentity(task Task, unitDirRel string) string {
-	parts := make([][]byte, 0, 6+len(task.OpConfig.Args)+len(task.OpConfig.Env))
+//
+// The parser is part of the question: a lint verdict records that the parser
+// found nothing, so the SHA-256 of the module the tool's outputParser names and
+// the key it dispatches to are in the key — empty for a tool without one. The
+// whole configuration is also hashed into the cache's invalidation key, but
+// that covers them only as long as it hashes everything.
+func verdictIdentity(task Task, unitDirRel, parserModuleHash string) string {
+	parserKey := ""
+	if task.Tool.OutputParser != nil {
+		parserKey = task.Tool.OutputParser.Parser
+	}
+	parts := make([][]byte, 0, 8+len(task.OpConfig.Args)+len(task.OpConfig.Env))
 	parts = append(parts,
-		[]byte("dmv1"),
+		[]byte("dmv2"),
 		[]byte(task.ToolName),
 		[]byte(task.Operation),
 		[]byte(unitDirRel),
 		[]byte(config.InferGranularity(task.OpConfig)),
 		[]byte(config.EffectiveArity(task.OpConfig)),
+		[]byte(parserModuleHash),
+		[]byte(parserKey),
 	)
 	for _, arg := range task.OpConfig.Args {
 		parts = append(parts, []byte(arg))
@@ -99,10 +111,11 @@ var cntVerdictBytes = trace.NewCounter("cache.verdict_bytes_hashed")
 type pathState struct {
 	path  string
 	entry string // "<relpath>\x00<hash>"
+	hash  string
 	size  int64
 	mod   time.Time
-	ident fileIdent // the part of the stat a writer cannot restore
-	read  bool      // the file was opened and hashed; false means the sentinel
+	ident cache.FileIdentity // the part of the stat a writer cannot restore
+	read  bool               // the file was opened and hashed; false means the sentinel
 }
 
 // verdictSnapshot is the pre-run input vector plus everything needed to decide,
@@ -197,9 +210,15 @@ func (s *verdictSnapshot) refreshStates(prev []pathState) ([]pathState, int64) {
 }
 
 // settled answers "can a stat alone prove this path is byte-identical to what
-// the pre-run pass hashed?". Every uncertain answer is false, which costs a
-// re-hash; there is no case in which it may guess true.
+// the pre-run pass hashed?" for a path the snapshot read.
 func (s *verdictSnapshot) settled(st pathState) bool {
+	return statSettled(st, s.taken)
+}
+
+// statSettled answers "can a stat alone prove this path is byte-identical to
+// the bytes read at or after taken?". Every uncertain answer is false, which
+// costs a re-hash; there is no case in which it may guess true.
+func statSettled(st pathState, taken time.Time) bool {
 	fi, err := os.Stat(st.path)
 	if err != nil {
 		// Still absent, still the sentinel. If it *was* read, it has vanished —
@@ -216,16 +235,16 @@ func (s *verdictSnapshot) settled(st pathState) bool {
 	// archive extraction — leaves size and mtime untouched, and no anchoring of
 	// the tick guard can see it. The inode-change time can: the write moves it
 	// and the restoring utimes call moves it again. Where the platform reports no
-	// change time (known == false) nothing here can rule that rewrite out, so the
+	// change time (Known == false) nothing here can rule that rewrite out, so the
 	// path is re-hashed rather than trusted.
-	fresh := identOf(fi)
-	if !fresh.known || fresh != st.ident {
+	fresh := cache.IdentityOf(fi)
+	if !fresh.Known || fresh != st.ident {
 		return false
 	}
 	// Unchanged stat, but a file last modified within a tick of the pre-run pass
 	// could have been rewritten at the same length during the run and still show
 	// this mtime. Only a re-hash can tell.
-	return !st.mod.After(s.taken.Add(-mtimeGranularity))
+	return !st.mod.After(taken.Add(-mtimeGranularity))
 }
 
 // hashStates folds the member and guard entries, plus the allowlisted
@@ -270,26 +289,37 @@ func hashedStates(paths []string, root string, memo *hashMemo, mode memoMode) ([
 }
 
 // hashedState reads one path and records both its content hash and the stat that
-// produced it. The stat comes from the open handle, so it describes the bytes
-// that were actually hashed and not a later state of the path.
-//
-// With a memo in memoShared mode, a path whose stat still matches an entry the
-// memo took under is answered without reading it; the entry's own validity check
-// is in lookup. In memoRewrite mode the bytes are always read, and what they
-// hash to replaces whatever the memo held for that path.
+// produced it, as the entry the verdict input vector folds in.
 func hashedState(p, root string, memo *hashMemo, mode memoMode) (pathState, int64) {
 	rel, err := filepath.Rel(root, p)
 	if err != nil {
 		rel = p
 	}
-	st := pathState{path: p, entry: filepath.ToSlash(rel) + "\x00(missing)"}
+	st, n := contentHash(p, memo, mode)
+	st.entry = filepath.ToSlash(rel) + "\x00(missing)"
+	if st.read {
+		st.entry = filepath.ToSlash(rel) + "\x00" + st.hash
+	}
+	return st, n
+}
+
+// contentHash reads one path and records both its content hash and the stat
+// that produced it. The stat comes from the open handle, so it describes the
+// bytes that were actually hashed and not a later state of the path. A path
+// that cannot be read comes back with read false and no hash.
+//
+// With a memo in memoShared mode, a path whose stat still matches an entry the
+// memo took under is answered without reading it; the entry's own validity check
+// is in lookup. In memoRewrite mode the bytes are always read, and what they
+// hash to replaces whatever the memo held for that path.
+func contentHash(p string, memo *hashMemo, mode memoMode) (pathState, int64) {
+	st := pathState{path: p}
 
 	if memo != nil && mode == memoShared {
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
-			ident := identOf(fi)
+			ident := cache.IdentityOf(fi)
 			if hash, ok := memo.lookup(p, fi.Size(), fi.ModTime(), ident); ok {
-				st.entry = filepath.ToSlash(rel) + "\x00" + hash
-				st.size, st.mod, st.ident, st.read = fi.Size(), fi.ModTime(), ident, true
+				st.hash, st.size, st.mod, st.ident, st.read = hash, fi.Size(), fi.ModTime(), ident, true
 				return st, 0
 			}
 		}
@@ -315,9 +345,8 @@ func hashedState(p, root string, memo *hashMemo, mode memoMode) (pathState, int6
 	if err != nil {
 		return st, 0
 	}
-	ident := identOf(fi)
-	st.entry = filepath.ToSlash(rel) + "\x00" + hash
-	st.size, st.mod, st.ident, st.read = fi.Size(), fi.ModTime(), ident, true
+	ident := cache.IdentityOf(fi)
+	st.hash, st.size, st.mod, st.ident, st.read = hash, fi.Size(), fi.ModTime(), ident, true
 	memo.store(p, hash, fi.Size(), fi.ModTime(), ident, taken)
 	return st, fi.Size()
 }
@@ -617,7 +646,7 @@ func (e *Executor) verdictKeys(task Task) (key string, snap *verdictSnapshot, by
 	if len(task.UnitMembers) == 0 {
 		return "", nil, 0, false
 	}
-	key = verdictIdentity(task, task.UnitDir)
+	key = verdictIdentity(task, task.UnitDir, e.parserModuleHash(task))
 	snap, bytesRead = verdictSnapshotOf(task.UnitMembers, task.UnitGuards, e.rootPath)
 	return key, snap, bytesRead, true
 }
@@ -680,6 +709,16 @@ func (e *Executor) recordVerdict(task Task, key string, snap *verdictSnapshot, o
 		sibling := task
 		sibling.Operation = config.OpLint
 		sibling.OpConfig = lintOp
-		e.cache.DeleteVerdict(verdictIdentity(sibling, sibling.UnitDir))
+		e.cache.DeleteVerdict(verdictIdentity(sibling, sibling.UnitDir, e.parserModuleHash(sibling)))
 	}
+}
+
+// parserModuleHash is the SHA-256 of the parser module a task's outputParser
+// names, "" for a tool without one or a module the executor was not told about.
+func (e *Executor) parserModuleHash(task Task) string {
+	op := task.Tool.OutputParser
+	if op == nil {
+		return ""
+	}
+	return e.parserModules[op.Module].Hash
 }

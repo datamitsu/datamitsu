@@ -3,6 +3,7 @@ package tooling
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,7 +119,9 @@ func TestVerdictKeysAppliesOnlyWhereItIsSound(t *testing.T) {
 func TestVerdictIdentitySeparatesDistinctQuestions(t *testing.T) {
 	root := t.TempDir()
 	base := unitTask(root)
-	baseKey := verdictIdentity(base, base.UnitDir)
+	base.Tool.OutputParser = &config.OutputParser{Module: "core", Parser: "tsc"}
+	moduleHash := strings.Repeat("a", 64)
+	baseKey := verdictIdentity(base, base.UnitDir, moduleHash)
 
 	tests := []struct {
 		name   string
@@ -130,26 +133,37 @@ func TestVerdictIdentitySeparatesDistinctQuestions(t *testing.T) {
 		{"declared env", func(task *Task) { task.OpConfig.Env = map[string]string{"TS_NODE": "1"} }},
 		{"granularity", func(task *Task) { task.OpConfig.Granularity = config.GranularityRepo }},
 		{"arity", func(task *Task) { task.OpConfig.Args = []string{"--noEmit", "{files}"} }},
+		{"parser key", func(task *Task) { task.Tool.OutputParser = &config.OutputParser{Module: "core", Parser: "tsgo"} }},
+		{"no parser", func(task *Task) { task.Tool.OutputParser = nil }},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			task := unitTask(root)
+			task.Tool.OutputParser = &config.OutputParser{Module: "core", Parser: "tsc"}
 			tt.mutate(&task)
-			if got := verdictIdentity(task, task.UnitDir); got == baseKey {
+			if got := verdictIdentity(task, task.UnitDir, moduleHash); got == baseKey {
 				t.Errorf("changing the %s left the identity unchanged; the cache would answer a different question", tt.name)
 			}
 		})
 	}
 
 	t.Run("unit dir", func(t *testing.T) {
-		if verdictIdentity(base, "other") == baseKey {
+		if verdictIdentity(base, "other", moduleHash) == baseKey {
 			t.Error("two units share one identity; a pass in one would satisfy the other")
 		}
 	})
 
+	t.Run("parser module", func(t *testing.T) {
+		if verdictIdentity(base, base.UnitDir, strings.Repeat("b", 64)) == baseKey {
+			t.Error("a verdict the old module decided would be replayed for the new one")
+		}
+	})
+
 	t.Run("stable across calls", func(t *testing.T) {
-		if verdictIdentity(unitTask(root), "pkg") != baseKey {
+		again := unitTask(root)
+		again.Tool.OutputParser = &config.OutputParser{Module: "core", Parser: "tsc"}
+		if verdictIdentity(again, "pkg", moduleHash) != baseKey {
 			t.Error("identity is unstable; nothing would ever hit")
 		}
 	})

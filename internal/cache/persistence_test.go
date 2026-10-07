@@ -36,7 +36,7 @@ func seededCache(t *testing.T) (c *Cache, cacheDir, projectPath, tracked string)
 	}
 
 	c = reopen(t, cacheDir, projectPath)
-	if err := c.AfterLint(tracked, "eslint", true); err != nil {
+	if err := c.AfterLint(tracked, "eslint", observeFile(tracked), true, true); err != nil {
 		t.Fatalf("AfterLint: %v", err)
 	}
 	c.AfterVerdict("k", VerdictEntry{Tool: "tsc", Op: "lint", InputHash: "h"})

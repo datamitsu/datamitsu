@@ -95,10 +95,14 @@ func newSession(cfg *config.Config, root string) *session {
 		projectCache.SetYieldToForeignKey(true)
 	}
 
+	executor := tooling.NewExecutor(root, false, false, binMgr, projectCache)
+	// The CLI names the same modules, so the verdicts both write agree.
+	executor.SetParserModules(cfg.Parsers)
+
 	return &session{
 		planner:        planner,
 		binMgr:         binMgr,
-		executor:       tooling.NewExecutor(root, false, false, binMgr, projectCache),
+		executor:       executor,
 		cache:          projectCache,
 		fixWidenTo:     cfg.Execution.ResolveWidenTo(config.OpFix, ""),
 		managedConfigs: cfg.ManagedConfigs,

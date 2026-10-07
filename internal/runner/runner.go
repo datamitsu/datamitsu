@@ -75,8 +75,8 @@ type executionInstance struct {
 // Progress tracking variables
 var (
 	progressMu  sync.Mutex
-	currentTask *ui.Task                   // shared file-processing task for the active operation
-	activeTools map[string]map[string]bool // currently running tools (tool -> set of active dirs)
+	currentTask *ui.Task          // shared file-processing task for the active operation
+	activeTasks map[string]string // running tasks: task ID -> directory relative to the git root
 )
 
 // toolPlanner is the planning surface used by runSingleOperation (satisfied by *tooling.Planner).
@@ -93,6 +93,7 @@ type planExecutor interface {
 	SetTaskStartCallback(cb tooling.TaskStartCallback)
 	SetFileProgressCallback(cb tooling.FileProgressCallback)
 	SetParser(parser tooling.DiagnosticParser)
+	SetParserModules(parsers config.MapOfParsers)
 	Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error)
 	TaskDir(task tooling.Task) string
 }
@@ -120,9 +121,12 @@ type sharedContext struct {
 	binMgr        toolEnsurer
 	timings       *timing.Timings
 	// parserMgr owns the WASM output-parser runtime (compile-once, instantiate
-	// per parse). nil when no parsers are declared or parsing is disabled; Closed
-	// in shutdown to release the shared runtime.
+	// per parse). nil when no parsers are declared; Closed in shutdown to
+	// release the shared runtime.
 	parserMgr *parsermanager.Manager
+	// parseProblems collects what the parsers could not parse, reported once
+	// per run; nil when no parser is wired.
+	parseProblems *parseProblems
 	// nameWidth is the widest configured tool name, computed once so every
 	// operation's result block (fix, lint, …) aligns on the same columns.
 	nameWidth int
@@ -280,12 +284,13 @@ func initSharedContext(
 	// and so they appear in --explain, which never reaches the install step.
 	planner.SetPlatformChecker(binMgr)
 	sc.executor = tooling.NewExecutor(sc.rootPath, false, sc.failFast, binMgr, sc.projectCache)
-	// Wire output-parsing only when parsers are declared and not disabled via
-	// --no-parse / DATAMITSU_NO_PARSE; otherwise the executor never parses (tools
-	// without an outputParser are unaffected either way).
-	if len(sc.cfg.Parsers) > 0 && !parsingDisabled() {
+	sc.executor.SetParserModules(sc.cfg.Parsers)
+	// Wire output-parsing whenever parsers are declared. --no-parse only changes
+	// what a failure frame shows: what the run records must not depend on it.
+	if len(sc.cfg.Parsers) > 0 {
 		sc.parserMgr = parsermanager.New(sc.cfg.Parsers)
-		sc.executor.SetParser(newDiagnosticParser(sc.parserMgr))
+		sc.parseProblems = newParseProblems()
+		sc.executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
 	}
 
 	// All configured tools are known here, so the result column width is fixed
@@ -484,7 +489,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 
 	// Track progress
 	progressTracker := make(map[string]*toolExecutionGroup)
-	activeTools = make(map[string]map[string]bool) // Initialize active tools tracker (tool -> set of active dirs)
+	activeTasks = make(map[string]string)
 
 	// Initialize tracker with all expected tools
 	toolOrder := 0
@@ -543,20 +548,17 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	}
 
 	// Set up task start callback
-	sc.executor.SetTaskStartCallback(func(toolName string, relativeDir string) {
+	sc.executor.SetTaskStartCallback(func(taskID, toolName, relativeDir string) {
 		ui.Emit(uievent.Event{
 			Type:   uievent.TypeToolRun,
-			OpID:   toolOpID(runOpID, toolName, relativeDir),
+			OpID:   toolOpID(runOpID, taskID),
 			Status: uievent.StatusStart,
 			Tool:   toolName,
 			Dir:    relativeDir,
 		})
 
 		progressMu.Lock()
-		if activeTools[toolName] == nil {
-			activeTools[toolName] = make(map[string]bool)
-		}
-		activeTools[toolName][relativeDir] = true
+		activeTasks[taskID] = relativeDir
 		t := ensureTask()
 		progressMu.Unlock()
 
@@ -564,7 +566,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	})
 
 	// Set up file progress callback
-	sc.executor.SetFileProgressCallback(func(toolName string, fileIndex, totalFiles int, success bool) {
+	sc.executor.SetFileProgressCallback(func(taskID, toolName string, fileIndex, totalFiles int, success bool) {
 		status := "✓"
 		if !success {
 			status = "✗"
@@ -572,12 +574,12 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 
 		progressMu.Lock()
 		t := ensureTask()
-		dir := activeToolDir(toolName)
+		dir := activeTasks[taskID]
 		progressMu.Unlock()
 
 		ui.Emit(uievent.Event{
 			Type:    uievent.TypeChunk,
-			OpID:    toolOpID(runOpID, toolName, dir),
+			OpID:    toolOpID(runOpID, taskID),
 			Status:  chunkStatus(fileIndex, totalFiles),
 			Tool:    toolName,
 			Dir:     dir,
@@ -607,7 +609,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			stopped = append(stopped, task)
 			emitStopped(runOpID, task)
 		} else {
-			opID := toolOpID(runOpID, result.ToolName, result.RelativeDir)
+			opID := toolOpID(runOpID, result.TaskID)
 			ui.Emit(uievent.Event{
 				Type:       uievent.TypeToolRun,
 				OpID:       opID,
@@ -637,12 +639,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			}
 
 			progressMu.Lock()
-			if dirs, ok := activeTools[result.ToolName]; ok {
-				delete(dirs, result.RelativeDir)
-				if len(dirs) == 0 {
-					delete(activeTools, result.ToolName)
-				}
-			}
+			delete(activeTasks, result.TaskID)
 			progressMu.Unlock()
 		}
 	})
@@ -716,6 +713,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	if len(toolGroups) > 0 || len(plan.Skipped) > 0 || len(stopped) > 0 {
 		printGroupedResults(toolGroups, sc.nameWidth, env.IsTimingsEnabled())
 		printStoppedTasks(stopped, sc.nameWidth)
+		printUnrunFiles(results, sc.rootPath, sc.nameWidth, cause)
 		printSkippedTools(plan.Skipped, sc.nameWidth)
 		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped), len(stopped), sc.footerNote(operation))
 	}
@@ -760,6 +758,20 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	}
 
 	return nil
+}
+
+// reportParseProblems warns about what the parsers could not parse: each module
+// that did not load, each parser key its module does not list, and each tool
+// whose output failed to parse, once per run however many invocations and
+// operations hit it. It runs once every operation has, so a warning names every
+// tool the problem reached.
+func (sc *sharedContext) reportParseProblems() {
+	if sc.parseProblems == nil {
+		return
+	}
+	for _, msg := range sc.parseProblems.pending() {
+		logger.Logger.Warn(msg)
+	}
 }
 
 // recordSkips accumulates unsupported-platform skips (deduped by tool name) so
@@ -1029,6 +1041,7 @@ func runSequential(
 	defer stopInterrupt()
 
 	opErr := sc.runOperations(ctx, operations)
+	sc.reportParseProblems()
 
 	if sc.explainLevel != "" {
 		return sc.outcome(ctx, opErr)
@@ -1207,39 +1220,12 @@ func formatToolWithDir(toolName, relativeDir string) string {
 	return "⏳ " + toolName
 }
 
-// activeToolDir returns any active directory for a tool (for progress display).
-// Must be called while holding progressMu.
-func activeToolDir(toolName string) string {
-	if dirs, ok := activeTools[toolName]; ok {
-		for dir := range dirs {
-			return dir
-		}
-	}
-	return ""
-}
-
-// toolOpID derives a per-tool-run correlation id from the run id, tool name and
-// project-relative dir. A derived id (not a generated one stored on the task) is
-// deliberate: executor tasks are value-copied, so a generated id would duplicate;
-// deriving from already-stable identity keeps a tool's start/chunk/done events
-// correlated without threading an id through the copy.
-//
-// KNOWN LIMITATION (deferred to the diagnostics phase, when the LSP consumer
-// fixes the required granularity): because the id is tool+dir, it is NOT unique
-// per individual task. Three cases break strict start->terminal chain pairing,
-// all sharing this root cause and all requiring the executor's FileProgressCallback
-// to carry per-task identity (dir + a per-task discriminant) to fix properly:
-//   - per-file-scope tools matching several files in ONE dir emit N start/done
-//     pairs under one op_id (indistinguishable);
-//   - the same tool running concurrently in two sibling dirs has its chunk events
-//     attributed to the wrong dir (the chunk callback recovers an arbitrary one);
-//   - a task stopped by fail-fast or an interruption ends with a skip event
-//     under the same id, so which of several starts it closes is ambiguous too.
-//
-// These only affect machine-consumer event-stream fidelity, never lint/fix
-// execution or exit codes; the common repository/per-project case is correct.
-func toolOpID(runOpID, tool, dir string) string {
-	return runOpID + ":" + tool + ":" + dir
+// toolOpID is the correlation id of one task's events: the operation's run id
+// and the task's ID, which the executor makes unique within the operation. A
+// task's start, its progress chunks and its terminal event share it, and no
+// other task's do.
+func toolOpID(runOpID, taskID string) string {
+	return runOpID + ":" + taskID
 }
 
 // chunkStatus reports a chunk event's status: done once a tool's last file unit
@@ -1464,9 +1450,9 @@ func formatDiagnostic(d diagnostic.Diagnostic) string {
 }
 
 // formatDiagnosticRelativeTo is formatDiagnostic with paths shortened against
-// baseDir. Batch parsers report absolute paths (eslint's filePath), which in a
-// monorepo push the useful part of the line off-screen; the box already prints
-// the Cwd these are relative to.
+// baseDir. Every path the executor hands over is absolute, which in a monorepo
+// pushes the useful part of the line off-screen; the box already prints the Cwd
+// these are relative to.
 func formatDiagnosticRelativeTo(d diagnostic.Diagnostic, baseDir string) string {
 	loc := fmt.Sprintf("%d:%d", d.Row, d.Col)
 	if d.File != "" {
@@ -1510,16 +1496,16 @@ func severityColor(s diagnostic.Severity) func(a ...any) string {
 }
 
 // usableDiagnostics reports whether the parsed diagnostics are worth showing in
-// place of the tool's raw output.
+// place of the tool's raw output. --no-parse asks for the raw output.
 //
 // One batch invocation covers many files, so a diagnostic without a file is
 // unattributable — and the raw output the parsed view replaces almost always did
 // name the file. Rather than silently degrade whenever a batch tool's parser
-// does not report paths, fall back to the raw text. Per-file runs are unaffected:
-// the executor stamps the file it linted, and even unstamped they are read in the
-// context of a single file.
+// does not report paths, fall back to the raw text. Per-file runs, and batches
+// of one file, are unaffected: the executor stamps the one file the process was
+// given, and even unstamped they are read in the context of a single file.
 func usableDiagnostics(result tooling.ExecutionResult) bool {
-	if len(result.Diagnostics) == 0 {
+	if len(result.Diagnostics) == 0 || parsingDisabled() {
 		return false
 	}
 	if !result.Batch {

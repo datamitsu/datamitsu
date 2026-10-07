@@ -565,6 +565,29 @@ datamitsu exec prettier -- --version
 datamitsu exec eslint -- --version
 ```
 
+### Bumping a tool whose output is parsed
+
+A cached lint pass means the tool's
+[`outputParser`](../guides/architecture/parsers.md#extraction-outcomes) read its output
+and found nothing. A release that changes the output format can turn every finding into
+"nothing" for a parser that no longer recognizes it, and the run then looks clean and is
+cached as clean. Each parser the reference configuration wires therefore has a clean and
+a finding-bearing recording of its real tool in the datamitsu repository
+(`parsers/datamitsu-parsers/fixtures/<parser>/`), asserted by the parser's tests.
+
+When a bump changes the version of such a tool, record both runs again with the new
+version and run the parser tests before the bump ships:
+
+```bash
+# In the datamitsu repository: rerun the tool over a clean input and over one with
+# findings, write stdout, stderr and the exit code into the fixture files, then
+cargo test --manifest-path parsers/Cargo.toml
+```
+
+`parsers/datamitsu-parsers/fixtures/README.md` lists the arguments each recording uses.
+A findings recording that parses to nothing fails the test: the parser needs a fix, in
+a module release, before the configuration can rely on the new version.
+
 ## Automation
 
 ### GitHub Actions: periodic version checks

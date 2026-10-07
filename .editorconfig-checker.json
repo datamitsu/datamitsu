@@ -1,3 +1,6 @@
 {
-  "Disable": {}
+  "Disable": {},
+  "Exclude": [
+    "^parsers/datamitsu-parsers/fixtures/[^/]+/"
+  ]
 }

@@ -19,6 +19,7 @@ import (
 
 func task(tool, projectPath string) tooling.Task {
 	return tooling.Task{
+		ID:          tool + ":" + projectPath + ":1",
 		ToolName:    tool,
 		ProjectPath: projectPath,
 		OpConfig:    config.ToolOperation{App: tool, Scope: config.ToolScopeRepository},
@@ -29,26 +30,28 @@ func task(tool, projectPath string) tooling.Task {
 // relative: "" is the root.
 func relDir(t tooling.Task) string { return t.ProjectPath }
 
-// The planned tasks without a result are the ones the run never reached. Tasks
-// of one tool in one directory are interchangeable, so they are matched by
-// count, and the answer keeps plan order.
+// The planned tasks without a result are the ones the run never reached. Every
+// planned task has an ID and every result carries its task's, so tasks of one
+// tool in one directory are told apart, and the answer keeps plan order.
 func TestUnreachedTasks(t *testing.T) {
+	named := func(tool, dir, id string) tooling.Task {
+		tk := task(tool, dir)
+		tk.ID = id
+		return tk
+	}
 	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{
-		{Priority: 10, Tasks: []tooling.Task{task("fmt", ""), task("fmt", ""), task("fmt", ""), task("tsc", "pkg/a")}},
-		{Priority: 20, Tasks: []tooling.Task{task("lint", ""), task("tsc", "pkg/b")}},
+		{Tasks: []tooling.Task{named("fmt", "", "fmt::1"), named("fmt", "", "fmt::2"), named("tsc", "pkg/a", "tsc:pkg/a:3")}},
+		{Tasks: []tooling.Task{named("lint", "", "lint::4")}},
 	}}
-	results := []tooling.GroupExecutionResult{{Priority: 10, Results: []tooling.ExecutionResult{
-		{ToolName: "fmt", Success: false},
-		{ToolName: "fmt", Cancelled: true, FailureReason: tooling.FailureReasonCancelled},
-		{ToolName: "tsc", RelativeDir: "pkg/a", Success: true},
+	results := []tooling.GroupExecutionResult{{Results: []tooling.ExecutionResult{
+		{ToolName: "fmt", TaskID: "fmt::2"},
+		{ToolName: "tsc", RelativeDir: "pkg/a", TaskID: "tsc:pkg/a:3"},
 	}}}
 
 	got := unreachedTasks(plan, results, relDir, stopFailFast)
-
 	want := []stoppedTask{
-		{tool: "fmt", cause: stopFailFast},
-		{tool: "lint", cause: stopFailFast},
-		{tool: "tsc", dir: "pkg/b", cause: stopFailFast},
+		{taskID: "fmt::1", tool: "fmt", cause: stopFailFast},
+		{taskID: "lint::4", tool: "lint", cause: stopFailFast},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("unreachedTasks() = %+v, want %+v", got, want)
@@ -136,6 +139,32 @@ func TestPrintStoppedTasks(t *testing.T) {
 	}
 }
 
+// TestPrintUnrunFiles: a task that ran and stopped short names the files it
+// never checked; a task the run stopped as a whole is listed elsewhere.
+func TestPrintUnrunFiles(t *testing.T) {
+	t.Setenv("CI", "true")
+	files := func(states ...tooling.FileState) []tooling.FileResult {
+		out := make([]tooling.FileResult, len(states))
+		for i, s := range states {
+			out[i] = tooling.FileResult{File: "/repo/src/f" + string(rune('0'+i)) + ".txt", State: s}
+		}
+		return out
+	}
+	results := []tooling.GroupExecutionResult{{Results: []tooling.ExecutionResult{
+		{ToolName: "alpha", FileResults: files(tooling.FileRan, tooling.FileNotStarted)},
+		{ToolName: "beta", RelativeDir: "pkg", FileResults: files(
+			tooling.FileRan, tooling.FileCancelled, tooling.FileNotStarted, tooling.FileNotStarted, tooling.FileNotStarted)},
+		{ToolName: "gamma", Cancelled: true, FileResults: files(tooling.FileNotStarted)},
+		{ToolName: "delta", FileResults: files(tooling.FileRan, tooling.FileCached)},
+	}}}
+	out := captureStdout(t, func() { printUnrunFiles(results, "/repo", 5, stopInterrupted) })
+	want := "┃ ⊘ alpha  1 file not run (interrupted): src/f1.txt\n" +
+		"┃ ⊘ beta [pkg]  4 files not run (interrupted): src/f1.txt, src/f2.txt, src/f3.txt +1 more\n"
+	if out != want {
+		t.Errorf("printUnrunFiles() printed\n%q\nwant\n%q", out, want)
+	}
+}
+
 // A run returns one error: an interruption wins because the run did not
 // finish; then a tool failure (exit 1), then --fail-on-skip, then
 // --require-coverage.
@@ -213,7 +242,7 @@ func TestInterruptedOperationFails(t *testing.T) {
 		{Priority: 20, Tasks: []tooling.Task{task("beta", "")}},
 	}}
 	executor := &fakeExecutor{order: &order, results: []tooling.GroupExecutionResult{
-		{Priority: 10, Success: true, Results: []tooling.ExecutionResult{{ToolName: "alpha", Success: true}}},
+		{Priority: 10, Success: true, Results: []tooling.ExecutionResult{{ToolName: "alpha", TaskID: "alpha::1", Success: true}}},
 	}}
 	sc := &sharedContext{
 		planner:         &fakePlanner{plan: plan},
@@ -310,8 +339,8 @@ func TestRunSingleOperationReportsStoppedTasks(t *testing.T) {
 		{Priority: 20, Tasks: []tooling.Task{task("gamma", "")}},
 	}}
 	executor := &fakeExecutor{order: &order, results: []tooling.GroupExecutionResult{{Priority: 10, Results: []tooling.ExecutionResult{
-		{ToolName: "alpha", Success: false, ExitCode: 1, FailureReason: tooling.FailureReasonIndependent},
-		{ToolName: "beta", Cancelled: true, FailureReason: tooling.FailureReasonCancelled, StartedAt: time.Now()},
+		{ToolName: "alpha", TaskID: "alpha::1", Success: false, ExitCode: 1, FailureReason: tooling.FailureReasonIndependent},
+		{ToolName: "beta", TaskID: "beta::1", Cancelled: true, FailureReason: tooling.FailureReasonCancelled, StartedAt: time.Now()},
 	}}}}
 	sc := &sharedContext{
 		planner:         &fakePlanner{plan: plan},

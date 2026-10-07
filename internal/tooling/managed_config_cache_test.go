@@ -89,12 +89,14 @@ func TestAConfigEditedDuringTheRunIsNotCached(t *testing.T) {
 		task.OpConfig.Granularity = config.GranularityFile
 		task.perFileCache = e.perFileCacheTool(task)
 
+		task.Files = []string{file}
+		_, seen := e.filterFilesByCache(task)
 		if edited {
 			writeManagedConfig(t, root, "indent: 4\n")
 		}
-		e.updateCacheAfterSuccess(task, []string{file})
+		e.updateCacheAfterSuccess(task, []string{file}, seen)
 
-		cached := !c.ShouldRun(file, e.perFileCacheTool(task), cache.OperationLint, true)
+		cached := !c.Check(file, e.perFileCacheTool(task), cache.OperationLint, observe(file), true)
 		if cached == edited {
 			t.Errorf("edited=%v: result cached under the current config = %v", edited, cached)
 		}

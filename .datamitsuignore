@@ -19,6 +19,10 @@ Taskfile.yaml: oxfmt
 # Minified HTML is generated from inspector/ and embedded byte-for-byte.
 internal/inspector/inspector.html: *
 
+# Tool output recorded byte for byte for the parser tests, misspellings and all:
+# a fixer would change what the tool printed, and a linter would judge it.
+parsers/datamitsu-parsers/fixtures/*/*: *
+
 # Vendored verbatim from a datamitsu-config release (see test/cli/README.md); it
 # is a bundle, re-fetched rather than edited, so no tool may rewrite or judge it.
 test/e2e/testdata/datamitsu.config.oci-ghcr.js: *
