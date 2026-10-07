@@ -169,8 +169,9 @@ completions/
 !completions/_datamitsu
 !completions/datamitsu.fish
 
-# Rust / WASM parser build artifacts
+# Rust / WASM parser build artifacts (target-embedded: the container build)
 parsers/target/
+parsers/target-embedded/
 
 # NPM Packaging artifacts
 packaging/npm/datamitsu-darwin-*/

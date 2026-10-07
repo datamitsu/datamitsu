@@ -77,7 +77,8 @@ fn assert_findings(key: &str, r: &Recording, want: &[RawDiagnostic]) {
 		assert_eq!(g, w, "{key}: diagnostic {i}");
 	}
 	let json = crate::dispatch(key, r.stdout, r.stderr, exit_code(r));
-	assert!(json.starts_with("[{") && json.ends_with("}]"), "{key}: {json}");
+	let head = format!(r#"{{"recognized":true,"format":"{key}","diagnostics":[{{"#);
+	assert!(json.starts_with(&head) && json.ends_with("}]}"), "{key}: {json}");
 }
 
 #[test]
@@ -100,7 +101,11 @@ fn clean_output_yields_nothing() {
 	for (key, r) in &clean {
 		assert_eq!(exit_code(r), 0, "{key}: a clean recording exits 0");
 		assert_eq!(parse(key, r), Vec::<RawDiagnostic>::new(), "{key}");
-		assert_eq!(crate::dispatch(key, r.stdout, r.stderr, 0), "[]", "{key}");
+		assert_eq!(
+			crate::dispatch(key, r.stdout, r.stderr, 0),
+			format!(r#"{{"recognized":true,"format":"{key}","diagnostics":[]}}"#),
+			"{key}"
+		);
 	}
 }
 

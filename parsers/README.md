@@ -42,14 +42,14 @@ host loses multiline cases (e.g. `cue_fmt`); the parser decides whether to split
 
 ## Output form
 
-`parse` returns a JSON array of diagnostics. Each object always has `message`;
-every other field (`row`, `col`, `end_row`, `end_col`, `severity`, `source`,
-`code`, `url`, `file`) is present only if the tool emitted it. An unknown tool
-name returns `[]`.
+`parse` answers in response ABI 2 — `{"recognized", "format", "diagnostics"}` —
+where every diagnostic field but `message` is present only if the tool emitted it.
+The [output parser guide](../website/docs/guides/architecture/parsers.md) describes
+the answer, the `describe` schema, the format parsers and the fallback.
 
-```json
-[{ "message": "missing newline", "row": 12, "col": 1, "code": "DL3000" }]
-```
+The crate builds two ways: the public module (the default features, `tools` and
+`format`) and the fallback the core embeds (`--no-default-features --features
+format`); `cargo test` passes either.
 
 ## Adding a parser
 
@@ -60,25 +60,44 @@ Each tool is one module under `datamitsu-parsers/src/tools/`. To add one:
    `category` and `kind` — and
    `pub fn parse(stdout: &[u8], stderr: &[u8], exit_code: i32) -> Vec<RawDiagnostic>`,
    with `cargo test` cases beside it and its `SAMPLES`.
-2. Register it: `pub mod <tool>;`, a dispatch arm and a `samples` entry in
-   `src/tools/mod.rs`, its descriptor in `TOOLS` in `src/capabilities.rs`, and its
-   row in `POSITIONS` in `src/contract.rs`. The core checks a configuration's
-   parser key against `describe` before it parses, so a parser missing from `TOOLS`
-   is treated as unknown even though it dispatches.
+2. Register it: `pub mod <tool>;`, a dispatch arm, a `samples` entry and its
+   descriptor in `DESCRIPTORS`, all in `src/tools/mod.rs`, and its row in
+   `POSITIONS` in `src/contract.rs`. The core checks a configuration's parser key
+   against `describe` before it parses, so a parser missing from `DESCRIPTORS` is
+   treated as unknown even though it dispatches. Nothing outside `src/tools/` and
+   `src/contract.rs` changes, so the embedded fallback module, which is built
+   without the tool parsers, need not be rebuilt.
 3. When a configuration wires the parser, record a clean and a finding-bearing run
    of the real tool under `datamitsu-parsers/fixtures/<tool>/` and assert them in
    `src/tools/fixtures.rs` ([fixtures/README.md](datamitsu-parsers/fixtures/README.md)).
 
+A format parser lives under `src/format/`; the
+[output parser guide](../website/docs/guides/architecture/parsers.md#format-parsers)
+says what one needs.
+
 ## Build & test
 
 ```bash
-# Native unit tests (no wasm toolchain needed)
-cargo test --manifest-path parsers/Cargo.toml
+# Native unit tests of both builds (no wasm toolchain needed), run from parsers/
+# so rustup picks up rust-toolchain.toml
+cd parsers
+cargo test
+cargo test --no-default-features --features format
+cd ..
 
 # Build the WASM artifact and report its size
 task build:parsers
 # -> parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm
+
+# Build it into the fixture the core's tests run (after any change here)
+task build:parsers:fixture
+# -> internal/parsermanager/testdata/echo.wasm
 ```
+
+`rust-toolchain.toml` pins the Rust release. rustup reads it from the directory
+cargo runs in, so run cargo from `parsers/` (the tasks do) to build and test with it;
+`embedded.lock` and `embedded.Dockerfile` name the same release for the
+container build.
 
 The release profile (workspace `parsers/Cargo.toml`) uses `opt-level = "s"`, LTO,
 strip, `codegen-units = 1`, and `panic = "abort"` to minimize artifact size.

@@ -54,8 +54,10 @@ func maskToken(s string) string {
 const injectedFinding = `[{"file":"Dockerfile","line":1,"column":1,"level":"error","code":"DL3006",` +
 	`"message":"Always tag the version of an image explicitly\n::error::injected"}]`
 
-// commandPrinter fails and prints a workflow command of its own.
-var commandPrinter = clitest.ShellTool("beta", settle+clitest.RecordRun+`; echo '::error title=x::y'; exit 1`, clitest.ToolOpSpec{})
+// commandPrinter fails and prints a workflow command of its own. The command
+// names a file that does not exist, so the fallback parser does not read it as
+// a finding: the tool stays unparsed and its output prints as it is.
+var commandPrinter = clitest.ShellTool("beta", settle+clitest.RecordRun+`; echo '::error file=gone.txt,title=x::y'; exit 1`, clitest.ToolOpSpec{})
 
 // annotatedProject is a repository with a parsed tool whose finding's message
 // tries to print a command, and an unparsed tool that prints one.
@@ -99,7 +101,7 @@ func TestAnnotationsGitHub(t *testing.T) {
 		if strings.Join(got, "\n") != strings.Join(want, "\n") {
 			t.Errorf("command lines =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 		}
-		if !strings.Contains(res.Stdout, "  │  ::error title=x::y\n") {
+		if !strings.Contains(res.Stdout, "  │  ::error file=gone.txt,title=x::y\n") {
 			t.Errorf("the tool's own command should print framed, inside the region:\n%s", res.Stdout)
 		}
 		if !strings.Contains(res.Stdout, "  │  ::error::injected [DL3006]\n") {

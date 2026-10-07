@@ -1,0 +1,12 @@
+<testsuites>
+  <testsuite name="x.go" tests="1" errors="0" failures="1">
+    <testcase name="errcheck" classname="x.go:6:11">
+      <failure message="x.go:6:11: Error return value of `os.Remove` is not checked" type=""><![CDATA[: Error return value of `os.Remove` is not checked
+Category: errcheck
+File: x.go
+Line: 6
+Details: 	os.Remove("x")]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>1 issues:
+* errcheck: 1

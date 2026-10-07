@@ -5,9 +5,9 @@
 //! none-ls navigates to `output.results` and runs `from_json` over those span
 //! objects with default attributes. deadnix prints no level and no rule id, so
 //! severity and code stay None.
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 
 use tinyjson::JsonValue;
 

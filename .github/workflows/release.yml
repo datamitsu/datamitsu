@@ -32,10 +32,12 @@ jobs:
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       # 2a. Build WASM parser modules — MUST precede goreleaser so the .wasm
       #     SHA-256 lands in checksums.txt (and is thus covered by the cosign
-      #     signature). rustup/cargo are preinstalled on ubuntu-latest; only the
-      #     freestanding wasm32 target needs adding.
-      - name: Add Rust wasm32 target
-        run: rustup target add wasm32-unknown-unknown
+      #     signature). rustup is preinstalled on ubuntu-latest; the release it
+      #     installs, with the freestanding wasm32 target, is the one
+      #     parsers/rust-toolchain.toml pins, and cargo runs in parsers/ to use it.
+      - name: Install the Rust toolchain parsers/rust-toolchain.toml pins
+        run: rustup toolchain install
+        working-directory: parsers
       - name: Cache cargo registry + wasm target
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -54,8 +56,9 @@ jobs:
           DATAMITSU_PARSERS_VERSION: ${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
         name: Build WASM parser modules
         run: |
-          cargo build --release --target wasm32-unknown-unknown --manifest-path parsers/Cargo.toml
-          echo "wasm size: $(wc -c < parsers/target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes"
+          cargo build --release --target wasm32-unknown-unknown
+          echo "wasm size: $(wc -c < target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes"
+        working-directory: parsers
       # 2. Build Binaries (GoReleaser)
       - env:
           # Canonical base image ref baked into the binary for `devtools dockerfile`.

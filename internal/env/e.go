@@ -233,6 +233,20 @@ var (
 		Description:  "Show tools' raw output instead of parsed findings; parsing still runs (set to any non-empty value)",
 	}
 
+	// maxParseInputBytes and maxFindingsPerProcess change what a run extracts
+	// from a tool's output, so they are ordinary fingerprint inputs.
+	maxParseInputBytes = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_MAX_PARSE_INPUT_BYTES",
+		DefaultValue: "8388608",
+		Description:  "Bytes of each output stream of one tool process a parser reads; a longer stream is cut and the process's extraction is truncated",
+	}
+
+	maxFindingsPerProcess = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_MAX_FINDINGS_PER_PROCESS",
+		DefaultValue: "10000",
+		Description:  "Findings kept from the output of one tool process; the rest are dropped and the process's extraction is truncated",
+	}
+
 	libcOverride = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_LIBC",
 		DefaultValue: "",

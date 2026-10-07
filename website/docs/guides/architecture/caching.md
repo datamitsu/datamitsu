@@ -151,9 +151,10 @@ recorded against the content the fixer produced, as described
 ### A lint pass means "nothing to report"
 
 A cache hit is replayed as "this tool found nothing here" — by the terminal, and by
-anything that reads a run's results after it. So for a tool that declares an
-[`outputParser`](./parsers.md#extraction-outcomes), a pass — of `lint` and of
-`fix` alike — follows what the parser read, not the exit code:
+anything that reads a run's results after it. So for a tool whose output a parser
+read — its declared [`outputParser`](./parsers.md#extraction-outcomes), or the
+[fallback](./parsers.md#three-layers) built into datamitsu — a pass, of `lint` and
+of `fix` alike, follows what the parser read, not the exit code:
 
 - A file gets a pass only when the process that checked it succeeded, its output
   was parsed, no finding names the file, and every finding the process reported
@@ -161,11 +162,13 @@ anything that reads a run's results after it. So for a tool that declares an
   the process was not given, could be about any of them, and no file of that
   process gets a pass.
 - Output that could not be parsed — the module did not load, does not know the
-  parser key, or failed — records nothing.
+  parser key, failed, or neither it nor the fallback recognized the output —
+  records nothing.
 - Every finding counts, at every level: a `hint` blocks a pass as much as an
   `error` does.
-- A tool without an `outputParser` keeps the exit-status rule: a success is a
-  pass.
+- A tool without an `outputParser` whose output the fallback does not recognize
+  keeps the exit-status rule: a success is a pass. Output the fallback does
+  recognize is judged like a parser's, finding by finding.
 - A fix pass follows the same rule. The
   [`failOn`](../../reference/configuration-api.md#failing-on-findings-failon) gate
   judges what a fixer leaves behind as it judges a linter's findings, so a fix pass
@@ -245,15 +248,17 @@ A verdict is stored under the operation's identity: the tool, the operation, the
 granularity and arity, the raw `args`, the declared `env`, the host values it inherits through
 `inheritEnv`, and — because the parser decides
 whether a lint run reported anything — the SHA-256 of the parser module the tool's
-`outputParser` names and the parser key. Pinning another module misses every verdict it did not
-decide.
+`outputParser` names and the parser key, and the content key of the fallback module the
+binary embeds. Pinning another module, or running a build that embeds another fallback,
+misses every verdict it did not decide. The per-file cache's key carries the fallback's
+content key as well: every development build reports the version `dev`.
 
 A `repo`-granularity operation gets a verdict too, but only when it opts in with `cache: true`.
 `file` granularity and an explicit `cache: false` never produce one.
 
 Only a successful task with **complete unit coverage** may write a verdict, and for
 a lint operation only when the task reported nothing: every process parsed without
-a finding, or run without an `outputParser`. A
+a finding, or run with nothing any parser recognized in its output. A
 narrowed partial task can consume an earlier full verdict when its inputs still
 match, but it cannot mint a new whole-unit pass. Verdict hits also have a TTL,
 controlled by `DATAMITSU_UNIT_CACHE_TTL` (`1440` minutes by default; `0`

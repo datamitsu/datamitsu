@@ -44,6 +44,9 @@ type ToolOpSpec struct {
 	InheritEnv []string
 	// FailOn sets the operation's failOn; empty leaves the default.
 	FailOn string
+	// Input and Output set the operation's input and output modes; empty
+	// leaves the defaults (a file argument, in place).
+	Input, Output string
 }
 
 // ShellTool returns the config JS that declares a tool whose app is
@@ -77,6 +80,12 @@ func ShellTool(name, script string, op ToolOpSpec) string {
 	}
 	if op.FailOn != "" {
 		opJS["failOn"] = op.FailOn
+	}
+	if op.Input != "" {
+		opJS["input"] = op.Input
+	}
+	if op.Output != "" {
+		opJS["output"] = op.Output
 	}
 	if len(op.Globs) > 0 {
 		opJS["globs"] = op.Globs

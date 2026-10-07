@@ -78,6 +78,8 @@ func TestEffectiveJSONRoundTrip(t *testing.T) {
 		"report",
 		"allowPartial",
 		"events",
+		"maxParseInputBytes",
+		"maxFindingsPerProcess",
 	}
 	for _, k := range requiredKeys {
 		if _, ok := m[k]; !ok {
@@ -337,6 +339,24 @@ func TestComputeOutput(t *testing.T) {
 				t.Errorf("Output = %q, want %q", eff.Output, raw)
 			}
 		})
+	}
+}
+
+// The parse caps are runtime configuration: the canonical defaults, and a
+// variable that moves each.
+func TestComputeParseCaps(t *testing.T) {
+	t.Setenv("DATAMITSU_MAX_PARSE_INPUT_BYTES", "")
+	t.Setenv("DATAMITSU_MAX_FINDINGS_PER_PROCESS", "")
+	eff := Compute()
+	if eff.MaxParseInputBytes != MaxParseInputBytes || eff.MaxFindingsPerProcess != MaxFindingsPerProcess {
+		t.Errorf("defaults = %d bytes, %d findings; want %d, %d",
+			eff.MaxParseInputBytes, eff.MaxFindingsPerProcess, MaxParseInputBytes, MaxFindingsPerProcess)
+	}
+	t.Setenv("DATAMITSU_MAX_PARSE_INPUT_BYTES", "4096")
+	t.Setenv("DATAMITSU_MAX_FINDINGS_PER_PROCESS", "12")
+	eff = Compute()
+	if eff.MaxParseInputBytes != 4096 || eff.MaxFindingsPerProcess != 12 {
+		t.Errorf("overrides = %d bytes, %d findings; want 4096, 12", eff.MaxParseInputBytes, eff.MaxFindingsPerProcess)
 	}
 }
 

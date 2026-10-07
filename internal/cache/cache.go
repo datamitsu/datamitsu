@@ -19,6 +19,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/parsermanager/embedded"
 	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/shamaton/msgpack/v2"
 	"go.uber.org/zap"
@@ -628,7 +629,10 @@ func (c *Cache) Clear() error {
 //   - d20v1: a fix pass follows the lint rule too: the failOn gate judges what
 //     a fixer leaves behind, so a fix pass recorded over a finding below one
 //     threshold would hide it from a stricter one.
-const cacheSemantics = "d20v1"
+//   - d8v1: the output of a tool without a parser that recognized it is read
+//     by the fallback built into the binary, and its findings block a pass as
+//     any others do.
+const cacheSemantics = "d8v1"
 
 // withoutThresholds returns cfg with no operation's failOn. A pass is recorded
 // only for output with no finding of any level, which holds at every
@@ -662,8 +666,15 @@ func withoutThresholds(cfg config.Config) config.Config {
 	return cfg
 }
 
+// embeddedParserKey identifies the fallback parser module the binary embeds.
+// Every development build reports the version "dev", and a pass recorded over
+// what one build's fallback parsed must not be replayed by a build whose
+// fallback parses differently.
+var embeddedParserKey = embedded.ContentKey
+
 // calculateInvalidationKey calculates an XXH3-128 hash from the datamitsu
-// version, the cache semantics, the full config JSON and the selected tools.
+// version, the cache semantics, the embedded fallback parser, the full config
+// JSON and the selected tools.
 //
 // invalidateOn used to be folded in here and no longer is. It was broken —
 // paths resolved against the git root, so packages/*/tsconfig.json read as
@@ -678,7 +689,7 @@ func calculateInvalidationKey(
 	// Build a single byte slice with all components separated by \0
 	var parts [][]byte
 
-	parts = append(parts, []byte(ldflags.Version), []byte(cacheSemantics))
+	parts = append(parts, []byte(ldflags.Version), []byte(cacheSemantics), []byte(embeddedParserKey()))
 
 	// Add config hash (serialize entire config)
 	configBytes, err := json.Marshal(withoutThresholds(cfg))

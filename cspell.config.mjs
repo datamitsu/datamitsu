@@ -15,6 +15,10 @@ export default defineConfig((config) => ({
     // sample tool output (including intentional misspellings fed to spell-check
     // tools like codespell/proselint). Not prose; spell-checking is pure noise.
     "parsers/datamitsu-parsers/src/tools/*.rs",
+    // The same for the standard-format parsers and the JSON helper they share
+    // with the tool parsers.
+    "parsers/datamitsu-parsers/src/format/*.rs",
+    "parsers/datamitsu-parsers/src/json_diag.rs",
     // Auto-generated parser-catalog page: tool descriptions come verbatim from the
     // WASM module (jargon: Verilog, Beancount, SPIR…), not our prose.
     "website/docs/reference/parser-catalog.md",
@@ -477,6 +481,7 @@ export default defineConfig((config) => ({
     "textdiff",
     "langserver",
     "rustup",
+    "RUSTFLAGS",
     "fooding",
     "Ints",
     "serde",

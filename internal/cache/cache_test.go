@@ -203,6 +203,26 @@ func TestInvalidationKeyFormat(t *testing.T) {
 	}
 }
 
+// TestInvalidationKeyNamesTheEmbeddedParser: two builds that report one version
+// but embed different fallback modules share no per-file pass.
+func TestInvalidationKeyNamesTheEmbeddedParser(t *testing.T) {
+	cfg := config.Config{}
+	key, err := calculateInvalidationKey(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	was := embeddedParserKey
+	t.Cleanup(func() { embeddedParserKey = was })
+	embeddedParserKey = func() string { return "another-module" }
+	other, err := calculateInvalidationKey(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other == key {
+		t.Error("a different embedded fallback module left the invalidation key unchanged")
+	}
+}
+
 // TestInvalidationKeyIgnoresFailOn: a pass holds at every threshold, so an
 // operation's failOn is not part of the key, while any other edit is.
 func TestInvalidationKeyIgnoresFailOn(t *testing.T) {

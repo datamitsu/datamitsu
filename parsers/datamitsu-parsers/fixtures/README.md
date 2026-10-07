@@ -47,3 +47,26 @@ To record a pair again, run the tool through the configuration's own app
 few findings, write stdout, stderr and the exit code into the three files, and
 update the expected diagnostics in `src/tools/fixtures.rs`. A findings recording
 that parses to nothing fails the test, whatever the expectations say.
+
+## Formats
+
+Real tools printing a standard format on request, under the format's key, named
+`<tool>-clean` and `<tool>-findings`. `src/format/fixtures.rs` requires each to be
+recognized by its format parser and, unless it printed nothing, by the sniffer,
+which must pick that format and read the same findings; the findings recordings
+are asserted field by field. Paths the tools printed are rewritten to `/work`.
+
+| Format               | Tool and version                         | Arguments                                                                     |
+| -------------------- | ---------------------------------------- | ----------------------------------------------------------------------------- |
+| `azure-logissue`     | ruff 0.16.8                              | `check --no-cache --isolated --output-format azure <file>`                    |
+| `checkstyle-xml`     | hadolint 2.14.0                          | `-f checkstyle <dockerfile>`                                                  |
+| `checkstyle-xml`     | ShellCheck 0.11.0                        | `-f checkstyle <script>`                                                      |
+| `checkstyle-xml`     | oxlint 1.79.0                            | `--format checkstyle <file>`                                                  |
+| `checkstyle-xml`     | TFLint 0.64.0 (ruleset.terraform 0.15.0) | `-f checkstyle` in the module's directory                                     |
+| `codeclimate`        | ruff 0.16.8                              | `check --no-cache --isolated --output-format gitlab <file>`                   |
+| `gcc`                | ShellCheck 0.11.0                        | `-f gcc <script>`                                                             |
+| `gcc`                | typos 1.49.0                             | `--format brief <file>`                                                       |
+| `github-annotations` | ruff 0.16.8                              | `check --no-cache --isolated --output-format github <file>`                   |
+| `junit-xml`          | golangci-lint v2.13.1                    | `run --no-config --enable-only errcheck --output.junit-xml.path=stdout ./...` |
+| `junit-xml`          | ruff 0.16.8                              | `check --no-cache --isolated --output-format junit <file>`                    |
+| `sarif`              | ruff 0.16.8                              | `check --no-cache --isolated --output-format sarif <file>`                    |

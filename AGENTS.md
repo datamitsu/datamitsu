@@ -271,10 +271,49 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   `column_unit` measured on the real tool or the parser listed in
   `UNKNOWN_COLUMN_UNITS`. `src/contract.rs` checks every parser against its
   `SAMPLES` and recorded fixtures, and requires its `POSITIONS` row.
+- Every output of `fix`/`lint`/`check` is parsed (`parseFileDiagnostics`,
+  `extract`): the declared parser, then — when there is none, or it failed, did
+  not recognize the output, or gave an empty ABI 1 answer under a non-zero exit
+  — the embedded fallback's sniffer, never a declared module's `fallback` key.
+  What read the findings is `ProcessResult.Provenance` (`parser`, `format`,
+  `fallback:<format>`) and `ParserModule` (whose contract the `failOn` gate
+  asks). A stdout-mode formatter's stdout reaches no parser; a line format the
+  fallback recognized keeps only lines naming a file on disk. The runner always
+  wires a parser, since the fallback needs no configuration; the language server
+  wires the fallback alone (`internal/lsp/parser.go`), because the passes it
+  records go into the cache the CLI reuses and may only be ones the CLI would
+  record.
+- The core reads parse answers of ABI 1 (an array) and 2 (an object) and
+  descriptor schemas 1–3, a newer schema as the newest known, unknown fields
+  ignored (`parsermanager.DecodeResponse`, `normalizeSchema`); the released
+  module in `testdata/released`, `echo.wasm` and a hand-assembled later-release
+  module (`compat_test.go`) hold it to that. An ABI 1 module stays supported
+  while the latest wrapper release pins one and two minor releases after; an
+  outdated one is named by `config show`, `devtools parsers list` and `-v`,
+  never by a plain run.
 - A change under `parsers/` rebuilds `internal/parsermanager/testdata/echo.wasm`
-  and regenerates `website/docs/reference/parser-catalog.md` in the same change
+  and regenerates `website/docs/reference/parser-catalog.md` in the same change,
+  both through `task build:parsers:fixture`
   (`internal/parsermanager/testdata/README.md`); the released module in
   `testdata/released` is never rebuilt.
+- The Rust release is `parsers/rust-toolchain.toml`: CI and the release install
+  it with `rustup toolchain install` and run cargo in `parsers/`, where rustup
+  finds the file. `parsers/embedded.lock` and the digest in
+  `parsers/embedded.Dockerfile` name the same release; a Rust upgrade changes
+  the three together, with the embedded module.
+- `internal/parsermanager/embedded/fallback.wasm` is the format-only build of the
+  crate (`--no-default-features --features format`) the core serves under the
+  reserved module name `embedded` and runs as its fallback. It is part of the
+  binary, not a distribution channel: never read a configuration's module from it
+  or pin it anywhere. It is committed only with its CI byte gate: change it only
+  through `task build:parsers:embedded` (a digest-pinned container) or the gate's
+  `embedded-fallback-wasm` artifact, together with `fallback.wasm.sources`
+  (`go run ./internal/parsermanager/embedded/cmd/sourcehash`), at most once per
+  stack. A file the format build compiles is listed in
+  `parsers/datamitsu-parsers/embedded-sources.txt`; the tool parsers are not in
+  it, so editing one needs no rebuild. The crate keeps `tinyjson` as its only
+  dependency — the XML formats are read by a hand-written tokenizer — and gets no
+  build script.
 
 ## Reports
 
@@ -311,9 +350,10 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   a report that was not written exits `exitcode.Export` (5) only when nothing
   else failed (1 > 4 > 5).
 - Completeness is per tool, from scope, execution and extraction
-  (`internal/report/completeness.go`); a tool without a parser is never
-  complete, nor one with a process that exited non-zero while its parser
-  answered with nothing (`failed-without-findings`). A report that lists findings (every renderer whose
+  (`internal/report/completeness.go`); a tool whose output no parser read — the
+  declared one or the embedded fallback — is never complete, nor one with a
+  process that exited non-zero while the parser that recognized its output found
+  nothing in it (`failed-without-findings`). A report that lists findings (every renderer whose
   `OmitsIncompleteTools` is false) is refused with exit 2 for a run narrowed at
   plan time unless `--allow-partial`, and any report turns fail-fast off; an
   explicit `--fail-fast=true` or `DATAMITSU_FAIL_FAST=true` with a report exits 2.
@@ -384,6 +424,21 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 **Breaking change: usage errors exit 2** — an unknown flag, a flag or `DATAMITSU_*` value a command does not accept, a missing required flag, flags that cannot be combined, a wrong number of positional arguments, and a combination refused before anything runs (`--require-coverage` with `--tools`) exited 1 like a failed tool and now exit 2 (`exitcode.Usage`, `internal/exitcode`), with the same messages. A script that tested `== 1` for them must test `== 2`. `llms` keeps its own 2 and 3; an unknown command (`datamitsu bogus`) still exits 1.
 
 **Breaking change: `--fail-on-skip` exits 4** — a tool skipped for having no binary for the host made `--fail-on-skip` exit 1, like a failed tool, and now exits 4 (`exitcode.Coverage`), the code of `--require-coverage`: both say the run did not look at everything. A tool failure still wins (exit 1), and when `--fail-on-skip` and `--require-coverage` both fail, both messages are printed and the run exits 4 once.
+
+**Breaking change: output no declared parser recognized is parsed by the
+fallback** — every output of `fix`/`lint`/`check` that no declared parser
+recognized goes to the embedded fallback's sniffer. A tool without an
+`outputParser` that prints a standard format now has findings: they block its
+cached passes (`cacheSemantics` `d8v1`, verdict identity `dmv4`), and one at or
+above `failOn` fails a run the tool itself passed. A declared parser that
+recognizes nothing is `parse-failed` rather than clean. Declare a format key
+(`datamitsu devtools parsers sniff` names it) or keep the tool's own parser.
+
+**Breaking change: the parser module name `embedded` is reserved** — the core
+serves the fallback parser module it embeds under that name, so a `parsers`
+entry named `embedded`, or an `outputParser.module` naming it, now fails the
+configuration load (`config.ReservedParserModule`, checked by `ValidateParsers`
+and `ValidateTools`). Rename such an entry and the tools that reference it.
 
 **Breaking change: dangling managed config tools fail the load** — `ManagedConfig.tools` naming a tool that is not configured was a warning and is now a config error, because the association decides what `ejectConfigs` moves. A config that deletes a tool but keeps its managed config fails to load; declare the tool with `skip: true` instead.
 

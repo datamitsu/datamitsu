@@ -140,14 +140,14 @@ prints a link (tfsec, dclint, buildifier, reek, …).
 process a tool runs therefore records an **extraction outcome** next to its exit
 code:
 
-| Outcome              | When                                                                      | Lint pass cached        |
-| -------------------- | ------------------------------------------------------------------------- | ----------------------- |
-| `parsed-clean`       | the parser ran without error and returned no diagnostic                   | yes                     |
-| `parsed-findings`    | the parser returned at least one diagnostic                               | for the files it spared |
-| `parser-unavailable` | the module did not load, or its `describe` does not list the declared key | no                      |
-| `parse-failed`       | the module returned an error for this output                              | no                      |
-| `truncated`          | reserved for an output or finding count over a cap; no cap exists yet     | no                      |
-| `none`               | the tool declares no `outputParser`, so nothing was attempted             | on success              |
+| Outcome              | When                                                                                    | Lint pass cached        |
+| -------------------- | --------------------------------------------------------------------------------------- | ----------------------- |
+| `parsed-clean`       | the parser ran without error and returned no diagnostic                                 | yes                     |
+| `parsed-findings`    | the parser returned at least one diagnostic                                             | for the files it spared |
+| `parser-unavailable` | the module did not load, or its `describe` does not list the declared key               | no                      |
+| `parse-failed`       | the module returned an error, or neither it nor the fallback recognized the output      | no                      |
+| `truncated`          | a stream or the findings exceeded a [parse cap](#parse-caps), or the answer was partial | no                      |
+| `none`               | no parser declared, and the [fallback](#three-layers) recognized nothing                | on success              |
 
 The last column is the [caching rule](./caching.md#a-lint-pass-means-nothing-to-report):
 a cached lint pass is replayed as "nothing to report", so it is recorded only where
@@ -174,6 +174,22 @@ descriptor schema 2 parsed its output, by its operation's
 [`failOn`](../../reference/configuration-api.md#failing-on-findings-failon): a
 finding at or above it fails a tool that exited 0. The extraction outcome decides
 what the cache may record.
+
+### Parse caps
+
+What one process's output costs to parse is bounded, twice:
+
+| Cap                                                                         | Default         | Over it                                   |
+| --------------------------------------------------------------------------- | --------------- | ----------------------------------------- |
+| `maxParseInputBytes` (`DATAMITSU_MAX_PARSE_INPUT_BYTES`), per stream        | 8 MiB (8388608) | the parser reads the first bytes up to it |
+| `maxFindingsPerProcess` (`DATAMITSU_MAX_FINDINGS_PER_PROCESS`), per process | 10000           | the findings after it are dropped         |
+
+A process over either records `truncated`, with the findings it kept: they are
+shown and they gate as any finding does, but no pass is cached and a report marks
+the tool incomplete. Both are runtime configuration, shown by
+[`datamitsu config runtime`](../../reference/cli-commands.md#config-runtime); a
+value that is not a positive integer stops `fix`, `lint` and `check` with exit 2
+before anything runs.
 
 ### Noise tolerance
 
@@ -268,7 +284,7 @@ Parsers are a Rust workspace compiled to the `wasm32-unknown-unknown` target as 
 freestanding `cdylib`. There is no `wasm-bindgen` — a small **manual-memory ABI**
 keeps the artifact small. Each tool is **one module** under `src/tools/<tool>.rs`,
 co-locating its parser with its `describe` recipe. A single dispatcher matches on
-the tool name, so adding a tool is one `match` arm + one module + one `TOOLS` row.
+the tool name, so adding a tool is one `match` arm + one module + one `DESCRIPTORS` row.
 
 Parsers are **hand-written**, porting the logic faithfully from the upstream
 [none-ls](https://github.com/nvimtools/none-ls.nvim) builtin or
@@ -290,7 +306,207 @@ spanning the parsing-difficulty classes — a representative few:
 | `echo`          | pipe-test only                             | —              |
 
 The single `.wasm` dispatches all of them by name (`tool.outputParser`). JSON
-tools share one `from_json` helper (`tools/json_diag.rs`), so each is a few lines.
+tools share one `from_json` helper (`src/json_diag.rs`), so each is a few lines.
+
+## Three layers
+
+Every output of `fix`, `lint` and `check` passes through up to three parsers, in
+turn, until one recognizes it:
+
+1. **The declared parser** — the tool's `outputParser`, a tool parser or a
+   [format parser](#format-parsers) of the module the configuration pins. An
+   answer that recognized the output decides, found or clean. A parser key the
+   module does not list, or a module that did not load, is `parser-unavailable`:
+   warned once per run and never cached, and the output still goes on to the
+   fallback so its findings are not lost.
+2. **The fallback** — the sniffer of the [module the binary embeds](#the-embedded-fallback),
+   when no parser was declared, or the declared one failed, did not recognize the
+   output, or (an array-answering module) answered with nothing under a non-zero
+   exit. The first standard format it recognizes reads the output. The core never
+   runs a declared module's own `fallback` key: the fallback is always the
+   binary's.
+3. **Nothing** — output no parser recognized. With a parser declared it is
+   `parse-failed`: warned once per run, never cached, and the tool is incomplete in
+   a report. Without one it is `none`: the exit code decides, as it always did, and
+   a failed run is reported with one synthetic finding.
+
+```mermaid
+flowchart TD
+    O[process output] --> D{parser declared?}
+    D -- yes --> P[declared parser]
+    P -- recognized --> R1[parser / format]
+    P -- not recognized, error, unavailable --> F[embedded fallback]
+    D -- no --> F
+    F -- recognized --> R2[fallback:format]
+    F -- nothing --> N{parser declared?}
+    N -- yes --> PF[parse-failed]
+    N -- no --> NO[none: the exit code decides]
+```
+
+A process records what read its findings — its **provenance**: `parser` (a tool
+parser), `format` (a declared format parser) or `fallback:<format>` (the format the
+fallback recognized); reports carry it per invocation and per finding. When the
+fallback reads what a declared parser did not, the run warns once: `declared parser
+"<key>" of module "<module>" did not recognize the output of <tool>; the fallback
+parsed it as <format>`. Its findings gate like any other — the embedded module sets
+levels only from what the tool printed — and block a cached pass like any other.
+
+The language server reads the output of what it runs with the same fallback, and
+with no declared module: the passes it records go into the execution cache the CLI
+reuses, so it may record only one the CLI would. A tool with a declared parser
+records none there.
+
+The fallback reads a stdout-mode formatter's stderr only: its stdout is the file's
+new content, which no parser ever reads. Every other tool's stdout and stderr are
+captured apart, parser declared or not, so progress written to stderr never lands
+inside a document on stdout; empty output is not read at all. One rule applies to the **line** formats it recognizes (`gcc`, `msvc`,
+`github-annotations`, `azure-logissue`) and to no structured one: a line naming a
+path that is not a file on disk — relative to the process's working directory, or
+absolute — is not a match, so prose that happens to look like `path:1:2:` is not a
+finding. When no line of the format the sniffer picked survives, the line formats
+it would have tried after that one read the output in turn, and the first with a
+line that survives is the one; when none has, the fallback recognized nothing.
+
+`datamitsu devtools parsers sniff <file>` shows what the fallback makes of a
+captured output, before a tool's format flag is declared as its format key.
+
+## Format parsers
+
+Many tools print a standard format on request. The module carries one parser per
+such shape, dispatched by key like a tool parser, so a tool without a parser of its
+own is parsed by naming the format its flag selects:
+
+| Key                  | Recognizes                                                                    |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `sarif`              | a JSON object with `version` and a `runs` array                               |
+| `codeclimate`        | a JSON array whose every element has `check_name` and `location.path`         |
+| `eslint-json`        | a JSON array whose every element has `filePath` and a `messages` array        |
+| `json`               | a JSON array whose every element has `message` and `line` (none-ls's default) |
+| `checkstyle-xml`     | a document whose root is `<checkstyle>`                                       |
+| `junit-xml`          | a document whose root is `<testsuites>` or `<testsuite>`                      |
+| `github-annotations` | a line `::error …::message` (also `warning`, `notice`)                        |
+| `azure-logissue`     | a line `##vso[task.logissue type=…;…]message`                                 |
+| `msvc`               | a line `path(line,col): error CODE: message`                                  |
+| `gcc`                | a line `path:line:col: level: message`, or `path:line: message`               |
+
+A structured format is recognized by its envelope, whatever it holds: a SARIF log
+without a result, an ESLint report whose files have no message, a `<checkstyle/>`
+without a file are recognized and clean. A bare `[]` or `{}` has no envelope and is
+not, nor is a document cut off before it closes, JSON or XML, or XML with a tag
+that cannot be read or an element left open: its findings may be missing. What a
+cut-off document holds is part of it, not a document of its own — the messages of
+a cut-off ESLint report are not a `json` array, a whole `<testsuite>` inside a
+cut-off `<testsuites>` is not a suite. An XML root counts only where it opens a
+line or follows the XML declaration, a comment or a `DOCTYPE` on it, and outside
+any CDATA section and comment, so a message that quotes `<checkstyle/>` is not a
+document. A SARIF result whose message is given by `id` is read from its rule's
+`messageStrings`, or the driver's `globalMessageStrings`, with its `arguments` in
+the placeholders. A line format is recognized
+when one line matches. Each parser reads stdout and stderr, and a structured one
+keeps the findings of every document in each — a command that ran a tool twice
+printed two reports — so a clean report cannot hide findings in another; noise
+around a document is skipped as it is for the tool parsers, however many bracketed
+log lines come before it. A JSON value is a document that cannot be read only where
+it begins as a report does — it opens its line, as an object whose first key
+follows its brace or an array of objects — and is cut off, or closes but does not
+parse; a bracket in a message, `expected {`, is neither. The [parser catalog](../../reference/parser-catalog.md#format-parsers)
+names the flag of each tool that prints each shape.
+
+A **declared** parser — a tool's or a format's — that found something recognized
+the output. One that found nothing did not, whatever the exit code, when the output
+holds a document that cannot be read whole — a JSON value or an XML document cut
+off before it closes, or malformed — since its findings may be in the part that
+could not be read; nor when the output holds findings in a standard format (the
+tool printed another format than the parser reads, and the fallback reads it).
+Otherwise it recognized the output when its own format was there — its envelope,
+or for a JSON tool parser any JSON document — or when the run exited 0 and the
+parser reads no structured format: a clean run of a line-format tool may print
+nothing, or a summary no format describes. A parser of a JSON or XML format — the
+structured format keys, and the tool parsers that read JSON — that finds no
+document in a stream where the tool printed something has not read the output,
+clean exit or not; empty output on exit 0 is clean for every parser. What remains,
+a failed run whose output held nothing either parser reads, is not recognized.
+
+The key `fallback` is the **sniffer**: it tries the formats in the order of the
+table and answers with the first that recognizes the output, named by its format.
+It recognizes only what a format matched, exit code or not — it guesses, and a guess
+needs evidence.
+
+Every answer, a declared parser's and the sniffer's, is **partial** when either
+stream holds a document that cannot be read whole: the findings read beside it, or
+out of the whole part of it, may not be all there were. A partial answer is
+`truncated` in the core, whoever read it — for a tool without a parser too, where
+output the fallback recognized nothing in but found a document cut off in is
+`truncated`, not `none`. A fallback that fails outright (a module error) leaves such
+a tool `parse-failed`. A JSON document nested deeper than 256 levels is not parsed
+at all.
+
+A format parser is one module under `parsers/datamitsu-parsers/src/format/`: its
+`DESCRIPTOR` of kind `format`, a `parse` returning a `Response`, its `SAMPLES`, an
+entry in `format::PARSERS` (which also sets the sniffer's order), in
+`format::DESCRIPTORS` and in `format::samples`, and its rows in `FORMAT_POSITIONS`
+and `FORMAT_UNKNOWN_COLUMN_UNITS` in `src/contract.rs`. Its sources are listed in
+`embedded-sources.txt`, so adding one rebuilds the embedded fallback.
+
+### The embedded fallback
+
+The binary carries one module of its own: the format parsers and the sniffer,
+built from the same crate without the tool parsers (the crate's `format` feature
+alone, about 180 KiB). The core serves it under the module name `embedded`, beside
+the declared ones — compiled once, pooled, described like them — and runs its
+`fallback` key on output no declared parser recognized; it never runs a declared
+module's `fallback`, so the fallback's version is always the binary's. `embedded`
+is reserved: a `parsers` entry may not take the name, and no `outputParser` may
+name it. `datamitsu devtools parsers list --embedded` describes it,
+`devtools parsers run <key> --embedded` runs one of its parsers, and
+`devtools parsers sniff <file>` shows which format its sniffer reads in a captured
+output.
+
+The module's content key — an XXH3 of its bytes — is part of the per-file cache
+key and of the unit verdict identity: every development build reports the version
+`dev`, and a pass recorded over what one build's fallback parsed must not be
+replayed by a build whose fallback parses differently.
+
+The bytes are committed as `internal/parsermanager/embedded/fallback.wasm`, and
+two checks keep them honest:
+
+- **A CI job rebuilds them and compares, byte for byte.** `task
+build:parsers:embedded` builds the module in a `linux/amd64` container from a
+  digest-pinned `rust` image, as the caller's user, with a separate target
+  directory and the cargo home, the toolchain's sources and the workspace
+  remapped to fixed paths; built twice on one machine, or natively with the same
+  flags, it gives the same SHA-256. The Rust release is one fact in three files —
+  `parsers/rust-toolchain.toml`, `parsers/embedded.lock` and the image digest in
+  `parsers/embedded.Dockerfile` — and the build refuses to run when they disagree
+  or when the image's `rustc -vV` names another release. The job
+  (`Embedded Parser Module` in `pr-checks.yml`) runs the same build and, when the
+  result differs from the committed module, uploads it as the
+  `embedded-fallback-wasm` artifact and fails.
+- **A Go test compares the sources with the fingerprint committed beside the
+  module.** `parsers/datamitsu-parsers/embedded-sources.txt` lists every file the
+  build reads; `fallback.wasm.sources` holds their XXH3 fingerprint (sorted paths,
+  each `path NUL length NUL bytes NUL`, CRLF read as LF), written by
+  `go run ./internal/parsermanager/embedded/cmd/sourcehash`. A listed source that
+  changed without a rebuild fails `go test` with "embedded module is stale", with
+  no Rust needed to notice; a change to a tool parser does not, since the tool
+  parsers are not in the build. The test also fails when a file the build
+  compiles is missing from the list.
+
+To change a format parser: edit the crate, run `task build:parsers:embedded`
+(Docker), and commit the module with its `fallback.wasm.sources`. Without Docker,
+push the source change, download the `embedded-fallback-wasm` artifact of the
+failed job, commit it as `fallback.wasm`, and run the `sourcehash` command. A
+Rust upgrade changes the toolchain file, the lock, the digest and the module in
+one change.
+
+The two XML formats are read by a tokenizer written for them (start and end tags,
+attributes, text, CDATA, the predefined entities and character references; no
+namespaces, no DTD), so the module keeps `tinyjson` as its only dependency.
+
+A tool's own format is usually richer than a standard one, and its parser reads it
+without a conversion in between. Prefer a tool's parser when the module has one, a
+format key when the tool prints a standard shape; the line formats carry only a
+file, a line, a column, a level and the text.
 
 ### Sign
 
@@ -311,8 +527,12 @@ transparency log on any fetch path. Both signatures are for **out-of-band**
 verification: a maintainer runs `cosign verify-blob` on `checksums.txt`, or
 `cosign verify` on the artifact reference, decides the module is trustworthy, and
 writes its SHA-256 into a config. From that point the config's `hash` is the only
-trust root the binary has — which is also why the core embeds no per-version WASM
-hash, so parsers can update independently of the core binary.
+trust root the binary has for a declared module, which is why the core pins no
+module version of its own: the public module updates independently of the core
+binary. The one module the binary does carry, the
+[embedded fallback](#the-embedded-fallback), is part of the binary and versioned
+with it — it is not a distribution channel, and no configuration's module ever
+comes from it.
 
 :::warning `signer` is rejected, not ignored
 Setting `oci.signer` is a **config error at load**, on a parser's `oci` and on
@@ -497,6 +717,24 @@ exported `parse`, then read and free the output buffer. The raw bytes are passed
 preserved; the parser decides whether to split. The JSON result deserializes into
 nullable Go structs (pointer fields, so a field the tool omitted stays `nil`).
 
+The answer comes in one of two forms, and the core reads both; the module this
+core is built with answers in the second:
+
+| ABI | Answer                                                                                            | Recognized                                              |
+| --- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 1   | a JSON array of diagnostics                                                                       | inferred: at least one diagnostic, or the tool exited 0 |
+| 2   | `{"recognized": true, "format": "sarif", "diagnostics": [ … ]}`, and `"partial": true` when it is | said by the parser                                      |
+
+`recognized: false` means the parser found nothing it understands — no document of
+its format, no line it matches — which is a different answer from understanding the
+output and finding nothing in it (`recognized: true` with no diagnostics). An array
+cannot tell the two apart, so an empty array from a tool that failed counts as not
+recognized. `format` names the format a format parser read, or the tool for a tool
+parser. `partial` says the output holds a document the parser could not read whole —
+cut off, or malformed — so the findings it read, if any, may not be all of them: the
+core records `truncated`, keeps the findings and caches no pass. A field the core
+does not know, in the answer or in a diagnostic, is ignored.
+
 Instances are **pooled**. Instantiating a module allocates a fresh linear memory,
 and a run parses the output of many tool invocations of the same module, so after
 a successful parse the instance goes back to the manager rather than being
@@ -540,9 +778,28 @@ The manifest carries a `schemaVersion`. From schema 2 every tool also declares:
 | `category`   | `security` for a security scanner; empty otherwise                                       |
 | `kind`       | what the parser reads: `tool`, one tool's own output format                              |
 
-The core reads schema 1 and schema 2 modules alike and ignores fields it does not
-know, so a configuration pinned to an older module keeps working; its tools simply
-declare none of the above.
+Schema 3 adds `abi` at the top level: `2` for a module whose `parse` answers in
+the object form above. A module without the field answers with arrays.
+
+The core reads schemas 1 to 3 alike and ignores fields it does not know, so a
+configuration pinned to an older module keeps working; its tools simply declare
+none of the above. A module that declares a schema newer than any the core knows
+is read as the newest one the core knows.
+
+#### Older modules
+
+A module a configuration pins always parses its own tools, however old it is. The
+[fallback](#three-layers) runs only on its triggers — no parser, a key the module
+does not list, a parse error, an answer that did not recognize the output, or an
+empty array under a non-zero exit — and never because a module is old. A module of
+response ABI 1 is supported while the latest wrapper release pins one, and for at
+least two minor releases after the wrapper moves to a newer one.
+
+An older module cannot say whether it recognized an output and has no format
+parsers. That is reported where someone can act on it, once per module: on stderr
+by `datamitsu config show` (for the modules already in the store; it fetches
+nothing) and `datamitsu devtools parsers list`, and in a run's debug log (`-v`) —
+never in a plain run, whose user cannot change a pin a wrapper chose.
 
 To debug a parser against a real `datamitsu lint` run, pass **`--no-parse`** (or set
 `DATAMITSU_NO_PARSE`): a failure frame shows each tool's raw output instead of its
@@ -550,7 +807,8 @@ parsed findings, so you can see exactly what the parser was given. The flag chan
 only what is displayed. Parsing still runs, and parser modules are still fetched
 and compiled, because what a run records must not depend on how it is shown.
 `devtools parsers run` is the complementary tool for iterating on a parser against
-piped output.
+piped output: it prints the module's whole answer — `abi`, `recognized`, `format`
+and the diagnostics.
 
 [`datamitsu devtools parsers list`](../../reference/cli-commands.md#devtools-parsers)
 aggregates `describe` across every configured parser into a **deduplicated** view:

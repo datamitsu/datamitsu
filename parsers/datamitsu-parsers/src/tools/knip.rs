@@ -87,7 +87,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 	// Lenient: knip writes its config-loading failures to stderr, but a plugin it
 	// executes to read a config can print to stdout, which would otherwise cost
 	// every finding in the run.
-	crate::tools::json_diag::extract_lenient(stdout, from_report)
+	crate::json_diag::extract_lenient(stdout, from_report)
 }
 
 fn from_report(value: &JsonValue) -> Vec<RawDiagnostic> {

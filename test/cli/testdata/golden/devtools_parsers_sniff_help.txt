@@ -1,0 +1,29 @@
+Run the sniffer of the fallback parser module built into this binary over a
+tool's captured output — a file, or stdin with - or no argument — and print the
+standard format it recognized and the findings it read. The core runs the same
+fallback on the output of a tool whose output no declared parser recognized.
+
+It is how to check a tool's format flag before declaring the format key as its
+outputParser.parser: pass --stderr-file and --exit-code as the tool left them.
+
+  ruff check --output-format sarif src > out.sarif
+  datamitsu devtools parsers sniff out.sarif
+
+Usage:
+  datamitsu devtools parsers sniff [<file>|-] [flags]
+
+Flags:
+      --exit-code int        The tool's exit code
+  -h, --help                 help for sniff
+      --json                 Emit the fallback's whole answer as JSON
+      --stderr-file string   File holding the tool's stderr
+
+Global Flags:
+      --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)
+      --binary-command string   Override the binary command (for npm package wrappers, etc). Can also be set via DATAMITSU_BINARY_COMMAND env var
+      --config strings          Additional configuration file(s) to load and merge (can be specified multiple times)
+      --log-format string       Status output format: console or jsonl (also via DATAMITSU_LOG_FORMAT)
+      --no-auto-config          Disable auto-discovery of datamitsu.config.{js,mjs,ts} at git root
+      --no-oci                  Disable OCI bundle store seeding (also via DATAMITSU_NO_OCI)
+      --no-parse                Show tools' raw output instead of parsed findings; parsing still runs (also via DATAMITSU_NO_PARSE)
+  -v, --verbose                 Enable debug-level logging (default level is warn)

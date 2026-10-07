@@ -10,7 +10,7 @@ import (
 )
 
 // expectedParsersSubcommands is the drift guard for the `devtools parsers` group.
-var expectedParsersSubcommands = []string{"inspect", "list", "prefetch", "run"}
+var expectedParsersSubcommands = []string{"inspect", "list", "prefetch", "run", "sniff"}
 
 // devtoolsParsersHelpCases freezes the static help surfaces for the parsers group.
 var devtoolsParsersHelpCases = []struct {
@@ -23,6 +23,7 @@ var devtoolsParsersHelpCases = []struct {
 	{"inspect", []string{"devtools", "parsers", "inspect", "--help"}, "devtools_parsers_inspect_help"},
 	{"run", []string{"devtools", "parsers", "run", "--help"}, "devtools_parsers_run_help"},
 	{"prefetch", []string{"devtools", "parsers", "prefetch", "--help"}, "devtools_parsers_prefetch_help"},
+	{"sniff", []string{"devtools", "parsers", "sniff", "--help"}, "devtools_parsers_sniff_help"},
 }
 
 func TestDevtoolsParsersHelpGolden(t *testing.T) {
@@ -42,7 +43,7 @@ func TestDevtoolsParsersHelpGolden(t *testing.T) {
 }
 
 // TestDevtoolsParsersCommandSetDrift asserts the parsers subcommand set is exactly
-// {inspect, list, prefetch, run}.
+// {inspect, list, prefetch, run, sniff}.
 func TestDevtoolsParsersCommandSetDrift(t *testing.T) {
 	res := clitest.Run(t, clitest.RunOptions{}, "devtools", "parsers", "--help")
 	if res.ExitCode != 0 {
@@ -123,6 +124,87 @@ func TestDevtoolsParsersRun(t *testing.T) {
 			t.Errorf("`parsers run` output missing %q:\n%s", want, res.Stdout)
 		}
 	}
+}
+
+// TestDevtoolsParsersSniff freezes what the built-in fallback makes of a
+// captured output: the format it picked and the findings, from a file or from
+// stdin, and a plain "nothing recognized" for prose.
+func TestDevtoolsParsersSniff(t *testing.T) {
+	p := clitest.NewProject(t)
+	sarif := `{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"ruff","rules":[{"id":"F401"}]}},` +
+		`"results":[{"ruleId":"F401","level":"error","message":{"text":"` + "`os`" + ` imported but unused"},` +
+		`"locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/a.py"},"region":{"startLine":1,"startColumn":8}}}]}]}]}`
+	if err := os.WriteFile(filepath.Join(p.Dir, "out.sarif"), []byte(sarif), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "parsers", "sniff", "out.sarif")
+	if res.ExitCode != 0 {
+		t.Fatalf("`parsers sniff` exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+	clitest.AssertGolden(t, "devtools_parsers_sniff_sarif", res.Stdout)
+
+	res = clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Stdin: "src/b.sh:3:1: warning: x appears unused [SC2034]\n"},
+		"devtools", "parsers", "sniff", "--exit-code", "1", "--json")
+	if res.ExitCode != 0 {
+		t.Fatalf("`parsers sniff --json` exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+	for _, want := range []string{`"recognized": true`, `"format": "gcc"`, `"code": "SC2034"`} {
+		if !strings.Contains(res.Stdout, want) {
+			t.Errorf("`parsers sniff --json` output missing %q:\n%s", want, res.Stdout)
+		}
+	}
+
+	res = clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Stdin: "All checks passed!\n"}, "devtools", "parsers", "sniff", "-")
+	if res.ExitCode != 0 || res.Stdout != "no standard format recognized\n" {
+		t.Errorf("`parsers sniff -` on prose: exit %d, stdout %q", res.ExitCode, res.Stdout)
+	}
+}
+
+// TestDevtoolsParsersEmbedded lists, inspects and runs the fallback module
+// built into the binary: format parsers only, and no config needed.
+func TestDevtoolsParsersEmbedded(t *testing.T) {
+	p := clitest.NewProject(t)
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "parsers", "list", "--embedded")
+	if res.ExitCode != 0 {
+		t.Fatalf("`parsers list --embedded` exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+	for _, want := range []string{"fallback (", "sarif (", "checkstyle-xml (", "  format · levels:"} {
+		if !strings.Contains(res.Stdout, want) {
+			t.Errorf("`parsers list --embedded` missing %q:\n%s", want, res.Stdout)
+		}
+	}
+	if strings.Contains(res.Stdout, "eslint (") {
+		t.Errorf("`parsers list --embedded` lists a tool parser:\n%s", res.Stdout)
+	}
+
+	res = clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "parsers", "inspect", "fallback", "--embedded")
+	if res.ExitCode != 0 || !strings.Contains(res.Stdout, "parser:   (embedded)") {
+		t.Errorf("`parsers inspect fallback --embedded`: exit %d\n%s%s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+
+	res = clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Stdin: "<checkstyle version=\"4.3\"/>"},
+		"devtools", "parsers", "run", "checkstyle-xml", "--embedded")
+	if res.ExitCode != 0 || !strings.Contains(res.Stdout, `"recognized": true`) {
+		t.Errorf("`parsers run checkstyle-xml --embedded`: exit %d\n%s%s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+
+	res = clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "parsers", "list", "--embedded", "--wasm", "x.wasm")
+	if res.ExitCode == 0 {
+		t.Errorf("`--embedded` with `--wasm` was accepted:\n%s", res.Stdout)
+	}
+}
+
+// TestTheEmbeddedModuleNameIsReserved: a configuration may not declare a
+// parsers entry under the name the built-in fallback is served by.
+func TestTheEmbeddedModuleNameIsReserved(t *testing.T) {
+	p := clitest.NewProject(t)
+	cfg := p.WriteFile("reserved.config.js", `function getMinVersion() { return "0.0.0"; }
+function getConfig(config) {
+  return { ...config, parsers: { embedded: { url: "https://example.test/m.wasm", hash: "`+strings.Repeat("ab", 32)+`" } } };
+}
+`)
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--config", cfg, "config", "show")
+	assertOfflineError(t, res, `parser "embedded": the name is reserved for the fallback parser module built into datamitsu`)
 }
 
 // TestDevtoolsParsersPrefetch freezes the offline contract: with no parsers

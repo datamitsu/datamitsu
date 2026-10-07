@@ -47,7 +47,7 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
 	// Lenient: one golangci-lint run covers a whole module, and the human summary
 	// the tool itself prints after the JSON would otherwise discard every issue.
-	crate::tools::json_diag::extract_lenient(stdout, from_report)
+	crate::json_diag::extract_lenient(stdout, from_report)
 }
 
 fn from_report(value: &JsonValue) -> Vec<RawDiagnostic> {

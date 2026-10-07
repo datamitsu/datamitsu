@@ -1,0 +1,227 @@
+//! Checkstyle XML: a `<checkstyle>` root holding `<file name="…">` elements,
+//! each holding `<error line column severity message source/>` findings. The
+//! `source` is the rule, and a `link` (tflint writes one) its URL. Many linters print it on request, which is what makes
+//! it the most common interchange format after SARIF.
+use crate::capabilities::ToolCapability;
+use crate::diagnostic::RawDiagnostic;
+use crate::response::Response;
+use crate::severity::{self, Level};
+
+use super::xml::{attr, Doc, Token, Tokenizer};
+
+const LEVELS: &[Level] = &[
+	Level("error", severity::ERROR),
+	Level("warning", severity::WARNING),
+	Level("info", severity::INFO),
+];
+
+pub const DESCRIPTOR: ToolCapability = ToolCapability {
+	name: "checkstyle-xml",
+	description: "Checkstyle XML, as linters print it on request: `shellcheck -f checkstyle`, \
+        `hadolint -f checkstyle`, `tflint -f checkstyle`, `oxlint --format checkstyle`, \
+        `phpcs --report=checkstyle`. Recognized by a `<checkstyle>` root, files or not.",
+	url: "https://checkstyle.org",
+	operations: &[],
+	severities: LEVELS,
+	column_unit: "",
+	category: "",
+	kind: "format",
+};
+
+pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Response {
+	super::each_stream(DESCRIPTOR.name, stdout, stderr, |s| {
+		match document(&String::from_utf8_lossy(s)) {
+			Doc::Whole(diags, _) => Some(diags),
+			_ => None,
+		}
+	})
+}
+
+/// Whether `text` holds a Checkstyle document that cannot be read whole.
+pub(crate) fn broken(text: &str) -> bool {
+	document(text) == Doc::Broken
+}
+
+/// The Checkstyle document in `text`, which starts at a `<checkstyle>` tag
+/// opening a line.
+fn document(text: &str) -> Doc {
+	super::xml::document(text, "checkstyle", from)
+}
+
+fn from(text: &str) -> Doc {
+	let mut tokens = Tokenizer::new(text);
+	match tokens.next() {
+		Some(Token::Start {
+			name: "checkstyle",
+			self_closing: true,
+			..
+		}) => return Doc::Whole(Vec::new(), tokens.read()),
+		Some(Token::Start { name: "checkstyle", .. }) => {}
+		Some(_) => return Doc::Not,
+		None => return Doc::Broken,
+	}
+	let mut file: Option<String> = None;
+	let mut out = Vec::new();
+	while let Some(token) = tokens.next() {
+		match token {
+			Token::Start {
+				name: "file", attrs, ..
+			} => {
+				file = attr(&attrs, "name").and_then(crate::diagnostic::file_field);
+			}
+			Token::End { name: "file" } => file = None,
+			Token::Start {
+				name: "error", attrs, ..
+			} => {
+				let Some(message) = attr(&attrs, "message") else {
+					continue;
+				};
+				out.push(RawDiagnostic {
+					message: message.to_string(),
+					row: attr(&attrs, "line").and_then(|v| v.trim().parse().ok()),
+					col: attr(&attrs, "column").and_then(|v| v.trim().parse().ok()),
+					severity: attr(&attrs, "severity").and_then(|s| severity::of(LEVELS, s)),
+					code: attr(&attrs, "source").filter(|s| !s.is_empty()).map(str::to_string),
+					url: attr(&attrs, "link").filter(|s| !s.is_empty()).map(str::to_string),
+					file: file.clone(),
+					..RawDiagnostic::default()
+				});
+			}
+			Token::End { name: "checkstyle" } => return Doc::Whole(out, tokens.read()),
+			_ => {}
+		}
+	}
+	Doc::Broken
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	pub(super) const SHELLCHECK: &[u8] = br#"<?xml version='1.0' encoding='UTF-8'?>
+<checkstyle version='4.3'>
+<file name='scripts/a b.sh' >
+<error line='3' column='6' severity='info' message='Double quote to prevent globbing and word splitting.' source='ShellCheck.SC2086' />
+<error line='5' column='1' severity='warning' message='x appears unused. Verify use (or export if used externally).' source='ShellCheck.SC2034' />
+</file>
+<file name='b.sh' >
+<error line='1' column='1' severity='error' message='Tips depend on target shell &amp; &lt;yours&gt; is unknown.' source='ShellCheck.SC2148' />
+</file>
+</checkstyle>
+"#;
+
+	#[test]
+	fn reads_files_and_their_errors() {
+		let r = parse(SHELLCHECK, b"", 1);
+		assert!(r.recognized);
+		assert_eq!(r.diagnostics.len(), 3);
+		let d = &r.diagnostics[0];
+		assert_eq!(d.file.as_deref(), Some("scripts/a b.sh"));
+		assert_eq!((d.row, d.col), (Some(3), Some(6)));
+		assert_eq!(
+			(d.severity, d.code.as_deref()),
+			(Some(severity::INFO), Some("ShellCheck.SC2086"))
+		);
+		assert_eq!(r.diagnostics[2].file.as_deref(), Some("b.sh"));
+		assert_eq!(
+			r.diagnostics[2].message,
+			"Tips depend on target shell & <yours> is unknown."
+		);
+	}
+
+	#[test]
+	fn a_clean_document_is_recognized_and_empty() {
+		for out in [
+			&br#"<?xml version="1.0" encoding="utf-8"?><checkstyle version="4.3"></checkstyle>"#[..],
+			b"<checkstyle/>",
+			br#"<checkstyle version="5.0"><file name="a.tf"></file></checkstyle>"#,
+		] {
+			let r = parse(out, b"", 0);
+			assert!(
+				r.recognized && r.diagnostics.is_empty(),
+				"{}",
+				String::from_utf8_lossy(out)
+			);
+		}
+	}
+
+	#[test]
+	fn a_truncated_document_is_not_recognized() {
+		let cut = &SHELLCHECK[..SHELLCHECK.len() / 2];
+		assert!(!parse(cut, b"", 1).recognized);
+		assert!(broken(&String::from_utf8_lossy(cut)));
+		assert!(!broken(&String::from_utf8_lossy(SHELLCHECK)));
+	}
+
+	#[test]
+	fn an_element_left_open_or_closed_twice_breaks_the_document() {
+		for out in [
+			&br#"<checkstyle><file name="a"></wrong></checkstyle>"#[..],
+			br#"<checkstyle><file name="a"><error line="1" message="m"></checkstyle>"#,
+		] {
+			assert!(!parse(out, b"", 0).recognized, "{}", String::from_utf8_lossy(out));
+			assert!(broken(&String::from_utf8_lossy(out)));
+		}
+	}
+
+	#[test]
+	fn a_comment_or_doctype_before_the_root_on_its_line_is_prolog() {
+		let out = br#"<?xml version="1.0"?><!-- generated --><!DOCTYPE checkstyle><checkstyle><file name="a"><error line="1" message="m"/></file></checkstyle>"#;
+		assert_eq!(parse(out, b"", 0).diagnostics.len(), 1);
+	}
+
+	#[test]
+	fn every_document_in_the_output_counts() {
+		let mut out = b"<checkstyle/>\n".to_vec();
+		out.extend_from_slice(SHELLCHECK);
+		out.extend_from_slice(b"\n");
+		out.extend_from_slice(SHELLCHECK);
+		assert_eq!(parse(&out, b"", 1).diagnostics.len(), 6);
+	}
+
+	#[test]
+	fn a_malformed_tag_breaks_the_document() {
+		let out =
+			br#"<checkstyle><file name="a"><error line="1" message="m"/><error line="2" message=bad/></file></checkstyle>"#;
+		assert!(!parse(out, b"", 1).recognized);
+		assert!(broken(&String::from_utf8_lossy(out)));
+	}
+
+	#[test]
+	fn a_root_quoted_in_other_text_is_no_document() {
+		for out in [
+			&b"a.xml:1:1: error: unexpected <checkstyle/>\n"[..],
+			br#"{"message":"<checkstyle version='4.3'></checkstyle>"}"#,
+		] {
+			assert!(!parse(out, b"", 1).recognized, "{}", String::from_utf8_lossy(out));
+		}
+		assert!(parse(b"  <checkstyle/>\n", b"", 0).recognized);
+	}
+
+	#[test]
+	fn reads_the_document_out_of_noise_on_either_stream() {
+		let mut noisy = b"Linting 2 files...\n".to_vec();
+		noisy.extend_from_slice(SHELLCHECK);
+		assert_eq!(parse(b"", &noisy, 1).diagnostics.len(), 3);
+	}
+
+	#[test]
+	fn other_xml_is_no_document() {
+		for out in [
+			&b"<testsuites></testsuites>"[..],
+			b"<checkstyles/>",
+			b"no xml",
+			b"a <checkstyle is a word",
+		] {
+			assert!(!parse(out, b"", 1).recognized, "{}", String::from_utf8_lossy(out));
+		}
+	}
+}
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: tests::SHELLCHECK,
+	stderr: b"",
+	exit: 1,
+}];

@@ -78,9 +78,17 @@ type fileParser struct {
 	findings func(stdout string) []diagnostic.Diagnostic
 }
 
-func (p fileParser) Parse(_ context.Context, _, _, _ string, stdout, _ []byte, _ int32) ([]diagnostic.Diagnostic, error) {
-	return p.findings(strings.TrimSpace(string(stdout))), nil
+func (p fileParser) Parse(_ context.Context, _, parser, _ string, stdout, _ []byte, _ int32) (ParseAnswer, error) {
+	return ParseAnswer{Diagnostics: p.findings(strings.TrimSpace(string(stdout))), Recognized: true, Format: parser}, nil
 }
+
+func (fileParser) Fallback(context.Context, string, []byte, []byte, int32) (ParseAnswer, error) {
+	return ParseAnswer{}, nil
+}
+
+func (fileParser) FellBack(string, config.OutputParser, string) {}
+
+func (fileParser) Unrecognized(string, config.OutputParser) {}
 
 // c1Project is a repository with two files, a cache, and an executor whose
 // only app echoes the paths it was handed and exits 0.

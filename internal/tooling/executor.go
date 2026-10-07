@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -25,6 +26,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
 	"github.com/datamitsu/datamitsu/internal/toolenv"
 	"github.com/datamitsu/datamitsu/internal/trace"
@@ -88,6 +90,7 @@ type Executor struct {
 	parserModules        config.MapOfParsers  // the declared parser modules, for the verdict identity
 	gate                 Gate                 // Optional: fails a process on its parsed findings
 	envObserver          func(environ []string)
+	limits               ParseLimits
 
 	// cmdInfos memoizes command resolution for the lifetime of one Execute; it is
 	// nil outside one (FormatContent), which resolves directly.
@@ -101,15 +104,39 @@ type AppManager interface {
 }
 
 // DiagnosticParser turns a tool's raw output into resolved diagnostics. It is
-// injected via SetParser; when nil (the default) the executor never parses, so
-// tools without an outputParser are entirely unaffected. The concrete
-// implementation (in the runner) loads the WASM module and applies the
-// defaults-in-core resolution.
+// injected via SetParser; when nil (the default) the executor never parses.
+// The concrete implementation (in the runner) loads the WASM modules and
+// applies the defaults-in-core resolution, and reports what could not be
+// parsed once per run.
 type DiagnosticParser interface {
 	// Parse loads the WASM module named by `module` (a parsers config entry),
 	// dispatches its `parser` (the key inside the module), and labels the resulting
 	// diagnostics with `toolName` as their source.
-	Parse(ctx context.Context, module, parser, toolName string, stdout, stderr []byte, exitCode int32) ([]diagnostic.Diagnostic, error)
+	Parse(ctx context.Context, module, parser, toolName string, stdout, stderr []byte, exitCode int32) (ParseAnswer, error)
+	// Fallback runs the sniffer of the fallback module the binary embeds.
+	Fallback(ctx context.Context, toolName string, stdout, stderr []byte, exitCode int32) (ParseAnswer, error)
+	// FellBack is told that the fallback read, as format, the output of a
+	// tool whose declared parser did not recognize it.
+	FellBack(toolName string, declared config.OutputParser, format string)
+	// Unrecognized is told that neither the declared parser nor the fallback
+	// recognized a tool's output.
+	Unrecognized(toolName string, declared config.OutputParser)
+}
+
+// ParseAnswer is a parser's answer to one output, resolved.
+type ParseAnswer struct {
+	Diagnostics []diagnostic.Diagnostic
+	// Recognized is false when the parser found nothing of its format in the
+	// output, which is not the same answer as finding nothing in it.
+	Recognized bool
+	// Format is the key the parser read: a format key, or a tool name.
+	Format string
+	// FormatParser reports that the key read a standard format any tool may
+	// print, not one tool's own output.
+	FormatParser bool
+	// Partial is true when the output holds a document the parser could not
+	// read whole, so the findings may not be all there were.
+	Partial bool
 }
 
 // ResultCallback is called when a task completes
@@ -159,6 +186,43 @@ func (e *Executor) SetFileProgressCallback(callback FileProgressCallback) {
 // outputParser. Without it, tool output is never parsed.
 func (e *Executor) SetParser(parser DiagnosticParser) {
 	e.parser = parser
+}
+
+// ParseLimits bound what one tool process's output costs to parse: the bytes of
+// each stream a parser reads and the findings kept. Output beyond either is
+// dropped and the process's extraction is truncated.
+type ParseLimits struct {
+	InputBytes int
+	Findings   int
+}
+
+// EffectiveParseLimits are the parse caps of the effective runtime
+// configuration.
+func EffectiveParseLimits() ParseLimits {
+	eff, err := runtimeconfig.Get()
+	if err != nil {
+		eff = runtimeconfig.Compute()
+	}
+	return ParseLimits{InputBytes: eff.MaxParseInputBytes, Findings: eff.MaxFindingsPerProcess}
+}
+
+// SetParseLimits replaces the executor's parse limits, which are otherwise
+// those of the effective runtime configuration; a limit that is not positive
+// keeps that value.
+func (e *Executor) SetParseLimits(limits ParseLimits) {
+	e.limits = limits
+}
+
+// orDefaults is l with each limit that is not positive at its effective value.
+func (l ParseLimits) orDefaults() ParseLimits {
+	defaults := EffectiveParseLimits()
+	if l.InputBytes <= 0 {
+		l.InputBytes = defaults.InputBytes
+	}
+	if l.Findings <= 0 {
+		l.Findings = defaults.Findings
+	}
+	return l
 }
 
 // SetParserModules tells the executor which parser modules the configuration
@@ -854,51 +918,225 @@ func joinStreams(stdout, stderr []byte) []byte {
 	}
 }
 
-// parseFileDiagnostics runs the tool's declared parser over one process's
-// captured output and records on proc what it yielded: its diagnostics and its
-// extraction outcome. A path the tool reported is made absolute against
+// parseFileDiagnostics extracts the findings of one process's captured output
+// and records on proc what it yielded: its diagnostics, its extraction outcome
+// and what read them. A path the tool reported is made absolute against
 // workingDir, the directory the process ran in. When proc was given exactly one
 // file, a diagnostic the parser left without a file is about it; a process
 // given several files, or none, leaves such a diagnostic file-less. A parse
 // failure is not fatal — the tool's own pass/fail is unaffected — and is
-// reported once per run by the caller that wired the parser, so it is logged
-// here at debug only.
+// reported once per run by the parser, so it is logged here at debug only.
 //
-// The parser reads the streams without their ANSI sequences: a tool that
+// Three parsers may read the output, in turn (extract): the declared one when
+// declared is set, then, when it did not recognize the output, the sniffer of
+// the fallback module the binary embeds.
+//
+// The parsers read the streams without their ANSI sequences: a tool that
 // colours its output even into a pipe would otherwise hide a position or a
 // level from a line parser behind an escape. The caller keeps the raw streams
-// for the frame.
-func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult, task Task, workingDir string, stdout, stderr []byte, exitCode int) {
-	op := task.Tool.OutputParser
+// for the frame. They read at most the executor's ParseLimits of either stream
+// and keep at most its limit of findings; a process that exceeds either is
+// truncated, with the findings that were kept.
+func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult, task Task, workingDir string, stdout, stderr []byte, exitCode int, declared bool) {
+	limits := e.limits.orDefaults()
 	stdout, stderr = StripCSI(stdout), StripCSI(stderr)
+	stdout, cutOut := limits.cut(stdout)
+	stderr, cutErr := limits.cut(stderr)
 	cntParse.Add(1)
 	parseSpan := trace.Start(trace.CatParse, "parseDiagnostics")
-	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.
-	diags, err := e.parser.Parse(ctx, op.Module, op.Parser, task.ToolName, stdout, stderr, int32(exitCode))
+	x := e.extract(ctx, task, proc.Files, workingDir, stdout, stderr, exitCode, declared)
 	parseSpan.EndWith(
 		trace.A("tool", task.ToolName),
-		trace.A("parser", op.Parser),
+		trace.A("provenance", x.provenance),
 		trace.A("bytes", len(stdout)+len(stderr)),
-		trace.A("diagnostics", len(diags)),
+		trace.A("diagnostics", len(x.diags)),
 	)
-	if err != nil {
-		proc.Extraction = ExtractionParseFailed
-		if _, unavailable := errors.AsType[*ParserUnavailableError](err); unavailable {
-			proc.Extraction = ExtractionParserUnavailable
-		}
-		proc.ParseError = err.Error()
-		log.Debug("output parser failed",
-			zap.String("tool", task.ToolName),
-			zap.String("module", op.Module),
-			zap.String("parser", op.Parser),
-			zap.String("extraction", string(proc.Extraction)),
-			zap.Strings("files", proc.Files),
-			zap.Error(err))
-		return
+	proc.Extraction, proc.ParseError = x.outcome, x.parseError
+	proc.Provenance, proc.ParserModule = x.provenance, x.module
+	diags := x.diags
+	dropped := len(diags) > limits.Findings
+	if dropped {
+		diags = diags[:limits.Findings]
 	}
+	proc.Diagnostics = diags
+	if x.outcome == ExtractionParsedClean && len(diags) > 0 {
+		proc.Extraction = ExtractionParsedFindings
+	}
+	if (cutOut || cutErr || dropped || x.partial) && x.outcome != ExtractionParserUnavailable {
+		proc.Extraction = ExtractionTruncated
+		log.Debug("tool output exceeded a parse limit or held a document cut off",
+			zap.String("tool", task.ToolName),
+			zap.Bool("stdoutCut", cutOut), zap.Bool("stderrCut", cutErr), zap.Bool("findingsDropped", dropped),
+			zap.Bool("partialDocument", x.partial))
+	}
+}
+
+// extracted is what the parsers made of one output.
+type extracted struct {
+	diags      []diagnostic.Diagnostic
+	outcome    Extraction
+	parseError string
+	provenance string
+	module     string
+	// partial: the output held a document the parser could not read whole.
+	partial bool
+}
+
+// Provenances of findings.
+const (
+	ProvenanceParser         = "parser"
+	ProvenanceFormat         = "format"
+	ProvenanceFallbackPrefix = "fallback:"
+)
+
+// EmbeddedParserModule is the name the fallback module the binary embeds is
+// served under (config.ReservedParserModule).
+const EmbeddedParserModule = config.ReservedParserModule
+
+// lineFormats are the formats the fallback recognizes by a matching line, not
+// by an envelope, in the order the sniffer tries them: prose can match them,
+// so a line whose path is not a file on disk does not count.
+var lineFormats = []string{"github-annotations", "azure-logissue", "msvc", "gcc"}
+
+// extract runs, in turn, the parsers that may read one output. A declared
+// parser that recognized it decides. Otherwise — no parser declared, one that
+// failed, did not recognize the output, or answered with an empty ABI 1 list
+// under a non-zero exit — the embedded fallback may read it: what it
+// recognizes is kept with the fallback:<format> provenance; a declared parser
+// that did not recognize the output is then parse-failed, and one the run
+// could not use stays parser-unavailable, its findings kept all the same.
+// Without a declaration, output the fallback does not recognize has no
+// extraction (none), and the exit status decides as it always did.
+func (e *Executor) extract(ctx context.Context, task Task, files []string, workingDir string, stdout, stderr []byte, exitCode int, declared bool) extracted {
+	x := extracted{outcome: ExtractionNone}
+	op := task.Tool.OutputParser
+	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.
+	code := int32(exitCode)
+	// A parse that failed with an error is reported as such; one that
+	// answered without recognizing the output only once the fallback, too,
+	// recognized nothing.
+	unrecognized := false
+	if declared {
+		answer, err := e.parser.Parse(ctx, op.Module, op.Parser, task.ToolName, stdout, stderr, code)
+		switch {
+		case err != nil:
+			x.outcome, x.parseError = ExtractionParseFailed, err.Error()
+			if _, unavailable := errors.AsType[*ParserUnavailableError](err); unavailable {
+				x.outcome = ExtractionParserUnavailable
+			}
+			log.Debug("output parser failed",
+				zap.String("tool", task.ToolName),
+				zap.String("module", op.Module),
+				zap.String("parser", op.Parser),
+				zap.String("extraction", string(x.outcome)),
+				zap.Strings("files", files),
+				zap.Error(err))
+		case answer.Recognized:
+			provenance := ProvenanceParser
+			if answer.FormatParser {
+				provenance = ProvenanceFormat
+			}
+			return extracted{
+				diags:      located(answer.Diagnostics, files, workingDir),
+				outcome:    ExtractionParsedClean,
+				provenance: provenance,
+				module:     op.Module,
+				partial:    answer.Partial,
+			}
+		default:
+			unrecognized = true
+			x.outcome = ExtractionParseFailed
+			x.parseError = fmt.Sprintf("parser %q of module %q did not recognize the output", op.Parser, op.Module)
+		}
+	}
+	fallback, ok, err := e.fallback(ctx, task, files, workingDir, stdout, stderr, code)
+	switch {
+	case ok && declared:
+		e.parser.FellBack(task.ToolName, *op, fallback.format)
+	case !ok && unrecognized:
+		e.parser.Unrecognized(task.ToolName, *op)
+	}
+	if !ok {
+		// Without a declaration, nothing recognized keeps the exit-status rule
+		// only when the fallback could read the output: one that failed, or
+		// found a document cut off, has not shown the output holds nothing.
+		switch {
+		case declared:
+		case err != nil:
+			x.outcome, x.parseError = ExtractionParseFailed, err.Error()
+		case fallback.x.partial:
+			x.outcome, x.partial = ExtractionTruncated, true
+			x.parseError = "the output holds a document cut off or malformed, which no parser read"
+		}
+		return x
+	}
+	fallback.x.outcome = ExtractionParsedClean
+	if x.outcome == ExtractionParserUnavailable {
+		fallback.x.outcome, fallback.x.parseError = ExtractionParserUnavailable, x.parseError
+	}
+	return fallback.x
+}
+
+// sniffed is what the fallback recognized in one output.
+type sniffed struct {
+	x      extracted
+	format string
+}
+
+// fallback runs the embedded sniffer; ok is false when it recognized nothing,
+// with the error when it could not run and x.partial when it found a document
+// cut off. Of a line format it keeps only the findings on files that exist.
+func (e *Executor) fallback(ctx context.Context, task Task, files []string, workingDir string, stdout, stderr []byte, code int32) (sniffed, bool, error) {
+	if len(bytes.TrimSpace(stdout)) == 0 && len(bytes.TrimSpace(stderr)) == 0 {
+		return sniffed{}, false, nil
+	}
+	answer, err := e.parser.Fallback(ctx, task.ToolName, stdout, stderr, code)
+	if err != nil {
+		log.Debug("the fallback parser failed", zap.String("tool", task.ToolName), zap.Error(err))
+		return sniffed{}, false, err
+	}
+	partial := sniffed{x: extracted{partial: answer.Partial}}
+	if !answer.Recognized {
+		return partial, false, nil
+	}
+	diags := located(answer.Diagnostics, files, workingDir)
+	if at := slices.Index(lineFormats, answer.Format); at >= 0 {
+		diags = onDisk(diags)
+		// A format whose every line named no file matched nothing: the line
+		// formats the sniffer would have tried after it get their turn.
+		for _, format := range lineFormats[at+1:] {
+			if len(diags) > 0 {
+				break
+			}
+			later, err := e.parser.Parse(ctx, EmbeddedParserModule, format, task.ToolName, stdout, stderr, code)
+			if err != nil {
+				log.Debug("the fallback parser failed", zap.String("tool", task.ToolName), zap.String("format", format), zap.Error(err))
+				return sniffed{}, false, err
+			}
+			diags = onDisk(located(later.Diagnostics, files, workingDir))
+			answer.Format = format
+		}
+		if len(diags) == 0 {
+			return partial, false, nil
+		}
+	}
+	return sniffed{
+		x: extracted{
+			diags:      diags,
+			provenance: ProvenanceFallbackPrefix + answer.Format,
+			module:     EmbeddedParserModule,
+			partial:    answer.Partial,
+		},
+		format: answer.Format,
+	}, true, nil
+}
+
+// located stamps a process's one file on a finding that names none and makes
+// every path absolute against the process's working directory.
+func located(diags []diagnostic.Diagnostic, files []string, workingDir string) []diagnostic.Diagnostic {
 	stamp := ""
-	if len(proc.Files) == 1 {
-		stamp = proc.Files[0]
+	if len(files) == 1 {
+		stamp = files[0]
 	}
 	for i := range diags {
 		if diags[i].File == "" {
@@ -906,11 +1144,31 @@ func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult
 		}
 		diags[i].File = diagnostic.AbsPath(diags[i].File, workingDir)
 	}
-	proc.Diagnostics = diags
-	proc.Extraction = ExtractionParsedClean
-	if len(diags) > 0 {
-		proc.Extraction = ExtractionParsedFindings
+	return diags
+}
+
+// onDisk keeps the findings that name no file or a file that exists: a
+// sniffed line naming a path that is not there is prose that looks like one.
+func onDisk(diags []diagnostic.Diagnostic) []diagnostic.Diagnostic {
+	kept := diags[:0]
+	for _, d := range diags {
+		if d.File == "" {
+			kept = append(kept, d)
+			continue
+		}
+		if info, err := os.Stat(d.File); err == nil && !info.IsDir() {
+			kept = append(kept, d)
+		}
 	}
+	return kept
+}
+
+// cut returns the part of stream a parser reads, and whether any was left out.
+func (l ParseLimits) cut(stream []byte) ([]byte, bool) {
+	if len(stream) <= l.InputBytes {
+		return stream, false
+	}
+	return stream[:l.InputBytes], true
 }
 
 func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binmanager.CommandInfo, workingDir string, startTime time.Time) ExecutionResult {
@@ -971,11 +1229,14 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 	formatMode := task.OpConfig.Output == config.ToolOutputStdout
 	// A formatter's stdout is the formatted file content, not diagnostics, so it
-	// must never be fed to the parser. Validation already limits output:stdout to
+	// must never be fed to a parser. Validation already limits output:stdout to
 	// the fix op, but a tool could still pair it with a tool-level outputParser;
-	// !formatMode keeps the parser off the formatted text in that case.
-	parseMode := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
-	// Both formatting and parsing need stdout and stderr kept apart.
+	// !formatMode keeps the declared parser off the formatted text in that
+	// case, and only its stderr reaches the fallback.
+	declared := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
+	parseMode := e.parser != nil
+	// Formatting and every parser need stdout and stderr kept apart: a line of
+	// stderr landing inside a JSON document on stdout would break it.
 	separate := formatMode || parseMode
 
 	for i, file := range filesToProcess {
@@ -1083,7 +1344,11 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		}
 		proc.Extraction, proc.ParseError = e.unparsed(task, formatMode)
 		if parseMode {
-			e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode)
+			parseOut := stdoutBytes
+			if formatMode {
+				parseOut = nil
+			}
+			e.parseFileDiagnostics(ctx, &proc, task, workingDir, parseOut, stderrBytes, exitCode, declared)
 			if gateErr := e.applyGate(task, &proc, err == nil); gateErr != nil {
 				err = gateErr
 			}
@@ -1395,7 +1660,8 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	// and must never reach the parser (validation keeps it off batch lint, but a
 	// tool could still pair output:stdout with a tool-level parser).
 	formatMode := task.OpConfig.Output == config.ToolOutputStdout
-	parseMode := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
+	declared := e.parser != nil && task.Tool.OutputParser != nil && !formatMode
+	parseMode := e.parser != nil && !formatMode
 	procStart := time.Now()
 	stdoutBytes, stderrBytes, err := e.runCommandIO(cmd, nil, parseMode)
 	procDuration := time.Since(procStart).Milliseconds()
@@ -1426,7 +1692,7 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 		proc.ExitCode = new(exitCode)
 	}
 	if parseMode {
-		e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode)
+		e.parseFileDiagnostics(ctx, &proc, task, workingDir, stdoutBytes, stderrBytes, exitCode, declared)
 		if gateErr := e.applyGate(task, &proc, err == nil); gateErr != nil {
 			err = gateErr
 			proc.Success = false

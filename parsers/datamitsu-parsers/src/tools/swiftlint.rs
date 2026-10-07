@@ -4,9 +4,9 @@
 //! The JSON reporter capitalizes the severity (`"Warning"`, `"Error"`); `line`
 //! and `character` are 1-based, and `character` is null for a whole-line
 //! violation.
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {

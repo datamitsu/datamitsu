@@ -74,7 +74,7 @@ func loaderServer(t *testing.T, content string) (s *Server, loader *fakeLoader, 
 	writeFile(t, loader.cfgFile, content)
 	buf = &bytes.Buffer{}
 	s = New(strings.NewReader(""), buf, loader, "")
-	t.Cleanup(s.closeSession)
+	t.Cleanup(func() { s.closeSession(t.Context()) })
 	return s, loader, buf
 }
 

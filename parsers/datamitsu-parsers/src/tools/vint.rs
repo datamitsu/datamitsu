@@ -2,9 +2,9 @@
 //!
 //! `--json` prints an array of violations whose `severity` is the lowercased
 //! level name: `error`, `warning` or `style_problem`.
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {

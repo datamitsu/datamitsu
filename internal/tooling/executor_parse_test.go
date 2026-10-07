@@ -16,18 +16,59 @@ import (
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 )
 
-// fakeParser records its inputs and returns a canned result/error.
+// fakeParser records its inputs and returns a canned result/error. The
+// declared parser recognizes the output unless unrecognized is set; the
+// fallback recognizes nothing unless fallback is set.
 type fakeParser struct {
 	gotModule, gotParser, gotTool string
 	gotStdout, gotStderr          []byte
 	gotExit                       int32
 	diags                         []diagnostic.Diagnostic
 	err                           error
+	unrecognized                  bool
+	format                        bool
+	partial                       bool
+
+	fallback                    *ParseAnswer
+	fallbackFails               error
+	formats                     map[string]ParseAnswer
+	formatsAsked                []string
+	fallbackStdout, fallbackErr []byte
+	fallbackCalls               int
+	fellBack, readNothing       []string
 }
 
-func (f *fakeParser) Parse(_ context.Context, module, parser, toolName string, stdout, stderr []byte, exitCode int32) ([]diagnostic.Diagnostic, error) {
+func (f *fakeParser) Parse(_ context.Context, module, parser, toolName string, stdout, stderr []byte, exitCode int32) (ParseAnswer, error) {
+	if module == EmbeddedParserModule {
+		f.formatsAsked = append(f.formatsAsked, parser)
+		return f.formats[parser], nil
+	}
 	f.gotModule, f.gotParser, f.gotTool, f.gotStdout, f.gotStderr, f.gotExit = module, parser, toolName, stdout, stderr, exitCode
-	return f.diags, f.err
+	return ParseAnswer{
+		Diagnostics: f.diags, Recognized: !f.unrecognized, Format: parser, FormatParser: f.format, Partial: f.partial,
+	}, f.err
+}
+
+func (f *fakeParser) Fallback(_ context.Context, _ string, stdout, stderr []byte, _ int32) (ParseAnswer, error) {
+	f.fallbackCalls++
+	f.fallbackStdout, f.fallbackErr = stdout, stderr
+	if f.fallbackFails != nil {
+		return ParseAnswer{}, f.fallbackFails
+	}
+	if f.fallback == nil {
+		return ParseAnswer{}, nil
+	}
+	answer := *f.fallback
+	answer.Diagnostics = append([]diagnostic.Diagnostic(nil), answer.Diagnostics...)
+	return answer, nil
+}
+
+func (f *fakeParser) FellBack(tool string, declared config.OutputParser, format string) {
+	f.fellBack = append(f.fellBack, tool+"/"+declared.Module+"/"+declared.Parser+"->"+format)
+}
+
+func (f *fakeParser) Unrecognized(tool string, declared config.OutputParser) {
+	f.readNothing = append(f.readNothing, tool+"/"+declared.Module+"/"+declared.Parser)
 }
 
 func parseTask(module, parser string) Task {
@@ -42,7 +83,7 @@ func TestParseFileDiagnostics_PassesTheOutputThrough(t *testing.T) {
 	e := &Executor{parser: fp}
 	var proc ProcessResult
 
-	e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), t.TempDir(), []byte("OUT"), []byte("ERR"), 1)
+	e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), t.TempDir(), []byte("OUT"), []byte("ERR"), 1, true)
 
 	if fp.gotModule != "core" || fp.gotParser != "eslint" || fp.gotTool != "eslint" ||
 		string(fp.gotStdout) != "OUT" || string(fp.gotStderr) != "ERR" || fp.gotExit != 1 {
@@ -79,7 +120,7 @@ func TestParseFileDiagnostics_Paths(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			e := &Executor{parser: &fakeParser{diags: []diagnostic.Diagnostic{{Message: "m", File: c.reported}}}}
 			proc := ProcessResult{Files: c.files}
-			e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "tsc"), dir, nil, nil, 1)
+			e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "tsc"), dir, nil, nil, 1, true)
 			if len(proc.Diagnostics) != 1 {
 				t.Fatalf("got %d diagnostics, want 1", len(proc.Diagnostics))
 			}
@@ -109,7 +150,7 @@ func TestParseFileDiagnostics_Extraction(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			e := &Executor{parser: c.parser}
 			proc := ProcessResult{Files: []string{"/w/f.js"}, Extraction: ExtractionNone}
-			e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), "/w", nil, nil, 0)
+			e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), "/w", nil, nil, 0, true)
 			if proc.Extraction != c.want {
 				t.Errorf("Extraction = %q, want %q", proc.Extraction, c.want)
 			}
@@ -118,6 +159,45 @@ func TestParseFileDiagnostics_Extraction(t *testing.T) {
 			}
 			if c.parser.err != nil && len(proc.Diagnostics) != 0 {
 				t.Errorf("a failed parse must yield no diagnostics, got %+v", proc.Diagnostics)
+			}
+		})
+	}
+}
+
+// TestParseFileDiagnostics_Limits pins the parse caps: a parser reads at most
+// the limit of each stream, keeps at most the limit of findings, and a process
+// over either is truncated with what was kept.
+func TestParseFileDiagnostics_Limits(t *testing.T) {
+	three := []diagnostic.Diagnostic{{Message: "a"}, {Message: "b"}, {Message: "c"}}
+	cases := []struct {
+		name         string
+		limits       ParseLimits
+		stdout       string
+		stderr       string
+		diags        []diagnostic.Diagnostic
+		wantStdout   string
+		wantStderr   string
+		wantFindings int
+		want         Extraction
+	}{
+		{"within both", ParseLimits{InputBytes: 8, Findings: 3}, "12345678", "abc", three, "12345678", "abc", 3, ExtractionParsedFindings},
+		{"stdout cut", ParseLimits{InputBytes: 4, Findings: 3}, "12345678", "", nil, "1234", "", 0, ExtractionTruncated},
+		{"stderr cut", ParseLimits{InputBytes: 2, Findings: 3}, "", "abc", three, "", "ab", 3, ExtractionTruncated},
+		{"findings dropped", ParseLimits{InputBytes: 8, Findings: 2}, "x", "", three, "x", "", 2, ExtractionTruncated},
+		{"unset limits are the defaults", ParseLimits{}, "x", "y", three, "x", "y", 3, ExtractionParsedFindings},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fp := &fakeParser{diags: c.diags}
+			e := &Executor{parser: fp}
+			e.SetParseLimits(c.limits)
+			var proc ProcessResult
+			e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), "/w", []byte(c.stdout), []byte(c.stderr), 1, true)
+			if string(fp.gotStdout) != c.wantStdout || string(fp.gotStderr) != c.wantStderr {
+				t.Errorf("parser read %q/%q, want %q/%q", fp.gotStdout, fp.gotStderr, c.wantStdout, c.wantStderr)
+			}
+			if len(proc.Diagnostics) != c.wantFindings || proc.Extraction != c.want {
+				t.Errorf("got %d findings, %q; want %d, %q", len(proc.Diagnostics), proc.Extraction, c.wantFindings, c.want)
 			}
 		})
 	}
@@ -393,7 +473,19 @@ func TestExecuteBatchRunsOnceWhenArgsIgnoreFiles(t *testing.T) {
 // the message so each invocation is distinguishable in the merged result.
 type perCallParser struct{ calls atomic.Int32 }
 
-func (p *perCallParser) Parse(_ context.Context, _, _, _ string, stdout, _ []byte, _ int32) ([]diagnostic.Diagnostic, error) {
+func (p *perCallParser) Parse(_ context.Context, _, parser, _ string, stdout, _ []byte, _ int32) (ParseAnswer, error) {
 	p.calls.Add(1)
-	return []diagnostic.Diagnostic{{Message: strings.TrimSpace(string(stdout)), File: "x.js"}}, nil
+	return ParseAnswer{
+		Diagnostics: []diagnostic.Diagnostic{{Message: strings.TrimSpace(string(stdout)), File: "x.js"}},
+		Recognized:  true,
+		Format:      parser,
+	}, nil
 }
+
+func (p *perCallParser) Fallback(context.Context, string, []byte, []byte, int32) (ParseAnswer, error) {
+	return ParseAnswer{}, nil
+}
+
+func (p *perCallParser) FellBack(string, config.OutputParser, string) {}
+
+func (p *perCallParser) Unrecognized(string, config.OutputParser) {}

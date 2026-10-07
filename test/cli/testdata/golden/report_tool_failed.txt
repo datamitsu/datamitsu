@@ -166,7 +166,7 @@
             "module": "core",
             "parser": "hadolint",
             "version": "0.1.0",
-            "schema": 2
+            "schema": 3
           },
           "failOn": "error",
           "gateActive": true,

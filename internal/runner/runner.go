@@ -326,18 +326,15 @@ func initSharedContext(
 	planner.SetPlatformChecker(binMgr)
 	sc.executor = tooling.NewExecutor(sc.rootPath, false, sc.failFast, binMgr, sc.projectCache)
 	sc.executor.SetParserModules(sc.cfg.Parsers)
-	// Wire output-parsing whenever parsers are declared. --no-parse only changes
-	// what a failure frame shows: what the run records must not depend on it.
-	if len(sc.cfg.Parsers) > 0 {
-		sc.parserMgr = parsermanager.New(sc.cfg.Parsers)
-		sc.parseProblems = newParseProblems()
-		sc.executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
-		sc.ignoredFailOn = &toolSet{}
-	}
+	// Output is always parsed: by a declared parser, and otherwise by the
+	// fallback built into the binary. --no-parse only changes what a failure
+	// frame shows: what the run records must not depend on it.
+	sc.parserMgr = parsermanager.New(sc.cfg.Parsers)
+	sc.parseProblems = newParseProblems()
+	sc.executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
+	sc.ignoredFailOn = &toolSet{}
 	sc.startReport()
-	if sc.parserMgr != nil {
-		sc.executor.SetGate(sc.gate())
-	}
+	sc.executor.SetGate(sc.gate())
 
 	// All configured tools are known here, so the result column width is fixed
 	// once and shared across every operation (so fix and lint blocks align).
@@ -372,13 +369,18 @@ func (sc *sharedContext) shutdown() {
 	}
 }
 
-// plannedParserModules returns the distinct WASM parser modules referenced by the
-// tools in plan (via their outputParser), for prewarming their one-time
-// compilation before execution.
+// plannedParserModules returns the distinct WASM parser modules the tools in
+// plan may be parsed with, for prewarming their one-time compilation before
+// execution: those their outputParser names, and the embedded fallback any
+// output may reach.
 func plannedParserModules(plan *tooling.ExecutionPlan) []string {
 	seen := make(map[string]bool)
 	var mods []string
 	for _, group := range plan.Groups {
+		if len(group.Tasks) > 0 && !seen[parsermanager.EmbeddedModule] {
+			seen[parsermanager.EmbeddedModule] = true
+			mods = append(mods, parsermanager.EmbeddedModule)
+		}
 		for _, task := range group.Tasks {
 			op := task.Tool.OutputParser
 			if op == nil || op.Module == "" || seen[op.Module] {

@@ -160,6 +160,15 @@ func TestVerdictIdentitySeparatesDistinctQuestions(t *testing.T) {
 		}
 	})
 
+	t.Run("embedded fallback parser", func(t *testing.T) {
+		was := embeddedParserKey
+		t.Cleanup(func() { embeddedParserKey = was })
+		embeddedParserKey = func() string { return "another-module" }
+		if verdictIdentity(base, base.UnitDir, moduleHash) == baseKey {
+			t.Error("a verdict one build's fallback decided would be replayed by a build with another")
+		}
+	})
+
 	t.Run("stable across calls", func(t *testing.T) {
 		again := unitTask(root)
 		again.Tool.OutputParser = &config.OutputParser{Module: "core", Parser: "tsc"}

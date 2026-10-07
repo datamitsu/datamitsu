@@ -12,3 +12,12 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 tinyjson = "2.5.1"
+
+# Two builds of one crate: the public module (the default, both features) and
+# the fallback the core embeds (`--no-default-features --features format`).
+[features]
+default = ["format", "tools"]
+# The standard-format parsers and the sniffer that picks one of them.
+format = []
+# One parser per tool; several share the format parsers' implementations.
+tools = ["format"]

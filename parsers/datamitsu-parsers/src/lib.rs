@@ -11,13 +11,18 @@
 //!      and writes the bytes,
 //!   2. host calls `parse(...)` passing the ptr/len of each buffer + exit code,
 //!   3. `parse` returns a single u64 packing `(ptr << 32) | len` of a freshly
-//!      allocated UTF-8 JSON output buffer,
+//!      allocated UTF-8 JSON output buffer — the answer of response ABI 2,
+//!      `{"recognized":…,"format":…,"diagnostics":[…]}`,
 //!   4. host reads the output then calls `dealloc(ptr, len)` to free it (and frees
 //!      the input buffers the same way).
 //!
 //! Raw bytes are delivered **whole, never host-line-split** (analysis.md §2.3):
 //! line-splitting in the host loses multiline cases like cue_fmt, so the parser
 //! decides whether to split.
+//!
+//! Two builds come from this crate: the public module (features `tools` and
+//! `format`) and the fallback the core embeds (`format` alone): the standard-
+//! format parsers and the sniffer that picks one of them.
 
 use std::alloc::{self, Layout};
 use std::ptr;
@@ -26,13 +31,22 @@ mod capabilities;
 #[cfg(test)]
 mod contract;
 mod diagnostic;
+#[cfg(feature = "format")]
+mod fallback;
+#[cfg(feature = "format")]
+mod format;
+#[cfg(feature = "format")]
+mod json_diag;
 mod location;
 mod numconv;
+mod response;
 mod severity;
+#[cfg(feature = "tools")]
 mod tools;
 
 pub use capabilities::describe_json;
 pub use diagnostic::RawDiagnostic;
+pub use response::Response;
 
 /// Allocate `len` bytes in the module's linear memory and return a pointer the
 /// host can write into. Ownership transfers to the host until it calls
@@ -104,12 +118,14 @@ pub extern "C" fn describe() -> u64 {
 /// freshly-instantiated state. The host calls this before returning an instance
 /// to its reuse pool, and reuses **only** instances that export it: without a
 /// reset boundary parse N+1 could observe parse N's state, leaking one tool's
-/// output into another's diagnostics. This module keeps no state between parses
-/// (every buffer is freed through `dealloc`), so the reset is a no-op — but
-/// exporting it is what declares that, and any future module-level state must be
-/// cleared here.
+/// output into another's diagnostics. Every buffer is freed through `dealloc`;
+/// the one flag a parse keeps — whether it saw a JSON document — is cleared here
+/// and again before every parse.
 #[no_mangle]
-pub extern "C" fn reset() {}
+pub extern "C" fn reset() {
+	#[cfg(feature = "format")]
+	json_diag::begin_parse();
+}
 
 unsafe fn slice<'a>(ptr: *const u8, len: u32) -> &'a [u8] {
 	if ptr.is_null() || len == 0 {
@@ -141,19 +157,29 @@ fn leak_json(s: String) -> u64 {
 }
 
 /// Pure dispatch core — split out so native `cargo test` can exercise it without
-/// the pointer ABI. Phase 1 only knows the `echo` parser used to prove the pipe;
-/// Phase 2 adds one `match` arm + one module fn per real tool.
-pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> String {
-	// Real tool parsers live one-per-module under `tools`; try them first.
-	if let Some(diags) = tools::dispatch(tool, stdout, stderr, exit_code) {
-		return diagnostic::to_json_array(&diags);
+/// the pointer ABI: the answer of the parser `key` as JSON.
+pub fn dispatch(key: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> String {
+	answer(key, stdout, stderr, exit_code).to_json()
+}
+
+/// The answer of the parser `key`: a tool parser, a format parser, the sniffer
+/// (`fallback`) or the pipe-test `echo`. A key this build does not know
+/// recognizes nothing, which the core reads as no parser at all.
+pub fn answer(key: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Response {
+	#[cfg(feature = "tools")]
+	if let Some(r) = tools::answer(key, stdout, stderr, exit_code) {
+		return r;
 	}
-	match tool {
-		"echo" => echo(stdout, stderr, exit_code),
-		// Unknown tool: an empty diagnostic list (not an error — the core decides
-		// how to treat "no parser produced anything").
-		_ => "[]".to_string(),
+	#[cfg(feature = "format")]
+	if let Some(r) = format::dispatch(key, stdout, stderr, exit_code) {
+		return r;
 	}
+	#[cfg(feature = "tools")]
+	if key == "echo" {
+		return echo(stdout, stderr, exit_code);
+	}
+	let _ = (stdout, stderr, exit_code);
+	Response::unrecognized("")
 }
 
 /// The `echo` parser: a trivial, deterministic branch used only to prove the
@@ -161,39 +187,69 @@ pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Str
 /// stdout (lossily decoded) back as a single diagnostic `message` and records the
 /// exit code in `code`. Every other field stays `None` to model the nullable
 /// contract.
-fn echo(stdout: &[u8], _stderr: &[u8], exit_code: i32) -> String {
+#[cfg(feature = "tools")]
+fn echo(stdout: &[u8], _stderr: &[u8], exit_code: i32) -> Response {
 	let message = String::from_utf8_lossy(stdout).into_owned();
 	let diag = RawDiagnostic {
 		message,
 		code: Some(exit_code.to_string()),
 		..RawDiagnostic::default()
 	};
-	diagnostic::to_json_array(&[diag])
+	Response::recognized("echo", vec![diag])
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
+	#[cfg(feature = "tools")]
 	#[test]
 	fn echo_round_trips_stdout_into_message() {
 		let json = dispatch("echo", b"hello world", b"", 0);
 		assert_eq!(
-			json, r#"[{"message":"hello world","code":"0"}]"#,
+			json, r#"{"recognized":true,"format":"echo","diagnostics":[{"message":"hello world","code":"0"}]}"#,
 			"echo must echo stdout into message and exit code into code"
 		);
 	}
 
+	#[cfg(feature = "tools")]
 	#[test]
 	fn echo_preserves_multiline_input_whole() {
 		// The host must not line-split; a multiline payload stays one message.
 		let json = dispatch("echo", b"line1\nline2", b"", 2);
-		assert_eq!(json, r#"[{"message":"line1\nline2","code":"2"}]"#);
+		assert_eq!(
+			json,
+			r#"{"recognized":true,"format":"echo","diagnostics":[{"message":"line1\nline2","code":"2"}]}"#
+		);
 	}
 
 	#[test]
-	fn unknown_tool_returns_empty_array() {
-		assert_eq!(dispatch("not-a-real-parser", b"anything", b"", 1), "[]");
+	fn an_unknown_key_recognizes_nothing() {
+		assert_eq!(
+			dispatch("not-a-real-parser", b"anything", b"", 1),
+			r#"{"recognized":false,"format":"","diagnostics":[]}"#
+		);
+	}
+
+	#[cfg(feature = "format")]
+	#[test]
+	fn a_format_key_and_the_sniffer_dispatch() {
+		let out = b"a.c:1:2: error: m\n";
+		assert_eq!(answer("gcc", out, b"", 1).format, "gcc");
+		let sniffed = answer("fallback", out, b"", 1);
+		assert!(sniffed.recognized);
+		assert_eq!((sniffed.format.as_str(), sniffed.diagnostics.len()), ("gcc", 1));
+	}
+
+	#[cfg(feature = "tools")]
+	#[test]
+	fn a_cut_off_document_is_not_recognized_on_a_clean_exit() {
+		let cut = br#"[{"filePath":"/a.js","messages":[{"message":"m","severity":2}"#;
+		for key in ["eslint", "eslint-json", "sarif"] {
+			let r = answer(key, cut, b"", 0);
+			assert!(!r.recognized, "{key}");
+		}
+		assert!(answer("eslint", b"[]", b"", 0).recognized);
 	}
 
 	#[test]

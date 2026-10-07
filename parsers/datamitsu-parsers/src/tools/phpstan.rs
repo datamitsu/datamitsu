@@ -10,9 +10,9 @@
 //! and no level: PHPStan's "level" is the strictness of the whole analysis, not a
 //! property of a finding, so no finding carries one.
 
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 use crate::severity;
 
 use tinyjson::JsonValue;

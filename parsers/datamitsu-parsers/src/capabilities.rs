@@ -13,17 +13,35 @@
 //! declared and actual versions drift. The config declares only url+hash.
 //!
 //! Each real tool owns its `DESCRIPTOR` in its `tools::<tool>` module, co-located
-//! with that tool's parser, and is referenced from [`TOOLS`] below.
+//! with that tool's parser, and is referenced from `tools::DESCRIPTORS`; the
+//! format parsers' are in `format::DESCRIPTORS`.
 
 use crate::diagnostic::json_string;
 use crate::severity::Level;
-use crate::tools;
 
 /// Capabilities schema version. Bump on an incompatible shape change so the Go
 /// decoder can refuse or adapt. Schema 2 adds each tool's level vocabulary,
 /// column unit, category and kind, and with them the promise that a level comes
-/// only from a token the tool printed.
-const SCHEMA_VERSION: u32 = 2;
+/// only from a token the tool printed. Schema 3 adds `abi`, the form `parse`
+/// answers in, and `features`, the parsers this build carries.
+const SCHEMA_VERSION: u32 = 3;
+
+/// The form `parse` answers in: an object that says whether the parser
+/// recognized the output (`crate::response`).
+const ABI: u32 = 2;
+
+/// The parser families this build carries: `tools` (one parser per tool) and
+/// `format` (the standard formats and the sniffer).
+fn features() -> Vec<&'static str> {
+	let mut out = Vec::new();
+	if cfg!(feature = "format") {
+		out.push("format");
+	}
+	if cfg!(feature = "tools") {
+		out.push("tools");
+	}
+	out
+}
 
 /// The build-injected module version. `DATAMITSU_PARSERS_VERSION` is read at
 /// compile time (like an ldflags `-X`); when unset — a plain local `cargo build`
@@ -66,134 +84,48 @@ pub(crate) struct ToolCapability {
 	pub(crate) column_unit: &'static str,
 	/// "security" for a security scanner; empty otherwise.
 	pub(crate) category: &'static str,
-	/// What the parser reads: "tool" for the tool's own output format.
+	/// What the parser reads: "tool" for the tool's own output format,
+	/// "format" for a standard format any tool may print.
 	pub(crate) kind: &'static str,
 }
 
-/// The `echo` pipe-test parser's descriptor (defined here since `echo` lives in
-/// the crate root, not in `tools`).
-const ECHO: ToolCapability = ToolCapability {
-	name: "echo",
-	description: "Pipe-test parser: echoes stdout into a single diagnostic message and the \
-        exit code into `code`. Proves the declare\u{2192}build\u{2192}sign\u{2192}deliver\u{2192}load\u{2192}invoke \
-        pipe end to end; not a real tool.",
-	url: "",
-	operations: &[],
-	severities: &[],
-	column_unit: "",
-	category: "",
-	kind: "tool",
-};
+#[cfg(feature = "tools")]
+fn tool_parsers() -> &'static [&'static ToolCapability] {
+	crate::tools::DESCRIPTORS
+}
 
-/// The capability table: the pipe-test `echo` plus one entry per real tool. A new
-/// tool adds its module's `DESCRIPTOR` here (and a `tools::dispatch` arm).
-pub(crate) const TOOLS: &[&ToolCapability] = &[
-	&ECHO,
-	&tools::actionlint::DESCRIPTOR,
-	&tools::alex::DESCRIPTOR,
-	&tools::ansiblelint::DESCRIPTOR,
-	&tools::bean_check::DESCRIPTOR,
-	&tools::bslint::DESCRIPTOR,
-	&tools::buf::DESCRIPTOR,
-	&tools::buildifier::DESCRIPTOR,
-	&tools::cfn_lint::DESCRIPTOR,
-	&tools::checkmake::DESCRIPTOR,
-	&tools::checkstyle::DESCRIPTOR,
-	&tools::clazy::DESCRIPTOR,
-	&tools::clj_kondo::DESCRIPTOR,
-	&tools::cmake_lint::DESCRIPTOR,
-	&tools::codespell::DESCRIPTOR,
-	&tools::commitlint::DESCRIPTOR,
-	&tools::cppcheck::DESCRIPTOR,
-	&tools::credo::DESCRIPTOR,
-	&tools::cspell::DESCRIPTOR,
-	&tools::cue_fmt::DESCRIPTOR,
-	&tools::dclint::DESCRIPTOR,
-	&tools::deadnix::DESCRIPTOR,
-	&tools::djlint::DESCRIPTOR,
-	&tools::dotenv_linter::DESCRIPTOR,
-	&tools::droast::DESCRIPTOR,
-	&tools::editorconfig_checker::DESCRIPTOR,
-	&tools::erb_lint::DESCRIPTOR,
-	&tools::eslint::DESCRIPTOR,
-	&tools::fish::DESCRIPTOR,
-	&tools::gccdiag::DESCRIPTOR,
-	&tools::gdlint::DESCRIPTOR,
-	&tools::gitleaks::DESCRIPTOR,
-	&tools::gitlint::DESCRIPTOR,
-	&tools::glslc::DESCRIPTOR,
-	&tools::golangci_lint::DESCRIPTOR,
-	&tools::hadolint::DESCRIPTOR,
-	&tools::haml_lint::DESCRIPTOR,
-	&tools::harper_cli::DESCRIPTOR,
-	&tools::knip::DESCRIPTOR,
-	&tools::ktlint::DESCRIPTOR,
-	&tools::kube_linter::DESCRIPTOR,
-	&tools::ltrs::DESCRIPTOR,
-	&tools::markdownlint::DESCRIPTOR,
-	&tools::markdownlint_cli2::DESCRIPTOR,
-	&tools::markuplint::DESCRIPTOR,
-	&tools::mdl::DESCRIPTOR,
-	&tools::mlint::DESCRIPTOR,
-	&tools::mypy::DESCRIPTOR,
-	&tools::npm_groovy_lint::DESCRIPTOR,
-	&tools::opacheck::DESCRIPTOR,
-	&tools::opentofu_validate::DESCRIPTOR,
-	&tools::perlimports::DESCRIPTOR,
-	&tools::phpcs::DESCRIPTOR,
-	&tools::phpmd::DESCRIPTOR,
-	&tools::phpstan::DESCRIPTOR,
-	&tools::pmd::DESCRIPTOR,
-	&tools::proselint::DESCRIPTOR,
-	&tools::protolint::DESCRIPTOR,
-	&tools::puppet_lint::DESCRIPTOR,
-	&tools::pydoclint::DESCRIPTOR,
-	&tools::pylint::DESCRIPTOR,
-	&tools::qmllint::DESCRIPTOR,
-	&tools::reek::DESCRIPTOR,
-	&tools::regal::DESCRIPTOR,
-	&tools::revive::DESCRIPTOR,
-	&tools::rpmspec::DESCRIPTOR,
-	&tools::rstcheck::DESCRIPTOR,
-	&tools::rubocop::DESCRIPTOR,
-	&tools::saltlint::DESCRIPTOR,
-	&tools::selene::DESCRIPTOR,
-	&tools::semgrep::DESCRIPTOR,
-	&tools::solhint::DESCRIPTOR,
-	&tools::spectral::DESCRIPTOR,
-	&tools::sqlfluff::DESCRIPTOR,
-	&tools::sqruff::DESCRIPTOR,
-	&tools::staticcheck::DESCRIPTOR,
-	&tools::statix::DESCRIPTOR,
-	&tools::stylint::DESCRIPTOR,
-	&tools::swiftlint::DESCRIPTOR,
-	&tools::teal::DESCRIPTOR,
-	&tools::terraform_validate::DESCRIPTOR,
-	&tools::terragrunt_validate::DESCRIPTOR,
-	&tools::textidote::DESCRIPTOR,
-	&tools::textlint::DESCRIPTOR,
-	&tools::tfsec::DESCRIPTOR,
-	&tools::tidy::DESCRIPTOR,
-	&tools::trivy::DESCRIPTOR,
-	&tools::tsc::DESCRIPTOR,
-	&tools::twigcs::DESCRIPTOR,
-	&tools::vacuum::DESCRIPTOR,
-	&tools::vale::DESCRIPTOR,
-	&tools::verilator::DESCRIPTOR,
-	&tools::vint::DESCRIPTOR,
-	&tools::write_good::DESCRIPTOR,
-	&tools::yamllint::DESCRIPTOR,
-	&tools::zsh::DESCRIPTOR,
-];
+#[cfg(not(feature = "tools"))]
+fn tool_parsers() -> &'static [&'static ToolCapability] {
+	&[]
+}
+
+#[cfg(feature = "format")]
+fn format_parsers() -> &'static [&'static ToolCapability] {
+	crate::format::DESCRIPTORS
+}
+
+#[cfg(not(feature = "format"))]
+fn format_parsers() -> &'static [&'static ToolCapability] {
+	&[]
+}
+
+/// Every parser this build describes: the tool parsers, then the format
+/// parsers and the sniffer.
+pub(crate) fn described() -> Vec<&'static ToolCapability> {
+	tool_parsers().iter().chain(format_parsers()).copied().collect()
+}
 
 /// Serialize the module's full capability manifest to JSON.
 pub fn describe_json() -> String {
-	let tools: Vec<String> = TOOLS.iter().map(|&t| tool_json(t)).collect();
+	let tools: Vec<String> = described().into_iter().map(tool_json).collect();
+	let features: Vec<String> = features().into_iter().map(json_string).collect();
 	format!(
-		r#"{{"schemaVersion":{},"module":{},"version":{},"tools":[{}]}}"#,
+		r#"{{"schemaVersion":{},"module":{},"version":{},"abi":{},"features":[{}],"tools":[{}]}}"#,
 		SCHEMA_VERSION,
 		json_string("datamitsu-parsers"),
 		json_string(module_version()),
+		ABI,
+		features.join(","),
 		tools.join(","),
 	)
 }
@@ -237,10 +169,35 @@ mod tests {
 	#[test]
 	fn describe_advertises_schema_module_and_version() {
 		let json = describe_json();
-		assert!(json.contains(r#""schemaVersion":2"#), "json: {json}");
+		assert!(json.contains(r#""schemaVersion":3"#), "json: {json}");
 		assert!(json.contains(r#""module":"datamitsu-parsers""#), "json: {json}");
+		assert!(json.contains(r#""abi":2"#), "json: {json}");
 	}
 
+	#[cfg(feature = "tools")]
+	#[test]
+	fn describe_names_both_features_of_the_public_build() {
+		assert!(describe_json().contains(r#""features":["format","tools"]"#));
+	}
+
+	#[cfg(not(feature = "tools"))]
+	#[test]
+	fn describe_names_the_format_feature_alone_of_the_embedded_build() {
+		let json = describe_json();
+		assert!(json.contains(r#""features":["format"]"#), "json: {json}");
+		assert!(!json.contains(r#""kind":"tool""#), "json: {json}");
+	}
+
+	#[test]
+	fn describe_lists_every_format_parser_and_the_sniffer() {
+		let json = describe_json();
+		for name in ["sarif", "checkstyle-xml", "gcc", "fallback"] {
+			assert!(json.contains(&format!(r#""name":"{name}""#)), "missing {name}: {json}");
+		}
+		assert!(json.contains(r#""kind":"format""#));
+	}
+
+	#[cfg(feature = "tools")]
 	#[test]
 	fn describe_lists_echo_and_real_tools() {
 		let json = describe_json();
@@ -249,6 +206,7 @@ mod tests {
 		}
 	}
 
+	#[cfg(feature = "tools")]
 	#[test]
 	fn describe_includes_an_invocation_recipe() {
 		// yamllint advertises how to run it (parsable, stdin).

@@ -6,9 +6,9 @@
 //! `end_column` (1-based, the end exclusive), `annotation_level` (one of
 //! GitHub's `notice`/`warning`/`failure`) and `message`, which sqlfluff writes
 //! as `<rule>: <description>` — the rule becomes the code.
-use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
+use crate::json_diag::{self, Attrs};
 use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {

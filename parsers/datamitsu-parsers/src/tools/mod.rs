@@ -1,14 +1,11 @@
 //! Per-tool parsers. One module per tool, each exporting `parse` (raw tool output
 //! → nullable `RawDiagnostic`s) and a `DESCRIPTOR` (its `describe` capability with
 //! the recommended invocation). Adding a tool is: a new module here, one arm in
-//! [`dispatch`], and one entry in `capabilities::TOOLS`.
+//! [`dispatch`], and one entry in [`DESCRIPTORS`].
 //!
 //! Parsers are **hand-written** (no `regex` dependency) and ported faithfully from
 //! the upstream none-ls builtin / efm errorformat. The JSON-output class shares the
 //! `json_diag` helper (its one external crate, `tinyjson`).
-
-// Shared helper for the JSON-output tool class (not a tool itself).
-pub mod json_diag;
 
 pub mod actionlint;
 pub mod alex;
@@ -220,7 +217,143 @@ pub(crate) fn samples(tool: &str) -> Option<&'static [crate::contract::Sample]> 
 	)
 }
 
+use crate::capabilities::ToolCapability;
 use crate::diagnostic::RawDiagnostic;
+use crate::response::Response;
+
+/// The `echo` pipe-test parser's descriptor; `echo` itself lives in the crate
+/// root.
+const ECHO: ToolCapability = ToolCapability {
+	name: "echo",
+	description: "Pipe-test parser: echoes stdout into a single diagnostic message and the \
+        exit code into `code`. Proves the declare\u{2192}build\u{2192}sign\u{2192}deliver\u{2192}load\u{2192}invoke \
+        pipe end to end; not a real tool.",
+	url: "",
+	operations: &[],
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
+};
+
+/// The capability table: the pipe-test `echo` plus one entry per real tool. A new
+/// tool adds its module's `DESCRIPTOR` here (and a [`dispatch`] arm). It lives
+/// here rather than in `capabilities`, which the embedded fallback module is
+/// built from: adding a tool must not change a source of that build.
+pub(crate) const DESCRIPTORS: &[&ToolCapability] = &[
+	&ECHO,
+	&actionlint::DESCRIPTOR,
+	&alex::DESCRIPTOR,
+	&ansiblelint::DESCRIPTOR,
+	&bean_check::DESCRIPTOR,
+	&bslint::DESCRIPTOR,
+	&buf::DESCRIPTOR,
+	&buildifier::DESCRIPTOR,
+	&cfn_lint::DESCRIPTOR,
+	&checkmake::DESCRIPTOR,
+	&checkstyle::DESCRIPTOR,
+	&clazy::DESCRIPTOR,
+	&clj_kondo::DESCRIPTOR,
+	&cmake_lint::DESCRIPTOR,
+	&codespell::DESCRIPTOR,
+	&commitlint::DESCRIPTOR,
+	&cppcheck::DESCRIPTOR,
+	&credo::DESCRIPTOR,
+	&cspell::DESCRIPTOR,
+	&cue_fmt::DESCRIPTOR,
+	&dclint::DESCRIPTOR,
+	&deadnix::DESCRIPTOR,
+	&djlint::DESCRIPTOR,
+	&dotenv_linter::DESCRIPTOR,
+	&droast::DESCRIPTOR,
+	&editorconfig_checker::DESCRIPTOR,
+	&erb_lint::DESCRIPTOR,
+	&eslint::DESCRIPTOR,
+	&fish::DESCRIPTOR,
+	&gccdiag::DESCRIPTOR,
+	&gdlint::DESCRIPTOR,
+	&gitleaks::DESCRIPTOR,
+	&gitlint::DESCRIPTOR,
+	&glslc::DESCRIPTOR,
+	&golangci_lint::DESCRIPTOR,
+	&hadolint::DESCRIPTOR,
+	&haml_lint::DESCRIPTOR,
+	&harper_cli::DESCRIPTOR,
+	&knip::DESCRIPTOR,
+	&ktlint::DESCRIPTOR,
+	&kube_linter::DESCRIPTOR,
+	&ltrs::DESCRIPTOR,
+	&markdownlint::DESCRIPTOR,
+	&markdownlint_cli2::DESCRIPTOR,
+	&markuplint::DESCRIPTOR,
+	&mdl::DESCRIPTOR,
+	&mlint::DESCRIPTOR,
+	&mypy::DESCRIPTOR,
+	&npm_groovy_lint::DESCRIPTOR,
+	&opacheck::DESCRIPTOR,
+	&opentofu_validate::DESCRIPTOR,
+	&perlimports::DESCRIPTOR,
+	&phpcs::DESCRIPTOR,
+	&phpmd::DESCRIPTOR,
+	&phpstan::DESCRIPTOR,
+	&pmd::DESCRIPTOR,
+	&proselint::DESCRIPTOR,
+	&protolint::DESCRIPTOR,
+	&puppet_lint::DESCRIPTOR,
+	&pydoclint::DESCRIPTOR,
+	&pylint::DESCRIPTOR,
+	&qmllint::DESCRIPTOR,
+	&reek::DESCRIPTOR,
+	&regal::DESCRIPTOR,
+	&revive::DESCRIPTOR,
+	&rpmspec::DESCRIPTOR,
+	&rstcheck::DESCRIPTOR,
+	&rubocop::DESCRIPTOR,
+	&saltlint::DESCRIPTOR,
+	&selene::DESCRIPTOR,
+	&semgrep::DESCRIPTOR,
+	&solhint::DESCRIPTOR,
+	&spectral::DESCRIPTOR,
+	&sqlfluff::DESCRIPTOR,
+	&sqruff::DESCRIPTOR,
+	&staticcheck::DESCRIPTOR,
+	&statix::DESCRIPTOR,
+	&stylint::DESCRIPTOR,
+	&swiftlint::DESCRIPTOR,
+	&teal::DESCRIPTOR,
+	&terraform_validate::DESCRIPTOR,
+	&terragrunt_validate::DESCRIPTOR,
+	&textidote::DESCRIPTOR,
+	&textlint::DESCRIPTOR,
+	&tfsec::DESCRIPTOR,
+	&tidy::DESCRIPTOR,
+	&trivy::DESCRIPTOR,
+	&tsc::DESCRIPTOR,
+	&twigcs::DESCRIPTOR,
+	&vacuum::DESCRIPTOR,
+	&vale::DESCRIPTOR,
+	&verilator::DESCRIPTOR,
+	&vint::DESCRIPTOR,
+	&write_good::DESCRIPTOR,
+	&yamllint::DESCRIPTOR,
+	&zsh::DESCRIPTOR,
+];
+
+/// The answer of the tool parser `tool`; `None` when this module has none.
+///
+/// A JSON tool parser's own format is there when it found a JSON document at
+/// all; a line tool parser has no envelope to find. `crate::fallback::declared`
+/// settles the rest: a parser that found nothing did not recognize output
+/// holding another format's findings, and did recognize a clean exit.
+pub fn answer(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Option<Response> {
+	crate::json_diag::begin_parse();
+	let diags = dispatch(tool, stdout, stderr, exit_code)?;
+	let own = crate::json_diag::document_seen();
+	let searched = crate::json_diag::searched_text();
+	Some(crate::fallback::declared(
+		tool, diags, own, searched, stdout, stderr, exit_code,
+	))
+}
 
 /// Dispatch a real tool parser by name. Returns `None` when this module has no
 /// parser for `tool`, so the caller can fall back (echo / unknown).

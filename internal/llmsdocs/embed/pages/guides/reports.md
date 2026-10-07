@@ -106,12 +106,20 @@ one that fails adds a reason to its `incomplete` list:
 | extraction | every output was read into findings by a parser, or a cache replayed a pass its parser read as clean | `no-extraction`, `parser-unavailable`, `parse-failed`, `truncated`, `unparsed-cache-hit`, `failed-without-findings` |
 
 A complete result in one project says nothing about the projects a narrowed run
-left out, which is why scope needs the whole repository. A tool without an output
-parser is never complete: its exit code says whether it passed, not what it
-found. Neither is a tool that exited non-zero while its parser found nothing
-in what it printed (`failed-without-findings`): the parser did not recognize
-that output, and a report that listed the tool would read its failure as
-clean — code scanning would close every alert the tool had.
+left out, which is why scope needs the whole repository. A tool whose output no
+parser read — neither a declared one nor the
+[fallback](./architecture/parsers.md#three-layers) built into datamitsu — is never
+complete (`no-extraction`, or `parse-failed` when a parser was declared): its exit
+code says whether it passed, not what it found. Neither is a tool that exited
+non-zero while the parser that recognized its output found nothing in it
+(`failed-without-findings`): the failure is not in what it printed, and a report
+that listed the tool would read it as clean — code scanning would close every
+alert the tool had.
+
+A cached pass carries no record of what read the output it stands for, so a
+cache hit of a tool without a declared parser is `unparsed-cache-hit` even when
+the fallback had read that output clean: warm runs of such a tool are incomplete
+until a parser is declared for it.
 
 The run is `complete` when every tool is, every operation ran, and the run left
 nothing out: a narrowed selection, a `--tools` filter (the tools it left out are

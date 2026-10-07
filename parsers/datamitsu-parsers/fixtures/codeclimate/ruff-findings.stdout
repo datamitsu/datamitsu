@@ -1,0 +1,21 @@
+[
+  {
+    "check_name": "F401",
+    "description": "F401: `os` imported but unused",
+    "severity": "major",
+    "fingerprint": "5f9b297f5e42f413",
+    "location": {
+      "path": "bad.py",
+      "positions": {
+        "begin": {
+          "line": 1,
+          "column": 8
+        },
+        "end": {
+          "line": 1,
+          "column": 10
+        }
+      }
+    }
+  }
+]

@@ -1,6 +1,6 @@
 # Plan 9: Parser formats and fallback — format parsers by name, an embedded sniffer, ABI v2
 
-**Status:** ready for implementation. Plan 9 of `2026-09-26-unified-results.md`; implements D8
+**Status:** completed 2026-09-28. Plan 9 of `../2026-09-26-unified-results.md`; implements D8
 (a–f), the fallback and compatibility side of R12, and module release 2. No decisions open.
 **Date:** 2026-09-26.
 **Depends on:** plan 3 (`ParseFailed`, extraction outcomes, C1 for every provenance, task

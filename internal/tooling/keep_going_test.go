@@ -310,15 +310,23 @@ func TestKeepGoingNamesFailuresWithoutAnExitCode(t *testing.T) {
 
 type lineParser struct{}
 
-func (lineParser) Parse(_ context.Context, _, _, _ string, stdout, _ []byte, _ int32) ([]diagnostic.Diagnostic, error) {
+func (lineParser) Parse(_ context.Context, _, parser, _ string, stdout, _ []byte, _ int32) (ParseAnswer, error) {
 	var found []diagnostic.Diagnostic
 	for line := range strings.Lines(string(stdout)) {
 		if line = strings.TrimSpace(line); line != "" {
 			found = append(found, diagnostic.Diagnostic{Message: line, Row: 1})
 		}
 	}
-	return found, nil
+	return ParseAnswer{Diagnostics: found, Recognized: true, Format: parser}, nil
 }
+
+func (lineParser) Fallback(context.Context, string, []byte, []byte, int32) (ParseAnswer, error) {
+	return ParseAnswer{}, nil
+}
+
+func (lineParser) FellBack(string, config.OutputParser, string) {}
+
+func (lineParser) Unrecognized(string, config.OutputParser) {}
 
 // A file whose content cannot be read for a stdin tool fails without a
 // process. Under keep-going the task goes on to the next file, and the failure
@@ -449,10 +457,18 @@ func TestInterruptedPerFileTaskKeepsItsFailure(t *testing.T) {
 // fail-fast would while a finished tool's output is still being parsed.
 type cancellingParser struct{ cancel context.CancelCauseFunc }
 
-func (p cancellingParser) Parse(context.Context, string, string, string, []byte, []byte, int32) ([]diagnostic.Diagnostic, error) {
+func (p cancellingParser) Parse(context.Context, string, string, string, []byte, []byte, int32) (ParseAnswer, error) {
 	p.cancel(errFailFast)
-	return []diagnostic.Diagnostic{{Message: "found it", Row: 1}}, nil
+	return ParseAnswer{Diagnostics: []diagnostic.Diagnostic{{Message: "found it", Row: 1}}, Recognized: true}, nil
 }
+
+func (cancellingParser) Fallback(context.Context, string, []byte, []byte, int32) (ParseAnswer, error) {
+	return ParseAnswer{}, nil
+}
+
+func (cancellingParser) FellBack(string, config.OutputParser, string) {}
+
+func (cancellingParser) Unrecognized(string, config.OutputParser) {}
 
 // A tool that failed on its own stays a failure, with its findings, when the
 // run is cancelled after its process ended; only a process the cancellation

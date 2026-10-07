@@ -40,18 +40,21 @@ func (e *ThresholdError) Error() string { return e.Reason }
 
 // ThresholdGate is the failOn gate. A finding at or above its operation's
 // effective threshold — config.EffectiveFailOn of the operation and global —
-// is reported; it gates when the module that parsed it declares the severity
-// contract, which contract answers per module. A process whose module does not
+// is reported; it gates when the module that parsed it — the declared one, or
+// the embedded fallback — declares the severity contract, which contract
+// answers per module. A process whose module does not
 // is judged by its exit code alone, and when its threshold is not the default
 // ignored is told the tool, so a threshold nobody enforces is not silent.
 func ThresholdGate(global config.Severity, contract func(module string) bool, ignored func(tool string)) Gate {
 	return func(task Task, proc *ProcessResult) GateDecision {
 		failOn := config.EffectiveFailOn(task.OpConfig, global)
 		level := diagnostic.Severity(failOn.Level())
-		// Only a module that parsed has been described; asking about any other
-		// would load it again.
-		parsed := proc.Extraction == ExtractionParsedClean || proc.Extraction == ExtractionParsedFindings
-		active := parsed && task.Tool.OutputParser != nil && contract(task.Tool.OutputParser.Module)
+		// Only a module that answered has been described; asking about any
+		// other would load it again. The findings of a truncated output are
+		// real, and so are the fallback's under a declared parser the run could
+		// not use.
+		parsed := proc.ParserModule != ""
+		active := parsed && contract(proc.ParserModule)
 		proc.FailOn, proc.GateActive = failOn, active
 
 		var gating []int
