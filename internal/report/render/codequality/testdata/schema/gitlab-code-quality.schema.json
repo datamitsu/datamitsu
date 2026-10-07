@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "GitLab publishes no schema for Code Quality reports. This one is written from the field list of 'Code Quality report format' in https://docs.gitlab.com/ci/testing/code_quality/ (read 2026-09-28): a single JSON array of issues with description, check_name, fingerprint, severity (info, minor, major, critical, blocker) and a location whose path is repository-relative without './', and which names its line through lines.begin or positions.begin.line. categories are CodeClimate's (https://github.com/codeclimate/platform/blob/master/spec/analyzers/SPEC.md).",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["description", "check_name", "fingerprint", "severity", "location"],
+    "properties": {
+      "type": { "const": "issue" },
+      "description": { "type": "string" },
+      "check_name": { "type": "string", "minLength": 1 },
+      "fingerprint": { "type": "string", "minLength": 1 },
+      "severity": { "enum": ["info", "minor", "major", "critical", "blocker"] },
+      "categories": {
+        "type": "array",
+        "items": {
+          "enum": ["Bug Risk", "Clarity", "Compatibility", "Complexity", "Duplication", "Performance", "Security", "Style"]
+        }
+      },
+      "location": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1, "not": { "pattern": "^(\\./|/|[A-Za-z]:)" } },
+          "lines": {
+            "type": "object",
+            "required": ["begin"],
+            "properties": {
+              "begin": { "type": "integer", "minimum": 1 },
+              "end": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "positions": {
+            "type": "object",
+            "required": ["begin"],
+            "properties": {
+              "begin": { "$ref": "#/$defs/position" },
+              "end": { "$ref": "#/$defs/position" }
+            }
+          }
+        },
+        "oneOf": [{ "required": ["lines"] }, { "required": ["positions"] }]
+      }
+    }
+  },
+  "$defs": {
+    "position": {
+      "type": "object",
+      "required": ["line"],
+      "properties": {
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

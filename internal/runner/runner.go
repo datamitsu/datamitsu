@@ -1151,6 +1151,9 @@ func runSequential(
 	defer stopInterrupt()
 
 	opErr := sc.runOperations(ctx, operations)
+	if _, refused := errors.AsType[refusedReportsError](opErr); refused {
+		return opErr
+	}
 	sc.reportParseProblems()
 
 	if sc.explainLevel != "" {
@@ -1190,6 +1193,11 @@ func (sc *sharedContext) runOperations(ctx context.Context, operations []config.
 	}
 	ignoreFiles := bundled.IgnoreFilesIn(allFiles)
 	sc.planner.SeedFiles(allFiles)
+	if sc.explainLevel == "" {
+		if err := sc.refuseCrowdedReports(ctx, operations); err != nil {
+			return err
+		}
+	}
 
 	if hasFix && sc.explainLevel == "" {
 		if err := bundled.RunFix(sc.rootPath, ignoreFiles); err != nil {

@@ -1,6 +1,8 @@
 package runner
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -13,8 +15,10 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render"
+	"github.com/datamitsu/datamitsu/internal/report/render/common"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/datamitsu/datamitsu/internal/uievent"
@@ -237,6 +241,7 @@ func (sc *sharedContext) buildReport(operations []config.OperationType) (*report
 			Vendor: sc.ci.Vendor, SHA: sc.ci.SHA, Ref: sc.ci.Ref, BaseRef: sc.ci.BaseRef, PRNumber: sc.ci.PRNumber,
 		},
 	})
+	render.Describe(run, sc.opts.Reports)
 	report.Mask(run, sc.secretValues())
 	return run, targets
 }
@@ -251,10 +256,16 @@ func (sc *sharedContext) writeReports(run *report.Run, targets []*render.Target,
 	if run == nil {
 		return err
 	}
+	for _, note := range render.Notes(run, sc.opts.Reports) {
+		logger.Logger.Warn(note)
+	}
 	var failures []error
 	for _, t := range targets {
 		status, msg := report.ExportWritten, ""
-		if writeErr := t.Write(run); writeErr != nil {
+		writeErr := t.Write(run)
+		if declined, ok := errors.AsType[render.DeclinedError](writeErr); ok {
+			status, msg = report.ExportOmitted, declined.Reason
+		} else if writeErr != nil {
 			status, msg = report.ExportFailed, writeErr.Error()
 			failures = append(failures, fmt.Errorf("report %s: %s: %w", t.Spec.Format, t.Spec.Path, writeErr))
 		}
@@ -277,6 +288,56 @@ func (sc *sharedContext) writeReports(run *report.Run, targets []*render.Target,
 		return err
 	}
 	return exitcode.ExportError{Err: failures[last]}
+}
+
+// refusedReports is a report refused once the plan is known but before any
+// tool ran: the run returns it as it is and writes nothing.
+type refusedReportsError struct{ exitcode.UsageError }
+
+// refuseCrowdedReports refuses, before anything runs, a report asked for as
+// one file — or stdout — whose format holds fewer tools in one file than the
+// run plans for the operation it writes: SARIF, which GitHub reads at most
+// twenty runs of per file. A directory target splits such a run instead.
+func (sc *sharedContext) refuseCrowdedReports(ctx context.Context, operations []config.OperationType) error {
+	var capped []render.Spec
+	for _, s := range sc.opts.Reports {
+		if _, ok := render.OneFileCap(s); ok {
+			capped = append(capped, s)
+		}
+	}
+	if len(capped) == 0 {
+		return nil
+	}
+	names := make([]string, len(operations))
+	for i, op := range operations {
+		names[i] = string(op)
+	}
+	plan, err := sc.planner.Plan(ctx, config.OperationType(common.ListedOperationName(names)), sc.selection, sc.selectedTools)
+	if err != nil || plan == nil {
+		// The operation meets the same error when it plans, and says so.
+		return nil //nolint:nilerr // not this check's error to report
+	}
+	tools := map[string]bool{}
+	for _, group := range plan.Groups {
+		for _, task := range group.Tasks {
+			tools[task.ToolName] = true
+		}
+	}
+	for _, crowded := range capped {
+		err := render.CheckCapacity(crowded, len(tools))
+		if err == nil {
+			continue
+		}
+		for _, spec := range sc.opts.Reports {
+			status := report.ExportOmitted
+			if spec.Format == crowded.Format {
+				status = report.ExportRefused
+			}
+			emitReport(spec, status, err.Error(), sc.secretValues())
+		}
+		return refusedReportsError{exitcode.UsageError{Err: err}}
+	}
+	return nil
 }
 
 // omitReports says, for a run that could not start, that none of its reports

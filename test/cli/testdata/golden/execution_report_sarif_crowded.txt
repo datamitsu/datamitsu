@@ -1,0 +1,8 @@
+exit code: 2
+===STDOUT===
+╭<RULE>╮
+│ datamitsu  <VERSION> │
+╰<RULE>╯
+
+===STDERR===
+error: report sarif would hold 21 tools in one file, more than the 20 it can: name a directory, sarif=<dir>/, to split it into files of at most 20

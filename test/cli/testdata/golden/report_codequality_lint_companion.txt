@@ -1,0 +1,43 @@
+{
+  "schema": "datamitsu.completeness/1",
+  "format": "codequality",
+  "complete": false,
+  "incomplete": [],
+  "tools": [
+    {
+      "operation": "lint",
+      "name": "alpha",
+      "complete": false,
+      "incomplete": [
+        "no-extraction"
+      ]
+    },
+    {
+      "operation": "lint",
+      "name": "hadolint",
+      "complete": true,
+      "incomplete": []
+    },
+    {
+      "operation": "lint",
+      "name": "outsider",
+      "complete": true,
+      "incomplete": []
+    }
+  ],
+  "omitted": [
+    {
+      "tool": "outsider",
+      "reason": "outside-repository",
+      "count": 1
+    }
+  ],
+  "exports": [
+    {
+      "format": "codequality",
+      "path": "gl-code-quality.json",
+      "status": "written",
+      "companion": "gl-code-quality.json.completeness.json"
+    }
+  ]
+}

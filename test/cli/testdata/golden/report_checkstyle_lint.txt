@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="datamitsu-<VERSION>">
+  <file name="/outside/Dockerfile">
+    <error line="2" severity="error" message="Use absolute WORKDIR" source="outsider/DL3000"/>
+  </file>
+  <file name="Dockerfile">
+    <error line="1" column="1" severity="warning" message="Always tag the version of an image explicitly" source="hadolint/DL3006"/>
+  </file>
+  <file name="">
+    <error severity="error" message="beta exited 1 without parsable findings" source="beta"/>
+  </file>
+</checkstyle>

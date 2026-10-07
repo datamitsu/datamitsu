@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="datamitsu" tests="8" failures="0" errors="1" skipped="0" time="<DUR>">
+  <testsuite name="lint/alpha" tests="3" failures="0" errors="0" skipped="0" time="<DUR>" timestamp="<TS>">
+    <properties>
+      <property name="complete" value="false"/>
+      <property name="incomplete" value="no-extraction"/>
+      <property name="cached" value="0"/>
+      <property name="run.complete" value="false"/>
+      <property name="run.incomplete" value=""/>
+    </properties>
+    <testcase classname="alpha" name="Dockerfile" time="<DUR>"/>
+    <testcase classname="alpha" name="exec.config.js" time="<DUR>"/>
+    <testcase classname="alpha" name="fixture.marker" time="<DUR>"/>
+  </testsuite>
+  <testsuite name="lint/beta" tests="4" failures="0" errors="1" skipped="0" time="<DUR>" timestamp="<TS>">
+    <properties>
+      <property name="complete" value="false"/>
+      <property name="incomplete" value="no-extraction"/>
+      <property name="cached" value="0"/>
+      <property name="run.complete" value="false"/>
+      <property name="run.incomplete" value=""/>
+    </properties>
+    <testcase classname="beta" name="Dockerfile" time="<DUR>"/>
+    <testcase classname="beta" name="exec.config.js" time="<DUR>"/>
+    <testcase classname="beta" name="fixture.marker" time="<DUR>"/>
+    <testcase classname="beta" name="." time="<DUR>">
+      <error type="exit" message="exit 1">beta exited 1 without parsable findings
+beta: failed</error>
+    </testcase>
+  </testsuite>
+  <testsuite name="lint/hadolint" tests="1" failures="0" errors="0" skipped="0" time="<DUR>" timestamp="<TS>">
+    <properties>
+      <property name="complete" value="true"/>
+      <property name="incomplete" value=""/>
+      <property name="cached" value="0"/>
+      <property name="run.complete" value="false"/>
+      <property name="run.incomplete" value=""/>
+    </properties>
+    <testcase classname="hadolint" name="Dockerfile" time="<DUR>">
+      <system-out>Dockerfile:1:1: warning hadolint(DL3006): Always tag the version of an image explicitly</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

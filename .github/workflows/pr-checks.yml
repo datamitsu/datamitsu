@@ -160,6 +160,10 @@ jobs:
           tags: datamitsu:pr-${{ github.event.pull_request.number }}-alpine
   lint:
     name: Lint
+    permissions:
+      contents: read
+      # The run's SARIF goes to code scanning.
+      security-events: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -172,13 +176,40 @@ jobs:
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum
-      # Every tool runs, so the annotations cover the whole repository. The
-      # variable rather than --fail-fast=false: a core older than the flag, which
-      # the wrapper may pin, ignores the variable instead of refusing the flag.
+      # Every tool runs, so the annotations cover the whole repository, and the
+      # run writes its SARIF split over files of twenty tools. Variables rather
+      # than --fail-fast=false and --report: a core older than the flags, which
+      # the wrapper may pin, ignores the variables instead of refusing the flags.
       - env:
           DATAMITSU_FAIL_FAST: "false"
+          DATAMITSU_REPORT: sarif=lint-sarif/
         name: Run datamitsu lint
         run: pnpm dm lint
+      # One upload per file, whatever the lint step's outcome, of each file it
+      # wrote: the action combines the files of a directory into one upload,
+      # which GitHub refuses above twenty runs. A run refused before it started
+      # writes nothing, and a pull request from a fork gets a read-only token.
+      - if: always() && hashFiles('lint-sarif/datamitsu-1.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        name: Upload SARIF to code scanning (tools 1-20)
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: lint-sarif/datamitsu-1.sarif
+      - if: always() && hashFiles('lint-sarif/datamitsu-2.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        name: Upload SARIF to code scanning (tools 21-40)
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: lint-sarif/datamitsu-2.sarif
+      - if: always() && hashFiles('lint-sarif/datamitsu-3.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        name: Upload SARIF to code scanning (tools 41-60)
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: lint-sarif/datamitsu-3.sarif
+      # A fourth file would go unread: fail rather than leave tools out.
+      - if: always() && hashFiles('lint-sarif/datamitsu-4.sarif') != ''
+        name: Check every SARIF file was uploaded
+        run: |
+          echo "::error::lint-sarif holds more than three files; add an upload step for each one"
+          exit 1
   llms-docs-drift:
     name: Embedded Docs Drift
     runs-on: ubuntu-latest
