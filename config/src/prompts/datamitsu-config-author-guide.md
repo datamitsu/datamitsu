@@ -84,6 +84,12 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.4.0** - `devtools pull-github` accepts a strict top-level `platforms`
+  list in its JSON manifest. It saves removal of unselected binary records
+  before pulling, even if a pull fails. Changing or removing the list changes
+  `configHash` and reruns detection at the same tag. See
+  `datamitsu llms reference/cli-commands` for supported identifiers.
+
 - **after v0.3.1** - `lint --baseline` and `check --baseline` gate only on the
   findings a baseline does not hold, but never override a tool's exit code
   (`datamitsu llms guides/reports`). Nothing changes for a configuration that

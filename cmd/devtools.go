@@ -120,6 +120,21 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load %s: %w", githubAppsPath, err)
 	}
 
+	history := *state
+	history.Binaries = make(map[string]*appstate.BinariesEntry, len(state.Binaries))
+	for name, entry := range state.Binaries {
+		if entry != nil {
+			copyEntry := *entry
+			history.Binaries[name] = &copyEntry
+		}
+	}
+	if state.FilterPlatforms() {
+		if err := appstate.Save(githubAppsPath, state); err != nil {
+			return err
+		}
+		fmt.Println("Removed unselected platforms from manifest; this filter remains applied if a pull fails.")
+	}
+
 	if len(state.Apps) == 0 {
 		fmt.Printf("No apps found in %s\n", githubAppsPath)
 		return nil
@@ -136,7 +151,7 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 	names := slices.Sorted(maps.Keys(state.Apps))
 	for i, appName := range names {
 		fmt.Printf("\n=== Processing %s [%d/%d] ===\n", appName, i+1, len(names))
-		for _, failure := range pullGithubApp(ctx, client, state, githubAppsPath, appName, minAge) {
+		for _, failure := range pullGithubApp(ctx, client, state, githubAppsPath, appName, minAge, &history) {
 			fmt.Fprintf(os.Stderr, "✗ %s: %s: %v\n", appName, failure.stage, failure.err)
 			if failure.fatal {
 				fmt.Fprintf(os.Stderr, "The run stopped at %s; the apps after it were not attempted.\n", appName)
@@ -146,7 +161,7 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return reportPullGithub(githubAppsPath, len(state.Apps), failures)
+	return reportPullGithub(githubAppsPath, len(state.Apps), failures, state.Platforms != nil)
 }
 
 // pullFailure is one app pull-github could not finish: the stage that failed
@@ -162,7 +177,7 @@ type pullFailure struct {
 // returns nothing on success; on failure it leaves the app's entry as it was
 // and returns what failed — one entry, or one per platform whose asset could
 // not be verified.
-func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.State, githubAppsPath, appName string, minAge int) []pullFailure {
+func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.State, githubAppsPath, appName string, minAge int, history ...*appstate.State) []pullFailure {
 	metadata := state.Apps[appName]
 	fail := func(stage string, err error) []pullFailure {
 		return []pullFailure{{app: appName, stage: stage, err: err}}
@@ -216,7 +231,7 @@ func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.S
 		Repo:  metadata.Repo,
 		Tag:   effectiveTag,
 	}
-	currentHash := appstate.ComputeConfigHash(hashMetadata)
+	currentHash := appstate.ComputeConfigHash(hashMetadata, state.Platforms)
 
 	// Check if binaries already exist and config hasn't changed
 	if state.Binaries[appName] != nil && state.Binaries[appName].ConfigHash == currentHash {
@@ -235,7 +250,11 @@ func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.S
 	}
 
 	// Build binaries into a temporary entry to avoid mutating shared state on failure
-	binariesEntry, err := buildBinariesForApp(ctx, appName, release, currentHash, state)
+	buildState := state
+	if len(history) > 0 {
+		buildState = history[0]
+	}
+	binariesEntry, err := buildBinariesForApp(ctx, appName, release, currentHash, buildState)
 	if err != nil {
 		if unverified, ok := errors.AsType[*verificationError](err); ok {
 			failures := make([]pullFailure, 0, len(unverified.platforms))
@@ -297,8 +316,8 @@ func (e *verificationError) Error() string {
 
 // reportPullGithub prints the run's outcome. With failures it lists each app,
 // the stage and the error, so nobody reads the log for them, and returns an
-// error so the command exits non-zero. Every failed app is left as it was.
-func reportPullGithub(githubAppsPath string, total int, failures []pullFailure) error {
+// error so the command exits non-zero. Platform pruning is not rolled back.
+func reportPullGithub(githubAppsPath string, total int, failures []pullFailure, filtered ...bool) error {
 	if len(failures) == 0 {
 		fmt.Printf("\n✓ Processed %d apps\n", total)
 		fmt.Printf("✓ Configuration saved to %s\n", githubAppsPath)
@@ -312,7 +331,11 @@ func reportPullGithub(githubAppsPath string, total int, failures []pullFailure) 
 		failedApps[f.app] = true
 		rateLimited = rateLimited || isRateLimited(f.err)
 	}
-	fmt.Fprintf(os.Stderr, "\n✗ %d of %d apps failed and are left as they were in %s:\n", len(failedApps), total, githubAppsPath)
+	outcome := "apps failed and are left as they were"
+	if len(filtered) > 0 && filtered[0] {
+		outcome = "apps failed; previous tags and selected binaries are retained"
+	}
+	fmt.Fprintf(os.Stderr, "\n✗ %d of %d %s in %s:\n", len(failedApps), total, outcome, githubAppsPath)
 	for _, f := range failures {
 		fmt.Fprintf(os.Stderr, "  %s (%s): %v\n", f.app, f.stage, f.err)
 	}
@@ -329,25 +352,27 @@ type platformTuple struct {
 }
 
 func buildPlatformTuples() []platformTuple {
-	baseArches := []syslist.ArchType{syslist.ArchTypeAmd64, syslist.ArchTypeArm64}
-	nonLinuxOSes := []syslist.OsType{syslist.OsTypeDarwin, syslist.OsTypeWindows, syslist.OsTypeFreebsd, syslist.OsTypeOpenbsd}
-	linuxLibcs := []string{"glibc", "musl"}
-
-	tuples := make([]platformTuple, 0, len(nonLinuxOSes)*len(baseArches)+len(baseArches)*len(linuxLibcs))
-
-	for _, osType := range nonLinuxOSes {
-		for _, arch := range baseArches {
-			tuples = append(tuples, platformTuple{os: osType, arch: arch, libc: "unknown"})
+	supported := appstate.SupportedPlatforms()
+	tuples := make([]platformTuple, 0, len(supported))
+	for _, id := range supported {
+		parts := strings.Split(id, "/")
+		libc := "unknown"
+		if len(parts) == 3 {
+			libc = parts[2]
 		}
+		tuples = append(tuples, platformTuple{os: syslist.OsType(parts[0]), arch: syslist.ArchType(parts[1]), libc: libc})
 	}
-
-	for _, arch := range baseArches {
-		for _, libc := range linuxLibcs {
-			tuples = append(tuples, platformTuple{os: syslist.OsTypeLinux, arch: arch, libc: libc})
-		}
-	}
-
 	return tuples
+}
+
+func selectedPlatformTuples(selection []string) []platformTuple {
+	platforms := buildPlatformTuples()
+	if selection == nil {
+		return platforms
+	}
+	return slices.DeleteFunc(platforms, func(p platformTuple) bool {
+		return !slices.Contains(selection, formatPlatformLabel(detectionResult{os: p.os, arch: p.arch, libc: p.libc}))
+	})
 }
 
 type detectionResult struct {
@@ -375,7 +400,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 		historicalBinaries = state.Binaries[appName].Binaries
 	}
 
-	platforms := buildPlatformTuples()
+	platforms := selectedPlatformTuples(state.Platforms)
 
 	// Track seen assets per OS/arch for deduplication.
 	// When the same binary (URL+hash) is detected for both glibc and musl,
@@ -454,7 +479,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 
 		// Deduplicate: if this is a musl tuple and the glibc entry for the same
 		// OS/arch has the same URL+hash, skip to avoid duplicate entries.
-		if platform.libc == "musl" {
+		if platform.libc == "musl" && state.Platforms == nil {
 			if osMap, ok := seenByOsArch[platform.os]; ok {
 				if seen, ok := osMap[platform.arch]; ok {
 					if seen.url == pick.asset.BrowserDownloadURL && seen.hash == pick.hash {
@@ -530,6 +555,16 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 			}
 		}
 		return nil, unverified
+	}
+
+	if state.Platforms != nil && notAvailableCount > 0 {
+		var missing []string
+		for _, r := range results {
+			if r.status == "not_available" {
+				missing = append(missing, formatPlatformLabel(r))
+			}
+		}
+		return nil, fmt.Errorf("app %s release %s has no compatible asset for selected platforms: %s", appName, release.TagName, strings.Join(missing, ", "))
 	}
 
 	switch {

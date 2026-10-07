@@ -207,7 +207,7 @@ function getConfig(config) {
 
 ### Binary Apps: `devtools pull-github`
 
-Binary apps are downloaded directly from GitHub releases. Use `pull-github` to fetch the latest release versions and compute hashes automatically.
+Binary apps are downloaded directly from GitHub releases. Use `pull-github` to fetch the latest release versions and published SHA-256 digests.
 
 **Apply updates:**
 
@@ -215,7 +215,19 @@ Binary apps are downloaded directly from GitHub releases. Use `pull-github` to f
 datamitsu devtools pull-github apps/githubApps.json --update
 ```
 
-With `--update`, the command fetches the latest release tags, downloads binaries for all platform tuples (Darwin/Linux/Windows/FreeBSD/OpenBSD on amd64/arm64, Linux with glibc/musl), computes SHA-256 hashes, fetches the repository description from GitHub API, and writes the results back to the JSON file.
+With `--update`, the command fetches the latest release tags, detects binaries for all platform tuples (Darwin/Linux/Windows/FreeBSD/OpenBSD on amd64/arm64, Linux with glibc/musl), reads their published SHA-256 digests, fetches the repository description from GitHub API, and writes the results back to the JSON file.
+
+To keep only specific platforms, add a top-level list to `githubApps.json`:
+
+```json
+"platforms": ["darwin/arm64", "linux/amd64/musl"]
+```
+
+The list strictly matches supported identifiers and removes unselected existing
+binary records before the pull. Those deletions remain saved if the pull fails.
+Changing the set or removing the field reruns detection even at the same tag.
+See [the command reference](/docs/reference/cli-commands#devtools-pull-github)
+for supported values and validation rules.
 
 **Verify binary extraction after update:**
 

@@ -4,9 +4,11 @@ package appstate
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/hashutil"
@@ -22,15 +24,16 @@ type AppMetadata struct {
 
 // BinariesEntry represents binaries for a single app with metadata
 type BinariesEntry struct {
-	ConfigHash  string                   `json:"configHash,omitempty"` // Hash of owner:repo:tag
+	ConfigHash  string                   `json:"configHash,omitempty"` // Hash of app metadata and target platforms
 	Description string                   `json:"description,omitempty"`
 	Binaries    binmanager.MapOfBinaries `json:"binaries"`
 }
 
 // State represents the githubApps.json structure
 type State struct {
-	Apps     map[string]*AppMetadata   `json:"apps"`
-	Binaries map[string]*BinariesEntry `json:"binaries"`
+	Platforms []string                  `json:"platforms,omitempty"`
+	Apps      map[string]*AppMetadata   `json:"apps"`
+	Binaries  map[string]*BinariesEntry `json:"binaries"`
 }
 
 // Load reads and parses githubApps.json
@@ -43,6 +46,17 @@ func Load(path string) (*State, error) {
 	var state State
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, fmt.Errorf("failed to parse githubApps.json: %w", err)
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, fmt.Errorf("failed to parse manifest fields: %w", err)
+	}
+	if raw, present := fields["platforms"]; present && (string(raw) == "null" || len(state.Platforms) == 0) {
+		return nil, errors.New("platforms must be a non-empty array of supported platform identifiers")
+	}
+	if err := ValidatePlatforms(state.Platforms); err != nil {
+		return nil, err
 	}
 
 	// Initialize maps if nil
@@ -118,11 +132,18 @@ func Validate(appName string, metadata *AppMetadata) error {
 	return nil
 }
 
-// ComputeConfigHash computes an XXH3-128 hash for app configuration (owner:repo:tag).
-func ComputeConfigHash(metadata *AppMetadata) string {
-	return hashutil.XXH3Multi(
-		[]byte(metadata.Owner),
-		[]byte(metadata.Repo),
-		[]byte(metadata.Tag),
-	)
+// ComputeConfigHash includes an order-independent platform selection. An absent
+// selection preserves the legacy hash and restores default-all after filtering.
+func ComputeConfigHash(metadata *AppMetadata, selections ...[]string) string {
+	parts := [][]byte{[]byte(metadata.Owner), []byte(metadata.Repo), []byte(metadata.Tag)}
+	if len(selections) > 0 && selections[0] != nil {
+		platforms := slices.Clone(selections[0])
+		slices.Sort(platforms)
+		platforms = slices.Compact(platforms)
+		parts = append(parts, []byte("platforms"))
+		for _, platform := range platforms {
+			parts = append(parts, []byte(platform))
+		}
+	}
+	return hashutil.XXH3Multi(parts...)
 }
