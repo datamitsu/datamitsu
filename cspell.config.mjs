@@ -41,6 +41,8 @@ export default defineConfig((config) => ({
   words: [
     ...config.words,
     "nosniff",
+    // checkmake's rule for a missing .PHONY target, quoted by the parser tests.
+    "minphony",
     // The file name of the officialUrl derivation and its tests.
     "officialurl",
     // The forges and package hosts an app's derived officialUrl can point at.

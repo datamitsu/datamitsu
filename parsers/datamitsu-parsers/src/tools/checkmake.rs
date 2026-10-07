@@ -6,6 +6,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "checkmake",
 	description: "`make` linter.",
 	url: "https://github.com/mrtazz/checkmake",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--format='{{.LineNumber}}:{{.Rule}}:{{.Violation}}\n'", "{file}"],
@@ -68,3 +72,11 @@ mod tests {
 		assert!(parse(b"some header line\n", b"", 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"1:minphony:Required target \"all\" is missing from the Makefile.\n\n4:maxbodylength:Target body for \"build\" exceeds allowed length of 5 (7).\n\n",
+	stderr: b"Error: violations found (2)\n",
+	exit: 1,
+}];

@@ -203,6 +203,42 @@ func TestInvalidationKeyFormat(t *testing.T) {
 	}
 }
 
+// TestInvalidationKeyIgnoresFailOn: a pass holds at every threshold, so an
+// operation's failOn is not part of the key, while any other edit is.
+func TestInvalidationKeyIgnoresFailOn(t *testing.T) {
+	cfg := func(failOn config.Severity, args ...string) config.Config {
+		return config.Config{Tools: config.MapOfTools{
+			"lint": {Name: "lint", Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {App: "lint", Args: args, FailOn: failOn},
+			}},
+			// A tool kept only to be skipped declares no operations at all.
+			"placeholder": {Name: "placeholder", Skip: true},
+		}}
+	}
+	key := func(c config.Config) string {
+		t.Helper()
+		k, err := calculateInvalidationKey(c, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return k
+	}
+	base := key(cfg("", "--check"))
+	for _, failOn := range []config.Severity{config.SeverityWarning, config.SeverityHint} {
+		if got := key(cfg(failOn, "--check")); got != base {
+			t.Errorf("failOn %q moved the key", failOn)
+		}
+	}
+	if key(cfg("", "--other")) == base {
+		t.Error("an args edit did not move the key")
+	}
+	withFailOn := cfg(config.SeverityWarning, "--check")
+	_ = key(withFailOn)
+	if withFailOn.Tools["lint"].Operations[config.OpLint].FailOn != config.SeverityWarning {
+		t.Error("computing the key changed the configuration")
+	}
+}
+
 func TestContentHashFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 

@@ -50,6 +50,7 @@ type Effective struct {
 	ConfigCache              bool   `json:"configCache"`
 	FailFast                 bool   `json:"failFast"`
 	FailFastSource           string `json:"failFastSource"`
+	FailOn                   string `json:"failOn"`
 	ForceGitSubprocess       bool   `json:"forceGitSubprocess"`
 	InstallTimeoutSeconds    int    `json:"installTimeoutSeconds"`
 	Libc                     string `json:"libc"`
@@ -87,6 +88,7 @@ func Compute() Effective {
 		ConfigCache:              env.ConfigCacheEnabled(),
 		FailFast:                 failFast,
 		FailFastSource:           failFastSource,
+		FailOn:                   env.FailOn(),
 		ForceGitSubprocess:       env.IsForceGitSubprocessEnabled(),
 		InstallTimeoutSeconds:    env.InstallTimeoutSeconds(),
 		Libc:                     string(target.HostTarget().Libc),

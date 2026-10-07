@@ -431,6 +431,14 @@ func parseFailFast(raw string) (value, ok bool) {
 	return false, false
 }
 
+// FailOn returns DATAMITSU_FAIL_ON exactly as set, "" when unset. It has no
+// fallback: a mistyped threshold must be refused, never read as the default
+// that gates less, so the command layer validates it and exits 2 on a value
+// that is not a level.
+func FailOn() string {
+	return os.Getenv(failOn.Name)
+}
+
 // NoParse reports whether a failure shows the tools' raw output instead of
 // their parsed findings — the env twin of the --no-parse flag. Parsing itself
 // still runs.

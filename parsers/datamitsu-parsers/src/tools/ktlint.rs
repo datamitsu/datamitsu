@@ -4,18 +4,22 @@
 //! ktlint's `--reporter=json` emits a per-file array, each entry holding a nested
 //! `errors` array — not the flat none-ls default JSON — so the navigation is
 //! hand-written over `tinyjson` rather than via `json_diag::from_json`.
-//! Severity follows the builtin: an empty `rule` → ERROR, otherwise WARN.
+//! The `errors` key is the level: every entry under it is an error.
 
 use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "ktlint",
 	description: "An anti-bikeshedding Kotlin linter with built-in formatter.",
 	url: "https://ktlint.github.io/",
+	severities: &[Level(ERRORS, severity::ERROR)],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &[
@@ -29,6 +33,8 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	}],
 };
 
+const ERRORS: &str = "errors";
+
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
 	let text = String::from_utf8_lossy(stdout);
 	let value: JsonValue = match text.parse() {
@@ -40,17 +46,23 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 		_ => return Vec::new(),
 	};
 
+	let level = severity::of(DESCRIPTOR.severities, ERRORS);
 	let mut out = Vec::new();
 	for file in files {
-		let errors = match file {
-			JsonValue::Object(m) => match m.get("errors") {
-				Some(JsonValue::Array(errs)) => errs,
-				_ => continue,
-			},
-			_ => continue,
+		let JsonValue::Object(file) = file else {
+			continue;
+		};
+		let Some(JsonValue::Array(errors)) = file.get(ERRORS) else {
+			continue;
+		};
+		let path = match file.get("file") {
+			Some(JsonValue::String(s)) => crate::diagnostic::file_field(s),
+			_ => None,
 		};
 		for err in errors {
-			if let Some(d) = from_error(err) {
+			if let Some(mut d) = from_error(err) {
+				d.file.clone_from(&path);
+				d.severity = level;
 				out.push(d);
 			}
 		}
@@ -67,22 +79,14 @@ fn from_error(value: &JsonValue) -> Option<RawDiagnostic> {
 		Some(JsonValue::String(s)) => s.clone(),
 		_ => return None,
 	};
-	let rule = match map.get("rule") {
-		Some(JsonValue::String(s)) => s.clone(),
-		_ => String::new(),
+	let code = match map.get("rule") {
+		Some(JsonValue::String(s)) if !s.is_empty() => Some(s.clone()),
+		_ => None,
 	};
-	// builtin: rule == "" -> ERROR, otherwise WARN.
-	let sev = if rule.is_empty() {
-		severity::ERROR
-	} else {
-		severity::WARNING
-	};
-	let code = if rule.is_empty() { None } else { Some(rule) };
 	Some(RawDiagnostic {
 		message,
 		row: get_u32(map, "line"),
 		col: get_u32(map, "column"),
-		severity: Some(sev),
 		source: Some("ktlint".to_string()),
 		code,
 		..RawDiagnostic::default()
@@ -102,30 +106,27 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn parses_nested_errors_and_severity() {
-		let json = br#"[
-            {
-                "file": "src/Main.kt",
-                "errors": [
-                    {"line": 1, "column": 1, "message": "Unexpected blank line(s) before \"}\"", "rule": "no-blank-line-before-rbrace"},
-                    {"line": 5, "column": 3, "message": "Something failed", "rule": ""}
-                ]
-            }
-        ]"#;
-		let out = parse(json, b"", 1);
+	fn parses_nested_errors() {
+		let out = parse(SAMPLES[0].stdout, b"", 1);
 		assert_eq!(out.len(), 2);
 
 		assert_eq!(out[0].message, "Unexpected blank line(s) before \"}\"");
 		assert_eq!(out[0].row, Some(1));
 		assert_eq!(out[0].col, Some(1));
-		assert_eq!(out[0].severity, Some(severity::WARNING));
-		assert_eq!(out[0].code.as_deref(), Some("no-blank-line-before-rbrace"));
+		assert_eq!(out[0].end_col, None);
+		assert_eq!(out[0].code.as_deref(), Some("standard:no-blank-line-before-rbrace"));
 		assert_eq!(out[0].source.as_deref(), Some("ktlint"));
 
-		// empty rule -> ERROR, no code.
-		assert_eq!(out[1].severity, Some(severity::ERROR));
 		assert_eq!(out[1].code, None);
 		assert_eq!(out[1].row, Some(5));
+	}
+
+	#[test]
+	fn an_entry_under_errors_is_an_error() {
+		for exit in [0, 1] {
+			let out = parse(SAMPLES[0].stdout, b"", exit);
+			assert!(out.iter().all(|d| d.severity == Some(severity::ERROR)), "{out:?}");
+		}
 	}
 
 	#[test]
@@ -135,4 +136,34 @@ mod tests {
 		// file with no errors array.
 		assert!(parse(br#"[{"file":"a.kt"}]"#, b"", 0).is_empty());
 	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let json = br#"[
+            {"file":"a.kt","errors":[{"line":1,"column":1,"message":"first","rule":"r1"}]},
+            {"file":"src/b.kts","errors":[{"line":2,"column":1,"message":"second","rule":"r2"}]},
+            {"file":"<stdin>","errors":[{"line":3,"column":1,"message":"piped","rule":"r3"}]}]"#;
+		let out = parse(json, b"", 1);
+		let got: Vec<_> = out.iter().map(|d| (d.message.as_str(), d.file.as_deref())).collect();
+		assert_eq!(
+			got,
+			[("first", Some("a.kt")), ("second", Some("src/b.kts")), ("piped", None)]
+		);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: br#"[
+    {
+        "file": "src/Main.kt",
+        "errors": [
+            {"line": 1, "column": 1, "message": "Unexpected blank line(s) before \"}\"", "rule": "standard:no-blank-line-before-rbrace"},
+            {"line": 5, "column": 3, "message": "Not a valid Kotlin file (5:3 expecting a top level declaration)", "rule": ""}
+        ]
+    }
+]"#,
+	stderr: b"",
+	exit: 1,
+}];

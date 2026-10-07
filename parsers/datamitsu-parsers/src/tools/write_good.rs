@@ -22,6 +22,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "write_good",
 	description: "English prose linter.",
 	url: "https://github.com/btford/write-good",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--text={file}", "--parse"],
@@ -95,3 +99,11 @@ mod tests {
 		assert!(out.is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"1:6:\"is detected\" may be passive voice\n3:0:\"So\" is a weasel word and can weaken meaning\n",
+	stderr: b"",
+	exit: 0,
+}];

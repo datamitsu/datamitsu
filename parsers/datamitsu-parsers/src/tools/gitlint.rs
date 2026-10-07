@@ -6,6 +6,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "gitlint",
 	description: "Linter for Git commit messages.",
 	url: "https://jorisroovers.com/gitlint/",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--msg-filename", "{file}"],
@@ -67,3 +71,11 @@ mod tests {
 		assert!(parse(b"", stderr, 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"1: T1 Title exceeds max length (90>72): \"feat: a very long commit title that keeps going well past the limit gitlint enforces\"\n3: B5 Body message is too short (12<20): \"short body\"\n",
+	exit: 2,
+}];

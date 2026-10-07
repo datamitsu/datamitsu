@@ -199,6 +199,28 @@ func TestConfigRuntimeFailFast(t *testing.T) {
 	}
 }
 
+// TestConfigRuntimeFailOn: `datamitsu config runtime | jq .failOn` reports the
+// global failOn raise, empty when DATAMITSU_FAIL_ON is not set.
+func TestConfigRuntimeFailOn(t *testing.T) {
+	for _, tc := range []struct{ env, want string }{{"", ""}, {"DATAMITSU_FAIL_ON=warning", "warning"}} {
+		var env []string
+		if tc.env != "" {
+			env = []string{tc.env}
+		}
+		res := clitest.Run(t, clitest.RunOptions{Env: env}, "config", "runtime")
+		if res.ExitCode != 0 {
+			t.Fatalf("`config runtime` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+		}
+		var eff map[string]any
+		if err := json.Unmarshal([]byte(res.Stdout), &eff); err != nil {
+			t.Fatalf("invalid JSON: %v\nstdout:\n%s", err, res.Stdout)
+		}
+		if got, ok := eff["failOn"].(string); !ok || got != tc.want {
+			t.Errorf("with %q, runtime[failOn] = %v, want %q", tc.env, eff["failOn"], tc.want)
+		}
+	}
+}
+
 // chainHashConfigJS is a config with two managed files used to exercise
 // `config chain-hash`. The files exist on disk with fixed content, so the
 // chain hashes (XXH3-128 of the content entering each file's root layer) are

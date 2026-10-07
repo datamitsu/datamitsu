@@ -2,13 +2,15 @@
 //!
 //! Ported from the none-ls `diagnostics/sqruff` builtin. It runs
 //! `sqruff lint --format github-annotation-native {file}` and reads diagnostics
-//! from **stderr**. Each line is a GitHub annotation:
+//! from **stderr**. Each line is a GitHub workflow annotation:
 //!
 //! ```text
-//! ::<severity> <...>,file=<file>,line=<row>,col=<col>::<rule>: <message>
+//! ::<level> <...>,file=<file>,line=<row>,col=<col>::<rule>: <message>
 //! ```
 //!
-//! e.g. `::error title=sqruff,file=test.sql,line=1,col=1::L010: Keywords must be consistently upper case.`.
+//! e.g. `::error title=sqruff,file=test.sql,line=1,col=1::LT01: Expected only single space.`.
+//! The level is a GitHub annotation level, the line and column are 1-based, and
+//! no end is printed.
 //!
 //! none-ls Lua pattern:
 //! `^::(%w+) .*,file=(.*),line=(%d+),col=(%d+)::(%w+: .*)`
@@ -16,12 +18,20 @@
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "sqruff",
 	description: "A high-speed SQL linter written in Rust.",
 	url: "https://github.com/quarylabs/sqruff",
+	severities: &[
+		Level("error", severity::ERROR),
+		Level("warning", severity::WARNING),
+		Level("notice", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["lint", "--format", "github-annotation-native", "{file}"],
@@ -48,36 +58,38 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// Split the annotation header (before "::") from the message (after).
 	let close = rest.find("::")?;
 	let header = &rest[..close];
-	let message = &rest[close + 2..];
 
 	// The Lua pattern requires the message to be `%w+: .*` (a word + ": ").
-	if !message_is_rule_prefixed(message) {
-		return None;
-	}
+	let (code, message) = split_rule(&rest[close + 2..])?;
 
 	let row = field_after(header, ",line=")?;
 	let col = field_after(header, ",col=")?;
-	// file= must be present (the pattern requires it) but is unused downstream.
-	if !header.contains(",file=") {
-		return None;
-	}
+	let file = file_after(header)?;
 
 	Some(RawDiagnostic {
 		message: message.to_string(),
 		row: Some(row),
 		col: Some(col),
-		severity: severity_of(severity_tok),
+		severity: severity::of(DESCRIPTOR.severities, severity_tok),
+		code: Some(code.to_string()),
+		file: crate::diagnostic::file_field(&file),
 		..RawDiagnostic::default()
 	})
 }
 
-/// Matches the Lua `(%w+: .*)` message capture: a word followed by ": ".
-fn message_is_rule_prefixed(message: &str) -> bool {
-	let Some(colon) = message.find(": ") else {
-		return false;
-	};
-	let word = &message[..colon];
-	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
+/// The `file=` property, which the pattern requires. It runs to the next
+/// property; a workflow command escapes `,` `:` and `%` inside a value.
+fn file_after(header: &str) -> Option<String> {
+	let start = header.find(",file=")? + ",file=".len();
+	let value = header[start..].split(',').next()?;
+	Some(value.replace("%2C", ",").replace("%3A", ":").replace("%25", "%"))
+}
+
+/// Splits the Lua `(%w+: .*)` message capture into the rule and its text.
+fn split_rule(message: &str) -> Option<(&str, &str)> {
+	let (word, text) = message.split_once(": ")?;
+	let is_rule = !word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_');
+	is_rule.then_some((word, text))
 }
 
 /// Parses the unsigned integer immediately following `key` in `header`.
@@ -87,13 +99,6 @@ fn field_after(header: &str, key: &str) -> Option<u32> {
 	digits.parse().ok()
 }
 
-fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		_ => None,
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -101,22 +106,33 @@ mod tests {
 	#[test]
 	fn parses_error_annotation() {
 		let d =
-			parse_line("::error title=sqruff,file=test.sql,line=1,col=1::L010: Keywords must be consistently upper case.")
+			parse_line("::error title=sqruff,file=test.sql,line=1,col=1::CP01: Keywords must be consistently upper case.")
 				.unwrap();
-		assert_eq!(d.message, "L010: Keywords must be consistently upper case.");
+		assert_eq!(d.message, "Keywords must be consistently upper case.");
+		assert_eq!(d.code.as_deref(), Some("CP01"));
 		assert_eq!(d.row, Some(1));
 		assert_eq!(d.col, Some(1));
+		assert_eq!(d.end_col, None);
 		assert_eq!(d.severity, Some(severity::ERROR));
 	}
 
 	#[test]
 	fn parse_reads_stderr_and_collects() {
-		let stderr = b"::error title=sqruff,file=a.sql,line=2,col=5::L044: Query produces an unknown number of result columns.\n::error title=sqruff,file=a.sql,line=10,col=3::CP01: Keywords must be lower case.\n";
-		let out = parse(b"", stderr, 1);
+		let out = parse(b"", SAMPLES[0].stderr, 1);
 		assert_eq!(out.len(), 2);
 		assert_eq!(out[1].row, Some(10));
 		assert_eq!(out[1].col, Some(3));
-		assert_eq!(out[1].message, "CP01: Keywords must be lower case.");
+		assert_eq!(out[1].message, "Keywords must be lower case.");
+		assert_eq!(out[1].code.as_deref(), Some("CP01"));
+	}
+
+	#[test]
+	fn reads_the_other_annotation_levels() {
+		let stderr = b"::warning title=sqruff,file=a.sql,line=2,col=1::LT01: w\n\
+::notice title=sqruff,file=a.sql,line=3,col=1::LT02: n\n\
+::debug title=sqruff,file=a.sql,line=4,col=1::LT03: d\n";
+		let levels: Vec<_> = parse(b"", stderr, 1).iter().map(|d| d.severity).collect();
+		assert_eq!(levels, [Some(severity::WARNING), Some(severity::INFO), None]);
 	}
 
 	#[test]
@@ -125,4 +141,21 @@ mod tests {
 		// message without the `word: ` rule prefix fails the pattern.
 		assert!(parse_line("::error file=a.sql,line=1,col=1::just a message").is_none());
 	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"::error title=sqruff,file=models/a.sql,line=1,col=1::LT01: first\n\
+::warning title=sqruff,file=b%2Cc.sql,line=2,col=1::LT02: second\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some("models/a.sql".to_string()), Some("b,c.sql".to_string())]);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"",
+	stderr: b"::error title=sqruff,file=a.sql,line=2,col=5::AM04: Query produces an unknown number of result columns.\n\
+::error title=sqruff,file=a.sql,line=10,col=3::CP01: Keywords must be lower case.\n",
+	exit: 1,
+}];

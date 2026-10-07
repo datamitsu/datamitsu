@@ -7,11 +7,17 @@ structured, **nullable** diagnostics for the datamitsu Go core.
 
 A parser extracts **only what the tool actually emitted**. Every diagnostic field
 but `message` is optional; `None` means "the tool did not provide this", not an
-error. The Go core fills defaults (column, severity fallback, range completion)
-and computes diffs — the WASM module owns **only extraction**. Do not invent data
-in a parser, and do not finalize the diagnostic shape here: `RawDiagnostic`
-(`datamitsu-parsers/src/diagnostic.rs`) is a Phase-1 placeholder, finalized in
-Phase 2.
+error. The Go core fills defaults (column, the level of a finding without one,
+range completion) and computes diffs — the WASM module owns **only extraction**.
+Do not invent data in a parser, and do not finalize the diagnostic shape here:
+`RawDiagnostic` (`datamitsu-parsers/src/diagnostic.rs`) is a Phase-1 placeholder,
+finalized in Phase 2.
+
+Every parser also keeps the rules `src/contract.rs` checks for all of them: a
+level only from a token the tool printed, the tool's name in `source` and the
+rule in `code`, 1-based positions with an exclusive end, and a measured column
+unit. The [output parser guide](../website/docs/guides/architecture/parsers.md)
+explains each.
 
 ## Call contract (host ABI)
 
@@ -38,7 +44,8 @@ host loses multiline cases (e.g. `cue_fmt`); the parser decides whether to split
 
 `parse` returns a JSON array of diagnostics. Each object always has `message`;
 every other field (`row`, `col`, `end_row`, `end_col`, `severity`, `source`,
-`code`) is present only if the tool emitted it. An unknown tool name returns `[]`.
+`code`, `url`, `file`) is present only if the tool emitted it. An unknown tool
+name returns `[]`.
 
 ```json
 [{ "message": "missing newline", "row": 12, "col": 1, "code": "DL3000" }]
@@ -48,11 +55,14 @@ every other field (`row`, `col`, `end_row`, `end_col`, `severity`, `source`,
 
 Each tool is one module under `datamitsu-parsers/src/tools/`. To add one:
 
-1. Add `src/tools/<tool>.rs` with its `DESCRIPTOR` and
+1. Add `src/tools/<tool>.rs` with its `DESCRIPTOR` — the level vocabulary in
+   `severities`, `column_unit` (or an entry on `UNKNOWN_COLUMN_UNITS`),
+   `category` and `kind` — and
    `pub fn parse(stdout: &[u8], stderr: &[u8], exit_code: i32) -> Vec<RawDiagnostic>`,
-   and `cargo test` cases beside it.
-2. Register it: `pub mod <tool>;` and a dispatch arm in `src/tools/mod.rs`, and its
-   descriptor in `TOOLS` in `src/capabilities.rs`. The core checks a configuration's
+   with `cargo test` cases beside it and its `SAMPLES`.
+2. Register it: `pub mod <tool>;`, a dispatch arm and a `samples` entry in
+   `src/tools/mod.rs`, its descriptor in `TOOLS` in `src/capabilities.rs`, and its
+   row in `POSITIONS` in `src/contract.rs`. The core checks a configuration's
    parser key against `describe` before it parses, so a parser missing from `TOOLS`
    is treated as unknown even though it dispatches.
 3. When a configuration wires the parser, record a clean and a finding-bearing run

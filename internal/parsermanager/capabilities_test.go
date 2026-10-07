@@ -2,6 +2,8 @@ package parsermanager
 
 import (
 	"context"
+	"encoding/json"
+	"slices"
 	"sync/atomic"
 	"testing"
 
@@ -102,5 +104,39 @@ func TestListCapabilities_EmptyIsEmpty(t *testing.T) {
 	}
 	if len(cat.Tools) != 0 || len(cat.Conflicts) != 0 {
 		t.Errorf("empty manager should yield empty catalog, got %+v", cat)
+	}
+}
+
+// TestNormalizeSeverities covers the two descriptor schemas the core reads: a
+// schema-1 module declares no vocabulary even if its JSON carried one, and a
+// schema-2 or later tool that left the field out declares an empty one.
+func TestNormalizeSeverities(t *testing.T) {
+	cases := []struct {
+		name     string
+		describe string
+		contract bool
+		want     []string
+	}{
+		{"schema 1", `{"schemaVersion":1,"tools":[{"name":"t","severities":["error"]}]}`, false, nil},
+		{"schema 2 with a vocabulary", `{"schemaVersion":2,"tools":[{"name":"t","severities":["error","warning"]}]}`, true, []string{"error", "warning"}},
+		{"schema 2 with an empty vocabulary", `{"schemaVersion":2,"tools":[{"name":"t","severities":[]}]}`, true, []string{}},
+		{"schema 2 without the field", `{"schemaVersion":2,"tools":[{"name":"t"}]}`, true, []string{}},
+		{"a later schema", `{"schemaVersion":3,"tools":[{"name":"t","severities":["hint"],"future":1}]}`, true, []string{"hint"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var caps Capabilities
+			if err := json.Unmarshal([]byte(tc.describe), &caps); err != nil {
+				t.Fatal(err)
+			}
+			normalizeSeverities(&caps)
+			if caps.SeverityContract() != tc.contract {
+				t.Errorf("SeverityContract() = %v, want %v", caps.SeverityContract(), tc.contract)
+			}
+			got := caps.Tools[0].Severities
+			if (got == nil) != (tc.want == nil) || !slices.Equal(got, tc.want) {
+				t.Errorf("severities = %#v, want %#v", got, tc.want)
+			}
+		})
 	}
 }

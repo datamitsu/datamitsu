@@ -67,10 +67,75 @@ A point is an end equal to the start. Several tools print `0` for "no position"
 (trivy, reek, npm-groovy-lint), which is why `0` is read as `1` rather than kept.
 
 What the core cannot do is tell a 0-based positive column from a 1-based one, or
-an inclusive end from an exclusive one: column 5 is column 5 either way. Parsers
-whose tool counts from 0 (spectral, vacuum, pylint) or reports an inclusive end
-are corrected in the module, so a configuration pinned to an older module keeps
-the positions that module reported.
+an inclusive end from an exclusive one: column 5 is column 5 either way. The
+module corrects them, and the descriptor-schema-2 release audited every parser
+for it: spectral, pylint, selene, cmake-lint, djlint, erb-lint, npm-groovy-lint,
+ltrs and write-good read 0-based columns and add 1; actionlint, vale, mlint and
+rubocop print the last column of a span and have 1 added to make the end
+exclusive; and a parser no longer invents an end — or a start column — its tool
+did not print. The module's `POSITIONS` table (`src/contract.rs`) records, per
+parser, what its tool prints, and a new parser cannot be added without its row. A
+configuration pinned to an older module keeps the positions that module reported.
+
+Columns are counted in the unit the tool uses, which the descriptor declares as
+`columnUnit` where it was measured on a line holding multi-byte characters and a
+tab (every measured tool counts a tab as one column):
+
+| Tool          | Version measured | Unit                   |
+| ------------- | ---------------- | ---------------------- |
+| actionlint    | 1.7.12           | `utf-8` (bytes)        |
+| golangci-lint | 2.13.1           | `utf-8` (bytes)        |
+| cspell        | 10.0.1           | `utf-16` (code units)  |
+| eslint        | 10.9.0           | `utf-16` (code units)  |
+| tsc           | 7.0.2            | `utf-16` (code units)  |
+| harper-cli    | 2.8.0            | `utf-32` (code points) |
+| protolint     | 0.57.0           | `utf-32` (code points) |
+| vale          | 3.18.0           | `utf-32` (code points) |
+| yamllint      | 1.38.0           | `utf-32` (code points) |
+
+Every other parser declares none. checkmake and dotenv-linter print no column,
+and dclint and hadolint print column 1 for every finding, so no measurement can
+tell their unit.
+
+### Levels
+
+The core's scale has four levels: error, warning, info and hint. From descriptor
+schema 2 a module declares, for every tool, the level words that tool prints —
+its `severities` vocabulary, which the parser maps onto that scale. An empty
+vocabulary says the tool prints no level at all. A module at schema 1 declares
+nothing, and [`devtools parsers list`](../../reference/cli-commands.md#devtools-parsers)
+shows no `levels` for its tools.
+
+A parser sets a level only from a token the tool printed: a level word, a numeric
+level, a `severity` field, or a key that is one (`errors[]`, `warnings[]`). It
+reads the level through its vocabulary, so a level the tool never printed has no
+way in: not one the parser's author thought fitting for every finding, not an
+error for text on stderr or for output that would not decode. A finding without
+a token has no level. The module's contract test holds every parser to this over
+its samples and its recorded fixtures, and the
+[parser catalogue](../../reference/parser-catalog.md) lists each vocabulary.
+
+The core resolves a finding without a level from the exit code of the process
+that printed it: **error when the tool failed, warning when it passed**. For a
+tool with no level vocabulary the exit code is the only thing it says about
+seriousness, so a checkmake finding under a failed run shows as an error and the
+same finding under a passing run as a warning. A level the tool printed is never
+changed by the exit code; a value outside the 1–4 scale counts as none.
+
+A schema-1 module predates the rule: more than twenty of its parsers set a level
+the tool never printed — "warning" for every finding of markdownlint, codespell or
+golangci-lint, "error" for every finding of knip, kube-linter or cue — and its
+golangci-lint and tfsec parsers dropped the level those tools do print. A
+configuration pinned to it keeps those levels.
+
+### Rule identity
+
+`source` names the tool; `code` names the rule, whenever the tool prints one, and
+nothing else — a rule is part of a finding's identity, and a location or a message
+in it would split one finding into many. golangci-lint's `code` is the linter that
+reported the issue (`errcheck`, `govet`); a linter's own rule id, when it prints
+one, stays in the message. `url` carries the rule's documentation where the tool
+prints a link (tfsec, dclint, buildifier, reek, …).
 
 ### Extraction outcomes
 
@@ -107,8 +172,11 @@ run warns once, after its last operation, however many invocations hit the same 
 - `parser module "<module>" has no parser "<key>", so the output of <tools> is not parsed`,
   once per key.
 
-The tool's own exit code decides whether it passed, whatever its extraction
-outcome; the outcome decides what the cache may record.
+Whether a tool passed is decided by its exit code and, when a module at
+descriptor schema 2 parsed its output, by its operation's
+[`failOn`](../../reference/configuration-api.md#failing-on-findings-failon): a
+finding at or above it fails a tool that exited 0. The extraction outcome decides
+what the cache may record.
 
 ### Noise tolerance
 
@@ -465,6 +533,19 @@ parse, how to invoke each (args + stdin), the upstream URL, and the module's
 **build-injected version**. The version is baked at compile time like a Go ldflags
 `-X` (CI sets `DATAMITSU_PARSERS_VERSION`); the module is the single source of
 truth, which is why the `parsers` config entity carries **no `version` field**.
+
+The manifest carries a `schemaVersion`. From schema 2 every tool also declares:
+
+| Field        | Meaning                                                                                  |
+| ------------ | ---------------------------------------------------------------------------------------- |
+| `severities` | the level words the tool prints; `[]` when it prints none ([Levels](#levels))            |
+| `columnUnit` | what the tool counts columns in — `utf-8`, `utf-16` or `utf-32`; empty when not measured |
+| `category`   | `security` for a security scanner; empty otherwise                                       |
+| `kind`       | what the parser reads: `tool`, one tool's own output format                              |
+
+The core reads schema 1 and schema 2 modules alike and ignores fields it does not
+know, so a configuration pinned to an older module keeps working; its tools simply
+declare none of the above.
 
 To debug a parser against a real `datamitsu lint` run, pass **`--no-parse`** (or set
 `DATAMITSU_NO_PARSE`): a failure frame shows each tool's raw output instead of its

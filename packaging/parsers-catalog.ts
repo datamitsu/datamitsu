@@ -14,13 +14,27 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 export interface CatalogTool {
+  category?: string;
+  columnUnit?: string;
   description: string;
+  kind?: string;
   module: string;
   name: string;
   operations: Record<string, { args: string[]; stdin: boolean }>;
+  // null for a module that predates the field (descriptor schema 1).
+  severities?: null | string[];
   url: string;
   version: string;
 }
+
+// A module that predates the field says nothing about levels ("—"); an empty
+// vocabulary is a tool that prints none.
+const levels = (t: CatalogTool): string => {
+  if (t.severities == null) {
+    return "—";
+  }
+  return t.severities.length === 0 ? "none" : t.severities.map((s) => `\`${s}\``).join(", ");
+};
 
 export interface ParserCatalog {
   conflicts?: string[];
@@ -68,8 +82,14 @@ export function renderCatalogMarkdown(cat: ParserCatalog): string {
       "[`outputParser`](./configuration-api.md#output-parser-outputparser) — the " +
       "**Parser** name below is its `parser` field.",
     "",
-    "| Parser | Modes | Description | Upstream |",
-    "| ------ | ----- | ----------- | -------- |",
+    "**Levels** are the level words the tool prints, which the parser maps onto error, " +
+      "warning, info and hint; `none` means the tool prints no level " +
+      "([how the core resolves a finding without one](../guides/architecture/parsers.md#levels)). " +
+      "**Columns** is the unit the tool counts columns in, where it was measured. " +
+      "**Category** marks a security scanner.",
+    "",
+    "| Parser | Modes | Levels | Columns | Category | Description | Upstream |",
+    "| ------ | ----- | ------ | ------- | -------- | ----------- | -------- |",
   ];
 
   for (const t of tools) {
@@ -78,7 +98,10 @@ export function renderCatalogMarkdown(cat: ParserCatalog): string {
         .sort((a, b) => a.localeCompare(b))
         .join(", ") || "—";
     const upstream = t.url ? `[link](${t.url})` : "—";
-    lines.push(`| \`${t.name}\` | ${modes} | ${cell(t.description)} | ${upstream} |`);
+    lines.push(
+      `| \`${t.name}\` | ${modes} | ${cell(levels(t))} | ${t.columnUnit || "—"} | ${t.category || "—"} | ` +
+        `${cell(t.description)} | ${upstream} |`,
+    );
   }
 
   return lines.join("\n") + "\n";

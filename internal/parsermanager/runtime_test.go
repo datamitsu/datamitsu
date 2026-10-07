@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -104,8 +105,10 @@ func TestRuntime_DescribeReportsCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Describe() error = %v", err)
 	}
-	if caps.SchemaVersion != 1 {
-		t.Errorf("schemaVersion = %d, want 1", caps.SchemaVersion)
+	// The released module in testdata/released pins schema 1 exactly; the
+	// current build may be any schema the core reads.
+	if caps.SchemaVersion < 1 {
+		t.Errorf("schemaVersion = %d, want >= 1", caps.SchemaVersion)
 	}
 	if caps.Module != "datamitsu-parsers" {
 		t.Errorf("module = %q, want %q", caps.Module, "datamitsu-parsers")
@@ -122,6 +125,36 @@ func TestRuntime_DescribeReportsCapabilities(t *testing.T) {
 		if !got[want] {
 			t.Errorf("describe missing tool %q; got %+v", want, caps.Tools)
 		}
+	}
+}
+
+// TestRuntime_DescribeCarriesTheSeverityContract: the current crate build is a
+// schema-2 module, so every tool declares a level vocabulary (empty for a tool
+// that prints none), and a measured tool its column unit.
+func TestRuntime_DescribeCarriesTheSeverityContract(t *testing.T) {
+	caps, err := DescribeLocal(context.Background(), echoWASM(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !caps.SeverityContract() {
+		t.Fatalf("schemaVersion = %d, want the severity contract", caps.SchemaVersion)
+	}
+	byName := make(map[string]ToolCapability, len(caps.Tools))
+	for _, tool := range caps.Tools {
+		if tool.Severities == nil {
+			t.Errorf("%s: no severities under schema %d", tool.Name, caps.SchemaVersion)
+		}
+		byName[tool.Name] = tool
+	}
+	tfsec := byName["tfsec"]
+	if !slices.Equal(tfsec.Severities, []string{"CRITICAL", "HIGH", "MEDIUM", "LOW"}) || tfsec.Category != "security" {
+		t.Errorf("tfsec = %+v, want its four levels and the security category", tfsec)
+	}
+	if knip := byName["knip"]; knip.Severities == nil || len(knip.Severities) != 0 {
+		t.Errorf("knip severities = %#v, want an empty vocabulary", knip.Severities)
+	}
+	if unit := byName["yamllint"].ColumnUnit; unit != "utf-32" {
+		t.Errorf("yamllint columnUnit = %q, want the measured utf-32", unit)
 	}
 }
 
@@ -197,6 +230,38 @@ func TestHasParser(t *testing.T) {
 		t.Errorf("ParseOutput on a module that fails verification: err = %v, want ErrModuleUnavailable", err)
 	}
 	if _, err := m.HasParser(ctx, "undeclared", "hadolint"); !errors.Is(err, ErrModuleUnavailable) {
+		t.Errorf("an undeclared module: err = %v, want ErrModuleUnavailable", err)
+	}
+}
+
+// TestSeverityContract tells the current crate build, whose levels come only
+// from what its tools printed, from the released v1 module, which predates
+// the contract, and answers from the describe HasParser already made.
+func TestSeverityContract(t *testing.T) {
+	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
+	ctx := context.Background()
+	current, released := echoWASM(t), releasedV1(t)
+	currentSrv, currentHits := serveWASM(t, current)
+	releasedSrv, _ := serveWASM(t, released)
+	m := New(config.MapOfParsers{
+		"current":  {URL: currentSrv.URL, Hash: sha256Hex(current)},
+		"released": {URL: releasedSrv.URL, Hash: sha256Hex(released)},
+	})
+	t.Cleanup(func() { _ = m.Close(context.Background()) })
+
+	if _, err := m.HasParser(ctx, "current", "hadolint"); err != nil {
+		t.Fatal(err)
+	}
+	for module, want := range map[string]bool{"current": true, "released": false} {
+		got, err := m.SeverityContract(ctx, module)
+		if err != nil || got != want {
+			t.Errorf("SeverityContract(%s) = %v, %v; want %v", module, got, err, want)
+		}
+	}
+	if n := atomic.LoadInt64(currentHits); n != 1 {
+		t.Errorf("current module fetched %d times, want once", n)
+	}
+	if _, err := m.SeverityContract(ctx, "undeclared"); !errors.Is(err, ErrModuleUnavailable) {
 		t.Errorf("an undeclared module: err = %v, want ErrModuleUnavailable", err)
 	}
 }

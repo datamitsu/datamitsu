@@ -30,6 +30,41 @@ fn exit_code(r: &Recording) -> i32 {
 	r.exit.trim().parse().expect("a recorded exit code")
 }
 
+/// Every recorded run, clean and finding-bearing, keyed by parser: the severity
+/// contract and the position audit run over each of them (`crate::contract`).
+pub(crate) fn recorded() -> Vec<(&'static str, crate::contract::Sample)> {
+	macro_rules! pair {
+		($key:literal) => {
+			[recording!($key, "clean"), recording!($key, "findings")].map(|r| {
+				(
+					$key,
+					crate::contract::Sample {
+						stdout: r.stdout,
+						stderr: r.stderr,
+						exit: exit_code(&r),
+					},
+				)
+			})
+		};
+	}
+	[
+		pair!("actionlint"),
+		pair!("checkmake"),
+		pair!("cspell"),
+		pair!("dclint"),
+		pair!("dotenv_linter"),
+		pair!("eslint"),
+		pair!("golangci_lint"),
+		pair!("hadolint"),
+		pair!("harper_cli"),
+		pair!("protolint"),
+		pair!("tsc"),
+		pair!("vale"),
+		pair!("yamllint"),
+	]
+	.concat()
+}
+
 fn parse(key: &str, r: &Recording) -> Vec<RawDiagnostic> {
 	dispatch(key, r.stdout, r.stderr, exit_code(r)).expect("a parser the module dispatches")
 }
@@ -79,27 +114,30 @@ fn actionlint_findings() {
 				message: "job \"build\" needs job \"missing\" which does not exist in this workflow".into(),
 				row: Some(4),
 				col: Some(3),
-				severity: Some(severity::ERROR),
+				end_col: Some(9),
 				source: Some("actionlint".into()),
 				code: Some("job-needs".into()),
+				file: Some(".github/workflows/findings.yml".into()),
 				..RawDiagnostic::default()
 			},
 			RawDiagnostic {
 				message: "\"github.event.issue.title\" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/reference/security/secure-use#good-practices-for-mitigating-script-injection-attacks for more details".into(),
 				row: Some(7),
 				col: Some(23),
-				severity: Some(severity::ERROR),
+				end_col: Some(47),
 				source: Some("actionlint".into()),
 				code: Some("expression".into()),
+				file: Some(".github/workflows/findings.yml".into()),
 				..RawDiagnostic::default()
 			},
 			RawDiagnostic {
 				message: "input \"foo\" is not defined in action \"actions/checkout@v4\". available inputs are \"clean\", \"fetch-depth\", \"fetch-tags\", \"filter\", \"github-server-url\", \"lfs\", \"path\", \"persist-credentials\", \"ref\", \"repository\", \"set-safe-directory\", \"show-progress\", \"sparse-checkout\", \"sparse-checkout-cone-mode\", \"ssh-key\", \"ssh-known-hosts\", \"ssh-strict\", \"ssh-user\", \"submodules\", \"token\"".into(),
 				row: Some(10),
 				col: Some(11),
-				severity: Some(severity::ERROR),
+				end_col: Some(15),
 				source: Some("actionlint".into()),
 				code: Some("action".into()),
+				file: Some(".github/workflows/findings.yml".into()),
 				..RawDiagnostic::default()
 			},
 		],
@@ -170,6 +208,7 @@ fn dclint_findings() {
 				col: Some(1),
 				severity: Some(severity::ERROR),
 				code: Some("no-unbound-port-interfaces".into()),
+				url: Some("https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/no-unbound-port-interfaces-rule.md".into()),
 				file: Some("findings.yml".into()),
 				..RawDiagnostic::default()
 			},
@@ -179,6 +218,7 @@ fn dclint_findings() {
 				col: Some(1),
 				severity: Some(severity::ERROR),
 				code: Some("no-version-field".into()),
+				url: Some("https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/no-version-field-rule.md".into()),
 				file: Some("findings.yml".into()),
 				..RawDiagnostic::default()
 			},
@@ -188,6 +228,7 @@ fn dclint_findings() {
 				col: Some(1),
 				severity: Some(severity::WARNING),
 				code: Some("require-project-name-field".into()),
+				url: Some("https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/require-project-name-field-rule.md".into()),
 				file: Some("findings.yml".into()),
 				..RawDiagnostic::default()
 			},
@@ -197,6 +238,7 @@ fn dclint_findings() {
 				col: Some(1),
 				severity: Some(severity::WARNING),
 				code: Some("require-quotes-in-ports".into()),
+				url: Some("https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/require-quotes-in-ports-rule.md".into()),
 				file: Some("findings.yml".into()),
 				..RawDiagnostic::default()
 			},
@@ -206,6 +248,7 @@ fn dclint_findings() {
 				col: Some(1),
 				severity: Some(severity::ERROR),
 				code: Some("service-image-require-explicit-tag".into()),
+				url: Some("https://github.com/zavoloklom/docker-compose-linter/blob/main/docs/rules/service-image-require-explicit-tag-rule.md".into()),
 				file: Some("findings.yml".into()),
 				..RawDiagnostic::default()
 			},
@@ -293,8 +336,8 @@ fn golangci_lint_findings() {
 				message: "Error return value of `os.Remove` is not checked".into(),
 				row: Some(12),
 				col: Some(11),
-				severity: Some(severity::WARNING),
-				source: Some("golangci-lint: errcheck".into()),
+				source: Some("golangci-lint".into()),
+				code: Some("errcheck".into()),
 				file: Some("main.go".into()),
 				..RawDiagnostic::default()
 			},
@@ -302,8 +345,8 @@ fn golangci_lint_findings() {
 				message: "ineffectual assignment to x".into(),
 				row: Some(9),
 				col: Some(2),
-				severity: Some(severity::WARNING),
-				source: Some("golangci-lint: ineffassign".into()),
+				source: Some("golangci-lint".into()),
+				code: Some("ineffassign".into()),
 				file: Some("main.go".into()),
 				..RawDiagnostic::default()
 			},
@@ -410,18 +453,20 @@ fn protolint_findings() {
 				message: "Field name \"Text\" must be underscore_separated_names like \"text\"".into(),
 				row: Some(6),
 				col: Some(3),
-				severity: Some(severity::WARNING),
+				severity: Some(severity::ERROR),
 				source: Some("protolint".into()),
 				code: Some("FIELD_NAMES_LOWER_SNAKE_CASE".into()),
+				file: Some("findings.proto".into()),
 				..RawDiagnostic::default()
 			},
 			RawDiagnostic {
 				message: "Message name \"greeting\" must be UpperCamelCase like \"Greeting\"".into(),
 				row: Some(5),
 				col: Some(1),
-				severity: Some(severity::WARNING),
+				severity: Some(severity::ERROR),
 				source: Some("protolint".into()),
 				code: Some("MESSAGE_NAMES_UPPER_CAMEL_CASE".into()),
+				file: Some("findings.proto".into()),
 				..RawDiagnostic::default()
 			},
 		],

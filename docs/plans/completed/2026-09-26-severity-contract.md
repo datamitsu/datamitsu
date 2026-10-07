@@ -1,6 +1,6 @@
 # Plan 5: Severity contract — honest levels from the parsers, one threshold in the core
 
-**Status:** ready for implementation. Plan 5 of `2026-09-26-unified-results.md`; implements D19,
+**Status:** completed 2026-09-27. Plan 5 of `../2026-09-26-unified-results.md`; implements D19,
 D20, R3, R4 and module release 1 (descriptor fields `severities`, `url`, `category`,
 `columnUnit`, `kind`; the `source`/`code` norm; the position-base audit). No decisions open.
 **Date:** 2026-09-26.

@@ -2,18 +2,26 @@
 //! diagnostics/markuplint builtin.
 //!
 //! markuplint `--format JSON` emits an array of objects with `line`, `col`,
-//! `ruleId`, `severity` (a string token) and `message`. The builtin maps both
-//! row/end_row from `line` and both col/end_col from `col`, sets a constant
-//! `source = "markuplint"`, and runs against a temp file (`$FILENAME`).
+//! `ruleId`, `severity` (`error`, `warning` or `info`) and `message`. It prints
+//! a start only, so no end is reported. The builtin sets a constant
+//! `source = "markuplint"` and runs against a temp file (`$FILENAME`).
 use super::json_diag::{self, Attrs};
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "markuplint",
 	description: "A linter for all markup developers.",
 	url: "https://github.com/markuplint/markuplint",
+	severities: &[
+		Level("error", severity::ERROR),
+		Level("warning", severity::WARNING),
+		Level("info", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["--format", "JSON", "{file}"],
@@ -24,15 +32,14 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
 	let attrs = Attrs {
 		row: "line",
-		end_row: "line",
 		col: "col",
-		end_col: "col",
 		code: "ruleId",
 		message: "message",
 		severity: "severity",
 		// markuplint reports the path per violation ("filePath"), which one run
 		// over many files needs.
 		file: "filePath",
+		..Attrs::defaults()
 	};
 	let mut out = json_diag::from_json(stdout, &attrs, severity_of);
 	for d in &mut out {
@@ -42,12 +49,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 }
 
 fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		"info" => Some(severity::INFO),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, level)
 }
 
 #[cfg(test)]
@@ -56,21 +58,28 @@ mod tests {
 
 	#[test]
 	fn parses_markuplint_json() {
-		let json = br#"[
-            {"severity":"error","line":3,"col":5,"ruleId":"required-attr","message":"Required 'alt' on '<img>'"},
-            {"severity":"warning","line":10,"col":1,"ruleId":"deprecated-element","message":"'<center>' is deprecated"}
-        ]"#;
-		let out = parse(json, b"", 0);
-		assert_eq!(out.len(), 2);
+		let out = parse(SAMPLES[0].stdout, b"", 1);
+		assert_eq!(out.len(), 3);
 		assert_eq!(out[0].message, "Required 'alt' on '<img>'");
 		assert_eq!(out[0].row, Some(3));
-		assert_eq!(out[0].end_row, Some(3));
+		assert_eq!(out[0].end_row, None);
 		assert_eq!(out[0].col, Some(5));
-		assert_eq!(out[0].end_col, Some(5));
+		assert_eq!(out[0].end_col, None);
 		assert_eq!(out[0].code.as_deref(), Some("required-attr"));
-		assert_eq!(out[0].severity, Some(severity::ERROR));
 		assert_eq!(out[0].source.as_deref(), Some("markuplint"));
-		assert_eq!(out[1].severity, Some(severity::WARNING));
+		assert_eq!(out[0].file.as_deref(), Some("index.html"));
+	}
+
+	#[test]
+	fn reads_the_printed_level() {
+		let out = parse(SAMPLES[0].stdout, b"", 1);
+		let levels: Vec<_> = out.iter().map(|d| d.severity).collect();
+		assert_eq!(
+			levels,
+			[Some(severity::ERROR), Some(severity::WARNING), Some(severity::INFO)]
+		);
+		let unknown = parse(br#"[{"severity":"fatal","line":1,"col":1,"message":"x"}]"#, b"", 1);
+		assert_eq!(unknown[0].severity, None);
 	}
 
 	#[test]
@@ -78,3 +87,24 @@ mod tests {
 		assert!(parse(b"[]", b"", 0).is_empty());
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: br#"[
+    {"severity":"error","line":3,"col":5,"raw":"<img src=\"a.png\">","ruleId":"required-attr","message":"Required 'alt' on '<img>'","filePath":"index.html"},
+    {"severity":"warning","line":10,"col":1,"raw":"<center>","ruleId":"deprecated-element","message":"'<center>' is deprecated","filePath":"index.html"},
+    {"severity":"info","line":12,"col":3,"raw":"<b>","ruleId":"use-list","message":"Use <ul> or <ol>","filePath":"index.html"}
+]"#,
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: br#"[
+    {"severity":"warning","line":10,"col":1,"raw":"<center>","ruleId":"deprecated-element","message":"'<center>' is deprecated","filePath":"index.html"}
+]"#,
+		stderr: b"",
+		exit: 0,
+	},
+];

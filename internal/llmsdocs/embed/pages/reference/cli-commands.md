@@ -29,7 +29,7 @@ in console mode.
 | Code         | Meaning                                                                                                                                                                                                                                                                                                      |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `0`          | Success                                                                                                                                                                                                                                                                                                      |
-| `1`          | A tool failed, or any error without a code of its own                                                                                                                                                                                                                                                        |
+| `1`          | A tool failed — it exited non-zero, or its parsed output held a finding at or above its operation's `failOn` (see [Failing on findings](#failing-on-findings---fail-on)) — or any error without a code of its own                                                                                            |
 | `2`          | Usage: an unknown flag, a flag or `DATAMITSU_*` value the command does not accept (`--widen-to=Repo`, `DATAMITSU_FAIL_FAST=yes`), a missing required flag, flags that cannot be combined, the wrong number of arguments, or a combination refused before anything runs (`--require-coverage` with `--tools`) |
 | `3`          | `llms`: an unknown or ambiguous page                                                                                                                                                                                                                                                                         |
 | `4`          | The run did not cover what it was asked to: `--require-coverage` (see [Narrowed runs](#narrowed-runs)) or `--fail-on-skip` (see [Skipped tools](#skipped-tools)); when both fail, both messages are printed                                                                                                  |
@@ -151,15 +151,16 @@ lint is skipped — unless `--fail-fast=false` runs it anyway (see
 datamitsu check [files...]
 ```
 
-| Flag                         | Description                                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
-| `--file-scoped`              | Only process git staged files                                                                                                  |
-| `--tools <list>`             | Comma-separated list of tools to run                                                                                           |
-| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
-| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))       |
-| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                       |
-| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))    |
+| Flag                         | Description                                                                                                                                                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                                                                                                             |
+| `--file-scoped`              | Only process git staged files                                                                                                                                                                                   |
+| `--tools <list>`             | Comma-separated list of tools to run                                                                                                                                                                            |
+| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools))                                                                                  |
+| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                        |
+| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
+| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
+| `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
 
 **Examples:**
 
@@ -255,6 +256,81 @@ tree.
 A formatter that fails at a low priority leaves its files unformatted for the
 linters that run after it, so a keep-going run can report findings that
 disappear once the formatter passes.
+
+### Failing on findings (`--fail-on`)
+
+A tool fails a run when it exits non-zero, or when its parsed output holds a
+finding at or above its operation's
+[`failOn`](./configuration-api.md#failing-on-findings-failon) — `error` unless the
+configuration sets another. `--fail-on <level>` (or `DATAMITSU_FAIL_ON`) raises
+that threshold for every operation of the run, to `warning`, `info` or `hint`; an
+operation whose own `failOn` is already stricter keeps it, and nothing lowers a
+threshold or turns a non-zero exit into a pass:
+
+```bash
+# CI: a warning fails the run too, whatever the tool's exit code
+datamitsu lint --fail-on warning
+```
+
+The flag wins over the variable. `datamitsu config runtime` reports the
+variable as `failOn` (empty when it is not set), and `--explain` shows each
+task's threshold: `failOn` in the JSON, a `Fail on:` line when it is not
+`error`. A value of either that is not `error`, `warning`, `info` or `hint`
+exits 2 before anything runs — a mistyped gate is refused, not ignored.
+
+The threshold gates only output a parser module with the severity contract
+(descriptor schema 2) read: its levels are what the tool printed. Under an
+older module the exit code alone decides, and a run that asked for a threshold
+other than `error` says so once, after its last operation:
+
+```console
+WARN failOn ignored for hadolint: parser module predates the severity contract
+```
+
+With the default threshold, a tool that exits 0 on a finding its parser reads
+as an error fails the run — semgrep without `--error`, trivy without
+`--exit-code`. A tool that failed because of the threshold shows exit code 0 in
+its frame, with a `Failed on:` line naming the threshold.
+
+### Findings in the terminal
+
+What the terminal shows is what gates: for every tool it prints the findings at
+or above the operation's threshold, sorted by level, file, line, column and
+rule, and counts the rest.
+
+- A failed tool prints them in its red frame. A tool that failed although none
+  of its findings reaches the threshold — one that fails on warnings, such as
+  `yamllint --strict` or `eslint --max-warnings 0` — prints every finding, so a
+  failure always explains itself; one that failed without findings prints its
+  output.
+- The findings below the threshold are never dropped: the tool line counts them
+  per level, the frame ends with one line saying what it left out, and the
+  footer sums them.
+- A passed tool prints no frame, except when a threshold other than `error` was
+  asked for and its parser module predates the severity contract: its findings
+  at or above that threshold then print in a yellow frame, since nothing
+  enforced it.
+
+An abridged run, the frame without its directory, command and duration lines:
+
+```console
+┃ ✗ eslint        1.20s  (1 failed)  · 5 warnings
+  ┌─ eslint [per-project] (run #1) ────────────────────
+  │  Exit code: 1
+  │
+  │  src/a.ts:3:7 error 'x' is assigned a value but never used. [no-unused-vars]
+  │  src/b.ts:9:1 error Unexpected var, use let or const instead. [no-var]
+  │  + 5 warnings hidden (failOn=error)
+  └─────────────────────────────────────────────────────────
+┃ ✓ yamllint      310ms  · 2 warnings
+┗━ 2 tools · 2 runs · done in 1.20s · 1 failed · 7 warnings hidden
+```
+
+`--fail-on hint` shows every finding and fails on any of them. `--no-parse`
+prints each framed tool's output instead of findings and counts nothing for it,
+and so does a tool run once over many files whose parser names no file for its
+findings: a finding that cannot say which file it is about reads worse than the
+output it came from. A tool that prints no frame keeps its counters either way.
 
 A tool the run stopped is neither a pass nor a failure, and it is listed rather
 than left out:
@@ -447,15 +523,16 @@ Run fix operations on files.
 datamitsu fix [files...]
 ```
 
-| Flag                         | Description                                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
-| `--file-scoped`              | Only process git staged files                                                                                                  |
-| `--tools <list>`             | Comma-separated list of tools to run                                                                                           |
-| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
-| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))       |
-| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                       |
-| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))    |
+| Flag                         | Description                                                                                                                                                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                                                                                                             |
+| `--file-scoped`              | Only process git staged files                                                                                                                                                                                   |
+| `--tools <list>`             | Comma-separated list of tools to run                                                                                                                                                                            |
+| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools))                                                                                  |
+| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                        |
+| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
+| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
+| `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
 
 **Examples:**
 
@@ -478,15 +555,16 @@ Run lint operations on files.
 datamitsu lint [files...]
 ```
 
-| Flag                         | Description                                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                            |
-| `--file-scoped`              | Only process git staged files                                                                                                  |
-| `--tools <list>`             | Comma-separated list of tools to run                                                                                           |
-| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools)) |
-| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))       |
-| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                       |
-| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))    |
+| Flag                         | Description                                                                                                                                                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--explain [mode]`           | Show execution plan without running. Modes: `summary` (default), `detailed`, `json`                                                                                                                             |
+| `--file-scoped`              | Only process git staged files                                                                                                                                                                                   |
+| `--tools <list>`             | Comma-separated list of tools to run                                                                                                                                                                            |
+| `--fail-on-skip`             | Exit non-zero if any tool is skipped because its binary is unavailable for this platform (see [Skipped tools](#skipped-tools))                                                                                  |
+| `--widen-to <level>`         | Limit how far work may widen beyond what you asked for: `target`, `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                        |
+| `--require-coverage <level>` | Exit non-zero unless the run answered completely: `unit` or `repo` (see [Narrowed runs](#narrowed-runs))                                                                                                        |
+| `--fail-fast[=false]`        | Stop at the first failing tool (the default); `=false` runs everything to the end (see [Keep-going runs](#keep-going-runs))                                                                                     |
+| `--fail-on <level>`          | Fail on findings at this level or above in every operation: `error`, `warning`, `info` or `hint`; raises each operation's `failOn`, never lowers it (see [Failing on findings](#failing-on-findings---fail-on)) |
 
 **Examples:**
 
@@ -1054,7 +1132,12 @@ its build-injected version — so this is the source of truth, not the config.
 
 `list` aggregates every configured parser into a **deduplicated** catalog (a module
 declared by N tools is described once); `inspect` shows the full detail for one
-tool. Both accept:
+tool. A module built with descriptor schema 2 or later also says, per tool, which
+level words the tool prints (`levels`, `none` when it prints none), the unit it
+counts columns in where that was measured (`columns`), and whether it is a
+security scanner (`category`); an older module shows none of these lines, which
+is how to tell which contract a pinned module carries (see
+[levels](../guides/architecture/parsers.md#levels)). Both accept:
 
 - `--json` — machine-readable output, for driving configs or build pipelines.
 - `--wasm <path>` — describe a local `.wasm` file directly, with no config or
@@ -1886,40 +1969,41 @@ from the same shell function that runs an activation through `eval`.
 
 ## Environment Variables
 
-| Variable                          | Description                                                                                           | Default                                             |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `DATAMITSU_CACHE_DIR`             | Custom base directory; ephemeral data goes in `{base}/cache`, downloaded artifacts in `{base}/store`  | `$XDG_CACHE_HOME/datamitsu` or `~/.cache/datamitsu` |
-| `DATAMITSU_CONCURRENCY`           | Number of concurrent download workers                                                                 | `3`                                                 |
-| `DATAMITSU_INSTALL_TIMEOUT`       | Per-app install timeout in seconds (`0` = disabled)                                                   | `600`                                               |
-| `DATAMITSU_MIN_RELEASE_AGE`       | Minimum release age in minutes for `pull-*` and the Go lock-file check (`0` = disabled)               | `10080`                                             |
-| `DATAMITSU_MAX_CMD_LENGTH`        | Maximum command-line length before a list-taking operation is split into chunks                       | `32000`                                             |
-| `DATAMITSU_MAX_ERROR_CMD_DISPLAY` | Maximum command length shown in an error before truncation                                            | `120`                                               |
-| `DATAMITSU_MAX_PARALLEL_WORKERS`  | Maximum parallel tool execution workers                                                               | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
-| `DATAMITSU_UNIT_CACHE_TTL`        | Minutes a cached unit-level verdict stays trusted; `0` disables verdict caching                       | `1440` (24h)                                        |
-| `DATAMITSU_FAIL_FAST`             | Stop `fix`, `lint` and `check` at the first failing tool (`true`/`1`) or run everything (`false`/`0`) | `true`                                              |
-| `DATAMITSU_CONFIG_CACHE`          | Serve evaluated config chains from disk (`0`/`false`/`off`/`no` disables it)                          | `1`                                                 |
-| `DATAMITSU_LSP_FORMAT_WIDEN_TO`   | How far editor format-on-save may widen: `target` or `unit`                                           | `unit`                                              |
-| `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` | Format-on-save watchdog in ms: no further tool group starts once it has elapsed (`0` = disabled)      | `15000`                                             |
-| `DATAMITSU_LOG_LEVEL`             | Log level (`debug`, `info`, `warn`, `error`)                                                          | `warn`                                              |
-| `DATAMITSU_LOG_FORMAT`            | Status output format (`console`, or newline-delimited `jsonl` with log lines as `log` events)         | `console`                                           |
-| `DATAMITSU_TIMINGS`               | Enable detailed planner/runner timings (`1` = enabled)                                                | `0`                                                 |
-| `DATAMITSU_STARTUP_TIMINGS`       | Report per-phase startup/config-load durations to stderr (`1` = enabled)                              | `0`                                                 |
-| `DATAMITSU_TRACE`                 | Record a full execution trace and print its summary (`1` = enabled)                                   | `0`                                                 |
-| `DATAMITSU_TRACE_DIR`             | Directory for execution trace files                                                                   | `{cache}/traces`                                    |
-| `DATAMITSU_FORCE_GIT_SUBPROCESS`  | Resolve the git root by forking `git` instead of walking the filesystem (`1` = enabled)               | `0`                                                 |
-| `DATAMITSU_BINARY_COMMAND`        | Override binary command path                                                                          | -                                                   |
-| `DATAMITSU_NO_SPONSOR`            | Suppress sponsor messages (any non-empty value)                                                       | -                                                   |
-| `DATAMITSU_OFFLINE`               | Refuse all network access (any non-empty value; requires a pre-seeded store)                          | -                                                   |
-| `DATAMITSU_NO_OCI`                | Disable OCI bundle store **seeding** (any non-empty value; twin of `--no-oci`)                        | -                                                   |
-| `DATAMITSU_NO_PARSE`              | Show tools' raw output instead of parsed findings; parsing still runs (twin of `--no-parse`)          | -                                                   |
-| `DATAMITSU_LIBC`                  | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection        | auto-detected                                       |
-| `DATAMITSU_OCI_REGISTRY`          | Registry host for base-image digest resolution in `devtools dockerfile`                               | `ghcr.io`                                           |
-| `DATAMITSU_PARSERS_DIR`           | Override directory for downloaded WASM output-parser modules                                          | `{store}/.parsers`                                  |
-| `DATAMITSU_ROOT`                  | Git root of the source-mode farm activated in this shell (exported by `datamitsu source`)             | -                                                   |
-| `DATAMITSU_FARM`                  | Farm directory activated in this shell (exported by `datamitsu source`)                               | -                                                   |
-| `DATAMITSU_FARM_CONFIG`           | Config chain of the farm activated in this shell (exported by `datamitsu source --config`)            | -                                                   |
-| `NO_COLOR`                        | Disable color output                                                                                  | -                                                   |
-| `FORCE_COLOR`                     | Force color output                                                                                    | -                                                   |
+| Variable                          | Description                                                                                                                                    | Default                                             |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `DATAMITSU_CACHE_DIR`             | Custom base directory; ephemeral data goes in `{base}/cache`, downloaded artifacts in `{base}/store`                                           | `$XDG_CACHE_HOME/datamitsu` or `~/.cache/datamitsu` |
+| `DATAMITSU_CONCURRENCY`           | Number of concurrent download workers                                                                                                          | `3`                                                 |
+| `DATAMITSU_INSTALL_TIMEOUT`       | Per-app install timeout in seconds (`0` = disabled)                                                                                            | `600`                                               |
+| `DATAMITSU_MIN_RELEASE_AGE`       | Minimum release age in minutes for `pull-*` and the Go lock-file check (`0` = disabled)                                                        | `10080`                                             |
+| `DATAMITSU_MAX_CMD_LENGTH`        | Maximum command-line length before a list-taking operation is split into chunks                                                                | `32000`                                             |
+| `DATAMITSU_MAX_ERROR_CMD_DISPLAY` | Maximum command length shown in an error before truncation                                                                                     | `120`                                               |
+| `DATAMITSU_MAX_PARALLEL_WORKERS`  | Maximum parallel tool execution workers                                                                                                        | `max(4, floor(NumCPU * 0.75))`, capped at 16        |
+| `DATAMITSU_UNIT_CACHE_TTL`        | Minutes a cached unit-level verdict stays trusted; `0` disables verdict caching                                                                | `1440` (24h)                                        |
+| `DATAMITSU_FAIL_FAST`             | Stop `fix`, `lint` and `check` at the first failing tool (`true`/`1`) or run everything (`false`/`0`)                                          | `true`                                              |
+| `DATAMITSU_FAIL_ON`               | Raise every operation's `failOn` for `fix`, `lint` and `check` to `error`, `warning`, `info` or `hint`; never lowers one (twin of `--fail-on`) | -                                                   |
+| `DATAMITSU_CONFIG_CACHE`          | Serve evaluated config chains from disk (`0`/`false`/`off`/`no` disables it)                                                                   | `1`                                                 |
+| `DATAMITSU_LSP_FORMAT_WIDEN_TO`   | How far editor format-on-save may widen: `target` or `unit`                                                                                    | `unit`                                              |
+| `DATAMITSU_LSP_FORMAT_TIMEOUT_MS` | Format-on-save watchdog in ms: no further tool group starts once it has elapsed (`0` = disabled)                                               | `15000`                                             |
+| `DATAMITSU_LOG_LEVEL`             | Log level (`debug`, `info`, `warn`, `error`)                                                                                                   | `warn`                                              |
+| `DATAMITSU_LOG_FORMAT`            | Status output format (`console`, or newline-delimited `jsonl` with log lines as `log` events)                                                  | `console`                                           |
+| `DATAMITSU_TIMINGS`               | Enable detailed planner/runner timings (`1` = enabled)                                                                                         | `0`                                                 |
+| `DATAMITSU_STARTUP_TIMINGS`       | Report per-phase startup/config-load durations to stderr (`1` = enabled)                                                                       | `0`                                                 |
+| `DATAMITSU_TRACE`                 | Record a full execution trace and print its summary (`1` = enabled)                                                                            | `0`                                                 |
+| `DATAMITSU_TRACE_DIR`             | Directory for execution trace files                                                                                                            | `{cache}/traces`                                    |
+| `DATAMITSU_FORCE_GIT_SUBPROCESS`  | Resolve the git root by forking `git` instead of walking the filesystem (`1` = enabled)                                                        | `0`                                                 |
+| `DATAMITSU_BINARY_COMMAND`        | Override binary command path                                                                                                                   | -                                                   |
+| `DATAMITSU_NO_SPONSOR`            | Suppress sponsor messages (any non-empty value)                                                                                                | -                                                   |
+| `DATAMITSU_OFFLINE`               | Refuse all network access (any non-empty value; requires a pre-seeded store)                                                                   | -                                                   |
+| `DATAMITSU_NO_OCI`                | Disable OCI bundle store **seeding** (any non-empty value; twin of `--no-oci`)                                                                 | -                                                   |
+| `DATAMITSU_NO_PARSE`              | Show tools' raw output instead of parsed findings; parsing still runs (twin of `--no-parse`)                                                   | -                                                   |
+| `DATAMITSU_LIBC`                  | Override host libc detection (`glibc` or `musl`); affects store paths and OCI bundle selection                                                 | auto-detected                                       |
+| `DATAMITSU_OCI_REGISTRY`          | Registry host for base-image digest resolution in `devtools dockerfile`                                                                        | `ghcr.io`                                           |
+| `DATAMITSU_PARSERS_DIR`           | Override directory for downloaded WASM output-parser modules                                                                                   | `{store}/.parsers`                                  |
+| `DATAMITSU_ROOT`                  | Git root of the source-mode farm activated in this shell (exported by `datamitsu source`)                                                      | -                                                   |
+| `DATAMITSU_FARM`                  | Farm directory activated in this shell (exported by `datamitsu source`)                                                                        | -                                                   |
+| `DATAMITSU_FARM_CONFIG`           | Config chain of the farm activated in this shell (exported by `datamitsu source --config`)                                                     | -                                                   |
+| `NO_COLOR`                        | Disable color output                                                                                                                           | -                                                   |
+| `FORCE_COLOR`                     | Force color output                                                                                                                             | -                                                   |
 
 `DATAMITSU_ROOT` and `DATAMITSU_FARM` are written by `datamitsu source`. Neither
 is used to resolve a tool — the shim discovers the repository root from the

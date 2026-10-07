@@ -2,22 +2,34 @@
 //! diagnostics/checkstyle builtin.
 //!
 //! checkstyle is invoked with `-f sarif`; the parser navigates the SARIF tree
-//! (`runs[0].results[].locations[].physicalLocation.region`) rather than the flat
-//! none-ls `from_json` shape, so the JSON is walked by hand here. stderr is also
-//! inspected: a missing-config message and the benign "Checkstyle ends with N
-//! errors." summary line are special-cased exactly as the builtin does.
+//! (`runs[0].results[].locations[].physicalLocation`, whose `artifactLocation.uri`
+//! names the file and whose `region` the position) rather than the flat
+//! none-ls `from_json` shape, so the JSON is walked by hand here. The level is
+//! the SARIF `level` checkstyle derives from the check's severity (`error`,
+//! `warning`, `note` for info). The region carries only a 1-based start. stderr
+//! is also inspected: a missing-config message and the benign "Checkstyle ends
+//! with N errors." summary line are special-cased exactly as the builtin does;
+//! a stderr finding has no level.
 
 use tinyjson::JsonValue;
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "checkstyle",
 	description: "Checkstyle is a tool for checking Java source code for adherence to a Code \
         Standard or set of validation rules (best practices).",
 	url: "https://checkstyle.org",
+	severities: &[
+		Level("error", severity::ERROR),
+		Level("warning", severity::WARNING),
+		Level("note", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["-f", "sarif", "{file}"],
@@ -31,19 +43,8 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 	out
 }
 
-/// none-ls maps SARIF level tokens via `h.diagnostics.severities`.
-fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		"information" => Some(severity::INFO),
-		"note" | "hint" => Some(severity::HINT),
-		_ => None,
-	}
-}
-
 /// stderr handling mirrors `parse_checkstyle_errors`: a config-missing hint, a
-/// suppressed summary line, otherwise the trimmed stderr as a single error.
+/// suppressed summary line, otherwise the trimmed stderr as a single finding.
 fn parse_stderr(stderr: &[u8]) -> Vec<RawDiagnostic> {
 	let err = String::from_utf8_lossy(stderr);
 	let trimmed = err.trim();
@@ -55,7 +56,6 @@ fn parse_stderr(stderr: &[u8]) -> Vec<RawDiagnostic> {
 			message: "You need to specify a configuration for checkstyle. See \
                 https://github.com/nvimtools/none-ls.nvim/blob/main/doc/BUILTINS.md#checkstyle"
 				.to_string(),
-			severity: Some(severity::ERROR),
 			..RawDiagnostic::default()
 		}];
 	}
@@ -65,7 +65,6 @@ fn parse_stderr(stderr: &[u8]) -> Vec<RawDiagnostic> {
 	}
 	vec![RawDiagnostic {
 		message: trimmed.to_string(),
-		severity: Some(severity::ERROR),
 		..RawDiagnostic::default()
 	}]
 }
@@ -100,27 +99,63 @@ fn parse_sarif(stdout: &[u8], out: &mut Vec<RawDiagnostic>) {
 			continue;
 		};
 		let code = get(result, "ruleId").and_then(as_str);
-		let severity = get(result, "level").and_then(as_str).and_then(|l| severity_of(&l));
+		let severity = get(result, "level")
+			.and_then(as_str)
+			.and_then(|l| severity::of(DESCRIPTOR.severities, &l));
 
 		let locations = get(result, "locations").and_then(as_array);
 		let Some(locations) = locations else {
 			continue;
 		};
 		for location in locations {
-			let region = get(location, "physicalLocation").and_then(|p| get(p, "region"));
+			let physical = get(location, "physicalLocation");
+			let region = physical.and_then(|p| get(p, "region"));
 			let col = region.and_then(|r| get(r, "startColumn")).and_then(as_u32);
 			let row = region.and_then(|r| get(r, "startLine")).and_then(as_u32);
+			let file = physical
+				.and_then(|p| get(p, "artifactLocation"))
+				.and_then(|a| get(a, "uri"))
+				.and_then(as_str)
+				.and_then(|uri| uri_path(&uri))
+				.as_deref()
+				.and_then(crate::diagnostic::file_field);
 			out.push(RawDiagnostic {
 				message: message.clone(),
 				row,
 				col,
-				end_col: col.map(|c| c + 1),
 				code: code.clone(),
 				severity,
+				file,
 				..RawDiagnostic::default()
 			});
 		}
 	}
+}
+
+/// The path of a SARIF artifact URI: the inverse of checkstyle's
+/// `SarifLogger.renderFileNameUri`, which writes `file:` and the path with every
+/// backslash as `/`, a space as `%20`, a quote as `%22`, and a `/` before a drive
+/// letter. A UNC path arrives as `file://server/share/…` and stays one. Only those
+/// two escapes are decoded, as checkstyle escapes nothing else: any other `%` is
+/// part of the name. A name holding a literal `%20` or `%22` cannot be told from
+/// an escaped one and reads back as a space or a quote. A URI without a scheme is
+/// a path already, and one with another scheme names no local file.
+fn uri_path(uri: &str) -> Option<String> {
+	let Some(rest) = uri.strip_prefix("file:") else {
+		return (!uri.contains("://")).then(|| uri.to_string());
+	};
+	let path = match rest.strip_prefix("//") {
+		Some(after) if after.starts_with('/') => after,
+		Some(after) if after.starts_with("localhost/") => &after["localhost".len()..],
+		_ => rest,
+	};
+	let bytes = path.as_bytes();
+	let path = if bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':' {
+		&path[1..]
+	} else {
+		path
+	};
+	Some(path.replace("%20", " ").replace("%22", "\""))
 }
 
 fn get<'a>(v: &'a JsonValue, key: &str) -> Option<&'a JsonValue> {
@@ -177,6 +212,10 @@ mod tests {
       ]
     }"#;
 
+	fn with_level(level: &str) -> String {
+		SARIF.replace(r#""level": "warning""#, &format!(r#""level": "{level}""#))
+	}
+
 	#[test]
 	fn parses_sarif_result() {
 		let out = parse(SARIF.as_bytes(), b"", 1);
@@ -184,9 +223,24 @@ mod tests {
 		assert_eq!(out[0].message, "Line is longer than 80 characters.");
 		assert_eq!(out[0].row, Some(12));
 		assert_eq!(out[0].col, Some(81));
-		assert_eq!(out[0].end_col, Some(82));
+		assert_eq!(out[0].end_col, None);
 		assert_eq!(out[0].code.as_deref(), Some("LineLength"));
 		assert_eq!(out[0].severity, Some(severity::WARNING));
+	}
+
+	#[test]
+	fn reads_the_sarif_level() {
+		for (level, want) in [
+			("error", Some(severity::ERROR)),
+			("warning", Some(severity::WARNING)),
+			("note", Some(severity::INFO)),
+			("none", None),
+		] {
+			let out = parse(with_level(level).as_bytes(), b"", 1);
+			assert_eq!(out[0].severity, want, "{level}");
+		}
+		let without = SARIF.replace(r#""level": "warning","#, "");
+		assert_eq!(parse(without.as_bytes(), b"", 1)[0].severity, None);
 	}
 
 	#[test]
@@ -196,10 +250,88 @@ mod tests {
 	}
 
 	#[test]
-	fn missing_config_yields_hint_error() {
+	fn missing_config_yields_a_hint_without_a_level() {
 		let out = parse(b"", b"Must specify a config XML file.", 1);
 		assert_eq!(out.len(), 1);
-		assert_eq!(out[0].severity, Some(severity::ERROR));
+		assert_eq!(out[0].severity, None);
 		assert!(out[0].message.contains("configuration for checkstyle"));
 	}
+
+	#[test]
+	fn other_stderr_is_one_finding_without_a_level() {
+		let out = parse(
+			b"",
+			b"com.puppycrawl.tools.checkstyle.api.CheckstyleException: unable to parse\n",
+			254,
+		);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].severity, None);
+		assert_eq!(
+			out[0].message,
+			"com.puppycrawl.tools.checkstyle.api.CheckstyleException: unable to parse"
+		);
+	}
+
+	#[test]
+	fn each_result_names_its_file() {
+		let out = parse(SAMPLES[0].stdout, b"", 1);
+		assert!(out.iter().all(|d| d.file.as_deref() == Some("/work/src/Main.java")));
+		for (uri, want) in [
+			("file:/my%20src/A.java", Some("/my src/A.java")),
+			("file:///abs/B.java", Some("/abs/B.java")),
+			("file:/C:/src/C.java", Some("C:/src/C.java")),
+			("src/D.java", Some("src/D.java")),
+			("https://example.test/E.java", None),
+			("file://server/share/F.java", Some("//server/share/F.java")),
+			("file:/lit%41.java", Some("/lit%41.java")),
+		] {
+			let sarif = SARIF.replace("file:/src/Main.java", uri);
+			assert_eq!(parse(sarif.as_bytes(), b"", 1)[0].file.as_deref(), want, "{uri}");
+		}
+	}
+	#[test]
+	fn a_uri_reads_back_as_checkstyle_wrote_it() {
+		assert_eq!(uri_path("file:///work/A.java").as_deref(), Some("/work/A.java"));
+		assert_eq!(
+			uri_path("file://localhost/work/A.java").as_deref(),
+			Some("/work/A.java")
+		);
+		assert_eq!(
+			uri_path("file:///C:/work/A%20B.java").as_deref(),
+			Some("C:/work/A B.java")
+		);
+		assert_eq!(
+			uri_path("file://server/share/A.java").as_deref(),
+			Some("//server/share/A.java")
+		);
+		assert_eq!(
+			uri_path("file:/work/Say%22Hi%22.java").as_deref(),
+			Some("/work/Say\"Hi\".java")
+		);
+		assert_eq!(
+			uri_path("file:/work/a%41%2F.java").as_deref(),
+			Some("/work/a%41%2F.java")
+		);
+		assert_eq!(uri_path("https://example.test/A.java"), None);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: br#"{"$schema":"https://json.schemastore.org/sarif-2.1.0.json","version":"2.1.0","runs":[{"tool":{"driver":{"name":"Checkstyle","version":"10.12.4"}},"results":[{"level":"warning","locations":[{"physicalLocation":{"artifactLocation":{"uri":"file:/work/src/Main.java"},"region":{"startColumn":81,"startLine":12}}}],"message":{"text":"Line is longer than 80 characters (found 97)."},"ruleId":"maxLineLen"},{"level":"error","locations":[{"physicalLocation":{"artifactLocation":{"uri":"file:/work/src/Main.java"},"region":{"startLine":1}}}],"message":{"text":"Missing a Javadoc comment."},"ruleId":"javadoc.missing"},{"level":"note","locations":[{"physicalLocation":{"artifactLocation":{"uri":"file:/work/src/Main.java"},"region":{"startColumn":5,"startLine":20}}}],"message":{"text":"'method def modifier' has incorrect indentation level 4, expected level should be 2."},"ruleId":"indentation.child.error"}]}]}"#,
+		stderr: b"Checkstyle ends with 1 errors.\n",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"Must specify a config XML file.\n",
+		exit: 254,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"com.puppycrawl.tools.checkstyle.api.CheckstyleException: Exception was thrown while processing /work/src/Main.java\n",
+		exit: 254,
+	},
+];

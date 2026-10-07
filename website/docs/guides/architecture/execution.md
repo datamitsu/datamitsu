@@ -133,6 +133,8 @@ A task's result is more than one exit code. It lists **every process** the task 
 
 A tool whose arguments name no file — `tsc` reading `tsconfig.json` — answers for its unit, not for the files that selected the task, so its result lists the unit's members, each checked by its one process. The frame, the counts and the exit code still read the task's aggregate: every process's output joined, the last failing process's exit code and command, every finding.
 
+A process fails when it exits non-zero, or when it exits 0 and its parsed output holds a finding at or above its operation's [`failOn`](../../reference/configuration-api.md#failing-on-findings-failon) — provided the parser module that read it takes levels only from what the tool printed. Such a process is marked as failed by its threshold, and so is its task when that is its only failure; in a batch process only the files its gating findings name count as failed. Under fail-fast it stops a run like any other failure.
+
 A task that failed on its own and stopped short — the rest of a per-file loop after a failing file under fail-fast, the chunks a cancellation reached before they started — names the files it never checked, under its failure: `⊘ alpha  2 files not run (fail-fast): src/b.txt, src/c.txt`.
 
 **Example scenario:**

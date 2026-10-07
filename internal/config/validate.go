@@ -983,6 +983,7 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 			}
 			errs = append(errs, noColorEnvErrors(toolName, opType, op.Env)...)
 			errs = append(errs, inheritEnvErrors(toolName, opType, op.InheritEnv)...)
+			errs = append(errs, failOnErrors(toolName, opType, op.FailOn)...)
 		}
 	}
 

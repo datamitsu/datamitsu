@@ -1404,3 +1404,20 @@ func TestFailFast(t *testing.T) {
 		})
 	}
 }
+
+// DATAMITSU_FAIL_ON comes back exactly as set, an invalid value included: the
+// command layer refuses it rather than a getter reading it as "no raise".
+func TestFailOn(t *testing.T) {
+	t.Setenv(failOn.Name, os.Getenv(failOn.Name))
+
+	_ = os.Unsetenv(failOn.Name)
+	if got := FailOn(); got != "" {
+		t.Errorf("FailOn() unset = %q, want empty", got)
+	}
+	for _, raw := range []string{"error", "warning", "info", "hint", "warnings", " Error "} {
+		t.Setenv(failOn.Name, raw)
+		if got := FailOn(); got != raw {
+			t.Errorf("FailOn() = %q, want %q returned raw", got, raw)
+		}
+	}
+}

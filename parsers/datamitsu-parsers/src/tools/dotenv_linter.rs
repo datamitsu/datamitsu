@@ -19,6 +19,10 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "dotenv_linter",
 	description: "Lightning-fast linter for .env files.",
 	url: "https://github.com/dotenv-linter/dotenv-linter",
+	severities: &[],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["{file}"],
@@ -87,3 +91,11 @@ mod tests {
 		assert_eq!(d.row, Some(2));
 	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[crate::contract::Sample {
+	stdout: b"Checking f.env\nf.env:1 LowercaseKey: The b key should be in uppercase\nf.env:2 SpaceCharacter: The line has spaces around equal sign\nf.env:2 UnorderedKey: The A  key should go before the b key\n\nFound 3 problems\n",
+	stderr: b"",
+	exit: 1,
+}];

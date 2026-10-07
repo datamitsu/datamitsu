@@ -1,21 +1,33 @@
 //! teal — the compiler for Teal, a typed dialect of Lua. Ported from the
 //! none-ls diagnostics/teal builtin.
 //!
-//! `tl check` emits, on stderr, section headers like `5 errors:` / `2 warnings:`
-//! that set the severity for the diagnostic lines that follow, then lines of the
-//! form `<file>:<row>:<col>: <message>`. Severity is stateful: the most recent
-//! header applies to subsequent lines (default error). The upstream builtin also
-//! filtered by temp_path and derived `end_col` from the buffer quote — both
-//! require the vim runtime/buffer content, which is unavailable here, so they are
-//! intentionally dropped.
+//! `tl check` emits, on stderr, section headers like `5 errors:`, `2 warnings:`
+//! or `1 syntax error:`, then lines of the form `<file>:<row>:<col>: <message>`.
+//! The header's category is the level token for the lines that follow it; a line
+//! before any header, or under a header the vocabulary does not list, has no
+//! level. The file before the position names the finding's file. The upstream
+//! builtin also filtered by temp_path and derived `end_col`
+//! from the buffer quote — both require the vim runtime/buffer content, which is
+//! unavailable here, so they are intentionally dropped.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "teal",
 	description: "The compiler for Teal, a typed dialect of Lua.",
 	url: "https://github.com/teal-language/tl",
+	severities: &[
+		Level("error", severity::ERROR),
+		Level("errors", severity::ERROR),
+		Level("syntax error", severity::ERROR),
+		Level("syntax errors", severity::ERROR),
+		Level("warning", severity::WARNING),
+		Level("warnings", severity::WARNING),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
 		args: &["check", "{file}"],
@@ -32,11 +44,11 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 	};
 
 	let mut out = Vec::new();
-	let mut current = severity::ERROR;
+	let mut current = None;
 	for raw in text.split('\n') {
 		let line = raw.strip_suffix('\r').unwrap_or(raw);
-		if let Some(sev) = parse_header(line) {
-			current = sev;
+		if let Some(category) = header_category(line) {
+			current = severity::of(DESCRIPTOR.severities, category);
 			continue;
 		}
 		if let Some(diag) = parse_diag(line, current) {
@@ -46,22 +58,22 @@ pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic
 	out
 }
 
-/// `^(%d*) ([%w]+):$` — leading digits, a space, an alphanumeric word, trailing
-/// colon. Returns the mapped severity when the word is a known level token.
-fn parse_header(line: &str) -> Option<u8> {
+/// `<count> <category>:` — a section header such as `2 warnings:` or
+/// `1 syntax error:`. Returns the category.
+fn header_category(line: &str) -> Option<&str> {
 	let body = line.strip_suffix(':')?;
-	let (count, word) = body.split_once(' ')?;
-	if !count.chars().all(|c| c.is_ascii_digit()) {
+	let (count, category) = body.split_once(' ')?;
+	if count.is_empty() || !count.chars().all(|c| c.is_ascii_digit()) {
 		return None;
 	}
-	if word.is_empty() || !word.chars().all(|c| c.is_ascii_alphanumeric()) {
+	if category.is_empty() || !category.chars().all(|c| c.is_ascii_alphanumeric() || c == ' ') {
 		return None;
 	}
-	severity_of(word)
+	Some(category)
 }
 
 /// `([^:]+):(%d+):(%d+): (.*)$` — file:row:col: message.
-fn parse_diag(line: &str, severity: u8) -> Option<RawDiagnostic> {
+fn parse_diag(line: &str, severity: Option<u8>) -> Option<RawDiagnostic> {
 	// file = up to the first ':'
 	let (file, rest) = line.split_once(':')?;
 	if file.is_empty() {
@@ -82,17 +94,10 @@ fn parse_diag(line: &str, severity: u8) -> Option<RawDiagnostic> {
 		message: message.to_string(),
 		row: Some(row),
 		col: Some(col),
-		severity: Some(severity),
+		severity,
+		file: crate::diagnostic::file_field(file),
 		..RawDiagnostic::default()
 	})
-}
-
-fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" | "errors" => Some(severity::ERROR),
-		"warning" | "warnings" => Some(severity::WARNING),
-		_ => None,
-	}
 }
 
 #[cfg(test)]
@@ -122,11 +127,56 @@ mod tests {
 	}
 
 	#[test]
-	fn defaults_to_error_without_header() {
+	fn a_syntax_error_header_is_a_level() {
+		let stderr = b"1 warning:\na.tl:1:7: unused variable x\n1 syntax error:\nb.tl:2:1: syntax error\n";
+		let diags = parse(b"", stderr, 1);
+		assert_eq!(diags.len(), 2);
+		assert_eq!(diags[0].severity, Some(severity::WARNING));
+		assert_eq!(diags[1].severity, Some(severity::ERROR));
+	}
+
+	#[test]
+	fn no_level_without_a_header() {
 		let stderr = b"baz.tl:1:1: syntax error\n";
 		let diags = parse(b"", stderr, 1);
 		assert_eq!(diags.len(), 1);
-		assert_eq!(diags[0].severity, Some(severity::ERROR));
+		assert_eq!(diags[0].severity, None);
 		assert_eq!(diags[0].message, "syntax error");
 	}
+
+	#[test]
+	fn an_unknown_header_clears_the_level() {
+		let stderr = b"1 error:\na.tl:1:1: x\n2 notes:\na.tl:2:1: y\n";
+		let diags = parse(b"", stderr, 1);
+		assert_eq!(diags.len(), 2);
+		assert_eq!(diags[0].severity, Some(severity::ERROR));
+		assert_eq!(diags[1].severity, None);
+	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stderr = b"1 error:\nsrc/a.tl:1:1: first\n1 warning:\nsrc/b.tl:2:3: second\n";
+		let files: Vec<_> = parse(b"", stderr, 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(files, [Some("src/a.tl".to_string()), Some("src/b.tl".to_string())]);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"========================================\n1 warning:\nfoo.tl:1:7: unused variable x: integer\n========================================\n2 errors:\nfoo.tl:3:10: unknown variable: y\nfoo.tl:7:1: redeclaration of variable 'z'\n",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"========================================\n1 syntax error:\nbar.tl:2:1: syntax error, expected 'end'\n",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"",
+		stderr: b"========================================\n2 warnings:\nbaz.tl:4:9: unused variable a: string\nbaz.tl:5:9: unused variable b: string\n",
+		exit: 0,
+	},
+];

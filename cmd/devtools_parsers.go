@@ -273,7 +273,33 @@ func renderToolLine(t parsermanager.CatalogTool) string {
 	if t.URL != "" {
 		fmt.Fprintf(&b, "  %s\n", color.New(color.FgBlue).Sprint(t.URL))
 	}
+	var facts []string
+	if levels, ok := levelsText(t); ok {
+		facts = append(facts, "levels: "+levels)
+	}
+	if t.ColumnUnit != "" {
+		facts = append(facts, "columns: "+t.ColumnUnit)
+	}
+	if t.Category != "" {
+		facts = append(facts, "category: "+t.Category)
+	}
+	if len(facts) > 0 {
+		fmt.Fprintf(&b, "  %s\n", color.New(color.Faint).Sprint(strings.Join(facts, " · ")))
+	}
 	return b.String()
+}
+
+// levelsText renders a tool's level vocabulary; ok is false for a module that
+// predates the field, which says nothing about levels.
+func levelsText(t parsermanager.CatalogTool) (string, bool) {
+	switch {
+	case t.Severities == nil:
+		return "", false
+	case len(t.Severities) == 0:
+		return "none", true
+	default:
+		return strings.Join(t.Severities, ", "), true
+	}
 }
 
 // renderToolDetail is the verbose `inspect` view, including per-mode invocations.
@@ -288,6 +314,18 @@ func renderToolDetail(t parsermanager.CatalogTool) string {
 	}
 	if t.Description != "" {
 		fmt.Fprintf(&b, "  desc:     %s\n", t.Description)
+	}
+	if levels, ok := levelsText(t); ok {
+		fmt.Fprintf(&b, "  levels:   %s\n", levels)
+	}
+	if t.ColumnUnit != "" {
+		fmt.Fprintf(&b, "  columns:  %s\n", t.ColumnUnit)
+	}
+	if t.Category != "" {
+		fmt.Fprintf(&b, "  category: %s\n", t.Category)
+	}
+	if t.Kind != "" {
+		fmt.Fprintf(&b, "  kind:     %s\n", t.Kind)
 	}
 	modes := t.Modes()
 	if len(modes) == 0 {

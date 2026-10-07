@@ -89,3 +89,58 @@ func TestRenderTool_Deterministic(t *testing.T) {
 		t.Errorf("yamllint detail missing invocation recipe:\n%s", d)
 	}
 }
+
+// TestRenderTool_SchemaFields: a schema-2 tool shows its levels, column unit and
+// category; a schema-1 tool (nil levels) shows none of them.
+func TestRenderTool_SchemaFields(t *testing.T) {
+	color.NoColor = true
+
+	cases := []struct {
+		name       string
+		tool       parsermanager.ToolCapability
+		wantLine   string
+		wantDetail []string
+		absent     []string
+	}{
+		{
+			name: "schema 2 with a vocabulary",
+			tool: parsermanager.ToolCapability{
+				Name: "tfsec", Severities: []string{"CRITICAL", "HIGH", "MEDIUM", "LOW"},
+				ColumnUnit: "utf-8", Category: "security", Kind: "tool",
+			},
+			wantLine:   "  levels: CRITICAL, HIGH, MEDIUM, LOW · columns: utf-8 · category: security\n",
+			wantDetail: []string{"levels:   CRITICAL, HIGH, MEDIUM, LOW", "columns:  utf-8", "category: security", "kind:     tool"},
+		},
+		{
+			name:       "schema 2 without levels",
+			tool:       parsermanager.ToolCapability{Name: "knip", Severities: []string{}, Kind: "tool"},
+			wantLine:   "  levels: none\n",
+			wantDetail: []string{"levels:   none"},
+			absent:     []string{"columns", "category"},
+		},
+		{
+			name:   "schema 1",
+			tool:   parsermanager.ToolCapability{Name: "old"},
+			absent: []string{"levels", "columns", "category", "kind"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tool := parsermanager.CatalogTool{ToolCapability: tc.tool, Parser: "p", Module: "m", Version: "1"}
+			line, detail := renderToolLine(tool), renderToolDetail(tool)
+			if tc.wantLine != "" && !strings.HasSuffix(line, tc.wantLine) {
+				t.Errorf("list line = %q, want it to end with %q", line, tc.wantLine)
+			}
+			for _, want := range tc.wantDetail {
+				if !strings.Contains(detail, want) {
+					t.Errorf("inspect detail missing %q\n%s", want, detail)
+				}
+			}
+			for _, word := range tc.absent {
+				if strings.Contains(line, word) || strings.Contains(detail, word+":") {
+					t.Errorf("%q shown for a tool that does not declare it:\n%s%s", word, line, detail)
+				}
+			}
+		})
+	}
+}

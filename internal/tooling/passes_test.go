@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func TestLintPasses(t *testing.T) {
+func TestPassesOf(t *testing.T) {
 	a, b := "/w/a.txt", "/w/b.txt"
 	covered := []string{a, b}
 	finding := func(file string) []diagnostic.Diagnostic { return []diagnostic.Diagnostic{{File: file, Message: "m"}} }
@@ -37,50 +37,35 @@ func TestLintPasses(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := lintPasses(c.proc, covered)
+			got := passesOf(c.proc, covered)
 			if !slices.Equal(got, c.want) {
-				t.Errorf("lintPasses = %v, want %v", got, c.want)
+				t.Errorf("passesOf = %v, want %v", got, c.want)
 			}
 		})
 	}
-
-	t.Run("a fix pass follows success alone", func(t *testing.T) {
-		proc := ProcessResult{Extraction: ExtractionParsedFindings, Diagnostics: finding(a)}
-		if got := passesOf(config.OpFix, proc, covered); !slices.Equal(got, covered) {
-			t.Errorf("passesOf(fix) = %v, want %v", got, covered)
-		}
-	})
 }
 
 func TestVerdictEligible(t *testing.T) {
-	lint := Task{Operation: config.OpLint}
-	fix := Task{Operation: config.OpFix}
 	cases := []struct {
 		name   string
-		task   Task
 		result ExecutionResult
 		want   bool
 	}{
-		{"parsed clean", lint, ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionParsedClean}}}, true},
-		{"no parser", lint, ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionNone}}}, true},
-		{"a finding of a passing tool", lint, ExecutionResult{
+		{"parsed clean", ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionParsedClean}}}, true},
+		{"no parser", ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionNone}}}, true},
+		{"a finding of a passing tool", ExecutionResult{
 			Processes:   []ProcessResult{{State: ProcessRan, Extraction: ExtractionParsedFindings}},
 			Diagnostics: []diagnostic.Diagnostic{{Message: "m", Severity: diagnostic.SeverityHint}},
 		}, false},
-		{"one unparsed process", lint, ExecutionResult{Processes: []ProcessResult{
+		{"one unparsed process", ExecutionResult{Processes: []ProcessResult{
 			{State: ProcessRan, Extraction: ExtractionParsedClean}, {State: ProcessRan, Extraction: ExtractionParseFailed},
 		}}, false},
-		{"an unavailable parser", lint, ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionParserUnavailable}}}, false},
-		{"a fix with findings", fix, ExecutionResult{
-			Processes:   []ProcessResult{{State: ProcessRan, Extraction: ExtractionParsedFindings}},
-			Diagnostics: []diagnostic.Diagnostic{{Message: "m"}},
-		}, true},
-		{"a dry run", fix, ExecutionResult{Processes: []ProcessResult{{State: ProcessNotStarted, Extraction: ExtractionNone}}}, false},
-		{"a lint dry run", lint, ExecutionResult{Processes: []ProcessResult{{State: ProcessNotStarted, Extraction: ExtractionNone}}}, false},
+		{"an unavailable parser", ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionParserUnavailable}}}, false},
+		{"a dry run", ExecutionResult{Processes: []ProcessResult{{State: ProcessNotStarted, Extraction: ExtractionNone}}}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := verdictEligible(c.task, c.result); got != c.want {
+			if got := verdictEligible(c.result); got != c.want {
 				t.Errorf("verdictEligible = %v, want %v", got, c.want)
 			}
 		})
@@ -190,17 +175,21 @@ func TestBatchLintPassAttribution(t *testing.T) {
 	}
 }
 
-// TestFixPassIgnoresTheParse: a fixer's output is not what its parser reads,
-// so a successful fix records its passes whatever the parser made of it.
-func TestFixPassIgnoresTheParse(t *testing.T) {
-	e, c, root, files := c1Project(t, fileParser{findings: func(string) []diagnostic.Diagnostic {
-		return []diagnostic.Diagnostic{{Message: "fixed 1 problem"}}
+// TestFixPassFollowsTheParse: a fix pass means nothing to report too — the
+// failOn gate judges what a fixer leaves behind — so the file a finding names
+// records none, and the other one does.
+func TestFixPassFollowsTheParse(t *testing.T) {
+	e, c, root, files := c1Project(t, fileParser{findings: func(stdout string) []diagnostic.Diagnostic {
+		if filepath.Base(stdout) == "a.txt" {
+			return []diagnostic.Diagnostic{{Message: "1 problem left", Severity: diagnostic.SeverityHint}}
+		}
+		return nil
 	}})
 	if result := e.executeTask(context.Background(), c1Task(config.OpFix, config.ToolScopePerFile, []string{"{file}"}, files, root)); !result.Success {
 		t.Fatalf("the fix failed: %v", result.Error)
 	}
-	if got := cachedFiles(t, c, cache.OperationFix, files); !slices.Equal(got, []string{"a.txt", "b.txt"}) {
-		t.Errorf("cached = %v, want both files", got)
+	if got := cachedFiles(t, c, cache.OperationFix, files); !slices.Equal(got, []string{"b.txt"}) {
+		t.Errorf("cached = %v, want only the file without findings", got)
 	}
 }
 

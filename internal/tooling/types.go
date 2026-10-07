@@ -70,7 +70,10 @@ type ExecutionPlan struct {
 	// A plan is only readable against the configuration that produced it, and a
 	// machine may hold several.
 	ConfigName string
-	Groups     []TaskGroup
+	// FailOn is the run's global failOn raise (--fail-on), empty when none; a
+	// task's threshold is config.EffectiveFailOn of its operation and this.
+	FailOn config.Severity
+	Groups []TaskGroup
 	// Skipped lists tools that were deliberately not planned, with the reason.
 	// These never run but are reported so the user sees what was left out and why.
 	Skipped []SkippedTool
@@ -161,6 +164,7 @@ const (
 	FailureReasonIndependent                      // Tool failed on its own
 	FailureReasonCancelled                        // Tool terminated by fail-fast cascade
 	FailureReasonInterrupted                      // Tool terminated because the caller cancelled the run (a signal, a withdrawn request)
+	FailureReasonThreshold                        // Tool exited 0, but a finding at or above its operation's failOn failed it
 )
 
 // Extraction is what became of one process's output: whether findings were
@@ -243,14 +247,24 @@ type ProcessResult struct {
 	State ProcessState
 	// ExitCode is nil unless State is ProcessRan.
 	ExitCode *int
-	// Success is whether the process did what it was run for: a zero exit and,
-	// for a formatter, a formatted file written.
+	// Success is whether the process did what it was run for: a zero exit,
+	// no finding the gate failed it for and, for a formatter, a formatted file
+	// written.
 	Success     bool
 	Extraction  Extraction
 	ParseError  string // the module's error for parse-failed and parser-unavailable
 	OutputTail  []byte // the last 4 KiB of the output the frame would show
 	Diagnostics []diagnostic.Diagnostic
 	DurationMs  int64
+	// FailOn is the effective threshold the gate applied to the process's
+	// findings; empty when no gate ran.
+	FailOn config.Severity
+	// GateActive reports that the module that parsed the output declares the
+	// severity contract, so its findings could fail the process.
+	GateActive bool
+	// ThresholdFailed reports a process that exited 0 and failed only because
+	// a finding reached FailOn.
+	ThresholdFailed bool
 
 	edits []textdiff.Edit // the formatting edits a per-file process applied
 }
@@ -325,6 +339,9 @@ type ExecutionResult struct {
 	// parsed (parse-failed or parser-unavailable): an empty Diagnostics then
 	// does not mean the tool found nothing.
 	ParseFailed bool
+	// FailOn is the effective threshold of the task's operation, as the gate
+	// applied it to its processes; empty when none of them was gated.
+	FailOn config.Severity
 
 	// Files are the task's files as planned, absolute and cleaned, run or
 	// cached alike; for a WholeUnit task and for a verdict hit, the unit's
@@ -365,6 +382,9 @@ func (r *ExecutionResult) addProcess(proc ProcessResult) {
 	r.Diagnostics = append(r.Diagnostics, proc.Diagnostics...)
 	if proc.Extraction == ExtractionParseFailed || proc.Extraction == ExtractionParserUnavailable {
 		r.ParseFailed = true
+	}
+	if proc.FailOn != "" {
+		r.FailOn = proc.FailOn
 	}
 }
 

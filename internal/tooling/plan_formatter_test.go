@@ -195,6 +195,53 @@ func TestDetailedFormatter_EmptyAndWholeProject(t *testing.T) {
 	}
 }
 
+// TestFormatters_EchoTheEffectiveFailOn: every formatter reports the threshold
+// a task runs with — its operation's failOn raised by the run's --fail-on — and
+// the human ones only when it is not the default.
+func TestFormatters_EchoTheEffectiveFailOn(t *testing.T) {
+	task := func(name string, failOn config.Severity) Task {
+		return Task{ToolName: name, OpConfig: config.ToolOperation{App: name, Scope: config.ToolScopeRepository, FailOn: failOn}}
+	}
+	plan := func(global config.Severity) *ExecutionPlan {
+		return &ExecutionPlan{FailOn: global, Groups: []TaskGroup{{Priority: 1, Tasks: []Task{
+			task("plain", ""), task("strict", config.SeverityWarning), task("hinted", config.SeverityHint),
+		}}}}
+	}
+	cases := []struct {
+		global config.Severity
+		want   map[string]config.Severity
+	}{
+		{"", map[string]config.Severity{"plain": "error", "strict": "warning", "hinted": "hint"}},
+		{config.SeverityInfo, map[string]config.Severity{"plain": "info", "strict": "info", "hinted": "hint"}},
+	}
+	for _, c := range cases {
+		var parsed PlanJSON
+		if err := json.Unmarshal([]byte(NewJSONFormatter().Format(plan(c.global), "/repo", "/repo", config.OpLint)), &parsed); err != nil {
+			t.Fatal(err)
+		}
+		for _, pg := range parsed.Groups[0].ParallelGroups {
+			for _, got := range pg.Tasks {
+				if want := c.want[got.ToolName]; got.FailOn != string(want) {
+					t.Errorf("global %q: %s failOn = %q, want %q", c.global, got.ToolName, got.FailOn, want)
+				}
+			}
+		}
+		for _, f := range []PlanFormatter{NewSummaryFormatter(), NewDetailedFormatter()} {
+			out := f.Format(plan(c.global), "/repo", "/repo", config.OpLint)
+			shown := strings.Count(out, "Fail on: ")
+			wantShown := 0
+			for _, s := range c.want {
+				if s != config.DefaultFailOn {
+					wantShown++
+				}
+			}
+			if shown != wantShown {
+				t.Errorf("global %q: %T shows %d thresholds, want %d:\n%s", c.global, f, shown, wantShown, out)
+			}
+		}
+	}
+}
+
 func TestJSONFormatter_ReportsGranularityArityCoverage(t *testing.T) {
 	plan := &ExecutionPlan{Groups: []TaskGroup{{Priority: 5, Tasks: []Task{
 		{

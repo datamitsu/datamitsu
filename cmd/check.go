@@ -17,6 +17,7 @@ var (
 	checkWidenTo       string
 	checkRequireCov    string
 	checkFailFast      bool
+	checkFailOn        string
 )
 
 var checkCmd = &cobra.Command{
@@ -44,11 +45,15 @@ func init() {
 	checkCmd.Flags().StringVar(&checkRequireCov, "require-coverage", "", "Exit non-zero unless the run answered completely (unit|repo)")
 	checkCmd.Flags().BoolVar(&checkFailOnSkip, "fail-on-skip", false, "Exit non-zero if any tool is skipped because its binary is unavailable for this platform")
 	addFailFastFlag(checkCmd, &checkFailFast)
+	addFailOnFlag(checkCmd, &checkFailOn)
 	rootCmd.AddCommand(checkCmd)
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
 	opts := runner.Options{WidenTo: checkWidenTo, RequireCoverage: checkRequireCov}
+	if err := applyFailOn(cmd, checkFailOn, &opts); err != nil {
+		return err
+	}
 	if err := applyFailFast(cmd, checkFailFast, &opts); err != nil {
 		return err
 	}

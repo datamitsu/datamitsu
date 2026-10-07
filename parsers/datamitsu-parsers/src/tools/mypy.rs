@@ -2,27 +2,35 @@
 //! diagnostics/mypy builtin.
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
-use crate::severity;
+use crate::severity::{self, Level};
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
-    name: "mypy",
-    description: "Mypy is an optional static type checker for Python that aims to combine the benefits of dynamic (or \"duck\") typing and static typing.",
-    url: "https://github.com/python/mypy",
-    operations: &[Operation {
-        mode: "lint",
-        args: &[
-            "--hide-error-codes",
-            "--hide-error-context",
-            "--no-color-output",
-            "--show-absolute-path",
-            "--show-column-numbers",
-            "--show-error-codes",
-            "--no-error-summary",
-            "--no-pretty",
-            "{file}",
-        ],
-        stdin: false,
-    }],
+	name: "mypy",
+	description: "Mypy is an optional static type checker for Python that aims to combine the benefits of dynamic (or \"duck\") typing and static typing.",
+	url: "https://github.com/python/mypy",
+	severities: &[
+		Level("error", severity::ERROR),
+		Level("warning", severity::WARNING),
+		Level("note", severity::INFO),
+	],
+	column_unit: "",
+	category: "",
+	kind: "tool",
+	operations: &[Operation {
+		mode: "lint",
+		args: &[
+			"--hide-error-codes",
+			"--hide-error-context",
+			"--no-color-output",
+			"--show-absolute-path",
+			"--show-column-numbers",
+			"--show-error-codes",
+			"--no-error-summary",
+			"--no-pretty",
+			"{file}",
+		],
+		stdin: false,
+	}],
 };
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
@@ -36,7 +44,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 // filename uses Lua [^:]+ (stops at first colon).
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
 	// filename: up to first ':'
-	let (_filename, rest) = line.split_once(':')?;
+	let (filename, rest) = line.split_once(':')?;
 	// row: digits up to ':'
 	let (row_s, rest) = rest.split_once(':')?;
 	let row: u32 = row_s.trim().parse().ok()?;
@@ -69,6 +77,7 @@ fn parse_line(line: &str) -> Option<RawDiagnostic> {
 		col,
 		severity: severity_of(sev_s),
 		code,
+		file: crate::diagnostic::file_field(filename),
 		..RawDiagnostic::default()
 	})
 }
@@ -88,12 +97,7 @@ fn split_code(message: &str) -> (&str, Option<String>) {
 }
 
 fn severity_of(level: &str) -> Option<u8> {
-	match level {
-		"error" => Some(severity::ERROR),
-		"warning" => Some(severity::WARNING),
-		"note" => Some(severity::INFO),
-		_ => None,
-	}
+	severity::of(DESCRIPTOR.severities, level)
 }
 
 #[cfg(test)]
@@ -137,4 +141,32 @@ mod tests {
 		assert_eq!(diags[0].severity, Some(severity::WARNING));
 		assert_eq!(diags[0].message, "unused 'type: ignore' comment");
 	}
+
+	#[test]
+	fn each_finding_names_its_file() {
+		let stdout = b"/src/a.py:1:1: error: first  [misc]\n/src/pkg/b.py:2: note: second\n";
+		let files: Vec<_> = parse(stdout, &[], 1).into_iter().map(|d| d.file).collect();
+		assert_eq!(
+			files,
+			[Some("/src/a.py".to_string()), Some("/src/pkg/b.py".to_string())]
+		);
+	}
 }
+
+/// Recorded or representative outputs every parser check runs over (`crate::contract`).
+#[cfg(test)]
+pub(crate) const SAMPLES: &[crate::contract::Sample] = &[
+	crate::contract::Sample {
+		stdout:
+			b"/src/app.py:10:5: error: Incompatible return value type (got \"int\", expected \"str\")  [return-value]\n\
+/src/app.py:3: warning: unused 'type: ignore' comment\n\
+/src/app.py:12:9: note: Revealed type is \"builtins.int\"\n",
+		stderr: b"",
+		exit: 1,
+	},
+	crate::contract::Sample {
+		stdout: b"/src/app.py:12:9: note: Revealed type is \"builtins.int\"\n",
+		stderr: b"",
+		exit: 0,
+	},
+];

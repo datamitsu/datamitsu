@@ -24,12 +24,6 @@ const (
 	SeverityHint    Severity = 4
 )
 
-// fallbackSeverity is used when a tool reports no level. none-ls/efm both escalate
-// to error; datamitsu deliberately defaults to Warning instead — an un-leveled
-// finding should not silently gate a build at error severity. Flip this one
-// constant to change the policy.
-const fallbackSeverity = SeverityWarning
-
 // String is the lowercase human/label form ("error", "warning", …).
 func (s Severity) String() string {
 	switch s {
@@ -57,6 +51,11 @@ func (s Severity) String() string {
 //     Row and EndCol == Col.
 //   - File is absolute and cleaned once the executor has resolved it against
 //     the working directory of the process that reported it (AbsPath).
+//   - Severity is the level the tool printed, when it printed one. A finding
+//     without a level is an error when the process that reported it failed
+//     and a warning when it passed: for a tool with no level vocabulary the
+//     exit code is the only statement of seriousness it makes. A printed
+//     level is never changed by the exit code.
 //
 // The core cannot tell a 0-based positive column from a 1-based one, or an
 // inclusive end from an exclusive one; those are corrected in the parser that
@@ -76,22 +75,33 @@ type Diagnostic struct {
 	Message  string   `json:"message"`  // the one always-present field
 	Source   string   `json:"source"`   // originating tool (e.g. "hadolint")
 	Code     string   `json:"code,omitempty"`
+	URL      string   `json:"url,omitempty"` // the rule's documentation, where the tool prints it
+	// Reported marks a finding at or above its operation's effective failOn:
+	// what the terminal shows. The failOn gate sets it; without one it stays
+	// false.
+	Reported bool `json:"reported,omitempty"`
+	// Gates marks a reported finding whose process the gate was active for —
+	// what fails a run on its own. A process parsed by a module that predates
+	// the severity contract has none.
+	Gates bool `json:"gates,omitempty"`
 }
 
 // Resolve fills the core's defaults over a parser's nullable RawDiagnostic. source
 // is the tool name the parser ran for; a Source the parser set itself (e.g.
-// cue_fmt) takes precedence. Defaults follow the none-ls/efm intersection:
+// cue_fmt) takes precedence. failed says whether the process that printed the
+// finding exited non-zero. Defaults:
 //   - a missing or 0 row/col → 1 (several parsers emit 0 for "no position");
 //   - an end column without an end row → on the start row, the span most
 //     tools mean by a column range;
 //   - an end without a column, or one before the start, → a point at the
 //     start: a column the tool did not print would be invented;
 //   - a 0 end row/col → 1, before that comparison;
-//   - missing/out-of-range severity → fallbackSeverity.
+//   - a missing or out-of-range severity → error when failed, warning when
+//     not (see Diagnostic).
 //
 // The file is left as the parser reported it: only the executor knows the
 // working directory a relative path is relative to.
-func Resolve(raw parsermanager.RawDiagnostic, source string) Diagnostic {
+func Resolve(raw parsermanager.RawDiagnostic, source string, failed bool) Diagnostic {
 	row := position(raw.Row, 1)
 	col := position(raw.Col, 1)
 	endRow, endCol := row, col
@@ -107,7 +117,7 @@ func Resolve(raw parsermanager.RawDiagnostic, source string) Diagnostic {
 		Col:      col,
 		EndRow:   endRow,
 		EndCol:   endCol,
-		Severity: fallbackSeverity,
+		Severity: levelWithout(failed),
 		Message:  raw.Message,
 		Source:   source,
 	}
@@ -115,6 +125,9 @@ func Resolve(raw parsermanager.RawDiagnostic, source string) Diagnostic {
 		if s := Severity(*raw.Severity); s >= SeverityError && s <= SeverityHint {
 			d.Severity = s
 		}
+	}
+	if raw.URL != nil {
+		d.URL = *raw.URL
 	}
 	if raw.Source != nil && *raw.Source != "" {
 		d.Source = *raw.Source
@@ -143,14 +156,22 @@ func AbsPath(file, workingDir string) string {
 	}
 }
 
-// ResolveAll resolves a parser's whole output for one tool.
-func ResolveAll(raws []parsermanager.RawDiagnostic, source string) []Diagnostic {
+// levelWithout is the level of a finding its tool printed none for.
+func levelWithout(failed bool) Severity {
+	if failed {
+		return SeverityError
+	}
+	return SeverityWarning
+}
+
+// ResolveAll resolves a parser's whole output for one process of a tool.
+func ResolveAll(raws []parsermanager.RawDiagnostic, source string, failed bool) []Diagnostic {
 	if len(raws) == 0 {
 		return nil
 	}
 	out := make([]Diagnostic, 0, len(raws))
 	for _, raw := range raws {
-		out = append(out, Resolve(raw, source))
+		out = append(out, Resolve(raw, source, failed))
 	}
 	return out
 }
