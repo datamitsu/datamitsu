@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "558b3b232382e9ba3aafeb99d77b580e",
+  "pageSetHash": "8078fb22471992c9880fba203b265251",
   "pages": [
     {
       "slug": "about",
@@ -406,8 +406,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 39754,
-      "contentHash": "1aaa4063777d0472473349a30636f31f"
+      "bytes": 40264,
+      "contentHash": "614b1e1906f47aa3f46767a470980f77"
     },
     {
       "slug": "how-to/manage-cache",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 175636,
-      "contentHash": "d77f257b582a88913355c2ce99d220d1"
+      "bytes": 177252,
+      "contentHash": "c2055c0a8eb103b934e6c087ea2a24f1"
     },
     {
       "slug": "reference/comparison",
