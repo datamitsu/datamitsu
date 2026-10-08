@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/releaseprovider"
+
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
@@ -29,7 +31,7 @@ func TestSelectedPlatformBinaries(t *testing.T) {
 		{"linux/amd64/musl"},
 		{"linux/amd64/glibc", "linux/amd64/musl", "darwin/arm64", "darwin/arm64"},
 	} {
-		state := &appstate.State{Platforms: selection}
+		state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: selection}
 		entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
 		if err != nil {
 			t.Fatal(err)
@@ -45,7 +47,7 @@ func TestSelectedPlatformBinaries(t *testing.T) {
 		}
 	}
 	for _, selection := range [][]string{{"windows/arm64"}, {"freebsd/arm64"}} {
-		entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Platforms: selection})
+		entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: selection})
 		if err == nil || entry != nil {
 			t.Fatalf("selection %v must fail without partial entry", selection)
 		}
@@ -71,13 +73,13 @@ func TestPullGithubPlatformTransitions(t *testing.T) {
 	defer srv.Close()
 	githubBaseURL = srv.URL
 	path := filepath.Join(t.TempDir(), "apps.json")
-	state := &appstate.State{Apps: map[string]*appstate.AppMetadata{"tool": {Owner: "o", Repo: "r", Tag: "v1"}}, Binaries: map[string]*appstate.BinariesEntry{}}
+	state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Apps: map[string]*appstate.AppMetadata{"tool": {Source: "github", Repository: "o/r", Tag: "v1"}}, Binaries: map[string]*appstate.BinariesEntry{}}
 	run := func() {
 		t.Helper()
 		if err := appstate.Save(path, state); err != nil {
 			t.Fatal(err)
 		}
-		if err := runPullGithub(pullGithubCmd, []string{path}); err != nil {
+		if err := runPullReleases(pullReleasesCmd, []string{path}); err != nil {
 			t.Fatal(err)
 		}
 		var err error
@@ -121,8 +123,8 @@ func TestPlatformPruningSurvivesPullFailureAndSkip(t *testing.T) {
 	githubBaseURL = srv.URL
 	for _, scenario := range []string{"failure", "skip", "no-apps"} {
 		t.Run(scenario, func(t *testing.T) {
-			metadata := &appstate.AppMetadata{Owner: "o", Repo: "r", Tag: "v1"}
-			state := &appstate.State{Platforms: []string{"darwin/arm64"}, Apps: map[string]*appstate.AppMetadata{}, Binaries: map[string]*appstate.BinariesEntry{
+			metadata := &appstate.AppMetadata{Source: "github", Repository: "o/r", Tag: "v1"}
+			state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: []string{"darwin/arm64"}, Apps: map[string]*appstate.AppMetadata{}, Binaries: map[string]*appstate.BinariesEntry{
 				"tool": {ConfigHash: "old", Binaries: binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": {URL: "old"}}}, "darwin": {"arm64": {"unknown": {URL: "keep"}}}}},
 			}}
 			if scenario != "no-apps" {
@@ -135,7 +137,7 @@ func TestPlatformPruningSurvivesPullFailureAndSkip(t *testing.T) {
 			if err := appstate.Save(path, state); err != nil {
 				t.Fatal(err)
 			}
-			err := runPullGithub(pullGithubCmd, []string{path})
+			err := runPullReleases(pullReleasesCmd, []string{path})
 			if (err != nil) != (scenario == "failure") {
 				t.Fatalf("unexpected run error: %v", err)
 			}
@@ -160,7 +162,7 @@ func TestPlatformPruningSurvivesPullFailureAndSkip(t *testing.T) {
 	if err := os.WriteFile(path, invalid, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := runPullGithub(pullGithubCmd, []string{path}); err == nil {
+	if err := runPullReleases(pullReleasesCmd, []string{path}); err == nil {
 		t.Fatal("invalid selector accepted")
 	}
 	data, err := os.ReadFile(path)
@@ -190,7 +192,7 @@ func TestSelectedPlatformsOnlyDownloadChosenAssets(t *testing.T) {
 		{Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: assets.URL + "/tool-linux-amd64.tar.gz", Digest: "sha256:" + vcSHA256Hex(archive)},
 		{Name: "tool-darwin-arm64.tar.gz", BrowserDownloadURL: assets.URL + "/tool-darwin-arm64.tar.gz", Digest: "sha256:" + vcSHA256Hex(archive)},
 	}}
-	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Platforms: []string{"linux/amd64/glibc", "linux/amd64/musl"}})
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: []string{"linux/amd64/glibc", "linux/amd64/musl"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,9 +215,9 @@ func TestRemovingPlatformsAfterFailedPullRestoresDefault(t *testing.T) {
 	srv := httptest.NewServer(api)
 	defer srv.Close()
 	githubBaseURL = srv.URL
-	metadata := &appstate.AppMetadata{Owner: "o", Repo: "tool", Tag: "v1"}
-	state := &appstate.State{Platforms: []string{"darwin/arm64"}, Apps: map[string]*appstate.AppMetadata{"tool": metadata}, Binaries: map[string]*appstate.BinariesEntry{
-		"tool": {ConfigHash: appstate.ComputeConfigHash(metadata), Binaries: binmanager.MapOfBinaries{
+	metadata := &appstate.AppMetadata{Source: "github", Repository: "o/tool", Tag: "v1"}
+	state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: []string{"darwin/arm64"}, Apps: map[string]*appstate.AppMetadata{"tool": metadata}, Binaries: map[string]*appstate.BinariesEntry{
+		"tool": {ConfigHash: appstate.ComputeConfigHash(metadata, nil), Binaries: binmanager.MapOfBinaries{
 			"linux": {"amd64": {"glibc": {URL: "old"}}}, "darwin": {"arm64": {"unknown": {URL: "keep"}}},
 		}},
 	}}
@@ -223,7 +225,7 @@ func TestRemovingPlatformsAfterFailedPullRestoresDefault(t *testing.T) {
 	if err := appstate.Save(path, state); err != nil {
 		t.Fatal(err)
 	}
-	if err := runPullGithub(pullGithubCmd, []string{path}); err == nil {
+	if err := runPullReleases(pullReleasesCmd, []string{path}); err == nil {
 		t.Fatal("missing darwin should fail")
 	}
 	state, err := appstate.Load(path)
@@ -237,7 +239,7 @@ func TestRemovingPlatformsAfterFailedPullRestoresDefault(t *testing.T) {
 	if err := appstate.Save(path, state); err != nil {
 		t.Fatal(err)
 	}
-	if err := runPullGithub(pullGithubCmd, []string{path}); err != nil {
+	if err := runPullReleases(pullReleasesCmd, []string{path}); err != nil {
 		t.Fatal(err)
 	}
 	state, err = appstate.Load(path)
@@ -261,7 +263,7 @@ func TestPlatformPruningPreservesBinaryPathHistory(t *testing.T) {
 	defer srv.Close()
 	githubBaseURL = srv.URL
 	binaryPath := "custom/bin/tool"
-	state := &appstate.State{Platforms: []string{"linux/amd64/musl"}, Apps: map[string]*appstate.AppMetadata{"tool": {Owner: "o", Repo: "tool", Tag: "v1"}}, Binaries: map[string]*appstate.BinariesEntry{
+	state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: []string{"linux/amd64/musl"}, Apps: map[string]*appstate.AppMetadata{"tool": {Source: "github", Repository: "o/tool", Tag: "v1"}}, Binaries: map[string]*appstate.BinariesEntry{
 		"tool": {Binaries: binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": {
 			URL: "https://example.test/v1/tool-linux-amd64.tar.gz", Hash: testHash1, ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &binaryPath,
 		}}}}},
@@ -270,7 +272,7 @@ func TestPlatformPruningPreservesBinaryPathHistory(t *testing.T) {
 	if err := appstate.Save(path, state); err != nil {
 		t.Fatal(err)
 	}
-	if err := runPullGithub(pullGithubCmd, []string{path}); err != nil {
+	if err := runPullReleases(pullReleasesCmd, []string{path}); err != nil {
 		t.Fatal(err)
 	}
 	state, err := appstate.Load(path)
@@ -297,7 +299,7 @@ func TestPlatformSelectionFiltersAvailableTargets(t *testing.T) {
 		{"linux/amd64/glibc", "linux/amd64/musl"},
 	} {
 		t.Run(strings.Join(selection, ","), func(t *testing.T) {
-			entry, err := buildBinariesForApp(context.Background(), "tool", release, "selected", &appstate.State{Platforms: selection})
+			entry, err := buildBinariesForApp(context.Background(), "tool", release, "selected", &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: selection})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -317,7 +319,7 @@ func TestPlatformSelectionFiltersAvailableTargets(t *testing.T) {
 			}
 		})
 	}
-	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Platforms: []string{"linux/amd64/glibc"}})
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: []string{"linux/amd64/glibc"}})
 	if err == nil || entry != nil {
 		t.Fatal("no available selected platform must fail")
 	}

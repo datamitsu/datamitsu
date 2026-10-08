@@ -16,6 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
@@ -686,16 +687,16 @@ func verifyBinaryOrDir(ctx context.Context, info binmanager.BinaryOsArchInfo) er
 	}
 
 	if info.ExtractDir {
-		return verifyExtractDir(ctx, info.URL, info.Hash, hashType, info.ContentType, info.BinaryPath)
+		return verifyExtractDir(ctx, info.URL, info.Hash, hashType, info.ContentType, info.BinaryPath, info.Auth)
 	}
 
-	return binmanager.VerifyBinaryExtraction(ctx, info.URL, info.Hash, hashType, info.ContentType, info.BinaryPath)
+	return binmanager.VerifyBinaryExtraction(ctx, info.URL, info.Hash, hashType, info.ContentType, info.BinaryPath, info.Auth)
 }
 
 // verifyExtractDir downloads an extractDir entry, unpacks the whole tree and checks the command
 // it names: binaryPath must be an executable inside the tree, since that is what runs. An entry
 // without one only has to unpack to something.
-func verifyExtractDir(ctx context.Context, url, hash string, hashType binmanager.BinHashType, contentType binmanager.BinContentType, binaryPath *string) error {
+func verifyExtractDir(ctx context.Context, url, hash string, hashType binmanager.BinHashType, contentType binmanager.BinContentType, binaryPath *string, auth ...*httpx.RequestAuth) error {
 	if hash == "" {
 		return errors.New("hash is empty: verification requires a non-empty hash")
 	}
@@ -706,7 +707,7 @@ func verifyExtractDir(ctx context.Context, url, hash string, hashType binmanager
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	downloadedPath, err := binmanager.DownloadFileForVerify(ctx, url, tempDir)
+	downloadedPath, err := binmanager.DownloadFileForVerify(ctx, url, tempDir, auth...)
 	if err != nil {
 		return err
 	}

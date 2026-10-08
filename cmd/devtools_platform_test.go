@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/releaseprovider"
+
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
@@ -98,6 +100,7 @@ func TestBuildBinariesForApp_NestedStorageStructure(t *testing.T) {
 	}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -164,6 +167,7 @@ func TestBuildBinariesForApp_DetectorCalledWithLibcType(t *testing.T) {
 	}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -199,6 +203,7 @@ func TestBuildBinariesForApp_InitializesNestedMaps(t *testing.T) {
 	}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -273,6 +278,7 @@ func TestFormatPlatformLabel(t *testing.T) {
 func TestBuildBinariesForApp_MapsExistBeforeWrite(t *testing.T) {
 	// Verify that maps are properly initialized even when state starts nil
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -320,6 +326,7 @@ func TestBuildBinariesForApp_MapsExistBeforeWrite(t *testing.T) {
 
 func TestBuildBinariesForApp_ConfigHash(t *testing.T) {
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -348,6 +355,7 @@ func TestBuildBinariesForApp_CorrectContentType(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -373,6 +381,7 @@ func TestBuildBinariesForApp_RejectsLibcMismatch(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -407,6 +416,7 @@ func TestBuildBinariesForApp_DoesNotMutateStateOnFailure(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -437,6 +447,7 @@ func TestBuildBinariesForApp_DeduplicatesSingleLinuxBinary(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -478,6 +489,7 @@ func TestBuildBinariesForApp_SeparateMuslBinariesNotDeduplicated(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -522,6 +534,7 @@ func TestBuildBinariesForApp_NoDuplicateURLHashPairs(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}

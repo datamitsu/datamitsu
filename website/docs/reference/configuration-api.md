@@ -1960,3 +1960,13 @@ Bun, Node, UV, and Go apps also require lock files. These locks pin transitive p
 content and are installed in frozen/read-only modes. Missing or empty hashes and
 missing lock files are configuration errors, never warnings or hash-less
 fallbacks.
+
+### Authenticated binary downloads
+
+A binary platform entry may carry `auth` with `tokenEnv`, `origin`, `header`
+(`Authorization` or `PRIVATE-TOKEN`), optional `scheme` (`Bearer` or `token`
+for Authorization) and optional `accept: "application/octet-stream"`.
+`origin` contains only scheme and host. Credentials are read through the named
+environment variable at download time, never serialized, and stripped when a
+redirect changes origin. SHA-256 remains mandatory. `pull-releases` generates
+these references from source profiles; public downloads need no `auth`.

@@ -211,7 +211,7 @@ binary: {
 
 The whole tree is installed under one store directory and `binaryPath` is what runs, so the binary sees its files where the archive put them. `binaryPath` is required with `extractDir`, must be exact, and the `contentType` must be a tar or zip archive. Install fails when the archive does not contain the path, and `devtools verify-all` checks that the path is an executable.
 
-Exact means more than it does for a single-file entry. Extracting one file finds `binaryPath` by its last component when the full path is not in the archive, so a guessed path like `protoc-36.2/protoc` extracts `bin/protoc` and passes `--verify-extraction`; an extracted directory is not searched, so the same guess fails the install. `devtools pull-github` writes neither `extractDir` nor a path it could not guess, so set both after loading a registry, per operating system:
+Exact means more than it does for a single-file entry. Extracting one file finds `binaryPath` by its last component when the full path is not in the archive, so a guessed path like `protoc-36.2/protoc` extracts `bin/protoc` and passes `--verify-extraction`; an extracted directory is not searched, so the same guess fails the install. `devtools pull-releases` writes neither `extractDir` nor a path it could not guess, so set both after loading a registry, per operating system:
 
 ```javascript
 for (const [os, archMap] of Object.entries(apps.protoc.binary.binaries)) {

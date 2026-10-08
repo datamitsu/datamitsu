@@ -6,14 +6,14 @@ import (
 )
 
 func TestPullGithubCmd_HasMinAgeFlag(t *testing.T) {
-	if pullGithubMinAge == nil {
-		t.Fatal("pullGithubMinAge pointer was not wired up in init()")
+	if pullReleasesMinAge == nil {
+		t.Fatal("pullReleasesMinAge pointer was not wired up in init()")
 	}
-	if *pullGithubMinAge != minAgeFlagDefault {
-		t.Errorf("default --min-age = %d, want sentinel %d", *pullGithubMinAge, minAgeFlagDefault)
+	if *pullReleasesMinAge != minAgeFlagDefault {
+		t.Errorf("default --min-age = %d, want sentinel %d", *pullReleasesMinAge, minAgeFlagDefault)
 	}
-	if pullGithubCmd.Flags().Lookup("min-age") == nil {
-		t.Fatal("--min-age flag was not registered on pull-github")
+	if pullReleasesCmd.Flags().Lookup("min-age") == nil {
+		t.Fatal("--min-age flag was not registered on pull-releases")
 	}
 }
 

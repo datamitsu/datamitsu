@@ -8,14 +8,14 @@ import (
 )
 
 func TestPullGitHubCommand_RequiresExactlyOneArg(t *testing.T) {
-	if pullGithubCmd.Args == nil {
+	if pullReleasesCmd.Args == nil {
 		t.Fatal("expected Args validator to be set (cobra.ExactArgs(1))")
 	}
-	err := pullGithubCmd.Args(pullGithubCmd, []string{})
+	err := pullReleasesCmd.Args(pullReleasesCmd, []string{})
 	if err == nil {
 		t.Fatal("expected error when no file argument provided")
 	}
-	err = pullGithubCmd.Args(pullGithubCmd, []string{"file.json"})
+	err = pullReleasesCmd.Args(pullReleasesCmd, []string{"file.json"})
 	if err != nil {
 		t.Fatalf("expected no error with one argument, got: %v", err)
 	}
@@ -25,8 +25,8 @@ func TestPullGitHubCommand_FileDoesNotExist(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nonexistent.json")
 
-	if err := ensureGitHubAppsJSONExists(path); err != nil {
-		t.Fatalf("ensureGitHubAppsJSONExists failed: %v", err)
+	if err := ensureBinaryAppsJSONExists(path); err != nil {
+		t.Fatalf("ensureBinaryAppsJSONExists failed: %v", err)
 	}
 
 	data, err := os.ReadFile(path)
@@ -53,13 +53,13 @@ func TestPullGitHubCommand_FileAlreadyExists(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "existing.json")
 
-	original := `{"apps":{"test":{"owner":"foo","repo":"bar","tag":"v1.0"}},"binaries":{}}` + "\n"
+	original := `{"sources":{"github":{"type":"github","url":"https://github.com"}},"apps":{"test":{"source":"github","repository":"foo/bar","tag":"v1.0"}},"binaries":{}}` + "\n"
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := ensureGitHubAppsJSONExists(path); err != nil {
-		t.Fatalf("ensureGitHubAppsJSONExists failed: %v", err)
+	if err := ensureBinaryAppsJSONExists(path); err != nil {
+		t.Fatalf("ensureBinaryAppsJSONExists failed: %v", err)
 	}
 
 	data, err := os.ReadFile(path)

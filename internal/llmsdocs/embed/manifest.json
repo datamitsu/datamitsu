@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "4359236213a09f5c4165b3cdcd9892f0",
+  "pageSetHash": "a3308f054793adc5b60d59831fc1f6e2",
   "pages": [
     {
       "slug": "about",
@@ -31,8 +31,8 @@
       "url": "https://datamitsu.com/docs/contributing/creating-wrappers.md",
       "title": "Creating Wrapper Packages",
       "description": "Build your own datamitsu config distribution package for your team or organization",
-      "bytes": 17059,
-      "contentHash": "07da8a7fc59b16c491e3e107808af48e"
+      "bytes": 17061,
+      "contentHash": "c5899374a4f994c3bddfb0d22f1026d4"
     },
     {
       "slug": "contributing",
@@ -271,8 +271,8 @@
       "url": "https://datamitsu.com/docs/guides/binary-management.md",
       "title": "Binary Management",
       "description": "How datamitsu downloads, verifies, and stores binary apps",
-      "bytes": 9278,
-      "contentHash": "e39289ddbf991c3357e9ee89235eb250"
+      "bytes": 9280,
+      "contentHash": "5f1517e3e516719ba3a5f7223ddf48d2"
     },
     {
       "slug": "guides/config-inspector",
@@ -352,8 +352,8 @@
       "url": "https://datamitsu.com/docs/guides/supply-chain-security.md",
       "title": "Supply Chain Security",
       "description": "How datamitsu enforces supply chain integrity for Bun, pnpm, UV, and Go dependencies",
-      "bytes": 28623,
-      "contentHash": "62602daf8c95ba0f8114c40bed3f8e7a"
+      "bytes": 28902,
+      "contentHash": "9be60c883e59186b0803105a6a039f0c"
     },
     {
       "slug": "guides/tooling-system",
@@ -397,8 +397,8 @@
       "url": "https://datamitsu.com/docs/how-to/machine-level-toolchain.md",
       "title": "Machine-Level Toolchain",
       "description": "Activate a hash-verified, pinned toolchain from a config outside any repository, so the tools you want on your machine are on PATH in every shell",
-      "bytes": 13027,
-      "contentHash": "af96f53dd9fba5a860e1ec93797f6b77"
+      "bytes": 13121,
+      "contentHash": "02ff9f58daf6e28c15c197c4e7f36879"
     },
     {
       "slug": "how-to/maintain-wrapper",
@@ -406,8 +406,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 40503,
-      "contentHash": "726552e89b6ad0a4785388c9147ed5f6"
+      "bytes": 40909,
+      "contentHash": "7c476ee5ae7b510c4d457cb08a2f1114"
     },
     {
       "slug": "how-to/manage-cache",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 177501,
-      "contentHash": "64b7b459e56eae0872e4f3215bba77e8"
+      "bytes": 181315,
+      "contentHash": "e99868580cf4d22067f4746a0dc34397"
     },
     {
       "slug": "reference/comparison",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 81494,
-      "contentHash": "516fc4721ff7b174a6219d9887b60e07"
+      "bytes": 82061,
+      "contentHash": "57893d2f2e095f58d029201e68f21638"
     },
     {
       "slug": "reference/ignore-rules",

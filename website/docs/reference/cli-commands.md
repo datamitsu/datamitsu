@@ -1509,14 +1509,14 @@ datamitsu config lockfile govulncheck
 
 Developer utility commands for maintaining datamitsu configurations.
 
-### devtools pull-github
+### devtools pull-releases
 
-Update binary configurations from GitHub releases. Requires a file argument specifying the path to the GitHub apps JSON file. If the file doesn't exist, an empty appstate structure is created automatically. Fetches repository descriptions from the GitHub API and stores them in the output JSON.
+Update binary configurations from release providers. Requires a file argument specifying the path to the binary apps JSON file. If the file doesn't exist, an empty appstate structure is created automatically. Fetches repository descriptions from the source API and stores them in the output JSON.
 
 ```bash
-datamitsu devtools pull-github <file>
-datamitsu devtools pull-github config/src/githubApps.json
-datamitsu devtools pull-github config/src/githubApps.json --update
+datamitsu devtools pull-releases <file>
+datamitsu devtools pull-releases config/src/binaryApps.json
+datamitsu devtools pull-releases config/src/binaryApps.json --update
 ```
 
 | Flag                  | Description                                                                                                                                                                                                                |
@@ -1549,6 +1549,7 @@ Add an optional top-level `platforms` array to the input manifest to restrict de
 
 ```json
 {
+  "sources": { "github": { "type": "github", "url": "https://github.com" } },
   "platforms": ["darwin/arm64", "linux/amd64/musl"],
   "apps": {},
   "binaries": {}
@@ -1585,17 +1586,78 @@ Before scoring, the detector filters out three categories of assets: checksum fi
 
 When a release holds several programs — harper publishes `harper-cli-*`, `harper-ls-*` and the `Harper` desktop app together — the asset whose name carries the app's name as whole tokens (case and separators aside) outranks the others of the same platform, whatever their format. An asset that names the requested libc still ranks above it: a `tool-alpine-*` build is the musl build even when only `tool-cli-linux-*` carries the app's name.
 
+The manifest has no schema version. Every app selects a named source and a
+repository path:
+
+```json
+{
+  "sources": {
+    "github": { "type": "github", "url": "https://github.com" },
+    "codeberg": { "type": "forgejo", "url": "https://codeberg.org" },
+    "gitea": { "type": "gitea", "url": "https://gitea.com" },
+    "gitlab": { "type": "gitlab", "url": "https://gitlab.com" }
+  },
+  "apps": {
+    "tool": { "source": "github", "repository": "owner/tool", "tag": "v1.0.0" }
+  },
+  "binaries": {}
+}
+```
+
+The repository and tag above are illustrative. Use the actual tag your source
+publishes. `repository` accepts nested GitLab namespaces. Supported `type` values
+are exactly `github`, `gitlab`, `gitea` and `forgejo`; Codeberg is a Forgejo
+instance, not a separate provider. `url` is the instance URL, including a
+self-hosted subpath when needed. Optional `apiUrl` overrides the derived API
+root (`/api/v3` for GitHub Enterprise, `/api/v4` for GitLab, `/api/v1` for Gitea
+and Forgejo; public GitHub uses `https://api.github.com`). Source URLs require
+HTTPS; local loopback instances also accept HTTP.
+
+An optional source `tokenEnv` names a third-party token environment variable.
+No token value is saved. API authentication and generated binary `auth` references
+are scoped to the exact origin; redirects to another origin drop credentials.
+For private GitHub assets, authenticated downloads use the asset API URL with
+an octet-stream Accept header. Download auth is consumed by both installation
+and `--verify-extraction`.
+
+**Integrity:** GitHub API digests are used directly. GitLab generic-package
+links obtain SHA-256 from package-file metadata for the same project. A source
+without a published digest must use explicit per-app `hashes` (asset filename
+to SHA-256), or `checksums` (checksum asset filename to the checksum file's own
+SHA-256). Only candidate files for selected platforms resolve digests. Checksum
+files are downloaded only with their own validated SHA-256 pin; a binary is
+never downloaded to manufacture its expected hash. GNU SHA-256 lists and BSD
+`SHA256 (filename) = hash` records are supported. Conflicting records are errors.
+
+Per-app pins apply by asset filename. When a new release needs those pins to
+resolve its digests, update them from independently trusted upstream metadata
+before using `--update`. With `--verify-extraction`, a stale matching pin fails verification and keeps
+the previous app entry. Without that flag, a manual `hashes` pin cannot be
+checked against the binary during pulling: the new tag and expected hash are
+recorded, and installation still refuses a mismatching download. Checksum-file
+pins are always verified when fetched. Pins are never refreshed by trusting
+unverified downloaded bytes. Native
+API digests permit automatic updates without maintaining per-app pins.
+
+**Breaking migration:** rename your registry file to `binaryApps.json`, add
+`sources`, and replace each app's `owner`/`repo` with `source`/`repository`.
+Replace `pull-github` with `pull-releases` in scripts. The old command and old
+manifest shape are not accepted. Unknown fields, sources and repository shapes
+fail before pruning or network requests. `configHash` includes the source
+profile, repository, tag, integrity pins and sorted unique platform selection.
+Generated entries record their resolved provider, instance, repository and tag.
+
 **Examples:**
 
 ```bash
 # Detect binaries for the tags the file already pins (apps added or re-pinned by hand)
-datamitsu devtools pull-github config/src/githubApps.json
+datamitsu devtools pull-releases config/src/binaryApps.json
 
 # Update to latest releases
-datamitsu devtools pull-github config/src/githubApps.json --update
+datamitsu devtools pull-releases config/src/binaryApps.json --update
 
 # Update and verify that archives extract correctly
-datamitsu devtools pull-github config/src/githubApps.json --update --verify-extraction
+datamitsu devtools pull-releases config/src/binaryApps.json --update --verify-extraction
 ```
 
 **Failures, retries and the exit code:**
@@ -1607,7 +1669,7 @@ With `--verify-extraction`, the download of each asset retries the same way. A p
 The file is saved after each app that succeeds, and each save replaces the file whole. Every entry in it is therefore either the previous state of an app that failed or was not reached, or the complete new state of one that succeeded; a failed app never gets a partial new entry. The deletion of platforms excluded by `platforms` is applied and saved before any app pull, including pulls that fail. A save that fails stops the run, since nothing after it could be recorded either.
 
 :::tip See also
-For a complete workflow including CI automation, see [Maintaining Wrapper Packages — Binary Apps](/docs/how-to/maintain-wrapper#binary-apps-devtools-pull-github).
+For a complete workflow including CI automation, see [Maintaining Wrapper Packages — Binary Apps](/docs/how-to/maintain-wrapper#binary-apps-devtools-pull-releases).
 :::
 
 ### devtools pull-node
@@ -1980,7 +2042,7 @@ datamitsu devtools tools inspect eslint
 
 **File not found errors:**
 
-If the JSON file argument doesn't exist, `pull-github`, `pull-node`, and `pull-uv` create an empty file automatically. However, `pull-runtimes` requires the `--update` flag to write — running without it produces an error.
+If the JSON file argument doesn't exist, `pull-releases`, `pull-node`, and `pull-uv` create an empty file automatically. However, `pull-runtimes` requires the `--update` flag to write — running without it produces an error.
 
 **GitHub API rate limits:**
 
@@ -1988,21 +2050,27 @@ Without a token the GitHub API allows 60 requests an hour, and a registry pull o
 
 ```bash
 export GITHUB_TOKEN=ghp_your_token_here
-datamitsu devtools pull-github config/src/githubApps.json --update
+datamitsu devtools pull-releases config/src/binaryApps.json --update
 ```
 
 **Hash mismatches:**
 
-If `verify-all` reports hash mismatches, the upstream binary may have changed without a version bump (a re-released tag). Re-run the corresponding `pull-*` command with `--update` to fetch fresh hashes:
+If `verify-all` reports a hash mismatch, investigate the changed upstream
+artifact before changing the expected hash. For release manifests, update manual
+`hashes` or `checksums` pins only from independently trusted upstream metadata.
+For a re-released tag using native API digests, clear the affected generated
+entry's `configHash` to force discovery while preserving its archive-path history.
+An unchanged tag and config hash skip discovery; `--update` alone does not
+refresh manual pins. Then pull and verify again:
 
 ```bash
-datamitsu devtools pull-github config/src/githubApps.json --update
+datamitsu devtools pull-releases config/src/binaryApps.json --verify-extraction
 datamitsu devtools verify-all
 ```
 
 **Network errors:**
 
-All devtools commands require network access to fetch from GitHub, npm, or PyPI. If you're behind a proxy, ensure `HTTPS_PROXY` is set. For intermittent failures, retry the command — downloads are idempotent.
+Release and package devtools require network access to their configured forge, npm or PyPI. If you're behind a proxy, ensure `HTTPS_PROXY` is set. For intermittent failures, retry the command — downloads are idempotent.
 
 ## cache
 

@@ -4,13 +4,13 @@ import (
 	"sort"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/github"
+	"github.com/datamitsu/datamitsu/internal/releaseasset"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
 // AssetScore holds the breakdown of an asset's score
 type AssetScore struct {
-	Asset        github.Asset
+	Asset        releaseasset.Asset
 	Total        int
 	OSMatch      bool
 	ArchMatch    bool
@@ -43,13 +43,13 @@ const (
 // ScoreAsset computes a match score for a GitHub release asset against the
 // requested OS, architecture, and libc type, without an app name to prefer.
 // Higher scores indicate better matches.
-func ScoreAsset(asset github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) AssetScore {
+func ScoreAsset(asset releaseasset.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) AssetScore {
 	return scoreAssetFor("", asset, osType, archType, libcType)
 }
 
 // scoreAssetFor scores an asset for appName: one whose name carries the app's
 // name earns scoreNameMatch on top of the platform criteria.
-func scoreAssetFor(appName string, asset github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) AssetScore {
+func scoreAssetFor(appName string, asset releaseasset.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) AssetScore {
 	s := AssetScore{Asset: asset}
 
 	osMatch := MatchOS(asset.Name, osType)
@@ -133,7 +133,7 @@ func scoreAssetFor(appName string, asset github.Asset, osType syslist.OsType, ar
 // implicit ones, then asset name ascending. Callers that only need the winner
 // use the first element; callers that want fallbacks (e.g. a raw binary behind
 // a preferred archive) walk the whole slice.
-func rankAssets(appName string, assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) []AssetScore {
+func rankAssets(appName string, assets []releaseasset.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) []AssetScore {
 	scores := make([]AssetScore, 0, len(assets))
 	for _, asset := range assets {
 		s := scoreAssetFor(appName, asset, osType, archType, libcType)
@@ -158,7 +158,7 @@ func rankAssets(appName string, assets []github.Asset, osType syslist.OsType, ar
 // selectBestAsset scores all assets, without an app name to prefer, and
 // returns the highest-scoring one. Ties are broken by asset name
 // (alphabetical, ascending) for determinism.
-func selectBestAsset(assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) *AssetScore {
+func selectBestAsset(assets []releaseasset.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) *AssetScore {
 	ranked := rankAssets("", assets, osType, archType, libcType)
 	if len(ranked) == 0 {
 		return nil

@@ -1,20 +1,20 @@
-Update binary configurations from GitHub releases using auto-detection.
+Update binary configurations from forge releases using auto-detection.
 
-Requires a file argument pointing to the GitHub apps JSON file.
+Requires a file argument pointing to the binary apps JSON file.
 If the file does not exist, an empty one will be created.
 
 Without --update: refreshes binaries using current tags
 With --update: fetches latest release tags and updates binaries
 
 Example:
-  datamitsu devtools pull-github config/src/githubApps.json
-  datamitsu devtools pull-github config/src/githubApps.json --update
+  datamitsu devtools pull-releases config/src/binaryApps.json
+  datamitsu devtools pull-releases config/src/binaryApps.json --update
 
 Usage:
-  datamitsu devtools pull-github <file> [flags]
+  datamitsu devtools pull-releases <file> [flags]
 
 Flags:
-  -h, --help                help for pull-github
+  -h, --help                help for pull-releases
       --min-age int         Minimum release age in minutes before a version is eligible (-1 = use global default of 10080, 0 = disable age filtering, positive = custom) (default -1)
       --update              Fetch latest release tags before updating binaries
       --verify-extraction   Download and verify binary extraction for all platforms before saving

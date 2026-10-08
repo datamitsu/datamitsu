@@ -45,6 +45,9 @@ export default defineConfig((config) => ({
     "darkk",
   ],
   words: [
+    "releaseasset",
+    "releaseprovider",
+    "APIURL",
     ...config.words,
     "nosniff",
     // checkmake's rule for a missing .PHONY target, quoted by the parser tests.

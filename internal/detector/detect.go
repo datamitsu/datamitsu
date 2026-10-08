@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/github"
+	"github.com/datamitsu/datamitsu/internal/releaseasset"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
@@ -15,7 +15,7 @@ import (
 // scored by OS, Arch, Libc match quality, whether its name carries the app's
 // name, archive format preference, and priority patterns. The highest-scoring
 // asset wins. Ties are broken alphabetically by asset name for determinism.
-func DetectBinary(appName string, assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) (*github.Asset, error) {
+func DetectBinary(appName string, assets []releaseasset.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) (*releaseasset.Asset, error) {
 	candidates, err := DetectBinaryCandidates(appName, assets, osType, archType, libcType)
 	if err != nil {
 		return nil, err
@@ -29,7 +29,7 @@ func DetectBinary(appName string, assets []github.Asset, osType syslist.OsType, 
 // the list lets callers fall back to a lower-ranked asset — e.g. a raw binary
 // when a preferred archive fails extraction verification — instead of dropping
 // the platform. The error cases mirror DetectBinary exactly.
-func DetectBinaryCandidates(appName string, assets []github.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) ([]github.Asset, error) {
+func DetectBinaryCandidates(appName string, assets []releaseasset.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) ([]releaseasset.Asset, error) {
 	if len(assets) == 0 {
 		return nil, errors.New("no assets available")
 	}
@@ -44,7 +44,7 @@ func DetectBinaryCandidates(appName string, assets []github.Asset, osType syslis
 		return nil, fmt.Errorf("no matching binary found for %s/%s", osType, archType)
 	}
 
-	out := make([]github.Asset, len(ranked))
+	out := make([]releaseasset.Asset, len(ranked))
 	for i := range ranked {
 		out[i] = ranked[i].Asset
 	}
@@ -53,8 +53,8 @@ func DetectBinaryCandidates(appName string, assets []github.Asset, osType syslis
 
 // filterValidAssets removes checksum, attestation, installer and
 // non-executable package files
-func filterValidAssets(appName string, assets []github.Asset) []github.Asset {
-	var valid []github.Asset
+func filterValidAssets(appName string, assets []releaseasset.Asset) []releaseasset.Asset {
+	var valid []releaseasset.Asset
 	for _, asset := range assets {
 		if IsChecksumFile(asset.Name) || IsAttestationFile(asset.Name) || IsNonExecutableFile(asset.Name) || IsInstallerFile(appName, asset.Name) {
 			continue

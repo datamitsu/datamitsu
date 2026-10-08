@@ -1,5 +1,7 @@
 package binmanager
 
+import "github.com/datamitsu/datamitsu/internal/httpx"
+
 // BinHashType identifies the cryptographic hash algorithm used to verify a download.
 type BinHashType string
 
@@ -54,9 +56,10 @@ func (t BinContentType) IsDirectoryArchive() bool {
 // BinaryOsArchInfo describes a downloadable binary for one OS/arch, including its
 // source URL, verification hash and extraction details.
 type BinaryOsArchInfo struct {
-	URL      string       `json:"url"`
-	Hash     string       `json:"hash"`
-	HashType *BinHashType `json:"hashType,omitempty"`
+	Auth     *httpx.RequestAuth `json:"auth,omitempty"`
+	URL      string             `json:"url"`
+	Hash     string             `json:"hash"`
+	HashType *BinHashType       `json:"hashType,omitempty"`
 
 	ContentType BinContentType `json:"contentType"`
 

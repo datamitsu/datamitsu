@@ -83,7 +83,7 @@ func (s *State) FilterPlatforms() bool {
 		entry.Binaries = filtered
 		if entryChanged {
 			changed = true
-			if metadata := s.Apps[name]; metadata == nil || entry.ConfigHash != ComputeConfigHash(metadata, s.Platforms) {
+			if metadata := s.Apps[name]; metadata == nil || entry.ConfigHash != ComputeConfigHash(metadata, s.Platforms, s.Sources[metadata.Source]) {
 				entry.ConfigHash = ""
 			}
 		}

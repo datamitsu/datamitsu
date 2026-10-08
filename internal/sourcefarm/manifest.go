@@ -86,7 +86,7 @@ import (
 //
 // Version 6 retires entries that recorded the extracted directory of an extractDir binary app
 // as its command; the command is now the binaryPath inside it.
-const ManifestFormatVersion = 6
+const ManifestFormatVersion = 7
 
 // Origin records how the farm's root was established.
 type Origin string

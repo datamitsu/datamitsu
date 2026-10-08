@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/releaseprovider"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 )
 
@@ -16,11 +18,11 @@ func TestLoad(t *testing.T) {
 		path := filepath.Join(tmpDir, "test.json")
 
 		testState := &State{
+			Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 			Apps: map[string]*AppMetadata{
 				"testapp": {
-					Owner: "owner",
-					Repo:  "repo",
-					Tag:   "v1.0.0",
+					Source: "github", Repository: "owner/repo",
+					Tag: "v1.0.0",
 				},
 			},
 			Binaries: map[string]*BinariesEntry{
@@ -49,8 +51,8 @@ func TestLoad(t *testing.T) {
 			t.Errorf("expected 1 app, got %d", len(state.Apps))
 		}
 
-		if state.Apps["testapp"].Owner != "owner" {
-			t.Errorf("expected owner 'owner', got '%s'", state.Apps["testapp"].Owner)
+		if state.Apps["testapp"].Repository != "owner/repo" {
+			t.Errorf("expected owner 'owner', got '%s'", state.Apps["testapp"].Repository)
 		}
 	})
 
@@ -121,11 +123,11 @@ func TestSave(t *testing.T) {
 		path := filepath.Join(tmpDir, "test.json")
 
 		testState := &State{
+			Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 			Apps: map[string]*AppMetadata{
 				"testapp": {
-					Owner: "owner",
-					Repo:  "repo",
-					Tag:   "v1.0.0",
+					Source: "github", Repository: "owner/repo",
+					Tag: "v1.0.0",
 				},
 			},
 			Binaries: map[string]*BinariesEntry{
@@ -169,11 +171,11 @@ func TestSave(t *testing.T) {
 		path := filepath.Join(tmpDir, "formatted.json")
 
 		testState := &State{
+			Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 			Apps: map[string]*AppMetadata{
 				"testapp": {
-					Owner: "owner",
-					Repo:  "repo",
-					Tag:   "v1.0.0",
+					Source: "github", Repository: "owner/repo",
+					Tag: "v1.0.0",
 				},
 			},
 			Binaries: map[string]*BinariesEntry{},
@@ -208,6 +210,7 @@ func TestSave(t *testing.T) {
 		path := filepath.Join(tmpDir, "newline.json")
 
 		testState := &State{
+			Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 			Apps:     map[string]*AppMetadata{},
 			Binaries: map[string]*BinariesEntry{},
 		}
@@ -231,6 +234,7 @@ func TestSave(t *testing.T) {
 		path := "/nonexistent/directory/test.json"
 
 		testState := &State{
+			Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 			Apps:     map[string]*AppMetadata{},
 			Binaries: map[string]*BinariesEntry{},
 		}
@@ -253,9 +257,8 @@ func TestValidate(t *testing.T) {
 			name:    "valid metadata",
 			appName: "testapp",
 			metadata: &AppMetadata{
-				Owner: "owner",
-				Repo:  "repo",
-				Tag:   "v1.0.0",
+				Source: "github", Repository: "owner/repo",
+				Tag: "v1.0.0",
 			},
 			expectError: false,
 		},
@@ -269,9 +272,8 @@ func TestValidate(t *testing.T) {
 			name:    "missing owner",
 			appName: "testapp",
 			metadata: &AppMetadata{
-				Owner: "",
-				Repo:  "repo",
-				Tag:   "v1.0.0",
+				Source: "github", Repository: "/repo",
+				Tag: "v1.0.0",
 			},
 			expectError: true,
 		},
@@ -279,9 +281,8 @@ func TestValidate(t *testing.T) {
 			name:    "missing repo",
 			appName: "testapp",
 			metadata: &AppMetadata{
-				Owner: "owner",
-				Repo:  "",
-				Tag:   "v1.0.0",
+				Source: "github", Repository: "owner/",
+				Tag: "v1.0.0",
 			},
 			expectError: true,
 		},
@@ -289,9 +290,8 @@ func TestValidate(t *testing.T) {
 			name:    "missing tag",
 			appName: "testapp",
 			metadata: &AppMetadata{
-				Owner: "owner",
-				Repo:  "repo",
-				Tag:   "",
+				Source: "github", Repository: "owner/repo",
+				Tag: "",
 			},
 			expectError: true,
 		},
@@ -380,8 +380,9 @@ func TestBinariesEntryDescription(t *testing.T) {
 		path := filepath.Join(tmpDir, "roundtrip.json")
 
 		original := &State{
+			Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 			Apps: map[string]*AppMetadata{
-				"myapp": {Owner: "owner", Repo: "repo", Tag: "v1.0.0"},
+				"myapp": {Source: "github", Repository: "owner/repo", Tag: "v1.0.0"},
 			},
 			Binaries: map[string]*BinariesEntry{
 				"myapp": {
@@ -412,8 +413,8 @@ func TestBinariesEntryDescription(t *testing.T) {
 
 		// Simulate old JSON without description field
 		oldJSON := `{
-  "apps": {
-    "myapp": {"owner": "owner", "repo": "repo", "tag": "v1.0.0"}
+  "sources":{"github":{"type":"github","url":"https://github.com"}},"apps": {
+    "myapp": {"source":"github","repository":"owner/repo", "tag": "v1.0.0"}
   },
   "binaries": {
     "myapp": {"configHash": "hash123", "binaries": {}}
@@ -441,13 +442,12 @@ func TestBinariesEntryDescription(t *testing.T) {
 func TestComputeConfigHash(t *testing.T) {
 	t.Run("consistent hash", func(t *testing.T) {
 		metadata := &AppMetadata{
-			Owner: "owner",
-			Repo:  "repo",
-			Tag:   "v1.0.0",
+			Source: "github", Repository: "owner/repo",
+			Tag: "v1.0.0",
 		}
 
-		hash1 := ComputeConfigHash(metadata)
-		hash2 := ComputeConfigHash(metadata)
+		hash1 := ComputeConfigHash(metadata, nil)
+		hash2 := ComputeConfigHash(metadata, nil)
 
 		if hash1 != hash2 {
 			t.Errorf("hash should be consistent: %s != %s", hash1, hash2)
@@ -456,19 +456,17 @@ func TestComputeConfigHash(t *testing.T) {
 
 	t.Run("different metadata produces different hash", func(t *testing.T) {
 		metadata1 := &AppMetadata{
-			Owner: "owner1",
-			Repo:  "repo",
-			Tag:   "v1.0.0",
+			Source: "github", Repository: "owner1/repo",
+			Tag: "v1.0.0",
 		}
 
 		metadata2 := &AppMetadata{
-			Owner: "owner2",
-			Repo:  "repo",
-			Tag:   "v1.0.0",
+			Source: "github", Repository: "owner2/repo",
+			Tag: "v1.0.0",
 		}
 
-		hash1 := ComputeConfigHash(metadata1)
-		hash2 := ComputeConfigHash(metadata2)
+		hash1 := ComputeConfigHash(metadata1, nil)
+		hash2 := ComputeConfigHash(metadata2, nil)
 
 		if hash1 == hash2 {
 			t.Error("different metadata should produce different hashes")
@@ -477,12 +475,11 @@ func TestComputeConfigHash(t *testing.T) {
 
 	t.Run("hash is hex encoded", func(t *testing.T) {
 		metadata := &AppMetadata{
-			Owner: "owner",
-			Repo:  "repo",
-			Tag:   "v1.0.0",
+			Source: "github", Repository: "owner/repo",
+			Tag: "v1.0.0",
 		}
 
-		hash := ComputeConfigHash(metadata)
+		hash := ComputeConfigHash(metadata, nil)
 
 		if len(hash) != 32 {
 			t.Errorf("XXH3-128 hex should be 32 characters, got %d", len(hash))
@@ -501,20 +498,21 @@ func TestComputeConfigHash(t *testing.T) {
 // file directly.
 func TestSave_FollowsSymlink(t *testing.T) {
 	dir := t.TempDir()
-	target := filepath.Join(dir, "shared", "githubApps.json")
+	target := filepath.Join(dir, "shared", "binaryApps.json")
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(target, []byte("{\"apps\":{},\"binaries\":{}}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	link := filepath.Join(dir, "githubApps.json")
+	link := filepath.Join(dir, "binaryApps.json")
 	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
 	state := &State{
-		Apps:     map[string]*AppMetadata{"tool": {Owner: "o", Repo: "tool", Tag: "v1"}},
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
+		Apps:     map[string]*AppMetadata{"tool": {Source: "github", Repository: "o/tool", Tag: "v1"}},
 		Binaries: map[string]*BinariesEntry{},
 	}
 	if err := Save(link, state); err != nil {
@@ -546,10 +544,11 @@ func TestSave_FollowsSymlink(t *testing.T) {
 // struct fields: "binaries" before "configHash" before "description", and
 // "binaryPath" before "contentType" before "hash" before "url".
 func TestSave_SortedKeys(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "githubApps.json")
+	path := filepath.Join(t.TempDir(), "binaryApps.json")
 	bp := "bin/tool"
 	state := &State{
-		Apps: map[string]*AppMetadata{"tool": {Owner: "o", Repo: "tool", Tag: "v1"}},
+		Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
+		Apps:    map[string]*AppMetadata{"tool": {Source: "github", Repository: "o/tool", Tag: "v1"}},
 		Binaries: map[string]*BinariesEntry{"tool": {
 			ConfigHash:  "hash",
 			Description: "a tool",
@@ -566,7 +565,7 @@ func TestSave_SortedKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	keys := []string{`"apps"`, `"owner"`, `"repo"`, `"tag"`, `"binaries"`, `"binaries": {`, `"binaryPath"`, `"contentType"`, `"hash"`, `"url"`, `"configHash"`, `"description"`}
+	keys := []string{`"apps"`, `"repository"`, `"source"`, `"tag"`, `"binaries"`, `"binaries": {`, `"binaryPath"`, `"contentType"`, `"hash"`, `"url"`, `"configHash"`, `"description"`}
 	last := -1
 	for _, k := range keys {
 		at := strings.Index(text[last+1:], k)

@@ -1338,7 +1338,7 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	downloadedPath, err := downloadAndVerifyWithName(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir, name)
+	downloadedPath, err := downloadAndVerifyWithName(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir, name, binaryInfo.Auth)
 	if err != nil {
 		return fmt.Errorf("failed to download and verify: %w", err)
 	}

@@ -138,16 +138,16 @@ All `pull-*` commands refuse to select a release younger than the **minimum rele
 
 ```bash
 # Default 7-day filter
-datamitsu devtools pull-github apps/githubApps.json --update
+datamitsu devtools pull-releases apps/binaryApps.json --update
 
 # Require 30 days of soak time
 datamitsu devtools pull-node apps/nodeApps.json --update --min-age 43200
 
 # Bypass the filter (e.g. to adopt a same-day security release)
-datamitsu devtools pull-github apps/githubApps.json --update --min-age 0
+datamitsu devtools pull-releases apps/binaryApps.json --update --min-age 0
 ```
 
-Set `DATAMITSU_MIN_RELEASE_AGE` (minutes) to change the default for every command, including the check `config lockfile` runs on a Go app's resolved modules. When no release is old enough, `pull-github` keeps an existing app's current tag (with a warning) but records a failure for a brand-new app; `pull-node`/`pull-uv` skip the package with a warning; `pull-runtimes` hard-errors. See [Supply Chain Security → Minimum Release Age](../guides/supply-chain-security.md#minimum-release-age-version-selection) for the full behavior table and the registries it covers.
+Set `DATAMITSU_MIN_RELEASE_AGE` (minutes) to change the default for every command, including the check `config lockfile` runs on a Go app's resolved modules. When no release is old enough, `pull-releases` keeps an existing app's current tag (with a warning) but records a failure for a brand-new app; `pull-node`/`pull-uv` skip the package with a warning; `pull-runtimes` hard-errors. See [Supply Chain Security → Minimum Release Age](../guides/supply-chain-security.md#minimum-release-age-version-selection) for the full behavior table and the registries it covers.
 
 ### Order and progress
 
@@ -164,7 +164,7 @@ A registry pull is how versions and hashes enter a configuration, so an app that
 
 Permanent failures — a 404, a release whose assets carry no digest, a validation error, a rate limit that resets later than two minutes — are not retried, but they are in the report and in the exit code all the same.
 
-Under `--verify-extraction`, only a fault in the asset itself — a hash mismatch, an archive that does not extract, a file that is not an executable — makes `pull-github` fall back to the next-ranked asset for the platform. A download that fails is not the asset's fault, so the platform is not handed to whatever ranks below (an attestation file, or a variant that happens to verify): it fails the app, whose previous entry is kept, and the report names the platform and the asset (`verify linux/amd64/glibc`).
+Under `--verify-extraction`, only a fault in the asset itself — a hash mismatch, an archive that does not extract, a file that is not an executable — makes `pull-releases` fall back to the next-ranked asset for the platform. A download that fails is not the asset's fault, so the platform is not handed to whatever ranks below (an attestation file, or a variant that happens to verify): it fails the app, whose previous entry is kept, and the report names the platform and the asset (`verify linux/amd64/glibc`).
 
 Every `pull-*` command that writes its file saves it after each entry that changed, before it starts the next, and replaces the file whole each time. After a failed or interrupted run every entry is therefore either the previous state of one that failed or was not reached, or the complete new state of one that succeeded, never a partial one; rerun the command to pick up the rest. A save that fails stops the run. `pull-runtimes` pulls pnpm before the runtimes that name it, and does not record a Node or Bun entry whose `pnpmRuntime` the file does not define: that runtime fails and keeps its previous entry.
 
@@ -202,19 +202,25 @@ function getConfig(config) {
 
 `datamitsuConfigInputs` is a deliberately minimal allowlist: it carries only the runtime values config evaluation is permitted to depend on (currently just `minimumReleaseAgeMinutes`). The full `config runtime` snapshot is **never** exposed to config JS — that boundary keeps hidden config inputs from leaking into fingerprinting and caching.
 
-### Binary Apps: `devtools pull-github`
+### Binary Apps: `devtools pull-releases`
 
-Binary apps are downloaded directly from GitHub releases. Use `pull-github` to fetch the latest release versions and published SHA-256 digests.
+Binary apps are downloaded from GitHub, GitLab, Gitea or Forgejo releases through named source profiles. Use `pull-releases` to fetch the latest release versions and published SHA-256 digests.
+
+The registry uses `sources` aliases and per-app `source`, `repository` and `tag`.
+There is no schema version or implicit GitHub fallback. See the
+[release provider reference](/docs/reference/cli-commands#devtools-pull-releases)
+for instance URLs, token references, integrity pins and migration from the old
+`owner`/`repo` registry.
 
 **Apply updates:**
 
 ```bash
-datamitsu devtools pull-github apps/githubApps.json --update
+datamitsu devtools pull-releases apps/binaryApps.json --update
 ```
 
-With `--update`, the command fetches the latest release tags, detects binaries for all platform tuples (Darwin/Linux/Windows/FreeBSD/OpenBSD on amd64/arm64, Linux with glibc/musl), reads their published SHA-256 digests, fetches the repository description from GitHub API, and writes the results back to the JSON file.
+With `--update`, the command fetches the latest release tags, detects binaries for all platform tuples (Darwin/Linux/Windows/FreeBSD/OpenBSD on amd64/arm64, Linux with glibc/musl), resolves their mandatory SHA-256 digests, fetches the repository description from the source API, and writes the results back to the JSON file.
 
-To keep only specific platforms, add a top-level list to `githubApps.json`:
+To keep only specific platforms, add a top-level list to `binaryApps.json`:
 
 ```json
 "platforms": ["darwin/arm64", "linux/amd64/musl"]
@@ -226,23 +232,23 @@ Unavailable selected platforms are reported and omitted when another selected
 platform is available. For releases that publish Linux only as musl, include
 `linux/amd64/musl` to retain that record; a musl asset is never relabeled as glibc.
 Changing the set or removing the field reruns detection even at the same tag.
-See [the command reference](/docs/reference/cli-commands#devtools-pull-github)
+See [the command reference](/docs/reference/cli-commands#devtools-pull-releases)
 for supported values and validation rules.
 
 **Verify binary extraction after update:**
 
 ```bash
-datamitsu devtools pull-github apps/githubApps.json --update --verify-extraction
+datamitsu devtools pull-releases apps/binaryApps.json --update --verify-extraction
 ```
 
 The `--verify-extraction` flag additionally downloads each binary (retrying a failed download like any other request), extracts it, and checks that the result is an executable: an ELF, Mach-O or PE file, or a script starting with `#!`. This catches changed archive structures, renamed binaries inside archives, and a `binaryPath` that picks a completion script or a man page instead of the binary.
 
-`pull-github` learns `binaryPath` from the entries already in the file. An asset published under the same name as before keeps the `binaryPath` recorded for it. Otherwise the closest entry lends its layout — the same OS, architecture and libc first, then the same OS and architecture, then the same OS — with the new asset's name substituted into the path component named after the old asset (`tombi-cli-1.5.0-x86_64-apple-darwin/tombi` becomes `tombi-cli-1.5.5-x86_64-apple-darwin/tombi`), or else only the version. A layout that names another architecture or libc than the asset is never borrowed. A `binaryPath` you corrected by hand therefore survives the next release instead of being guessed again.
+`pull-releases` learns `binaryPath` from the entries already in the file. An asset published under the same name as before keeps the `binaryPath` recorded for it. Otherwise the closest entry lends its layout — the same OS, architecture and libc first, then the same OS and architecture, then the same OS — with the new asset's name substituted into the path component named after the old asset (`tombi-cli-1.5.0-x86_64-apple-darwin/tombi` becomes `tombi-cli-1.5.5-x86_64-apple-darwin/tombi`), or else only the version. A layout that names another architecture or libc than the asset is never borrowed. A `binaryPath` you corrected by hand therefore survives the next release instead of being guessed again.
 
 An asset that names an operating system datamitsu does not run on — illumos, Solaris, NetBSD, DragonFly, Haiku, Android, AIX, Plan 9 — is never recorded for Linux, even when it carries an `x86_64` token and no other. On Windows, `win64` counts as amd64 and `win32` as 32-bit, and a bare `win` token or a `.exe` suffix is enough to name the OS.
 
 :::note Releases with mixed asset types
-Some tools publish VS Code extensions (`.vsix`), Linux packages (`.deb`, `.rpm`), NuGet packages (`.nupkg`), Python wheels (`.whl`), Windows installers (`.msi`), or macOS installer packages (`.pkg`) alongside binary archives in the same GitHub release. datamitsu automatically excludes these non-executable formats before scoring, so only actual binaries compete for selection. No configuration is needed — the filtering is automatic.
+Some tools publish VS Code extensions (`.vsix`), Linux packages (`.deb`, `.rpm`), NuGet packages (`.nupkg`), Python wheels (`.whl`), Windows installers (`.msi`), or macOS installer packages (`.pkg`) alongside binary archives in the same release. datamitsu automatically excludes these non-executable formats before scoring, so only actual binaries compete for selection. No configuration is needed — the filtering is automatic.
 :::
 
 ### Node Apps (npm): `devtools pull-node`
@@ -626,8 +632,8 @@ jobs:
           # Install datamitsu (adjust for your setup)
           go build -o datamitsu .
 
-      # Note: pull-github does not support --dry-run.
-      # Use pull-github --update in the automated update PR workflow instead.
+      # Note: pull-releases does not support --dry-run.
+      # Use pull-releases --update in the automated update PR workflow instead.
 
       - name: Check node app updates
         run: ./datamitsu devtools pull-node apps/nodeApps.json --update --dry-run
@@ -661,7 +667,7 @@ jobs:
         run: go build -o datamitsu .
 
       - name: Update binary apps
-        run: ./datamitsu devtools pull-github apps/githubApps.json --update
+        run: ./datamitsu devtools pull-releases apps/binaryApps.json --update
 
       - name: Update node apps
         run: ./datamitsu devtools pull-node apps/nodeApps.json --update

@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/releaseprovider"
+
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
@@ -33,7 +35,7 @@ func captureStderr(fn func()) string {
 	return buf.String()
 }
 
-// fakeGitHub serves the release and repository endpoints pull-github reads,
+// fakeGitHub serves the release and repository endpoints pull-releases reads,
 // answering each repository the way its scenario says.
 type fakeGitHub struct {
 	mu       sync.Mutex
@@ -51,6 +53,10 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(parts) == 2 {
 		// Repository metadata: the description is a warning at most.
 		_ = json.NewEncoder(w).Encode(map[string]string{"full_name": "o/" + repo, "description": "desc " + repo})
+		return
+	}
+	if f.isListing(r) && r.URL.Query().Get("page") != "" && r.URL.Query().Get("page") != "1" {
+		_, _ = w.Write([]byte("[]"))
 		return
 	}
 	f.mu.Lock()
@@ -133,8 +139,8 @@ func TestRunPullGithub_ReportsFailuresAndExitsNonZero(t *testing.T) {
 	defer func() { githubBaseURL = "" }()
 	updateFlag = true
 	defer func() { updateFlag = false }()
-	*pullGithubMinAge = 0
-	defer func() { *pullGithubMinAge = minAgeFlagDefault }()
+	*pullReleasesMinAge = 0
+	defer func() { *pullReleasesMinAge = minAgeFlagDefault }()
 
 	// "gone" was recorded by an earlier run; its entry must survive untouched.
 	previous := &appstate.BinariesEntry{
@@ -142,10 +148,10 @@ func TestRunPullGithub_ReportsFailuresAndExitsNonZero(t *testing.T) {
 		Description: "old description",
 		Binaries:    binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": binmanager.BinaryOsArchInfo{URL: "https://example.test/v0/gone", Hash: strings.Repeat("cd", 32), ContentType: binmanager.BinContentTypeTarGz}}}},
 	}
-	path := filepath.Join(t.TempDir(), "githubApps.json")
-	state := &appstate.State{Apps: map[string]*appstate.AppMetadata{}, Binaries: map[string]*appstate.BinariesEntry{"gone": previous}}
+	path := filepath.Join(t.TempDir(), "binaryApps.json")
+	state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Apps: map[string]*appstate.AppMetadata{}, Binaries: map[string]*appstate.BinariesEntry{"gone": previous}}
 	for _, name := range []string{"fine", "flaky", "gone", "limited", "undigested"} {
-		state.Apps[name] = &appstate.AppMetadata{Owner: "o", Repo: name, Tag: "v0"}
+		state.Apps[name] = &appstate.AppMetadata{Source: "github", Repository: "o" + "/" + name, Tag: "v0"}
 	}
 	if err := appstate.Save(path, state); err != nil {
 		t.Fatal(err)
@@ -153,16 +159,16 @@ func TestRunPullGithub_ReportsFailuresAndExitsNonZero(t *testing.T) {
 
 	var err error
 	stderr := captureStderr(func() {
-		_ = captureStdout(func() { err = runPullGithub(pullGithubCmd, []string{path}) })
+		_ = captureStdout(func() { err = runPullReleases(pullReleasesCmd, []string{path}) })
 	})
 
 	if err == nil || err.Error() != "3 of 5 apps failed" {
-		t.Fatalf("runPullGithub() = %v, want 3 of 5 apps failed\nstderr:\n%s", err, stderr)
+		t.Fatalf("runPullReleases() = %v, want 3 of 5 apps failed\nstderr:\n%s", err, stderr)
 	}
 	for _, want := range []string{
-		"retry 2/4 for GET " + srv.URL + "/repos/o/flaky/releases?per_page=30",
+		"retry 2/4 for GET " + srv.URL + "/repos/o/flaky/releases?page=1&per_page=100",
 		"3 of 5 apps failed and are left as they were in " + path,
-		"gone (latest release): release not found",
+		"gone (latest release): release source github returned HTTP 404",
 		"limited (latest release): GitHub API rate limit exceeded",
 		"undigested (binaries for v1): assets were detected for 2 platform(s) but none carries a SHA-256 digest",
 		"Hint: set GITHUB_TOKEN",
@@ -207,9 +213,10 @@ func TestRunPullGithub_AllSucceedExitsZero(t *testing.T) {
 	githubBaseURL = srv.URL
 	defer func() { githubBaseURL = "" }()
 
-	path := filepath.Join(t.TempDir(), "githubApps.json")
+	path := filepath.Join(t.TempDir(), "binaryApps.json")
 	state := &appstate.State{
-		Apps:     map[string]*appstate.AppMetadata{"fine": {Owner: "o", Repo: "fine", Tag: "v1"}},
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
+		Apps:     map[string]*appstate.AppMetadata{"fine": {Source: "github", Repository: "o/fine", Tag: "v1"}},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
 	if err := appstate.Save(path, state); err != nil {
@@ -217,9 +224,9 @@ func TestRunPullGithub_AllSucceedExitsZero(t *testing.T) {
 	}
 
 	var err error
-	stdout := captureStdout(func() { err = runPullGithub(pullGithubCmd, []string{path}) })
+	stdout := captureStdout(func() { err = runPullReleases(pullReleasesCmd, []string{path}) })
 	if err != nil {
-		t.Fatalf("runPullGithub() = %v", err)
+		t.Fatalf("runPullReleases() = %v", err)
 	}
 	for _, want := range []string{"=== Processing fine [1/1] ===", "✓ Processed 1 apps"} {
 		if !strings.Contains(stdout, want) {
@@ -242,15 +249,15 @@ func TestRunPullGithub_ProcessesAppsAlphabetically(t *testing.T) {
 	githubBaseURL = srv.URL
 	defer func() { githubBaseURL = "" }()
 
-	path := filepath.Join(t.TempDir(), "githubApps.json")
-	if err := os.WriteFile(path, []byte(`{"apps":{"zeta":{"owner":"o","repo":"zeta","tag":"v1"},"alpha":{"owner":"o","repo":"alpha","tag":"v1"},"mid":{"owner":"o","repo":"mid","tag":"v1"}},"binaries":{}}`+"\n"), 0o644); err != nil {
+	path := filepath.Join(t.TempDir(), "binaryApps.json")
+	if err := os.WriteFile(path, []byte(`{"sources":{"github":{"type":"github","url":"https://github.com"}},"apps":{"zeta":{"source":"github","repository":"o/zeta","tag":"v1"},"alpha":{"source":"github","repository":"o/alpha","tag":"v1"},"mid":{"source":"github","repository":"o/mid","tag":"v1"}},"binaries":{}}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	var err error
-	stdout := captureStdout(func() { err = runPullGithub(pullGithubCmd, []string{path}) })
+	stdout := captureStdout(func() { err = runPullReleases(pullReleasesCmd, []string{path}) })
 	if err != nil {
-		t.Fatalf("runPullGithub() = %v", err)
+		t.Fatalf("runPullReleases() = %v", err)
 	}
 	headers := []string{"=== Processing alpha [1/3] ===", "=== Processing mid [2/3] ===", "=== Processing zeta [3/3] ==="}
 	last := -1
