@@ -1,2 +1,5 @@
 import { defineConfig } from "../.datamitsu/prettier.config.mjs";
-export default defineConfig();
+
+const config = defineConfig();
+
+export default config;

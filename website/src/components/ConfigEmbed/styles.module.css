@@ -1,6 +1,7 @@
 .figure {
   margin: 2rem 0 0;
 }
+
 .frame {
   display: block;
   width: 100%;
@@ -10,6 +11,7 @@
   border-radius: 12px;
   color-scheme: inherit;
 }
+
 .caption {
   display: flex;
   flex-wrap: wrap;
@@ -19,6 +21,7 @@
   font-size: 12px;
   line-height: 1.8;
 }
+
 .caption code {
   font-size: 10px;
   background: transparent;
@@ -26,23 +29,28 @@
   padding: 0;
   overflow-wrap: anywhere;
 }
+
 .caption a {
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 4px;
 }
+
 .fallback {
   margin: 12px 0 0;
   font-size: 12px;
   line-height: 1.9;
   overflow-wrap: anywhere;
 }
+
 .fallback summary {
   cursor: pointer;
 }
+
 :global([data-theme="light"]) .frame {
   color-scheme: light;
 }
+
 :global([data-theme="dark"]) .frame {
   color-scheme: dark;
 }

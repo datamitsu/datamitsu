@@ -23,18 +23,17 @@ const dots = snapshot.manifest.apps
   .sort((a, b) => b.depth - a.depth);
 
 const rings = [0, 1, 2].map((ring) =>
-  Array.from({ length: 101 }, (_, step) => {
+  Array.from({ length: 101 }, (_value, step) => {
     const stepAngle = (step / 100) * Math.PI * 2;
     const ringRadius = 290 + ring * 24;
     const flat = ring === 1 ? 0.8 : 0.2;
-    return place({
+    const point = place({
       x: Math.cos(stepAngle) * ringRadius,
       y: Math.sin(stepAngle) * ringRadius * flat,
       z: Math.sin(stepAngle) * ringRadius * (ring === 1 ? 0.2 : 0.8),
     });
-  })
-    .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
-    .join(" "),
+    return `${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+  }).join(" "),
 );
 
 export default function OrbitPoster({ className }: { className?: string }) {

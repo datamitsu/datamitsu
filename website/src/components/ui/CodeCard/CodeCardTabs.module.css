@@ -37,7 +37,7 @@
 .tab:focus-visible {
   outline: 2px solid var(--datamitsu-gold);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(212, 168, 85, 0.2);
+  box-shadow: 0 0 0 4px rgb(212 168 85 / 20%);
 }
 
 .tabActive {
@@ -46,21 +46,21 @@
 }
 
 /* Mobile Responsiveness */
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .tab {
     padding: 0.15rem 0.5rem;
     font-size: 0.7rem;
   }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .tab {
     font-size: 0.72rem;
   }
 }
 
 /* High contrast mode support */
-@media (prefers-contrast: high) {
+@media (prefers-contrast: more) {
   .tab:focus {
     outline-width: 3px;
   }

@@ -3,6 +3,7 @@
 .embed {
   margin: 0;
 }
+
 .stage {
   position: relative;
   width: 100vw;
@@ -12,6 +13,7 @@
   border-block: 1px solid var(--edge);
   background: radial-gradient(ellipse at 50% 48%, #b8923d1f, transparent 62%);
 }
+
 .poster,
 .frame {
   position: absolute;
@@ -19,21 +21,26 @@
   width: 100%;
   height: 100%;
 }
+
 .poster {
   transition: opacity 400ms ease;
 }
+
 .frame {
   border: 0;
   opacity: 0;
   color-scheme: light;
   transition: opacity 500ms ease;
 }
+
 .stage[data-live="true"] .poster {
   opacity: 0;
 }
+
 .stage[data-live="true"] .frame {
   opacity: 1;
 }
+
 .invite {
   position: absolute;
   left: 50%;
@@ -49,6 +56,7 @@
   border-radius: 999px;
   cursor: pointer;
 }
+
 .fallback {
   display: grid;
   align-content: center;
@@ -57,31 +65,38 @@
   padding: 32px clamp(22px, 5vw, 88px);
   font-size: 15px;
 }
+
 .bar {
   display: flex;
   gap: 6px;
   height: 18px;
 }
+
 .bar span {
   flex-basis: 0;
   min-width: 4px;
   border-radius: 3px;
 }
+
 .counts {
   font-family: var(--mono);
   font-size: 11px;
 }
+
 :global(html[data-theme="dark"]) .frame {
   color-scheme: dark;
 }
-@media (max-width: 760px) {
+
+@media (width <= 760px) {
   .stage {
     height: clamp(380px, 68svh, 560px);
   }
+
   .fallback {
     padding: 24px 22px;
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .poster,
   .frame {

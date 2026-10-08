@@ -104,7 +104,7 @@ export default function Showcase() {
           </div>
         )}
         {entries.length >= listControlsThreshold && (
-          <div aria-label="Filter by stack" className={styles.filters} role="group">
+          <fieldset aria-label="Filter by stack" className={styles.filters}>
             <button aria-pressed={tag === ""} onClick={() => setTag("")} type="button">
               All
             </button>
@@ -118,7 +118,7 @@ export default function Showcase() {
                 {name}
               </button>
             ))}
-          </div>
+          </fieldset>
         )}
         {shown.length === 0 && (
           <p className={styles.empty}>Nothing matches that. Clear the search to see every entry.</p>

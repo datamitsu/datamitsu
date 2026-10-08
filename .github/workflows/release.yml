@@ -48,11 +48,11 @@ jobs:
             parsers/target
           restore-keys: |
             wasm-parsers-${{ runner.os }}-
-      - # DATAMITSU_PARSERS_VERSION is baked into the module's `describe` output
-        # (like a Go ldflags -X), read at compile time by option_env! in
-        # parsers/src/capabilities.rs. The module — not the config — is the source
-        # of truth for its version.
-        env:
+      # DATAMITSU_PARSERS_VERSION is baked into the module's `describe` output
+      # (like a Go ldflags -X), read at compile time by option_env! in
+      # parsers/src/capabilities.rs. The module — not the config — is the source
+      # of truth for its version.
+      - env:
           DATAMITSU_PARSERS_VERSION: ${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
         name: Build WASM parser modules
         run: |

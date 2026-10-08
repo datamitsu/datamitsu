@@ -35,6 +35,13 @@ const applyBench = (config: config.Config): config.Config => {
 };
 
 const getConfig = (config: config.Config) => {
+  config.ejectConfigs ??= [];
+  for (const tool of ["editorconfig-checker", "gitleaks", "trufflehog"]) {
+    if (!config.ejectConfigs.includes(tool)) {
+      config.ejectConfigs.push(tool);
+    }
+  }
+
   config.apps ??= {};
   config.apps["inspector-types"] = {
     shell: {

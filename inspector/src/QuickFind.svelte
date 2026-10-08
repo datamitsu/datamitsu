@@ -18,11 +18,6 @@
       )
       .slice(0, 30),
   );
-  function open() {
-    query = "";
-    dialog.showModal();
-    input.focus();
-  }
   function keyboard(event: KeyboardEvent) {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
@@ -65,6 +60,11 @@
       event.preventDefault();
       buttons[0]?.click();
     }
+  }
+  function open() {
+    query = "";
+    dialog.showModal();
+    input.focus();
   }
 </script>
 

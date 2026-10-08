@@ -9,19 +9,7 @@ description = "Configuration management and binary distribution tool. JavaScript
 readme = "README.md"
 requires-python = ">=3.9"
 keywords = ["binary", "config", "datamitsu", "golangci-lint", "lefthook", "linter", "tools"]
-classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-  "Topic :: Software Development :: Quality Assurance",
-]
+classifiers = ["Development Status :: 3 - Alpha", "Intended Audience :: Developers", "License :: OSI Approved :: MIT License", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.9", "Programming Language :: Python :: 3.10", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Programming Language :: Python :: 3.13", "Topic :: Software Development :: Quality Assurance"]
 
 [[project.authors]]
 name = "Alexander Svinarev"
@@ -57,3 +45,7 @@ include = ["datamitsu/"]
 [tool.hatch.build.targets.wheel]
 artifacts = ["datamitsu"]
 packages = ["datamitsu"]
+
+[tool.ruff]
+indent-width = 2
+line-length = 100
