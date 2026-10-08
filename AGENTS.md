@@ -468,6 +468,10 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   history; failure does not undo pruning or commit a new config hash. Invalidate an
   old hash when pruning changes an entry it no longer describes, so removing
   the selector after a failed pull cannot incorrectly skip default-all.
+- The selection filters available targets, not required per-app coverage:
+  report and omit unavailable targets; fail when none is usable, or when a
+  selected asset lacks SHA-256 or fails verification. Never relabel a musl
+  asset as glibc to fill a missing target.
 - `configHash` includes the sorted unique selection; absence preserves the
   default-all hash. Explicit selections retain both selected libc keys even
   when their assets match.

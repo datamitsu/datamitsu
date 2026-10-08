@@ -225,6 +225,9 @@ To keep only specific platforms, add a top-level list to `githubApps.json`:
 
 The list strictly matches supported identifiers and removes unselected existing
 binary records before the pull. Those deletions remain saved if the pull fails.
+Unavailable selected platforms are reported and omitted when another selected
+platform is available. For releases that publish Linux only as musl, include
+`linux/amd64/musl` to retain that record; a musl asset is never relabeled as glibc.
 Changing the set or removing the field reruns detection even at the same tag.
 See [the command reference](/docs/reference/cli-commands#devtools-pull-github)
 for supported values and validation rules.

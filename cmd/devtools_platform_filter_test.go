@@ -44,7 +44,7 @@ func TestSelectedPlatformBinaries(t *testing.T) {
 			t.Fatalf("selection %v generated %d leaves", selection, count)
 		}
 	}
-	for _, selection := range [][]string{{"windows/arm64"}, {"freebsd/arm64"}, {"darwin/arm64", "freebsd/arm64"}} {
+	for _, selection := range [][]string{{"windows/arm64"}, {"freebsd/arm64"}} {
 		entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Platforms: selection})
 		if err == nil || entry != nil {
 			t.Fatalf("selection %v must fail without partial entry", selection)
@@ -280,5 +280,45 @@ func TestPlatformPruningPreservesBinaryPathHistory(t *testing.T) {
 	got := state.Binaries["tool"].Binaries["linux"]["amd64"]["musl"].BinaryPath
 	if got == nil || *got != binaryPath {
 		t.Fatalf("history lost: %v", got)
+	}
+}
+
+func TestPlatformSelectionFiltersAvailableTargets(t *testing.T) {
+	old := verifyExtractionFlag
+	verifyExtractionFlag = false
+	t.Cleanup(func() { verifyExtractionFlag = old })
+	release := &github.Release{TagName: "v1", Assets: []github.Asset{
+		pickAsset("tool-aarch64-apple-darwin.tar.xz"),
+		pickAsset("tool-x86_64-unknown-linux-musl.tar.xz"),
+	}}
+	for _, selection := range [][]string{
+		{"darwin/arm64", "linux/amd64/glibc"},
+		{"darwin/arm64", "linux/amd64/glibc", "linux/amd64/musl"},
+		{"linux/amd64/glibc", "linux/amd64/musl"},
+	} {
+		t.Run(strings.Join(selection, ","), func(t *testing.T) {
+			entry, err := buildBinariesForApp(context.Background(), "tool", release, "selected", &appstate.State{Platforms: selection})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if entry.ConfigHash != "selected" {
+				t.Fatal("successful filtered entry lacks hash")
+			}
+			linux := entry.Binaries["linux"]["amd64"]
+			if _, ok := linux["glibc"]; ok {
+				t.Fatal("musl asset was relabeled as glibc")
+			}
+			if strings.Contains(strings.Join(selection, ","), "linux/amd64/musl") {
+				if linux["musl"].URL == "" {
+					t.Fatal("available selected musl asset omitted")
+				}
+			} else if len(entry.Binaries["linux"]) != 0 {
+				t.Fatal("unselected musl was included")
+			}
+		})
+	}
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Platforms: []string{"linux/amd64/glibc"}})
+	if err == nil || entry != nil {
+		t.Fatal("no available selected platform must fail")
 	}
 }

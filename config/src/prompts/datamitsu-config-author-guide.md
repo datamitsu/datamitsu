@@ -85,7 +85,8 @@ Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
 - **after v0.4.0** - `devtools pull-github` accepts a strict top-level `platforms`
-  list in its JSON manifest. It saves removal of unselected binary records
+  list in its JSON manifest. The list filters available targets; it does not
+  require every selected target in every app. It saves removal of unselected binary records
   before pulling, even if a pull fails. Changing or removing the list changes
   `configHash` and reruns detection at the same tag. See
   `datamitsu llms reference/cli-commands` for supported identifiers.
