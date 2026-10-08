@@ -459,6 +459,19 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   A new piece of human output checks `ui.Muted()`; `ui.Quiet()` means only
   "stderr is a JSON-L stream", which agent output is not.
 
+## GitHub Manifest Platform Filtering
+
+- `githubApps.json` accepts a strict, case-sensitive `platforms` list from
+  `appstate.SupportedPlatforms()`. This matrix also drives GitHub detection.
+- Filter all existing binary entries and save before pulling, even when apps
+  are absent or detection is skipped. Keep pre-filter maps for `binaryPath`
+  history; failure does not undo pruning or commit a new config hash. Invalidate an
+  old hash when pruning changes an entry it no longer describes, so removing
+  the selector after a failed pull cannot incorrectly skip default-all.
+- `configHash` includes the sorted unique selection; absence preserves the
+  default-all hash. Explicit selections retain both selected libc keys even
+  when their assets match.
+
 ## Product Stage
 
 - Project is in `alpha`.

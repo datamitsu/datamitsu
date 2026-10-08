@@ -1522,7 +1522,7 @@ datamitsu devtools pull-github config/src/githubApps.json --update
 | `--verify-extraction` | Verify that each downloaded asset extracts to an executable (ELF, Mach-O, PE or a `#!` script)                                                                                                                             |
 | `--min-age <minutes>` | Minimum release age before a version is eligible (`-1` = global default of `10080`, `0` = disable, positive = custom). See [Minimum Release Age](/docs/guides/supply-chain-security#minimum-release-age-version-selection) |
 
-The command scans releases for all platform combinations using OS/Arch/Libc target tuples. For Linux, both glibc and musl variants are detected separately; an asset whose name says `alpine` or `musl` counts as a Linux build even without `linux` in it, so `tool-alpine` lands on `linux/amd64/musl`. The output JSON uses a nested three-level storage structure:
+By default, the command scans releases for all platform combinations using OS/Arch/Libc target tuples. For Linux, both glibc and musl variants are detected separately; an asset whose name says `alpine` or `musl` counts as a Linux build even without `linux` in it, so `tool-alpine` lands on `linux/amd64/musl`. The output JSON uses a nested three-level storage structure:
 
 ```json
 {
@@ -1542,7 +1542,38 @@ The command scans releases for all platform combinations using OS/Arch/Libc targ
 }
 ```
 
-Non-Linux platforms use `unknown` as the libc key. If a musl variant is not found for a Linux target, that entry is simply omitted.
+Add an optional top-level `platforms` array to the input manifest to restrict detection:
+
+```json
+{
+  "platforms": ["darwin/arm64", "linux/amd64/musl"],
+  "apps": {},
+  "binaries": {}
+}
+```
+
+Accepted identifiers are `darwin/amd64`, `darwin/arm64`, `windows/amd64`,
+`windows/arm64`, `freebsd/amd64`, `freebsd/arm64`, `openbsd/amd64`,
+`openbsd/arm64`, `linux/amd64/glibc`, `linux/amd64/musl`,
+`linux/arm64/glibc` and `linux/arm64/musl`. Values are case-sensitive and exact:
+there are no aliases or whitespace normalization. `linux/amd64` is not accepted.
+An empty array, `null`, an invalid type or an unknown identifier fails before
+filtering or GitHub requests. Repeated identifiers are processed once.
+
+When present, the array removes every unselected platform from existing binary
+entries before pulling releases, including entries without an `apps` record.
+This deletion is saved even if a subsequent pull fails. Only selected platforms
+are detected and, with `--verify-extraction`, downloaded and verified. A selected
+platform without a compatible asset fails that app without saving a partial new
+entry. Explicit selections keep separate glibc and musl entries even when they
+share an asset.
+
+The sorted, unique selection participates in `configHash`: changing the set
+reruns detection at the same tag; reordering it does not. Removing `platforms`
+restores default-all detection at the same tag. Without the field, existing
+all-platform behavior and libc deduplication are preserved.
+
+Non-Linux platforms use `unknown` as the libc key. Without an explicit selection, a missing musl variant is simply omitted.
 
 Before scoring, the detector filters out three categories of assets: checksum files (`.sha256`, `.md5`, `.sha512`, etc.), attestations published beside an asset (`.proof`, `.sig`, `.asc`, `.minisig`, `.pem`, `.crt`, `.sigstore.json`, `.intoto.jsonl`, `.sbom`, `.spdx.json`, `.cdx.json`) and non-executable package formats and installers (`.vsix`, `.deb`, `.rpm`, `.nupkg`, `.whl`, `.msi`, `.msix`, `.appx`, `.pkg`, `.dmg`, and a name in which `setup` or `installer` stands as a word of its own, such as `Harper_2.11.0_x64-setup.exe` — unless the app's own name says so). This prevents IDE extensions, package-manager bundles, a desktop app's installer or a signature file from outscoring — or standing in for — actual binaries when releases mix them.
 
@@ -1567,7 +1598,7 @@ Every app is attempted; one that fails does not stop the others. A request that 
 
 With `--verify-extraction`, the download of each asset retries the same way. A platform whose asset turns out to be at fault — a hash mismatch, an archive that does not extract, a file that is not an executable — falls back to the next-ranked asset; a download that fails does not, since it says nothing about the asset, and a platform that still cannot be verified fails the app: its previous entry is kept, the report names the platform and the asset (`verify linux/amd64/glibc`), and the run exits with status 1.
 
-The file is saved after each app that succeeds, and each save replaces the file whole. Every entry in it is therefore either the previous state of an app that failed or was not reached, or the complete new state of one that succeeded; a failed app never gets a partial entry. A save that fails stops the run, since nothing after it could be recorded either.
+The file is saved after each app that succeeds, and each save replaces the file whole. Every entry in it is therefore either the previous state of an app that failed or was not reached, or the complete new state of one that succeeded; a failed app never gets a partial new entry. The deletion of platforms excluded by `platforms` is applied and saved before any app pull, including pulls that fail. A save that fails stops the run, since nothing after it could be recorded either.
 
 :::tip See also
 For a complete workflow including CI automation, see [Maintaining Wrapper Packages — Binary Apps](/docs/how-to/maintain-wrapper#binary-apps-devtools-pull-github).
