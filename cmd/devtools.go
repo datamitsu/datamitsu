@@ -557,7 +557,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 		return nil, unverified
 	}
 
-	if state.Platforms != nil && notAvailableCount > 0 {
+	if state.Platforms != nil && notAvailableCount > 0 && successCount == 0 && noHashCount == 0 {
 		var missing []string
 		for _, r := range results {
 			if r.status == "not_available" {

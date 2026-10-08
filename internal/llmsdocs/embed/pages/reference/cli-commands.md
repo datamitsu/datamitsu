@@ -1564,9 +1564,12 @@ When present, the array removes every unselected platform from existing binary
 entries before pulling releases, including entries without an `apps` record.
 This deletion is saved even if a subsequent pull fails. Only selected platforms
 are detected and, with `--verify-extraction`, downloaded and verified. A selected
-platform without a compatible asset fails that app without saving a partial new
-entry. Explicit selections keep separate glibc and musl entries even when they
-share an asset.
+platform without a compatible asset is reported and omitted. The list filters
+available platforms; it does not require every app to publish every selected
+platform. An app fails if none of its selected platforms has a usable asset.
+A missing SHA-256 digest or failed verification still fails the app without
+saving a partial new entry. Explicit selections keep separate glibc and musl
+entries even when they share an asset.
 
 The sorted, unique selection participates in `configHash`: changing the set
 reruns detection at the same tag; reordering it does not. Removing `platforms`
