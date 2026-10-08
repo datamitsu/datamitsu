@@ -5,12 +5,12 @@ allowBuilds:
   esbuild: false
   keytar: false
   sharp: true
-audit: {}
-auditLevel: high
+audit:
+  level: high
 autoInstallPeers: true
 blockExoticSubdeps: true
 catalog:
-  "@shibanet0/datamitsu-config": 0.0.0-unstable.20260912.f201136
+  "@shibanet0/datamitsu-config": 0.0.0-unstable.20261008.3db1384
 dangerouslyAllowAllBuilds: false
 dedupeDirectDeps: true
 dedupePeerDependents: true
@@ -50,6 +50,7 @@ savePrefix: ""
 strictDepBuilds: true
 strictSsl: true
 trustLockfile: true
+trustPolicy: no-downgrade
 trustPolicyExclude:
   - semver@5.7.2
 unsafePerm: false

@@ -2,7 +2,7 @@
 # All configured tools are disabled by default (opt-in model).
 # Enable a tool by removing it from the list below (or add "!**/*: <tool>").
 website/**/*: tsc
-**/*: actionlint, bearer, grype, harper-cli, lychee, osv-scanner, trivy, trufflehog, vale, knip, typos
+**/*: actionlint, bearer, droast, grype, harper-cli, knip, lychee, lychee-offline, markdownlint-cli2, osv-scanner, trivy, trufflehog, typos, vale
 
 # The embedded documentation snapshot is a verbatim copy of the Docusaurus llms
 # output, written by `task gen:llms-docs`. Its bytes are hashed into

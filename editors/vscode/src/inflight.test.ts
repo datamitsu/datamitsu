@@ -4,6 +4,20 @@ import { test } from "node:test";
 import { CancellationSource, type CancellationToken } from "./cancellation";
 import { InFlight } from "./inflight";
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  reject: (reason?: unknown) => void;
+  resolve: (value: PromiseLike<T> | T) => void;
+} {
+  let resolve!: (value: PromiseLike<T> | T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
 // hasSettled reports whether a promise has settled once pending callbacks have run.
 async function hasSettled(promise: Promise<unknown>): Promise<boolean> {
   let isSettled = false;
@@ -26,8 +40,8 @@ test("InFlight: idle resolves at once when nothing runs", async () => {
 
 test("InFlight: idle waits for the last running request", async () => {
   const inFlight = new InFlight();
-  const first = Promise.withResolvers<string>();
-  const second = Promise.withResolvers<string>();
+  const first = deferred<string>();
+  const second = deferred<string>();
   const firstResult = inFlight.track(undefined, () => first.promise);
   const secondResult = inFlight.track(undefined, () => second.promise);
   assert.equal(inFlight.size, 2);
@@ -45,7 +59,7 @@ test("InFlight: idle waits for the last running request", async () => {
 
 test("InFlight: a failed request still counts as finished", async () => {
   const inFlight = new InFlight();
-  const request = Promise.withResolvers<string>();
+  const request = deferred<string>();
   const result = inFlight.track(undefined, () => request.promise);
   const idle = inFlight.idle();
 
@@ -70,7 +84,7 @@ test("InFlight: a request runs on its own token, linked to the editor's", async 
   const inFlight = new InFlight();
   const editor = new CancellationSource();
   let seen: CancellationToken | undefined;
-  const request = Promise.withResolvers<string>();
+  const request = deferred<string>();
   const result = inFlight.track(editor.token, (token) => {
     seen = token;
     return request.promise;

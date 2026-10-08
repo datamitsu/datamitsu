@@ -43,13 +43,13 @@
 }
 
 /* Mobile Responsiveness */
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .headerRight {
     font-size: 0.65rem;
   }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .headerRight {
     font-size: 0.7rem;
   }

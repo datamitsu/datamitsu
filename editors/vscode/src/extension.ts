@@ -47,7 +47,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       output?.info(`${changed.join(", ")} changed; restarting the language server`);
-      requestRestart(context, false).then(undefined, () => {});
+      requestRestart(context, false).catch(() => {});
     }),
   );
 
@@ -80,7 +80,7 @@ function requestRestart(context: vscode.ExtensionContext, isImmediate: boolean):
         .idle()
         // A different session means another restart already read the settings.
         .then(() => (session === formatting ? requestRestart(context, false) : undefined))
-        .then(undefined, () => {});
+        .catch(() => {});
       return;
     }
     await stop();
@@ -97,7 +97,7 @@ function serialize(transition: () => Promise<void>): Promise<void> {
 // showError surfaces an error popup without blocking activation. Attaching a
 // rejection handler keeps the thenable non-floating without the `void` operator.
 function showError(message: string): void {
-  vscode.window.showErrorMessage(message).then(undefined, () => {});
+  Promise.resolve(vscode.window.showErrorMessage(message)).catch(() => {});
 }
 
 // spawnServer launches `datamitsu lsp` and returns its stdio as an LSP stream

@@ -8,6 +8,8 @@ export default defineConfig((config) => ({
     // Captured config descriptions and app names belong to the pinned wrapper.
     "website/src/data/reference-config.json",
     "**/*.golangci.yaml",
+    // Tool identifiers include intentional misspellings that typos must recognize.
+    ".typos.toml",
     // Vendored third-party OCI config fixture (single source of truth is the
     // upstream release; not our prose to spell-check).
     "test/e2e/testdata/datamitsu.config.oci-ghcr.js",

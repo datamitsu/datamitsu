@@ -1,74 +1,188 @@
 updates:
-  # Go module dependencies
   - commit-message:
-      prefix: "build(deps)"
-    directory: "/"
-    labels:
-      - "dependencies"
-      - "go"
-    open-pull-requests-limit: 5
-    package-ecosystem: "gomod"
+      include: scope
+      prefix: chore
+    directory: /parsers
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 10
+    package-ecosystem: cargo
     schedule:
-      day: "monday"
-      interval: "weekly"
-  # npm dependencies - root workspace
+      interval: weekly
   - commit-message:
-      prefix: "build(deps)"
-    directory: "/"
-    labels:
-      - "dependencies"
-      - "npm"
-    open-pull-requests-limit: 5
-    package-ecosystem: "npm"
+      include: scope
+      prefix: chore
+    directory: /parsers/datamitsu-parsers
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 10
+    package-ecosystem: cargo
     schedule:
-      day: "monday"
-      interval: "weekly"
-  # npm dependencies - programmable API
+      interval: weekly
   - commit-message:
-      prefix: "build(deps)"
-    directory: "/programmable-api/js"
+      include: scope
+      prefix: chore
+    directory: /docker
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
     labels:
-      - "dependencies"
-      - "npm"
-    open-pull-requests-limit: 5
-    package-ecosystem: "npm"
+      - dependencies
+      - docker
+    open-pull-requests-limit: 10
+    package-ecosystem: docker
     schedule:
-      day: "monday"
-      interval: "weekly"
-  # npm dependencies - website
+      interval: weekly
   - commit-message:
-      prefix: "build(deps)"
-    directory: "/website"
-    labels:
-      - "dependencies"
-      - "npm"
-    open-pull-requests-limit: 5
-    package-ecosystem: "npm"
+      include: scope
+      prefix: chore
+    directory: /parsers
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    labels: null
+    open-pull-requests-limit: 10
+    package-ecosystem: docker
     schedule:
-      day: "monday"
-      interval: "weekly"
-  # GitHub Actions
+      interval: weekly
   - commit-message:
-      prefix: "ci(deps)"
-    directory: "/"
+      prefix: ci
+    directory: /
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
     labels:
-      - "dependencies"
-      - "ci"
-    open-pull-requests-limit: 5
-    package-ecosystem: "github-actions"
+      - dependencies
+      - ci
+    open-pull-requests-limit: 10
+    package-ecosystem: github-actions
     schedule:
-      day: "monday"
-      interval: "weekly"
-  # Docker base images
+      interval: weekly
   - commit-message:
-      prefix: "build(deps)"
-    directory: "/docker"
+      include: scope
+      prefix: chore
+    directory: /
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
     labels:
-      - "dependencies"
-      - "docker"
-    open-pull-requests-limit: 3
-    package-ecosystem: "docker"
+      - dependencies
+      - go
+    open-pull-requests-limit: 10
+    package-ecosystem: gomod
     schedule:
-      day: "monday"
-      interval: "weekly"
+      interval: weekly
+  - commit-message:
+      include: scope
+      prefix: chore
+    directory: /
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    labels:
+      - dependencies
+      - npm
+    open-pull-requests-limit: 10
+    package-ecosystem: npm
+    schedule:
+      interval: weekly
+  - commit-message:
+      include: scope
+      prefix: chore
+    directory: /editors/vscode
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 10
+    package-ecosystem: npm
+    schedule:
+      interval: weekly
+  - commit-message:
+      include: scope
+      prefix: chore
+    directory: /inspector
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 10
+    package-ecosystem: npm
+    schedule:
+      interval: weekly
+  - commit-message:
+      include: scope
+      prefix: chore
+    directory: /packaging/action
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 10
+    package-ecosystem: npm
+    schedule:
+      interval: weekly
+  - commit-message:
+      include: scope
+      prefix: chore
+    directory: /packaging/npm/datamitsu
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 10
+    package-ecosystem: npm
+    schedule:
+      interval: weekly
+  - commit-message:
+      include: scope
+      prefix: chore
+    directory: /programmable-api/js
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    labels:
+      - dependencies
+      - npm
+    open-pull-requests-limit: 10
+    package-ecosystem: npm
+    schedule:
+      interval: weekly
+  - commit-message:
+      include: scope
+      prefix: chore
+    directory: /website
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    labels:
+      - dependencies
+      - npm
+    open-pull-requests-limit: 10
+    package-ecosystem: npm
+    schedule:
+      interval: weekly
+  - commit-message:
+      include: scope
+      prefix: chore
+    directory: /packaging/python
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 10
+    package-ecosystem: pip
+    schedule:
+      interval: weekly
 version: 2
