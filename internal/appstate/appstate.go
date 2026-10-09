@@ -175,7 +175,7 @@ func ComputeConfigHash(metadata *AppMetadata, selections []string, sources ...re
 	if err != nil {
 		panic(err)
 	}
-	return hashutil.XXH3Hex(data)
+	return hashutil.XXH3Multi([]byte("release-download-policy-v1"), data)
 }
 
 // ValidateSources rejects malformed manifests before pruning or networking.

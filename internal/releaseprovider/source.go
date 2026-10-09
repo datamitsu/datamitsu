@@ -14,10 +14,11 @@ import (
 
 // Source identifies an instance and an optional host-scoped API credential.
 type Source struct {
-	Type     string `json:"type"`
-	URL      string `json:"url"`
-	APIURL   string `json:"apiUrl,omitempty"`
-	TokenEnv string `json:"tokenEnv,omitempty"`
+	Type         string `json:"type"`
+	URL          string `json:"url"`
+	APIURL       string `json:"apiUrl,omitempty"`
+	TokenEnv     string `json:"tokenEnv,omitempty"`
+	DownloadAuth string `json:"downloadAuth,omitempty"`
 }
 
 // ValidateURL permits HTTPS and loopback-only HTTP for local instances and tests.
@@ -53,6 +54,15 @@ func (s Source) Validate() error {
 		if err := ValidateURL(s.APIURL); err != nil {
 			return err
 		}
+	}
+	switch s.DownloadAuth {
+	case "", "auto", "none":
+	case "required":
+		if s.TokenEnv == "" {
+			return errors.New("source.downloadAuth required needs source.tokenEnv")
+		}
+	default:
+		return fmt.Errorf("unknown source.downloadAuth %q (expected auto, required or none)", s.DownloadAuth)
 	}
 	if s.TokenEnv != "" {
 		if _, err := env.Credential(s.TokenEnv); err != nil {

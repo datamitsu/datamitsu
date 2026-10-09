@@ -67,7 +67,7 @@ func TestPullGithubPlatformTransitions(t *testing.T) {
 		if strings.Contains(r.URL.Path, "/releases/") {
 			_ = json.NewEncoder(w).Encode(&github.Release{TagName: "v1", Assets: []github.Asset{pickAsset("tool-linux-amd64"), pickAsset("tool-darwin-arm64")}})
 		} else {
-			_ = json.NewEncoder(w).Encode(map[string]string{"description": "tool"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"description": "tool", "private": false})
 		}
 	}))
 	defer srv.Close()

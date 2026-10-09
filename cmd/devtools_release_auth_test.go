@@ -36,21 +36,25 @@ func TestPullReleasesPrivateAssetsInstallAndVerify(t *testing.T) {
 	downloads := 0
 	var base string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "token private-fixture-value" {
+		wantAuth := "token private-fixture-value"
+		if strings.Contains(r.URL.Path, "/releases/download/") {
+			wantAuth = "Bearer private-fixture-value"
+		}
+		if r.Header.Get("Authorization") != wantAuth {
 			t.Error("private request lacks credential")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/downloads/") {
+		if strings.HasPrefix(r.URL.Path, "/group/tool/releases/download/v1/") {
 			downloads++
 			_, _ = w.Write(data)
 			return
 		}
 		if strings.Contains(r.URL.Path, "/releases/") {
-			_ = json.NewEncoder(w).Encode(releaseasset.Release{TagName: "v1", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{Name: "tool-linux-amd64", BrowserDownloadURL: base + "/downloads/tool-linux-amd64"}}})
+			_ = json.NewEncoder(w).Encode(releaseasset.Release{TagName: "v1", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{Name: "tool-linux-amd64", BrowserDownloadURL: base + "/group/tool/releases/download/v1/tool-linux-amd64"}}})
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]string{"description": "tool"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"description": "tool", "private": true})
 	}))
 	defer srv.Close()
 	base = srv.URL

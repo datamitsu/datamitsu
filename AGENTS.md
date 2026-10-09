@@ -468,6 +468,14 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 - Integrity resolution happens only for selected candidates. Checksum files
   require their own SHA-256 pin before download. GitLab package metadata must
   belong to the configured project; missing hashes are fatal.
+- Source `downloadAuth` is `auto` (default), `required`, or `none`. `tokenEnv`
+  authorizes discovery independently. Resolve URL/auth per asset, not per source:
+  native downloads use factual visibility; GitLab packages have independent
+  access levels. Unknown same-origin endpoints require an explicit policy.
+  External origins never inherit source credentials. Checksum downloads must
+  use resolved asset auth, never metadata authentication. Cache only successful
+  repository metadata with known visibility. Generation fingerprints must
+  invalidate entries made before this policy, for every provider.
 - `BinaryOsArchInfo.Auth` stores credential references, never values. Install
   and verification use the same origin-scoped transport and drop auth on
   cross-origin redirects. Auth is transport-only, not install identity.

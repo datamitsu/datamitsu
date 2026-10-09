@@ -35,6 +35,7 @@ type Client struct {
 	token         string
 	packageFiles  map[string]map[string]string
 	projectIDs    map[string]int64
+	repositories  map[string]releaseasset.Repository
 }
 
 // New constructs a validated instance client without making a network request.
@@ -42,7 +43,7 @@ func New(source Source) (*Client, error) {
 	if err := source.Validate(); err != nil {
 		return nil, err
 	}
-	c := &Client{source: source, http: httpx.NewHardenedClient(apiTimeout), packageFiles: make(map[string]map[string]string), projectIDs: make(map[string]int64)}
+	c := &Client{source: source, http: httpx.NewHardenedClient(apiTimeout), packageFiles: make(map[string]map[string]string), projectIDs: make(map[string]int64), repositories: make(map[string]releaseasset.Repository)}
 	if source.TokenEnv != "" {
 		var err error
 		c.token, err = env.Credential(source.TokenEnv)
@@ -90,7 +91,7 @@ func (r gitlabRelease) release() releaseasset.Release {
 	out := releaseasset.Release{TagName: r.TagName, PublishedAt: r.ReleasedAt, Draft: r.Upcoming}
 	for _, link := range r.Assets.Links {
 		raw := link.URL
-		if link.DirectURL != "" {
+		if raw == "" {
 			raw = link.DirectURL
 		}
 		out.Assets = append(out.Assets, releaseasset.Asset{Name: link.Name, BrowserDownloadURL: raw, MetadataURL: link.URL})
@@ -120,7 +121,9 @@ func (c *Client) GetRelease(ctx context.Context, repository, tag string) (*relea
 		if r.TagName != tag {
 			return nil, fmt.Errorf("release response does not match requested tag %q", tag)
 		}
-		c.decorate(repository, &r)
+		if err := c.decorate(ctx, repository, &r); err != nil {
+			return nil, err
+		}
 		return &r, nil
 	}
 	var r releaseasset.Release
@@ -130,7 +133,9 @@ func (c *Client) GetRelease(ctx context.Context, repository, tag string) (*relea
 	if r.TagName != tag {
 		return nil, fmt.Errorf("release response does not match requested tag %q", tag)
 	}
-	c.decorate(repository, &r)
+	if err := c.decorate(ctx, repository, &r); err != nil {
+		return nil, err
+	}
 	return &r, nil
 }
 
@@ -172,63 +177,57 @@ func (c *Client) GetLatestReleaseWithMinAge(ctx context.Context, repository stri
 					return nil, err
 				}
 			}
-			c.decorate(repository, r)
+			if err := c.decorate(ctx, repository, r); err != nil {
+				return nil, err
+			}
 			return r, nil
 		}
 	}
 	return nil, errors.New("release listing did not finish within 10 pages; pin a tag explicitly")
 }
 
-// GetRepository fetches description and, for GitLab, the project identity used for digest lookup.
+// GetRepository fetches visibility and description, plus GitLab package access and project identity.
 func (c *Client) GetRepository(ctx context.Context, repository string) (*releaseasset.Repository, error) {
 	if err := ValidateRepository(c.source.Type, repository); err != nil {
 		return nil, err
 	}
 
+	if cached, ok := c.repositories[repository]; ok {
+		return &cached, nil
+	}
+
 	var raw struct {
-		Description string `json:"description"`
-		ID          int64  `json:"id"`
+		Private       *bool  `json:"private"`
+		Visibility    string `json:"visibility"`
+		PackageAccess string `json:"package_registry_access_level"`
+		Description   string `json:"description"`
+		ID            int64  `json:"id"`
 	}
 	if err := c.getJSON(ctx, repoRoute(c.source.Type, repository), &raw); err != nil {
 		return nil, err
 	}
+	repo := releaseasset.Repository{Description: raw.Description, PackageAccess: raw.PackageAccess}
+	if c.source.Type == "gitlab" {
+		switch raw.Visibility {
+		case "public", "internal", "private":
+			repo.Visibility = raw.Visibility
+			repo.Private = raw.Visibility != "public"
+		}
+	} else if raw.Private != nil {
+		repo.Private = *raw.Private
+		repo.Visibility = "public"
+		if *raw.Private {
+			repo.Visibility = "private"
+		}
+		if raw.Visibility != "" && raw.Visibility != repo.Visibility {
+			return nil, errors.New("repository visibility conflicts with private flag")
+		}
+	}
 	c.projectIDs[repository] = raw.ID
-	return &releaseasset.Repository{Description: raw.Description}, nil
-}
-
-func (c *Client) decorate(repository string, r *releaseasset.Release) {
-	if r == nil || c.source.TokenEnv == "" {
-		return
+	if repo.Visibility != "" {
+		c.repositories[repository] = repo
 	}
-	u, _ := url.Parse(c.source.APIBase())
-	origin := u.Scheme + "://" + u.Host
-	for i := range r.Assets {
-		asset := &r.Assets[i]
-		if c.source.Type == "gitlab" && sameOrigin(asset.BrowserDownloadURL, c.source.APIBase()) {
-			raw, err := url.Parse(asset.BrowserDownloadURL)
-			if err == nil {
-				if index := strings.Index(raw.EscapedPath(), "/downloads/"); index >= 0 {
-					asset.BrowserDownloadURL = c.source.APIBase() + repoRoute("gitlab", repository) + "/releases/" + url.PathEscape(r.TagName) + raw.EscapedPath()[index:]
-				}
-			}
-		}
-		if c.source.Type == "github" && asset.APIURL != "" && sameOrigin(asset.APIURL, c.source.APIBase()) {
-			asset.BrowserDownloadURL = asset.APIURL
-		}
-		if !sameOrigin(asset.BrowserDownloadURL, c.source.APIBase()) {
-			continue
-		}
-		ref := &httpx.RequestAuth{Origin: origin, TokenEnv: c.source.TokenEnv, Header: "Authorization", Scheme: "token"}
-		if c.source.Type == "gitlab" {
-			ref.Header = "PRIVATE-TOKEN"
-			ref.Scheme = ""
-		}
-		if c.source.Type == "github" {
-			ref.Scheme = "Bearer"
-			ref.Accept = "application/octet-stream"
-		}
-		asset.Auth = ref
-	}
+	return &repo, nil
 }
 
 func (c *Client) authenticate(req *http.Request) {
@@ -246,6 +245,15 @@ func (c *Client) authenticate(req *http.Request) {
 }
 
 func (c *Client) get(ctx context.Context, raw string, accept string) ([]byte, error) {
+	return c.request(ctx, raw, accept, nil, false)
+}
+
+// getAsset keeps discovery authentication out of artifact/checksum requests.
+func (c *Client) getAsset(ctx context.Context, asset *releaseasset.Asset) ([]byte, error) {
+	return c.request(ctx, asset.BrowserDownloadURL, "application/octet-stream", asset.Auth, true)
+}
+
+func (c *Client) request(ctx context.Context, raw string, accept string, auth *httpx.RequestAuth, download bool) ([]byte, error) {
 	if err := httpx.GuardOffline("release provider request"); err != nil {
 		return nil, err
 	}
@@ -258,6 +266,13 @@ func (c *Client) get(ctx context.Context, raw string, accept string) ([]byte, er
 	if err := ValidateURL(checked.String()); err != nil {
 		return nil, err
 	}
+	client := c.http
+	if download {
+		client, err = httpx.WithAuth(httpx.NewHardenedClient(apiTimeout), auth)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var data []byte
 	err = httpretry.Retry(ctx, "GET "+raw, c.RetryNotifier, func() error {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
@@ -265,8 +280,14 @@ func (c *Client) get(ctx context.Context, raw string, accept string) ([]byte, er
 			return httpretry.Permanent(err)
 		}
 		req.Header.Set("Accept", accept)
-		c.authenticate(req)
-		resp, err := c.http.Do(req)
+		if download {
+			if err := auth.Apply(req); err != nil {
+				return httpretry.Permanent(err)
+			}
+		} else {
+			c.authenticate(req)
+		}
+		resp, err := client.Do(req)
 		if err != nil {
 			return fmt.Errorf("release request failed: %w", err)
 		}

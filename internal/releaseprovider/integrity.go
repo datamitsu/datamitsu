@@ -90,7 +90,7 @@ func (c *Client) ResolveDigest(ctx context.Context, repository string, assets []
 		key := "checksum:" + checksum.BrowserDownloadURL + ":" + expected
 		table, ok := c.packageFiles[key]
 		if !ok {
-			data, err := c.get(ctx, checksum.BrowserDownloadURL, "application/octet-stream")
+			data, err := c.getAsset(ctx, checksum)
 			if err != nil {
 				return err
 			}

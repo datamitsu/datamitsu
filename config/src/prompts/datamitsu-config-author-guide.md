@@ -84,6 +84,17 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.4.0** - Release sources accept `downloadAuth: auto | required | none`
+  (default `auto`). `tokenEnv` authorizes discovery independently; download auth
+  is resolved per asset. Public native assets keep anonymous URLs. GitLab package
+  access follows package metadata, and unknown same-origin endpoints require an
+  explicit policy. External origins never receive the source credential.
+  Re-run `pull-releases` once to regenerate entries from the initial multi-source
+  implementation; their generation fingerprints are invalidated automatically.
+  Changing `downloadAuth` also invalidates entries. Missing required tokens fail
+  before download; hashes remain mandatory. See
+  `datamitsu llms reference/cli-commands`.
+
 - **after v0.4.0** - The binary registry is `binaryApps.json`; use
   `devtools pull-releases` with named `sources` for GitHub, GitLab, Gitea or
   Forgejo. Replace `owner`/`repo` with `source`/`repository`; the old command

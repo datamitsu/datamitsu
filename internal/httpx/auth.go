@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -90,6 +91,9 @@ func (a *RequestAuth) Apply(req *http.Request) error {
 	token, err := env.Credential(a.TokenEnv)
 	if err != nil {
 		return err
+	}
+	if token == "" {
+		return fmt.Errorf("download credential environment variable %s is not set", a.TokenEnv)
 	}
 	if token != "" {
 		if a.Scheme != "" {

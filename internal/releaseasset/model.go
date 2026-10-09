@@ -10,6 +10,7 @@ import (
 // Asset carries discovery metadata; a non-empty SHA-256 digest is required before downloading.
 type Asset struct {
 	APIURL             string             `json:"url,omitempty"`
+	UUID               string             `json:"uuid,omitempty"`
 	MetadataURL        string             `json:"-"`
 	Auth               *httpx.RequestAuth `json:"-"`
 	Name               string             `json:"name"`
@@ -30,5 +31,8 @@ type Release struct {
 
 // Repository is the metadata carried into a generated app description.
 type Repository struct {
-	Description string `json:"description"`
+	Visibility    string `json:"-"`
+	PackageAccess string `json:"-"`
+	Private       bool   `json:"private"`
+	Description   string `json:"description"`
 }
