@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 )
 
 // dependencyLink is one entry of an app's dependency PATH directory: the command name the app
@@ -94,7 +94,7 @@ func dependencyPathDir(links []dependencyLink) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("dependency PATH directory: %w", err)
 	}
-	return filepath.Join(root, hashutil.XXH3Multi(parts...)), nil
+	return filepath.Join(root, digest.XXH3Multi(parts...).Hex()), nil
 }
 
 func dependencyPathEntries(dir string, links []dependencyLink) []string {

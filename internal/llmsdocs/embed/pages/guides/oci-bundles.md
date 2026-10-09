@@ -139,7 +139,7 @@ parsers: {
 },
 ```
 
-The mirror is not a trust boundary either. A parser artifact's single layer must have digest `sha256:` + the parser's mandatory `hash`, so a manifest that points at different content is rejected **before one payload byte is requested**; the bytes are hashed again while streaming and once more on the file on disk. A registry that rewrites manifests while proxying them changes their digest and fails the pull closed instead of serving something unexpected.
+The mirror is not a trust boundary either. A parser artifact's single layer must have exactly the digest the parser's mandatory `hash` names (the same `sha256:`-prefixed value), so a manifest that points at different content is rejected **before one payload byte is requested**; the bytes are hashed again while streaming and once more on the file on disk. A registry that rewrites manifests while proxying them changes their digest and fails the pull closed instead of serving something unexpected.
 
 :::warning Limitations of a mirrored registry
 datamitsu can authenticate to exactly one registry: **GHCR**, using `GITHUB_TOKEN`, and only when the configured `ref` host is `ghcr.io` — the token is never attached to any other host. There is no docker `config.json`, no credential helper, no user/password, no custom CA bundle. A Harbor, Artifactory or Nexus mirror must therefore allow **anonymous pull** of the mirrored repositories; an authenticated private mirror is not supported yet.

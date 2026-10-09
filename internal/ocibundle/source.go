@@ -2,7 +2,6 @@ package ocibundle
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -10,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ocidigest"
 
@@ -87,15 +87,12 @@ type layoutSource struct {
 
 func newLayoutSource(dir string) *layoutSource { return &layoutSource{dir: dir} }
 
-func (s *layoutSource) blobPath(digest string) (string, error) {
-	hexPart, ok := strings.CutPrefix(digest, "sha256:")
-	if !ok || len(hexPart) != 64 {
-		return "", fmt.Errorf("unsupported digest %q in OCI layout (only sha256)", digest)
+func (s *layoutSource) blobPath(dgst string) (string, error) {
+	d, err := digest.ParseSHA256(dgst)
+	if err != nil {
+		return "", fmt.Errorf("unsupported digest %q in OCI layout (only sha256)", dgst)
 	}
-	if _, err := hex.DecodeString(hexPart); err != nil {
-		return "", fmt.Errorf("malformed digest %q in OCI layout", digest)
-	}
-	return filepath.Join(s.dir, "blobs", "sha256", hexPart), nil
+	return filepath.Join(s.dir, "blobs", "sha256", d.Hex()), nil
 }
 
 func (s *layoutSource) manifest(_ context.Context, digest string) ([]byte, error) {
@@ -151,7 +148,7 @@ func (s *layoutSource) blob(_ context.Context, desc ocispec.Descriptor, destDir,
 		}
 	}()
 
-	hasher := sha256.New()
+	hasher := digest.NewSHA256()
 	written, err := io.Copy(io.MultiWriter(out, hasher), io.LimitReader(in, maxCompressedBlobBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("copy blob %s from OCI layout: %w", desc.Digest, err)
@@ -162,22 +159,24 @@ func (s *layoutSource) blob(_ context.Context, desc ocispec.Descriptor, destDir,
 	if desc.Size >= 0 && written != desc.Size {
 		return "", fmt.Errorf("blob size mismatch for %s: expected %d bytes got %d", desc.Digest, desc.Size, written)
 	}
-	wantHex := strings.TrimPrefix(desc.Digest.String(), "sha256:")
-	if got := hex.EncodeToString(hasher.Sum(nil)); got != wantHex {
+	want, err := digest.ParseSHA256(desc.Digest.String())
+	if err != nil {
+		return "", fmt.Errorf("unsupported digest %q in OCI layout (only sha256)", desc.Digest)
+	}
+	if got := hex.EncodeToString(hasher.Sum(nil)); got != want.Hex() {
 		return "", fmt.Errorf("blob digest mismatch for %s: got sha256:%s", desc.Digest, got)
 	}
 	return tmpPath, nil
 }
 
-// verifySHA256 checks data against a "sha256:<hex>" digest string.
-func verifySHA256(data []byte, digest string) error {
-	wantHex, ok := strings.CutPrefix(digest, "sha256:")
-	if !ok {
-		return fmt.Errorf("unsupported digest %q (only sha256)", digest)
+// verifySHA256 checks data against a canonical "sha256:<hex>" digest string.
+func verifySHA256(data []byte, dgst string) error {
+	d, err := digest.ParseSHA256(dgst)
+	if err != nil {
+		return fmt.Errorf("unsupported digest %q (only sha256)", dgst)
 	}
-	sum := sha256.Sum256(data)
-	if got := hex.EncodeToString(sum[:]); got != wantHex {
-		return fmt.Errorf("digest mismatch: expected sha256:%s got sha256:%s", wantHex, got)
+	if got := digest.SHA256Of(data); got.Hex() != d.Hex() {
+		return fmt.Errorf("digest mismatch: expected %s got %s", d.String(), got.String())
 	}
 	return nil
 }

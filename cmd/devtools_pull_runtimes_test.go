@@ -204,8 +204,8 @@ func TestDetectRuntimeBinaries_HashExtraction(t *testing.T) {
 	}
 
 	info := binaries[syslist.OsTypeDarwin][syslist.ArchTypeAmd64]["unknown"]
-	if info.Hash != testHash1 {
-		t.Errorf("hash = %q, want %q", info.Hash, testHash1)
+	if info.Hash != "sha256:"+testHash1 {
+		t.Errorf("hash = %q, want %q", info.Hash, "sha256:"+testHash1)
 	}
 }
 

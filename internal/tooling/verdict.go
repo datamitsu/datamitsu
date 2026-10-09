@@ -9,8 +9,8 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/parsermanager/embedded"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/toolenv"
@@ -84,7 +84,7 @@ func verdictIdentity(task Task, unitDirRel, parserModuleHash string) string {
 	for _, kv := range inherited {
 		parts = append(parts, []byte(kv))
 	}
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 }
 
 // embeddedParserKey identifies the fallback parser module the binary embeds.
@@ -285,7 +285,7 @@ func hashStates(members, guards []pathState) string {
 	for _, kv := range inheritedEnv() {
 		parts = append(parts, []byte(kv))
 	}
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 }
 
 func sortedEntries(states []pathState) []string {
@@ -362,13 +362,13 @@ func contentHash(p string, memo *hashMemo, mode memoMode) (pathState, int64) {
 	}
 	// Streamed from the open handle, so the hash and the stat that guards it come
 	// from the same file description without materializing the file in memory.
-	hash, err := hashutil.XXH3Reader(f)
+	d, err := digest.XXH3Reader(f)
 	if err != nil {
 		return st, 0
 	}
 	ident := cache.IdentityOf(fi)
-	st.hash, st.size, st.mod, st.ident, st.read = hash, fi.Size(), fi.ModTime(), ident, true
-	memo.store(p, hash, fi.Size(), fi.ModTime(), ident, taken)
+	st.hash, st.size, st.mod, st.ident, st.read = d.Hex(), fi.Size(), fi.ModTime(), ident, true
+	memo.store(p, d.Hex(), fi.Size(), fi.ModTime(), ident, taken)
 	return st, fi.Size()
 }
 

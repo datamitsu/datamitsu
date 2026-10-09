@@ -681,8 +681,8 @@ declare global {
        * silently clobbering local overrides.
        *
        * Opt-in per file and verified only on the root layer (intermediate layers are ignored). The
-       * content is hashed byte-for-byte, with no normalization. Format: "xxh3:<32-hex>" (a bare
-       * 32-hex value is also accepted). Bypass the check with `--no-verify-hash`.
+       * content is hashed byte-for-byte, with no normalization. Format: "xxh3:<32 lowercase hex>" —
+       * canonical form only, validated at config load. Bypass the check with `--no-verify-hash`.
        *
        * @example
        *   "xxh3:0a1b2c3d4e5f60718293a4b5c6d7e8f9";
@@ -835,10 +835,10 @@ declare global {
      */
     interface Parser {
       /**
-       * SHA-256 hash (64 lowercase hex characters) of the .wasm module. Mandatory per the security
-       * policy for every source — an empty or malformed hash is a config error. For an `oci` source
-       * it must also equal the artifact's single layer blob digest, so a mismatch is rejected
-       * before the module is downloaded.
+       * Canonical SHA-256 digest of the .wasm module: "sha256:<64 lowercase hex>". Mandatory per
+       * the security policy for every source — an empty or malformed hash is a config error. For an
+       * `oci` source it must also equal the artifact's single layer blob digest, so a mismatch is
+       * rejected before the module is downloaded.
        */
       hash: string;
 
@@ -1396,6 +1396,9 @@ declare global {
     }
 
     interface AppConfigJVM {
+      /**
+       * Canonical SHA-256 digest of the JAR: "sha256:<64 lowercase hex>".
+       */
       jarHash: string;
       jarUrl: string;
       /**
@@ -1470,8 +1473,8 @@ declare global {
       format?: "tar" | "tar.bz2" | "tar.gz" | "tar.xz" | "tar.zst";
 
       /**
-       * SHA-256 hash (64 lowercase hex characters). Required for external archives per security
-       * policy.
+       * Canonical SHA-256 digest ("sha256:<64 lowercase hex>"). Required for external archives per
+       * security policy.
        */
       hash?: string;
 
@@ -1516,11 +1519,10 @@ declare global {
        */
       extractDir?: boolean;
 
-      hash: string;
       /**
-       * @default sha256
+       * Canonical SHA-256 digest of the artifact: "sha256:<64 lowercase hex>".
        */
-      hashType?: BinHashType;
+      hash: string;
       url: string;
     }
 
@@ -1536,8 +1538,6 @@ declare global {
       | "xz"
       | "zip"
       | "zst";
-
-    type BinHashType = "sha256";
 
     interface Bundle {
       /**

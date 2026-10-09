@@ -29,7 +29,7 @@ func TestExecRuntimeEnvDependency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	binary := &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{osType: {arch: {"unknown": {URL: "https://example.invalid/offline-fixture", Hash: strings.Repeat("0", 64), ContentType: binmanager.BinContentTypeBinary}}}}}
+	binary := &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{osType: {arch: {"unknown": {URL: "https://example.invalid/offline-fixture", Hash: "sha256:" + strings.Repeat("0", 64), ContentType: binmanager.BinContentTypeBinary}}}}}
 	apps := binmanager.MapOfApps{
 		"proxy":            {Binary: binary, DependsOn: []string{"private-upstream"}, RuntimeEnv: map[string]string{"UPSTREAM": "${APP_BIN:private-upstream}"}},
 		"private-upstream": {Binary: binary, Lazy: true},

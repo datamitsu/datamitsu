@@ -11,8 +11,6 @@
 package teamcity
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"sort"
@@ -21,6 +19,7 @@ import (
 	"unicode"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render/github"
 )
@@ -172,8 +171,7 @@ func Identity(tool string) string {
 	if id == tool && len(id) <= identityLimit && id != "" {
 		return id
 	}
-	sum := sha256.Sum256([]byte(tool))
-	suffix := "_" + hex.EncodeToString(sum[:4])
+	suffix := "_" + digest.SHA256Of([]byte(tool)).Hex()[:8]
 	runes := []rune(id)
 	if len(runes) > identityLimit-len(suffix) {
 		runes = runes[:identityLimit-len(suffix)]

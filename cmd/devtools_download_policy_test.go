@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +9,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -41,8 +41,8 @@ func TestForgeDownloadPolicyInstallAndVerify(t *testing.T) {
 					t.Setenv("TEST_DOWNLOAD_TOKEN", "fixture")
 					t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 					data := []byte("#!/bin/sh\necho tool\n")
-					sum := sha256.Sum256(data)
-					hash := hex.EncodeToString(sum[:])
+					sum := digest.SHA256Of(data)
+					hash := "sha256:" + sum.Hex()
 					var downloads atomic.Int32
 					var base string
 					downloadPath := "/group/tool/releases/download/v1/tool-linux-amd64"

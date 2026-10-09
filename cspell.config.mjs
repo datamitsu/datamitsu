@@ -617,5 +617,15 @@ export default defineConfig((config) => ({
     "chardata",
     // reviewdog's filter mode that reports every diagnostic.
     "nofilter",
+    // The xxh3 Go package the digest policy names while forbidding direct
+    // imports of it.
+    "zeebo",
+    // Words the digest-unification plan and its review record use.
+    "retargeted",
+    "retarget",
+    "nolints",
+    "fhash",
+    // The reasoning-effort level the plan's review provenance names.
+    "xhigh",
   ],
 }));

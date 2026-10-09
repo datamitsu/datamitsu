@@ -36,14 +36,14 @@ function getConfig(config) {
               amd64: {
                 unknown: {
                   url: "https://github.com/evilmartians/lefthook/releases/download/v1.6.1/lefthook_1.6.1_MacOS_x86_64.gz",
-                  hash: "abc123...",
+                  hash: "sha256:abc123...",
                   contentType: "gz",
                 },
               },
               arm64: {
                 unknown: {
                   url: "https://github.com/evilmartians/lefthook/releases/download/v1.6.1/lefthook_1.6.1_MacOS_arm64.gz",
-                  hash: "def456...",
+                  hash: "sha256:def456...",
                   contentType: "gz",
                 },
               },
@@ -52,7 +52,7 @@ function getConfig(config) {
               amd64: {
                 glibc: {
                   url: "https://github.com/evilmartians/lefthook/releases/download/v1.6.1/lefthook_1.6.1_Linux_x86_64.gz",
-                  hash: "789abc...",
+                  hash: "sha256:789abc...",
                   contentType: "gz",
                 },
               },
@@ -79,11 +79,13 @@ The hash is verified after download and before extraction. If the hash doesn't m
 - Tampered binaries
 - Supply chain attacks
 
-Hashes are plain SHA-256 hex strings:
+Hashes are canonical SHA-256 digests — `sha256:` followed by 64 lowercase hex characters:
 
 ```javascript
-hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+hash: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 ```
+
+A bare 64-hex pin is rejected at config load.
 
 ## Supported Archive Formats
 
@@ -198,7 +200,7 @@ binary: {
       amd64: {
         glibc: {
           url: "https://github.com/protocolbuffers/protobuf/releases/download/v36.2/protoc-36.2-linux-x86_64.zip",
-          hash: "0000000000000000000000000000000000000000000000000000000000000000", // replace with the expected SHA-256
+          hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000", // replace with the expected SHA-256 digest
           contentType: "zip",
           binaryPath: "bin/protoc",
           extractDir: true,

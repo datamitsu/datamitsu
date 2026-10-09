@@ -1308,7 +1308,7 @@ var binaries$1 = {
           unknown: {
             binaryPath: "darwin-amd64/helm",
             contentType: "tar.gz",
-            hash: "6c163d687ca03c3b5c01928e53bbbcf9518278f47ce7a2f249a5a08e8bdaa2bc",
+            hash: "sha256:6c163d687ca03c3b5c01928e53bbbcf9518278f47ce7a2f249a5a08e8bdaa2bc",
             url: "https://get.helm.sh/helm-v4.2.4-darwin-amd64.tar.gz",
           },
         },
@@ -1316,7 +1316,7 @@ var binaries$1 = {
           unknown: {
             binaryPath: "darwin-arm64/helm",
             contentType: "tar.gz",
-            hash: "d747eb4e28bd2727173d15b759fa0a17822291ec09db7ced3d55af290a3661a2",
+            hash: "sha256:d747eb4e28bd2727173d15b759fa0a17822291ec09db7ced3d55af290a3661a2",
             url: "https://get.helm.sh/helm-v4.2.4-darwin-arm64.tar.gz",
           },
         },
@@ -1326,7 +1326,7 @@ var binaries$1 = {
           glibc: {
             binaryPath: "linux-amd64/helm",
             contentType: "tar.gz",
-            hash: "c306b46f719b0a4da32d0f78ee21bf90ce8d602f15b22ab753f0674d1670a7f3",
+            hash: "sha256:c306b46f719b0a4da32d0f78ee21bf90ce8d602f15b22ab753f0674d1670a7f3",
             url: "https://get.helm.sh/helm-v4.2.4-linux-amd64.tar.gz",
           },
         },
@@ -1334,7 +1334,7 @@ var binaries$1 = {
           glibc: {
             binaryPath: "linux-arm64/helm",
             contentType: "tar.gz",
-            hash: "564de2191b881e9f71b5606b25345821ea1682f06ab90499d3ab22b530176da1",
+            hash: "sha256:564de2191b881e9f71b5606b25345821ea1682f06ab90499d3ab22b530176da1",
             url: "https://get.helm.sh/helm-v4.2.4-linux-arm64.tar.gz",
           },
         },
@@ -1344,7 +1344,7 @@ var binaries$1 = {
           unknown: {
             binaryPath: "windows-amd64/helm.exe",
             contentType: "zip",
-            hash: "e94d83a4706fd82078c98dade2079fa9d9680c1c2bfb93bfc304ee6bc2412a32",
+            hash: "sha256:e94d83a4706fd82078c98dade2079fa9d9680c1c2bfb93bfc304ee6bc2412a32",
             url: "https://get.helm.sh/helm-v4.2.4-windows-amd64.zip",
           },
         },
@@ -1352,7 +1352,7 @@ var binaries$1 = {
           unknown: {
             binaryPath: "windows-arm64/helm.exe",
             contentType: "zip",
-            hash: "dbe8b49ea9877abe3d77354a792efb01920da9f65a492fcb8b4fce4e08bbae8f",
+            hash: "sha256:dbe8b49ea9877abe3d77354a792efb01920da9f65a492fcb8b4fce4e08bbae8f",
             url: "https://get.helm.sh/helm-v4.2.4-windows-arm64.zip",
           },
         },
@@ -1366,14 +1366,14 @@ var binaries$1 = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "d5276c0f4fde77fc446070290f345944a7f1fda153df6b960e5fde93b7a9bccd",
+            hash: "sha256:d5276c0f4fde77fc446070290f345944a7f1fda153df6b960e5fde93b7a9bccd",
             url: "https://dl.k8s.io/release/v1.37.0/bin/darwin/amd64/kubectl",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "583beedaebe422e71d3f1a96acef8b1fef86ea2f09a45ad01aa6c9ce287c1380",
+            hash: "sha256:583beedaebe422e71d3f1a96acef8b1fef86ea2f09a45ad01aa6c9ce287c1380",
             url: "https://dl.k8s.io/release/v1.37.0/bin/darwin/arm64/kubectl",
           },
         },
@@ -1382,14 +1382,14 @@ var binaries$1 = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f",
+            hash: "sha256:6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f",
             url: "https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "922df28df248cc00a9e025f947704f1d1482de64ece54cfe57e61f19eaf1eef3",
+            hash: "sha256:922df28df248cc00a9e025f947704f1d1482de64ece54cfe57e61f19eaf1eef3",
             url: "https://dl.k8s.io/release/v1.37.0/bin/linux/arm64/kubectl",
           },
         },
@@ -1398,7 +1398,7 @@ var binaries$1 = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "4721b614a67bb4932a0369e61f4a323d8c6ca00943d3a2ff14837c124da06f0e",
+            hash: "sha256:4721b614a67bb4932a0369e61f4a323d8c6ca00943d3a2ff14837c124da06f0e",
             url: "https://dl.k8s.io/release/v1.37.0/bin/windows/amd64/kubectl.exe",
           },
         },
@@ -1814,7 +1814,7 @@ var binaries = {
           unknown: {
             binaryPath: "actionlint-1.7.12/actionlint",
             contentType: "tar.gz",
-            hash: "5b44c3bc2255115c9b69e30efc0fecdf498fdb63c5d58e17084fd5f16324c644",
+            hash: "sha256:5b44c3bc2255115c9b69e30efc0fecdf498fdb63c5d58e17084fd5f16324c644",
             url: "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_amd64.tar.gz",
           },
         },
@@ -1822,7 +1822,7 @@ var binaries = {
           unknown: {
             binaryPath: "actionlint-1.7.12/actionlint",
             contentType: "tar.gz",
-            hash: "aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f",
+            hash: "sha256:aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f",
             url: "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_arm64.tar.gz",
           },
         },
@@ -1832,7 +1832,7 @@ var binaries = {
           unknown: {
             binaryPath: "actionlint-1.7.12/actionlint",
             contentType: "tar.gz",
-            hash: "3de1b027d0b749e81d6d972cbf5d14dc708a275248da1ba4eed4a9af707d1339",
+            hash: "sha256:3de1b027d0b749e81d6d972cbf5d14dc708a275248da1ba4eed4a9af707d1339",
             url: "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_freebsd_amd64.tar.gz",
           },
         },
@@ -1842,7 +1842,7 @@ var binaries = {
           glibc: {
             binaryPath: "actionlint-1.7.12/actionlint",
             contentType: "tar.gz",
-            hash: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8",
+            hash: "sha256:8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8",
             url: "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz",
           },
         },
@@ -1850,7 +1850,7 @@ var binaries = {
           glibc: {
             binaryPath: "actionlint-1.7.12/actionlint",
             contentType: "tar.gz",
-            hash: "325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6",
+            hash: "sha256:325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6",
             url: "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_arm64.tar.gz",
           },
         },
@@ -1860,7 +1860,7 @@ var binaries = {
           unknown: {
             binaryPath: "actionlint-1.7.12/actionlint.exe",
             contentType: "zip",
-            hash: "6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9",
+            hash: "sha256:6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9",
             url: "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_windows_amd64.zip",
           },
         },
@@ -1868,7 +1868,7 @@ var binaries = {
           unknown: {
             binaryPath: "actionlint-1.7.12/actionlint.exe",
             contentType: "zip",
-            hash: "cadcf7ea4efe3a68728893813643cebe1185e5b1d4be5b96245f65c9a4d5ea41",
+            hash: "sha256:cadcf7ea4efe3a68728893813643cebe1185e5b1d4be5b96245f65c9a4d5ea41",
             url: "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_windows_arm64.zip",
           },
         },
@@ -1884,7 +1884,7 @@ var binaries = {
           unknown: {
             binaryPath: "age-v1.3.1/age",
             contentType: "tar.gz",
-            hash: "2b233301ad21ab7b1eabd9ae1198a164005fa4928fcdd745d47c39f8593209d7",
+            hash: "sha256:2b233301ad21ab7b1eabd9ae1198a164005fa4928fcdd745d47c39f8593209d7",
             url: "https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-darwin-amd64.tar.gz",
           },
         },
@@ -1892,7 +1892,7 @@ var binaries = {
           unknown: {
             binaryPath: "age-v1.3.1/age",
             contentType: "tar.gz",
-            hash: "01120ea2cbf0463d4c6bd767f99f3271bbed1cdc8a9aa718a76ba1fe4f01998b",
+            hash: "sha256:01120ea2cbf0463d4c6bd767f99f3271bbed1cdc8a9aa718a76ba1fe4f01998b",
             url: "https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-darwin-arm64.tar.gz",
           },
         },
@@ -1902,7 +1902,7 @@ var binaries = {
           unknown: {
             binaryPath: "age-v1.3.1/age",
             contentType: "tar.gz",
-            hash: "3d597b093d6b21f78b465a55cef748cdd357bddc43128527d3aacec4649caa63",
+            hash: "sha256:3d597b093d6b21f78b465a55cef748cdd357bddc43128527d3aacec4649caa63",
             url: "https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-freebsd-amd64.tar.gz",
           },
         },
@@ -1912,7 +1912,7 @@ var binaries = {
           glibc: {
             binaryPath: "age-v1.3.1/age",
             contentType: "tar.gz",
-            hash: "bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377",
+            hash: "sha256:bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377",
             url: "https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz",
           },
         },
@@ -1920,7 +1920,7 @@ var binaries = {
           glibc: {
             binaryPath: "age-v1.3.1/age",
             contentType: "tar.gz",
-            hash: "c6878a324421b69e3e20b00ba17c04bc5c6dab0030cfe55bf8f68fa8d9e9093a",
+            hash: "sha256:c6878a324421b69e3e20b00ba17c04bc5c6dab0030cfe55bf8f68fa8d9e9093a",
             url: "https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-arm64.tar.gz",
           },
         },
@@ -1930,7 +1930,7 @@ var binaries = {
           unknown: {
             binaryPath: "age-v1.3.1/age.exe",
             contentType: "zip",
-            hash: "c56e8ce22f7e80cb85ad946cc82d198767b056366201d3e1a2b93d865be38154",
+            hash: "sha256:c56e8ce22f7e80cb85ad946cc82d198767b056366201d3e1a2b93d865be38154",
             url: "https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-windows-amd64.zip",
           },
         },
@@ -1947,7 +1947,7 @@ var binaries = {
           unknown: {
             binaryPath: "air-1.67.4/air",
             contentType: "tar.gz",
-            hash: "a6eccc0afea79497d74edb2f0fc603fd518ac9825a83e487d9e419ee5786035c",
+            hash: "sha256:a6eccc0afea79497d74edb2f0fc603fd518ac9825a83e487d9e419ee5786035c",
             url: "https://github.com/air-verse/air/releases/download/v1.67.4/air_1.67.4_darwin_amd64.tar.gz",
           },
         },
@@ -1955,7 +1955,7 @@ var binaries = {
           unknown: {
             binaryPath: "air-1.67.4/air",
             contentType: "tar.gz",
-            hash: "377e3f6ad87dc27a1fe665a78229c619188cf70d05ddc24d62ba065ee0824934",
+            hash: "sha256:377e3f6ad87dc27a1fe665a78229c619188cf70d05ddc24d62ba065ee0824934",
             url: "https://github.com/air-verse/air/releases/download/v1.67.4/air_1.67.4_darwin_arm64.tar.gz",
           },
         },
@@ -1965,7 +1965,7 @@ var binaries = {
           glibc: {
             binaryPath: "air-1.67.4/air",
             contentType: "tar.gz",
-            hash: "c8cc405210e557e2681275688ce700441eac53db9fb42bb58764874ee9aa783d",
+            hash: "sha256:c8cc405210e557e2681275688ce700441eac53db9fb42bb58764874ee9aa783d",
             url: "https://github.com/air-verse/air/releases/download/v1.67.4/air_1.67.4_linux_amd64.tar.gz",
           },
         },
@@ -1973,7 +1973,7 @@ var binaries = {
           glibc: {
             binaryPath: "air-1.67.4/air",
             contentType: "tar.gz",
-            hash: "3b138e3cc01c6f1f077f555baa1db45215c02f1aa57db8ab0b5b082a76a45743",
+            hash: "sha256:3b138e3cc01c6f1f077f555baa1db45215c02f1aa57db8ab0b5b082a76a45743",
             url: "https://github.com/air-verse/air/releases/download/v1.67.4/air_1.67.4_linux_arm64.tar.gz",
           },
         },
@@ -1982,14 +1982,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "b7f986b24fae6fa2941b37d63f7f7e82f7716033fd739f8f3e7c272e0903e9d5",
+            hash: "sha256:b7f986b24fae6fa2941b37d63f7f7e82f7716033fd739f8f3e7c272e0903e9d5",
             url: "https://github.com/air-verse/air/releases/download/v1.67.4/air_1.67.4_windows_amd64.exe",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "4e61b04f9aae3e33893535208162cf120f3d18eadc0143368669f6ad9a2b472b",
+            hash: "sha256:4e61b04f9aae3e33893535208162cf120f3d18eadc0143368669f6ad9a2b472b",
             url: "https://github.com/air-verse/air/releases/download/v1.67.4/air_1.67.4_windows_arm64.exe",
           },
         },
@@ -2005,7 +2005,7 @@ var binaries = {
           unknown: {
             binaryPath: "alint-v0.15.1/alint",
             contentType: "tar.gz",
-            hash: "56f215fb421cbe22b094548f7123903336f5baf79ef29f94cc75b54746f7f9dd",
+            hash: "sha256:56f215fb421cbe22b094548f7123903336f5baf79ef29f94cc75b54746f7f9dd",
             url: "https://github.com/asamarts/alint/releases/download/v0.15.1/alint-v0.15.1-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -2013,7 +2013,7 @@ var binaries = {
           unknown: {
             binaryPath: "alint-v0.15.1/alint",
             contentType: "tar.gz",
-            hash: "681c82ac56dc592b6b9939fcbaf5e431ba123f8481424cfaeb570ea70baf100d",
+            hash: "sha256:681c82ac56dc592b6b9939fcbaf5e431ba123f8481424cfaeb570ea70baf100d",
             url: "https://github.com/asamarts/alint/releases/download/v0.15.1/alint-v0.15.1-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -2023,7 +2023,7 @@ var binaries = {
           musl: {
             binaryPath: "alint-v0.15.1/alint",
             contentType: "tar.gz",
-            hash: "83bfc3437e62cdb2262f28329dfc024773c439828a27cc291eb0247ad9018cfb",
+            hash: "sha256:83bfc3437e62cdb2262f28329dfc024773c439828a27cc291eb0247ad9018cfb",
             url: "https://github.com/asamarts/alint/releases/download/v0.15.1/alint-v0.15.1-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -2031,7 +2031,7 @@ var binaries = {
           musl: {
             binaryPath: "alint-v0.15.1/alint",
             contentType: "tar.gz",
-            hash: "4f709cb490da2aec5dd6b582f1d59aa0397b520a8a7e393275533b3d5da19f6e",
+            hash: "sha256:4f709cb490da2aec5dd6b582f1d59aa0397b520a8a7e393275533b3d5da19f6e",
             url: "https://github.com/asamarts/alint/releases/download/v0.15.1/alint-v0.15.1-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -2041,7 +2041,7 @@ var binaries = {
           unknown: {
             binaryPath: "alint-v0.15.1/alint.exe",
             contentType: "tar.gz",
-            hash: "3c7117eefe45993e414e2fabae91bb9b721bf30c169bdccf80dcb3897fead0be",
+            hash: "sha256:3c7117eefe45993e414e2fabae91bb9b721bf30c169bdccf80dcb3897fead0be",
             url: "https://github.com/asamarts/alint/releases/download/v0.15.1/alint-v0.15.1-x86_64-pc-windows-msvc.tar.gz",
           },
         },
@@ -2056,14 +2056,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "5e48cdff132995b251d2c4efe531bf96d503982d08b19918504fe91610686d2a",
+            hash: "sha256:5e48cdff132995b251d2c4efe531bf96d503982d08b19918504fe91610686d2a",
             url: "https://github.com/allure-framework/allurectl/releases/download/2.22.0/allurectl_darwin_amd64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "d9d30cbf3fce8f50e1e3ce2bc85facbb8bab530ac08a5d1fc39d52cbcebd78e5",
+            hash: "sha256:d9d30cbf3fce8f50e1e3ce2bc85facbb8bab530ac08a5d1fc39d52cbcebd78e5",
             url: "https://github.com/allure-framework/allurectl/releases/download/2.22.0/allurectl_darwin_arm64",
           },
         },
@@ -2072,14 +2072,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "ac3205984d9a48e89a14dc3308714d6e198f7937ebc18a8b1d0c63381bb513b2",
+            hash: "sha256:ac3205984d9a48e89a14dc3308714d6e198f7937ebc18a8b1d0c63381bb513b2",
             url: "https://github.com/allure-framework/allurectl/releases/download/2.22.0/allurectl_linux_amd64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "1bc30483eabbbf8c492e073fa8cf914194e3f11d34edf050d9ba3fb45ac4561b",
+            hash: "sha256:1bc30483eabbbf8c492e073fa8cf914194e3f11d34edf050d9ba3fb45ac4561b",
             url: "https://github.com/allure-framework/allurectl/releases/download/2.22.0/allurectl_linux_arm64",
           },
         },
@@ -2088,14 +2088,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "fb9288d9ebd65d53729deb1a4a1c5fb68ab9ff8d7db407ce8a578ee7c329aea2",
+            hash: "sha256:fb9288d9ebd65d53729deb1a4a1c5fb68ab9ff8d7db407ce8a578ee7c329aea2",
             url: "https://github.com/allure-framework/allurectl/releases/download/2.22.0/allurectl_windows_amd64.exe",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "c721db1e811f7b15f135d835332820ea218692aa3e5e4f84baab7cab1ac511ad",
+            hash: "sha256:c721db1e811f7b15f135d835332820ea218692aa3e5e4f84baab7cab1ac511ad",
             url: "https://github.com/allure-framework/allurectl/releases/download/2.22.0/allurectl_windows_arm64.exe",
           },
         },
@@ -2111,7 +2111,7 @@ var binaries = {
           unknown: {
             binaryPath: "ast-grep",
             contentType: "zip",
-            hash: "38ec2d1c7c97f1efc1c1080526e3c54b964e263478e347f44a65b5287ef5a6ad",
+            hash: "sha256:38ec2d1c7c97f1efc1c1080526e3c54b964e263478e347f44a65b5287ef5a6ad",
             url: "https://github.com/ast-grep/ast-grep/releases/download/0.45.1/app-x86_64-apple-darwin.zip",
           },
         },
@@ -2119,7 +2119,7 @@ var binaries = {
           unknown: {
             binaryPath: "ast-grep",
             contentType: "zip",
-            hash: "6c761afbdc072a7a9006d0dc5c49b3247fef195b8bebe675b4aa385ff872d9c3",
+            hash: "sha256:6c761afbdc072a7a9006d0dc5c49b3247fef195b8bebe675b4aa385ff872d9c3",
             url: "https://github.com/ast-grep/ast-grep/releases/download/0.45.1/app-aarch64-apple-darwin.zip",
           },
         },
@@ -2129,7 +2129,7 @@ var binaries = {
           glibc: {
             binaryPath: "ast-grep",
             contentType: "zip",
-            hash: "76fb6555be6734fb5057dba8d2fb756430f374bb9e1af694cf1ce00e13238d63",
+            hash: "sha256:76fb6555be6734fb5057dba8d2fb756430f374bb9e1af694cf1ce00e13238d63",
             url: "https://github.com/ast-grep/ast-grep/releases/download/0.45.1/app-x86_64-unknown-linux-gnu.zip",
           },
         },
@@ -2137,7 +2137,7 @@ var binaries = {
           glibc: {
             binaryPath: "ast-grep",
             contentType: "zip",
-            hash: "9ee7ec49aada3dc05135d21977af089a33fc3154ada25bab102daca90b5098f2",
+            hash: "sha256:9ee7ec49aada3dc05135d21977af089a33fc3154ada25bab102daca90b5098f2",
             url: "https://github.com/ast-grep/ast-grep/releases/download/0.45.1/app-aarch64-unknown-linux-gnu.zip",
           },
         },
@@ -2147,7 +2147,7 @@ var binaries = {
           unknown: {
             binaryPath: "ast-grep.exe",
             contentType: "zip",
-            hash: "b816b375df6a30f8e5d91d706dccae6127346e68970788cf8c2decee54bcaa31",
+            hash: "sha256:b816b375df6a30f8e5d91d706dccae6127346e68970788cf8c2decee54bcaa31",
             url: "https://github.com/ast-grep/ast-grep/releases/download/0.45.1/app-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -2155,7 +2155,7 @@ var binaries = {
           unknown: {
             binaryPath: "ast-grep.exe",
             contentType: "zip",
-            hash: "88c27b45a70a279b987bf3949c1d289cbc0484513f87c4bdd07ad313bd1bec91",
+            hash: "sha256:88c27b45a70a279b987bf3949c1d289cbc0484513f87c4bdd07ad313bd1bec91",
             url: "https://github.com/ast-grep/ast-grep/releases/download/0.45.1/app-aarch64-pc-windows-msvc.zip",
           },
         },
@@ -2171,7 +2171,7 @@ var binaries = {
           unknown: {
             binaryPath: "bearer-2.1.0/bearer",
             contentType: "tar.gz",
-            hash: "d08f3b74724619e4dc8f4673085ce16df4d881e5e104a85b6104498431e6a777",
+            hash: "sha256:d08f3b74724619e4dc8f4673085ce16df4d881e5e104a85b6104498431e6a777",
             url: "https://github.com/Bearer/bearer/releases/download/v2.1.0/bearer_2.1.0_darwin_amd64.tar.gz",
           },
         },
@@ -2179,7 +2179,7 @@ var binaries = {
           unknown: {
             binaryPath: "bearer-2.1.0/bearer",
             contentType: "tar.gz",
-            hash: "8ffcda3cff9ed7c74a1727e5fbd6caf056d076e61ae30bf65428eafde56e8549",
+            hash: "sha256:8ffcda3cff9ed7c74a1727e5fbd6caf056d076e61ae30bf65428eafde56e8549",
             url: "https://github.com/Bearer/bearer/releases/download/v2.1.0/bearer_2.1.0_darwin_arm64.tar.gz",
           },
         },
@@ -2189,7 +2189,7 @@ var binaries = {
           glibc: {
             binaryPath: "bearer-2.1.0/bearer",
             contentType: "tar.zst",
-            hash: "a78a0d8dfb69d06ec7668db682ae3c8e8ad9755f68dec34f80b10efa98daaf3c",
+            hash: "sha256:a78a0d8dfb69d06ec7668db682ae3c8e8ad9755f68dec34f80b10efa98daaf3c",
             url: "https://github.com/Bearer/bearer/releases/download/v2.1.0/bearer_2.1.0_linux-amd64.pkg.tar.zst",
           },
         },
@@ -2197,7 +2197,7 @@ var binaries = {
           glibc: {
             binaryPath: "bearer-2.1.0/bearer",
             contentType: "tar.zst",
-            hash: "a052e6c594ad88595be6c3102db3c4a13960e305385a90b7734017b191b76d05",
+            hash: "sha256:a052e6c594ad88595be6c3102db3c4a13960e305385a90b7734017b191b76d05",
             url: "https://github.com/Bearer/bearer/releases/download/v2.1.0/bearer_2.1.0_linux-arm64.pkg.tar.zst",
           },
         },
@@ -2214,7 +2214,7 @@ var binaries = {
           unknown: {
             binaryPath: "buf/bin/buf",
             contentType: "tar.gz",
-            hash: "8b87e66786b46b20e7f7e328c9e15f64f636041acfdbf93374873d9014a62d30",
+            hash: "sha256:8b87e66786b46b20e7f7e328c9e15f64f636041acfdbf93374873d9014a62d30",
             url: "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-Darwin-x86_64.tar.gz",
           },
         },
@@ -2222,7 +2222,7 @@ var binaries = {
           unknown: {
             binaryPath: "buf/bin/buf",
             contentType: "tar.gz",
-            hash: "be040ae0ca381103dfda68a36738695c4db3e48de8e91412acdc3d991f39b91e",
+            hash: "sha256:be040ae0ca381103dfda68a36738695c4db3e48de8e91412acdc3d991f39b91e",
             url: "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-Darwin-arm64.tar.gz",
           },
         },
@@ -2232,7 +2232,7 @@ var binaries = {
           unknown: {
             binaryPath: "buf/bin/buf",
             contentType: "tar.gz",
-            hash: "c67a7b23afdef2802c12c2fde350ddc366243f957e9dcc09b8b053f1884c2edd",
+            hash: "sha256:c67a7b23afdef2802c12c2fde350ddc366243f957e9dcc09b8b053f1884c2edd",
             url: "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-FreeBSD-x86_64.tar.gz",
           },
         },
@@ -2240,7 +2240,7 @@ var binaries = {
           unknown: {
             binaryPath: "buf/bin/buf",
             contentType: "tar.gz",
-            hash: "e991f61e66eb4992152a8eaab8564233db443d1f70d29e50939f1a8430a4e958",
+            hash: "sha256:e991f61e66eb4992152a8eaab8564233db443d1f70d29e50939f1a8430a4e958",
             url: "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-FreeBSD-arm64.tar.gz",
           },
         },
@@ -2250,7 +2250,7 @@ var binaries = {
           glibc: {
             binaryPath: "buf/bin/buf",
             contentType: "tar.gz",
-            hash: "a9c6186cf6fcf062b247345e1b7b12c26f580c1b2a4bbf4d3fe080abf85ceee8",
+            hash: "sha256:a9c6186cf6fcf062b247345e1b7b12c26f580c1b2a4bbf4d3fe080abf85ceee8",
             url: "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-Linux-x86_64.tar.gz",
           },
         },
@@ -2258,7 +2258,7 @@ var binaries = {
           glibc: {
             binaryPath: "buf/bin/buf",
             contentType: "tar.gz",
-            hash: "7641bd7e06a37a54cbb8c789f53465899def96196ab5c08057432f781a15d517",
+            hash: "sha256:7641bd7e06a37a54cbb8c789f53465899def96196ab5c08057432f781a15d517",
             url: "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-Linux-aarch64.tar.gz",
           },
         },
@@ -2268,7 +2268,7 @@ var binaries = {
           unknown: {
             binaryPath: "buf/bin/buf",
             contentType: "tar.gz",
-            hash: "42b092859a2c1bc5e635b9bb9efc7ddf34eed278c83ba1677456ea1c5e237e6e",
+            hash: "sha256:42b092859a2c1bc5e635b9bb9efc7ddf34eed278c83ba1677456ea1c5e237e6e",
             url: "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-OpenBSD-x86_64.tar.gz",
           },
         },
@@ -2276,7 +2276,7 @@ var binaries = {
           unknown: {
             binaryPath: "buf/bin/buf",
             contentType: "tar.gz",
-            hash: "7ca23eb5a68e6c86615eaf5d99bb4804e4e33f1c22d5cabd14b9e7a6170a8411",
+            hash: "sha256:7ca23eb5a68e6c86615eaf5d99bb4804e4e33f1c22d5cabd14b9e7a6170a8411",
             url: "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-OpenBSD-arm64.tar.gz",
           },
         },
@@ -2285,14 +2285,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "6e8f6d043e520bc81cae7b85d4cd6d93e57716a8a9842d5d18200191ee259cb5",
+            hash: "sha256:6e8f6d043e520bc81cae7b85d4cd6d93e57716a8a9842d5d18200191ee259cb5",
             url: "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-Windows-x86_64.exe",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "cc06910c1b69715b598fc8d1958538c86b656c05f6dd0a516dfa90c325dcbead",
+            hash: "sha256:cc06910c1b69715b598fc8d1958538c86b656c05f6dd0a516dfa90c325dcbead",
             url: "https://github.com/bufbuild/buf/releases/download/v1.72.0/buf-Windows-arm64.exe",
           },
         },
@@ -2308,7 +2308,7 @@ var binaries = {
           unknown: {
             binaryPath: "cargo-deny-0.20.2/cargo-deny",
             contentType: "tar.gz",
-            hash: "248da7f581724e470071990c088ffc55c811981715f4cbdb258621fb79f8b7a6",
+            hash: "sha256:248da7f581724e470071990c088ffc55c811981715f4cbdb258621fb79f8b7a6",
             url: "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -2316,7 +2316,7 @@ var binaries = {
           unknown: {
             binaryPath: "cargo-deny-0.20.2/cargo-deny",
             contentType: "tar.gz",
-            hash: "fe67d82a10d8597a3549364cb733a3f9cc1bfff9031b7ae46384a9f2a72090c3",
+            hash: "sha256:fe67d82a10d8597a3549364cb733a3f9cc1bfff9031b7ae46384a9f2a72090c3",
             url: "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -2326,7 +2326,7 @@ var binaries = {
           musl: {
             binaryPath: "cargo-deny-0.20.2/cargo-deny",
             contentType: "tar.gz",
-            hash: "9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f",
+            hash: "sha256:9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f",
             url: "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -2334,7 +2334,7 @@ var binaries = {
           musl: {
             binaryPath: "cargo-deny-0.20.2/cargo-deny",
             contentType: "tar.gz",
-            hash: "995c82be0defc7a025cae49a2aa2644ce8245c9a3318fc4103907c6a285e8c7d",
+            hash: "sha256:995c82be0defc7a025cae49a2aa2644ce8245c9a3318fc4103907c6a285e8c7d",
             url: "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -2344,7 +2344,7 @@ var binaries = {
           unknown: {
             binaryPath: "cargo-deny-0.20.2/cargo-deny.exe",
             contentType: "tar.gz",
-            hash: "975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc",
+            hash: "sha256:975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc",
             url: "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-pc-windows-msvc.tar.gz",
           },
         },
@@ -2359,14 +2359,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "82942043a4766b9fb3ffe6c77584df7d6c832bfa00571f234d257799f492fdd7",
+            hash: "sha256:82942043a4766b9fb3ffe6c77584df7d6c832bfa00571f234d257799f492fdd7",
             url: "https://github.com/checkmake/checkmake/releases/download/v0.3.2/checkmake-v0.3.2.darwin.amd64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "d5dab7169d1cb246b380ed5e7fc1e6aded301d453db258f858e774422d25961f",
+            hash: "sha256:d5dab7169d1cb246b380ed5e7fc1e6aded301d453db258f858e774422d25961f",
             url: "https://github.com/checkmake/checkmake/releases/download/v0.3.2/checkmake-v0.3.2.darwin.arm64",
           },
         },
@@ -2375,7 +2375,7 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "c1d30b22a63f458215c5fd68179d19ced1341231c7650c76dcb0b0734c9c7955",
+            hash: "sha256:c1d30b22a63f458215c5fd68179d19ced1341231c7650c76dcb0b0734c9c7955",
             url: "https://github.com/checkmake/checkmake/releases/download/v0.3.2/checkmake-v0.3.2.freebsd.amd64",
           },
         },
@@ -2384,14 +2384,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "e2effb876913f3ee2caef0ba35f6202c5e8a3cd55a077d8d2b9ce2034257b6af",
+            hash: "sha256:e2effb876913f3ee2caef0ba35f6202c5e8a3cd55a077d8d2b9ce2034257b6af",
             url: "https://github.com/checkmake/checkmake/releases/download/v0.3.2/checkmake-v0.3.2.linux.amd64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "409167c4abb99407bd232c3bbd351b8a39df57997feafde5a08bddffb0f2dcb4",
+            hash: "sha256:409167c4abb99407bd232c3bbd351b8a39df57997feafde5a08bddffb0f2dcb4",
             url: "https://github.com/checkmake/checkmake/releases/download/v0.3.2/checkmake-v0.3.2.linux.arm64",
           },
         },
@@ -2400,14 +2400,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "6adf4bde2dbfe8001ecf2918abfe02f7a57191568f1d185537eccd9c59625dca",
+            hash: "sha256:6adf4bde2dbfe8001ecf2918abfe02f7a57191568f1d185537eccd9c59625dca",
             url: "https://github.com/checkmake/checkmake/releases/download/v0.3.2/checkmake-v0.3.2.windows.amd64.exe",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "571b6440776236a3626c5fc9aeaef7da78eee625683f181af89439028996c611",
+            hash: "sha256:571b6440776236a3626c5fc9aeaef7da78eee625683f181af89439028996c611",
             url: "https://github.com/checkmake/checkmake/releases/download/v0.3.2/checkmake-v0.3.2.windows.arm64.exe",
           },
         },
@@ -2423,7 +2423,7 @@ var binaries = {
           unknown: {
             binaryPath: "conftest-0.69.0/conftest",
             contentType: "tar.gz",
-            hash: "74fc9073fc7a5f11ffe00db7599d2b155d179acc70e83ffc7ab4a8750e6ee24e",
+            hash: "sha256:74fc9073fc7a5f11ffe00db7599d2b155d179acc70e83ffc7ab4a8750e6ee24e",
             url: "https://github.com/open-policy-agent/conftest/releases/download/v0.69.0/conftest_0.69.0_Darwin_x86_64.tar.gz",
           },
         },
@@ -2431,7 +2431,7 @@ var binaries = {
           unknown: {
             binaryPath: "conftest-0.69.0/conftest",
             contentType: "tar.gz",
-            hash: "78302d045f0ec52e9786a06c6c621ac4516b4c5dd1e54efc8050c86c29b964d9",
+            hash: "sha256:78302d045f0ec52e9786a06c6c621ac4516b4c5dd1e54efc8050c86c29b964d9",
             url: "https://github.com/open-policy-agent/conftest/releases/download/v0.69.0/conftest_0.69.0_Darwin_arm64.tar.gz",
           },
         },
@@ -2441,7 +2441,7 @@ var binaries = {
           glibc: {
             binaryPath: "conftest-0.69.0/conftest",
             contentType: "tar.gz",
-            hash: "96fc2fbf11f0afde51256647127e6f00a64ce839a4d9a0a1aef2426c0e6f4b3f",
+            hash: "sha256:96fc2fbf11f0afde51256647127e6f00a64ce839a4d9a0a1aef2426c0e6f4b3f",
             url: "https://github.com/open-policy-agent/conftest/releases/download/v0.69.0/conftest_0.69.0_Linux_x86_64.tar.gz",
           },
         },
@@ -2449,7 +2449,7 @@ var binaries = {
           glibc: {
             binaryPath: "conftest-0.69.0/conftest",
             contentType: "tar.gz",
-            hash: "3b9c35223fe35f9988e153cdffb0144f911201306c746758b73be82831c543d9",
+            hash: "sha256:3b9c35223fe35f9988e153cdffb0144f911201306c746758b73be82831c543d9",
             url: "https://github.com/open-policy-agent/conftest/releases/download/v0.69.0/conftest_0.69.0_Linux_arm64.tar.gz",
           },
         },
@@ -2459,7 +2459,7 @@ var binaries = {
           unknown: {
             binaryPath: "conftest-0.69.0/conftest.exe",
             contentType: "zip",
-            hash: "be95f90cd22d00e709a7ad37bdac357c103b4f81d92dc51ca75a60e5f3905cf5",
+            hash: "sha256:be95f90cd22d00e709a7ad37bdac357c103b4f81d92dc51ca75a60e5f3905cf5",
             url: "https://github.com/open-policy-agent/conftest/releases/download/v0.69.0/conftest_0.69.0_Windows_x86_64.zip",
           },
         },
@@ -2467,7 +2467,7 @@ var binaries = {
           unknown: {
             binaryPath: "conftest-0.69.0/conftest.exe",
             contentType: "zip",
-            hash: "3a37240aa7a4ec755b7bffd6bb117eab656eefeefd19c47f293636ed364d1dce",
+            hash: "sha256:3a37240aa7a4ec755b7bffd6bb117eab656eefeefd19c47f293636ed364d1dce",
             url: "https://github.com/open-policy-agent/conftest/releases/download/v0.69.0/conftest_0.69.0_Windows_arm64.zip",
           },
         },
@@ -2483,14 +2483,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "2347488e5d5b25336644024dfeca5601b190e91197a71a917bda44744aff106c",
+            hash: "sha256:2347488e5d5b25336644024dfeca5601b190e91197a71a917bda44744aff106c",
             url: "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-darwin-amd64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "5cf948c2f4dfe59687bdd0b8523709067383e03982cc543475c8a7dc70e92a76",
+            hash: "sha256:5cf948c2f4dfe59687bdd0b8523709067383e03982cc543475c8a7dc70e92a76",
             url: "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-darwin-arm64",
           },
         },
@@ -2499,14 +2499,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71",
+            hash: "sha256:4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71",
             url: "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-amd64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a",
+            hash: "sha256:c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a",
             url: "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-arm64",
           },
         },
@@ -2515,7 +2515,7 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be",
+            hash: "sha256:9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be",
             url: "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-windows-amd64.exe",
           },
         },
@@ -2531,7 +2531,7 @@ var binaries = {
           unknown: {
             binaryPath: "crane",
             contentType: "tar.gz",
-            hash: "f31075b3375f79b406a600e090d5c4778b3c6598a01c817dc7898c05c7c00a56",
+            hash: "sha256:f31075b3375f79b406a600e090d5c4778b3c6598a01c817dc7898c05c7c00a56",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Darwin_x86_64.tar.gz",
           },
         },
@@ -2539,7 +2539,7 @@ var binaries = {
           unknown: {
             binaryPath: "crane",
             contentType: "tar.gz",
-            hash: "11cc3640e53473eb0d8c501068573e52a259f4d82177e6dd11b7bacb8955459e",
+            hash: "sha256:11cc3640e53473eb0d8c501068573e52a259f4d82177e6dd11b7bacb8955459e",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Darwin_arm64.tar.gz",
           },
         },
@@ -2549,7 +2549,7 @@ var binaries = {
           glibc: {
             binaryPath: "crane",
             contentType: "tar.gz",
-            hash: "5c16d8ddb971cb1d5e6ed8b1e743da8224414eeba2c2762d8f1a61b2f095699e",
+            hash: "sha256:5c16d8ddb971cb1d5e6ed8b1e743da8224414eeba2c2762d8f1a61b2f095699e",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Linux_x86_64.tar.gz",
           },
         },
@@ -2557,7 +2557,7 @@ var binaries = {
           glibc: {
             binaryPath: "crane",
             contentType: "tar.gz",
-            hash: "1f4c647b7bb260ab5435661df5b526cf59950ebf95201790db7183ac189cbcbd",
+            hash: "sha256:1f4c647b7bb260ab5435661df5b526cf59950ebf95201790db7183ac189cbcbd",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Linux_arm64.tar.gz",
           },
         },
@@ -2567,7 +2567,7 @@ var binaries = {
           unknown: {
             binaryPath: "crane.exe",
             contentType: "tar.gz",
-            hash: "2309f41ce9a31b6096fd590a57b00b0fd1d6dc41d315dc820795f64be070fe03",
+            hash: "sha256:2309f41ce9a31b6096fd590a57b00b0fd1d6dc41d315dc820795f64be070fe03",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Windows_x86_64.tar.gz",
           },
         },
@@ -2575,7 +2575,7 @@ var binaries = {
           unknown: {
             binaryPath: "crane.exe",
             contentType: "tar.gz",
-            hash: "d265afe5d393ac5a8be92f447e3839a45160aa189b8ca57611f3649f35519862",
+            hash: "sha256:d265afe5d393ac5a8be92f447e3839a45160aa189b8ca57611f3649f35519862",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Windows_arm64.tar.gz",
           },
         },
@@ -2591,7 +2591,7 @@ var binaries = {
           unknown: {
             binaryPath: "d2-v0.7.1/d2",
             contentType: "tar.gz",
-            hash: "b0178e8fdae72194d5a23aa6effd323378cc58ccd3b08d175ab80371c14e106f",
+            hash: "sha256:b0178e8fdae72194d5a23aa6effd323378cc58ccd3b08d175ab80371c14e106f",
             url: "https://github.com/d2lang/d2/releases/download/v0.7.1/d2-v0.7.1-macos-amd64.tar.gz",
           },
         },
@@ -2599,7 +2599,7 @@ var binaries = {
           unknown: {
             binaryPath: "d2-v0.7.1/d2",
             contentType: "tar.gz",
-            hash: "80de85f3b0ac7d9569acac0780ed65dd994ea78969b6b230c58bbb2c6113465b",
+            hash: "sha256:80de85f3b0ac7d9569acac0780ed65dd994ea78969b6b230c58bbb2c6113465b",
             url: "https://github.com/d2lang/d2/releases/download/v0.7.1/d2-v0.7.1-macos-arm64.tar.gz",
           },
         },
@@ -2609,7 +2609,7 @@ var binaries = {
           glibc: {
             binaryPath: "d2-v0.7.1/d2",
             contentType: "tar.gz",
-            hash: "eb172adf59f38d1e5a70ab177591356754ffaf9bebb84e0ca8b767dfb421dad7",
+            hash: "sha256:eb172adf59f38d1e5a70ab177591356754ffaf9bebb84e0ca8b767dfb421dad7",
             url: "https://github.com/d2lang/d2/releases/download/v0.7.1/d2-v0.7.1-linux-amd64.tar.gz",
           },
         },
@@ -2617,7 +2617,7 @@ var binaries = {
           glibc: {
             binaryPath: "d2-v0.7.1/d2",
             contentType: "tar.gz",
-            hash: "ce3a0b985a8f91335a826c254b3a88736fd81afcdd08b58f6c749d2add6864b0",
+            hash: "sha256:ce3a0b985a8f91335a826c254b3a88736fd81afcdd08b58f6c749d2add6864b0",
             url: "https://github.com/d2lang/d2/releases/download/v0.7.1/d2-v0.7.1-linux-arm64.tar.gz",
           },
         },
@@ -2627,7 +2627,7 @@ var binaries = {
           unknown: {
             binaryPath: "d2-v0.7.1/d2.exe",
             contentType: "tar.gz",
-            hash: "d289c2866221c618c9fc6efcd416ee8c16e122bd0100761aea51001e3c958f57",
+            hash: "sha256:d289c2866221c618c9fc6efcd416ee8c16e122bd0100761aea51001e3c958f57",
             url: "https://github.com/d2lang/d2/releases/download/v0.7.1/d2-v0.7.1-windows-amd64.tar.gz",
           },
         },
@@ -2635,7 +2635,7 @@ var binaries = {
           unknown: {
             binaryPath: "d2-v0.7.1/d2.exe",
             contentType: "tar.gz",
-            hash: "c7ebdc7b2f6df513b715d431762105386f7c702b0b2dddff2a500a032b1bba67",
+            hash: "sha256:c7ebdc7b2f6df513b715d431762105386f7c702b0b2dddff2a500a032b1bba67",
             url: "https://github.com/d2lang/d2/releases/download/v0.7.1/d2-v0.7.1-windows-arm64.tar.gz",
           },
         },
@@ -2650,14 +2650,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "gz",
-            hash: "68c73f534d969599fbe1412cbcb220438c544ca6bef29fa6f6037361556f21b4",
+            hash: "sha256:68c73f534d969599fbe1412cbcb220438c544ca6bef29fa6f6037361556f21b4",
             url: "https://github.com/TomWright/dasel/releases/download/v3.11.2/dasel_darwin_amd64.gz",
           },
         },
         arm64: {
           unknown: {
             contentType: "gz",
-            hash: "df63be20fd7707a770ca8a3a0ccc871ab71a48c79324cbd27e36bd3d708fc155",
+            hash: "sha256:df63be20fd7707a770ca8a3a0ccc871ab71a48c79324cbd27e36bd3d708fc155",
             url: "https://github.com/TomWright/dasel/releases/download/v3.11.2/dasel_darwin_arm64.gz",
           },
         },
@@ -2666,14 +2666,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "gz",
-            hash: "1af4fc41087c91dd59ab10aa13dc66a87d291e26b24bdec51480fe96cfd3ccf1",
+            hash: "sha256:1af4fc41087c91dd59ab10aa13dc66a87d291e26b24bdec51480fe96cfd3ccf1",
             url: "https://github.com/TomWright/dasel/releases/download/v3.11.2/dasel_linux_amd64.gz",
           },
         },
         arm64: {
           glibc: {
             contentType: "gz",
-            hash: "6f783edc1ff8e41c6bab901227740209506eecb6d67a87b3b7dda9e762c860a2",
+            hash: "sha256:6f783edc1ff8e41c6bab901227740209506eecb6d67a87b3b7dda9e762c860a2",
             url: "https://github.com/TomWright/dasel/releases/download/v3.11.2/dasel_linux_arm64.gz",
           },
         },
@@ -2682,7 +2682,7 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "7f37a5aba88c702884edca3bcf2ad0a67b3f2533cbfbf1f6bc414e25e2fe1d24",
+            hash: "sha256:7f37a5aba88c702884edca3bcf2ad0a67b3f2533cbfbf1f6bc414e25e2fe1d24",
             url: "https://github.com/TomWright/dasel/releases/download/v3.11.2/dasel_windows_amd64.exe",
           },
         },
@@ -2699,7 +2699,7 @@ var binaries = {
           unknown: {
             binaryPath: "dotenv-linter",
             contentType: "tar.gz",
-            hash: "143361bcd3c859cac0b16a6eaa51f3f69f270f17a55431e2e44d76722a7f0271",
+            hash: "sha256:143361bcd3c859cac0b16a6eaa51f3f69f270f17a55431e2e44d76722a7f0271",
             url: "https://github.com/dotenv-linter/dotenv-linter/releases/download/v4.0.0/dotenv-linter-darwin-x86_64.tar.gz",
           },
         },
@@ -2707,7 +2707,7 @@ var binaries = {
           unknown: {
             binaryPath: "dotenv-linter",
             contentType: "tar.gz",
-            hash: "430ed45983cfc1d242cae959ec4b3b2df43fa1aff07d7750cc836d2f6479799a",
+            hash: "sha256:430ed45983cfc1d242cae959ec4b3b2df43fa1aff07d7750cc836d2f6479799a",
             url: "https://github.com/dotenv-linter/dotenv-linter/releases/download/v4.0.0/dotenv-linter-darwin-arm64.tar.gz",
           },
         },
@@ -2717,13 +2717,13 @@ var binaries = {
           glibc: {
             binaryPath: "dotenv-linter",
             contentType: "tar.gz",
-            hash: "9e2f1f6eb88a71ac15ef209f78f5a68644db82f132d2677112b4f80ec2bd2127",
+            hash: "sha256:9e2f1f6eb88a71ac15ef209f78f5a68644db82f132d2677112b4f80ec2bd2127",
             url: "https://github.com/dotenv-linter/dotenv-linter/releases/download/v4.0.0/dotenv-linter-linux-x86_64.tar.gz",
           },
           musl: {
             binaryPath: "dotenv-linter",
             contentType: "tar.gz",
-            hash: "88a9f2ccfbfea621e5b4691246c419de71d79c7596def888849496695cd8a082",
+            hash: "sha256:88a9f2ccfbfea621e5b4691246c419de71d79c7596def888849496695cd8a082",
             url: "https://github.com/dotenv-linter/dotenv-linter/releases/download/v4.0.0/dotenv-linter-alpine-x86_64.tar.gz",
           },
         },
@@ -2731,13 +2731,13 @@ var binaries = {
           glibc: {
             binaryPath: "dotenv-linter",
             contentType: "tar.gz",
-            hash: "c4113aafd35e5f9095b2f757061d07cc8eb5cc0bcd755249877af08b7ffafb9a",
+            hash: "sha256:c4113aafd35e5f9095b2f757061d07cc8eb5cc0bcd755249877af08b7ffafb9a",
             url: "https://github.com/dotenv-linter/dotenv-linter/releases/download/v4.0.0/dotenv-linter-linux-aarch64.tar.gz",
           },
           musl: {
             binaryPath: "dotenv-linter",
             contentType: "tar.gz",
-            hash: "819153e4f43ce016ebd076653e611431d5207e4fa5623a83028dfca92b1c3201",
+            hash: "sha256:819153e4f43ce016ebd076653e611431d5207e4fa5623a83028dfca92b1c3201",
             url: "https://github.com/dotenv-linter/dotenv-linter/releases/download/v4.0.0/dotenv-linter-alpine-aarch64.tar.gz",
           },
         },
@@ -2752,14 +2752,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "7f2d7cece38829795953e957a37559815f8f94835063c78ace3e8d5f8ad0db2d",
+            hash: "sha256:7f2d7cece38829795953e957a37559815f8f94835063c78ace3e8d5f8ad0db2d",
             url: "https://github.com/immanuwell/dockerfile-roast/releases/download/1.6.1/droast-macos-x86_64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "35553c601ed4a419df7161784ef50d4935c7c0576f1d9bb8588aba22d8e0179d",
+            hash: "sha256:35553c601ed4a419df7161784ef50d4935c7c0576f1d9bb8588aba22d8e0179d",
             url: "https://github.com/immanuwell/dockerfile-roast/releases/download/1.6.1/droast-macos-arm64",
           },
         },
@@ -2768,14 +2768,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "53022f2ddddb79abd6ce3c74a703d00d807ebabc8f70595c9c8b8a5f23bd91fe",
+            hash: "sha256:53022f2ddddb79abd6ce3c74a703d00d807ebabc8f70595c9c8b8a5f23bd91fe",
             url: "https://github.com/immanuwell/dockerfile-roast/releases/download/1.6.1/droast-linux-x86_64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "b13e956a79b21ace526ddf8d4b196a11828564f3705c4a4aa643247817e8e29d",
+            hash: "sha256:b13e956a79b21ace526ddf8d4b196a11828564f3705c4a4aa643247817e8e29d",
             url: "https://github.com/immanuwell/dockerfile-roast/releases/download/1.6.1/droast-linux-arm64",
           },
         },
@@ -2784,7 +2784,7 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "69323f5215d4ecf536dbc61e9668691c1c356df4d7305d59f76932844302f1d3",
+            hash: "sha256:69323f5215d4ecf536dbc61e9668691c1c356df4d7305d59f76932844302f1d3",
             url: "https://github.com/immanuwell/dockerfile-roast/releases/download/1.6.1/droast-windows-x86_64.exe",
           },
         },
@@ -2800,7 +2800,7 @@ var binaries = {
           unknown: {
             binaryPath: "editorconfig-checker",
             contentType: "tar.gz",
-            hash: "36885cd6a16f6ba5088ac2711f5e125d75c0b5f9092e86b03e1b644a52583647",
+            hash: "sha256:36885cd6a16f6ba5088ac2711f5e125d75c0b5f9092e86b03e1b644a52583647",
             url: "https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.11.1/editorconfig-checker-darwin-all.tar.gz",
           },
         },
@@ -2808,7 +2808,7 @@ var binaries = {
           unknown: {
             binaryPath: "editorconfig-checker",
             contentType: "tar.gz",
-            hash: "36885cd6a16f6ba5088ac2711f5e125d75c0b5f9092e86b03e1b644a52583647",
+            hash: "sha256:36885cd6a16f6ba5088ac2711f5e125d75c0b5f9092e86b03e1b644a52583647",
             url: "https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.11.1/editorconfig-checker-darwin-all.tar.gz",
           },
         },
@@ -2818,7 +2818,7 @@ var binaries = {
           glibc: {
             binaryPath: "editorconfig-checker",
             contentType: "tar.gz",
-            hash: "eea4e20653cd00167ea074671891ebaa851150d2ac1525a8c343ba16820e7109",
+            hash: "sha256:eea4e20653cd00167ea074671891ebaa851150d2ac1525a8c343ba16820e7109",
             url: "https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.11.1/editorconfig-checker-linux-amd64.tar.gz",
           },
         },
@@ -2826,7 +2826,7 @@ var binaries = {
           glibc: {
             binaryPath: "editorconfig-checker",
             contentType: "tar.gz",
-            hash: "26c34559bda51abb689a820f9804fdf619347a01dc532a8772682648aa7333c6",
+            hash: "sha256:26c34559bda51abb689a820f9804fdf619347a01dc532a8772682648aa7333c6",
             url: "https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.11.1/editorconfig-checker-linux-arm64.tar.gz",
           },
         },
@@ -2836,7 +2836,7 @@ var binaries = {
           unknown: {
             binaryPath: "editorconfig-checker.exe",
             contentType: "tar.gz",
-            hash: "b0e4fd76e9b18a7f07a370ab1496c5d27b9434257f364deb2643871f0b32af2b",
+            hash: "sha256:b0e4fd76e9b18a7f07a370ab1496c5d27b9434257f364deb2643871f0b32af2b",
             url: "https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.11.1/editorconfig-checker-windows-amd64.tar.gz",
           },
         },
@@ -2844,7 +2844,7 @@ var binaries = {
           unknown: {
             binaryPath: "editorconfig-checker.exe",
             contentType: "tar.gz",
-            hash: "511c00110975bf4a4bd0863051fd04bb73f5bbaeab41e9b7738d18c0cf38932c",
+            hash: "sha256:511c00110975bf4a4bd0863051fd04bb73f5bbaeab41e9b7738d18c0cf38932c",
             url: "https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.11.1/editorconfig-checker-windows-arm64.tar.gz",
           },
         },
@@ -2859,14 +2859,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "2ad7d0a6e1ea67ab10a22cc06825fdc776511e8f412926d1c752b630eac12e02",
+            hash: "sha256:2ad7d0a6e1ea67ab10a22cc06825fdc776511e8f412926d1c752b630eac12e02",
             url: "https://github.com/antonmedv/fx/releases/download/39.2.0/fx_darwin_amd64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "5d7dadbf8ac4e4a55b5b6d31bdd958b90823292997ba9ddae395f66417bb4a9b",
+            hash: "sha256:5d7dadbf8ac4e4a55b5b6d31bdd958b90823292997ba9ddae395f66417bb4a9b",
             url: "https://github.com/antonmedv/fx/releases/download/39.2.0/fx_darwin_arm64",
           },
         },
@@ -2875,14 +2875,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "17ea6549c7cf0b8be5ec109d04da7fbf1d5de9f7b99d957a6215081933528afe",
+            hash: "sha256:17ea6549c7cf0b8be5ec109d04da7fbf1d5de9f7b99d957a6215081933528afe",
             url: "https://github.com/antonmedv/fx/releases/download/39.2.0/fx_linux_amd64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "85ea8435b0a80b6d31ffa9f61ac9b67d9bb8f0ffffabdfe5e7e587b07a0a0684",
+            hash: "sha256:85ea8435b0a80b6d31ffa9f61ac9b67d9bb8f0ffffabdfe5e7e587b07a0a0684",
             url: "https://github.com/antonmedv/fx/releases/download/39.2.0/fx_linux_arm64",
           },
         },
@@ -2891,14 +2891,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "00fbddd7bd67f747a51aecc0a5bafcc695a21dfae7b912684510722c8e2d6d22",
+            hash: "sha256:00fbddd7bd67f747a51aecc0a5bafcc695a21dfae7b912684510722c8e2d6d22",
             url: "https://github.com/antonmedv/fx/releases/download/39.2.0/fx_windows_amd64.exe",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "10d4e3ab80b2d28ee9335979384192fb643bf1e868e3f0c29e59f77dd5ae4766",
+            hash: "sha256:10d4e3ab80b2d28ee9335979384192fb643bf1e868e3f0c29e59f77dd5ae4766",
             url: "https://github.com/antonmedv/fx/releases/download/39.2.0/fx_windows_arm64.exe",
           },
         },
@@ -2914,7 +2914,7 @@ var binaries = {
           unknown: {
             binaryPath: "gcrane",
             contentType: "tar.gz",
-            hash: "f31075b3375f79b406a600e090d5c4778b3c6598a01c817dc7898c05c7c00a56",
+            hash: "sha256:f31075b3375f79b406a600e090d5c4778b3c6598a01c817dc7898c05c7c00a56",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Darwin_x86_64.tar.gz",
           },
         },
@@ -2922,7 +2922,7 @@ var binaries = {
           unknown: {
             binaryPath: "gcrane",
             contentType: "tar.gz",
-            hash: "11cc3640e53473eb0d8c501068573e52a259f4d82177e6dd11b7bacb8955459e",
+            hash: "sha256:11cc3640e53473eb0d8c501068573e52a259f4d82177e6dd11b7bacb8955459e",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Darwin_arm64.tar.gz",
           },
         },
@@ -2932,7 +2932,7 @@ var binaries = {
           glibc: {
             binaryPath: "gcrane",
             contentType: "tar.gz",
-            hash: "5c16d8ddb971cb1d5e6ed8b1e743da8224414eeba2c2762d8f1a61b2f095699e",
+            hash: "sha256:5c16d8ddb971cb1d5e6ed8b1e743da8224414eeba2c2762d8f1a61b2f095699e",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Linux_x86_64.tar.gz",
           },
         },
@@ -2940,7 +2940,7 @@ var binaries = {
           glibc: {
             binaryPath: "gcrane",
             contentType: "tar.gz",
-            hash: "1f4c647b7bb260ab5435661df5b526cf59950ebf95201790db7183ac189cbcbd",
+            hash: "sha256:1f4c647b7bb260ab5435661df5b526cf59950ebf95201790db7183ac189cbcbd",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Linux_arm64.tar.gz",
           },
         },
@@ -2950,7 +2950,7 @@ var binaries = {
           unknown: {
             binaryPath: "gcrane.exe",
             contentType: "tar.gz",
-            hash: "2309f41ce9a31b6096fd590a57b00b0fd1d6dc41d315dc820795f64be070fe03",
+            hash: "sha256:2309f41ce9a31b6096fd590a57b00b0fd1d6dc41d315dc820795f64be070fe03",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Windows_x86_64.tar.gz",
           },
         },
@@ -2958,7 +2958,7 @@ var binaries = {
           unknown: {
             binaryPath: "gcrane.exe",
             contentType: "tar.gz",
-            hash: "d265afe5d393ac5a8be92f447e3839a45160aa189b8ca57611f3649f35519862",
+            hash: "sha256:d265afe5d393ac5a8be92f447e3839a45160aa189b8ca57611f3649f35519862",
             url: "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Windows_arm64.tar.gz",
           },
         },
@@ -2974,7 +2974,7 @@ var binaries = {
           unknown: {
             binaryPath: "git-cliff-2.13.1/git-cliff",
             contentType: "tar.gz",
-            hash: "6e60ae390d375cecb9d8008c49f0e724a8dfe40390b532ef5501e421d2cc8acb",
+            hash: "sha256:6e60ae390d375cecb9d8008c49f0e724a8dfe40390b532ef5501e421d2cc8acb",
             url: "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -2982,7 +2982,7 @@ var binaries = {
           unknown: {
             binaryPath: "git-cliff-2.13.1/git-cliff",
             contentType: "tar.gz",
-            hash: "21547ae4a0421164070ab75c2522864ea5565858a011fabc5f583061b20f1226",
+            hash: "sha256:21547ae4a0421164070ab75c2522864ea5565858a011fabc5f583061b20f1226",
             url: "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -2992,13 +2992,13 @@ var binaries = {
           glibc: {
             binaryPath: "git-cliff-2.13.1/git-cliff",
             contentType: "tar.gz",
-            hash: "9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546",
+            hash: "sha256:9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546",
             url: "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "git-cliff-2.13.1/git-cliff",
             contentType: "tar.gz",
-            hash: "200d2535da6d9703f3bcc8a4d159c3b55eacdb01cf2148c55b3eee9dd04d5249",
+            hash: "sha256:200d2535da6d9703f3bcc8a4d159c3b55eacdb01cf2148c55b3eee9dd04d5249",
             url: "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -3006,13 +3006,13 @@ var binaries = {
           glibc: {
             binaryPath: "git-cliff-2.13.1/git-cliff",
             contentType: "tar.gz",
-            hash: "9619b7f0c584229f8a2331c1905afe88bd938bdc9102926c2073836a42f02455",
+            hash: "sha256:9619b7f0c584229f8a2331c1905afe88bd938bdc9102926c2073836a42f02455",
             url: "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-aarch64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "git-cliff-2.13.1/git-cliff",
             contentType: "tar.gz",
-            hash: "4054c124b926c117f3fa048939bc8be0a954f29f3b6f367627e8cb22c1971882",
+            hash: "sha256:4054c124b926c117f3fa048939bc8be0a954f29f3b6f367627e8cb22c1971882",
             url: "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -3022,7 +3022,7 @@ var binaries = {
           unknown: {
             binaryPath: "git-cliff-2.13.1/git-cliff.exe",
             contentType: "zip",
-            hash: "3ae3a5549e85c7ad5b20192ebcfee4371269deca51255f6f2f2e051c6541f5ca",
+            hash: "sha256:3ae3a5549e85c7ad5b20192ebcfee4371269deca51255f6f2f2e051c6541f5ca",
             url: "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -3030,7 +3030,7 @@ var binaries = {
           unknown: {
             binaryPath: "git-cliff-2.13.1/git-cliff.exe",
             contentType: "zip",
-            hash: "03a623191fe575bc0024e2ebc61cc861cebd3ba84b93ff13b002c42e8248cd3f",
+            hash: "sha256:03a623191fe575bc0024e2ebc61cc861cebd3ba84b93ff13b002c42e8248cd3f",
             url: "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-aarch64-pc-windows-msvc.zip",
           },
         },
@@ -3047,7 +3047,7 @@ var binaries = {
           unknown: {
             binaryPath: "gitleaks-8.30.1/gitleaks",
             contentType: "tar.gz",
-            hash: "dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709",
+            hash: "sha256:dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709",
             url: "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_x64.tar.gz",
           },
         },
@@ -3055,7 +3055,7 @@ var binaries = {
           unknown: {
             binaryPath: "gitleaks-8.30.1/gitleaks",
             contentType: "tar.gz",
-            hash: "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5",
+            hash: "sha256:b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5",
             url: "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_arm64.tar.gz",
           },
         },
@@ -3065,7 +3065,7 @@ var binaries = {
           glibc: {
             binaryPath: "gitleaks-8.30.1/gitleaks",
             contentType: "tar.gz",
-            hash: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+            hash: "sha256:551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
             url: "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz",
           },
         },
@@ -3073,7 +3073,7 @@ var binaries = {
           glibc: {
             binaryPath: "gitleaks-8.30.1/gitleaks",
             contentType: "tar.gz",
-            hash: "e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080",
+            hash: "sha256:e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080",
             url: "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz",
           },
         },
@@ -3083,7 +3083,7 @@ var binaries = {
           unknown: {
             binaryPath: "gitleaks-8.30.1/gitleaks.exe",
             contentType: "zip",
-            hash: "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e",
+            hash: "sha256:d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e",
             url: "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip",
           },
         },
@@ -3091,7 +3091,7 @@ var binaries = {
           unknown: {
             binaryPath: "gitleaks-8.30.1/gitleaks.exe",
             contentType: "zip",
-            hash: "b95f5e4f5c425cedca7ee203d9afd29597e692c4924a12ed42f970537c72cc0f",
+            hash: "sha256:b95f5e4f5c425cedca7ee203d9afd29597e692c4924a12ed42f970537c72cc0f",
             url: "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_arm64.zip",
           },
         },
@@ -3107,7 +3107,7 @@ var binaries = {
           unknown: {
             binaryPath: "migrate",
             contentType: "tar.gz",
-            hash: "e010d5d1792fa9b368c846f0aa297982322aa5739e784608d3cea653d297e0f4",
+            hash: "sha256:e010d5d1792fa9b368c846f0aa297982322aa5739e784608d3cea653d297e0f4",
             url: "https://github.com/golang-migrate/migrate/releases/download/v4.19.1/migrate.darwin-amd64.tar.gz",
           },
         },
@@ -3115,7 +3115,7 @@ var binaries = {
           unknown: {
             binaryPath: "migrate",
             contentType: "tar.gz",
-            hash: "a8cc8657afd1c2c93c78e8b77fd2275d150c29ebc1fff0e8fe0be68751503468",
+            hash: "sha256:a8cc8657afd1c2c93c78e8b77fd2275d150c29ebc1fff0e8fe0be68751503468",
             url: "https://github.com/golang-migrate/migrate/releases/download/v4.19.1/migrate.darwin-arm64.tar.gz",
           },
         },
@@ -3125,7 +3125,7 @@ var binaries = {
           glibc: {
             binaryPath: "migrate",
             contentType: "tar.gz",
-            hash: "2ac648fbd1b127b69ab5a7b33cf96212178f71e22379fc50573630c6f4c7ce18",
+            hash: "sha256:2ac648fbd1b127b69ab5a7b33cf96212178f71e22379fc50573630c6f4c7ce18",
             url: "https://github.com/golang-migrate/migrate/releases/download/v4.19.1/migrate.linux-amd64.tar.gz",
           },
         },
@@ -3133,7 +3133,7 @@ var binaries = {
           glibc: {
             binaryPath: "migrate",
             contentType: "tar.gz",
-            hash: "2fea2455c0f3f07cc3f4b98471c951ad1a716059574b20b6416bd1e9058751c5",
+            hash: "sha256:2fea2455c0f3f07cc3f4b98471c951ad1a716059574b20b6416bd1e9058751c5",
             url: "https://github.com/golang-migrate/migrate/releases/download/v4.19.1/migrate.linux-arm64.tar.gz",
           },
         },
@@ -3143,7 +3143,7 @@ var binaries = {
           unknown: {
             binaryPath: "migrate.exe",
             contentType: "zip",
-            hash: "d2537dfd991787c1e458965c4f49098c5a72f943bfc9d975c573a9c245f7ba2e",
+            hash: "sha256:d2537dfd991787c1e458965c4f49098c5a72f943bfc9d975c573a9c245f7ba2e",
             url: "https://github.com/golang-migrate/migrate/releases/download/v4.19.1/migrate.windows-amd64.zip",
           },
         },
@@ -3151,7 +3151,7 @@ var binaries = {
           unknown: {
             binaryPath: "migrate.exe",
             contentType: "zip",
-            hash: "f626ae8027741a6f879ee00d72433dc17edc00bad91cbb8a7192c91cb1a4ca88",
+            hash: "sha256:f626ae8027741a6f879ee00d72433dc17edc00bad91cbb8a7192c91cb1a4ca88",
             url: "https://github.com/golang-migrate/migrate/releases/download/v4.19.1/migrate.windows-arm64.zip",
           },
         },
@@ -3167,7 +3167,7 @@ var binaries = {
           unknown: {
             binaryPath: "golangci-lint-2.13.1/golangci-lint",
             contentType: "tar.gz",
-            hash: "2c373363953e4e0bee2a03b7fe864a5eb6a3822927cb077d9ca33f2ae3cb2da2",
+            hash: "sha256:2c373363953e4e0bee2a03b7fe864a5eb6a3822927cb077d9ca33f2ae3cb2da2",
             url: "https://github.com/golangci/golangci-lint/releases/download/v2.13.1/golangci-lint-2.13.1-darwin-amd64.tar.gz",
           },
         },
@@ -3175,7 +3175,7 @@ var binaries = {
           unknown: {
             binaryPath: "golangci-lint-2.13.1/golangci-lint",
             contentType: "tar.gz",
-            hash: "0c9818baf6fb8ad26c6d2ef51b68d5a1e260ef07727036b1431647cc44637c7c",
+            hash: "sha256:0c9818baf6fb8ad26c6d2ef51b68d5a1e260ef07727036b1431647cc44637c7c",
             url: "https://github.com/golangci/golangci-lint/releases/download/v2.13.1/golangci-lint-2.13.1-darwin-arm64.tar.gz",
           },
         },
@@ -3185,7 +3185,7 @@ var binaries = {
           unknown: {
             binaryPath: "golangci-lint-2.13.1/golangci-lint",
             contentType: "tar.gz",
-            hash: "3d3199ff1248ed0f0e52a5577bbb096f109c624e8a7cae6565ff396ac9a8cea2",
+            hash: "sha256:3d3199ff1248ed0f0e52a5577bbb096f109c624e8a7cae6565ff396ac9a8cea2",
             url: "https://github.com/golangci/golangci-lint/releases/download/v2.13.1/golangci-lint-2.13.1-freebsd-amd64.tar.gz",
           },
         },
@@ -3193,7 +3193,7 @@ var binaries = {
           unknown: {
             binaryPath: "golangci-lint-2.13.1/golangci-lint",
             contentType: "tar.gz",
-            hash: "3448c2af740b56bdecf312cbec71147460bcd251751420e7d2b3e0e6f26a8a8a",
+            hash: "sha256:3448c2af740b56bdecf312cbec71147460bcd251751420e7d2b3e0e6f26a8a8a",
             url: "https://github.com/golangci/golangci-lint/releases/download/v2.13.1/golangci-lint-2.13.1-freebsd-arm64.tar.gz",
           },
         },
@@ -3203,7 +3203,7 @@ var binaries = {
           glibc: {
             binaryPath: "golangci-lint-2.13.1/golangci-lint",
             contentType: "tar.gz",
-            hash: "b17bfbc9d4aaa48be7f4f1ce3240bc3d8200c870c072bacf15c26219e2cfb9cc",
+            hash: "sha256:b17bfbc9d4aaa48be7f4f1ce3240bc3d8200c870c072bacf15c26219e2cfb9cc",
             url: "https://github.com/golangci/golangci-lint/releases/download/v2.13.1/golangci-lint-2.13.1-linux-amd64.tar.gz",
           },
         },
@@ -3211,7 +3211,7 @@ var binaries = {
           glibc: {
             binaryPath: "golangci-lint-2.13.1/golangci-lint",
             contentType: "tar.gz",
-            hash: "908317c23db18448f924e853b3d8a659fd919614cd438f224810a4053daa2607",
+            hash: "sha256:908317c23db18448f924e853b3d8a659fd919614cd438f224810a4053daa2607",
             url: "https://github.com/golangci/golangci-lint/releases/download/v2.13.1/golangci-lint-2.13.1-linux-arm64.tar.gz",
           },
         },
@@ -3221,7 +3221,7 @@ var binaries = {
           unknown: {
             binaryPath: "golangci-lint-2.13.1/golangci-lint.exe",
             contentType: "zip",
-            hash: "cc119bdd57d2b35ce36fbc174b54949e1a1e45f2cadaf64372cc799cabaf88a9",
+            hash: "sha256:cc119bdd57d2b35ce36fbc174b54949e1a1e45f2cadaf64372cc799cabaf88a9",
             url: "https://github.com/golangci/golangci-lint/releases/download/v2.13.1/golangci-lint-2.13.1-windows-amd64.zip",
           },
         },
@@ -3229,7 +3229,7 @@ var binaries = {
           unknown: {
             binaryPath: "golangci-lint-2.13.1/golangci-lint.exe",
             contentType: "zip",
-            hash: "88ee9636ab1eeaff9384a8894b377fb8c2f4a820310ffa2ff5bafb1173dc87ce",
+            hash: "sha256:88ee9636ab1eeaff9384a8894b377fb8c2f4a820310ffa2ff5bafb1173dc87ce",
             url: "https://github.com/golangci/golangci-lint/releases/download/v2.13.1/golangci-lint-2.13.1-windows-arm64.zip",
           },
         },
@@ -3244,14 +3244,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "bdaaddcaf1bce02a31a580242db507cfec35354ea14fb9e4a6c6aea1031422d5",
+            hash: "sha256:bdaaddcaf1bce02a31a580242db507cfec35354ea14fb9e4a6c6aea1031422d5",
             url: "https://github.com/pressly/goose/releases/download/v3.27.3/goose_darwin_x86_64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "86bf41d1a81e2eabc0f621dc020303513364d9cad9e3d1d4987fdfcf7dd8f4ae",
+            hash: "sha256:86bf41d1a81e2eabc0f621dc020303513364d9cad9e3d1d4987fdfcf7dd8f4ae",
             url: "https://github.com/pressly/goose/releases/download/v3.27.3/goose_darwin_arm64",
           },
         },
@@ -3260,14 +3260,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "ca18112e2438b3ad608af9a5938beafd01fa36a4a19a3edbe4f29226ca5c8533",
+            hash: "sha256:ca18112e2438b3ad608af9a5938beafd01fa36a4a19a3edbe4f29226ca5c8533",
             url: "https://github.com/pressly/goose/releases/download/v3.27.3/goose_linux_x86_64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "a774a3ed3381352a795b2a019b604792965546f6f47b34b59896288d97bf4809",
+            hash: "sha256:a774a3ed3381352a795b2a019b604792965546f6f47b34b59896288d97bf4809",
             url: "https://github.com/pressly/goose/releases/download/v3.27.3/goose_linux_arm64",
           },
         },
@@ -3276,14 +3276,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "7957b982e4374a377649483229ed2f5e03dc53a0dc9e83a682c3d8fc48ca4b3e",
+            hash: "sha256:7957b982e4374a377649483229ed2f5e03dc53a0dc9e83a682c3d8fc48ca4b3e",
             url: "https://github.com/pressly/goose/releases/download/v3.27.3/goose_windows_x86_64.exe",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "add53a24a906e0f64f2dada1f1f570cb137b443c7b5e2957346aedca77458ed0",
+            hash: "sha256:add53a24a906e0f64f2dada1f1f570cb137b443c7b5e2957346aedca77458ed0",
             url: "https://github.com/pressly/goose/releases/download/v3.27.3/goose_windows_arm64.exe",
           },
         },
@@ -3299,7 +3299,7 @@ var binaries = {
           unknown: {
             binaryPath: "grype-0.117.0/grype",
             contentType: "tar.gz",
-            hash: "312ed375dcda6d8893b4ca5d517371fef1a50062ebb0b0dbe6bdb4ac2fb57c57",
+            hash: "sha256:312ed375dcda6d8893b4ca5d517371fef1a50062ebb0b0dbe6bdb4ac2fb57c57",
             url: "https://github.com/anchore/grype/releases/download/v0.117.0/grype_0.117.0_darwin_amd64.tar.gz",
           },
         },
@@ -3307,7 +3307,7 @@ var binaries = {
           unknown: {
             binaryPath: "grype-0.117.0/grype",
             contentType: "tar.gz",
-            hash: "bfcefa3f3b1690d9c77d847841b32ebd6106ab0e0e32f810924707e704d53584",
+            hash: "sha256:bfcefa3f3b1690d9c77d847841b32ebd6106ab0e0e32f810924707e704d53584",
             url: "https://github.com/anchore/grype/releases/download/v0.117.0/grype_0.117.0_darwin_arm64.tar.gz",
           },
         },
@@ -3317,7 +3317,7 @@ var binaries = {
           glibc: {
             binaryPath: "grype-0.117.0/grype",
             contentType: "tar.gz",
-            hash: "38525dab1e06f162ebaa02f94d82d1f807076b011a44180cf2777edf1a7b9c26",
+            hash: "sha256:38525dab1e06f162ebaa02f94d82d1f807076b011a44180cf2777edf1a7b9c26",
             url: "https://github.com/anchore/grype/releases/download/v0.117.0/grype_0.117.0_linux_amd64.tar.gz",
           },
         },
@@ -3325,7 +3325,7 @@ var binaries = {
           glibc: {
             binaryPath: "grype-0.117.0/grype",
             contentType: "tar.gz",
-            hash: "935f628bdf9331ffdd946931ea5fdb50045d3970ba52670cbeb44a88f127291b",
+            hash: "sha256:935f628bdf9331ffdd946931ea5fdb50045d3970ba52670cbeb44a88f127291b",
             url: "https://github.com/anchore/grype/releases/download/v0.117.0/grype_0.117.0_linux_arm64.tar.gz",
           },
         },
@@ -3335,7 +3335,7 @@ var binaries = {
           unknown: {
             binaryPath: "grype-0.117.0/grype.exe",
             contentType: "zip",
-            hash: "7728ee9c06792e62444bd651274e4dd1e30eec02eee1266bb6c9c9d237d0f0cb",
+            hash: "sha256:7728ee9c06792e62444bd651274e4dd1e30eec02eee1266bb6c9c9d237d0f0cb",
             url: "https://github.com/anchore/grype/releases/download/v0.117.0/grype_0.117.0_windows_amd64.zip",
           },
         },
@@ -3350,14 +3350,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "ffe9bb18b23d5ed1eae50237aecdbb523d016e96da0bd4e7aa432040acfc3fde",
+            hash: "sha256:ffe9bb18b23d5ed1eae50237aecdbb523d016e96da0bd4e7aa432040acfc3fde",
             url: "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-macos-x86_64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "5c09f3213f8e40406abe048233d985eebef336d4a6a20021be47fadb6cf480a2",
+            hash: "sha256:5c09f3213f8e40406abe048233d985eebef336d4a6a20021be47fadb6cf480a2",
             url: "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-macos-arm64",
           },
         },
@@ -3366,14 +3366,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507",
+            hash: "sha256:c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507",
             url: "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "f6198ef8090f404dbb771abfee086eb8c48ac177f30da7fd3510aca35b344b5d",
+            hash: "sha256:f6198ef8090f404dbb771abfee086eb8c48ac177f30da7fd3510aca35b344b5d",
             url: "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-arm64",
           },
         },
@@ -3382,7 +3382,7 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "01d927294962b5387f9ead4f18679158452be4f17c765ad0bdffe5264b9c7b0a",
+            hash: "sha256:01d927294962b5387f9ead4f18679158452be4f17c765ad0bdffe5264b9c7b0a",
             url: "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-windows-x86_64.exe",
           },
         },
@@ -3398,7 +3398,7 @@ var binaries = {
           unknown: {
             binaryPath: "harper-cli",
             contentType: "tar.gz",
-            hash: "84274c96a3bc80fb4b37226c03fc701a9d2ad303112655fc2b5b13074a767290",
+            hash: "sha256:84274c96a3bc80fb4b37226c03fc701a9d2ad303112655fc2b5b13074a767290",
             url: "https://github.com/Automattic/harper/releases/download/v2.8.0/harper-cli-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -3406,7 +3406,7 @@ var binaries = {
           unknown: {
             binaryPath: "harper-cli",
             contentType: "tar.gz",
-            hash: "b3dfa4f439462f2d4a6cc4ce36e01802d128716f384ff2f2fd9477e96e7eeae0",
+            hash: "sha256:b3dfa4f439462f2d4a6cc4ce36e01802d128716f384ff2f2fd9477e96e7eeae0",
             url: "https://github.com/Automattic/harper/releases/download/v2.8.0/harper-cli-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -3416,13 +3416,13 @@ var binaries = {
           glibc: {
             binaryPath: "harper-cli",
             contentType: "tar.gz",
-            hash: "9afce391415e548338c5300def7004a1905bcd8b80b954f9c12a6802e6b2ec60",
+            hash: "sha256:9afce391415e548338c5300def7004a1905bcd8b80b954f9c12a6802e6b2ec60",
             url: "https://github.com/Automattic/harper/releases/download/v2.8.0/harper-cli-x86_64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "harper-cli",
             contentType: "tar.gz",
-            hash: "0faf7dd78e633ae8950c8cce091a654306b53dcfa47a8b86aae53f8e29a91100",
+            hash: "sha256:0faf7dd78e633ae8950c8cce091a654306b53dcfa47a8b86aae53f8e29a91100",
             url: "https://github.com/Automattic/harper/releases/download/v2.8.0/harper-cli-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -3430,13 +3430,13 @@ var binaries = {
           glibc: {
             binaryPath: "harper-cli",
             contentType: "tar.gz",
-            hash: "eeac4cf443edb298a59ad3f980350a4276cac7200d69c73d85abf6eab74871f5",
+            hash: "sha256:eeac4cf443edb298a59ad3f980350a4276cac7200d69c73d85abf6eab74871f5",
             url: "https://github.com/Automattic/harper/releases/download/v2.8.0/harper-cli-aarch64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "harper-cli",
             contentType: "tar.gz",
-            hash: "9b2d374efe4e3427c31181e249d9b15acda9b8f786d8bd8e7b0cf96766dd739a",
+            hash: "sha256:9b2d374efe4e3427c31181e249d9b15acda9b8f786d8bd8e7b0cf96766dd739a",
             url: "https://github.com/Automattic/harper/releases/download/v2.8.0/harper-cli-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -3446,7 +3446,7 @@ var binaries = {
           unknown: {
             binaryPath: "harper-cli.exe",
             contentType: "zip",
-            hash: "e1983b02ed2862f4660757c7aa5f71c49c29830898f1760cdf043d3260005fa1",
+            hash: "sha256:e1983b02ed2862f4660757c7aa5f71c49c29830898f1760cdf043d3260005fa1",
             url: "https://github.com/Automattic/harper/releases/download/v2.8.0/harper-cli-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -3461,14 +3461,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "e94b266e3c26690550006abe63152b782280f4e14374accdf04cbde844f00bc0",
+            hash: "sha256:e94b266e3c26690550006abe63152b782280f4e14374accdf04cbde844f00bc0",
             url: "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-macos-amd64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "2d75340ba57a4b4b4c8708a21c2dc8e958a48aaa8bba13b27f77f6e4c0eca07e",
+            hash: "sha256:2d75340ba57a4b4b4c8708a21c2dc8e958a48aaa8bba13b27f77f6e4c0eca07e",
             url: "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-macos-arm64",
           },
         },
@@ -3477,14 +3477,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f",
+            hash: "sha256:b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f",
             url: "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-amd64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "8b85c817833814ddca00a144c33705546355afccf0cf39b188f3cdb48b852309",
+            hash: "sha256:8b85c817833814ddca00a144c33705546355afccf0cf39b188f3cdb48b852309",
             url: "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-arm64",
           },
         },
@@ -3493,14 +3493,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "a6fc67fedaf9128a3309a1e2ebb8b986aeccf70122ee46d2cb4849e423f0c627",
+            hash: "sha256:a6fc67fedaf9128a3309a1e2ebb8b986aeccf70122ee46d2cb4849e423f0c627",
             url: "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-amd64.exe",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "083b5377392bc57cf27052b6d20a2d927770683bca844632901ff38b4b7b0ac7",
+            hash: "sha256:083b5377392bc57cf27052b6d20a2d927770683bca844632901ff38b4b7b0ac7",
             url: "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-arm64.exe",
           },
         },
@@ -3516,7 +3516,7 @@ var binaries = {
           unknown: {
             binaryPath: "just-1.58.0/just",
             contentType: "tar.gz",
-            hash: "9a09cfef66aaa79da58203970103a0684307716caaabd3e9844cacc4dc0f4023",
+            hash: "sha256:9a09cfef66aaa79da58203970103a0684307716caaabd3e9844cacc4dc0f4023",
             url: "https://github.com/casey/just/releases/download/1.58.0/just-1.58.0-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -3524,7 +3524,7 @@ var binaries = {
           unknown: {
             binaryPath: "just-1.58.0/just",
             contentType: "tar.gz",
-            hash: "50ae3e996c974a0bf32ea7d10f495070df33f1b43e0616b2769e3d4821ed8f48",
+            hash: "sha256:50ae3e996c974a0bf32ea7d10f495070df33f1b43e0616b2769e3d4821ed8f48",
             url: "https://github.com/casey/just/releases/download/1.58.0/just-1.58.0-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -3534,7 +3534,7 @@ var binaries = {
           musl: {
             binaryPath: "just-1.58.0/just",
             contentType: "tar.gz",
-            hash: "4a5cc2f53e6f0f8c59092a6cc38291eb729d46a7dd95d3ae582008881b84931d",
+            hash: "sha256:4a5cc2f53e6f0f8c59092a6cc38291eb729d46a7dd95d3ae582008881b84931d",
             url: "https://github.com/casey/just/releases/download/1.58.0/just-1.58.0-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -3542,7 +3542,7 @@ var binaries = {
           musl: {
             binaryPath: "just-1.58.0/just",
             contentType: "tar.gz",
-            hash: "748237128c4c40cbdabc65e841d05ceba13cc23a91eaba395495894c1d9764df",
+            hash: "sha256:748237128c4c40cbdabc65e841d05ceba13cc23a91eaba395495894c1d9764df",
             url: "https://github.com/casey/just/releases/download/1.58.0/just-1.58.0-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -3552,7 +3552,7 @@ var binaries = {
           unknown: {
             binaryPath: "just-1.58.0/just.exe",
             contentType: "zip",
-            hash: "759f16fb7aa17c5c8b9594b6d4a8c1a6630dfd042cf2b3ff84841454d3d188dc",
+            hash: "sha256:759f16fb7aa17c5c8b9594b6d4a8c1a6630dfd042cf2b3ff84841454d3d188dc",
             url: "https://github.com/casey/just/releases/download/1.58.0/just-1.58.0-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -3560,7 +3560,7 @@ var binaries = {
           unknown: {
             binaryPath: "just-1.58.0/just.exe",
             contentType: "zip",
-            hash: "3a39ed629eb67678976c811a4da46f7985a2c22f4dbabe017b8b2eb5ceb5d01c",
+            hash: "sha256:3a39ed629eb67678976c811a4da46f7985a2c22f4dbabe017b8b2eb5ceb5d01c",
             url: "https://github.com/casey/just/releases/download/1.58.0/just-1.58.0-aarch64-pc-windows-msvc.zip",
           },
         },
@@ -3576,7 +3576,7 @@ var binaries = {
           unknown: {
             binaryPath: "kube-linter",
             contentType: "tar.gz",
-            hash: "c62e8af3c9df2557c7a3922119ea1b35597794737d1ccad493f63a0d66e7b8fc",
+            hash: "sha256:c62e8af3c9df2557c7a3922119ea1b35597794737d1ccad493f63a0d66e7b8fc",
             url: "https://github.com/stackrox/kube-linter/releases/download/v0.8.3/kube-linter-darwin.tar.gz",
           },
         },
@@ -3584,7 +3584,7 @@ var binaries = {
           unknown: {
             binaryPath: "kube-linter",
             contentType: "tar.gz",
-            hash: "6e3443a8ff8625a9fc31a38682c783988d7559018f7ff707a4f8c77c18c92f14",
+            hash: "sha256:6e3443a8ff8625a9fc31a38682c783988d7559018f7ff707a4f8c77c18c92f14",
             url: "https://github.com/stackrox/kube-linter/releases/download/v0.8.3/kube-linter-darwin_arm64.tar.gz",
           },
         },
@@ -3594,7 +3594,7 @@ var binaries = {
           glibc: {
             binaryPath: "kube-linter",
             contentType: "tar.gz",
-            hash: "1a6d8419b11971372971fdbc22682b684ebfb7cf1c39591662d1b6ca736c41df",
+            hash: "sha256:1a6d8419b11971372971fdbc22682b684ebfb7cf1c39591662d1b6ca736c41df",
             url: "https://github.com/stackrox/kube-linter/releases/download/v0.8.3/kube-linter-linux.tar.gz",
           },
         },
@@ -3602,7 +3602,7 @@ var binaries = {
           glibc: {
             binaryPath: "kube-linter",
             contentType: "tar.gz",
-            hash: "802e1b09eabd08f6f0a060a6b8ab2bf7bc7e6bf4f673bb2692303704c84b3e22",
+            hash: "sha256:802e1b09eabd08f6f0a060a6b8ab2bf7bc7e6bf4f673bb2692303704c84b3e22",
             url: "https://github.com/stackrox/kube-linter/releases/download/v0.8.3/kube-linter-linux_arm64.tar.gz",
           },
         },
@@ -3612,7 +3612,7 @@ var binaries = {
           unknown: {
             binaryPath: "kube-linter.exe",
             contentType: "tar.gz",
-            hash: "27132f8505d156e3877c6235970f567f47bedf11102f79fd6780d4ab536f6525",
+            hash: "sha256:27132f8505d156e3877c6235970f567f47bedf11102f79fd6780d4ab536f6525",
             url: "https://github.com/stackrox/kube-linter/releases/download/v0.8.3/kube-linter-windows.tar.gz",
           },
         },
@@ -3620,7 +3620,7 @@ var binaries = {
           unknown: {
             binaryPath: "kube-linter.exe",
             contentType: "tar.gz",
-            hash: "23e6bf5fe694219187c24a01692acdfcfb077aac821cb3d5bdf393f5a536f599",
+            hash: "sha256:23e6bf5fe694219187c24a01692acdfcfb077aac821cb3d5bdf393f5a536f599",
             url: "https://github.com/stackrox/kube-linter/releases/download/v0.8.3/kube-linter-windows_arm64.tar.gz",
           },
         },
@@ -3637,7 +3637,7 @@ var binaries = {
           unknown: {
             binaryPath: "kubeconform",
             contentType: "tar.gz",
-            hash: "71dbc87ac9f24099a62b93570e65aa06312ba6ac8aea63b7f86e9d999edf5a92",
+            hash: "sha256:71dbc87ac9f24099a62b93570e65aa06312ba6ac8aea63b7f86e9d999edf5a92",
             url: "https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-darwin-amd64.tar.gz",
           },
         },
@@ -3645,7 +3645,7 @@ var binaries = {
           unknown: {
             binaryPath: "kubeconform",
             contentType: "tar.gz",
-            hash: "f84f4dfbebf4a6b0b230385fa065a39ea35e02608c2b50d025dcf64775a69d67",
+            hash: "sha256:f84f4dfbebf4a6b0b230385fa065a39ea35e02608c2b50d025dcf64775a69d67",
             url: "https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-darwin-arm64.tar.gz",
           },
         },
@@ -3655,7 +3655,7 @@ var binaries = {
           glibc: {
             binaryPath: "kubeconform",
             contentType: "tar.gz",
-            hash: "9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883",
+            hash: "sha256:9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883",
             url: "https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz",
           },
         },
@@ -3663,7 +3663,7 @@ var binaries = {
           glibc: {
             binaryPath: "kubeconform",
             contentType: "tar.gz",
-            hash: "1f53fc8e81258197a35e8603054162a5af1de8c5af13746c71ab680d9534ed87",
+            hash: "sha256:1f53fc8e81258197a35e8603054162a5af1de8c5af13746c71ab680d9534ed87",
             url: "https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-arm64.tar.gz",
           },
         },
@@ -3673,7 +3673,7 @@ var binaries = {
           unknown: {
             binaryPath: "kubeconform.exe",
             contentType: "zip",
-            hash: "e3f56102bcf4f50b034a567e2482a1c5330799983ddd655952310211aef73d93",
+            hash: "sha256:e3f56102bcf4f50b034a567e2482a1c5330799983ddd655952310211aef73d93",
             url: "https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-windows-amd64.zip",
           },
         },
@@ -3681,7 +3681,7 @@ var binaries = {
           unknown: {
             binaryPath: "kubeconform.exe",
             contentType: "zip",
-            hash: "4f3c9889f5f3a1e4aba84f9212f599ad3164d1fb32175fba3a53b505b0fffd0f",
+            hash: "sha256:4f3c9889f5f3a1e4aba84f9212f599ad3164d1fb32175fba3a53b505b0fffd0f",
             url: "https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-windows-arm64.zip",
           },
         },
@@ -3696,14 +3696,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "gz",
-            hash: "b9ab6e5de57b1fdd1ffe77a9d57fbec34539b50481fa5c38f91f19fe5175dcc5",
+            hash: "sha256:b9ab6e5de57b1fdd1ffe77a9d57fbec34539b50481fa5c38f91f19fe5175dcc5",
             url: "https://github.com/evilmartians/lefthook/releases/download/v2.1.11/lefthook_2.1.11_MacOS_x86_64.gz",
           },
         },
         arm64: {
           unknown: {
             contentType: "gz",
-            hash: "2d2b312730f3d900354f5f0eb37abf31ff65a033021be761f25a2eb709c9cdbc",
+            hash: "sha256:2d2b312730f3d900354f5f0eb37abf31ff65a033021be761f25a2eb709c9cdbc",
             url: "https://github.com/evilmartians/lefthook/releases/download/v2.1.11/lefthook_2.1.11_MacOS_arm64.gz",
           },
         },
@@ -3712,14 +3712,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "gz",
-            hash: "224fffbe03fbb7a43ad82fd761938edb26b779a41fb2b7b0747d23bed495d317",
+            hash: "sha256:224fffbe03fbb7a43ad82fd761938edb26b779a41fb2b7b0747d23bed495d317",
             url: "https://github.com/evilmartians/lefthook/releases/download/v2.1.11/lefthook_2.1.11_Freebsd_x86_64.gz",
           },
         },
         arm64: {
           unknown: {
             contentType: "gz",
-            hash: "306eb4719c3df0bcd7c218ee47d91b0b0e1074c7c5a048177def98d6058de3ed",
+            hash: "sha256:306eb4719c3df0bcd7c218ee47d91b0b0e1074c7c5a048177def98d6058de3ed",
             url: "https://github.com/evilmartians/lefthook/releases/download/v2.1.11/lefthook_2.1.11_Freebsd_arm64.gz",
           },
         },
@@ -3728,14 +3728,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "gz",
-            hash: "435aff51fc767a7f135717a4e3e4f3282c15e0a4ca4e2dfd1b54ef8241ee5f3f",
+            hash: "sha256:435aff51fc767a7f135717a4e3e4f3282c15e0a4ca4e2dfd1b54ef8241ee5f3f",
             url: "https://github.com/evilmartians/lefthook/releases/download/v2.1.11/lefthook_2.1.11_Linux_x86_64.gz",
           },
         },
         arm64: {
           glibc: {
             contentType: "gz",
-            hash: "94568fb0f7bc62eb7d7b110534f7bb01c5153551a3f364269e742fcfaa0b1c07",
+            hash: "sha256:94568fb0f7bc62eb7d7b110534f7bb01c5153551a3f364269e742fcfaa0b1c07",
             url: "https://github.com/evilmartians/lefthook/releases/download/v2.1.11/lefthook_2.1.11_Linux_aarch64.gz",
           },
         },
@@ -3744,14 +3744,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "gz",
-            hash: "8a95b530486272157863ab67fb51c99dd1aa107eed3c710d1a73a92560e1c85d",
+            hash: "sha256:8a95b530486272157863ab67fb51c99dd1aa107eed3c710d1a73a92560e1c85d",
             url: "https://github.com/evilmartians/lefthook/releases/download/v2.1.11/lefthook_2.1.11_Openbsd_x86_64.gz",
           },
         },
         arm64: {
           unknown: {
             contentType: "gz",
-            hash: "d3b77d0bc2597fa3937e3359c2a4c11b8bfcd7a7c43a8573c1a3ecf2a4aae31f",
+            hash: "sha256:d3b77d0bc2597fa3937e3359c2a4c11b8bfcd7a7c43a8573c1a3ecf2a4aae31f",
             url: "https://github.com/evilmartians/lefthook/releases/download/v2.1.11/lefthook_2.1.11_Openbsd_arm64.gz",
           },
         },
@@ -3760,14 +3760,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "a3d506b8d4bc421c22a0fe1e1e0c373e9bb7d413edcae3237a3518c7b78a2f5a",
+            hash: "sha256:a3d506b8d4bc421c22a0fe1e1e0c373e9bb7d413edcae3237a3518c7b78a2f5a",
             url: "https://github.com/evilmartians/lefthook/releases/download/v2.1.11/lefthook_2.1.11_Windows_x86_64.exe",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "7333ef649fcc41ee3140ffe2e8479c21bfcd9df2a69df0a9905a5fcf86166c7b",
+            hash: "sha256:7333ef649fcc41ee3140ffe2e8479c21bfcd9df2a69df0a9905a5fcf86166c7b",
             url: "https://github.com/evilmartians/lefthook/releases/download/v2.1.11/lefthook_2.1.11_Windows_arm64.exe",
           },
         },
@@ -3782,14 +3782,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "fc17fc642e95fd8bf7030ed661e86758bee654f6e11f1e31a5f21887f47f73ae",
+            hash: "sha256:fc17fc642e95fd8bf7030ed661e86758bee654f6e11f1e31a5f21887f47f73ae",
             url: "https://github.com/loeffel-io/ls-lint/releases/download/v2.3.1/ls-lint-darwin-amd64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "e4ed2ce2b7b61d6685769e34c6375ccecb14a3f00ee59438cf82d01d6236a3c4",
+            hash: "sha256:e4ed2ce2b7b61d6685769e34c6375ccecb14a3f00ee59438cf82d01d6236a3c4",
             url: "https://github.com/loeffel-io/ls-lint/releases/download/v2.3.1/ls-lint-darwin-arm64",
           },
         },
@@ -3798,14 +3798,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "b5a0d2e4427ad039fbc574551f17679f38f142b25d15e0e538769f8cf15af397",
+            hash: "sha256:b5a0d2e4427ad039fbc574551f17679f38f142b25d15e0e538769f8cf15af397",
             url: "https://github.com/loeffel-io/ls-lint/releases/download/v2.3.1/ls-lint-linux-amd64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "2abdb71243c619f0bb29587be5c228bec84c107985f2c066139ef0ec35fd3a99",
+            hash: "sha256:2abdb71243c619f0bb29587be5c228bec84c107985f2c066139ef0ec35fd3a99",
             url: "https://github.com/loeffel-io/ls-lint/releases/download/v2.3.1/ls-lint-linux-arm64",
           },
         },
@@ -3814,7 +3814,7 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "94e5cfb9468e597cb513fb7a8bf26499c9315ebd505d960c74e2d4849167bd31",
+            hash: "sha256:94e5cfb9468e597cb513fb7a8bf26499c9315ebd505d960c74e2d4849167bd31",
             url: "https://github.com/loeffel-io/ls-lint/releases/download/v2.3.1/ls-lint-windows-amd64.exe",
           },
         },
@@ -3831,7 +3831,7 @@ var binaries = {
           unknown: {
             binaryPath: "lychee",
             contentType: "tar.gz",
-            hash: "887503a9cff667d322b8d0892b40bf49976eb9507af8483220a3706cdad55978",
+            hash: "sha256:887503a9cff667d322b8d0892b40bf49976eb9507af8483220a3706cdad55978",
             url: "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -3839,7 +3839,7 @@ var binaries = {
           unknown: {
             binaryPath: "lychee",
             contentType: "tar.gz",
-            hash: "c9d3740ea2d891854d37116c9fba840f37b6e7c89d330e7db84ac333631c4977",
+            hash: "sha256:c9d3740ea2d891854d37116c9fba840f37b6e7c89d330e7db84ac333631c4977",
             url: "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -3849,13 +3849,13 @@ var binaries = {
           glibc: {
             binaryPath: "lychee",
             contentType: "tar.gz",
-            hash: "1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a",
+            hash: "sha256:1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a",
             url: "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "lychee",
             contentType: "tar.gz",
-            hash: "73657a111819a30c47c08352896796f23d64e4eb2b3ed39b6d32149241566fc5",
+            hash: "sha256:73657a111819a30c47c08352896796f23d64e4eb2b3ed39b6d32149241566fc5",
             url: "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -3863,13 +3863,13 @@ var binaries = {
           glibc: {
             binaryPath: "lychee",
             contentType: "tar.gz",
-            hash: "91a7bd65685da41b90ccb9bc867a3d649a7818042dae04ff405e55a25bddee4c",
+            hash: "sha256:91a7bd65685da41b90ccb9bc867a3d649a7818042dae04ff405e55a25bddee4c",
             url: "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-aarch64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "lychee",
             contentType: "tar.gz",
-            hash: "5d0b0e3aeab240f41920c633a6eaf97599be6eedda034b36e858ede7dba5e535",
+            hash: "sha256:5d0b0e3aeab240f41920c633a6eaf97599be6eedda034b36e858ede7dba5e535",
             url: "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -3879,7 +3879,7 @@ var binaries = {
           unknown: {
             binaryPath: "lychee.exe",
             contentType: "zip",
-            hash: "32975d1493ee1a975d6bb41e4fb56fe419cb442ded628bb772ba2e614acfacad",
+            hash: "sha256:32975d1493ee1a975d6bb41e4fb56fe419cb442ded628bb772ba2e614acfacad",
             url: "https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -3896,7 +3896,7 @@ var binaries = {
           unknown: {
             binaryPath: "mdsf",
             contentType: "tar.gz",
-            hash: "ab3990678f514a45719b14d18ba53b87414ddca8f7ff0d33262371f20d8fea6f",
+            hash: "sha256:ab3990678f514a45719b14d18ba53b87414ddca8f7ff0d33262371f20d8fea6f",
             url: "https://github.com/hougesen/mdsf/releases/download/v0.12.1/mdsf-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -3904,7 +3904,7 @@ var binaries = {
           unknown: {
             binaryPath: "mdsf",
             contentType: "tar.gz",
-            hash: "91f46b517bf3547190fcadf6ad1f4e4b177ff1abc7fd720f4df285c910e4f0fe",
+            hash: "sha256:91f46b517bf3547190fcadf6ad1f4e4b177ff1abc7fd720f4df285c910e4f0fe",
             url: "https://github.com/hougesen/mdsf/releases/download/v0.12.1/mdsf-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -3914,7 +3914,7 @@ var binaries = {
           glibc: {
             binaryPath: "mdsf",
             contentType: "tar.gz",
-            hash: "adba0ac7765458ac76901fbc9952c7006842ac233ee5565702cfa0aea39cace5",
+            hash: "sha256:adba0ac7765458ac76901fbc9952c7006842ac233ee5565702cfa0aea39cace5",
             url: "https://github.com/hougesen/mdsf/releases/download/v0.12.1/mdsf-x86_64-unknown-linux-gnu.tar.gz",
           },
         },
@@ -3924,7 +3924,7 @@ var binaries = {
           unknown: {
             binaryPath: "mdsf.exe",
             contentType: "tar.gz",
-            hash: "d35c0fa327df59cb4b9089bee933742eef2c7abaf650742f120759409334e8f3",
+            hash: "sha256:d35c0fa327df59cb4b9089bee933742eef2c7abaf650742f120759409334e8f3",
             url: "https://github.com/hougesen/mdsf/releases/download/v0.12.1/mdsf-x86_64-pc-windows-msvc.tar.gz",
           },
         },
@@ -3939,14 +3939,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "9f89beb6c3d784893cb1cae0a3d56c529bfe91075418c2f9440c45b79654198b",
+            hash: "sha256:9f89beb6c3d784893cb1cae0a3d56c529bfe91075418c2f9440c45b79654198b",
             url: "https://github.com/google/osv-scanner/releases/download/v2.5.1/osv-scanner_darwin_amd64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "75c44d6332f892a1e56286f4105a98ed751ae28d215ca0a8b65cc00d84103054",
+            hash: "sha256:75c44d6332f892a1e56286f4105a98ed751ae28d215ca0a8b65cc00d84103054",
             url: "https://github.com/google/osv-scanner/releases/download/v2.5.1/osv-scanner_darwin_arm64",
           },
         },
@@ -3955,14 +3955,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be",
+            hash: "sha256:f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be",
             url: "https://github.com/google/osv-scanner/releases/download/v2.5.1/osv-scanner_linux_amd64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "3d0f5aa5a6baa8eb32bcef247388e149ef6030a6634ccae6fa0d62681fb27a6d",
+            hash: "sha256:3d0f5aa5a6baa8eb32bcef247388e149ef6030a6634ccae6fa0d62681fb27a6d",
             url: "https://github.com/google/osv-scanner/releases/download/v2.5.1/osv-scanner_linux_arm64",
           },
         },
@@ -3971,14 +3971,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "25e42f5ef6711fd8c0fb45390972205891dd44c6bd02ac93f0f63e8e98d9bfb6",
+            hash: "sha256:25e42f5ef6711fd8c0fb45390972205891dd44c6bd02ac93f0f63e8e98d9bfb6",
             url: "https://github.com/google/osv-scanner/releases/download/v2.5.1/osv-scanner_windows_amd64.exe",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "33feb0b210a3e5ea7b338c719defc899f8833d990cdd297bcad4ff1a2586ec8b",
+            hash: "sha256:33feb0b210a3e5ea7b338c719defc899f8833d990cdd297bcad4ff1a2586ec8b",
             url: "https://github.com/google/osv-scanner/releases/download/v2.5.1/osv-scanner_windows_arm64.exe",
           },
         },
@@ -3995,7 +3995,7 @@ var binaries = {
           unknown: {
             binaryPath: "oxipng-10.2.0/oxipng",
             contentType: "tar.gz",
-            hash: "c45acf40a70cc02539c55555ac240bf5ef24544b7ea9959d22da19f606cec205",
+            hash: "sha256:c45acf40a70cc02539c55555ac240bf5ef24544b7ea9959d22da19f606cec205",
             url: "https://github.com/oxipng/oxipng/releases/download/v10.2.0/oxipng-10.2.0-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -4003,7 +4003,7 @@ var binaries = {
           unknown: {
             binaryPath: "oxipng-10.2.0/oxipng",
             contentType: "tar.gz",
-            hash: "9aad3927d095b6ade2aacb92b89ebaca442483c1f7cde5d7a2486b283c2ed5f9",
+            hash: "sha256:9aad3927d095b6ade2aacb92b89ebaca442483c1f7cde5d7a2486b283c2ed5f9",
             url: "https://github.com/oxipng/oxipng/releases/download/v10.2.0/oxipng-10.2.0-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -4013,13 +4013,13 @@ var binaries = {
           glibc: {
             binaryPath: "oxipng-10.2.0/oxipng",
             contentType: "tar.gz",
-            hash: "b33f84c73d42cb592bea5d84c431030b1e97784817693380dfcec7d9575f871e",
+            hash: "sha256:b33f84c73d42cb592bea5d84c431030b1e97784817693380dfcec7d9575f871e",
             url: "https://github.com/oxipng/oxipng/releases/download/v10.2.0/oxipng-10.2.0-x86_64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "oxipng-10.2.0/oxipng",
             contentType: "tar.gz",
-            hash: "a27ecb29faab9da1549f4a243bab12f1e43e4ed8ae6a2a2186a543dc9ffd3956",
+            hash: "sha256:a27ecb29faab9da1549f4a243bab12f1e43e4ed8ae6a2a2186a543dc9ffd3956",
             url: "https://github.com/oxipng/oxipng/releases/download/v10.2.0/oxipng-10.2.0-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -4027,13 +4027,13 @@ var binaries = {
           glibc: {
             binaryPath: "oxipng-10.2.0/oxipng",
             contentType: "tar.gz",
-            hash: "97d168c6c0d1dbcb36e7438eb489804748a2ba40d94fe21aa7dab7372e9efe9b",
+            hash: "sha256:97d168c6c0d1dbcb36e7438eb489804748a2ba40d94fe21aa7dab7372e9efe9b",
             url: "https://github.com/oxipng/oxipng/releases/download/v10.2.0/oxipng-10.2.0-aarch64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "oxipng-10.2.0/oxipng",
             contentType: "tar.gz",
-            hash: "6475c5bdba472e00dddff8da22081e6a9ed28ecfd838451d9f05e22f568787ee",
+            hash: "sha256:6475c5bdba472e00dddff8da22081e6a9ed28ecfd838451d9f05e22f568787ee",
             url: "https://github.com/oxipng/oxipng/releases/download/v10.2.0/oxipng-10.2.0-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -4043,7 +4043,7 @@ var binaries = {
           unknown: {
             binaryPath: "oxipng-10.2.0/oxipng.exe",
             contentType: "zip",
-            hash: "a5ad52c9c288dc99c2eae90dcad73dee64e39bf3f5aa5303c0fb55ac9c5f069b",
+            hash: "sha256:a5ad52c9c288dc99c2eae90dcad73dee64e39bf3f5aa5303c0fb55ac9c5f069b",
             url: "https://github.com/oxipng/oxipng/releases/download/v10.2.0/oxipng-10.2.0-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -4059,7 +4059,7 @@ var binaries = {
           unknown: {
             binaryPath: "pinact",
             contentType: "tar.gz",
-            hash: "513678fdb0bb59b2742dd06d28f0ee851496a83ba939954009aa6be53f5aec9c",
+            hash: "sha256:513678fdb0bb59b2742dd06d28f0ee851496a83ba939954009aa6be53f5aec9c",
             url: "https://github.com/suzuki-shunsuke/pinact/releases/download/v4.1.1/pinact_darwin_amd64.tar.gz",
           },
         },
@@ -4067,7 +4067,7 @@ var binaries = {
           unknown: {
             binaryPath: "pinact",
             contentType: "tar.gz",
-            hash: "c13998c9f0dd09d8973700938aa5f6ac52a1db4e94d4f578d8cc976cda478614",
+            hash: "sha256:c13998c9f0dd09d8973700938aa5f6ac52a1db4e94d4f578d8cc976cda478614",
             url: "https://github.com/suzuki-shunsuke/pinact/releases/download/v4.1.1/pinact_darwin_arm64.tar.gz",
           },
         },
@@ -4077,7 +4077,7 @@ var binaries = {
           glibc: {
             binaryPath: "pinact",
             contentType: "tar.gz",
-            hash: "d1cffebe5704b74e2e5f8a864efb9f7e54768972dc686188c008033fb1797841",
+            hash: "sha256:d1cffebe5704b74e2e5f8a864efb9f7e54768972dc686188c008033fb1797841",
             url: "https://github.com/suzuki-shunsuke/pinact/releases/download/v4.1.1/pinact_linux_amd64.tar.gz",
           },
         },
@@ -4085,7 +4085,7 @@ var binaries = {
           glibc: {
             binaryPath: "pinact",
             contentType: "tar.gz",
-            hash: "dd1f29908319ed3e59f9fe6b39196efbb76936357f3bd741cd759a96306ae8d8",
+            hash: "sha256:dd1f29908319ed3e59f9fe6b39196efbb76936357f3bd741cd759a96306ae8d8",
             url: "https://github.com/suzuki-shunsuke/pinact/releases/download/v4.1.1/pinact_linux_arm64.tar.gz",
           },
         },
@@ -4095,7 +4095,7 @@ var binaries = {
           unknown: {
             binaryPath: "pinact.exe",
             contentType: "zip",
-            hash: "88db480a3f8833d7233b482a72c97308df558ebceb0d3214775889239901f6a9",
+            hash: "sha256:88db480a3f8833d7233b482a72c97308df558ebceb0d3214775889239901f6a9",
             url: "https://github.com/suzuki-shunsuke/pinact/releases/download/v4.1.1/pinact_windows_amd64.zip",
           },
         },
@@ -4103,7 +4103,7 @@ var binaries = {
           unknown: {
             binaryPath: "pinact.exe",
             contentType: "zip",
-            hash: "98e99a7e13472fa5d1dc1298eea736fa5267bfa4a06dd5ba83a8bf42d3f02f67",
+            hash: "sha256:98e99a7e13472fa5d1dc1298eea736fa5267bfa4a06dd5ba83a8bf42d3f02f67",
             url: "https://github.com/suzuki-shunsuke/pinact/releases/download/v4.1.1/pinact_windows_arm64.zip",
           },
         },
@@ -4120,7 +4120,7 @@ var binaries = {
           unknown: {
             binaryPath: "protoc-36.0/protoc",
             contentType: "zip",
-            hash: "2847d952ecd1c466769ae3ca319c9cd34c3613542eba335dc9b02c49537f6c70",
+            hash: "sha256:2847d952ecd1c466769ae3ca319c9cd34c3613542eba335dc9b02c49537f6c70",
             url: "https://github.com/protocolbuffers/protobuf/releases/download/v36.0/protoc-36.0-osx-x86_64.zip",
           },
         },
@@ -4128,7 +4128,7 @@ var binaries = {
           unknown: {
             binaryPath: "protoc-36.0/protoc",
             contentType: "zip",
-            hash: "b6bc4afdcb880124bf342851d05155b6e3d9b6e661236d87b9c614250d26ae00",
+            hash: "sha256:b6bc4afdcb880124bf342851d05155b6e3d9b6e661236d87b9c614250d26ae00",
             url: "https://github.com/protocolbuffers/protobuf/releases/download/v36.0/protoc-36.0-osx-aarch_64.zip",
           },
         },
@@ -4138,7 +4138,7 @@ var binaries = {
           glibc: {
             binaryPath: "protoc-36.0/protoc",
             contentType: "zip",
-            hash: "bc8211ce760bd43ee21ddc145d6d9dbaeeabae205267a79d9054a240e367d4b4",
+            hash: "sha256:bc8211ce760bd43ee21ddc145d6d9dbaeeabae205267a79d9054a240e367d4b4",
             url: "https://github.com/protocolbuffers/protobuf/releases/download/v36.0/protoc-36.0-linux-x86_64.zip",
           },
         },
@@ -4146,7 +4146,7 @@ var binaries = {
           glibc: {
             binaryPath: "protoc-36.0/protoc",
             contentType: "zip",
-            hash: "4a00ec5e256d20a3deadd9e77d56da0ac04c72367c3c959f6d08e110a368400a",
+            hash: "sha256:4a00ec5e256d20a3deadd9e77d56da0ac04c72367c3c959f6d08e110a368400a",
             url: "https://github.com/protocolbuffers/protobuf/releases/download/v36.0/protoc-36.0-linux-aarch_64.zip",
           },
         },
@@ -4156,7 +4156,7 @@ var binaries = {
           unknown: {
             binaryPath: "protoc-36.0/protoc.exe",
             contentType: "zip",
-            hash: "50b904fe09980eb44d566755eb65b4693a0deac30998ea3323c6901d9540e60d",
+            hash: "sha256:50b904fe09980eb44d566755eb65b4693a0deac30998ea3323c6901d9540e60d",
             url: "https://github.com/protocolbuffers/protobuf/releases/download/v36.0/protoc-36.0-win32.zip",
           },
         },
@@ -4172,7 +4172,7 @@ var binaries = {
           unknown: {
             binaryPath: "protolint-0.57.0/protolint",
             contentType: "tar.gz",
-            hash: "eb94bd56170278f8100c4caabb23ae12987d47ecd7fd08d8fde5113b646765d1",
+            hash: "sha256:eb94bd56170278f8100c4caabb23ae12987d47ecd7fd08d8fde5113b646765d1",
             url: "https://github.com/yoheimuta/protolint/releases/download/v0.57.0/protolint_0.57.0_darwin_amd64.tar.gz",
           },
         },
@@ -4180,7 +4180,7 @@ var binaries = {
           unknown: {
             binaryPath: "protolint-0.57.0/protolint",
             contentType: "tar.gz",
-            hash: "a5be6f431484b054b8281c71903dfa37e366f69b098472710d84c1884f658eb8",
+            hash: "sha256:a5be6f431484b054b8281c71903dfa37e366f69b098472710d84c1884f658eb8",
             url: "https://github.com/yoheimuta/protolint/releases/download/v0.57.0/protolint_0.57.0_darwin_arm64.tar.gz",
           },
         },
@@ -4190,7 +4190,7 @@ var binaries = {
           glibc: {
             binaryPath: "protolint-0.57.0/protolint",
             contentType: "tar.gz",
-            hash: "ad8a340427a14f035c4ff8ee81d532467ea15b5a80fb02ad1529a01e1d945f47",
+            hash: "sha256:ad8a340427a14f035c4ff8ee81d532467ea15b5a80fb02ad1529a01e1d945f47",
             url: "https://github.com/yoheimuta/protolint/releases/download/v0.57.0/protolint_0.57.0_linux_amd64.tar.gz",
           },
         },
@@ -4198,7 +4198,7 @@ var binaries = {
           glibc: {
             binaryPath: "protolint-0.57.0/protolint",
             contentType: "tar.gz",
-            hash: "14cf8453cb16657ce13a8c614d2483106cfd09cb6638c82ee7694474c512baff",
+            hash: "sha256:14cf8453cb16657ce13a8c614d2483106cfd09cb6638c82ee7694474c512baff",
             url: "https://github.com/yoheimuta/protolint/releases/download/v0.57.0/protolint_0.57.0_linux_arm64.tar.gz",
           },
         },
@@ -4208,7 +4208,7 @@ var binaries = {
           unknown: {
             binaryPath: "protolint-0.57.0/protolint.exe",
             contentType: "tar.gz",
-            hash: "577cfccc0466cd358799109109b4a36bd7540c7af6bc66714065a5dd8e294559",
+            hash: "sha256:577cfccc0466cd358799109109b4a36bd7540c7af6bc66714065a5dd8e294559",
             url: "https://github.com/yoheimuta/protolint/releases/download/v0.57.0/protolint_0.57.0_windows_amd64.tar.gz",
           },
         },
@@ -4216,7 +4216,7 @@ var binaries = {
           unknown: {
             binaryPath: "protolint-0.57.0/protolint.exe",
             contentType: "tar.gz",
-            hash: "665c3e8e212a2932d4514aeec88d52a863d06379117df31518512b3ffacbc34f",
+            hash: "sha256:665c3e8e212a2932d4514aeec88d52a863d06379117df31518512b3ffacbc34f",
             url: "https://github.com/yoheimuta/protolint/releases/download/v0.57.0/protolint_0.57.0_windows_arm64.tar.gz",
           },
         },
@@ -4232,7 +4232,7 @@ var binaries = {
           unknown: {
             binaryPath: "ruff",
             contentType: "tar.gz",
-            hash: "233b7368e00b25064abd0db19f7cb1b43117fef41d7106170e6ffec50a0201ca",
+            hash: "sha256:233b7368e00b25064abd0db19f7cb1b43117fef41d7106170e6ffec50a0201ca",
             url: "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -4240,7 +4240,7 @@ var binaries = {
           unknown: {
             binaryPath: "ruff",
             contentType: "tar.gz",
-            hash: "b4ad832b7734592aa1c6710dbc15277ed9d3d54c8bd44bb25bb7b14ae9098b88",
+            hash: "sha256:b4ad832b7734592aa1c6710dbc15277ed9d3d54c8bd44bb25bb7b14ae9098b88",
             url: "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -4250,13 +4250,13 @@ var binaries = {
           glibc: {
             binaryPath: "ruff",
             contentType: "tar.gz",
-            hash: "9cb1234804ddb0f7f57cef3f81623ce5acb990e40af7cce08dc7778c9d7ee96c",
+            hash: "sha256:9cb1234804ddb0f7f57cef3f81623ce5acb990e40af7cce08dc7778c9d7ee96c",
             url: "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-x86_64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "ruff",
             contentType: "tar.gz",
-            hash: "0c2a1616b0782dbf7ee04239576887c4c894277189e04ba94ff3160eba9c1863",
+            hash: "sha256:0c2a1616b0782dbf7ee04239576887c4c894277189e04ba94ff3160eba9c1863",
             url: "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -4264,13 +4264,13 @@ var binaries = {
           glibc: {
             binaryPath: "ruff",
             contentType: "tar.gz",
-            hash: "08eb65c07016f1b6d2a874777492a230c7d5822bdf34030af217825b57911b0a",
+            hash: "sha256:08eb65c07016f1b6d2a874777492a230c7d5822bdf34030af217825b57911b0a",
             url: "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-aarch64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "ruff",
             contentType: "tar.gz",
-            hash: "2b828176fed3fa23361accb749e305f804bb050395a05ed96c769a8fd4c8e440",
+            hash: "sha256:2b828176fed3fa23361accb749e305f804bb050395a05ed96c769a8fd4c8e440",
             url: "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -4280,7 +4280,7 @@ var binaries = {
           unknown: {
             binaryPath: "ruff.exe",
             contentType: "zip",
-            hash: "5e3a9521e568fd925d554abd606f40bb51e59327c28db716eb3faf2c5b6ce123",
+            hash: "sha256:5e3a9521e568fd925d554abd606f40bb51e59327c28db716eb3faf2c5b6ce123",
             url: "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -4288,7 +4288,7 @@ var binaries = {
           unknown: {
             binaryPath: "ruff.exe",
             contentType: "zip",
-            hash: "da426ce57cffb8399aec0efcdca54a7bd775877d43ed4cdc8bbe0db1ba612b27",
+            hash: "sha256:da426ce57cffb8399aec0efcdca54a7bd775877d43ed4cdc8bbe0db1ba612b27",
             url: "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-aarch64-pc-windows-msvc.zip",
           },
         },
@@ -4304,7 +4304,7 @@ var binaries = {
           unknown: {
             binaryPath: "scorecard-5.5.0/scorecard",
             contentType: "tar.gz",
-            hash: "979487ca20e726f6a4d2bd63a0a4c544184f589724b3d12d2ba8d0ea80889063",
+            hash: "sha256:979487ca20e726f6a4d2bd63a0a4c544184f589724b3d12d2ba8d0ea80889063",
             url: "https://github.com/ossf/scorecard/releases/download/v5.5.0/scorecard_5.5.0_darwin_amd64.tar.gz",
           },
         },
@@ -4312,7 +4312,7 @@ var binaries = {
           unknown: {
             binaryPath: "scorecard-5.5.0/scorecard",
             contentType: "tar.gz",
-            hash: "bac6371a4f810d6bdd0b65d63c3311906bdfe3ba0d76a5ea743ce24ced170fcf",
+            hash: "sha256:bac6371a4f810d6bdd0b65d63c3311906bdfe3ba0d76a5ea743ce24ced170fcf",
             url: "https://github.com/ossf/scorecard/releases/download/v5.5.0/scorecard_5.5.0_darwin_arm64.tar.gz",
           },
         },
@@ -4322,7 +4322,7 @@ var binaries = {
           glibc: {
             binaryPath: "scorecard-5.5.0/scorecard",
             contentType: "tar.gz",
-            hash: "83b90a05c1540ef1390db1cd5711e5fd04be9c1d8537fb84d39d02092d6a8dff",
+            hash: "sha256:83b90a05c1540ef1390db1cd5711e5fd04be9c1d8537fb84d39d02092d6a8dff",
             url: "https://github.com/ossf/scorecard/releases/download/v5.5.0/scorecard_5.5.0_linux_amd64.tar.gz",
           },
         },
@@ -4330,7 +4330,7 @@ var binaries = {
           glibc: {
             binaryPath: "scorecard-5.5.0/scorecard",
             contentType: "tar.gz",
-            hash: "3ce59d20c1d53e540c4a14e0da1e0d96b3b294e8ddc96a3c5a7b8a637b32991e",
+            hash: "sha256:3ce59d20c1d53e540c4a14e0da1e0d96b3b294e8ddc96a3c5a7b8a637b32991e",
             url: "https://github.com/ossf/scorecard/releases/download/v5.5.0/scorecard_5.5.0_linux_arm64.tar.gz",
           },
         },
@@ -4340,7 +4340,7 @@ var binaries = {
           unknown: {
             binaryPath: "scorecard-5.5.0/scorecard.exe",
             contentType: "tar.gz",
-            hash: "21ca42b37260785e670c58f602b483510099e7b1988e3c6eb5005f143dc2a2ab",
+            hash: "sha256:21ca42b37260785e670c58f602b483510099e7b1988e3c6eb5005f143dc2a2ab",
             url: "https://github.com/ossf/scorecard/releases/download/v5.5.0/scorecard_5.5.0_windows_amd64.tar.gz",
           },
         },
@@ -4348,7 +4348,7 @@ var binaries = {
           unknown: {
             binaryPath: "scorecard-5.5.0/scorecard.exe",
             contentType: "tar.gz",
-            hash: "375ccf037552cf2ca105b9143311ed9128c669352d29faeb6bd11024e5d0be4a",
+            hash: "sha256:375ccf037552cf2ca105b9143311ed9128c669352d29faeb6bd11024e5d0be4a",
             url: "https://github.com/ossf/scorecard/releases/download/v5.5.0/scorecard_5.5.0_windows_arm64.tar.gz",
           },
         },
@@ -4364,7 +4364,7 @@ var binaries = {
           unknown: {
             binaryPath: "shellcheck",
             contentType: "tar.gz",
-            hash: "c2c15e08df0e8fbc374c335b230a7ee958c313fa5714817a59aa59f1aa594f51",
+            hash: "sha256:c2c15e08df0e8fbc374c335b230a7ee958c313fa5714817a59aa59f1aa594f51",
             url: "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.x86_64.tar.gz",
           },
         },
@@ -4372,7 +4372,7 @@ var binaries = {
           unknown: {
             binaryPath: "shellcheck",
             contentType: "tar.gz",
-            hash: "339b930feb1ea764467013cc1f72d09cd6b869ebf1013296ba9055ab2ffbd26f",
+            hash: "sha256:339b930feb1ea764467013cc1f72d09cd6b869ebf1013296ba9055ab2ffbd26f",
             url: "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.gz",
           },
         },
@@ -4382,7 +4382,7 @@ var binaries = {
           glibc: {
             binaryPath: "shellcheck",
             contentType: "tar.gz",
-            hash: "b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6",
+            hash: "sha256:b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6",
             url: "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.gz",
           },
         },
@@ -4390,7 +4390,7 @@ var binaries = {
           glibc: {
             binaryPath: "shellcheck",
             contentType: "tar.gz",
-            hash: "68a8133197a50beb8803f8d42f9908d1af1c5540d4bb05fdfca8c1fa47decefc",
+            hash: "sha256:68a8133197a50beb8803f8d42f9908d1af1c5540d4bb05fdfca8c1fa47decefc",
             url: "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.aarch64.tar.gz",
           },
         },
@@ -4405,14 +4405,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "6feedafc72915794163114f512348e2437d080d0047ef8b8fa2ec63b575f12af",
+            hash: "sha256:6feedafc72915794163114f512348e2437d080d0047ef8b8fa2ec63b575f12af",
             url: "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_darwin_amd64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "9680526be4a66ea1ffe988ed08af58e1400fe1e4f4aef5bd88b20bb9b3da33f8",
+            hash: "sha256:9680526be4a66ea1ffe988ed08af58e1400fe1e4f4aef5bd88b20bb9b3da33f8",
             url: "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_darwin_arm64",
           },
         },
@@ -4421,14 +4421,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1",
+            hash: "sha256:fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1",
             url: "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "32d92acaa5cd8abb29fc49dac123dc412442d5713967819d8af2c29f1b3857c7",
+            hash: "sha256:32d92acaa5cd8abb29fc49dac123dc412442d5713967819d8af2c29f1b3857c7",
             url: "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_arm64",
           },
         },
@@ -4437,7 +4437,7 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "60cd368533d0ad73fa86d93d5bbf95ef40587245ce684ed138c1b31557b5fe97",
+            hash: "sha256:60cd368533d0ad73fa86d93d5bbf95ef40587245ce684ed138c1b31557b5fe97",
             url: "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_windows_amd64.exe",
           },
         },
@@ -4453,14 +4453,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "f902dbc0be77cd3778d2a7119cc7235e220cf2ef809171b17b95e295b2e23d35",
+            hash: "sha256:f902dbc0be77cd3778d2a7119cc7235e220cf2ef809171b17b95e295b2e23d35",
             url: "https://github.com/snyk/cli/releases/download/v1.1306.4/snyk-macos",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "c9f0ef8c4b555f3ac4eb6d3d874d2d06260a58d39e91dbcac4008cfb74c9ecbb",
+            hash: "sha256:c9f0ef8c4b555f3ac4eb6d3d874d2d06260a58d39e91dbcac4008cfb74c9ecbb",
             url: "https://github.com/snyk/cli/releases/download/v1.1306.4/snyk-macos-arm64",
           },
         },
@@ -4469,19 +4469,19 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "78a83f57a16cb660879cb29f75fcb4a6c1ba07791dceb41e2b840fb89741c95c",
+            hash: "sha256:78a83f57a16cb660879cb29f75fcb4a6c1ba07791dceb41e2b840fb89741c95c",
             url: "https://github.com/snyk/cli/releases/download/v1.1306.4/snyk-linux",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "d970aef55c25dc3cb5986853e69643aac7e20acf8c56ffbd304218f41470a7d2",
+            hash: "sha256:d970aef55c25dc3cb5986853e69643aac7e20acf8c56ffbd304218f41470a7d2",
             url: "https://github.com/snyk/cli/releases/download/v1.1306.4/snyk-linux-arm64",
           },
           musl: {
             contentType: "binary",
-            hash: "72aef488d0134231846dce8152973e14a4e9c2f07eb52a950c9aa0ba065da29e",
+            hash: "sha256:72aef488d0134231846dce8152973e14a4e9c2f07eb52a950c9aa0ba065da29e",
             url: "https://github.com/snyk/cli/releases/download/v1.1306.4/snyk-alpine-arm64",
           },
         },
@@ -4496,14 +4496,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "42162d5cef10b74fcf80a045a70e658d7ce6e63d6ea1be6f347e44015714468d",
+            hash: "sha256:42162d5cef10b74fcf80a045a70e658d7ce6e63d6ea1be6f347e44015714468d",
             url: "https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.darwin.amd64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "b97c0d434aab577dc40310e8d22ff9e45eef4c80638ab978daae9b4681c59286",
+            hash: "sha256:b97c0d434aab577dc40310e8d22ff9e45eef4c80638ab978daae9b4681c59286",
             url: "https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.darwin.arm64",
           },
         },
@@ -4512,14 +4512,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b",
+            hash: "sha256:e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b",
             url: "https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "53b0abacd38ef1b12a66d6c100956691b9cefce018d91f81e73ddf7438b94d77",
+            hash: "sha256:53b0abacd38ef1b12a66d6c100956691b9cefce018d91f81e73ddf7438b94d77",
             url: "https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.arm64",
           },
         },
@@ -4535,7 +4535,7 @@ var binaries = {
           unknown: {
             binaryPath: "sqlc-1.31.1/sqlc",
             contentType: "tar.gz",
-            hash: "c5af76772e3785d21663a62697056b383f07629979b1bd25b93872e73dbd519b",
+            hash: "sha256:c5af76772e3785d21663a62697056b383f07629979b1bd25b93872e73dbd519b",
             url: "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_darwin_amd64.tar.gz",
           },
         },
@@ -4543,7 +4543,7 @@ var binaries = {
           unknown: {
             binaryPath: "sqlc-1.31.1/sqlc",
             contentType: "tar.gz",
-            hash: "21602158c99eb1f2bae197a66abfb1941d1e9e50b23125bb193349c6b1acc71e",
+            hash: "sha256:21602158c99eb1f2bae197a66abfb1941d1e9e50b23125bb193349c6b1acc71e",
             url: "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_darwin_arm64.tar.gz",
           },
         },
@@ -4553,7 +4553,7 @@ var binaries = {
           glibc: {
             binaryPath: "sqlc-1.31.1/sqlc",
             contentType: "tar.gz",
-            hash: "497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354",
+            hash: "sha256:497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354",
             url: "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz",
           },
         },
@@ -4561,7 +4561,7 @@ var binaries = {
           glibc: {
             binaryPath: "sqlc-1.31.1/sqlc",
             contentType: "tar.gz",
-            hash: "b7cae247740d0c51a1e657479e5b2d21e6fef428f596682a01bc55bf4ab8a23d",
+            hash: "sha256:b7cae247740d0c51a1e657479e5b2d21e6fef428f596682a01bc55bf4ab8a23d",
             url: "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_arm64.tar.gz",
           },
         },
@@ -4571,7 +4571,7 @@ var binaries = {
           unknown: {
             binaryPath: "sqlc-1.31.1/sqlc.exe",
             contentType: "tar.gz",
-            hash: "40d138ec18b1cc80d2be7305917fd4deceda4e0c32d78ba5d8faa4bfa3bc0fc0",
+            hash: "sha256:40d138ec18b1cc80d2be7305917fd4deceda4e0c32d78ba5d8faa4bfa3bc0fc0",
             url: "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_windows_amd64.tar.gz",
           },
         },
@@ -4579,7 +4579,7 @@ var binaries = {
           unknown: {
             binaryPath: "sqlc-1.31.1/sqlc.exe",
             contentType: "tar.gz",
-            hash: "aa9b926313f922a2c7c668076dd5a2754724d61f528c1d5ef033bed11b27eccd",
+            hash: "sha256:aa9b926313f922a2c7c668076dd5a2754724d61f528c1d5ef033bed11b27eccd",
             url: "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_windows_arm64.tar.gz",
           },
         },
@@ -4595,7 +4595,7 @@ var binaries = {
           unknown: {
             binaryPath: "sqruff",
             contentType: "tar.gz",
-            hash: "56c75d61a668da1907e68ca92b200efe4f93fa24e6cdc02b7c5cbe286025555c",
+            hash: "sha256:56c75d61a668da1907e68ca92b200efe4f93fa24e6cdc02b7c5cbe286025555c",
             url: "https://github.com/quarylabs/sqruff/releases/download/v0.40.0/sqruff-darwin-x86_64.tar.gz",
           },
         },
@@ -4603,7 +4603,7 @@ var binaries = {
           unknown: {
             binaryPath: "sqruff",
             contentType: "tar.gz",
-            hash: "b7ddf7a52d13023a6bdac6ef0999ca5d0f8ed3a5dd7f935da21d06dab2457ea2",
+            hash: "sha256:b7ddf7a52d13023a6bdac6ef0999ca5d0f8ed3a5dd7f935da21d06dab2457ea2",
             url: "https://github.com/quarylabs/sqruff/releases/download/v0.40.0/sqruff-darwin-aarch64.tar.gz",
           },
         },
@@ -4613,7 +4613,7 @@ var binaries = {
           musl: {
             binaryPath: "sqruff",
             contentType: "tar.gz",
-            hash: "8a377bdfdfaf46483c33cce46d3b4eb46bcec4b9557f6d0106adc85cc926660e",
+            hash: "sha256:8a377bdfdfaf46483c33cce46d3b4eb46bcec4b9557f6d0106adc85cc926660e",
             url: "https://github.com/quarylabs/sqruff/releases/download/v0.40.0/sqruff-linux-x86_64-musl.tar.gz",
           },
         },
@@ -4621,7 +4621,7 @@ var binaries = {
           musl: {
             binaryPath: "sqruff",
             contentType: "tar.gz",
-            hash: "b1e4ba8f1da96b9a626e8b6ce208e4d94ca13d44a755790a89cc8193f00ee138",
+            hash: "sha256:b1e4ba8f1da96b9a626e8b6ce208e4d94ca13d44a755790a89cc8193f00ee138",
             url: "https://github.com/quarylabs/sqruff/releases/download/v0.40.0/sqruff-linux-aarch64-musl.tar.gz",
           },
         },
@@ -4631,7 +4631,7 @@ var binaries = {
           unknown: {
             binaryPath: "sqruff.exe",
             contentType: "zip",
-            hash: "f60f5d2f98c6b170d319cda71e53379653bc4dfa2ef5ded1551e57fe918782fa",
+            hash: "sha256:f60f5d2f98c6b170d319cda71e53379653bc4dfa2ef5ded1551e57fe918782fa",
             url: "https://github.com/quarylabs/sqruff/releases/download/v0.40.0/sqruff-windows-x86_64.zip",
           },
         },
@@ -4647,7 +4647,7 @@ var binaries = {
           unknown: {
             binaryPath: "swag-2.0.0/swag",
             contentType: "tar.gz",
-            hash: "2f1bc6f43bd6211e1debca3ed1e486de0d3aabb2c7dcfdaab92e688717062ba2",
+            hash: "sha256:2f1bc6f43bd6211e1debca3ed1e486de0d3aabb2c7dcfdaab92e688717062ba2",
             url: "https://github.com/swaggo/swag/releases/download/v2.0.0-rc5/swag_2.0.0-rc5_Darwin_x86_64.tar.gz",
           },
         },
@@ -4655,7 +4655,7 @@ var binaries = {
           unknown: {
             binaryPath: "swag-2.0.0/swag",
             contentType: "tar.gz",
-            hash: "048ab25c7c953196bab7cfa46bafb44d254ecfb901aa0271958b023ac2d1eaf3",
+            hash: "sha256:048ab25c7c953196bab7cfa46bafb44d254ecfb901aa0271958b023ac2d1eaf3",
             url: "https://github.com/swaggo/swag/releases/download/v2.0.0-rc5/swag_2.0.0-rc5_Darwin_arm64.tar.gz",
           },
         },
@@ -4665,7 +4665,7 @@ var binaries = {
           glibc: {
             binaryPath: "swag-2.0.0/swag",
             contentType: "tar.gz",
-            hash: "7211a07fb8cb413aab5e14031074656dd879ff6a86e93a92f4e826ffbabffa10",
+            hash: "sha256:7211a07fb8cb413aab5e14031074656dd879ff6a86e93a92f4e826ffbabffa10",
             url: "https://github.com/swaggo/swag/releases/download/v2.0.0-rc5/swag_2.0.0-rc5_Linux_x86_64.tar.gz",
           },
         },
@@ -4673,7 +4673,7 @@ var binaries = {
           glibc: {
             binaryPath: "swag-2.0.0/swag",
             contentType: "tar.gz",
-            hash: "f21c7f6114711fc651370c88f7937f77cc273a6c93810048abf6623be26eef93",
+            hash: "sha256:f21c7f6114711fc651370c88f7937f77cc273a6c93810048abf6623be26eef93",
             url: "https://github.com/swaggo/swag/releases/download/v2.0.0-rc5/swag_2.0.0-rc5_Linux_arm64.tar.gz",
           },
         },
@@ -4689,7 +4689,7 @@ var binaries = {
           unknown: {
             binaryPath: "syft-1.51.0/syft",
             contentType: "tar.gz",
-            hash: "cddf9a044145caf0a1a3194d00d1dd51a1666f4814f2919cdb4768a0c062ad95",
+            hash: "sha256:cddf9a044145caf0a1a3194d00d1dd51a1666f4814f2919cdb4768a0c062ad95",
             url: "https://github.com/anchore/syft/releases/download/v1.51.0/syft_1.51.0_darwin_amd64.tar.gz",
           },
         },
@@ -4697,7 +4697,7 @@ var binaries = {
           unknown: {
             binaryPath: "syft-1.51.0/syft",
             contentType: "tar.gz",
-            hash: "4f37f4c7fefce0a68e4cf71ba3f5f9829a99e65d89b29f7ee41b8c2c10ea8c59",
+            hash: "sha256:4f37f4c7fefce0a68e4cf71ba3f5f9829a99e65d89b29f7ee41b8c2c10ea8c59",
             url: "https://github.com/anchore/syft/releases/download/v1.51.0/syft_1.51.0_darwin_arm64.tar.gz",
           },
         },
@@ -4707,7 +4707,7 @@ var binaries = {
           glibc: {
             binaryPath: "syft-1.51.0/syft",
             contentType: "tar.gz",
-            hash: "2a2e837a2c8d59ec9af5472ee22d3b04ee463c4e44476ecf993fd1e5ab6ebc7f",
+            hash: "sha256:2a2e837a2c8d59ec9af5472ee22d3b04ee463c4e44476ecf993fd1e5ab6ebc7f",
             url: "https://github.com/anchore/syft/releases/download/v1.51.0/syft_1.51.0_linux_amd64.tar.gz",
           },
         },
@@ -4715,7 +4715,7 @@ var binaries = {
           glibc: {
             binaryPath: "syft-1.51.0/syft",
             contentType: "tar.gz",
-            hash: "6c0466811541ea03add5213a60a1562f0851e4c0b0ecfdee1a694a9455285900",
+            hash: "sha256:6c0466811541ea03add5213a60a1562f0851e4c0b0ecfdee1a694a9455285900",
             url: "https://github.com/anchore/syft/releases/download/v1.51.0/syft_1.51.0_linux_arm64.tar.gz",
           },
         },
@@ -4725,7 +4725,7 @@ var binaries = {
           unknown: {
             binaryPath: "syft-1.51.0/syft.exe",
             contentType: "zip",
-            hash: "fc5ffaeffb993576ece9c791da5a688fb2c8969a1479bbfe58583672c64da336",
+            hash: "sha256:fc5ffaeffb993576ece9c791da5a688fb2c8969a1479bbfe58583672c64da336",
             url: "https://github.com/anchore/syft/releases/download/v1.51.0/syft_1.51.0_windows_amd64.zip",
           },
         },
@@ -4733,7 +4733,7 @@ var binaries = {
           unknown: {
             binaryPath: "syft-1.51.0/syft.exe",
             contentType: "zip",
-            hash: "3fd075e644e67d1a9ae63fbc67991c510fc623030a67b93f5de9e2fd2da5d3c2",
+            hash: "sha256:3fd075e644e67d1a9ae63fbc67991c510fc623030a67b93f5de9e2fd2da5d3c2",
             url: "https://github.com/anchore/syft/releases/download/v1.51.0/syft_1.51.0_windows_arm64.zip",
           },
         },
@@ -4750,7 +4750,7 @@ var binaries = {
           unknown: {
             binaryPath: "task",
             contentType: "tar.gz",
-            hash: "7f1a702d54a789cb818a636039a83df071f4179893133afafa4eba351a7e19ef",
+            hash: "sha256:7f1a702d54a789cb818a636039a83df071f4179893133afafa4eba351a7e19ef",
             url: "https://github.com/go-task/task/releases/download/v3.53.1/task_darwin_amd64.tar.gz",
           },
         },
@@ -4758,7 +4758,7 @@ var binaries = {
           unknown: {
             binaryPath: "task",
             contentType: "tar.gz",
-            hash: "85d2d96c2380b33d7855b07b3f7a20dc7ca0eda999a26efa0fb5f6f32b366cd7",
+            hash: "sha256:85d2d96c2380b33d7855b07b3f7a20dc7ca0eda999a26efa0fb5f6f32b366cd7",
             url: "https://github.com/go-task/task/releases/download/v3.53.1/task_darwin_arm64.tar.gz",
           },
         },
@@ -4768,7 +4768,7 @@ var binaries = {
           unknown: {
             binaryPath: "task",
             contentType: "tar.gz",
-            hash: "cebbe970c1006646daa88a1db13a318456af8589a10ef81b1bef97472379d127",
+            hash: "sha256:cebbe970c1006646daa88a1db13a318456af8589a10ef81b1bef97472379d127",
             url: "https://github.com/go-task/task/releases/download/v3.53.1/task_freebsd_amd64.tar.gz",
           },
         },
@@ -4776,7 +4776,7 @@ var binaries = {
           unknown: {
             binaryPath: "task",
             contentType: "tar.gz",
-            hash: "12a12219b8a15a2c7e870d95ce4a1d0595e9e78a68b360793405859c172dd2ba",
+            hash: "sha256:12a12219b8a15a2c7e870d95ce4a1d0595e9e78a68b360793405859c172dd2ba",
             url: "https://github.com/go-task/task/releases/download/v3.53.1/task_freebsd_arm64.tar.gz",
           },
         },
@@ -4786,7 +4786,7 @@ var binaries = {
           glibc: {
             binaryPath: "task",
             contentType: "tar.gz",
-            hash: "a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7",
+            hash: "sha256:a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7",
             url: "https://github.com/go-task/task/releases/download/v3.53.1/task_linux_amd64.tar.gz",
           },
         },
@@ -4794,7 +4794,7 @@ var binaries = {
           glibc: {
             binaryPath: "task",
             contentType: "tar.gz",
-            hash: "e3ad19101493a0112e1f22ae8ccc54bf03e533b1076a0ca1e6c782a09ad2e588",
+            hash: "sha256:e3ad19101493a0112e1f22ae8ccc54bf03e533b1076a0ca1e6c782a09ad2e588",
             url: "https://github.com/go-task/task/releases/download/v3.53.1/task_linux_arm64.tar.gz",
           },
         },
@@ -4804,7 +4804,7 @@ var binaries = {
           unknown: {
             binaryPath: "task.exe",
             contentType: "zip",
-            hash: "27c0cd248c12cba03d8958d954a3df981c900be885ec9ce5f6a3cdc4e9a19316",
+            hash: "sha256:27c0cd248c12cba03d8958d954a3df981c900be885ec9ce5f6a3cdc4e9a19316",
             url: "https://github.com/go-task/task/releases/download/v3.53.1/task_windows_amd64.zip",
           },
         },
@@ -4812,7 +4812,7 @@ var binaries = {
           unknown: {
             binaryPath: "task.exe",
             contentType: "zip",
-            hash: "4f7c32c0b5a09aabfd860bcf4ff5649f0483339c1f7f90ad5ee55692da7237b6",
+            hash: "sha256:4f7c32c0b5a09aabfd860bcf4ff5649f0483339c1f7f90ad5ee55692da7237b6",
             url: "https://github.com/go-task/task/releases/download/v3.53.1/task_windows_arm64.zip",
           },
         },
@@ -4829,7 +4829,7 @@ var binaries = {
           unknown: {
             binaryPath: "terraform-docs-v0.24.0/terraform-docs",
             contentType: "tar.gz",
-            hash: "3c3f7f18f908457fd1209cbe341418f7f6bae78c08126cfbe8de0d1b06aa8781",
+            hash: "sha256:3c3f7f18f908457fd1209cbe341418f7f6bae78c08126cfbe8de0d1b06aa8781",
             url: "https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-darwin-amd64.tar.gz",
           },
         },
@@ -4837,7 +4837,7 @@ var binaries = {
           unknown: {
             binaryPath: "terraform-docs-v0.24.0/terraform-docs",
             contentType: "tar.gz",
-            hash: "f6b114f4b032f3f9202ab6c23bfd28c3c8e68aeeb8a8f12fc118bf2073081d71",
+            hash: "sha256:f6b114f4b032f3f9202ab6c23bfd28c3c8e68aeeb8a8f12fc118bf2073081d71",
             url: "https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-darwin-arm64.tar.gz",
           },
         },
@@ -4847,7 +4847,7 @@ var binaries = {
           unknown: {
             binaryPath: "terraform-docs-v0.24.0/terraform-docs",
             contentType: "tar.gz",
-            hash: "8c79a973f03a14681494e96a1c3d77c9c3fb0751db818b4548d0c5456befe9fa",
+            hash: "sha256:8c79a973f03a14681494e96a1c3d77c9c3fb0751db818b4548d0c5456befe9fa",
             url: "https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-freebsd-amd64.tar.gz",
           },
         },
@@ -4855,7 +4855,7 @@ var binaries = {
           unknown: {
             binaryPath: "terraform-docs-v0.24.0/terraform-docs",
             contentType: "tar.gz",
-            hash: "206a1bf4aede19703c0e4f3dbc3c8abd5b3e006038a69a136090166e539e2333",
+            hash: "sha256:206a1bf4aede19703c0e4f3dbc3c8abd5b3e006038a69a136090166e539e2333",
             url: "https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-freebsd-arm64.tar.gz",
           },
         },
@@ -4865,7 +4865,7 @@ var binaries = {
           glibc: {
             binaryPath: "terraform-docs-v0.24.0/terraform-docs",
             contentType: "tar.gz",
-            hash: "9005daf969de0b50134493a2c00078b49f5f5b39d021cda7c89bf4d4f3d776d3",
+            hash: "sha256:9005daf969de0b50134493a2c00078b49f5f5b39d021cda7c89bf4d4f3d776d3",
             url: "https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-linux-amd64.tar.gz",
           },
         },
@@ -4873,7 +4873,7 @@ var binaries = {
           glibc: {
             binaryPath: "terraform-docs-v0.24.0/terraform-docs",
             contentType: "tar.gz",
-            hash: "d12bd7b73c1fc9c64efc79f8157dd713dabd559f1ecf3cfc0f42e32279a155fd",
+            hash: "sha256:d12bd7b73c1fc9c64efc79f8157dd713dabd559f1ecf3cfc0f42e32279a155fd",
             url: "https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-linux-arm64.tar.gz",
           },
         },
@@ -4883,7 +4883,7 @@ var binaries = {
           unknown: {
             binaryPath: "terraform-docs-v0.24.0/terraform-docs.exe",
             contentType: "zip",
-            hash: "afc02cbdf63726d3e5fb26a077ca1f24acd4820d7e44c21b03a3e030f9266490",
+            hash: "sha256:afc02cbdf63726d3e5fb26a077ca1f24acd4820d7e44c21b03a3e030f9266490",
             url: "https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-windows-amd64.zip",
           },
         },
@@ -4891,7 +4891,7 @@ var binaries = {
           unknown: {
             binaryPath: "terraform-docs-v0.24.0/terraform-docs.exe",
             contentType: "zip",
-            hash: "1168c12929531ac9132c97fff794ef531ebb2a5b54c41870b9e19911950b6fd4",
+            hash: "sha256:1168c12929531ac9132c97fff794ef531ebb2a5b54c41870b9e19911950b6fd4",
             url: "https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-windows-arm64.zip",
           },
         },
@@ -4905,14 +4905,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "0f4d44d11ce6e6c43bec1e3ebed6b7e7553f4ec40e64a10b05165e980b98c6a4",
+            hash: "sha256:0f4d44d11ce6e6c43bec1e3ebed6b7e7553f4ec40e64a10b05165e980b98c6a4",
             url: "https://github.com/gruntwork-io/terragrunt/releases/download/v1.1.3/terragrunt_darwin_amd64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "4bfb50d952f21d20271cb423b7c83a78af9ad0849884e8a831ffb7ace843f334",
+            hash: "sha256:4bfb50d952f21d20271cb423b7c83a78af9ad0849884e8a831ffb7ace843f334",
             url: "https://github.com/gruntwork-io/terragrunt/releases/download/v1.1.3/terragrunt_darwin_arm64",
           },
         },
@@ -4921,14 +4921,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "d5da6a66741f4ee752aa3b502b57e47fd6d5c178942861b2507f14f083e7606e",
+            hash: "sha256:d5da6a66741f4ee752aa3b502b57e47fd6d5c178942861b2507f14f083e7606e",
             url: "https://github.com/gruntwork-io/terragrunt/releases/download/v1.1.3/terragrunt_linux_amd64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "5e9b388402ab7075e907e8d8511662e2a828008129746e4e5e23de04c7b78ef4",
+            hash: "sha256:5e9b388402ab7075e907e8d8511662e2a828008129746e4e5e23de04c7b78ef4",
             url: "https://github.com/gruntwork-io/terragrunt/releases/download/v1.1.3/terragrunt_linux_arm64",
           },
         },
@@ -4937,7 +4937,7 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "754687ad0874e4299e667c10af793208cf0347d64f376d4c21c9b1824cb8b022",
+            hash: "sha256:754687ad0874e4299e667c10af793208cf0347d64f376d4c21c9b1824cb8b022",
             url: "https://github.com/gruntwork-io/terragrunt/releases/download/v1.1.3/terragrunt_windows_amd64.exe",
           },
         },
@@ -4954,7 +4954,7 @@ var binaries = {
           unknown: {
             binaryPath: "tflint",
             contentType: "zip",
-            hash: "0f3a9fd17526014646a2dfc3f9122f7b4161abe3d6b0f0f03f9014483ddf4d19",
+            hash: "sha256:0f3a9fd17526014646a2dfc3f9122f7b4161abe3d6b0f0f03f9014483ddf4d19",
             url: "https://github.com/terraform-linters/tflint/releases/download/v0.64.0/tflint_darwin_amd64.zip",
           },
         },
@@ -4962,7 +4962,7 @@ var binaries = {
           unknown: {
             binaryPath: "tflint",
             contentType: "zip",
-            hash: "2496e9cb3d24992d553b45e7c87a0fdc9449ca975233876247a9bfeda857e6c0",
+            hash: "sha256:2496e9cb3d24992d553b45e7c87a0fdc9449ca975233876247a9bfeda857e6c0",
             url: "https://github.com/terraform-linters/tflint/releases/download/v0.64.0/tflint_darwin_arm64.zip",
           },
         },
@@ -4972,7 +4972,7 @@ var binaries = {
           glibc: {
             binaryPath: "tflint",
             contentType: "zip",
-            hash: "cca9d13e2e1d7a2c627af60ff899a3c9b74212899416aeb96ec764d2ef954537",
+            hash: "sha256:cca9d13e2e1d7a2c627af60ff899a3c9b74212899416aeb96ec764d2ef954537",
             url: "https://github.com/terraform-linters/tflint/releases/download/v0.64.0/tflint_linux_amd64.zip",
           },
         },
@@ -4980,7 +4980,7 @@ var binaries = {
           glibc: {
             binaryPath: "tflint",
             contentType: "zip",
-            hash: "560da89aacf59389d4eb029730dd5b109b7288096c32f2726a0d9e783a5ea8eb",
+            hash: "sha256:560da89aacf59389d4eb029730dd5b109b7288096c32f2726a0d9e783a5ea8eb",
             url: "https://github.com/terraform-linters/tflint/releases/download/v0.64.0/tflint_linux_arm64.zip",
           },
         },
@@ -4990,7 +4990,7 @@ var binaries = {
           unknown: {
             binaryPath: "tflint.exe",
             contentType: "zip",
-            hash: "fb42fb859d844b156a8ea9d3363078c4d8b85ca78782e60876b08c9b8e59f303",
+            hash: "sha256:fb42fb859d844b156a8ea9d3363078c4d8b85ca78782e60876b08c9b8e59f303",
             url: "https://github.com/terraform-linters/tflint/releases/download/v0.64.0/tflint_windows_amd64.zip",
           },
         },
@@ -5006,7 +5006,7 @@ var binaries = {
           unknown: {
             binaryPath: "tfupdate-0.10.2/tfupdate",
             contentType: "tar.gz",
-            hash: "47ec26be091d95210371d7954d37ae98bfd0398b9e6961b57e9ac7785706fe3c",
+            hash: "sha256:47ec26be091d95210371d7954d37ae98bfd0398b9e6961b57e9ac7785706fe3c",
             url: "https://github.com/minamijoyo/tfupdate/releases/download/v0.10.2/tfupdate_0.10.2_darwin_amd64.tar.gz",
           },
         },
@@ -5014,7 +5014,7 @@ var binaries = {
           unknown: {
             binaryPath: "tfupdate-0.10.2/tfupdate",
             contentType: "tar.gz",
-            hash: "a1403215422af47afdc47e94432bb53245888d772965621185ec3f762e9d2d00",
+            hash: "sha256:a1403215422af47afdc47e94432bb53245888d772965621185ec3f762e9d2d00",
             url: "https://github.com/minamijoyo/tfupdate/releases/download/v0.10.2/tfupdate_0.10.2_darwin_arm64.tar.gz",
           },
         },
@@ -5024,7 +5024,7 @@ var binaries = {
           glibc: {
             binaryPath: "tfupdate-0.10.2/tfupdate",
             contentType: "tar.gz",
-            hash: "559bc7c6c15496682a3207cbdc4e6327de252f5f1a4348f5098027d6bcc4ebe2",
+            hash: "sha256:559bc7c6c15496682a3207cbdc4e6327de252f5f1a4348f5098027d6bcc4ebe2",
             url: "https://github.com/minamijoyo/tfupdate/releases/download/v0.10.2/tfupdate_0.10.2_linux_amd64.tar.gz",
           },
         },
@@ -5032,7 +5032,7 @@ var binaries = {
           glibc: {
             binaryPath: "tfupdate-0.10.2/tfupdate",
             contentType: "tar.gz",
-            hash: "3ca3382ce16b37a248e95b38cf7d889a49412a19df3a6f3a7ad3db727de8eb12",
+            hash: "sha256:3ca3382ce16b37a248e95b38cf7d889a49412a19df3a6f3a7ad3db727de8eb12",
             url: "https://github.com/minamijoyo/tfupdate/releases/download/v0.10.2/tfupdate_0.10.2_linux_arm64.tar.gz",
           },
         },
@@ -5042,7 +5042,7 @@ var binaries = {
           unknown: {
             binaryPath: "tfupdate-0.10.2/tfupdate.exe",
             contentType: "tar.gz",
-            hash: "f6f6eddf58a5a13f8285e4d7bccf4f0aa88982286b2735de0f9866aaa8a75911",
+            hash: "sha256:f6f6eddf58a5a13f8285e4d7bccf4f0aa88982286b2735de0f9866aaa8a75911",
             url: "https://github.com/minamijoyo/tfupdate/releases/download/v0.10.2/tfupdate_0.10.2_windows_amd64.tar.gz",
           },
         },
@@ -5050,7 +5050,7 @@ var binaries = {
           unknown: {
             binaryPath: "tfupdate-0.10.2/tfupdate.exe",
             contentType: "tar.gz",
-            hash: "b23560a4e13be76637dd68b9888eeb2d91c3c1aa9433761a5fa345545c2e3828",
+            hash: "sha256:b23560a4e13be76637dd68b9888eeb2d91c3c1aa9433761a5fa345545c2e3828",
             url: "https://github.com/minamijoyo/tfupdate/releases/download/v0.10.2/tfupdate_0.10.2_windows_arm64.tar.gz",
           },
         },
@@ -5066,7 +5066,7 @@ var binaries = {
           unknown: {
             binaryPath: "tofu-1.12.6/tofu",
             contentType: "tar.gz",
-            hash: "44bb1855f372f17f365fb94517906e78da5001da10f4c98de57a39bf982f3a92",
+            hash: "sha256:44bb1855f372f17f365fb94517906e78da5001da10f4c98de57a39bf982f3a92",
             url: "https://github.com/opentofu/opentofu/releases/download/v1.12.6/tofu_1.12.6_darwin_amd64.tar.gz",
           },
         },
@@ -5074,7 +5074,7 @@ var binaries = {
           unknown: {
             binaryPath: "tofu-1.12.6/tofu",
             contentType: "tar.gz",
-            hash: "f958ec5e511063be9feb180ca015a4cb7977566a9cf6a8550bba8c2a9b5aba74",
+            hash: "sha256:f958ec5e511063be9feb180ca015a4cb7977566a9cf6a8550bba8c2a9b5aba74",
             url: "https://github.com/opentofu/opentofu/releases/download/v1.12.6/tofu_1.12.6_darwin_arm64.tar.gz",
           },
         },
@@ -5084,7 +5084,7 @@ var binaries = {
           unknown: {
             binaryPath: "tofu-1.12.6/tofu",
             contentType: "tar.gz",
-            hash: "fc501a4b5bbf2e1c8550e503e0a3639b36d9373166bc21ec1bcd2e3dd01e2b30",
+            hash: "sha256:fc501a4b5bbf2e1c8550e503e0a3639b36d9373166bc21ec1bcd2e3dd01e2b30",
             url: "https://github.com/opentofu/opentofu/releases/download/v1.12.6/tofu_1.12.6_freebsd_amd64.tar.gz",
           },
         },
@@ -5094,7 +5094,7 @@ var binaries = {
           glibc: {
             binaryPath: "tofu-1.12.6/tofu",
             contentType: "tar.gz",
-            hash: "50a6106fa4de523d09c87af85f3db1dd47535fc005727fdca6852146476b88ec",
+            hash: "sha256:50a6106fa4de523d09c87af85f3db1dd47535fc005727fdca6852146476b88ec",
             url: "https://github.com/opentofu/opentofu/releases/download/v1.12.6/tofu_1.12.6_linux_amd64.tar.gz",
           },
         },
@@ -5102,7 +5102,7 @@ var binaries = {
           glibc: {
             binaryPath: "tofu-1.12.6/tofu",
             contentType: "tar.gz",
-            hash: "9bd0228a81bcd0c88f7045c74378f45a815779f19897191dff7d9efba9976b9e",
+            hash: "sha256:9bd0228a81bcd0c88f7045c74378f45a815779f19897191dff7d9efba9976b9e",
             url: "https://github.com/opentofu/opentofu/releases/download/v1.12.6/tofu_1.12.6_linux_arm64.tar.gz",
           },
         },
@@ -5112,7 +5112,7 @@ var binaries = {
           unknown: {
             binaryPath: "tofu-1.12.6/tofu",
             contentType: "tar.gz",
-            hash: "f45ee7adef55e972c6d911f217802a27a165d806a593ef9621e2acf7d93763a4",
+            hash: "sha256:f45ee7adef55e972c6d911f217802a27a165d806a593ef9621e2acf7d93763a4",
             url: "https://github.com/opentofu/opentofu/releases/download/v1.12.6/tofu_1.12.6_openbsd_amd64.tar.gz",
           },
         },
@@ -5122,7 +5122,7 @@ var binaries = {
           unknown: {
             binaryPath: "tofu-1.12.6/tofu.exe",
             contentType: "tar.gz",
-            hash: "bcbcd9ca744af6c4053e2d5e75dae79ff33ad7dc38d45e1233e693d096284538",
+            hash: "sha256:bcbcd9ca744af6c4053e2d5e75dae79ff33ad7dc38d45e1233e693d096284538",
             url: "https://github.com/opentofu/opentofu/releases/download/v1.12.6/tofu_1.12.6_windows_amd64.tar.gz",
           },
         },
@@ -5138,7 +5138,7 @@ var binaries = {
           unknown: {
             binaryPath: "tombi-cli-1.5.0-x86_64-apple-darwin/tombi",
             contentType: "tar.gz",
-            hash: "ba2966ea709a3b1417f3cae9506880642306426fec7c970dc0202882e2634593",
+            hash: "sha256:ba2966ea709a3b1417f3cae9506880642306426fec7c970dc0202882e2634593",
             url: "https://github.com/tombi-toml/tombi/releases/download/v1.5.0/tombi-cli-1.5.0-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -5146,7 +5146,7 @@ var binaries = {
           unknown: {
             binaryPath: "tombi-cli-1.5.0-aarch64-apple-darwin/tombi",
             contentType: "tar.gz",
-            hash: "0e14d1f61ecfba7dd22fce1417be4c1c0428354cfe7e5b2756a2fe36424e15f1",
+            hash: "sha256:0e14d1f61ecfba7dd22fce1417be4c1c0428354cfe7e5b2756a2fe36424e15f1",
             url: "https://github.com/tombi-toml/tombi/releases/download/v1.5.0/tombi-cli-1.5.0-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -5156,7 +5156,7 @@ var binaries = {
           musl: {
             binaryPath: "tombi-cli-1.5.0-x86_64-unknown-linux-musl/tombi",
             contentType: "tar.gz",
-            hash: "440381b5d3ea67d325c6b4c4b4d0c681bc4aabd3623f31fce379a30cec6694db",
+            hash: "sha256:440381b5d3ea67d325c6b4c4b4d0c681bc4aabd3623f31fce379a30cec6694db",
             url: "https://github.com/tombi-toml/tombi/releases/download/v1.5.0/tombi-cli-1.5.0-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -5164,7 +5164,7 @@ var binaries = {
           musl: {
             binaryPath: "tombi-cli-1.5.0-aarch64-unknown-linux-musl/tombi",
             contentType: "tar.gz",
-            hash: "963e8d91a7b5517071837971dc7c60a84f766038ea4467a5c3799a511413ac78",
+            hash: "sha256:963e8d91a7b5517071837971dc7c60a84f766038ea4467a5c3799a511413ac78",
             url: "https://github.com/tombi-toml/tombi/releases/download/v1.5.0/tombi-cli-1.5.0-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -5174,7 +5174,7 @@ var binaries = {
           unknown: {
             binaryPath: "tombi.exe",
             contentType: "zip",
-            hash: "6566cd1a9d87d83e905bf2aa9b72858dc66e21dc949b9ccf3a09447155b21245",
+            hash: "sha256:6566cd1a9d87d83e905bf2aa9b72858dc66e21dc949b9ccf3a09447155b21245",
             url: "https://github.com/tombi-toml/tombi/releases/download/v1.5.0/tombi-cli-1.5.0-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -5182,7 +5182,7 @@ var binaries = {
           unknown: {
             binaryPath: "tombi.exe",
             contentType: "zip",
-            hash: "cfef2b3c79a971bd2d5d3b0af63e092fd8d1c414afdea56ccb97d6f3b5ff046e",
+            hash: "sha256:cfef2b3c79a971bd2d5d3b0af63e092fd8d1c414afdea56ccb97d6f3b5ff046e",
             url: "https://github.com/tombi-toml/tombi/releases/download/v1.5.0/tombi-cli-1.5.0-aarch64-pc-windows-msvc.zip",
           },
         },
@@ -5198,7 +5198,7 @@ var binaries = {
           unknown: {
             binaryPath: "trivy-0.74.0/trivy",
             contentType: "tar.gz",
-            hash: "472816f6888dda689d075c30254d4210b4d1035acf365aa72332f584c2f60485",
+            hash: "sha256:472816f6888dda689d075c30254d4210b4d1035acf365aa72332f584c2f60485",
             url: "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_macOS-64bit.tar.gz",
           },
         },
@@ -5206,7 +5206,7 @@ var binaries = {
           unknown: {
             binaryPath: "trivy-0.74.0/trivy",
             contentType: "tar.gz",
-            hash: "1caada5e0e2091909357c7525d3aa76f4b660b13821bc143b190c7483e31cc11",
+            hash: "sha256:1caada5e0e2091909357c7525d3aa76f4b660b13821bc143b190c7483e31cc11",
             url: "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_macOS-ARM64.tar.gz",
           },
         },
@@ -5216,7 +5216,7 @@ var binaries = {
           unknown: {
             binaryPath: "trivy-0.74.0/trivy",
             contentType: "tar.gz",
-            hash: "b8e8834a90b0f28c172498a96d1b91876eb2f09867f02aa314df9a862aa86227",
+            hash: "sha256:b8e8834a90b0f28c172498a96d1b91876eb2f09867f02aa314df9a862aa86227",
             url: "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_FreeBSD-64bit.tar.gz",
           },
         },
@@ -5226,7 +5226,7 @@ var binaries = {
           glibc: {
             binaryPath: "trivy-0.74.0/trivy",
             contentType: "tar.gz",
-            hash: "2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a",
+            hash: "sha256:2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a",
             url: "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz",
           },
         },
@@ -5234,7 +5234,7 @@ var binaries = {
           glibc: {
             binaryPath: "trivy-0.74.0/trivy",
             contentType: "tar.gz",
-            hash: "b94ce1976bbf3c15b514b605ee88be7c6d94a29be2302847ff01cb794d47aad5",
+            hash: "sha256:b94ce1976bbf3c15b514b605ee88be7c6d94a29be2302847ff01cb794d47aad5",
             url: "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-ARM64.tar.gz",
           },
         },
@@ -5244,7 +5244,7 @@ var binaries = {
           unknown: {
             binaryPath: "trivy-0.74.0/trivy.exe",
             contentType: "zip",
-            hash: "94c40e0696e4b907a74b7b2e1438d5d72ebaca83115817407f568a002d520842",
+            hash: "sha256:94c40e0696e4b907a74b7b2e1438d5d72ebaca83115817407f568a002d520842",
             url: "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_windows-64bit.zip",
           },
         },
@@ -5261,7 +5261,7 @@ var binaries = {
           unknown: {
             binaryPath: "trufflehog",
             contentType: "tar.gz",
-            hash: "037e4aeb197870555ff515432bb5f1f2c98dce5f1214631a689112b5e0e4c9fd",
+            hash: "sha256:037e4aeb197870555ff515432bb5f1f2c98dce5f1214631a689112b5e0e4c9fd",
             url: "https://github.com/trufflesecurity/trufflehog/releases/download/v3.97.0/trufflehog_3.97.0_darwin_amd64.tar.gz",
           },
         },
@@ -5269,7 +5269,7 @@ var binaries = {
           unknown: {
             binaryPath: "trufflehog",
             contentType: "tar.gz",
-            hash: "ad0a99bd48d6df80eabab24d11d0fd771e245fc55ed347f943cafb5e5f497c5c",
+            hash: "sha256:ad0a99bd48d6df80eabab24d11d0fd771e245fc55ed347f943cafb5e5f497c5c",
             url: "https://github.com/trufflesecurity/trufflehog/releases/download/v3.97.0/trufflehog_3.97.0_darwin_arm64.tar.gz",
           },
         },
@@ -5279,7 +5279,7 @@ var binaries = {
           glibc: {
             binaryPath: "trufflehog",
             contentType: "tar.gz",
-            hash: "62224de2f9dd7cd418800feb953760a302ed2f82a7c547fe1146a4874fb179e4",
+            hash: "sha256:62224de2f9dd7cd418800feb953760a302ed2f82a7c547fe1146a4874fb179e4",
             url: "https://github.com/trufflesecurity/trufflehog/releases/download/v3.97.0/trufflehog_3.97.0_linux_amd64.tar.gz",
           },
         },
@@ -5287,7 +5287,7 @@ var binaries = {
           glibc: {
             binaryPath: "trufflehog",
             contentType: "tar.gz",
-            hash: "f48f57e3d4343377865b1b64653f96d381d61a7792d89d026e85524732039fde",
+            hash: "sha256:f48f57e3d4343377865b1b64653f96d381d61a7792d89d026e85524732039fde",
             url: "https://github.com/trufflesecurity/trufflehog/releases/download/v3.97.0/trufflehog_3.97.0_linux_arm64.tar.gz",
           },
         },
@@ -5297,7 +5297,7 @@ var binaries = {
           unknown: {
             binaryPath: "trufflehog.exe",
             contentType: "tar.gz",
-            hash: "2a8208e6e5be8d6cd855322480eda4790a437f805dbd6538ad7495c27f40d4e5",
+            hash: "sha256:2a8208e6e5be8d6cd855322480eda4790a437f805dbd6538ad7495c27f40d4e5",
             url: "https://github.com/trufflesecurity/trufflehog/releases/download/v3.97.0/trufflehog_3.97.0_windows_amd64.tar.gz",
           },
         },
@@ -5305,7 +5305,7 @@ var binaries = {
           unknown: {
             binaryPath: "trufflehog.exe",
             contentType: "tar.gz",
-            hash: "33e29c35561f22a8ab2b9aad5dca7e18227c3bf452cb8d08eb148b7895534b75",
+            hash: "sha256:33e29c35561f22a8ab2b9aad5dca7e18227c3bf452cb8d08eb148b7895534b75",
             url: "https://github.com/trufflesecurity/trufflehog/releases/download/v3.97.0/trufflehog_3.97.0_windows_arm64.tar.gz",
           },
         },
@@ -5321,7 +5321,7 @@ var binaries = {
           unknown: {
             binaryPath: "ty",
             contentType: "tar.gz",
-            hash: "0ea1cf4577dfac855b3ae15b02326b9ba27c0d020373938f59cd4a662bce2e08",
+            hash: "sha256:0ea1cf4577dfac855b3ae15b02326b9ba27c0d020373938f59cd4a662bce2e08",
             url: "https://github.com/astral-sh/ty/releases/download/0.0.73/ty-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -5329,7 +5329,7 @@ var binaries = {
           unknown: {
             binaryPath: "ty",
             contentType: "tar.gz",
-            hash: "9adcc77248a6ef6c4f185a71dfec87d7d0499c1d0a5e61e32dff4f8b21d8cd83",
+            hash: "sha256:9adcc77248a6ef6c4f185a71dfec87d7d0499c1d0a5e61e32dff4f8b21d8cd83",
             url: "https://github.com/astral-sh/ty/releases/download/0.0.73/ty-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -5339,13 +5339,13 @@ var binaries = {
           glibc: {
             binaryPath: "ty",
             contentType: "tar.gz",
-            hash: "706e455274bd57ab58d201c0def9033d338672f157e4dc3d5256f07b483fcbf4",
+            hash: "sha256:706e455274bd57ab58d201c0def9033d338672f157e4dc3d5256f07b483fcbf4",
             url: "https://github.com/astral-sh/ty/releases/download/0.0.73/ty-x86_64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "ty",
             contentType: "tar.gz",
-            hash: "a3a8fe9c4ece8236630a426e747981a480a1e79a90dc9b27bb149f69b9a56a2f",
+            hash: "sha256:a3a8fe9c4ece8236630a426e747981a480a1e79a90dc9b27bb149f69b9a56a2f",
             url: "https://github.com/astral-sh/ty/releases/download/0.0.73/ty-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -5353,13 +5353,13 @@ var binaries = {
           glibc: {
             binaryPath: "ty",
             contentType: "tar.gz",
-            hash: "0c15d14bc72b0e1f3d441a85fa5bf2ab8983a6aa0da6ce58b3af84d9aba97a2b",
+            hash: "sha256:0c15d14bc72b0e1f3d441a85fa5bf2ab8983a6aa0da6ce58b3af84d9aba97a2b",
             url: "https://github.com/astral-sh/ty/releases/download/0.0.73/ty-aarch64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "ty",
             contentType: "tar.gz",
-            hash: "efc09714a11d74aa7dfcbbb35d849e068839bb77f2420816a51559c33bb08dd7",
+            hash: "sha256:efc09714a11d74aa7dfcbbb35d849e068839bb77f2420816a51559c33bb08dd7",
             url: "https://github.com/astral-sh/ty/releases/download/0.0.73/ty-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -5369,7 +5369,7 @@ var binaries = {
           unknown: {
             binaryPath: "ty.exe",
             contentType: "zip",
-            hash: "774f39828acec8dd77755503efc1986862bb276104d8251cdad953c0874c7d7f",
+            hash: "sha256:774f39828acec8dd77755503efc1986862bb276104d8251cdad953c0874c7d7f",
             url: "https://github.com/astral-sh/ty/releases/download/0.0.73/ty-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -5377,7 +5377,7 @@ var binaries = {
           unknown: {
             binaryPath: "ty.exe",
             contentType: "zip",
-            hash: "ef992fa568eb5d4b342edf4d5cfcaca0e0e6e7fa29cbb937a6c12fbc5dfe674e",
+            hash: "sha256:ef992fa568eb5d4b342edf4d5cfcaca0e0e6e7fa29cbb937a6c12fbc5dfe674e",
             url: "https://github.com/astral-sh/ty/releases/download/0.0.73/ty-aarch64-pc-windows-msvc.zip",
           },
         },
@@ -5393,7 +5393,7 @@ var binaries = {
           unknown: {
             binaryPath: "typos-v1.49.0/typos",
             contentType: "tar.gz",
-            hash: "4cecbf653a9fc45f023abf57f4e2e2f6b138c2d2387b09289beacdd3f0ea7bfd",
+            hash: "sha256:4cecbf653a9fc45f023abf57f4e2e2f6b138c2d2387b09289beacdd3f0ea7bfd",
             url: "https://github.com/crate-ci/typos/releases/download/v1.49.0/typos-v1.49.0-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -5401,7 +5401,7 @@ var binaries = {
           unknown: {
             binaryPath: "typos-v1.49.0/typos",
             contentType: "tar.gz",
-            hash: "8c0e7bd40b2b60c0b0cfe9f74dd814b4d4385c956ce86860f7da9e62d91fdc73",
+            hash: "sha256:8c0e7bd40b2b60c0b0cfe9f74dd814b4d4385c956ce86860f7da9e62d91fdc73",
             url: "https://github.com/crate-ci/typos/releases/download/v1.49.0/typos-v1.49.0-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -5411,7 +5411,7 @@ var binaries = {
           musl: {
             binaryPath: "typos-v1.49.0/typos",
             contentType: "tar.gz",
-            hash: "48bd2d58e02ce713b8c0f1aa239e68ee4f7d8c551013135806e6aed3938d9e10",
+            hash: "sha256:48bd2d58e02ce713b8c0f1aa239e68ee4f7d8c551013135806e6aed3938d9e10",
             url: "https://github.com/crate-ci/typos/releases/download/v1.49.0/typos-v1.49.0-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -5419,7 +5419,7 @@ var binaries = {
           musl: {
             binaryPath: "typos-v1.49.0/typos",
             contentType: "tar.gz",
-            hash: "85c8b87b22a0fb1da130cd4d495e0beba7f1225eb580933184509e146ec4c509",
+            hash: "sha256:85c8b87b22a0fb1da130cd4d495e0beba7f1225eb580933184509e146ec4c509",
             url: "https://github.com/crate-ci/typos/releases/download/v1.49.0/typos-v1.49.0-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -5429,7 +5429,7 @@ var binaries = {
           unknown: {
             binaryPath: "typos-v1.49.0/typos.exe",
             contentType: "zip",
-            hash: "06d3a1b71c282e021671070696a72696d5c60ea485b47dc4f8f1fbcf90144d02",
+            hash: "sha256:06d3a1b71c282e021671070696a72696d5c60ea485b47dc4f8f1fbcf90144d02",
             url: "https://github.com/crate-ci/typos/releases/download/v1.49.0/typos-v1.49.0-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -5445,7 +5445,7 @@ var binaries = {
           unknown: {
             binaryPath: "typst",
             contentType: "tar.xz",
-            hash: "7f9fdd9584866245de9a79e0add8f9236fae6f40a8a45e2c4771ccc14db4e0fa",
+            hash: "sha256:7f9fdd9584866245de9a79e0add8f9236fae6f40a8a45e2c4771ccc14db4e0fa",
             url: "https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-apple-darwin.tar.xz",
           },
         },
@@ -5453,7 +5453,7 @@ var binaries = {
           unknown: {
             binaryPath: "typst",
             contentType: "tar.xz",
-            hash: "48f62ed034aa3a7978309579ac6ca00045e2ef0da73114e8af27cfd8e74dc05a",
+            hash: "sha256:48f62ed034aa3a7978309579ac6ca00045e2ef0da73114e8af27cfd8e74dc05a",
             url: "https://github.com/typst/typst/releases/download/v0.15.1/typst-aarch64-apple-darwin.tar.xz",
           },
         },
@@ -5463,7 +5463,7 @@ var binaries = {
           musl: {
             binaryPath: "typst",
             contentType: "tar.xz",
-            hash: "a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c",
+            hash: "sha256:a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c",
             url: "https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-unknown-linux-musl.tar.xz",
           },
         },
@@ -5471,7 +5471,7 @@ var binaries = {
           musl: {
             binaryPath: "typst",
             contentType: "tar.xz",
-            hash: "5aa8d74a3d906e60ea12a66ac2f37f8eef1b14cbad7182a745e393a10c23dcee",
+            hash: "sha256:5aa8d74a3d906e60ea12a66ac2f37f8eef1b14cbad7182a745e393a10c23dcee",
             url: "https://github.com/typst/typst/releases/download/v0.15.1/typst-aarch64-unknown-linux-musl.tar.xz",
           },
         },
@@ -5481,7 +5481,7 @@ var binaries = {
           unknown: {
             binaryPath: "typst.exe",
             contentType: "zip",
-            hash: "19ce3551153c2fe7ee9fa2f95208310c8f4d3209fedb699e0333faf8913f6736",
+            hash: "sha256:19ce3551153c2fe7ee9fa2f95208310c8f4d3209fedb699e0333faf8913f6736",
             url: "https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -5489,7 +5489,7 @@ var binaries = {
           unknown: {
             binaryPath: "typst.exe",
             contentType: "zip",
-            hash: "4ab28e1b71ec3184d38d580ab797f499b6770d952b6b19167be5cea5c2662e14",
+            hash: "sha256:4ab28e1b71ec3184d38d580ab797f499b6770d952b6b19167be5cea5c2662e14",
             url: "https://github.com/typst/typst/releases/download/v0.15.1/typst-aarch64-pc-windows-msvc.zip",
           },
         },
@@ -5504,14 +5504,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "d24debaf653664c64622871df68239d92841261c5c894034120f4a6a74c943ab",
+            hash: "sha256:d24debaf653664c64622871df68239d92841261c5c894034120f4a6a74c943ab",
             url: "https://github.com/typstyle-rs/typstyle/releases/download/v0.15.1/typstyle-x86_64-apple-darwin",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "f97b74f3a3dfb43ece4e627753d2dae703af2b77f114fb0f1e766f7f1bad5fa1",
+            hash: "sha256:f97b74f3a3dfb43ece4e627753d2dae703af2b77f114fb0f1e766f7f1bad5fa1",
             url: "https://github.com/typstyle-rs/typstyle/releases/download/v0.15.1/typstyle-aarch64-apple-darwin",
           },
         },
@@ -5520,19 +5520,19 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "213c11bc2c64f7237c382b4bb1d06991530ed9d44d3a05204ca3c19615d55b99",
+            hash: "sha256:213c11bc2c64f7237c382b4bb1d06991530ed9d44d3a05204ca3c19615d55b99",
             url: "https://github.com/typstyle-rs/typstyle/releases/download/v0.15.1/typstyle-x86_64-unknown-linux-gnu",
           },
           musl: {
             contentType: "binary",
-            hash: "7aaa0b0fe54ee859c2e138c3f8d307960b06fe072ab9eb14bcf6ab50b5fe9c86",
+            hash: "sha256:7aaa0b0fe54ee859c2e138c3f8d307960b06fe072ab9eb14bcf6ab50b5fe9c86",
             url: "https://github.com/typstyle-rs/typstyle/releases/download/v0.15.1/typstyle-x86_64-unknown-linux-musl",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "2e7bff51079d2f1faaf8629972e79c3d51a3deeaf9b16386ea83334b94773ad1",
+            hash: "sha256:2e7bff51079d2f1faaf8629972e79c3d51a3deeaf9b16386ea83334b94773ad1",
             url: "https://github.com/typstyle-rs/typstyle/releases/download/v0.15.1/typstyle-aarch64-unknown-linux-gnu",
           },
         },
@@ -5541,14 +5541,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "5bed3082e1668561c95e976888d694699650dd194ac23e0d08d4106c7496a48f",
+            hash: "sha256:5bed3082e1668561c95e976888d694699650dd194ac23e0d08d4106c7496a48f",
             url: "https://github.com/typstyle-rs/typstyle/releases/download/v0.15.1/typstyle-x86_64-pc-windows-msvc.exe",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "c5b23f3acbae4956e46073845619b815fc965b167412ed9b9656c54c72d8adcd",
+            hash: "sha256:c5b23f3acbae4956e46073845619b815fc965b167412ed9b9656c54c72d8adcd",
             url: "https://github.com/typstyle-rs/typstyle/releases/download/v0.15.1/typstyle-aarch64-pc-windows-msvc.exe",
           },
         },
@@ -5564,7 +5564,7 @@ var binaries = {
           unknown: {
             binaryPath: "unfuck-ai-comments-v0.9.3/unfuck-ai-comments",
             contentType: "tar.gz",
-            hash: "47303e6cb52adbf5deecea994d696702e89d72fb5e012945eedef5937f6869fc",
+            hash: "sha256:47303e6cb52adbf5deecea994d696702e89d72fb5e012945eedef5937f6869fc",
             url: "https://github.com/umputun/unfuck-ai-comments/releases/download/v0.9.3/unfuck-ai-comments_v0.9.3_macos_x86_64.tar.gz",
           },
         },
@@ -5572,7 +5572,7 @@ var binaries = {
           unknown: {
             binaryPath: "unfuck-ai-comments-v0.9.3/unfuck-ai-comments",
             contentType: "tar.gz",
-            hash: "7bc3177cee075dc9565df3f8bc07c9b3b2aa41519ddc82a127b9c065a46c0486",
+            hash: "sha256:7bc3177cee075dc9565df3f8bc07c9b3b2aa41519ddc82a127b9c065a46c0486",
             url: "https://github.com/umputun/unfuck-ai-comments/releases/download/v0.9.3/unfuck-ai-comments_v0.9.3_macos_arm64.tar.gz",
           },
         },
@@ -5582,7 +5582,7 @@ var binaries = {
           glibc: {
             binaryPath: "unfuck-ai-comments-v0.9.3/unfuck-ai-comments",
             contentType: "tar.gz",
-            hash: "ca89627963e4da90fe4e95af70a0afb6dfb26cc4b8619cbd0d7d1743522ce482",
+            hash: "sha256:ca89627963e4da90fe4e95af70a0afb6dfb26cc4b8619cbd0d7d1743522ce482",
             url: "https://github.com/umputun/unfuck-ai-comments/releases/download/v0.9.3/unfuck-ai-comments_v0.9.3_linux_x86_64.tar.gz",
           },
         },
@@ -5590,7 +5590,7 @@ var binaries = {
           glibc: {
             binaryPath: "unfuck-ai-comments-v0.9.3/unfuck-ai-comments",
             contentType: "tar.gz",
-            hash: "0616701cc9c9092ab7801e49713453caa75da547422fec11bb7807c356fcd2d6",
+            hash: "sha256:0616701cc9c9092ab7801e49713453caa75da547422fec11bb7807c356fcd2d6",
             url: "https://github.com/umputun/unfuck-ai-comments/releases/download/v0.9.3/unfuck-ai-comments_v0.9.3_linux_arm64.tar.gz",
           },
         },
@@ -5606,7 +5606,7 @@ var binaries = {
           unknown: {
             binaryPath: "utpm",
             contentType: "tar.gz",
-            hash: "daff23fe337df266426ed57a5b1cd9000cab72ec0d71c9eb117b4af23adfd138",
+            hash: "sha256:daff23fe337df266426ed57a5b1cd9000cab72ec0d71c9eb117b4af23adfd138",
             url: "https://github.com/typst-community/utpm/releases/download/v0.3.0/utpm-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -5614,7 +5614,7 @@ var binaries = {
           unknown: {
             binaryPath: "utpm",
             contentType: "tar.gz",
-            hash: "3030a4fe20989985f17fbc37ac0f9be81ccc14cd98747bc7932d580c6cade276",
+            hash: "sha256:3030a4fe20989985f17fbc37ac0f9be81ccc14cd98747bc7932d580c6cade276",
             url: "https://github.com/typst-community/utpm/releases/download/v0.3.0/utpm-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -5624,13 +5624,13 @@ var binaries = {
           glibc: {
             binaryPath: "utpm",
             contentType: "tar.gz",
-            hash: "aae307a0f2b359f3f54e4b19adbbc27a494a3a7cc7999cccd0e9bf3d558c4334",
+            hash: "sha256:aae307a0f2b359f3f54e4b19adbbc27a494a3a7cc7999cccd0e9bf3d558c4334",
             url: "https://github.com/typst-community/utpm/releases/download/v0.3.0/utpm-x86_64-unknown-linux-gnu.tar.gz",
           },
           musl: {
             binaryPath: "utpm",
             contentType: "tar.gz",
-            hash: "cc907b72fa8f847c8f430a8c670fd99aa930aff4defe65dd3e30f28ecb167a21",
+            hash: "sha256:cc907b72fa8f847c8f430a8c670fd99aa930aff4defe65dd3e30f28ecb167a21",
             url: "https://github.com/typst-community/utpm/releases/download/v0.3.0/utpm-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -5638,7 +5638,7 @@ var binaries = {
           glibc: {
             binaryPath: "utpm",
             contentType: "tar.gz",
-            hash: "b9be05231771e934fa9e1d26d1c4f56db24816324769059db8f8adaca31a8aee",
+            hash: "sha256:b9be05231771e934fa9e1d26d1c4f56db24816324769059db8f8adaca31a8aee",
             url: "https://github.com/typst-community/utpm/releases/download/v0.3.0/utpm-aarch64-unknown-linux-gnu.tar.gz",
           },
         },
@@ -5648,7 +5648,7 @@ var binaries = {
           unknown: {
             binaryPath: "utpm.exe",
             contentType: "tar.gz",
-            hash: "88337427c8d1f7228dbf873d80113c231a55070f9ebc4fa409b3dd36a3db34d5",
+            hash: "sha256:88337427c8d1f7228dbf873d80113c231a55070f9ebc4fa409b3dd36a3db34d5",
             url: "https://github.com/typst-community/utpm/releases/download/v0.3.0/utpm-x86_64-pc-windows-msvc.tar.gz",
           },
         },
@@ -5656,7 +5656,7 @@ var binaries = {
           unknown: {
             binaryPath: "utpm.exe",
             contentType: "tar.gz",
-            hash: "d58aad50355f65c1eb8537f1e187dbe88ebe86f810e249a273c8fcca134abee4",
+            hash: "sha256:d58aad50355f65c1eb8537f1e187dbe88ebe86f810e249a273c8fcca134abee4",
             url: "https://github.com/typst-community/utpm/releases/download/v0.3.0/utpm-aarch64-pc-windows-msvc.tar.gz",
           },
         },
@@ -5672,7 +5672,7 @@ var binaries = {
           unknown: {
             binaryPath: "vacuum-0.30.0/vacuum",
             contentType: "tar.gz",
-            hash: "8476232e7e03bdd022e85285aeb05106158ac8e8bb156a5f18ab8792ca53f2f9",
+            hash: "sha256:8476232e7e03bdd022e85285aeb05106158ac8e8bb156a5f18ab8792ca53f2f9",
             url: "https://github.com/daveshanley/vacuum/releases/download/v0.30.0/vacuum_0.30.0_darwin_x86_64.tar.gz",
           },
         },
@@ -5680,7 +5680,7 @@ var binaries = {
           unknown: {
             binaryPath: "vacuum-0.30.0/vacuum",
             contentType: "tar.gz",
-            hash: "bebcc32f58db734bcf329ef6f0754d2b1051d55961ee92aac1d2b1192fad78e8",
+            hash: "sha256:bebcc32f58db734bcf329ef6f0754d2b1051d55961ee92aac1d2b1192fad78e8",
             url: "https://github.com/daveshanley/vacuum/releases/download/v0.30.0/vacuum_0.30.0_darwin_arm64.tar.gz",
           },
         },
@@ -5690,7 +5690,7 @@ var binaries = {
           glibc: {
             binaryPath: "vacuum-0.30.0/vacuum",
             contentType: "tar.gz",
-            hash: "817b6bd71051c2b543891b4e26692404bfab9c79b29393734bdd8c6b9356c2e4",
+            hash: "sha256:817b6bd71051c2b543891b4e26692404bfab9c79b29393734bdd8c6b9356c2e4",
             url: "https://github.com/daveshanley/vacuum/releases/download/v0.30.0/vacuum_0.30.0_linux_x86_64.tar.gz",
           },
         },
@@ -5698,7 +5698,7 @@ var binaries = {
           glibc: {
             binaryPath: "vacuum-0.30.0/vacuum",
             contentType: "tar.gz",
-            hash: "5328adfda617a6c720999e4cbce956f9b1f55f34e90f62e642e7e41f73541511",
+            hash: "sha256:5328adfda617a6c720999e4cbce956f9b1f55f34e90f62e642e7e41f73541511",
             url: "https://github.com/daveshanley/vacuum/releases/download/v0.30.0/vacuum_0.30.0_linux_arm64.tar.gz",
           },
         },
@@ -5708,7 +5708,7 @@ var binaries = {
           unknown: {
             binaryPath: "vacuum-0.30.0/vacuum.exe",
             contentType: "tar.gz",
-            hash: "5a18e540bfa12675872125c9a7d68d484908342600721b18a7cb127a1db38776",
+            hash: "sha256:5a18e540bfa12675872125c9a7d68d484908342600721b18a7cb127a1db38776",
             url: "https://github.com/daveshanley/vacuum/releases/download/v0.30.0/vacuum_0.30.0_windows_x86_64.tar.gz",
           },
         },
@@ -5716,7 +5716,7 @@ var binaries = {
           unknown: {
             binaryPath: "vacuum-0.30.0/vacuum.exe",
             contentType: "tar.gz",
-            hash: "32cfaf6c0062fe4ef0a0add76c98937e84b5b11a66c390ec024288f85b44bc7f",
+            hash: "sha256:32cfaf6c0062fe4ef0a0add76c98937e84b5b11a66c390ec024288f85b44bc7f",
             url: "https://github.com/daveshanley/vacuum/releases/download/v0.30.0/vacuum_0.30.0_windows_arm64.tar.gz",
           },
         },
@@ -5733,7 +5733,7 @@ var binaries = {
           unknown: {
             binaryPath: "vale-3.18.0/vale",
             contentType: "tar.gz",
-            hash: "7ec47dad588bf1421e12f72f15219dcc96e3adf7204918ee86ea81fe8cddab8d",
+            hash: "sha256:7ec47dad588bf1421e12f72f15219dcc96e3adf7204918ee86ea81fe8cddab8d",
             url: "https://github.com/vale-cli/vale/releases/download/v3.18.0/vale_3.18.0_macOS_64-bit.tar.gz",
           },
         },
@@ -5741,7 +5741,7 @@ var binaries = {
           unknown: {
             binaryPath: "vale-3.18.0/vale",
             contentType: "tar.gz",
-            hash: "4d7de9bda8379da14cd45048500199c549413187526d0913383ad822866ad43d",
+            hash: "sha256:4d7de9bda8379da14cd45048500199c549413187526d0913383ad822866ad43d",
             url: "https://github.com/vale-cli/vale/releases/download/v3.18.0/vale_3.18.0_macOS_arm64.tar.gz",
           },
         },
@@ -5751,7 +5751,7 @@ var binaries = {
           glibc: {
             binaryPath: "vale-3.18.0/vale",
             contentType: "tar.gz",
-            hash: "a6f71a75a12fe689345b754f2412b90367fe33648abb7d200fa19eaadc2dbf6d",
+            hash: "sha256:a6f71a75a12fe689345b754f2412b90367fe33648abb7d200fa19eaadc2dbf6d",
             url: "https://github.com/vale-cli/vale/releases/download/v3.18.0/vale_3.18.0_Linux_64-bit.tar.gz",
           },
         },
@@ -5759,7 +5759,7 @@ var binaries = {
           glibc: {
             binaryPath: "vale-3.18.0/vale",
             contentType: "tar.gz",
-            hash: "228325a79f3e6d8b4798d82901f8ed36f6d12b7ff0bad2cc83512dde0c84fbcc",
+            hash: "sha256:228325a79f3e6d8b4798d82901f8ed36f6d12b7ff0bad2cc83512dde0c84fbcc",
             url: "https://github.com/vale-cli/vale/releases/download/v3.18.0/vale_3.18.0_Linux_arm64.tar.gz",
           },
         },
@@ -5769,7 +5769,7 @@ var binaries = {
           unknown: {
             binaryPath: "vale-3.18.0/vale.exe",
             contentType: "zip",
-            hash: "621cee4b7f8c8687fbcbdcbfc2e904aaa174b9d07bcb9018bd96b943b89c539d",
+            hash: "sha256:621cee4b7f8c8687fbcbdcbfc2e904aaa174b9d07bcb9018bd96b943b89c539d",
             url: "https://github.com/vale-cli/vale/releases/download/v3.18.0/vale_3.18.0_Windows_64-bit.zip",
           },
         },
@@ -5777,7 +5777,7 @@ var binaries = {
           unknown: {
             binaryPath: "vale-3.18.0/vale.exe",
             contentType: "zip",
-            hash: "24a70591e45a5afbb94d44e5bd600ffcd15b6dabc6cf9ffffd5c3ece4a6c4732",
+            hash: "sha256:24a70591e45a5afbb94d44e5bd600ffcd15b6dabc6cf9ffffd5c3ece4a6c4732",
             url: "https://github.com/vale-cli/vale/releases/download/v3.18.0/vale_3.18.0_Windows_arm64.zip",
           },
         },
@@ -5794,7 +5794,7 @@ var binaries = {
           unknown: {
             binaryPath: "wt",
             contentType: "tar.xz",
-            hash: "dbc5a7e5f787d19943e2f7f1a3214be836f71bab2ef79ff4e8ede4cb390cd634",
+            hash: "sha256:dbc5a7e5f787d19943e2f7f1a3214be836f71bab2ef79ff4e8ede4cb390cd634",
             url: "https://github.com/max-sixty/worktrunk/releases/download/v0.75.0/worktrunk-x86_64-apple-darwin.tar.xz",
           },
         },
@@ -5802,7 +5802,7 @@ var binaries = {
           unknown: {
             binaryPath: "wt",
             contentType: "tar.xz",
-            hash: "c5868d06bddd28b8e49d7b0c42c06e5825ec27e930ce7f3d254a8d8f6511c3b9",
+            hash: "sha256:c5868d06bddd28b8e49d7b0c42c06e5825ec27e930ce7f3d254a8d8f6511c3b9",
             url: "https://github.com/max-sixty/worktrunk/releases/download/v0.75.0/worktrunk-aarch64-apple-darwin.tar.xz",
           },
         },
@@ -5812,7 +5812,7 @@ var binaries = {
           musl: {
             binaryPath: "wt",
             contentType: "tar.xz",
-            hash: "9ca16c77245c01edb079620a4375a8a49046fded4d4e571dd21930fd0235eca3",
+            hash: "sha256:9ca16c77245c01edb079620a4375a8a49046fded4d4e571dd21930fd0235eca3",
             url: "https://github.com/max-sixty/worktrunk/releases/download/v0.75.0/worktrunk-x86_64-unknown-linux-musl.tar.xz",
           },
         },
@@ -5820,7 +5820,7 @@ var binaries = {
           musl: {
             binaryPath: "wt",
             contentType: "tar.xz",
-            hash: "2504fdc07152fadd2c53c6d71268c6684aa08fb9f5a3ea4ec740c8747d3dde88",
+            hash: "sha256:2504fdc07152fadd2c53c6d71268c6684aa08fb9f5a3ea4ec740c8747d3dde88",
             url: "https://github.com/max-sixty/worktrunk/releases/download/v0.75.0/worktrunk-aarch64-unknown-linux-musl.tar.xz",
           },
         },
@@ -5830,7 +5830,7 @@ var binaries = {
           unknown: {
             binaryPath: "wt.exe",
             contentType: "zip",
-            hash: "ded8b08156410ce9bf217d9a8e5b7c150eb52d0960799c3846fde1b80f616b20",
+            hash: "sha256:ded8b08156410ce9bf217d9a8e5b7c150eb52d0960799c3846fde1b80f616b20",
             url: "https://github.com/max-sixty/worktrunk/releases/download/v0.75.0/worktrunk-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -5847,7 +5847,7 @@ var binaries = {
           unknown: {
             binaryPath: "xh-v0.26.2/xh",
             contentType: "tar.gz",
-            hash: "1f19ae1a2f411c58bd6943c638472cd5c4179ed019fe4f786e524b27da4c14a2",
+            hash: "sha256:1f19ae1a2f411c58bd6943c638472cd5c4179ed019fe4f786e524b27da4c14a2",
             url: "https://github.com/ducaale/xh/releases/download/v0.26.2/xh-v0.26.2-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -5855,7 +5855,7 @@ var binaries = {
           unknown: {
             binaryPath: "xh-v0.26.2/xh",
             contentType: "tar.gz",
-            hash: "cc5739d061a8469d0011ca0ab92d4a5cd726cc56f0ef30108953b119f54d0719",
+            hash: "sha256:cc5739d061a8469d0011ca0ab92d4a5cd726cc56f0ef30108953b119f54d0719",
             url: "https://github.com/ducaale/xh/releases/download/v0.26.2/xh-v0.26.2-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -5865,7 +5865,7 @@ var binaries = {
           musl: {
             binaryPath: "xh-v0.26.2/xh",
             contentType: "tar.gz",
-            hash: "8c53b6a23435754f9e2ea8ab8c0d0296a1921404b88132cf9b364ff6e8c22a6e",
+            hash: "sha256:8c53b6a23435754f9e2ea8ab8c0d0296a1921404b88132cf9b364ff6e8c22a6e",
             url: "https://github.com/ducaale/xh/releases/download/v0.26.2/xh-v0.26.2-x86_64-unknown-linux-musl.tar.gz",
           },
         },
@@ -5873,7 +5873,7 @@ var binaries = {
           musl: {
             binaryPath: "xh-v0.26.2/xh",
             contentType: "tar.gz",
-            hash: "3a44900a8ac53f614aa0cd1d2e54ecf4e93584384c1ad091aa18d7992686d7eb",
+            hash: "sha256:3a44900a8ac53f614aa0cd1d2e54ecf4e93584384c1ad091aa18d7992686d7eb",
             url: "https://github.com/ducaale/xh/releases/download/v0.26.2/xh-v0.26.2-aarch64-unknown-linux-musl.tar.gz",
           },
         },
@@ -5883,7 +5883,7 @@ var binaries = {
           unknown: {
             binaryPath: "xh-v0.26.2/xh.exe",
             contentType: "zip",
-            hash: "7907c1ef225382fb5955c8274aa23e31b70622c4d39dbc76cf945dc8ce15a78d",
+            hash: "sha256:7907c1ef225382fb5955c8274aa23e31b70622c4d39dbc76cf945dc8ce15a78d",
             url: "https://github.com/ducaale/xh/releases/download/v0.26.2/xh-v0.26.2-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -5899,7 +5899,7 @@ var binaries = {
           unknown: {
             binaryPath: "yamlfmt-0.21.0/yamlfmt",
             contentType: "tar.gz",
-            hash: "060e943bcb8583c456810eb1ff4721b4f46c4a0c1a4432449d5dc3bbfe29a22b",
+            hash: "sha256:060e943bcb8583c456810eb1ff4721b4f46c4a0c1a4432449d5dc3bbfe29a22b",
             url: "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Darwin_x86_64.tar.gz",
           },
         },
@@ -5907,7 +5907,7 @@ var binaries = {
           unknown: {
             binaryPath: "yamlfmt-0.21.0/yamlfmt",
             contentType: "tar.gz",
-            hash: "4b417ecb94339d57e4c122ecc948c1a00fe328b5853266de9806e652a92858fa",
+            hash: "sha256:4b417ecb94339d57e4c122ecc948c1a00fe328b5853266de9806e652a92858fa",
             url: "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Darwin_arm64.tar.gz",
           },
         },
@@ -5917,7 +5917,7 @@ var binaries = {
           glibc: {
             binaryPath: "yamlfmt-0.21.0/yamlfmt",
             contentType: "tar.gz",
-            hash: "1f300d9257b232bb3b541d7fb1b0e6b3c121bcbab381c86cd38cb8722be8a566",
+            hash: "sha256:1f300d9257b232bb3b541d7fb1b0e6b3c121bcbab381c86cd38cb8722be8a566",
             url: "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Linux_x86_64.tar.gz",
           },
         },
@@ -5925,7 +5925,7 @@ var binaries = {
           glibc: {
             binaryPath: "yamlfmt-0.21.0/yamlfmt",
             contentType: "tar.gz",
-            hash: "5b2689c963b177271330c5ce8ca7396751107e5a826be46f03d2cb9b6f0c7784",
+            hash: "sha256:5b2689c963b177271330c5ce8ca7396751107e5a826be46f03d2cb9b6f0c7784",
             url: "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Linux_arm64.tar.gz",
           },
         },
@@ -5935,7 +5935,7 @@ var binaries = {
           unknown: {
             binaryPath: "yamlfmt-0.21.0/yamlfmt.exe",
             contentType: "tar.gz",
-            hash: "07f80ce5d741eb4b0a9380ac78a19c7cb5bd44e2a9a47a5a04839e3ba54dd463",
+            hash: "sha256:07f80ce5d741eb4b0a9380ac78a19c7cb5bd44e2a9a47a5a04839e3ba54dd463",
             url: "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Windows_x86_64.tar.gz",
           },
         },
@@ -5943,7 +5943,7 @@ var binaries = {
           unknown: {
             binaryPath: "yamlfmt-0.21.0/yamlfmt.exe",
             contentType: "tar.gz",
-            hash: "c1e64d1c72ca8986bc5b8c8edd4ec89f0627804e7e08f8de9f4b484cb5cad897",
+            hash: "sha256:c1e64d1c72ca8986bc5b8c8edd4ec89f0627804e7e08f8de9f4b484cb5cad897",
             url: "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Windows_arm64.tar.gz",
           },
         },
@@ -5958,14 +5958,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "caa513cb04f3804b34d4752f0e0d7904fecb9e7cf1d34081289f83259319a7f6",
+            hash: "sha256:caa513cb04f3804b34d4752f0e0d7904fecb9e7cf1d34081289f83259319a7f6",
             url: "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_darwin_amd64",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "cceb0b8d71ea5294334121f8429f33f92b920e7217d904a2f9f35443968ac424",
+            hash: "sha256:cceb0b8d71ea5294334121f8429f33f92b920e7217d904a2f9f35443968ac424",
             url: "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_darwin_arm64",
           },
         },
@@ -5974,7 +5974,7 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "2f14cc1addfbea7f3b2c8f60ebd1d71ba8a03690ee06f62a63605ab2ea104ab1",
+            hash: "sha256:2f14cc1addfbea7f3b2c8f60ebd1d71ba8a03690ee06f62a63605ab2ea104ab1",
             url: "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_freebsd_amd64",
           },
         },
@@ -5983,14 +5983,14 @@ var binaries = {
         amd64: {
           glibc: {
             contentType: "binary",
-            hash: "c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385",
+            hash: "sha256:c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385",
             url: "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64",
           },
         },
         arm64: {
           glibc: {
             contentType: "binary",
-            hash: "88a1016bc1d657375a35864e4f44b6f333df8ff97b559f51bba0adcb2169df09",
+            hash: "sha256:88a1016bc1d657375a35864e4f44b6f333df8ff97b559f51bba0adcb2169df09",
             url: "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_arm64",
           },
         },
@@ -5999,7 +5999,7 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "a1eafecf994af94c1d6ab056f3eee7f5dfd6766c2fca133f2c9e4484d831fc1d",
+            hash: "sha256:a1eafecf994af94c1d6ab056f3eee7f5dfd6766c2fca133f2c9e4484d831fc1d",
             url: "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_openbsd_amd64",
           },
         },
@@ -6008,14 +6008,14 @@ var binaries = {
         amd64: {
           unknown: {
             contentType: "binary",
-            hash: "ece3dd8bb50d39f93610506273ea262feb91e5c486bbddbb10abf91b2a6c0f14",
+            hash: "sha256:ece3dd8bb50d39f93610506273ea262feb91e5c486bbddbb10abf91b2a6c0f14",
             url: "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_windows_amd64.exe",
           },
         },
         arm64: {
           unknown: {
             contentType: "binary",
-            hash: "9a0ec8f648b0749d3d71286df96384f358c0eeca486bbcdec04e747307021d3a",
+            hash: "sha256:9a0ec8f648b0749d3d71286df96384f358c0eeca486bbcdec04e747307021d3a",
             url: "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_windows_arm64.exe",
           },
         },
@@ -6032,7 +6032,7 @@ var binaries = {
           unknown: {
             binaryPath: "zizmor",
             contentType: "tar.gz",
-            hash: "648b72ab9941a7f2a8d65d7b68a8e76cef789538c8df3a3950384d38423375b0",
+            hash: "sha256:648b72ab9941a7f2a8d65d7b68a8e76cef789538c8df3a3950384d38423375b0",
             url: "https://github.com/zizmorcore/zizmor/releases/download/v1.29.0/zizmor-x86_64-apple-darwin.tar.gz",
           },
         },
@@ -6040,7 +6040,7 @@ var binaries = {
           unknown: {
             binaryPath: "zizmor",
             contentType: "tar.gz",
-            hash: "720322fade9e83a9c7953944c438f2ba942636b86b96a8f0e6b15ce94c8a6b6f",
+            hash: "sha256:720322fade9e83a9c7953944c438f2ba942636b86b96a8f0e6b15ce94c8a6b6f",
             url: "https://github.com/zizmorcore/zizmor/releases/download/v1.29.0/zizmor-aarch64-apple-darwin.tar.gz",
           },
         },
@@ -6050,7 +6050,7 @@ var binaries = {
           glibc: {
             binaryPath: "zizmor",
             contentType: "tar.gz",
-            hash: "dd96df044a6e8538d5f423790f453bdd03d49e5b2bcc38214acc41a2f1297839",
+            hash: "sha256:dd96df044a6e8538d5f423790f453bdd03d49e5b2bcc38214acc41a2f1297839",
             url: "https://github.com/zizmorcore/zizmor/releases/download/v1.29.0/zizmor-x86_64-unknown-linux-gnu.tar.gz",
           },
         },
@@ -6058,7 +6058,7 @@ var binaries = {
           glibc: {
             binaryPath: "zizmor",
             contentType: "tar.gz",
-            hash: "415eaa7c0a06479a701b8e44a3e812c1047decc848ec4bede7bd6bbf49f22d20",
+            hash: "sha256:415eaa7c0a06479a701b8e44a3e812c1047decc848ec4bede7bd6bbf49f22d20",
             url: "https://github.com/zizmorcore/zizmor/releases/download/v1.29.0/zizmor-aarch64-unknown-linux-gnu.tar.gz",
           },
         },
@@ -6068,7 +6068,7 @@ var binaries = {
           unknown: {
             binaryPath: "zizmor.exe",
             contentType: "zip",
-            hash: "68a6bc6888f10bf0d53658c75885e7c1b7a0588d4c1fbc3f0ca280ad7324bf06",
+            hash: "sha256:68a6bc6888f10bf0d53658c75885e7c1b7a0588d4c1fbc3f0ca280ad7324bf06",
             url: "https://github.com/zizmorcore/zizmor/releases/download/v1.29.0/zizmor-x86_64-pc-windows-msvc.zip",
           },
         },
@@ -6264,7 +6264,7 @@ const allApps = {
     description:
       "A program that reformats Kotlin source code to comply with the common community standard for Kotlin code conventions.",
     jvm: {
-      jarHash: "f39bf9a1f520d27f86f2bdf4d6dbb2574c05e84f656171ed65c4e534b86b9965",
+      jarHash: "sha256:f39bf9a1f520d27f86f2bdf4d6dbb2574c05e84f656171ed65c4e534b86b9965",
       jarUrl:
         "https://github.com/facebook/ktfmt/releases/download/v0.62/ktfmt-0.62-with-dependencies.jar",
       version: "v0.62",
@@ -6273,7 +6273,7 @@ const allApps = {
   ktlint: {
     description: "An anti-bikeshedding Kotlin linter with built-in formatter",
     jvm: {
-      jarHash: "a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75",
+      jarHash: "sha256:a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75",
       jarUrl: "https://github.com/pinterest/ktlint/releases/download/1.8.0/ktlint",
       version: "1.8.0",
     },
@@ -6319,7 +6319,7 @@ const allApps = {
   "openapi-generator": {
     description: `OpenAPI Generator allows generation of API client libraries (SDK generation), server stubs, documentation and configuration automatically given an OpenAPI Spec (v2, v3)`,
     jvm: {
-      jarHash: "871e0155287a87b579ff31096b2d45b1f95a115edfe631411ec6cff4848d0f03",
+      jarHash: "sha256:871e0155287a87b579ff31096b2d45b1f95a115edfe631411ec6cff4848d0f03",
       jarUrl:
         "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.20.0/openapi-generator-cli-7.20.0.jar",
       version: "7.20.0",
@@ -11373,7 +11373,7 @@ function parsePin(raw) {
 const ociBundle = parsePin(OCI_BUNDLE_PIN);
 const parsers = {
   core: {
-    hash: "b5425355969f69f9a80a9838269b350b33ab47ec290358d7aa761483a2921986",
+    hash: "sha256:b5425355969f69f9a80a9838269b350b33ab47ec290358d7aa761483a2921986",
     oci: {
       digest: "sha256:33f5437bfa8c974e79f5d597af2009a56f2b438792958d62ee885749b445d5e2",
       ref: "ghcr.io/datamitsu/datamitsu-parsers",
@@ -11457,7 +11457,7 @@ var runtimes_default = {
               binaryPath: "bun-darwin-x64/bun",
               contentType: "zip",
               extractDir: true,
-              hash: "8f34239f276a3f0d27bfcd1ffecfe5d2127e74fb0aa4c0971a0cdec7b225c965",
+              hash: "sha256:8f34239f276a3f0d27bfcd1ffecfe5d2127e74fb0aa4c0971a0cdec7b225c965",
               url: "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-darwin-x64.zip",
             },
           },
@@ -11466,7 +11466,7 @@ var runtimes_default = {
               binaryPath: "bun-darwin-aarch64/bun",
               contentType: "zip",
               extractDir: true,
-              hash: "d8973ce835fa7867e5cc79afee6fc6f1ae0117aa4bd5fc2546fd00c512f71386",
+              hash: "sha256:d8973ce835fa7867e5cc79afee6fc6f1ae0117aa4bd5fc2546fd00c512f71386",
               url: "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-darwin-aarch64.zip",
             },
           },
@@ -11477,14 +11477,14 @@ var runtimes_default = {
               binaryPath: "bun-linux-x64/bun",
               contentType: "zip",
               extractDir: true,
-              hash: "74c1c3bee7cd998500c8f969cd8972355ac6a07207e94a39eece1999b56ffabf",
+              hash: "sha256:74c1c3bee7cd998500c8f969cd8972355ac6a07207e94a39eece1999b56ffabf",
               url: "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-x64.zip",
             },
             musl: {
               binaryPath: "bun-linux-x64-musl/bun",
               contentType: "zip",
               extractDir: true,
-              hash: "ea116fe09f2f764c87b9bf735225b781d1f7674ca58d66040470f38a7943c8ab",
+              hash: "sha256:ea116fe09f2f764c87b9bf735225b781d1f7674ca58d66040470f38a7943c8ab",
               url: "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-x64-musl.zip",
             },
           },
@@ -11493,14 +11493,14 @@ var runtimes_default = {
               binaryPath: "bun-linux-aarch64/bun",
               contentType: "zip",
               extractDir: true,
-              hash: "580ce77533108dc6b10bec1721397e4f5aa44e909726da2451d483dfc5e581d6",
+              hash: "sha256:580ce77533108dc6b10bec1721397e4f5aa44e909726da2451d483dfc5e581d6",
               url: "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-aarch64.zip",
             },
             musl: {
               binaryPath: "bun-linux-aarch64-musl/bun",
               contentType: "zip",
               extractDir: true,
-              hash: "53895807a00508f70e76715947097aa533ec520aac066501c00fb77d2b1a7a6c",
+              hash: "sha256:53895807a00508f70e76715947097aa533ec520aac066501c00fb77d2b1a7a6c",
               url: "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-linux-aarch64-musl.zip",
             },
           },
@@ -11511,7 +11511,7 @@ var runtimes_default = {
               binaryPath: "bun-windows-x64/bun.exe",
               contentType: "zip",
               extractDir: true,
-              hash: "52b1f3028b01f43d37fefdf669d034a1ee2e0d96c56bb13c393bdaf169b1af84",
+              hash: "sha256:52b1f3028b01f43d37fefdf669d034a1ee2e0d96c56bb13c393bdaf169b1af84",
               url: "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-windows-x64.zip",
             },
           },
@@ -11520,7 +11520,7 @@ var runtimes_default = {
               binaryPath: "bun-windows-aarch64/bun.exe",
               contentType: "zip",
               extractDir: true,
-              hash: "41ea66155baf0ac1f8545f8d54544bcaf4908104193c5db9aad85d6f53ae1bd7",
+              hash: "sha256:41ea66155baf0ac1f8545f8d54544bcaf4908104193c5db9aad85d6f53ae1bd7",
               url: "https://github.com/oven-sh/bun/releases/download/bun-v1.4.1/bun-windows-aarch64.zip",
             },
           },
@@ -11540,7 +11540,7 @@ var runtimes_default = {
               binaryPath: "go/bin/go",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "d3314e25496e4381d71a5c51d2907e7af655d199f6780b549f015bd85fef4986",
+              hash: "sha256:d3314e25496e4381d71a5c51d2907e7af655d199f6780b549f015bd85fef4986",
               url: "https://go.dev/dl/go1.27.0.darwin-amd64.tar.gz",
             },
           },
@@ -11549,7 +11549,7 @@ var runtimes_default = {
               binaryPath: "go/bin/go",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "90493b3bbd5e10f91d12153198bf1994fd756399b4fec93b49b0c6e2acdeeb3e",
+              hash: "sha256:90493b3bbd5e10f91d12153198bf1994fd756399b4fec93b49b0c6e2acdeeb3e",
               url: "https://go.dev/dl/go1.27.0.darwin-arm64.tar.gz",
             },
           },
@@ -11560,7 +11560,7 @@ var runtimes_default = {
               binaryPath: "go/bin/go",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "675c26c449cbb18fc24b74650de1eabbae6e16f64326fd85a283fb3b58280685",
+              hash: "sha256:675c26c449cbb18fc24b74650de1eabbae6e16f64326fd85a283fb3b58280685",
               url: "https://go.dev/dl/go1.27.0.linux-amd64.tar.gz",
             },
           },
@@ -11569,7 +11569,7 @@ var runtimes_default = {
               binaryPath: "go/bin/go",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "51798d2c42d0e1c6ed7fd9f48728b4193abac9e8aad6dbac2fe96a81f5909bda",
+              hash: "sha256:51798d2c42d0e1c6ed7fd9f48728b4193abac9e8aad6dbac2fe96a81f5909bda",
               url: "https://go.dev/dl/go1.27.0.linux-arm64.tar.gz",
             },
           },
@@ -11580,7 +11580,7 @@ var runtimes_default = {
               binaryPath: "go/bin/go.exe",
               contentType: "zip",
               extractDir: true,
-              hash: "f0c0a0d33ba94f4d2c5dbc887334ce678b21813504ddb3aafcb06e60a5a667c4",
+              hash: "sha256:f0c0a0d33ba94f4d2c5dbc887334ce678b21813504ddb3aafcb06e60a5a667c4",
               url: "https://go.dev/dl/go1.27.0.windows-amd64.zip",
             },
           },
@@ -11589,7 +11589,7 @@ var runtimes_default = {
               binaryPath: "go/bin/go.exe",
               contentType: "zip",
               extractDir: true,
-              hash: "6e0156b9788209931dd340fadc04171ce15063c17b51c92e7b86b51109626e90",
+              hash: "sha256:6e0156b9788209931dd340fadc04171ce15063c17b51c92e7b86b51109626e90",
               url: "https://go.dev/dl/go1.27.0.windows-arm64.zip",
             },
           },
@@ -11609,7 +11609,7 @@ var runtimes_default = {
               binaryPath: "jdk-26.0.2+10/Contents/Home/bin/java",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "def6874a01072031c2c850b03b4d29d4e97772af7cc2f564f6fae03f98eb6ea9",
+              hash: "sha256:def6874a01072031c2c850b03b4d29d4e97772af7cc2f564f6fae03f98eb6ea9",
               url: "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_x64_mac_hotspot_26.0.2_10.tar.gz",
             },
           },
@@ -11618,7 +11618,7 @@ var runtimes_default = {
               binaryPath: "jdk-26.0.2+10/Contents/Home/bin/java",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "4c9255ed5a9fa84ad6e25675bac6ba6a4906fc7878169d7369a1424157b50256",
+              hash: "sha256:4c9255ed5a9fa84ad6e25675bac6ba6a4906fc7878169d7369a1424157b50256",
               url: "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_aarch64_mac_hotspot_26.0.2_10.tar.gz",
             },
           },
@@ -11629,14 +11629,14 @@ var runtimes_default = {
               binaryPath: "jdk-26.0.2+10/bin/java",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "56f768372f6ca1e2eb4c5f46b78f627949e8dcfe9c9723926cf45a45faf35802",
+              hash: "sha256:56f768372f6ca1e2eb4c5f46b78f627949e8dcfe9c9723926cf45a45faf35802",
               url: "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_x64_linux_hotspot_26.0.2_10.tar.gz",
             },
             musl: {
               binaryPath: "jdk-26.0.2+10/bin/java",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "88caf27ab9f2a15a52a114ea18fa20c518ccc325b5ba4bb5fd6c42c56b581498",
+              hash: "sha256:88caf27ab9f2a15a52a114ea18fa20c518ccc325b5ba4bb5fd6c42c56b581498",
               url: "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_x64_alpine-linux_hotspot_26.0.2_10.tar.gz",
             },
           },
@@ -11645,14 +11645,14 @@ var runtimes_default = {
               binaryPath: "jdk-26.0.2+10/bin/java",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "f82aeb1d5b0ddb93d3bd81c20948bc560c0758993157202424c17e805e2effbb",
+              hash: "sha256:f82aeb1d5b0ddb93d3bd81c20948bc560c0758993157202424c17e805e2effbb",
               url: "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_aarch64_linux_hotspot_26.0.2_10.tar.gz",
             },
             musl: {
               binaryPath: "jdk-26.0.2+10/bin/java",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "bee481d4ba078ac1aaa741541bb0b99de876d679ccc80f9685710b72bc7b04f1",
+              hash: "sha256:bee481d4ba078ac1aaa741541bb0b99de876d679ccc80f9685710b72bc7b04f1",
               url: "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_aarch64_alpine-linux_hotspot_26.0.2_10.tar.gz",
             },
           },
@@ -11663,7 +11663,7 @@ var runtimes_default = {
               binaryPath: "jdk-26.0.2+10/bin/java.exe",
               contentType: "zip",
               extractDir: true,
-              hash: "0b532502e29a5d2babe608069f6df2423ae5e1aa714b715b560217cf8c6ce8ff",
+              hash: "sha256:0b532502e29a5d2babe608069f6df2423ae5e1aa714b715b560217cf8c6ce8ff",
               url: "https://github.com/adoptium/temurin26-binaries/releases/download/jdk-26.0.2%2B10/OpenJDK26U-jdk_x64_windows_hotspot_26.0.2_10.zip",
             },
           },
@@ -11682,7 +11682,7 @@ var runtimes_default = {
               binaryPath: "node-v26.8.1-darwin-x64/bin/node",
               contentType: "tar.xz",
               extractDir: true,
-              hash: "977c742754a1fa2425d3d9b4a17ca0ba4809919030432f47880b3dba8260cb6f",
+              hash: "sha256:977c742754a1fa2425d3d9b4a17ca0ba4809919030432f47880b3dba8260cb6f",
               url: "https://nodejs.org/dist/v26.8.1/node-v26.8.1-darwin-x64.tar.xz",
             },
           },
@@ -11691,7 +11691,7 @@ var runtimes_default = {
               binaryPath: "node-v26.8.1-darwin-arm64/bin/node",
               contentType: "tar.xz",
               extractDir: true,
-              hash: "b32047d86467497d3f59b8cf81f422c06938cf5f36ece2b36f6e7c024a0a3e5b",
+              hash: "sha256:b32047d86467497d3f59b8cf81f422c06938cf5f36ece2b36f6e7c024a0a3e5b",
               url: "https://nodejs.org/dist/v26.8.1/node-v26.8.1-darwin-arm64.tar.xz",
             },
           },
@@ -11702,14 +11702,14 @@ var runtimes_default = {
               binaryPath: "node-v26.8.1-linux-x64/bin/node",
               contentType: "tar.xz",
               extractDir: true,
-              hash: "3e301118d7df53d563b7e96c1617545f26e2f76f9724be668d6cab65c15dda5d",
+              hash: "sha256:3e301118d7df53d563b7e96c1617545f26e2f76f9724be668d6cab65c15dda5d",
               url: "https://nodejs.org/dist/v26.8.1/node-v26.8.1-linux-x64.tar.xz",
             },
             musl: {
               binaryPath: "node-v26.8.1-linux-x64-musl/bin/node",
               contentType: "tar.xz",
               extractDir: true,
-              hash: "cc6a960576eeebf62d51d25ce0d138a3ca50a57e3f8f4a8bc10a3e37b15e2f63",
+              hash: "sha256:cc6a960576eeebf62d51d25ce0d138a3ca50a57e3f8f4a8bc10a3e37b15e2f63",
               url: "https://unofficial-builds.nodejs.org/download/release/v26.8.1/node-v26.8.1-linux-x64-musl.tar.xz",
             },
           },
@@ -11718,14 +11718,14 @@ var runtimes_default = {
               binaryPath: "node-v26.8.1-linux-arm64/bin/node",
               contentType: "tar.xz",
               extractDir: true,
-              hash: "23c1b4d19e2f12a7d06fe8aa3d6e0e4923cf77a47e13c5ccdf32fadaa33960f2",
+              hash: "sha256:23c1b4d19e2f12a7d06fe8aa3d6e0e4923cf77a47e13c5ccdf32fadaa33960f2",
               url: "https://nodejs.org/dist/v26.8.1/node-v26.8.1-linux-arm64.tar.xz",
             },
             musl: {
               binaryPath: "node-v26.8.1-linux-arm64-musl/bin/node",
               contentType: "tar.xz",
               extractDir: true,
-              hash: "019a11d7c54062d24e56165a295867d0f3c1aefd2e677f9ee449c16408b9baea",
+              hash: "sha256:019a11d7c54062d24e56165a295867d0f3c1aefd2e677f9ee449c16408b9baea",
               url: "https://unofficial-builds.nodejs.org/download/release/v26.8.1/node-v26.8.1-linux-arm64-musl.tar.xz",
             },
           },
@@ -11736,7 +11736,7 @@ var runtimes_default = {
               binaryPath: "node-v26.8.1-win-x64/node.exe",
               contentType: "zip",
               extractDir: true,
-              hash: "57693d8e93d1b04e7b7de46aca53ecd63e97564e73de36a68428d7ff08d83587",
+              hash: "sha256:57693d8e93d1b04e7b7de46aca53ecd63e97564e73de36a68428d7ff08d83587",
               url: "https://nodejs.org/dist/v26.8.1/node-v26.8.1-win-x64.zip",
             },
           },
@@ -11745,7 +11745,7 @@ var runtimes_default = {
               binaryPath: "node-v26.8.1-win-arm64/node.exe",
               contentType: "zip",
               extractDir: true,
-              hash: "09d62005aa9dca8fcd9bdce8196f5aa783eee3818d5af74089eb7297103c02d4",
+              hash: "sha256:09d62005aa9dca8fcd9bdce8196f5aa783eee3818d5af74089eb7297103c02d4",
               url: "https://nodejs.org/dist/v26.8.1/node-v26.8.1-win-arm64.zip",
             },
           },
@@ -11768,7 +11768,7 @@ var runtimes_default = {
               binaryPath: "pnpm",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "98921409db2f510ccc4eb521f9bfec51e3f1e809fd66717a062962f3b2a4cdea",
+              hash: "sha256:98921409db2f510ccc4eb521f9bfec51e3f1e809fd66717a062962f3b2a4cdea",
               url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-darwin-x64.tar.gz",
             },
           },
@@ -11777,7 +11777,7 @@ var runtimes_default = {
               binaryPath: "pnpm",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "432fd151c10477630cf5c9f41209c2a7b75ac6dce7b2533a459519daf8954c52",
+              hash: "sha256:432fd151c10477630cf5c9f41209c2a7b75ac6dce7b2533a459519daf8954c52",
               url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-darwin-arm64.tar.gz",
             },
           },
@@ -11788,14 +11788,14 @@ var runtimes_default = {
               binaryPath: "pnpm",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "66e9886299085dade56e203ae0e3586f35787f8801a68d33ec07ac17b0de2001",
+              hash: "sha256:66e9886299085dade56e203ae0e3586f35787f8801a68d33ec07ac17b0de2001",
               url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-linux-x64.tar.gz",
             },
             musl: {
               binaryPath: "pnpm",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "b72cfc2140e2f3380e26555a474f8e091a4431374face630a50b00e4db992ddb",
+              hash: "sha256:b72cfc2140e2f3380e26555a474f8e091a4431374face630a50b00e4db992ddb",
               url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-linux-x64-musl.tar.gz",
             },
           },
@@ -11804,14 +11804,14 @@ var runtimes_default = {
               binaryPath: "pnpm",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "14f7a3e67d658d4ca8002c2aa0567f27dc5fe056a9f29f98ba7d2bfd6c81591b",
+              hash: "sha256:14f7a3e67d658d4ca8002c2aa0567f27dc5fe056a9f29f98ba7d2bfd6c81591b",
               url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-linux-arm64.tar.gz",
             },
             musl: {
               binaryPath: "pnpm",
               contentType: "tar.gz",
               extractDir: true,
-              hash: "26eba6156b6b47d8c589e2ed76af9b3d3a001d9d87dd4769754a1d09f07505bb",
+              hash: "sha256:26eba6156b6b47d8c589e2ed76af9b3d3a001d9d87dd4769754a1d09f07505bb",
               url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-linux-arm64-musl.tar.gz",
             },
           },
@@ -11822,7 +11822,7 @@ var runtimes_default = {
               binaryPath: "pnpm.exe",
               contentType: "zip",
               extractDir: true,
-              hash: "356092adbd4f69670945ed24c7fca994ba4dd9fbaf23b028bb9708afd7bc676e",
+              hash: "sha256:356092adbd4f69670945ed24c7fca994ba4dd9fbaf23b028bb9708afd7bc676e",
               url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-win32-x64.zip",
             },
           },
@@ -11831,7 +11831,7 @@ var runtimes_default = {
               binaryPath: "pnpm.exe",
               contentType: "zip",
               extractDir: true,
-              hash: "6536c3c8647648005a347c3480040b9fb67763f07fbca43df0738a95c1a41188",
+              hash: "sha256:6536c3c8647648005a347c3480040b9fb67763f07fbca43df0738a95c1a41188",
               url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-win32-arm64.zip",
             },
           },
@@ -11850,7 +11850,7 @@ var runtimes_default = {
             unknown: {
               binaryPath: "uv",
               contentType: "tar.gz",
-              hash: "b3b2137477cf96c9686ebfb71524614cec780c673fd73e59bce099aef02e70e8",
+              hash: "sha256:b3b2137477cf96c9686ebfb71524614cec780c673fd73e59bce099aef02e70e8",
               url: "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-x86_64-apple-darwin.tar.gz",
             },
           },
@@ -11858,7 +11858,7 @@ var runtimes_default = {
             unknown: {
               binaryPath: "uv",
               contentType: "tar.gz",
-              hash: "5bb0e5fe008a773c3dbcb97ff79cd89e1241464fe9d2f986d52ad8f1b037bd62",
+              hash: "sha256:5bb0e5fe008a773c3dbcb97ff79cd89e1241464fe9d2f986d52ad8f1b037bd62",
               url: "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-aarch64-apple-darwin.tar.gz",
             },
           },
@@ -11868,13 +11868,13 @@ var runtimes_default = {
             glibc: {
               binaryPath: "uv",
               contentType: "tar.gz",
-              hash: "68a509da24b06b4223a1c0175fb5eb5bc79342b76cbeff0cfe51ac3f5b17b6b2",
+              hash: "sha256:68a509da24b06b4223a1c0175fb5eb5bc79342b76cbeff0cfe51ac3f5b17b6b2",
               url: "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-x86_64-unknown-linux-gnu.tar.gz",
             },
             musl: {
               binaryPath: "uv",
               contentType: "tar.gz",
-              hash: "a4742988791c9aeae68c78150d6cba762062ad2a47e53738c2779d2b596bfcdb",
+              hash: "sha256:a4742988791c9aeae68c78150d6cba762062ad2a47e53738c2779d2b596bfcdb",
               url: "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-x86_64-unknown-linux-musl.tar.gz",
             },
           },
@@ -11882,13 +11882,13 @@ var runtimes_default = {
             glibc: {
               binaryPath: "uv",
               contentType: "tar.gz",
-              hash: "9bf43b4d1a07665bf64d4c4e710930b382321a785e0eb10aac07f46471f86a31",
+              hash: "sha256:9bf43b4d1a07665bf64d4c4e710930b382321a785e0eb10aac07f46471f86a31",
               url: "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-aarch64-unknown-linux-gnu.tar.gz",
             },
             musl: {
               binaryPath: "uv",
               contentType: "tar.gz",
-              hash: "8767a0e77f2cd45436401b1b42bf7e9ed5a4a91a74a5305d6fe93249d0f6dbc5",
+              hash: "sha256:8767a0e77f2cd45436401b1b42bf7e9ed5a4a91a74a5305d6fe93249d0f6dbc5",
               url: "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-aarch64-unknown-linux-musl.tar.gz",
             },
           },
@@ -11898,7 +11898,7 @@ var runtimes_default = {
             unknown: {
               binaryPath: "uv.exe",
               contentType: "zip",
-              hash: "4c4d49d8738847d9b71ba319e49a5688c93eac0fe6204b1df24e98528dddf39a",
+              hash: "sha256:4c4d49d8738847d9b71ba319e49a5688c93eac0fe6204b1df24e98528dddf39a",
               url: "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-x86_64-pc-windows-msvc.zip",
             },
           },
@@ -11906,7 +11906,7 @@ var runtimes_default = {
             unknown: {
               binaryPath: "uv.exe",
               contentType: "zip",
-              hash: "724279317fee6e5fa8ad1908e4eba2bbe764ef1ece5b3f4597927b62b1fe562a",
+              hash: "sha256:724279317fee6e5fa8ad1908e4eba2bbe764ef1ece5b3f4597927b62b1fe562a",
               url: "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-aarch64-pc-windows-msvc.zip",
             },
           },

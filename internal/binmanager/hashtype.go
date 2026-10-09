@@ -2,26 +2,6 @@ package binmanager
 
 import "github.com/datamitsu/datamitsu/internal/httpx"
 
-// BinHashType identifies the cryptographic hash algorithm used to verify a download.
-type BinHashType string
-
-const defaultBinHashType BinHashType = "sha256"
-
-// Supported hash algorithms for verifying downloaded artifacts.
-const (
-	BinHashTypeSHA1   BinHashType = "sha1"
-	BinHashTypeSHA256 BinHashType = "sha256"
-	BinHashTypeSHA384 BinHashType = "sha384"
-	BinHashTypeSHA512 BinHashType = "sha512"
-	BinHashTypeMD5    BinHashType = "md5"
-)
-
-// IsAllowedDownloadHashType returns true if the hash type is allowed for download verification.
-// Per security policy, all artifacts downloaded from the internet must use SHA-256.
-func IsAllowedDownloadHashType(ht BinHashType) bool {
-	return ht == BinHashTypeSHA256
-}
-
 // BinContentType identifies the on-disk format of a downloaded artifact.
 type BinContentType string
 
@@ -56,10 +36,10 @@ func (t BinContentType) IsDirectoryArchive() bool {
 // BinaryOsArchInfo describes a downloadable binary for one OS/arch, including its
 // source URL, verification hash and extraction details.
 type BinaryOsArchInfo struct {
-	Auth     *httpx.RequestAuth `json:"auth,omitempty"`
-	URL      string             `json:"url"`
-	Hash     string             `json:"hash"`
-	HashType *BinHashType       `json:"hashType,omitempty"`
+	Auth *httpx.RequestAuth `json:"auth,omitempty"`
+	URL  string             `json:"url"`
+	// Hash pins the artifact's SHA-256, canonically "sha256:<64 lowercase hex>".
+	Hash string `json:"hash"`
 
 	ContentType BinContentType `json:"contentType"`
 

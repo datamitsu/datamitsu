@@ -2,8 +2,6 @@ package parsermanager
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
+
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
@@ -22,8 +22,8 @@ import (
 
 // sha256Hex returns the lowercase hex SHA-256 of b (the form a config hash takes).
 func sha256Hex(b []byte) string {
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(b)
+	return sum.Hex()
 }
 
 // serveWASM starts a test server returning fixed bytes and counts requests.

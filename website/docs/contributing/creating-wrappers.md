@@ -109,7 +109,7 @@ function getConfig(prev) {
               amd64: {
                 glibc: {
                   url: "https://github.com/golangci/golangci-lint/releases/download/v1.55.0/golangci-lint-1.55.0-linux-amd64.tar.gz",
-                  hash: "<sha256-hash>",
+                  hash: "sha256:<digest>",
                   contentType: "tar.gz",
                   binaryPath: "golangci-lint-1.55.0-linux-amd64/golangci-lint",
                 },
@@ -119,7 +119,7 @@ function getConfig(prev) {
               amd64: {
                 unknown: {
                   url: "https://github.com/golangci/golangci-lint/releases/download/v1.55.0/golangci-lint-1.55.0-darwin-amd64.tar.gz",
-                  hash: "<sha256-hash>",
+                  hash: "sha256:<digest>",
                   contentType: "tar.gz",
                   binaryPath: "golangci-lint-1.55.0-darwin-amd64/golangci-lint",
                 },
@@ -127,7 +127,7 @@ function getConfig(prev) {
               arm64: {
                 unknown: {
                   url: "https://github.com/golangci/golangci-lint/releases/download/v1.55.0/golangci-lint-1.55.0-darwin-arm64.tar.gz",
-                  hash: "<sha256-hash>",
+                  hash: "sha256:<digest>",
                   contentType: "tar.gz",
                   binaryPath: "golangci-lint-1.55.0-darwin-arm64/golangci-lint",
                 },
@@ -328,7 +328,7 @@ function getRemoteConfigs() {
   return [
     {
       url: "https://config.company.com/datamitsu/base.ts",
-      hash: "abc123...", // SHA-256 hash (mandatory)
+      hash: "sha256:abc123...", // canonical SHA-256 digest (mandatory)
     },
   ];
 }

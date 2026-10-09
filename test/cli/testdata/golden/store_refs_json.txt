@@ -18,40 +18,40 @@
       "kind": "parser",
       "name": "legacy",
       "url": "https://example.test/legacy.wasm",
-      "hash": "7777777777777777777777777777777777777777777777777777777777777777"
+      "hash": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
     },
     {
       "kind": "runtime-binary",
       "name": "node",
       "url": "https://example.test/node-linux-amd64.tar.gz",
-      "hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
       "platform": "linux/amd64/glibc"
     },
     {
       "kind": "runtime-binary",
       "name": "pnpm",
       "url": "https://example.test/pnpm-linux-x64.tar.gz",
-      "hash": "8888888888888888888888888888888888888888888888888888888888888888",
+      "hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
       "platform": "linux/amd64/glibc"
     },
     {
       "kind": "app-archive",
       "name": "prettier:completions",
       "url": "https://example.test/prettier-completions.tar.gz",
-      "hash": "3333333333333333333333333333333333333333333333333333333333333333"
+      "hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
     },
     {
       "kind": "app-binary",
       "name": "shellcheck",
       "url": "https://example.test/shellcheck-darwin-arm64.tar.gz",
-      "hash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
       "platform": "darwin/arm64/unknown"
     },
     {
       "kind": "app-binary",
       "name": "shellcheck",
       "url": "https://example.test/shellcheck-linux-amd64.tar.gz",
-      "hash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "platform": "linux/amd64/glibc"
     }
   ]

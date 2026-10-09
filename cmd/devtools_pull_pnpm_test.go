@@ -8,6 +8,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 )
@@ -23,7 +24,7 @@ func testPNPMBinaries() binmanager.MapOfBinaries {
 			syslist.ArchTypeAmd64: {
 				"glibc": {
 					URL:         pnpmTestReleaseURL + "pnpm-linux-x64.tar.gz",
-					Hash:        testHash1,
+					Hash:        "sha256:" + testHash1,
 					ContentType: binmanager.BinContentTypeTarGz,
 					BinaryPath:  &binaryPath,
 					ExtractDir:  true,
@@ -73,7 +74,7 @@ func TestDetectPNPMBinaries(t *testing.T) {
 
 	digests := make(map[string]string, len(release.Assets))
 	for _, asset := range release.Assets {
-		digests[asset.Name] = strings.TrimPrefix(asset.Digest, "sha256:")
+		digests[asset.Name] = asset.Digest
 	}
 
 	tests := []struct {
@@ -226,7 +227,7 @@ func TestCollectStoreRefsPNPMRuntime(t *testing.T) {
 		Kind:     "runtime-binary",
 		Name:     "pnpm",
 		URL:      pnpmTestReleaseURL + "pnpm-linux-x64.tar.gz",
-		Hash:     testHash1,
+		Hash:     "sha256:" + testHash1,
 		Platform: "linux/amd64/glibc",
 	}
 	if len(refs.HTTPS) != 1 || refs.HTTPS[0] != want {
@@ -264,8 +265,8 @@ func assertEmbeddedPNPMRuntime(t *testing.T, runtimes config.MapOfRuntimes) {
 				if !strings.HasPrefix(info.URL, wantPrefix) {
 					t.Errorf("pnpm %s: url %q is not a %s release asset", platform, info.URL, version)
 				}
-				if !isLowerHex64(info.Hash) {
-					t.Errorf("pnpm %s: hash %q is not a SHA-256 hex digest", platform, info.Hash)
+				if err := digest.IsSHA256(info.Hash); err != nil {
+					t.Errorf("pnpm %s: hash %q is not a canonical SHA-256 digest", platform, info.Hash)
 				}
 			}
 		}
@@ -273,18 +274,6 @@ func assertEmbeddedPNPMRuntime(t *testing.T, runtimes config.MapOfRuntimes) {
 	if count != len(pnpmArchiveSpecs()) {
 		t.Errorf("pnpm runtime pins %d platforms, want %d", count, len(pnpmArchiveSpecs()))
 	}
-}
-
-func isLowerHex64(s string) bool {
-	if len(s) != 64 {
-		return false
-	}
-	for _, c := range s {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-			return false
-		}
-	}
-	return true
 }
 
 // TestPreservePNPMRuntimeRefKeepsExistingName covers a filtered `--runtime node`

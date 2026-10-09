@@ -42,7 +42,7 @@ function getConfig(prev) {
               amd64: {
                 glibc: {
                   url: "https://github.com/golangci/golangci-lint/releases/download/v2.1.0/golangci-lint-2.1.0-linux-amd64.tar.gz",
-                  hash: "<sha256-hash>",
+                  hash: "sha256:<digest>",
                   contentType: "tar.gz",
                   binaryPath: "golangci-lint-2.1.0-linux-amd64/golangci-lint",
                 },

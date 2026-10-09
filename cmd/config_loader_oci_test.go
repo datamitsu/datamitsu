@@ -70,7 +70,7 @@ function getConfig(input) {
     return {
         parsers: {
             core: {
-                hash: "`+strings.Repeat("ab", 32)+`",
+                hash: "sha256:`+strings.Repeat("ab", 32)+`",
                 oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers", digest: "`+testOCIDigest+`" },
             },
         },
@@ -100,7 +100,7 @@ function getConfig(input) {
 // two sources are mutually exclusive, so the override has to drop the url — if
 // the spread left it behind, the result would fail validation.
 func TestProcessConfigSourceParserOCIOverridesURL(t *testing.T) {
-	hash := strings.Repeat("ab", 32)
+	hash := "sha256:" + strings.Repeat("ab", 32)
 	first := runOCIConfigSource(t, nil, "parser-url", `
 function getConfig(input) {
     return { ...input, parsers: { core: { url: "https://example.com/core.wasm", hash: "`+hash+`" } } };

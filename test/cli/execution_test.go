@@ -777,7 +777,7 @@ func TestExecutionSetupErrorIsReported(t *testing.T) {
 // operation that plans it.
 func hostUninstallable(tool, operation string) string {
 	build := `{ url: "https://example.invalid/unreachable", contentType: "raw",
-  hash: "3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" }`
+  hash: "sha256:3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" }`
 	return fmt.Sprintf(`c.apps["unreachable"] = { binary: { binaries: { %s: { %s: { glibc: %s, musl: %s, unknown: %s } } } } };
 c.tools[%q] = { name: %q, operations: { %s: { app: "unreachable", args: [], scope: "repository" } } };
 `, runtime.GOOS, runtime.GOARCH, build, build, build, tool, tool, operation)
@@ -1242,7 +1242,7 @@ func TestExecutionParserProblems(t *testing.T) {
 	module := filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
 	spec := fixtureSpec
 	spec.Parsers = strings.Replace(clitest.SeedParserModule(t, e.cache, module), "{",
-		`{"missing":{"url":"https://parsers.example.invalid/missing.wasm","hash":"`+strings.Repeat("1", 64)+`"},`, 1)
+		`{"missing":{"url":"https://parsers.example.invalid/missing.wasm","hash":"sha256:`+strings.Repeat("1", 64)+`"},`, 1)
 	perFile := func(name, parser, parserModule string) string {
 		return clitest.ShellTool(name, passScript+"; echo finding", clitest.ToolOpSpec{
 			Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
@@ -1302,7 +1302,7 @@ func nativeSkipped() string {
 	}
 	return fmt.Sprintf(`c.apps["native"] = { binary: { binaries: { %s: { amd64: { unknown: {
   url: "https://example.invalid/native", contentType: "raw",
-  hash: "3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" } } } } } };
+  hash: "sha256:3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" } } } } } };
 c.tools["native"] = { name: "native", operations: { lint: { app: "native", args: [], scope: "repository" } } };
 `, otherOS)
 }

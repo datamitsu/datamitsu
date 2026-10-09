@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"maps"
 	"net/http"
@@ -14,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/engine"
@@ -989,8 +989,8 @@ func TestBuildConfigSourcesFlagSkipsDeclared(t *testing.T) {
 }
 
 func computeHash(content string) string {
-	h := sha256.Sum256([]byte(content))
-	return "sha256:" + hex.EncodeToString(h[:])
+	h := digest.SHA256Of([]byte(content))
+	return "sha256:" + h.Hex()
 }
 
 // ===========================================================================
@@ -1038,12 +1038,12 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-// jvmApp renders a valid jvm app literal (jarHash is a 64-char lowercase hex
-// string so it passes config validation; jvm apps need no lockfile).
+// jvmApp renders a valid jvm app literal (jarHash is a canonical SHA-256
+// digest so it passes config validation; jvm apps need no lockfile).
 func jvmApp(hashChar string, version string) string {
 	return fmt.Sprintf(
 		`{ jvm: { jarUrl: "https://example.com/x.jar", jarHash: %q, version: %q } }`,
-		strings.Repeat(hashChar, 64), version,
+		"sha256:"+strings.Repeat(hashChar, 64), version,
 	)
 }
 

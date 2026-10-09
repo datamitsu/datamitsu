@@ -149,13 +149,20 @@ linters:
       use-default-exclusions: true
     depguard:
       rules:
+        no-direct-sha256:
+          deny:
+            - desc: use internal/digest for SHA-256 hashing and pin parsing; do not import crypto/sha256 directly
+              pkg: crypto/sha256
+          files:
+            - $all
+            - "!**/internal/digest/*.go"
         no-direct-xxh3:
           deny:
-            - desc: use internal/hashutil for XXH3 hashing; do not import zeebo/xxh3 directly
+            - desc: use internal/digest for hashing; do not import zeebo/xxh3 directly
               pkg: github.com/zeebo/xxh3
           files:
             - $all
-            - "!**/internal/hashutil/*.go"
+            - "!**/internal/digest/*.go"
     forbidigo:
       forbid:
         - msg: Access datamitsu env vars via internal/env (add a getter in env.go), not os.Getenv directly.

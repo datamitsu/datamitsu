@@ -17,7 +17,8 @@ set -euo pipefail
 REGISTRY="${PARSERS_REGISTRY:-ghcr.io}"
 REPO="${PARSERS_REPO:?PARSERS_REPO is required (e.g. datamitsu/datamitsu-parsers)}"
 DIGEST="${PARSERS_DIGEST:?PARSERS_DIGEST is required (sha256:<64 hex>)}"
-SHA256="${PARSERS_SHA256:?PARSERS_SHA256 is required (the module sha256, bare hex)}"
+SHA256="${PARSERS_SHA256:?PARSERS_SHA256 is required (the module sha256, sha256:<64 hex>)}"
+SHA256="${SHA256#sha256:}"
 
 # GHCR issues an anonymous pull token for public packages; for a private one the
 # token request succeeds but the pull that follows does not, which is exactly

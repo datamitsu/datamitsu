@@ -16,7 +16,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 // SchemaVersion is the current manifest format version. Bump it on any
@@ -87,7 +87,7 @@ func ComputePageSetHash(pages []Page) string {
 	for _, p := range sorted {
 		parts = append(parts, []byte(p.Slug), []byte(p.ContentHash))
 	}
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 }
 
 // Find returns the page with the given canonical slug.

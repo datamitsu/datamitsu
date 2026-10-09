@@ -3,8 +3,6 @@ package binmanager
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
@@ -14,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 func TestAppDependencyClosure(t *testing.T) {
@@ -152,7 +152,7 @@ func TestConcurrentAppDependencyInstalls(t *testing.T) {
 	previousClient := httpClient
 	httpClient = &http.Client{Transport: dependencyTransport{payload: payload}}
 	t.Cleanup(func() { httpClient = previousClient })
-	sum := sha256.Sum256(payload)
+	sum := digest.SHA256Of(payload)
 	apps := MapOfApps{}
 	for _, name := range []string{"left", "right", "leaf"} {
 		app := binaryAppFixture(t, name)[name]
@@ -160,7 +160,7 @@ func TestConcurrentAppDependencyInstalls(t *testing.T) {
 			for _, variants := range arches {
 				for libc, info := range variants {
 					info.URL = "https://fixture.invalid/tool"
-					info.Hash = hex.EncodeToString(sum[:])
+					info.Hash = sum.Hex()
 					variants[libc] = info
 				}
 			}

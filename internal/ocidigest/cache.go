@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
@@ -34,7 +34,7 @@ const CacheDirName = ".oci-digests"
 // The filename is an XXH3 key (an internal cache key — not a security boundary,
 // per the hashing policy); the cached value is the external SHA-256 digest.
 func digestCachePath(cacheDir, registry, repo, tag string) string {
-	key := hashutil.XXH3Multi([]byte(registry), []byte(repo), []byte(tag))
+	key := digest.XXH3Multi([]byte(registry), []byte(repo), []byte(tag)).Hex()
 	return filepath.Join(cacheDir, CacheDirName, key+".json")
 }
 

@@ -22,18 +22,18 @@ import (
 const reviewdogApp = `c.apps.reviewdog = {binary: {version: "0.21.2", binaries: {
   darwin: {
     amd64: {unknown: {contentType: "tar.gz", binaryPath: "reviewdog-0.21.2/reviewdog",
-      hash: "3002ad37ee7d344de25e3c630a293aa322fc10d7b9c3fc6d4e836b616d084ae5",
+      hash: "sha256:3002ad37ee7d344de25e3c630a293aa322fc10d7b9c3fc6d4e836b616d084ae5",
       url: "https://github.com/reviewdog/reviewdog/releases/download/v0.21.2/reviewdog_0.21.2_Darwin_x86_64.tar.gz"}},
     arm64: {unknown: {contentType: "tar.gz", binaryPath: "reviewdog-0.21.2/reviewdog",
-      hash: "54497b0f3378936caa22a3a11d796acefe4d5f35d86f5cc84c622f941c3c0c68",
+      hash: "sha256:54497b0f3378936caa22a3a11d796acefe4d5f35d86f5cc84c622f941c3c0c68",
       url: "https://github.com/reviewdog/reviewdog/releases/download/v0.21.2/reviewdog_0.21.2_Darwin_arm64.tar.gz"}},
   },
   linux: {
     amd64: {glibc: {contentType: "tar.gz", binaryPath: "reviewdog-0.21.2/reviewdog",
-      hash: "30413aa3c7443e9c3c157fe5766cad40e3bb39a32e210ee69b710a8d5c4b8e51",
+      hash: "sha256:30413aa3c7443e9c3c157fe5766cad40e3bb39a32e210ee69b710a8d5c4b8e51",
       url: "https://github.com/reviewdog/reviewdog/releases/download/v0.21.2/reviewdog_0.21.2_Linux_x86_64.tar.gz"}},
     arm64: {glibc: {contentType: "tar.gz", binaryPath: "reviewdog-0.21.2/reviewdog",
-      hash: "56854c078853ea53c73e1e4d627e6a90d6b68185c46edd46aad8beb94564b948",
+      hash: "sha256:56854c078853ea53c73e1e4d627e6a90d6b68185c46edd46aad8beb94564b948",
       url: "https://github.com/reviewdog/reviewdog/releases/download/v0.21.2/reviewdog_0.21.2_Linux_arm64.tar.gz"}},
   },
 }}};

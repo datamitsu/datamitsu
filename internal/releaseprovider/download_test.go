@@ -185,7 +185,7 @@ func TestChecksumDownloadUsesResolvedAuth(t *testing.T) {
 			if !restricted {
 				t.Setenv("TEST_DOWNLOAD_TOKEN", "")
 			}
-			if err := c.ResolveDigest(context.Background(), "group/tool", r.Assets, &r.Assets[0], nil, map[string]string{"checksums": digest(payload)}); err != nil {
+			if err := c.ResolveDigest(context.Background(), "group/tool", r.Assets, &r.Assets[0], nil, map[string]string{"checksums": expectedDigest(payload)}); err != nil {
 				t.Fatal(err)
 			}
 			if r.Assets[0].Digest != "sha256:"+strings.Repeat("a", 64) {

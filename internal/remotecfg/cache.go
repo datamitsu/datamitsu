@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
@@ -14,7 +14,7 @@ const remoteConfigDir = ".remote-configs"
 
 // CachedConfigPath returns the cache file path for a remote config URL.
 func CachedConfigPath(cacheDir, url string) string {
-	h := hashutil.XXH3Hex([]byte(url))
+	h := digest.XXH3Of([]byte(url)).Hex()
 	return filepath.Join(cacheDir, remoteConfigDir, h+".ts")
 }
 

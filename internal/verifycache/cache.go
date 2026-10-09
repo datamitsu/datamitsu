@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
@@ -32,7 +32,7 @@ type VerifyState struct {
 
 // StatePath returns the state file path for the given cache directory and CWD.
 func StatePath(cacheDir, cwd string) string {
-	hash := hashutil.XXH3Hex([]byte(cwd))
+	hash := digest.XXH3Of([]byte(cwd)).Hex()
 	return filepath.Join(cacheDir, ".verify-state", hash+".json")
 }
 

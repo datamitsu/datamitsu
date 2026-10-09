@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
@@ -402,7 +402,7 @@ func ComputeStalenessKey(formatVersion int, datamitsuVersion, root, goos, goarch
 	for _, kv := range sortedEnv {
 		parts = append(parts, []byte(kv))
 	}
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 }
 
 // BuildManifest returns the manifest describing plan. It writes nothing —

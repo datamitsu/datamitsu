@@ -2,16 +2,15 @@ package ocidigest
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/httpretry"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/logger"
@@ -39,23 +38,14 @@ func IsDigestMismatch(err error) bool {
 	return errors.Is(err, errDigestMismatch)
 }
 
-// parseSHA256Digest validates a "sha256:<64 hex>" digest string and returns
-// the hex tail.
+// parseSHA256Digest validates a canonical "sha256:<64 hex>" digest string and
+// returns the hex tail.
 func parseSHA256Digest(dgst string) (string, error) {
-	hexPart, ok := strings.CutPrefix(dgst, "sha256:")
-	if !ok {
+	d, err := digest.ParseSHA256(dgst)
+	if err != nil {
 		return "", fmt.Errorf("unsupported digest %q: only sha256 digests are accepted", dgst)
 	}
-	if len(hexPart) != 64 {
-		return "", fmt.Errorf("malformed sha256 digest %q", dgst)
-	}
-	if _, err := hex.DecodeString(hexPart); err != nil {
-		return "", fmt.Errorf("malformed sha256 digest %q", dgst)
-	}
-	if hexPart != strings.ToLower(hexPart) {
-		return "", fmt.Errorf("malformed sha256 digest %q: hex must be lowercase", dgst)
-	}
-	return hexPart, nil
+	return d.Hex(), nil
 }
 
 // PullManifest fetches the manifest (or index) pinned by digest and returns
@@ -130,10 +120,9 @@ func (r *Resolver) pullManifestOnce(ctx context.Context, repo, dgst string) ([]b
 		return nil, httpretry.Permanent(fmt.Errorf("manifest %s@%s exceeds the %d byte limit", repo, dgst, manifestMaxBytes))
 	}
 
-	sum := sha256.Sum256(body)
-	if got := hex.EncodeToString(sum[:]); got != wantHex {
+	if got := digest.SHA256Of(body); got.Hex() != wantHex {
 		// Identical wrong bytes cannot become right on retry.
-		return nil, httpretry.Permanent(fmt.Errorf("manifest body %w for %s: expected sha256:%s got sha256:%s", errDigestMismatch, repo, wantHex, got))
+		return nil, httpretry.Permanent(fmt.Errorf("manifest body %w for %s: expected sha256:%s got %s", errDigestMismatch, repo, wantHex, got.String()))
 	}
 	return body, nil
 }
@@ -248,7 +237,7 @@ func (r *Resolver) pullBlobOnce(ctx context.Context, repo, dgst string, size, ma
 		return "", httpretry.Permanent(statusErr)
 	}
 
-	hasher := sha256.New()
+	hasher := digest.NewSHA256()
 	limited := guard.Reader(io.LimitReader(resp.Body, maxBytes+1))
 	reader := ui.Current().Download(displayName, size, limited)
 	defer func() { _ = reader.Close() }()

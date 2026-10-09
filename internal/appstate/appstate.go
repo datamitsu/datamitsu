@@ -12,7 +12,7 @@ import (
 	"slices"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/jsonsort"
 	"github.com/datamitsu/datamitsu/internal/releaseprovider"
 )
@@ -85,6 +85,41 @@ func Load(path string) (*State, error) {
 	}
 	if state.Binaries == nil {
 		state.Binaries = make(map[string]*BinariesEntry)
+	}
+
+	// Normalize every pin to its canonical form so the next Save writes it
+	// however this entry arrived (a pull can save entries it never regenerated).
+	for _, app := range state.Apps {
+		if app == nil {
+			continue
+		}
+		for name, pin := range app.Hashes {
+			if d, err := digest.ParseSHA256Loose(pin); err == nil {
+				app.Hashes[name] = d.String()
+			}
+		}
+		for name, pin := range app.Checksums {
+			if d, err := digest.ParseSHA256Loose(pin); err == nil {
+				app.Checksums[name] = d.String()
+			}
+		}
+	}
+	for _, entry := range state.Binaries {
+		if entry == nil {
+			// A null entry is tolerated the way FilterPlatforms tolerates it:
+			// the file is shared with hand edits and older writers.
+			continue
+		}
+		for _, archMap := range entry.Binaries {
+			for _, libcMap := range archMap {
+				for libc, info := range libcMap {
+					if d, err := digest.ParseSHA256Loose(info.Hash); err == nil {
+						info.Hash = d.String()
+						libcMap[libc] = info
+					}
+				}
+			}
+		}
 	}
 
 	return &state, nil
@@ -175,7 +210,7 @@ func ComputeConfigHash(metadata *AppMetadata, selections []string, sources ...re
 	if err != nil {
 		panic(err)
 	}
-	return hashutil.XXH3Multi([]byte("release-download-policy-v1"), data)
+	return digest.XXH3Multi([]byte("release-download-policy-v1"), data).Hex()
 }
 
 // ValidateSources rejects malformed manifests before pruning or networking.

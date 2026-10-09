@@ -30,7 +30,7 @@ function getConfig(prev) {
               amd64: {
                 glibc: {
                   url: "https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64",
-                  hash: "56de6d5e5ec427e17b74fa48d51271c7fc0d61571c37f4a4c87c04f911dc5f94",
+                  hash: "sha256:56de6d5e5ec427e17b74fa48d51271c7fc0d61571c37f4a4c87c04f911dc5f94",
                   contentType: "binary",
                 },
               },
@@ -39,7 +39,7 @@ function getConfig(prev) {
               amd64: {
                 unknown: {
                   url: "https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Darwin-x86_64",
-                  hash: "911006e5fe41981c319cf4ef331d12bd1c02b594e4a1e9a4b1dbe5fbab0e5b5c",
+                  hash: "sha256:911006e5fe41981c319cf4ef331d12bd1c02b594e4a1e9a4b1dbe5fbab0e5b5c",
                   contentType: "binary",
                 },
               },

@@ -18,14 +18,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/facts"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 )
 
 // FormatVersion is the schema version of the stored artifact. Bump it whenever
 // the encoded artifact's shape changes; every old entry then misses rather than
 // decoding into a struct that no longer means the same thing.
-const FormatVersion = 7
+const FormatVersion = 8
 
 // ChainFile is one on-disk file of the resolved config chain. A file that does
 // not exist is recorded with Exists=false and an empty hash: its appearance is
@@ -205,7 +205,13 @@ func Key(in Inputs) string {
 
 	parts = append(parts, []byte("remote"), []byte(strconv.Itoa(len(in.RemoteConfigs))))
 	for _, r := range in.RemoteConfigs {
-		parts = append(parts, fmt.Appendf(nil, "%s\x1f%s", r.URL, r.Hash))
+		// The pin folds by its hex value so a pin's spelling (bare or
+		// canonical) never moves the cache key.
+		pin := r.Hash
+		if d, err := digest.ParseSHA256Loose(r.Hash); err == nil {
+			pin = d.Hex()
+		}
+		parts = append(parts, fmt.Appendf(nil, "%s\x1f%s", r.URL, pin))
 	}
 
 	// Marshalled rather than formatted field by field: a new
@@ -226,7 +232,7 @@ func Key(in Inputs) string {
 		parts = append(parts, []byte(kv))
 	}
 
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 }
 
 // HashChainFile reads path and returns its ChainFile entry. A file that cannot
@@ -241,11 +247,11 @@ func HashChainFile(path string) ChainFile {
 		return ChainFile{Path: path, Exists: false}
 	}
 	defer func() { _ = f.Close() }()
-	hash, err := hashutil.XXH3Reader(f)
+	d, err := digest.XXH3Reader(f)
 	if err != nil {
 		return ChainFile{Path: path, Exists: false}
 	}
-	return ChainFile{Path: path, ContentHash: hash, Exists: true}
+	return ChainFile{Path: path, ContentHash: d.Hex(), Exists: true}
 }
 
 // configInputsBytes renders ConfigInputs as its JSON encoding, which Go emits in

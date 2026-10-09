@@ -364,7 +364,7 @@ func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, s
 		if spec.relPath != "" {
 			file = filepath.Join(staged, filepath.FromSlash(spec.relPath))
 		}
-		if err := binmanager.VerifyFileHashPublic(file, spec.sha256, binmanager.BinHashTypeSHA256); err != nil {
+		if err := binmanager.VerifyFileHashPublic(file, spec.sha256); err != nil {
 			return fmt.Errorf("%w: seeded content for %q does not match the published SHA-256 from the config: %w", errIntegrity, spec.owner, err)
 		}
 		log.Debug("re-verified seeded artifact against published hash",

@@ -23,8 +23,8 @@ import (
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
@@ -883,14 +883,14 @@ func (e *Executor) perFileCacheTool(task Task) string {
 			}
 			parts = append(parts, []byte(ref.Key), data)
 		}
-		name += "@" + hashutil.XXH3Multi(parts...)
+		name += "@" + digest.XXH3Multi(parts...).Hex()
 	}
 	if pairs := task.inherited.Pairs(); len(pairs) > 0 {
 		parts := make([][]byte, 0, len(pairs))
 		for _, kv := range pairs {
 			parts = append(parts, []byte(kv))
 		}
-		name += "+env:" + hashutil.XXH3Multi(parts...)
+		name += "+env:" + digest.XXH3Multi(parts...).Hex()
 	}
 	return name
 }

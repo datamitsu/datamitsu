@@ -11,9 +11,9 @@ import (
 	"github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/configcache"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/facts"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
@@ -197,11 +197,11 @@ var binaryIdentity = sync.OnceValue(func() string {
 	if err != nil {
 		parts = append(parts, []byte("defaultConfig"), fmt.Appendf(nil, "unreadable\x1f%v", err))
 	} else {
-		parts = append(parts, []byte("defaultConfig"), []byte(hashutil.XXH3Hex([]byte(defaultConfig))))
+		parts = append(parts, []byte("defaultConfig"), []byte(digest.XXH3Of([]byte(defaultConfig)).Hex()))
 	}
 
 	parts = append(parts, []byte("executable"), []byte(executableStamp()))
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 })
 
 // executableStamp is the running executable's size and modification time, the

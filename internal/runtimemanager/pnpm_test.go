@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -15,6 +13,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -152,8 +152,8 @@ func makePNPMArchive(t *testing.T) ([]byte, string) {
 	if err := gzw.Close(); err != nil {
 		t.Fatalf("close gzip writer: %v", err)
 	}
-	sum := sha256.Sum256(buf.Bytes())
-	return buf.Bytes(), hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(buf.Bytes())
+	return buf.Bytes(), sum.Hex()
 }
 
 // TestPNPMRuntime_DownloadVerifyExtract pins that pnpm is acquired through the

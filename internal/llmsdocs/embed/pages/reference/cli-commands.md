@@ -1454,7 +1454,7 @@ Print the XXH3-128 chain hash that `datamitsu config reconcile` verifies for man
 datamitsu config chain-hash [file...]
 ```
 
-The value is the input to the **topmost** layer, so declare your own entry for the file first (a placeholder `expectChainHash` is enough), then read the real hash here. With no arguments every managed config file is listed as `file  hash`; with exactly one file only its bare hash is printed, which is convenient for scripting.
+The value is the input to the **topmost** layer, so declare your own entry for the file first (a placeholder `expectChainHash` is enough), then read the real hash here. With no arguments every managed config file is listed as `file  hash`; with exactly one file only its hash is printed, ready to paste into a pin — `expectChainHash` accepts only the canonical `xxh3:<32 lowercase hex>` form.
 
 **Examples:**
 

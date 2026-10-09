@@ -4,9 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -64,8 +64,8 @@ func buildTestWheel(t *testing.T, w *testWheel) {
 		if _, err := fw.Write([]byte(f[1])); err != nil {
 			t.Fatal(err)
 		}
-		sum := sha256.Sum256([]byte(f[1]))
-		fmt.Fprintf(&record, "%s,sha256=%s,%d\n", f[0], base64.RawURLEncoding.EncodeToString(sum[:]), len(f[1]))
+		raw, _ := digest.SHA256Raw(bytes.NewReader([]byte(f[1])))
+		fmt.Fprintf(&record, "%s,sha256=%s,%d\n", f[0], base64.RawURLEncoding.EncodeToString(raw), len(f[1]))
 	}
 	record.WriteString(distInfo + "/RECORD,,\n")
 	fw, err := zw.Create(distInfo + "/RECORD")
@@ -114,12 +114,12 @@ func serveTestIndex(t *testing.T, wheels []*testWheel) string {
 			if w.name != project {
 				continue
 			}
-			sum := sha256.Sum256(w.data)
+			sum := digest.SHA256Of(w.data)
 			page.Versions = append(page.Versions, w.version)
 			page.Files = append(page.Files, file{
 				Filename:   w.filename(),
 				URL:        srv.URL + "/files/" + w.filename(),
-				Hashes:     map[string]string{"sha256": hex.EncodeToString(sum[:])},
+				Hashes:     map[string]string{"sha256": sum.Hex()},
 				UploadTime: w.uploaded.UTC().Format(time.RFC3339),
 				Size:       len(w.data),
 			})

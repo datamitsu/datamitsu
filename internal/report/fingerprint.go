@@ -2,10 +2,11 @@ package report
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"sort"
 	"strconv"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 // A finding's fingerprint is SHA-256, not XXH3, because it leaves the process:
@@ -37,8 +38,7 @@ const (
 // LineHash is the line component of a fingerprint: the hex SHA-256 of line
 // without its trailing whitespace.
 func LineHash(line []byte) string {
-	sum := sha256.Sum256(bytes.TrimRight(line, " \t\r\v\f"))
-	return hex.EncodeToString(sum[:])
+	return digest.SHA256Of(bytes.TrimRight(line, " \t\r\v\f")).Hex()
 }
 
 // RowHash stands in for LineHash when the line cannot be read.
@@ -48,7 +48,7 @@ func RowHash(row int) string {
 
 // Fingerprint is the 64-character lowercase hex identity of a finding.
 func Fingerprint(tool, code, relPath, lineHash string, ordinal int) string {
-	h := sha256.New()
+	h := digest.NewSHA256()
 	for i, part := range []string{FingerprintVersion, tool, code, relPath, lineHash, strconv.Itoa(ordinal)} {
 		if i > 0 {
 			h.Write([]byte{0})

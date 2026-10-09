@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 // GetRuntimesPath returns the root directory for managed runtimes ({store}/.runtimes).
@@ -37,7 +37,7 @@ func GetPNPMStorePath() string {
 // HashProjectPath computes the XXH3-128 hash of a project path.
 // Used for cache directory naming. Shared between env and cache packages.
 func HashProjectPath(projectPath string) string {
-	return hashutil.XXH3Hex([]byte(projectPath))
+	return digest.XXH3Of([]byte(projectPath)).Hex()
 }
 
 // ProjectManifestFileName is the file name of the source-mode farm manifest,
@@ -158,7 +158,7 @@ func ConfigFarmIdentity(configPaths []string) (string, error) {
 	for _, p := range resolved {
 		parts = append(parts, []byte(p))
 	}
-	return hashutil.XXH3Multi(parts...), nil
+	return digest.XXH3Multi(parts...).Hex(), nil
 }
 
 // configFarmRootDir returns the per-chain cache directory

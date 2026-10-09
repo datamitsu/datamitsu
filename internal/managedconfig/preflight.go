@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 // PreflightError lists every managed config file that is not where, or not
@@ -92,7 +92,7 @@ func checkConfigFile(gitRoot, key string, mc config.ManagedConfig, tools []strin
 		return config.InternalConfigRelPath(key) + " is missing; run `datamitsu init` to write it"
 	case err != nil:
 		return fmt.Sprintf("%s cannot be read (%v); run `datamitsu init` to rewrite it", config.InternalConfigRelPath(key), err)
-	case mc.Render == nil || hashutil.XXH3Hex(data) != mc.Render.Hash:
+	case mc.Render == nil || digest.XXH3Of(data).Hex() != mc.Render.Hash:
 		return config.InternalConfigRelPath(key) + " is out of date with the configuration; run `datamitsu init` to rewrite it"
 	}
 	return ""

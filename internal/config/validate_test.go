@@ -951,7 +951,7 @@ func TestValidateApps_JVM_Valid(t *testing.T) {
 		"openapi-generator": {
 			Jvm: &binmanager.AppConfigJVM{
 				JarURL:  "https://example.com/openapi-generator.jar",
-				JarHash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				JarHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				Version: "7.0.0",
 			},
 		},
@@ -1263,7 +1263,7 @@ func TestValidateApps_ValidExplicitRuntimeRef(t *testing.T) {
 		"openapi-generator": {
 			Jvm: &binmanager.AppConfigJVM{
 				JarURL:  "https://example.com/openapi-generator.jar",
-				JarHash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				JarHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				Version: "7.0.0",
 				Runtime: "jvm",
 			},
@@ -2033,7 +2033,7 @@ func TestValidateApps_Archives_ValidExternal(t *testing.T) {
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"dist": {
 					URL:    "https://example.com/dist.tar.gz",
-					Hash:   "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+					Hash:   "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 					Format: binmanager.BinContentTypeTarGz,
 				},
 			},
@@ -2233,7 +2233,7 @@ func TestValidateApps_Archives_ExternalInvalidHash(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid hash")
 	}
-	if !strings.Contains(err.Error(), "hash must be a valid SHA-256 hex string") {
+	if !strings.Contains(err.Error(), "hash must be a canonical SHA-256 digest") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -2244,7 +2244,7 @@ func TestValidateApps_Archives_ExternalMissingFormat(t *testing.T) {
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"dist": {
 					URL:  "https://example.com/dist.tar.gz",
-					Hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+					Hash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				},
 			},
 		},
@@ -2388,7 +2388,7 @@ func TestValidateBundles_ValidWithArchives(t *testing.T) {
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"data": {
 					URL:    "https://example.com/data.tar.gz",
-					Hash:   "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+					Hash:   "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 					Format: binmanager.BinContentTypeTarGz,
 				},
 			},

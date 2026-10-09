@@ -1,26 +1,20 @@
 package binmanager
 
 import (
-	"crypto/md5"  //nolint:gosec // G501,G505: weak hashes supported only for verifying upstream-published checksums
-	"crypto/sha1" //nolint:gosec // G501,G505: weak hashes supported only for verifying upstream-published checksums
-	"crypto/sha256"
-	"crypto/sha512"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/target"
-	"go.uber.org/zap"
 )
 
 // calculateConfigHash calculates XXH3-128 hash of binary configuration using the resolved target.
 // The resolved target (not the host target) determines the cache path, ensuring that
-// glibc and musl binaries get separate cache entries.
+// glibc and musl binaries get separate cache entries. The pin folds by its hex
+// value alone, so a pin's spelling (bare or canonical) never moves the store.
 func calculateConfigHash(info BinaryOsArchInfo, resolved target.ResolvedTarget) string {
 	binaryPath := ""
 	if info.BinaryPath != nil {
@@ -30,78 +24,31 @@ func calculateConfigHash(info BinaryOsArchInfo, resolved target.ResolvedTarget) 
 	if info.ExtractDir {
 		extractDir = "extractDir"
 	}
-	return hashutil.XXH3Multi(
+	pin := info.Hash
+	if d, err := digest.ParseSHA256Loose(info.Hash); err == nil {
+		pin = d.Hex()
+	}
+	return digest.XXH3Multi(
 		[]byte(info.URL),
-		[]byte(info.Hash),
+		[]byte(pin),
 		[]byte(info.ContentType),
 		[]byte(binaryPath),
 		[]byte(extractDir),
 		[]byte(resolved.Target.OS),
 		[]byte(resolved.Target.Arch),
 		[]byte(string(resolved.Target.Libc)),
-	)
+	).Hex()
 }
 
-// verifyFileHash verifies a downloaded file's integrity using cryptographic hashes.
-// Used exclusively for external verification of content downloaded from the internet.
-func verifyFileHash(filePath string, expectedHash string, hashType BinHashType) error {
-	file, err := os.Open(filePath)
+// verifyFileHash verifies a downloaded file's integrity against its SHA-256
+// pin. Used exclusively for external verification of content downloaded from
+// the internet; the security policy admits no other algorithm.
+func verifyFileHash(filePath string, expectedHash string) error {
+	d, err := digest.ParseSHA256Loose(expectedHash)
 	if err != nil {
-		return fmt.Errorf("failed to open file for verification: %w", err)
+		return fmt.Errorf("invalid pinned hash: %w", err)
 	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			log.Warn("failed to close file during hash verification", zap.Error(err))
-		}
-	}()
-
-	var actualHash string
-
-	switch hashType {
-	case BinHashTypeSHA256:
-		h := sha256.New()
-		if _, err := io.Copy(h, file); err != nil {
-			return fmt.Errorf("failed to calculate sha256: %w", err)
-		}
-		actualHash = hex.EncodeToString(h.Sum(nil))
-
-	case BinHashTypeSHA512:
-		h := sha512.New()
-		if _, err := io.Copy(h, file); err != nil {
-			return fmt.Errorf("failed to calculate sha512: %w", err)
-		}
-		actualHash = hex.EncodeToString(h.Sum(nil))
-
-	case BinHashTypeSHA384:
-		h := sha512.New384()
-		if _, err := io.Copy(h, file); err != nil {
-			return fmt.Errorf("failed to calculate sha384: %w", err)
-		}
-		actualHash = hex.EncodeToString(h.Sum(nil))
-
-	case BinHashTypeSHA1:
-		h := sha1.New() //nolint:gosec // G401: SHA1 used only to verify upstream-published checksums
-		if _, err := io.Copy(h, file); err != nil {
-			return fmt.Errorf("failed to calculate sha1: %w", err)
-		}
-		actualHash = hex.EncodeToString(h.Sum(nil))
-
-	case BinHashTypeMD5:
-		h := md5.New() //nolint:gosec // G401: MD5 used only to verify upstream-published checksums
-		if _, err := io.Copy(h, file); err != nil {
-			return fmt.Errorf("failed to calculate md5: %w", err)
-		}
-		actualHash = hex.EncodeToString(h.Sum(nil))
-
-	default:
-		return fmt.Errorf("unsupported hash type: %s", hashType)
-	}
-
-	if actualHash != expectedHash {
-		return fmt.Errorf("hash mismatch: expected %s, got %s", expectedHash, actualHash)
-	}
-
-	return nil
+	return d.VerifyFile(filePath)
 }
 
 // HashFilesAndArchives computes an XXH3-128 hash over files and archives content.
@@ -146,9 +93,15 @@ func HashFilesAndArchives(files map[string]string, archives map[string]*ArchiveS
 			if spec.IsInline() {
 				buf = append(buf, spec.Inline...)
 			} else {
+				// The pin folds by its hex value, so a pin's spelling (bare or
+				// canonical) never moves the bundle or app identity.
+				pin := spec.Hash
+				if d, err := digest.ParseSHA256Loose(spec.Hash); err == nil {
+					pin = d.Hex()
+				}
 				buf = append(buf, spec.URL...)
 				buf = append(buf, 0)
-				buf = append(buf, spec.Hash...)
+				buf = append(buf, pin...)
 				buf = append(buf, 0)
 				buf = append(buf, spec.Format...)
 			}
@@ -156,15 +109,15 @@ func HashFilesAndArchives(files map[string]string, archives map[string]*ArchiveS
 		}
 	}
 
-	return hashutil.XXH3Hex(buf)
+	return digest.XXH3Of(buf).Hex()
 }
 
 func calculateBundleHash(name, version string, files map[string]string, archives map[string]*ArchiveSpec) string {
-	return hashutil.XXH3Multi(
+	return digest.XXH3Multi(
 		[]byte(name),
 		[]byte(version),
 		[]byte(HashFilesAndArchives(files, archives)),
-	)
+	).Hex()
 }
 
 // ComputeBundlePath returns the install directory path for a bundle without checking existence.

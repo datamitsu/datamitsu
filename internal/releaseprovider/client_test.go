@@ -2,8 +2,6 @@ package releaseprovider
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/httpretry"
 	"github.com/datamitsu/datamitsu/internal/releaseasset"
 )
 
-func digest(data []byte) string { h := sha256.Sum256(data); return hex.EncodeToString(h[:]) }
+func expectedDigest(data []byte) string { return digest.SHA256Of(data).Hex() }
 
 func TestForgeAdapters(t *testing.T) {
 	for _, kind := range []string{"github", "gitea", "forgejo", "gitlab"} {
@@ -100,7 +99,7 @@ func TestPinnedChecksumAndMissingHash(t *testing.T) {
 	if requests != 0 {
 		t.Fatal("hash-less candidate was downloaded")
 	}
-	pins := map[string]string{"checksums.txt": digest(payload)}
+	pins := map[string]string{"checksums.txt": expectedDigest(payload)}
 	if err := c.ResolveDigest(context.Background(), "group/tool", assets, &asset, nil, pins); err != nil {
 		t.Fatal(err)
 	}

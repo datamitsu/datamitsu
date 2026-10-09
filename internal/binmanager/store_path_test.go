@@ -2,8 +2,6 @@ package binmanager
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
@@ -71,7 +71,7 @@ func TestExecDownloadedBinary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read test binary: %v", err)
 	}
-	sum := sha256.Sum256(content)
+	sum := digest.SHA256Of(content)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(content)
@@ -99,7 +99,7 @@ func TestExecDownloadedBinary(t *testing.T) {
 					osType: {
 						archType: {libc: BinaryOsArchInfo{
 							URL:         server.URL,
-							Hash:        hex.EncodeToString(sum[:]),
+							Hash:        sum.Hex(),
 							ContentType: BinContentTypeBinary,
 						}},
 					},
