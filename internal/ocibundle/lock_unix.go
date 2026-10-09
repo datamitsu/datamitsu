@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 )
 
 // lockSubtree takes an exclusive inter-process lock for one subtree so two
@@ -24,7 +24,7 @@ func lockSubtree(storeRoot, subtree string) (release func(), err error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create lock directory: %w", err)
 	}
-	lockPath := filepath.Join(dir, hashutil.XXH3Multi([]byte(storeRoot), []byte(subtree))+".lock")
+	lockPath := filepath.Join(dir, digest.XXH3Multi([]byte(storeRoot), []byte(subtree)).Hex()+".lock")
 	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open lock file: %w", err)

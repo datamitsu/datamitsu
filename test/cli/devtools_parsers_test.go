@@ -200,7 +200,7 @@ func TestTheEmbeddedModuleNameIsReserved(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := p.WriteFile("reserved.config.js", `function getMinVersion() { return "0.0.0"; }
 function getConfig(config) {
-  return { ...config, parsers: { embedded: { url: "https://example.test/m.wasm", hash: "`+strings.Repeat("ab", 32)+`" } } };
+  return { ...config, parsers: { embedded: { url: "https://example.test/m.wasm", hash: "sha256:`+strings.Repeat("ab", 32)+`" } } };
 }
 `)
 	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--config", cfg, "config", "show")

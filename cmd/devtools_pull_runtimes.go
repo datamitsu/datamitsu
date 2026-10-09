@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/detector"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/httpx"
@@ -602,7 +602,7 @@ func detectBunBinaries(release *github.Release) (binmanager.MapOfBinaries, error
 		if !ok {
 			return nil, fmt.Errorf("bun %s: release asset %s not found", release.TagName, spec.filename)
 		}
-		hash, err := extractHashFromDigest(asset.Digest)
+		hash, err := parseArtifactHash(asset.Digest)
 		if err != nil {
 			return nil, fmt.Errorf("bun %s asset %s: %w", release.TagName, spec.filename, err)
 		}
@@ -690,7 +690,7 @@ func detectPNPMBinaries(release *github.Release) (binmanager.MapOfBinaries, erro
 		if !ok {
 			return nil, fmt.Errorf("pnpm %s: release asset %s not found", release.TagName, spec.filename)
 		}
-		hash, err := extractHashFromDigest(asset.Digest)
+		hash, err := parseArtifactHash(asset.Digest)
 		if err != nil {
 			return nil, fmt.Errorf("pnpm %s asset %s: %w", release.TagName, spec.filename, err)
 		}
@@ -922,7 +922,7 @@ func detectJVMBinaries(release *github.Release) (binmanager.MapOfBinaries, error
 
 		contentType := detector.DetectContentType(asset.Name)
 
-		hash, err := extractHashFromDigest(asset.Digest)
+		hash, err := parseArtifactHash(asset.Digest)
 		if err != nil {
 			return nil, fmt.Errorf("platform %s/%s/%s: %w", platform.os, platform.arch, platform.libc, err)
 		}
@@ -1128,16 +1128,6 @@ func fetchPlainShasums(ctx context.Context, client *http.Client, baseURL, versio
 	return parseSHASUMS(string(body)), nil
 }
 
-// isSHA256Hex reports whether s is a 64-character lowercase-or-uppercase hex
-// string (a SHA-256 digest).
-func isSHA256Hex(s string) bool {
-	if len(s) != 64 {
-		return false
-	}
-	_, err := hex.DecodeString(s)
-	return err == nil
-}
-
 // buildNodeBinaries assembles the MapOfBinaries for every Node archive tuple,
 // looking each archive's SHA-256 up in the appropriate (verified) SHASUMS map
 // and recording extractDir entries with computed binaryPaths. A missing or
@@ -1155,13 +1145,13 @@ func buildNodeBinaries(cfg nodePullConfig, distShasums, muslShasums map[string]s
 			return nil, fmt.Errorf("node %s: SHA-256 hash not found for %s in %s SHASUMS",
 				cfg.version, spec.filename, libcLabel(spec))
 		}
-		// Normalize to lowercase so the recorded hash passes config validation
-		// (config.isValidSHA256Hex requires 64 lowercase hex chars). The hex/length
-		// guard below still rejects malformed values regardless of case.
-		hash = strings.ToLower(hash)
-		if !isSHA256Hex(hash) {
+		// Normalize to the canonical form the generated manifest records
+		// ("sha256:<64 lowercase hex>"); anything non-SHA-256 is refused.
+		pin, err := digest.ParseSHA256Loose(hash)
+		if err != nil {
 			return nil, fmt.Errorf("node %s: invalid SHA-256 hash %q for %s", cfg.version, hash, spec.filename)
 		}
+		hash = pin.String()
 
 		bp := nodeBinaryPath(spec)
 		binInfo := binmanager.BinaryOsArchInfo{
@@ -1341,13 +1331,13 @@ func buildGoBinaries(cfg goPullConfig) (binmanager.MapOfBinaries, error) {
 			return nil, fmt.Errorf("go %s: SHA-256 hash not found for %s in go.dev release files",
 				cfg.version, spec.filename)
 		}
-		// Normalize to lowercase so the recorded hash passes config validation
-		// (config.isValidSHA256Hex requires 64 lowercase hex chars). The hex/length
-		// guard below still rejects malformed values regardless of case.
-		hash = strings.ToLower(hash)
-		if !isSHA256Hex(hash) {
+		// Normalize to the canonical form the generated manifest records
+		// ("sha256:<64 lowercase hex>"); anything non-SHA-256 is refused.
+		pin, err := digest.ParseSHA256Loose(hash)
+		if err != nil {
 			return nil, fmt.Errorf("go %s: invalid SHA-256 hash %q for %s", cfg.version, hash, spec.filename)
 		}
+		hash = pin.String()
 
 		bp := goBinaryPath(spec)
 		binInfo := binmanager.BinaryOsArchInfo{
@@ -1448,7 +1438,7 @@ func detectRuntimeBinaries(name string, release *github.Release) (binmanager.Map
 			nil,
 		)
 
-		hash, err := extractHashFromDigest(asset.Digest)
+		hash, err := parseArtifactHash(asset.Digest)
 		if err != nil {
 			return nil, fmt.Errorf("platform %s/%s/%s: %w", platform.os, platform.arch, platform.libc, err)
 		}

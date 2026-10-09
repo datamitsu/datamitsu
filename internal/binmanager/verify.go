@@ -60,7 +60,6 @@ func VerifyBinaryExtraction(
 	ctx context.Context,
 	url string,
 	hash string,
-	hashType BinHashType,
 	contentType BinContentType,
 	binaryPath *string,
 	auth ...*httpx.RequestAuth,
@@ -82,7 +81,7 @@ func VerifyBinaryExtraction(
 		return err
 	}
 
-	if err := verifyFileHash(downloadedPath, hash, hashType); err != nil {
+	if err := verifyFileHash(downloadedPath, hash); err != nil {
 		return fmt.Errorf("hash verification failed: %w", err)
 	}
 
@@ -154,9 +153,10 @@ func DownloadFileForVerify(ctx context.Context, url string, destDir string, auth
 	return downloadForVerify(ctx, url, destDir, auth...)
 }
 
-// VerifyFileHashPublic verifies a file's hash. Public wrapper around verifyFileHash for verify-all.
-func VerifyFileHashPublic(filePath string, expectedHash string, hashType BinHashType) error {
-	return verifyFileHash(filePath, expectedHash, hashType)
+// VerifyFileHashPublic verifies a file's SHA-256 pin. Public wrapper around
+// verifyFileHash for verify-all and parsermanager.
+func VerifyFileHashPublic(filePath string, expectedHash string) error {
+	return verifyFileHash(filePath, expectedHash)
 }
 
 // ExtractDirForVerify extracts an archive to a directory. Public wrapper around extractBinaryToDir for verify-all.

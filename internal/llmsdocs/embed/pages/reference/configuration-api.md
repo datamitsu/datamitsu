@@ -67,7 +67,7 @@ final Config
 ```
 
 - Each source must export `getMinVersion()` — version is checked before `getConfig()` runs (fail-fast)
-- Each source can export `getRemoteConfigs()` returning `Array<{url: string, hash: string}>` for recursive parent resolution
+- Each source can export `getRemoteConfigs()` returning `Array<{url: string, hash: string}>` for recursive parent resolution. The `hash` is a SHA-256 digest — canonical form recommended; a bare or uppercase value is accepted and normalized there
 - The auto git-root config can export `getBeforeConfigs()` returning `Array<{path: string}>` to load local files as under-layers (parity with `--before-config`). It is honoured only at the git-root layer and skipped entirely when a `--before-config` flag is present; relative paths resolve against the git-root config's directory, no hash is required (local files are not downloads)
 - `ignoreRules` use append semantics across config layers
 - Circular remote config dependencies are detected and produce an error
@@ -340,7 +340,7 @@ const apps = {
           amd64: {
             glibc: {
               url: "https://github.com/golangci/golangci-lint/releases/download/v2.1.0/golangci-lint-2.1.0-linux-amd64.tar.gz",
-              hash: "abc123...", // SHA-256 (mandatory)
+              hash: "sha256:abc123...", // canonical SHA-256 digest (mandatory)
               contentType: "tar.gz",
               binaryPath: "golangci-lint-2.1.0-linux-amd64/golangci-lint",
             },
@@ -350,7 +350,7 @@ const apps = {
           arm64: {
             unknown: {
               url: "https://github.com/golangci/golangci-lint/releases/download/v2.1.0/golangci-lint-2.1.0-darwin-arm64.tar.gz",
-              hash: "def456...",
+              hash: "sha256:def456...",
               contentType: "tar.gz",
               binaryPath: "golangci-lint-2.1.0-darwin-arm64/golangci-lint",
             },
@@ -374,8 +374,7 @@ interface AppConfigBinary {
 
 interface BinaryOsArchInfo {
   url: string;
-  hash: string; // SHA-256 hash (mandatory)
-  hashType?: "sha256"; // Optional assertion; SHA-256 is the only accepted type
+  hash: string; // Canonical SHA-256 digest "sha256:<64 lowercase hex>" (mandatory)
   contentType: BinContentType;
   binaryPath?: string; // Path to binary within archive; with extractDir, the command inside the directory (required)
   extractDir?: boolean; // Extract entire archive to directory and run binaryPath inside it (tar or zip only)
@@ -503,7 +502,7 @@ const apps = {
       version: "7.12.0",
       jarUrl:
         "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.12.0/openapi-generator-cli-7.12.0.jar",
-      jarHash: "abc123...", // SHA-256 (mandatory)
+      jarHash: "sha256:abc123...", // canonical SHA-256 digest (mandatory)
       runtime: "jvm-default",
     },
   },
@@ -516,7 +515,7 @@ const apps = {
 interface AppConfigJVM {
   version: string;
   jarUrl: string;
-  jarHash: string; // SHA-256 hash (mandatory)
+  jarHash: string; // Canonical SHA-256 digest "sha256:<64 lowercase hex>" (mandatory)
   mainClass?: string; // When set, uses java -cp instead of java -jar
   runtime?: string; // Runtime name override
 }
@@ -660,7 +659,7 @@ const runtimes = {
           amd64: {
             glibc: {
               url: "https://nodejs.org/dist/v26.2.0/node-v26.2.0-linux-x64.tar.xz",
-              hash: "abc123...", // SHA-256 (mandatory)
+              hash: "sha256:abc123...", // canonical SHA-256 digest (mandatory)
               contentType: "tar.xz",
               binaryPath: "node-v26.2.0-linux-x64/bin/node",
               extractDir: true,
@@ -684,7 +683,7 @@ const runtimes = {
           amd64: {
             glibc: {
               url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-linux-x64.tar.gz",
-              hash: "def456...", // SHA-256 (mandatory)
+              hash: "sha256:def456...", // canonical SHA-256 digest (mandatory)
               contentType: "tar.gz",
               binaryPath: "pnpm",
               extractDir: true,
@@ -1399,8 +1398,8 @@ overrides, update the pin, and re-run. Key properties:
   pins on intermediate layers are ignored.
 - **Byte-for-byte.** The incoming content is hashed verbatim with no
   normalization — any change (upstream _or_ a handler that folds in your on-disk
-  file) moves the hash. Format: `"xxh3:<32-hex>"` (a bare 32-hex value is also
-  accepted).
+  file) moves the hash. Format: `"xxh3:<32 lowercase hex>"` — the only accepted
+  form; a bare 32-hex value is rejected at config load.
 - **Bypass.** Pass `datamitsu config reconcile --no-verify-hash` to skip the check and write
   regardless of drift.
 
@@ -1488,7 +1487,7 @@ interface ArchiveSpec {
   inline?: string; // Brotli-compressed tar: "tar.br:..." prefix
   url?: string; // External archive URL
   format?: string; // Required for external: "tar", "tar.gz", etc.
-  hash?: string; // SHA-256 required for external archives
+  hash?: string; // Canonical SHA-256 digest "sha256:<64 lowercase hex>" — required for external archives
 }
 ```
 
@@ -1593,7 +1592,7 @@ content-addressed in the store, and loaded into a sandboxed WASM runtime
 
 ```typescript
 interface Parser {
-  hash: string; // SHA-256 (64 lowercase hex) — mandatory for every source
+  hash: string; // Canonical SHA-256 digest "sha256:<64 lowercase hex>" — mandatory for every source
   url?: string; // URL of the .wasm module
   oci?: ParserOCI; // registry-sourced module
   // Exactly one of `url` or `oci`. No `version` field — see note below.
@@ -1602,7 +1601,7 @@ interface Parser {
 
 | Field  | Type        | Description                                                       |
 | ------ | ----------- | ----------------------------------------------------------------- |
-| `hash` | `string`    | SHA-256 hash, 64 lowercase hex — **mandatory** for every source   |
+| `hash` | `string`    | Canonical SHA-256 digest, `sha256:<64 lowercase hex>` — **mandatory** for every source |
 | `url`  | `string`    | URL of the `.wasm` module. Exactly one of `url` or `oci`          |
 | `oci`  | `ParserOCI` | Module pulled from an OCI registry. Exactly one of `url` or `oci` |
 
@@ -1622,7 +1621,7 @@ function getConfig(input) {
     parsers: {
       echo: {
         url: "https://github.com/owner/repo/releases/download/v1.2.3/datamitsu_parsers_1.2.3.wasm",
-        hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       },
     },
   };
@@ -1632,7 +1631,7 @@ function getConfig(input) {
 The SHA-256 `hash` is **mandatory** for every source per the
 [security policy](#security-requirements) — an empty or malformed hash is a
 config error, not a warning (`parser "echo": hash is required (SHA-256)` and
-`parser "echo": hash must be a valid SHA-256 hex string (64 lowercase hex characters)`).
+`parser "echo": hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>)`).
 
 The module is delivered through two channels. As a versioned asset on the GitHub
 Release (`datamitsu_parsers_<version>.wasm`): take the `url` from that release
@@ -1652,7 +1651,7 @@ parsers: {
 parsers: {
   echo: {
     url: "https://example.com/datamitsu_parsers.wasm",
-    hash: "0123…cdef", // 64 lowercase hex
+    hash: "sha256:0123…cdef", // sha256:<64 lowercase hex>
   },
 }
 ```
@@ -1677,7 +1676,7 @@ parsers: {
   echo: {
     url: "https://example.com/datamitsu_parsers.wasm",
     oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers", digest: "sha256:89ab…4567" },
-    hash: "0123…cdef",
+    hash: "sha256:0123…cdef",
   },
 }
 
@@ -1730,7 +1729,7 @@ function getConfig(input) {
           ref: "ghcr.io/datamitsu/datamitsu-parsers",
           digest: "sha256:89abcdef0123456789abcdef0123456789abcdef0123456789abcdef01234567",
         },
-        hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       },
     },
   };
@@ -1749,8 +1748,8 @@ Rules:
   `oci.digest … must be "sha256:" followed by 64 lowercase hex characters` when it
   is malformed.
 - `hash` stays mandatory and does double duty: it is **also** the expected layer
-  blob digest. The artifact's single layer must have digest `"sha256:" + hash`, so
-  the registry digest chain and the config hash are the same number. A manifest
+  blob digest — the layer's digest is the same `sha256:`-prefixed value, so the
+  registry digest chain and the config hash are the same number. A manifest
   that points at other content is rejected before one payload byte is requested,
   and the same `hash` is checked again on the downloaded stream and once more on
   the file on disk.
@@ -1942,13 +1941,14 @@ const toolsConfig = {
 
 ## Security Requirements
 
-All content downloaded from the internet must have a SHA-256 hash specified:
+All content downloaded from the internet must have a SHA-256 hash specified, as a
+canonical digest — `sha256:<64 lowercase hex>`; a bare 64-hex pin no longer loads:
 
 - Binary apps: `hash` field on each platform entry
 - Managed Bun, Node, pnpm, UV/Python, JVM, and Go runtimes: `hash` on every downloaded platform entry
 - JVM apps: `jarHash` field
 - External archives: `hash` field
-- Remote configs: `hash` on every `getRemoteConfigs()` entry
+- Remote configs: `hash` on every `getRemoteConfigs()` entry — the one lenient pin: a bare or uppercase-hex value is accepted there and normalized to canonical, because it is copied from a release page or checksum file
 - Output parsers: `hash` field on each `parsers` entry, whichever source it declares
 - OCI-sourced parsers: `oci.digest` on the entry, **plus** the same mandatory `hash` — which the artifact's single layer must carry as its blob digest
 - OCI store bundles: mandatory `oci.digest`; unpacked artifacts are re-verified against their individual SHA-256 pins

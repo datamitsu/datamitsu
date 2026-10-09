@@ -2,8 +2,6 @@ package releaseprovider
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -11,17 +9,19 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/releaseasset"
 )
 
-// SHA256 validates an external digest and returns its lowercase hexadecimal form.
+// SHA256 validates an external digest and returns its lowercase hexadecimal
+// form, accepting the canonical "sha256:" prefix or a bare 64-hex value in
+// either case.
 func SHA256(value string) (string, error) {
-	value = strings.TrimPrefix(value, "sha256:")
-	data, err := hex.DecodeString(value)
-	if err != nil || len(data) != sha256.Size {
+	d, err := digest.ParseSHA256Loose(value)
+	if err != nil {
 		return "", errors.New("expected a SHA-256 digest (64 hexadecimal characters)")
 	}
-	return strings.ToLower(value), nil
+	return d.Hex(), nil
 }
 
 // ResolveDigest resolves only the candidate currently being considered for a selected target.
@@ -94,8 +94,8 @@ func (c *Client) ResolveDigest(ctx context.Context, repository string, assets []
 			if err != nil {
 				return err
 			}
-			got := sha256.Sum256(data)
-			if hex.EncodeToString(got[:]) != expected {
+			got := digest.SHA256Of(data)
+			if got.Hex() != expected {
 				return fmt.Errorf("checksum asset %q failed SHA-256 verification", name)
 			}
 			table, err = parseChecksums(data)

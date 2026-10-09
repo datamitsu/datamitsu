@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -31,8 +31,8 @@ func TestPullReleasesPrivateAssetsInstallAndVerify(t *testing.T) {
 	updateFlag, verifyExtractionFlag = false, true
 	t.Cleanup(func() { updateFlag, verifyExtractionFlag = oldUpdate, oldVerify })
 	data := []byte("#!/bin/sh\necho tool\n")
-	h := sha256.Sum256(data)
-	hash := hex.EncodeToString(h[:])
+	h := digest.SHA256Of(data)
+	hash := h.Hex()
 	downloads := 0
 	var base string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

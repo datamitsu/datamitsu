@@ -2,8 +2,6 @@ package binmanager
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
@@ -24,7 +24,7 @@ func extractDirFixture(t *testing.T, archive string, contentType BinContentType,
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(content)
+	sum := digest.SHA256Of(content)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(content)
 	}))
@@ -44,7 +44,7 @@ func extractDirFixture(t *testing.T, archive string, contentType BinContentType,
 	binary := &AppConfigBinary{Binaries: MapOfBinaries{
 		osType: {archType: {libc: BinaryOsArchInfo{
 			URL:         server.URL,
-			Hash:        hex.EncodeToString(sum[:]),
+			Hash:        sum.Hex(),
 			ContentType: contentType,
 			BinaryPath:  &binaryPath,
 			ExtractDir:  true,

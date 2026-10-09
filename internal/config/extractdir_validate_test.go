@@ -17,7 +17,7 @@ func TestValidateApps_ExtractDirRequiresBinaryPathAndArchive(t *testing.T) {
 				Binary: &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{
 					syslist.OsTypeLinux: {syslist.ArchTypeAmd64: {"glibc": binmanager.BinaryOsArchInfo{
 						URL:         "https://example.com/protoc-36.2-linux-x86_64.zip",
-						Hash:        strings.Repeat("a", 64),
+						Hash:        "sha256:" + strings.Repeat("a", 64),
 						ContentType: contentType,
 						BinaryPath:  binaryPath,
 						ExtractDir:  true,

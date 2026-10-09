@@ -248,7 +248,7 @@ function main() {
 
   console.log("Point the wrapper config's `parsers` entry at the local module:\n");
   console.log("  const parsers = { core: {");
-  console.log(`    hash: "${hash}",`);
+  console.log(`    hash: "sha256:${hash}",`);
   console.log(`    url: "file://${wasmDestination}"`);
   console.log("  } };\n");
   console.log("The hash is still mandatory and verified — only the transport is local,");

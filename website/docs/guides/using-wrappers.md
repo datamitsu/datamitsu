@@ -283,7 +283,7 @@ function getConfig(prev) {
               amd64: {
                 glibc: {
                   url: "https://example.com/custom-linter-linux-amd64.tar.gz",
-                  hash: "<sha256>",
+                  hash: "sha256:<digest>",
                   contentType: "tar.gz",
                   binaryPath: "custom-linter",
                 },
@@ -514,7 +514,7 @@ function getConfig(prev) {
               amd64: {
                 glibc: {
                   url: "https://github.com/golangci/golangci-lint/releases/download/v1.60.0/...",
-                  hash: "<new-sha256>",
+                  hash: "sha256:<new-digest>",
                   contentType: "tar.gz",
                   binaryPath: "...",
                 },

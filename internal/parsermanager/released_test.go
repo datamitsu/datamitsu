@@ -2,14 +2,13 @@ package parsermanager
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 // The core must keep reading every module a released configuration can pin.
@@ -48,7 +47,7 @@ func releasedV1(t *testing.T) []byte {
 	if err != nil {
 		t.Fatalf("read the released module: %v", err)
 	}
-	if sum := sha256.Sum256(wasm); hex.EncodeToString(sum[:]) != releasedV1SHA256 {
+	if sum := digest.SHA256Of(wasm); sum.Hex() != releasedV1SHA256 {
 		t.Fatalf("%s has SHA-256 %x, want %s: the released fixture is immutable",
 			releasedV1Path, sum, releasedV1SHA256)
 	}

@@ -30,7 +30,7 @@ export const mapOfApps: BinManager.MapOfApps = {
   },
   ktlint: {
     jvm: {
-      jarHash: "a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75",
+      jarHash: "sha256:a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75",
       jarUrl: "https://github.com/pinterest/ktlint/releases/download/1.8.0/ktlint",
       version: "1.8.0",
     },

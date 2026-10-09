@@ -36,12 +36,14 @@ declarations do not have it, this version does not accept it.
 ## Downloads
 
 - Everything fetched from the network - binary, archive, JAR, runtime, remote
-  config - carries a SHA-256 hash: `hash`, or `jarHash` for a JVM app's JAR. A
-  missing hash fails the load. Never write a placeholder, and never copy a
-  version or a hash from memory.
+  config - carries a SHA-256 digest: `hash`, or `jarHash` for a JVM app's JAR,
+  written canonically as `"sha256:<64 lowercase hex>"` (an `expectChainHash`
+  pin is `"xxh3:<32 lowercase hex>"`). A missing or bare-hex hash fails the
+  load. Never write a placeholder, and never copy a version or a hash from
+  memory.
 - Bump versions with `datamitsu devtools pull-releases`, `pull-node`, `pull-uv` and
   `pull-runtimes`. They read hashes from the published artifacts and apply the
-  minimum release age.
+  minimum release age, writing them in the canonical form.
 - Bun, Node, UV and Go apps need a `lockFile`. Generate it with
   `datamitsu config lockfile <app>` whenever the app's version or dependencies
   change; never edit one by hand.
@@ -83,6 +85,15 @@ writes the configuration; never ship it to consumers.
 
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
+
+- **after v0.4.0** - Hash pins are canonical `alg:value` digests:
+  `"sha256:<64 lowercase hex>"` for every download pin (`hash`, `jarHash`,
+  archive hashes, parser hashes) and `"xxh3:<32 lowercase hex>"` for
+  `expectChainHash`. Bare hex values fail the load with a format-teaching
+  error, and the `hashType` field is gone: the algorithm is part of the
+  digest. Add the `sha256:` prefix to every existing pin; values are
+  otherwise unchanged. Hand-written `binaryApps.json` pin maps still accept
+  loose input and normalize on load.
 
 - **after v0.4.0** - Release sources accept `downloadAuth: auto | required | none`
   (default `auto`). `tokenEnv` authorizes discovery independently; download auth

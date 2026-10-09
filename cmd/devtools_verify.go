@@ -240,12 +240,8 @@ func binaryJobKeyAndFP(j binaryVerifyJob) (string, string) {
 	if j.info.BinaryPath != nil {
 		binaryPath = *j.info.BinaryPath
 	}
-	hashType := string(binmanager.BinHashTypeSHA256)
-	if j.info.HashType != nil {
-		hashType = string(*j.info.HashType)
-	}
 	key := verifycache.BinaryEntryKey(j.appName, string(j.os), string(j.arch), j.libc)
-	fp := verifycache.FingerprintBinary(j.info.URL, j.info.Hash, hashType, string(j.info.ContentType), binaryPath, j.info.ExtractDir, string(j.os), string(j.arch), j.libc)
+	fp := verifycache.FingerprintBinary(j.info.URL, j.info.Hash, string(j.info.ContentType), binaryPath, j.info.ExtractDir, string(j.os), string(j.arch), j.libc)
 	return key, fp
 }
 
@@ -254,12 +250,8 @@ func runtimeJobKeyAndFP(j runtimeVerifyJob) (string, string) {
 	if j.info.BinaryPath != nil {
 		binaryPath = *j.info.BinaryPath
 	}
-	hashType := string(binmanager.BinHashTypeSHA256)
-	if j.info.HashType != nil {
-		hashType = string(*j.info.HashType)
-	}
 	key := verifycache.RuntimeEntryKey(j.runtimeName, string(j.os), string(j.arch), j.libc)
-	fp := verifycache.FingerprintRuntime(j.info.URL, j.info.Hash, hashType, string(j.info.ContentType), binaryPath, j.info.ExtractDir, string(j.os), string(j.arch), j.libc)
+	fp := verifycache.FingerprintRuntime(j.info.URL, j.info.Hash, string(j.info.ContentType), binaryPath, j.info.ExtractDir, string(j.os), string(j.arch), j.libc)
 	return key, fp
 }
 
@@ -681,22 +673,17 @@ func runPhase1BinaryApps(ctx context.Context, cfg *config.Config, concurrency in
 }
 
 func verifyBinaryOrDir(ctx context.Context, info binmanager.BinaryOsArchInfo) error {
-	hashType := binmanager.BinHashTypeSHA256
-	if info.HashType != nil {
-		hashType = *info.HashType
-	}
-
 	if info.ExtractDir {
-		return verifyExtractDir(ctx, info.URL, info.Hash, hashType, info.ContentType, info.BinaryPath, info.Auth)
+		return verifyExtractDir(ctx, info.URL, info.Hash, info.ContentType, info.BinaryPath, info.Auth)
 	}
 
-	return binmanager.VerifyBinaryExtraction(ctx, info.URL, info.Hash, hashType, info.ContentType, info.BinaryPath, info.Auth)
+	return binmanager.VerifyBinaryExtraction(ctx, info.URL, info.Hash, info.ContentType, info.BinaryPath, info.Auth)
 }
 
 // verifyExtractDir downloads an extractDir entry, unpacks the whole tree and checks the command
 // it names: binaryPath must be an executable inside the tree, since that is what runs. An entry
 // without one only has to unpack to something.
-func verifyExtractDir(ctx context.Context, url, hash string, hashType binmanager.BinHashType, contentType binmanager.BinContentType, binaryPath *string, auth ...*httpx.RequestAuth) error {
+func verifyExtractDir(ctx context.Context, url, hash string, contentType binmanager.BinContentType, binaryPath *string, auth ...*httpx.RequestAuth) error {
 	if hash == "" {
 		return errors.New("hash is empty: verification requires a non-empty hash")
 	}
@@ -712,7 +699,7 @@ func verifyExtractDir(ctx context.Context, url, hash string, hashType binmanager
 		return err
 	}
 
-	if err := binmanager.VerifyFileHashPublic(downloadedPath, hash, hashType); err != nil {
+	if err := binmanager.VerifyFileHashPublic(downloadedPath, hash); err != nil {
 		return fmt.Errorf("hash verification failed: %w", err)
 	}
 

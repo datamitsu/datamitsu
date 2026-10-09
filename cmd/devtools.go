@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
@@ -14,6 +13,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/detector"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/releaseasset"
 	"github.com/datamitsu/datamitsu/internal/releaseprovider"
@@ -454,7 +454,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *releaseas
 	var verify extractionVerifier
 	if verifyExtractionFlag {
 		verify = memoizedVerifier(func(ctx context.Context, url, hash string, contentType binmanager.BinContentType, binaryPath *string) error {
-			return binmanager.VerifyBinaryExtraction(ctx, url, hash, binmanager.BinHashTypeSHA256, contentType, binaryPath, authByURL[url])
+			return binmanager.VerifyBinaryExtraction(ctx, url, hash, contentType, binaryPath, authByURL[url])
 		})
 	}
 
@@ -723,7 +723,7 @@ func pickBinaryForPlatform(
 			}
 		}
 
-		hash, err := extractHashFromDigest(asset.Digest)
+		hash, err := parseArtifactHash(asset.Digest)
 		if err != nil {
 			hashErr = &candidateError{asset: asset.Name, err: err}
 			continue
@@ -842,32 +842,16 @@ func printDetectionResults(results []detectionResult, verifyMode bool) {
 	}
 }
 
-// extractHashFromDigest extracts the SHA-256 hash value from GitHub digest field.
-// Only accepts "sha256:<64 hex chars>" format. Returns error for invalid formats.
-func extractHashFromDigest(digest string) (string, error) {
-	if digest == "" {
-		return "", errors.New("empty digest")
+// parseArtifactHash parses a provider digest into the canonical SHA-256 form
+// the generated manifest writes: "sha256:<64 lowercase hex>". Provider feeds
+// arrive prefixed (GitHub "sha256:…", GitLab bare file_sha256); either case is
+// normalized, anything non-SHA-256 is refused.
+func parseArtifactHash(digestValue string) (string, error) {
+	d, err := digest.ParseSHA256Loose(digestValue)
+	if err != nil {
+		return "", err
 	}
-
-	parts := strings.SplitN(digest, ":", 2)
-	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid digest format %q: missing algorithm prefix", digest)
-	}
-
-	if parts[0] != "sha256" {
-		return "", fmt.Errorf("unsupported digest algorithm %q (only sha256 supported)", parts[0])
-	}
-
-	hashValue := parts[1]
-	if len(hashValue) != 64 {
-		return "", fmt.Errorf("invalid SHA-256 hash length %d (expected 64) in digest %q", len(hashValue), digest)
-	}
-
-	if _, err := hex.DecodeString(hashValue); err != nil {
-		return "", fmt.Errorf("invalid hex in SHA-256 hash %q: %w", hashValue, err)
-	}
-
-	return hashValue, nil
+	return d.String(), nil
 }
 
 func safeReleaseLabel(value string) string {

@@ -9,8 +9,8 @@ import (
 	"github.com/datamitsu/datamitsu/internal/target"
 )
 
-// validHex is a syntactically valid lowercase 64-char SHA-256 hex string.
-const validHex = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+// validPin is a canonical lowercase SHA-256 pin: "sha256:" + 64 hex characters.
+const validPin = "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
 
 // managedBinaries builds a one-entry MapOfBinaries for linux/amd64 with the
 // given libc key and binary info, exercising the managed-mode validation loop.
@@ -33,7 +33,7 @@ func TestValidateRuntimes_ManagedBinaries_Valid(t *testing.T) {
 			Managed: &RuntimeConfigManaged{
 				Binaries: managedBinaries(string(target.LibcGlibc), binmanager.BinaryOsArchInfo{
 					URL:        "https://example.com/uv.tar.gz",
-					Hash:       validHex,
+					Hash:       validPin,
 					BinaryPath: &bp,
 				}),
 			},
@@ -45,7 +45,6 @@ func TestValidateRuntimes_ManagedBinaries_Valid(t *testing.T) {
 }
 
 func TestValidateRuntimes_ManagedBinaries_Errors(t *testing.T) {
-	badHashType := binmanager.BinHashTypeSHA512
 	unsafePath := "../escape"
 
 	tests := []struct {
@@ -57,13 +56,13 @@ func TestValidateRuntimes_ManagedBinaries_Errors(t *testing.T) {
 		{
 			name:    "invalid libc key",
 			libc:    "bogus",
-			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: validHex},
+			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: validPin},
 			wantSub: "libc key",
 		},
 		{
 			name:    "missing url",
 			libc:    string(target.LibcMusl),
-			info:    binmanager.BinaryOsArchInfo{Hash: validHex},
+			info:    binmanager.BinaryOsArchInfo{Hash: validPin},
 			wantSub: "url is required",
 		},
 		{
@@ -76,18 +75,24 @@ func TestValidateRuntimes_ManagedBinaries_Errors(t *testing.T) {
 			name:    "invalid hash",
 			libc:    string(target.LibcGlibc),
 			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: "zzzz"},
-			wantSub: "valid SHA-256",
+			wantSub: "canonical SHA-256",
 		},
 		{
-			name:    "disallowed hash type",
+			name:    "bare hex hash is rejected",
 			libc:    string(target.LibcGlibc),
-			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: validHex, HashType: &badHashType},
-			wantSub: "hash type",
+			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"},
+			wantSub: "canonical SHA-256",
+		},
+		{
+			name:    "weak algorithm pin is rejected",
+			libc:    string(target.LibcGlibc),
+			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: "sha512:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"},
+			wantSub: "canonical SHA-256",
 		},
 		{
 			name:    "unsafe binary path",
 			libc:    string(target.LibcGlibc),
-			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: validHex, BinaryPath: &unsafePath},
+			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: validPin, BinaryPath: &unsafePath},
 			wantSub: "escapes parent directory",
 		},
 	}

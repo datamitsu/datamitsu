@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +14,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/releaseasset"
 	"github.com/datamitsu/datamitsu/internal/releaseprovider"
@@ -46,8 +44,8 @@ func TestGitHubVisibilityDownloadPaths(t *testing.T) {
 				t.Setenv("GITHUB_TOKEN", "fixture-github-credential")
 				t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 				data := []byte("#!/bin/sh\necho fixture\n")
-				sum := sha256.Sum256(data)
-				expected := hex.EncodeToString(sum[:])
+				sum := digest.SHA256Of(data)
+				expected := "sha256:" + sum.Hex()
 				var browserRequests, assetRequests, repoRequests, discoveryRequests atomic.Int32
 				var corrupt atomic.Bool
 				writeBinary := func(w http.ResponseWriter) {
@@ -107,7 +105,7 @@ func TestGitHubVisibilityDownloadPaths(t *testing.T) {
 						_ = json.NewEncoder(w).Encode(map[string]any{"description": "fixture", "private": tc.private, "id": 1})
 						return
 					}
-					_ = json.NewEncoder(w).Encode(releaseasset.Release{TagName: "v1", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{Name: "tool-linux-amd64", APIURL: apiURL + "/repos/o/tool/releases/assets/1", BrowserDownloadURL: browser.URL + "/tool-linux-amd64", Digest: "sha256:" + expected}}})
+					_ = json.NewEncoder(w).Encode(releaseasset.Release{TagName: "v1", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{Name: "tool-linux-amd64", APIURL: apiURL + "/repos/o/tool/releases/assets/1", BrowserDownloadURL: browser.URL + "/tool-linux-amd64", Digest: expected}}})
 				}))
 				defer api.Close()
 				apiURL = api.URL
@@ -231,7 +229,7 @@ func TestGitHubPreviouslyGeneratedAPIEntryIsRefreshed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldHash := hashutil.XXH3Hex(data)
+	oldHash := digest.XXH3Of(data).Hex()
 	if oldHash == appstate.ComputeConfigHash(metadata, selection, source) {
 		t.Fatal("old generation fingerprint still matches")
 	}

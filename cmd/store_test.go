@@ -5,13 +5,13 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -220,8 +220,8 @@ func TestResolveSeedRef(t *testing.T) {
 }
 
 func storeTestSHA256(data []byte) string {
-	sum := sha256.Sum256(data)
-	return "sha256:" + hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(data)
+	return "sha256:" + sum.Hex()
 }
 
 // seedStoreTestBundle prepares an isolated cache/store, a git root with a

@@ -2,13 +2,12 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"os"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/shamaton/msgpack/v2"
 )
@@ -120,7 +119,7 @@ func BenchmarkConfigCacheKeyXXH3(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			_ = hashutil.XXH3Hex(data)
+			_ = digest.XXH3Of(data).Hex()
 		}
 	})
 	data, err := os.ReadFile(path)
@@ -130,13 +129,13 @@ func BenchmarkConfigCacheKeyXXH3(b *testing.B) {
 	b.Run("hash-only", func(b *testing.B) {
 		b.SetBytes(int64(len(data)))
 		for b.Loop() {
-			_ = hashutil.XXH3Hex(data)
+			_ = digest.XXH3Of(data).Hex()
 		}
 	})
 	b.Run("sha256-only", func(b *testing.B) {
 		b.SetBytes(int64(len(data)))
 		for b.Loop() {
-			_ = sha256.Sum256(data)
+			_ = digest.SHA256Of(data)
 		}
 	})
 	b.Run("stat-only", func(b *testing.B) {

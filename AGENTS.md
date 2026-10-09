@@ -19,7 +19,7 @@
 
 **All artifacts downloaded from the internet MUST have a SHA-256 hash specified. No exceptions.**
 
-- Any binary, archive, JAR file, or remote config loaded from a URL must include a `hash` field (SHA-256).
+- Any binary, archive, JAR file, or remote config loaded from a URL must include a `hash` field: a canonical SHA-256 digest `sha256:<64 lowercase hex>`.
 - If a hash is missing or empty, **refuse to process and return an error immediately**. Do not download, do not fall back to "hash-less" mode.
 - This applies equally to: binary apps, managed runtimes, JVM JAR files, and remote config files (`getRemoteConfigs()`).
 - Lock files are mandatory for all Bun, UV, Node, and Go apps. Hashes are always mandatory regardless of any flag.
@@ -27,20 +27,20 @@
 
 ## Hashing Policy
 
-**Strict separation between internal and external hashing:**
+**One package owns every hash: `internal/digest`.** Never import `zeebo/xxh3`
+or `crypto/sha256` anywhere else (depguard enforces both). Strict separation
+between internal and external hashing stays:
 
-- **XXH3-128** (github.com/zeebo/xxh3):
+- **XXH3-128** (token `xxh3`):
   - All internal cache keys, invalidation keys, internal fingerprints
   - Config hashes (binmanager, runtimemanager, verifycache)
   - Per-file content tracking in execution cache
   - Path hashing (git root, project paths, URL→cache filename)
-  - Use via internal/hashutil package — never import xxh3 directly
 
-- **SHA-256 / SHA-512 / other crypto hashes** (crypto/sha256, etc):
+- **SHA-256** (token `sha256`):
   - File integrity verification of all downloaded content
   - All hashes that come from external sources (release manifests, lock files)
   - Mandatory for binaries, JARs, archives, remote configs
-  - Industry standard, published by upstream projects
   - Identifiers that leave the process and that another system stores and
     compares: the finding fingerprint (`report.Fingerprint`, `dmfp1`), which
     code scanning keeps as an alert's identity across uploads
@@ -52,10 +52,25 @@ external value, it MUST be XXH3-128. An identifier that lives in another
 system's database is not an internal fingerprint: it is written into a report
 and compared there, so it is SHA-256.
 
+**Canonical string form:** every digest a person reads, writes or copies is
+`alg:value` — `sha256:<64 lowercase hex>` or `xxh3:<32 lowercase hex>`
+(`xxh3` names XXH3-128; no aliases). Config pins, generated manifests,
+`expectChainHash`, `getRemoteConfigs()` hashes and error messages use this
+form and are validated at load (`digest.ParseSHA256`/`ParseXXH3`). Ingestion
+of external feeds (`ParseSHA256Loose`) may accept any case or a bare hex
+value and normalizes to canonical.
+
+**Bare hex for identity:** hash inputs and cache/store addresses use
+`Digest.Hex()`, never the canonical string — an identity must not depend on
+how a pin was spelled, and a colon cannot appear in a Windows path component.
+
 **Forbidden:**
 
 - Using XXH3 for any verification of external content
 - Using SHA-256 for internal cache keys (correct but slow — wastes cycles)
+- Importing `zeebo/xxh3` or `crypto/sha256` outside `internal/digest`
+- A `hashType`-style side field naming the algorithm: the algorithm lives in
+  the digest string itself, and downloads verify SHA-256 only
 
 **Rationale:** XXH3 is 10–25× faster than SHA-256 on typical cache key sizes, with collision resistance more than sufficient for non-adversarial internal use. Cryptographic hashes remain non-negotiable for any content arriving over the network.
 
@@ -529,6 +544,8 @@ configuration load (`config.ReservedParserModule`, checked by `ValidateParsers`
 and `ValidateTools`). Rename such an entry and the tools that reference it.
 
 **Breaking change: dangling managed config tools fail the load** — `ManagedConfig.tools` naming a tool that is not configured was a warning and is now a config error, because the association decides what `ejectConfigs` moves. A config that deletes a tool but keeps its managed config fails to load; declare the tool with `skip: true` instead.
+
+**Breaking change: hash pins are canonical `alg:value` digests; `hashType` is gone** — every hash field a person writes (`binaries.<os>.<arch>.<libc>.hash`, `jvm.jarHash`, `archives[].hash`, `parsers.<n>.hash`, `oci.digest`, `expectChainHash`) is now `"sha256:<64 lowercase hex>"` or `"xxh3:<32 lowercase hex>"`, validated at load; a bare hex pin fails with a format-teaching error. The `hashType` field and the `BinHashType` machinery are removed — the algorithm lives in the digest string, and downloads verify SHA-256 only. `internal/hashutil` is replaced by `internal/digest` (one package owns every hash; depguard denies `zeebo/xxh3` and `crypto/sha256` outside it). Ingestion of external feeds and hand-written `binaryApps.json` pin maps still accepts loose input and normalizes it on load. Existing store layouts and every cache identity keep their bare-hex addresses, so nothing re-downloads; the config-eval cache and toolstate go cold once (`d9v1`, format 8). Regenerate generated manifests with the updated devtools commands.
 
 **Breaking change: pnpm is its own runtime** — pnpm 12 ships no JavaScript implementation, so pnpm became a runtime of kind `pnpm` (`managed.binaries` per platform from the pnpm/pnpm GitHub release archives, `pnpm.pnpmVersion`), and the `node` and `bun` sub-configs replaced `pnpmVersion` + `pnpmHash` with `pnpmRuntime`, the name of that runtime. A config that defines its own Node or Bun runtime the old way fails validation; regenerate it with `datamitsu devtools pull-runtimes` (which now also writes the `pnpm` entry). The pnpm runtime's identity folds into the app hash of Node and Bun apps, not into the Node or Bun runtime hash, so a pnpm bump reinstalls apps without re-downloading Node or Bun; `CollectRequiredRuntimes`, the Dockerfile app slices and the verify fingerprint follow the `pnpmRuntime` reference (`MapOfRuntimes.PNPMRuntimeName`). The native pnpm writes its `--reporter=ndjson` stream to stderr and reports failures as plain text rather than ndjson error events, so `pnpmReporter` keeps non-JSON lines for the error message.
 

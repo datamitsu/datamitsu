@@ -4,8 +4,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +14,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -63,8 +63,8 @@ func makeNodeTarXzBytes(t *testing.T) ([]byte, string) {
 		t.Fatalf("close xz writer: %v", err)
 	}
 
-	sum := sha256.Sum256(buf.Bytes())
-	return buf.Bytes(), hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(buf.Bytes())
+	return buf.Bytes(), sum.Hex()
 }
 
 // nodeRuntimeWith builds a single managed "node" runtime whose binaries map has

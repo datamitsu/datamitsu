@@ -2,13 +2,13 @@ package binmanager
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/httpretry"
 )
@@ -30,8 +30,8 @@ func fastVerifyRetries(t *testing.T) {
 func TestVerifyBinaryExtraction_DownloadRetries(t *testing.T) {
 	fastVerifyRetries(t)
 	body := []byte("#!/bin/sh\necho ok\n")
-	sum := sha256.Sum256(body)
-	hash := hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(body)
+	hash := sum.Hex()
 
 	t.Run("a transient failure is retried and reported", func(t *testing.T) {
 		attempts := 0
@@ -48,7 +48,7 @@ func TestVerifyBinaryExtraction_DownloadRetries(t *testing.T) {
 		var seen []httpretry.Attempt
 		VerifyRetryNotifier = func(a httpretry.Attempt) { seen = append(seen, a) }
 
-		if err := VerifyBinaryExtraction(context.Background(), srv.URL, hash, BinHashTypeSHA256, BinContentTypeBinary, nil); err != nil {
+		if err := VerifyBinaryExtraction(context.Background(), srv.URL, hash, BinContentTypeBinary, nil); err != nil {
 			t.Fatalf("VerifyBinaryExtraction() = %v", err)
 		}
 		if attempts != 2 || len(seen) != 1 || seen[0].What != "GET "+srv.URL || !strings.Contains(seen[0].Err.Error(), "502") {
@@ -64,7 +64,7 @@ func TestVerifyBinaryExtraction_DownloadRetries(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		err := VerifyBinaryExtraction(context.Background(), srv.URL, hash, BinHashTypeSHA256, BinContentTypeBinary, nil)
+		err := VerifyBinaryExtraction(context.Background(), srv.URL, hash, BinContentTypeBinary, nil)
 		if !IsDownloadError(err) || attempts != httpretry.DefaultMaxAttempts {
 			t.Fatalf("VerifyBinaryExtraction() = %v after %d attempts, want a DownloadError after %d", err, attempts, httpretry.DefaultMaxAttempts)
 		}
@@ -81,7 +81,7 @@ func TestVerifyBinaryExtraction_DownloadRetries(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		err := VerifyBinaryExtraction(context.Background(), srv.URL, hash, BinHashTypeSHA256, BinContentTypeBinary, nil)
+		err := VerifyBinaryExtraction(context.Background(), srv.URL, hash, BinContentTypeBinary, nil)
 		if !IsDownloadError(err) || attempts != 1 {
 			t.Fatalf("VerifyBinaryExtraction() = %v after %d attempts, want a DownloadError after 1", err, attempts)
 		}
@@ -93,7 +93,7 @@ func TestVerifyBinaryExtraction_DownloadRetries(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		err := VerifyBinaryExtraction(context.Background(), srv.URL, strings.Repeat("0", 64), BinHashTypeSHA256, BinContentTypeBinary, nil)
+		err := VerifyBinaryExtraction(context.Background(), srv.URL, strings.Repeat("0", 64), BinContentTypeBinary, nil)
 		if err == nil || IsDownloadError(err) || !strings.Contains(err.Error(), "hash verification failed") {
 			t.Fatalf("VerifyBinaryExtraction() = %v, want a hash mismatch that is not a DownloadError", err)
 		}
@@ -115,7 +115,7 @@ func TestVerifyBinaryExtraction_DownloadRetries(t *testing.T) {
 		var seen []httpretry.Attempt
 		VerifyRetryNotifier = func(a httpretry.Attempt) { seen = append(seen, a) }
 
-		if err := VerifyBinaryExtraction(context.Background(), srv.URL, hash, BinHashTypeSHA256, BinContentTypeBinary, nil); err != nil {
+		if err := VerifyBinaryExtraction(context.Background(), srv.URL, hash, BinContentTypeBinary, nil); err != nil {
 			t.Fatalf("VerifyBinaryExtraction() = %v", err)
 		}
 		if attempts != 2 || len(seen) != 1 || seen[0].Delay != time.Second {
@@ -132,7 +132,7 @@ func TestVerifyBinaryExtraction_DownloadRetries(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		err := VerifyBinaryExtraction(context.Background(), srv.URL, hash, BinHashTypeSHA256, BinContentTypeBinary, nil)
+		err := VerifyBinaryExtraction(context.Background(), srv.URL, hash, BinContentTypeBinary, nil)
 		if !IsDownloadError(err) || attempts != 1 || !strings.Contains(err.Error(), "asks to wait 1h0m0s") {
 			t.Fatalf("VerifyBinaryExtraction() = %v after %d attempts", err, attempts)
 		}

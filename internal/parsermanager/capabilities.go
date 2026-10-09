@@ -250,7 +250,7 @@ func DescribeStored(ctx context.Context, parsers config.MapOfParsers) []CatalogM
 	for _, name := range names {
 		p := parsers[name]
 		path := filepath.Join(moduleDir(name, p), wasmFileName)
-		if binmanager.VerifyFileHashPublic(path, p.Hash, binmanager.BinHashTypeSHA256) != nil {
+		if binmanager.VerifyFileHashPublic(path, p.Hash) != nil {
 			continue
 		}
 		wasm, err := os.ReadFile(path)

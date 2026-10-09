@@ -20,7 +20,7 @@ func Resolve(ctx context.Context, url, expectedHash, cacheDir string) (string, e
 		return "", fmt.Errorf("remote config %s: hash is required", url)
 	}
 
-	if err := validateHashFormat(expectedHash); err != nil {
+	if _, err := parseExpectedHash(expectedHash); err != nil {
 		return "", fmt.Errorf("remote config %s: %w", url, err)
 	}
 

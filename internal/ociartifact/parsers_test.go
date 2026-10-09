@@ -14,8 +14,9 @@ import (
 )
 
 // moduleSHA256 is the layer digest recorded in the golden manifest — i.e. the
-// value a config would carry as the parser's mandatory `hash`.
-const moduleSHA256 = "612a5c2da01d74a35fc0a27ac01ac9ae92442cbdc8bc6ddddee4a32642a9d73f"
+// value a config would carry as the parser's mandatory `hash` (canonical form:
+// "sha256:" + 64 lowercase hex).
+const moduleSHA256 = "sha256:612a5c2da01d74a35fc0a27ac01ac9ae92442cbdc8bc6ddddee4a32642a9d73f"
 
 // goldenManifest returns the published artifact manifest exactly as the release
 // job writes it. Keeping the wire format in testdata (rather than building it
@@ -66,7 +67,7 @@ func TestSelectWasmLayer_ValidArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SelectWasmLayer() error = %v", err)
 	}
-	if got := desc.Digest.String(); got != "sha256:"+moduleSHA256 {
+	if got := desc.Digest.String(); got != moduleSHA256 {
 		t.Errorf("descriptor digest = %q, want the module hash", got)
 	}
 	if desc.MediaType != MediaTypeWasm {
@@ -214,7 +215,7 @@ func TestSelectWasmLayer_DigestMismatchNamesBoth(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a rejection")
 	}
-	for _, want := range []string{"sha256:" + other, "sha256:" + moduleSHA256} {
+	for _, want := range []string{"sha256:" + other, moduleSHA256} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not name %q", err, want)
 		}
@@ -224,9 +225,10 @@ func TestSelectWasmLayer_DigestMismatchNamesBoth(t *testing.T) {
 func TestSelectWasmLayer_HashIsMandatory(t *testing.T) {
 	for name, hash := range map[string]string{
 		"empty":     "",
-		"uppercase": strings.ToUpper(moduleSHA256),
-		"short":     moduleSHA256[:32],
-		"prefixed":  "sha256:" + moduleSHA256,
+		"uppercase": strings.ToUpper(strings.TrimPrefix(moduleSHA256, "sha256:")),
+		"short":     "sha256:" + strings.TrimPrefix(moduleSHA256, "sha256:")[:32],
+		"bare hex":  strings.TrimPrefix(moduleSHA256, "sha256:"),
+		"weak alg":  "sha512:" + strings.Repeat("ab", 64),
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := SelectWasmLayer(goldenManifest(t), hash)
@@ -304,7 +306,7 @@ func TestFetchParserModule_HappyPath(t *testing.T) {
 	if fake.blobCalls != 1 {
 		t.Errorf("blob calls = %d, want 1", fake.blobCalls)
 	}
-	if fake.lastBlobDgst != "sha256:"+moduleSHA256 {
+	if fake.lastBlobDgst != moduleSHA256 {
 		t.Errorf("blob pulled by digest %q, want the layer digest", fake.lastBlobDgst)
 	}
 }

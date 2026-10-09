@@ -39,7 +39,7 @@ runtimes: {
           amd64: {
             glibc: {
               url: "https://github.com/astral-sh/uv/releases/download/0.6.0/uv-x86_64-unknown-linux-gnu.tar.gz",
-              hash: "...",
+              hash: "sha256:...", // canonical digest (mandatory)
               contentType: "tar.gz",
               binaryPath: "uv",
             },
@@ -205,7 +205,7 @@ runtimes: {
           amd64: {
             glibc: {
               url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-linux-x64.tar.gz",
-              hash: "66e98862...", // SHA-256 (mandatory)
+              hash: "sha256:66e98862...", // canonical SHA-256 digest (mandatory)
               contentType: "tar.gz",
               binaryPath: "pnpm",
               extractDir: true,
@@ -261,7 +261,7 @@ apps: {
   "openapi-generator": {
     jvm: {
       jarUrl: "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.0.0/openapi-generator-cli-7.0.0.jar",
-      jarHash: "...",
+      jarHash: "sha256:...", // canonical digest (mandatory)
       version: "7.0.0",
     },
   },

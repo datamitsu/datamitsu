@@ -16,8 +16,8 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/configcache"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/parsermanager/embedded"
 	"github.com/datamitsu/datamitsu/internal/trace"
@@ -632,7 +632,9 @@ func (c *Cache) Clear() error {
 //   - d8v1: the output of a tool without a parser that recognized it is read
 //     by the fallback built into the binary, and its findings block a pass as
 //     any others do.
-const cacheSemantics = "d8v1"
+//   - d9v1: config hash pins are canonical "sha256:<hex>" strings and the
+//     hashType field is gone; every key that folds a pin moved.
+const cacheSemantics = "d9v1"
 
 // withoutThresholds returns cfg with no operation's failOn. A pass is recorded
 // only for output with no finding of any level, which holds at every
@@ -708,7 +710,7 @@ func calculateInvalidationKey(
 		}
 	}
 
-	return hashutil.XXH3Multi(parts...), nil
+	return digest.XXH3Multi(parts...).Hex(), nil
 }
 
 // hashFile calculates XXH3-128 hash of a file's contents
@@ -723,7 +725,8 @@ func hashFile(path string) (string, error) {
 		_ = f.Close()
 	}()
 
-	return hashutil.XXH3Reader(f)
+	d, err := digest.XXH3Reader(f)
+	return d.Hex(), err
 }
 
 func pathEqualFold(a, b string) bool {

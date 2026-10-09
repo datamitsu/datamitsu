@@ -202,7 +202,7 @@ func TestConfigLockfileListAndErrorPaths(t *testing.T) {
 	})
 }
 
-const lockfileBinaryConfigJS = `const H = "0000000000000000000000000000000000000000000000000000000000000000";
+const lockfileBinaryConfigJS = `const H = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
 function mkBin() {
   const b = { binaries: {} };
   for (const os of ["linux", "darwin"]) {

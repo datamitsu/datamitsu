@@ -716,7 +716,7 @@ func downloadAndExtractExternalArchive(ctx context.Context, name string, spec *A
 		return fmt.Errorf("archive %q: download failed: %w", name, err)
 	}
 
-	if err := verifyFileHash(tmpPath, spec.Hash, BinHashTypeSHA256); err != nil {
+	if err := verifyFileHash(tmpPath, spec.Hash); err != nil {
 		return fmt.Errorf("archive %q: hash verification failed: %w", name, err)
 	}
 
@@ -1320,11 +1320,6 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
 		return err
 	}
 
-	hashType := defaultBinHashType
-	if binaryInfo.HashType != nil {
-		hashType = *binaryInfo.HashType
-	}
-
 	log.Debug("downloading binary",
 		zap.String("name", name),
 		zap.String("url", binaryInfo.URL),
@@ -1338,7 +1333,7 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	downloadedPath, err := downloadAndVerifyWithName(ctx, binaryInfo.URL, binaryInfo.Hash, hashType, tmpDir, name, binaryInfo.Auth)
+	downloadedPath, err := downloadAndVerifyWithName(ctx, binaryInfo.URL, binaryInfo.Hash, tmpDir, name, binaryInfo.Auth)
 	if err != nil {
 		return fmt.Errorf("failed to download and verify: %w", err)
 	}

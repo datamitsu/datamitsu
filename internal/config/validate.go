@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -13,6 +12,7 @@ import (
 	"unicode"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/ociref"
 	"github.com/datamitsu/datamitsu/internal/target"
 )
@@ -167,8 +167,8 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			}
 			if app.Jvm.JarHash == "" {
 				errs = append(errs, fmt.Sprintf("app %q: jvm.jarHash is required", appName))
-			} else if !isValidSHA256Hex(app.Jvm.JarHash) {
-				errs = append(errs, fmt.Sprintf("app %q: jvm.jarHash must be a valid SHA-256 hex string (64 lowercase hex characters)", appName))
+			} else if _, err := digest.ParseSHA256(app.Jvm.JarHash); err != nil {
+				errs = append(errs, fmt.Sprintf("app %q: jvm.jarHash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", appName, err))
 			}
 			if app.Jvm.Version == "" {
 				errs = append(errs, fmt.Sprintf("app %q: jvm.version is required", appName))
@@ -280,8 +280,8 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			if isExternal {
 				if archiveSpec.Hash == "" {
 					errs = append(errs, fmt.Sprintf("app %q: archive %q hash is required for external archives (SHA-256)", appName, archiveName))
-				} else if !isValidSHA256Hex(archiveSpec.Hash) {
-					errs = append(errs, fmt.Sprintf("app %q: archive %q hash must be a valid SHA-256 hex string (64 lowercase hex characters)", appName, archiveName))
+				} else if _, err := digest.ParseSHA256(archiveSpec.Hash); err != nil {
+					errs = append(errs, fmt.Sprintf("app %q: archive %q hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", appName, archiveName, err))
 				}
 				if archiveSpec.Format == "" {
 					errs = append(errs, fmt.Sprintf("app %q: archive %q format is required for external archives", appName, archiveName))
@@ -442,11 +442,8 @@ func validateBinaryEntry(appName, platform string, info binmanager.BinaryOsArchI
 	}
 	if info.Hash == "" {
 		errs = append(errs, fmt.Sprintf("app %q (%s): hash is required", appName, platform))
-	} else if !isValidSHA256Hex(info.Hash) {
-		errs = append(errs, fmt.Sprintf("app %q (%s): hash must be a valid SHA-256 hex string (64 lowercase hex characters)", appName, platform))
-	}
-	if info.HashType != nil && !binmanager.IsAllowedDownloadHashType(*info.HashType) {
-		errs = append(errs, fmt.Sprintf("app %q (%s): hash type %q is not allowed for downloads; use sha256", appName, platform, *info.HashType))
+	} else if _, err := digest.ParseSHA256(info.Hash); err != nil {
+		errs = append(errs, fmt.Sprintf("app %q (%s): hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", appName, platform, err))
 	}
 	if info.BinaryPath != nil {
 		if err := validateSafeRelativePath(*info.BinaryPath, "binaryPath"); err != nil {
@@ -523,11 +520,10 @@ func ValidateOCI(ref *OCIRef) error {
 		}
 	}
 
-	const digestPrefix = "sha256:"
 	switch {
 	case ref.Digest == "":
 		errs = append(errs, "oci: digest is required (sha256:<64 hex>)")
-	case !strings.HasPrefix(ref.Digest, digestPrefix) || !isValidSHA256Hex(strings.TrimPrefix(ref.Digest, digestPrefix)):
+	case digest.IsSHA256(ref.Digest) != nil:
 		errs = append(errs, fmt.Sprintf("oci: digest %q must be \"sha256:\" followed by 64 lowercase hex characters", ref.Digest))
 	}
 
@@ -601,8 +597,8 @@ func ValidateParsers(parsers MapOfParsers) error {
 		}
 		if p.Hash == "" {
 			errs = append(errs, fmt.Sprintf("parser %q: hash is required (SHA-256)", name))
-		} else if !isValidSHA256Hex(p.Hash) {
-			errs = append(errs, fmt.Sprintf("parser %q: hash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
+		} else if _, err := digest.ParseSHA256(p.Hash); err != nil {
+			errs = append(errs, fmt.Sprintf("parser %q: hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", name, err))
 		}
 		errs = append(errs, validateParserOCI(name, p.OCI)...)
 	}
@@ -634,11 +630,10 @@ func validateParserOCI(name string, oci *ParserOCI) []string {
 		}
 	}
 
-	const digestPrefix = "sha256:"
 	switch {
 	case oci.Digest == "":
 		errs = append(errs, fmt.Sprintf("parser %q: oci.digest is required (sha256:<64 hex>)", name))
-	case !strings.HasPrefix(oci.Digest, digestPrefix) || !isValidSHA256Hex(strings.TrimPrefix(oci.Digest, digestPrefix)):
+	case digest.IsSHA256(oci.Digest) != nil:
 		errs = append(errs, fmt.Sprintf("parser %q: oci.digest %q must be \"sha256:\" followed by 64 lowercase hex characters", name, oci.Digest))
 	}
 
@@ -702,17 +697,6 @@ func ValidateLsp(lsp MapOfLsp, tools MapOfTools) error {
 	return nil
 }
 
-func isValidSHA256Hex(s string) bool {
-	if len(s) != 64 {
-		return false
-	}
-	if s != strings.ToLower(s) {
-		return false
-	}
-	_, err := hex.DecodeString(s)
-	return err == nil
-}
-
 // ValidateManagedConfigs validates managed configuration file entries.
 func ValidateManagedConfigs(managedConfigs MapOfManagedConfigs) error {
 	var errs []string
@@ -728,12 +712,16 @@ func ValidateManagedConfigs(managedConfigs MapOfManagedConfigs) error {
 		if cfg.Scope != "" && cfg.Scope != ScopeProject && cfg.Scope != ScopeGitRoot {
 			errs = append(errs, fmt.Sprintf("managed config %q: scope must be %q, %q, or empty, got %q", name, ScopeProject, ScopeGitRoot, cfg.Scope))
 		}
+		if cfg.ExpectChainHash != "" {
+			if _, err := digest.ParseXXH3(cfg.ExpectChainHash); err != nil {
+				errs = append(errs, fmt.Sprintf("managed config %q: expectChainHash must be a canonical XXH3-128 digest (xxh3:<32 lowercase hex>), %v", name, err))
+			}
+		}
 	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
 	}
-
 	return nil
 }
 
@@ -1149,8 +1137,8 @@ func ValidateBundles(bundles binmanager.MapOfBundles, apps binmanager.MapOfApps)
 			if isExternal {
 				if archiveSpec.Hash == "" {
 					errs = append(errs, fmt.Sprintf("bundle %q: archive %q hash is required for external archives (SHA-256)", name, archiveName))
-				} else if !isValidSHA256Hex(archiveSpec.Hash) {
-					errs = append(errs, fmt.Sprintf("bundle %q: archive %q hash must be a valid SHA-256 hex string (64 lowercase hex characters)", name, archiveName))
+				} else if _, err := digest.ParseSHA256(archiveSpec.Hash); err != nil {
+					errs = append(errs, fmt.Sprintf("bundle %q: archive %q hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", name, archiveName, err))
 				}
 				if archiveSpec.Format == "" {
 					errs = append(errs, fmt.Sprintf("bundle %q: archive %q format is required for external archives", name, archiveName))
@@ -1250,11 +1238,8 @@ func ValidateRuntimes(runtimes MapOfRuntimes) error {
 							}
 							if info.Hash == "" {
 								errs = append(errs, fmt.Sprintf("runtime %q (%s): hash is required", name, platform))
-							} else if !isValidSHA256Hex(info.Hash) {
-								errs = append(errs, fmt.Sprintf("runtime %q (%s): hash must be a valid SHA-256 hex string (64 lowercase hex characters)", name, platform))
-							}
-							if info.HashType != nil && !binmanager.IsAllowedDownloadHashType(*info.HashType) {
-								errs = append(errs, fmt.Sprintf("runtime %q (%s): hash type %q is not allowed for downloads; use sha256", name, platform, *info.HashType))
+							} else if _, err := digest.ParseSHA256(info.Hash); err != nil {
+								errs = append(errs, fmt.Sprintf("runtime %q (%s): hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", name, platform, err))
 							}
 							if info.BinaryPath != nil {
 								if err := validateSafeRelativePath(*info.BinaryPath, "binaryPath"); err != nil {

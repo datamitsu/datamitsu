@@ -49,10 +49,10 @@ globalThis.getMinVersion = () => "0.0.0";
 `
 
 // Hashes are mandatory for every downloadable artifact, so the fixture carries
-// well-formed SHA-256 values it will never verify: nothing is fetched here.
+// canonical SHA-256 pins it will never verify: nothing is fetched here.
 const (
-	machineHashA = "1111111111111111111111111111111111111111111111111111111111111111"
-	machineHashB = "2222222222222222222222222222222222222222222222222222222222222222"
+	machineHashA = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	machineHashB = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
 )
 
 // writeMachineConfig puts the machine-level config in a directory git knows

@@ -6,10 +6,14 @@ datamitsu treats supply chain integrity as a non-negotiable property of every in
 
 ## Hash Verification (All Downloads)
 
-Every artifact downloaded from the internet must have a SHA-256 hash. This
-includes binary apps, managed runtimes, JVM JAR files, external app and bundle
-archives, pnpm itself, remote config files, and WASM output parsers. If a hash is
-missing, datamitsu refuses to download — there is no permissive fallback mode.
+Every artifact downloaded from the internet must have a SHA-256 hash, pinned as
+a canonical digest — `sha256:` followed by 64 lowercase hex characters; a bare
+64-hex pin is rejected at config load. This includes binary apps, managed
+runtimes, JVM JAR files, external app and bundle archives, pnpm itself, remote
+config files, and WASM output parsers. If a hash is missing, datamitsu refuses
+to download — there is no permissive fallback mode. (The `getRemoteConfigs()`
+pin is the one lenient exception: a bare or uppercase value copied from a
+release page is accepted there and normalized to canonical.)
 
 The hash is verified before the artifact is unpacked or executed. Lock files
 are mandatory for all Bun, Node, UV, and Go apps; their package managers then
@@ -22,7 +26,7 @@ See the [Binary Management](./binary-management.md) guide for the verification p
 
 A [WASM output parser](./architecture/parsers.md) declares its module either as an `https` URL or as an OCI artifact (`oci: { ref, digest }`) — exactly one of the two. Declaring both, or neither, is a config error at load, and there is no fallback between them: a config that pins a registry never reaches back to a URL.
 
-`hash` stays mandatory for both sources. For an OCI source it does double duty: it is also the expected digest of the artifact's single layer. datamitsu requires that layer to have digest `"sha256:" + hash`, so the registry digest chain and the config hash are the same number rather than two independent claims. A registry serving a correctly-digested manifest that points at different content is rejected before one payload byte is requested.
+`hash` stays mandatory for both sources, in the canonical `sha256:<64 lowercase hex>` form. For an OCI source it does double duty: it is also the expected digest of the artifact's single layer — the layer's digest is the same `sha256:`-prefixed value, so the registry digest chain and the config hash are the same number rather than two independent claims. A registry serving a correctly-digested manifest that points at different content is rejected before one payload byte is requested.
 
 The module is therefore hash-checked three times on its way into the store:
 

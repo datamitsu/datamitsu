@@ -36,7 +36,7 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
           amd64: {
             unknown: {
               contentType: "tar.xz",
-              hash: "<sha256>",
+              hash: "sha256:<digest>",
               url: "https://nodejs.org/dist/v26.2.0/node-v26.2.0-darwin-x64.tar.xz",
               binaryPath: "node-v26.2.0-darwin-x64/bin/node",
               extractDir: true,
@@ -45,7 +45,7 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
           arm64: {
             unknown: {
               contentType: "tar.xz",
-              hash: "<sha256>",
+              hash: "sha256:<digest>",
               url: "https://nodejs.org/dist/v26.2.0/node-v26.2.0-darwin-arm64.tar.xz",
               binaryPath: "node-v26.2.0-darwin-arm64/bin/node",
               extractDir: true,
@@ -56,14 +56,14 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
           amd64: {
             glibc: {
               contentType: "tar.xz",
-              hash: "<sha256>",
+              hash: "sha256:<digest>",
               url: "https://nodejs.org/dist/v26.2.0/node-v26.2.0-linux-x64.tar.xz",
               binaryPath: "node-v26.2.0-linux-x64/bin/node",
               extractDir: true,
             },
             musl: {
               contentType: "tar.xz",
-              hash: "<sha256>",
+              hash: "sha256:<digest>",
               url: "https://unofficial-builds.nodejs.org/download/release/v26.2.0/node-v26.2.0-linux-x64-musl.tar.xz",
               binaryPath: "node-v26.2.0-linux-x64-musl/bin/node",
               extractDir: true,

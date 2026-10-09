@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 
 	"golang.org/x/sys/windows"
 )
@@ -22,7 +22,7 @@ func lockDatamitsuDir(gitRoot string) (release func(), err error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create lock directory: %w", err)
 	}
-	file, err := os.OpenFile(filepath.Join(dir, hashutil.XXH3Hex([]byte(gitRoot))+".lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	file, err := os.OpenFile(filepath.Join(dir, digest.XXH3Of([]byte(gitRoot)).Hex()+".lock"), os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open lock file: %w", err)
 	}

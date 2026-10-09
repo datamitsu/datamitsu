@@ -1,13 +1,13 @@
 package clitest
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
@@ -34,9 +34,9 @@ func TestSeedParserModuleLayout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(data)
-	if p.Hash != hex.EncodeToString(sum[:]) || !strings.HasPrefix(p.URL, "https://") {
-		t.Errorf("declaration = %+v, want the module's SHA-256 and an https URL", p)
+	sum := digest.SHA256Of(data)
+	if p.Hash != "sha256:"+sum.Hex() || !strings.HasPrefix(p.URL, "https://") {
+		t.Errorf("declaration = %+v, want the module's canonical SHA-256 pin and an https URL", p)
 	}
 
 	t.Setenv("DATAMITSU_CACHE_DIR", cache)
