@@ -1599,11 +1599,11 @@ interface Parser {
 }
 ```
 
-| Field  | Type        | Description                                                       |
-| ------ | ----------- | ----------------------------------------------------------------- |
+| Field  | Type        | Description                                                                            |
+| ------ | ----------- | -------------------------------------------------------------------------------------- |
 | `hash` | `string`    | Canonical SHA-256 digest, `sha256:<64 lowercase hex>` — **mandatory** for every source |
-| `url`  | `string`    | URL of the `.wasm` module. Exactly one of `url` or `oci`          |
-| `oci`  | `ParserOCI` | Module pulled from an OCI registry. Exactly one of `url` or `oci` |
+| `url`  | `string`    | URL of the `.wasm` module. Exactly one of `url` or `oci`                               |
+| `oci`  | `ParserOCI` | Module pulled from an OCI registry. Exactly one of `url` or `oci`                      |
 
 The entity is intentionally **source + hash only**. A module reports its own
 build-injected version (and the tools it parses) through its WASM `describe`

@@ -564,15 +564,15 @@ binary and still lose diagnostics parsing.
 The artifact is deliberately minimal, and its shape is a contract the core
 enforces on **every** pull, before it requests any payload:
 
-| Part                | Required value                                                                     |
-| ------------------- | ---------------------------------------------------------------------------------- |
-| Manifest media type | `application/vnd.oci.image.manifest.v1+json`                                       |
-| `artifactType`      | `application/vnd.datamitsu.parsers.v1+wasm`                                        |
-| Layers              | exactly one, `application/wasm`, **uncompressed**                                  |
+| Part                | Required value                                                                                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------- |
+| Manifest media type | `application/vnd.oci.image.manifest.v1+json`                                                          |
+| `artifactType`      | `application/vnd.datamitsu.parsers.v1+wasm`                                                           |
+| Layers              | exactly one, `application/wasm`, **uncompressed**                                                     |
 | Layer digest        | exactly the entry's `hash` (the same `sha256:`-prefixed digest) — the pivot the whole design rests on |
-| Layer size          | greater than zero and within the module size cap                                   |
-| `subject`           | absent — a manifest with one is a referrer (a signature, an SBOM), not the module  |
-| Index               | rejected — a wasm module is platform-independent, so there is nothing to select on |
+| Layer size          | greater than zero and within the module size cap                                                      |
+| `subject`           | absent — a manifest with one is a referrer (a signature, an SBOM), not the module                     |
+| Index               | rejected — a wasm module is platform-independent, so there is nothing to select on                    |
 
 The config blob is the empty-JSON descriptor. That is a **publishing** invariant,
 asserted where the artifact is produced, and deliberately _not_ a consumer rule:
@@ -873,16 +873,16 @@ to pure extraction.
 The two channels differ only in how the bytes are addressed. Everything after
 "the bytes exist" is shared.
 
-| Concern                         | Release asset (`url`)                      | OCI artifact (`oci`)                                                                       |
-| ------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| What the config pins            | the module's SHA-256                       | the module's SHA-256 **and** the artifact manifest digest                                  |
+| Concern                         | Release asset (`url`)                      | OCI artifact (`oci`)                                                                          |
+| ------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| What the config pins            | the module's SHA-256                       | the module's SHA-256 **and** the artifact manifest digest                                     |
 | Pre-flight rejection            | none — the payload is fetched, then hashed | the manifest pivot: `layers[0].digest` must equal the entry's `hash`, checked before any blob |
-| Hash checks per fetch           | once, on the finished file on disk         | three: the manifest pivot, the streamed blob, then the file on disk                        |
-| Signature checked by the binary | none                                       | none                                                                                       |
-| Signature available out-of-band | cosign over `checksums.txt`                | cosign over the artifact manifest                                                          |
-| Credentials sent                | none                                       | `GITHUB_TOKEN`, and only when the reference's host is `ghcr.io`                            |
-| Disabled by `--no-oci`          | no                                         | no — that flag governs bundle seeding only                                                 |
-| Blocked by `DATAMITSU_OFFLINE`  | yes                                        | yes                                                                                        |
+| Hash checks per fetch           | once, on the finished file on disk         | three: the manifest pivot, the streamed blob, then the file on disk                           |
+| Signature checked by the binary | none                                       | none                                                                                          |
+| Signature available out-of-band | cosign over `checksums.txt`                | cosign over the artifact manifest                                                             |
+| Credentials sent                | none                                       | `GITHUB_TOKEN`, and only when the reference's host is `ghcr.io`                               |
+| Disabled by `--no-oci`          | no                                         | no — that flag governs bundle seeding only                                                    |
+| Blocked by `DATAMITSU_OFFLINE`  | yes                                        | yes                                                                                           |
 
 | Shared property    | Mechanism                                                                                                               |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
