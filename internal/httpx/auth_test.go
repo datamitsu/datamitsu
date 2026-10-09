@@ -3,6 +3,7 @@ package httpx
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -58,5 +59,27 @@ func TestAuthDefaultPortsAreSameOrigin(t *testing.T) {
 		if req.Header.Get("Private-Token") != "credential" {
 			t.Fatalf("same-origin request lacked token: %v", pair)
 		}
+	}
+}
+
+func TestAuthMissingCredentialFailsOnlyOnBoundOrigin(t *testing.T) {
+	t.Setenv("TEST_DOWNLOAD_TOKEN", "")
+	auth := &RequestAuth{TokenEnv: "TEST_DOWNLOAD_TOKEN", Origin: "https://forge.example.test", Header: "Authorization", Scheme: "Bearer"}
+	req, err := http.NewRequest(http.MethodGet, "https://forge.example.test/binary", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := auth.Apply(req); err == nil || !strings.Contains(err.Error(), "TEST_DOWNLOAD_TOKEN") {
+		t.Fatalf("missing credential error=%v", err)
+	}
+	other, err := http.NewRequest(http.MethodGet, "https://cdn.example.test/binary", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := auth.Apply(other); err != nil {
+		t.Fatal("unrelated origin tried to load missing credential")
+	}
+	if other.Header.Get("Authorization") != "" {
+		t.Fatal("credential forwarded")
 	}
 }

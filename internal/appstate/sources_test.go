@@ -35,7 +35,7 @@ func TestSourceAndIntegrityFingerprint(t *testing.T) {
 	app := &AppMetadata{Source: "upstream", Repository: "group/tool", Tag: "v1"}
 	source := releaseprovider.Source{Type: "github", URL: "https://github.com"}
 	original := ComputeConfigHash(app, []string{"darwin/arm64"}, source)
-	for _, changed := range []releaseprovider.Source{{Type: "gitea", URL: source.URL}, {Type: source.Type, URL: "https://elsewhere.test"}, {Type: source.Type, URL: source.URL, APIURL: "https://api.example.test"}, {Type: source.Type, URL: source.URL, TokenEnv: "MY_FORGE_TOKEN"}} {
+	for _, changed := range []releaseprovider.Source{{Type: "gitea", URL: source.URL}, {Type: source.Type, URL: "https://elsewhere.test"}, {Type: source.Type, URL: source.URL, APIURL: "https://api.example.test"}, {Type: source.Type, URL: source.URL, TokenEnv: "MY_FORGE_TOKEN"}, {Type: source.Type, URL: source.URL, DownloadAuth: "none"}} {
 		if ComputeConfigHash(app, []string{"darwin/arm64"}, changed) == original {
 			t.Fatalf("source change did not invalidate hash: %+v", changed)
 		}

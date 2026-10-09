@@ -34,7 +34,7 @@ func TestForgeAdapters(t *testing.T) {
 					_ = json.NewEncoder(w).Encode(releaseasset.Release{TagName: "v1.0.0", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.test/tool.tar.gz", Digest: "sha256:" + strings.Repeat("a", 64)}}})
 					return
 				}
-				_ = json.NewEncoder(w).Encode(map[string]any{"description": "tool", "id": 42})
+				_ = json.NewEncoder(w).Encode(map[string]any{"description": "tool", "id": 42, "private": false, "visibility": "public"})
 			}))
 			defer srv.Close()
 			c, err := New(Source{Type: kind, URL: srv.URL, APIURL: srv.URL})
@@ -58,6 +58,10 @@ func TestForgeAdapters(t *testing.T) {
 
 func TestLatestAcrossPages(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/repos/group/tool") {
+			_, _ = w.Write([]byte(`{"private":false}`))
+			return
+		}
 		if page := r.URL.Query().Get("page"); page != "1" && page != "2" {
 			_, _ = w.Write([]byte("[]"))
 			return

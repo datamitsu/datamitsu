@@ -1614,11 +1614,49 @@ and Forgejo; public GitHub uses `https://api.github.com`). Source URLs require
 HTTPS; local loopback instances also accept HTTP.
 
 An optional source `tokenEnv` names a third-party token environment variable.
-No token value is saved. API authentication and generated binary `auth` references
-are scoped to the exact origin; redirects to another origin drop credentials.
-For private GitHub assets, authenticated downloads use the asset API URL with
-an octet-stream Accept header. Download auth is consumed by both installation
-and `--verify-extraction`.
+No token value is saved. It authorizes discovery API requests independently of
+artifact downloads. The optional `downloadAuth` field controls downloads:
+
+| Value            | Behavior                                                                                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `auto` (default) | Resolve access separately for each asset from provider metadata and its endpoint. Public downloads have no auth. Restricted downloads require `tokenEnv`. Unknown access is an error with instructions to select an explicit policy. |
+| `required`       | Require `tokenEnv` and authorize downloads on the configured instance. External origins remain anonymous. This uses the provider's token scheme; it does not configure reverse-proxy Basic auth or SSO.                              |
+| `none`           | Never attach download credentials. Reject endpoints known to require auth; explicitly permit unknown endpoints anonymously. Discovery still uses `tokenEnv`.                                                                         |
+
+For example, a source can specify `"downloadAuth": "none"` alongside a
+`tokenEnv` used only for metadata. Different aliases of one instance can choose
+different policies; app-level overrides are not supported.
+
+GitHub reads explicit repository `private` metadata. Published public native
+assets retain `browser_download_url`; private assets and drafts use the API
+asset URL with an octet-stream Accept header. Gitea and Forgejo native release
+attachments use repository visibility and draft status, retaining their browser
+download URL with a Bearer token when restricted. Successful repository metadata
+with known visibility is cached for the current client; absent visibility is
+never silently treated as public.
+
+GitLab reads `visibility` (`public`, `internal`, or `private`). It prefers the
+original release link target over the permanent redirect URL. Generic-package
+URLs for the same project use `package_registry_access_level`: `public` permits
+anonymous download, `private` requires auth, `enabled` follows project visibility,
+and `disabled` is an error. Missing package policy requires an explicit
+`downloadAuth`. Restricted permanent release URLs use the token-capable release
+API download route. Arbitrary same-origin links, including links to other
+projects, require an explicit policy. External links never inherit repository
+credentials, even when the project is private or the mode is `required`.
+See the [GitLab package registry access rules](https://docs.gitlab.com/user/packages/package_registry/)
+and [project API access levels](https://docs.gitlab.com/api/projects/).
+
+Installation, checksum downloads, and `--verify-extraction` consume the same
+resolved download auth. Missing required tokens fail before the request.
+Cross-origin redirects drop credentials. There is no anonymous-to-authenticated
+fallback after HTTP errors. SHA-256 verification remains mandatory in every mode.
+
+After upgrading from the initial multi-source implementation, run
+`pull-releases` again with the existing tags. The generation fingerprint
+invalidates old entries for all providers once, replacing public download auth
+and GitHub API asset URLs with anonymous download URLs. Changing `downloadAuth`
+also invalidates generated entries.
 
 **Integrity:** GitHub API digests are used directly. GitLab generic-package
 links obtain SHA-256 from package-file metadata for the same project. A source

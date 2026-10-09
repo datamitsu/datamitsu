@@ -52,7 +52,7 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	repo := parts[1]
 	if len(parts) == 2 {
 		// Repository metadata: the description is a warning at most.
-		_ = json.NewEncoder(w).Encode(map[string]string{"full_name": "o/" + repo, "description": "desc " + repo})
+		_ = json.NewEncoder(w).Encode(map[string]any{"full_name": "o/" + repo, "description": "desc " + repo, "private": false})
 		return
 	}
 	if f.isListing(r) && r.URL.Query().Get("page") != "" && r.URL.Query().Get("page") != "1" {
