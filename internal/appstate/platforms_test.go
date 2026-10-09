@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/releaseprovider"
+
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 )
 
@@ -54,20 +56,17 @@ func TestLoadPlatformSelection(t *testing.T) {
 }
 
 func TestPlatformSelectionHash(t *testing.T) {
-	metadata := &AppMetadata{Owner: "o", Repo: "r", Tag: "v1"}
+	metadata := &AppMetadata{Source: "github", Repository: "o/r", Tag: "v1"}
 	a := []string{"darwin/arm64", "linux/amd64/musl"}
 	b := []string{"linux/amd64/musl", "darwin/arm64", "darwin/arm64"}
 	if ComputeConfigHash(metadata, a) != ComputeConfigHash(metadata, b) {
 		t.Fatal("order or duplicates changed hash")
 	}
-	if ComputeConfigHash(metadata, a) == ComputeConfigHash(metadata) {
+	if ComputeConfigHash(metadata, a) == ComputeConfigHash(metadata, nil) {
 		t.Fatal("selection must differ from absent field")
 	}
 	if ComputeConfigHash(metadata, a) == ComputeConfigHash(metadata, []string{"darwin/arm64"}) {
 		t.Fatal("different selection has same hash")
-	}
-	if ComputeConfigHash(metadata, nil) != ComputeConfigHash(metadata) {
-		t.Fatal("absent selection changed legacy hash")
 	}
 	if !slices.Equal(a, []string{"darwin/arm64", "linux/amd64/musl"}) {
 		t.Fatal("hash mutated selection")
@@ -80,7 +79,7 @@ func TestFilterPlatforms(t *testing.T) {
 		"linux":   {"amd64": {"glibc": {URL: "remove"}, "musl": {URL: "keep"}}},
 		"windows": {"arm64": {"unknown": {URL: "remove"}}},
 	}
-	state := &State{Binaries: map[string]*BinariesEntry{"orphan": {ConfigHash: "old", Binaries: bins}, "nil": nil}}
+	state := &State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Binaries: map[string]*BinariesEntry{"orphan": {ConfigHash: "old", Binaries: bins}, "nil": nil}}
 	if state.FilterPlatforms() {
 		t.Fatal("absent selector filtered binaries")
 	}

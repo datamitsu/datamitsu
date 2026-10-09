@@ -1,8 +1,8 @@
 {
   "apps": {
     "task": {
-      "owner": "go-task",
-      "repo": "task",
+      "repository": "go-task/task",
+      "source": "github",
       "tag": "v3.53.1"
     }
   },
@@ -84,6 +84,13 @@
       },
       "configHash": "08c5ef70bd16bc1603a7e89068c5998f",
       "description": "A fast, cross-platform build tool inspired by Make, designed for modern workflows."
+    }
+  },
+  "sources": {
+    "github": {
+      "tokenEnv": "GITHUB_TOKEN",
+      "type": "github",
+      "url": "https://github.com"
     }
   }
 }

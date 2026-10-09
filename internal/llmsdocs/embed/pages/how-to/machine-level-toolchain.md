@@ -62,9 +62,10 @@ a config with a missing or malformed hash fails to load. See
 [Hash verification is the point](#hash-verification-is-the-point) below.
 
 Writing those hashes by hand is not the intended workflow.
-[`datamitsu devtools pull-github`](./maintain-wrapper.md#binary-apps-devtools-pull-github)
-resolves the latest release, downloads every platform tuple and computes the SHA-256 hashes for
-you; the same `devtools pull-node` / `pull-uv` commands do it for npm and PyPI tools, which are
+[`datamitsu devtools pull-releases`](./maintain-wrapper.md#binary-apps-devtools-pull-releases)
+resolves releases through source profiles and records their expected SHA-256
+digests or explicit pins for selected available platforms. It downloads binaries
+only with `--verify-extraction`; the same `devtools pull-node` / `pull-uv` commands do it for npm and PyPI tools, which are
 declared as [runtime-managed apps](../guides/runtime-management.md) with a lock file rather than
 a URL.
 

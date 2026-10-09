@@ -590,7 +590,7 @@ The author maintains `shibanet0/datamitsu-config` as a reference wrapper:
 
 - **Always specify SHA-256 hashes** for all binaries (mandatory)
 - **Pin exact versions** — Don't use "latest" or version ranges
-- **Verify hashes** — Use `datamitsu devtools pull-github --verify-extraction` during development
+- **Verify hashes** — Use `datamitsu devtools pull-releases --verify-extraction` during development
 - **Keep hashes updated** — Monitor security advisories for tool updates
 
 ### Maintainability

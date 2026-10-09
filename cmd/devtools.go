@@ -14,7 +14,9 @@ import (
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/detector"
-	"github.com/datamitsu/datamitsu/internal/github"
+	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/releaseasset"
+	"github.com/datamitsu/datamitsu/internal/releaseprovider"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 
@@ -24,7 +26,7 @@ import (
 var (
 	updateFlag           bool
 	verifyExtractionFlag bool
-	pullGithubMinAge     *int
+	pullReleasesMinAge   *int
 )
 
 var devtoolsCmd = &cobra.Command{
@@ -33,42 +35,42 @@ var devtoolsCmd = &cobra.Command{
 	Long:  `Development tools for maintaining datamitsu binary configurations`,
 }
 
-var pullGithubCmd = &cobra.Command{
-	Use:   "pull-github <file>",
-	Short: "Update binary configurations from GitHub releases",
-	Long: `Update binary configurations from GitHub releases using auto-detection.
+var pullReleasesCmd = &cobra.Command{
+	Use:   "pull-releases <file>",
+	Short: "Update binary configurations from forge releases",
+	Long: `Update binary configurations from forge releases using auto-detection.
 
-Requires a file argument pointing to the GitHub apps JSON file.
+Requires a file argument pointing to the binary apps JSON file.
 If the file does not exist, an empty one will be created.
 
 Without --update: refreshes binaries using current tags
 With --update: fetches latest release tags and updates binaries
 
 Example:
-  datamitsu devtools pull-github config/src/githubApps.json
-  datamitsu devtools pull-github config/src/githubApps.json --update`,
+  datamitsu devtools pull-releases config/src/binaryApps.json
+  datamitsu devtools pull-releases config/src/binaryApps.json --update`,
 	Args: usageArgs(cobra.ExactArgs(1)),
-	RunE: runPullGithub,
+	RunE: runPullReleases,
 }
 
 func init() {
 	rootCmd.AddCommand(devtoolsCmd)
-	devtoolsCmd.AddCommand(pullGithubCmd)
+	devtoolsCmd.AddCommand(pullReleasesCmd)
 	devtoolsCmd.AddCommand(packInlineArchiveCmd)
-	pullGithubCmd.Flags().BoolVar(&updateFlag, "update", false,
+	pullReleasesCmd.Flags().BoolVar(&updateFlag, "update", false,
 		"Fetch latest release tags before updating binaries")
-	pullGithubCmd.Flags().BoolVar(&verifyExtractionFlag, "verify-extraction", false,
+	pullReleasesCmd.Flags().BoolVar(&verifyExtractionFlag, "verify-extraction", false,
 		"Download and verify binary extraction for all platforms before saving")
-	pullGithubMinAge = addMinAgeFlag(pullGithubCmd)
+	pullReleasesMinAge = addMinAgeFlag(pullReleasesCmd)
 }
 
-func ensureGitHubAppsJSONExists(path string) error {
+func ensureBinaryAppsJSONExists(path string) error {
 	_, err := os.Stat(path)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("checking file: %w", err)
 	}
 	if os.IsNotExist(err) {
-		emptyState := []byte("{\"apps\":{},\"binaries\":{}}\n")
+		emptyState := []byte("{\"sources\":{},\"apps\":{},\"binaries\":{}}\n")
 		tmpFile, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
 		if err != nil {
 			return fmt.Errorf("failed to create temp file: %w", err)
@@ -95,29 +97,29 @@ func ensureGitHubAppsJSONExists(path string) error {
 	return nil
 }
 
-func runPullGithub(cmd *cobra.Command, args []string) error {
+func runPullReleases(cmd *cobra.Command, args []string) error {
 	ctx := commandContext(cmd)
 
 	// Get file path from positional argument
-	githubAppsPath := args[0]
+	binaryAppsPath := args[0]
 
 	// Resolve the effective minimum release age from runtime config + flag.
 	eff, err := runtimeconfig.Get()
 	if err != nil {
 		return fmt.Errorf("failed to read runtime config: %w", err)
 	}
-	minAge := resolveMinAge(*pullGithubMinAge, eff)
+	minAge := resolveMinAge(*pullReleasesMinAge, eff)
 
 	// Create file if it doesn't exist
-	if err := ensureGitHubAppsJSONExists(githubAppsPath); err != nil {
+	if err := ensureBinaryAppsJSONExists(binaryAppsPath); err != nil {
 		return fmt.Errorf("failed to ensure file exists: %w", err)
 	}
 
 	// Load configuration file
-	fmt.Printf("Loading %s...\n", githubAppsPath)
-	state, err := appstate.Load(githubAppsPath)
+	fmt.Printf("Loading %s...\n", binaryAppsPath)
+	state, err := appstate.Load(binaryAppsPath)
 	if err != nil {
-		return fmt.Errorf("failed to load %s: %w", githubAppsPath, err)
+		return fmt.Errorf("failed to load %s: %w", binaryAppsPath, err)
 	}
 
 	history := *state
@@ -129,20 +131,31 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if state.FilterPlatforms() {
-		if err := appstate.Save(githubAppsPath, state); err != nil {
+		if err := appstate.Save(binaryAppsPath, state); err != nil {
 			return err
 		}
 		fmt.Println("Removed unselected platforms from manifest; this filter remains applied if a pull fails.")
 	}
 
 	if len(state.Apps) == 0 {
-		fmt.Printf("No apps found in %s\n", githubAppsPath)
+		fmt.Printf("No apps found in %s\n", binaryAppsPath)
 		return nil
 	}
 
 	fmt.Printf("Minimum release age: %s\n", minAgeBanner(minAge))
 
-	client := newGitHubClient()
+	clients := make(map[string]releaseprovider.Provider)
+	for alias, source := range state.Sources {
+		if source.Type == "github" && githubBaseURL != "" {
+			source.APIURL = githubBaseURL
+		}
+		client, err := releaseprovider.New(source)
+		if err != nil {
+			return err
+		}
+		client.RetryNotifier = retryNotifier
+		clients[alias] = client
+	}
 	enableRetryNotices()
 
 	// Every app is attempted; a failure is recorded and reported at the end,
@@ -151,7 +164,7 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 	names := slices.Sorted(maps.Keys(state.Apps))
 	for i, appName := range names {
 		fmt.Printf("\n=== Processing %s [%d/%d] ===\n", appName, i+1, len(names))
-		for _, failure := range pullGithubApp(ctx, client, state, githubAppsPath, appName, minAge, &history) {
+		for _, failure := range pullReleasesApp(ctx, clients[state.Apps[appName].Source], state, binaryAppsPath, appName, minAge, &history) {
 			fmt.Fprintf(os.Stderr, "✗ %s: %s: %v\n", appName, failure.stage, failure.err)
 			if failure.fatal {
 				fmt.Fprintf(os.Stderr, "The run stopped at %s; the apps after it were not attempted.\n", appName)
@@ -161,10 +174,10 @@ func runPullGithub(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return reportPullGithub(githubAppsPath, len(state.Apps), failures, state.Platforms != nil)
+	return reportPullReleases(binaryAppsPath, len(state.Apps), failures, state.Platforms != nil)
 }
 
-// pullFailure is one app pull-github could not finish: the stage that failed
+// pullFailure is one app pull-releases could not finish: the stage that failed
 // and why. A fatal failure — the file cannot be written — ends the run.
 type pullFailure struct {
 	app   string
@@ -173,11 +186,11 @@ type pullFailure struct {
 	fatal bool
 }
 
-// pullGithubApp brings one app up to date and saves the file when it did. It
+// pullReleasesApp brings one app up to date and saves the file when it did. It
 // returns nothing on success; on failure it leaves the app's entry as it was
 // and returns what failed — one entry, or one per platform whose asset could
 // not be verified.
-func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.State, githubAppsPath, appName string, minAge int, history ...*appstate.State) []pullFailure {
+func pullReleasesApp(ctx context.Context, client releaseprovider.Provider, state *appstate.State, binaryAppsPath, appName string, minAge int, history ...*appstate.State) []pullFailure {
 	metadata := state.Apps[appName]
 	fail := func(stage string, err error) []pullFailure {
 		return []pullFailure{{app: appName, stage: stage, err: err}}
@@ -187,11 +200,11 @@ func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.S
 		return fail("metadata", err)
 	}
 
-	fmt.Printf("App: %s (%s/%s)\n", appName, metadata.Owner, metadata.Repo)
+	fmt.Printf("App: %s (%s/%s)\n", appName, metadata.Source, metadata.Repository)
 	fmt.Printf("Current tag: %s\n", metadata.Tag)
 
 	// If --update flag is set, fetch latest release first
-	var release *github.Release
+	var release *releaseasset.Release
 	effectiveTag := metadata.Tag
 	if updateFlag {
 		if minAge > 0 {
@@ -202,7 +215,7 @@ func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.S
 		// GetLatestReleaseWithMinAge falls through to GetLatestRelease when
 		// minAge <= 0, so a nil release only happens under an active cutoff.
 		var err error
-		release, err = client.GetLatestReleaseWithMinAge(ctx, metadata.Owner, metadata.Repo, minAge)
+		release, err = client.GetLatestReleaseWithMinAge(ctx, metadata.Repository, minAge)
 		if err != nil {
 			return fail("latest release", err)
 		}
@@ -227,11 +240,13 @@ func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.S
 
 	// Compute config hash using effective tag (not yet committed to state)
 	hashMetadata := &appstate.AppMetadata{
-		Owner: metadata.Owner,
-		Repo:  metadata.Repo,
-		Tag:   effectiveTag,
+		Source:     metadata.Source,
+		Repository: metadata.Repository,
+		Tag:        effectiveTag,
+		Hashes:     metadata.Hashes,
+		Checksums:  metadata.Checksums,
 	}
-	currentHash := appstate.ComputeConfigHash(hashMetadata, state.Platforms)
+	currentHash := appstate.ComputeConfigHash(hashMetadata, state.Platforms, state.Sources[metadata.Source])
 
 	// Check if binaries already exist and config hasn't changed
 	if state.Binaries[appName] != nil && state.Binaries[appName].ConfigHash == currentHash {
@@ -243,7 +258,7 @@ func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.S
 	if release == nil {
 		fmt.Printf("Fetching release %s...\n", effectiveTag)
 		var err error
-		release, err = client.GetRelease(ctx, metadata.Owner, metadata.Repo, effectiveTag)
+		release, err = client.GetRelease(ctx, metadata.Repository, effectiveTag)
 		if err != nil {
 			return fail("release "+effectiveTag, err)
 		}
@@ -254,7 +269,20 @@ func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.S
 	if len(history) > 0 {
 		buildState = history[0]
 	}
-	binariesEntry, err := buildBinariesForApp(ctx, appName, release, currentHash, buildState)
+	if previous := buildState.Binaries[appName]; previous != nil && previous.Source != nil {
+		origin := previous.Source
+		source := state.Sources[metadata.Source]
+		if origin.Type != source.Type || origin.URL != source.URL || origin.Repository != metadata.Repository || (origin.APIURL != "" && origin.APIURL != source.APIBase()) {
+			copyState := *buildState
+			copyState.Binaries = maps.Clone(buildState.Binaries)
+			delete(copyState.Binaries, appName)
+			buildState = &copyState
+		}
+	}
+
+	binariesEntry, err := buildBinariesForApp(ctx, appName, release, currentHash, buildState, func(asset *releaseasset.Asset) error {
+		return client.ResolveDigest(ctx, metadata.Repository, release.Assets, asset, metadata.Hashes, metadata.Checksums)
+	})
 	if err != nil {
 		if unverified, ok := errors.AsType[*verificationError](err); ok {
 			failures := make([]pullFailure, 0, len(unverified.platforms))
@@ -268,7 +296,7 @@ func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.S
 
 	// Fetch repository description (matches node/UV pattern: use fetched if non-empty, else preserve existing)
 	desc := ""
-	repoInfo, err := client.GetRepository(ctx, metadata.Owner, metadata.Repo)
+	repoInfo, err := client.GetRepository(ctx, metadata.Repository)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to fetch repository description for %s: %v\n", appName, err)
 	} else if repoInfo != nil {
@@ -280,14 +308,16 @@ func pullGithubApp(ctx context.Context, client *github.Client, state *appstate.S
 		}
 	}
 	binariesEntry.Description = desc
+	source := state.Sources[metadata.Source]
+	binariesEntry.Source = &appstate.Origin{Type: source.Type, URL: source.URL, APIURL: source.APIBase(), Repository: metadata.Repository, Tag: effectiveTag}
 
 	// Commit changes to state only after full success
 	metadata.Tag = effectiveTag
 	state.Binaries[appName] = binariesEntry
 
 	// Save immediately after each app update to prevent data loss
-	fmt.Printf("Saving %s...\n", githubAppsPath)
-	if err := appstate.Save(githubAppsPath, state); err != nil {
+	fmt.Printf("Saving %s...\n", binaryAppsPath)
+	if err := appstate.Save(binaryAppsPath, state); err != nil {
 		return []pullFailure{{app: appName, stage: "save", err: fmt.Errorf("failed to save after %s: %w", appName, err), fatal: true}}
 	}
 	return nil
@@ -314,13 +344,13 @@ func (e *verificationError) Error() string {
 	return fmt.Sprintf("verification failed for %d platform(s): %s", len(e.platforms), strings.Join(names, ", "))
 }
 
-// reportPullGithub prints the run's outcome. With failures it lists each app,
+// reportPullReleases prints the run's outcome. With failures it lists each app,
 // the stage and the error, so nobody reads the log for them, and returns an
 // error so the command exits non-zero. Platform pruning is not rolled back.
-func reportPullGithub(githubAppsPath string, total int, failures []pullFailure, filtered ...bool) error {
+func reportPullReleases(binaryAppsPath string, total int, failures []pullFailure, filtered ...bool) error {
 	if len(failures) == 0 {
 		fmt.Printf("\n✓ Processed %d apps\n", total)
-		fmt.Printf("✓ Configuration saved to %s\n", githubAppsPath)
+		fmt.Printf("✓ Configuration saved to %s\n", binaryAppsPath)
 		return nil
 	}
 
@@ -335,7 +365,7 @@ func reportPullGithub(githubAppsPath string, total int, failures []pullFailure, 
 	if len(filtered) > 0 && filtered[0] {
 		outcome = "apps failed; previous tags and selected binaries are retained"
 	}
-	fmt.Fprintf(os.Stderr, "\n✗ %d of %d %s in %s:\n", len(failedApps), total, outcome, githubAppsPath)
+	fmt.Fprintf(os.Stderr, "\n✗ %d of %d %s in %s:\n", len(failedApps), total, outcome, binaryAppsPath)
 	for _, f := range failures {
 		fmt.Fprintf(os.Stderr, "  %s (%s): %v\n", f.app, f.stage, f.err)
 	}
@@ -386,7 +416,7 @@ type detectionResult struct {
 	err         error
 }
 
-func buildBinariesForApp(ctx context.Context, appName string, release *github.Release, configHash string, state *appstate.State) (*appstate.BinariesEntry, error) {
+func buildBinariesForApp(ctx context.Context, appName string, release *releaseasset.Release, configHash string, state *appstate.State, digestResolvers ...func(*releaseasset.Asset) error) (*appstate.BinariesEntry, error) {
 	fmt.Printf("\nDetecting binaries:\n")
 
 	// Build into a fresh entry to avoid mutating shared state on failure
@@ -415,10 +445,16 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 	// pickBinaryForPlatform can retry the next-ranked candidate on failure —
 	// e.g. fall back to a raw binary when a preferred archive's guessed
 	// in-archive path is wrong. Left nil (no verification) when the flag is off.
+	authByURL := make(map[string]*httpx.RequestAuth)
+	for _, asset := range release.Assets {
+		if asset.Auth != nil {
+			authByURL[asset.BrowserDownloadURL] = asset.Auth
+		}
+	}
 	var verify extractionVerifier
 	if verifyExtractionFlag {
 		verify = memoizedVerifier(func(ctx context.Context, url, hash string, contentType binmanager.BinContentType, binaryPath *string) error {
-			return binmanager.VerifyBinaryExtraction(ctx, url, hash, binmanager.BinHashTypeSHA256, contentType, binaryPath)
+			return binmanager.VerifyBinaryExtraction(ctx, url, hash, binmanager.BinHashTypeSHA256, contentType, binaryPath, authByURL[url])
 		})
 	}
 
@@ -446,15 +482,16 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 		// Walk the ranked candidates and take the first that satisfies libc,
 		// hash, and (when enabled) extraction verification. A raw binary can thus
 		// rescue a platform whose higher-ranked archive fails to extract.
-		pick, status, pickErr := pickBinaryForPlatform(ctx, appName, candidates, platform, historicalBinaries, verify)
+		pick, status, pickErr := pickBinaryForPlatform(ctx, appName, candidates, platform, historicalBinaries, verify, digestResolvers...)
 		switch status {
 		case "success":
 			// fall through to dedup + store below
 		case "no_hash":
-			results = append(results, detectionResult{
-				os: platform.os, arch: platform.arch, libc: platform.libc,
-				status: "no_hash", assetName: candidates[0].Name, err: pickErr,
-			})
+			result := detectionResult{os: platform.os, arch: platform.arch, libc: platform.libc, status: "no_hash", assetName: candidates[0].Name, err: pickErr}
+			if failure, ok := errors.AsType[*candidateError](pickErr); ok {
+				result.assetName, result.err = failure.asset, failure.err
+			}
+			results = append(results, result)
 			noHashCount++
 			continue
 		case "verification_failed":
@@ -501,6 +538,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 		binInfo := binmanager.BinaryOsArchInfo{
 			URL:         pick.asset.BrowserDownloadURL,
 			Hash:        pick.hash,
+			Auth:        pick.asset.Auth,
 			ContentType: pick.contentType,
 			BinaryPath:  pick.binaryPath,
 		}
@@ -550,7 +588,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *github.Re
 			if r.status == "verification_failed" {
 				unverified.platforms = append(unverified.platforms, platformVerification{
 					platform: formatPlatformLabel(r),
-					err:      fmt.Errorf("%s: %w", r.assetName, r.err),
+					err:      fmt.Errorf("%s: %w", safeReleaseLabel(r.assetName), r.err),
 				})
 			}
 		}
@@ -630,7 +668,7 @@ func (e *candidateError) Unwrap() error { return e.err }
 // candidatePick is the asset chosen for one platform plus the derived metadata
 // needed to record it.
 type candidatePick struct {
-	asset       github.Asset
+	asset       releaseasset.Asset
 	contentType binmanager.BinContentType
 	binaryPath  *string
 	hash        string
@@ -650,10 +688,11 @@ type candidatePick struct {
 func pickBinaryForPlatform(
 	ctx context.Context,
 	appName string,
-	candidates []github.Asset,
+	candidates []releaseasset.Asset,
 	platform platformTuple,
 	historical binmanager.MapOfBinaries,
 	verify extractionVerifier,
+	digestResolvers ...func(*releaseasset.Asset) error,
 ) (*candidatePick, string, error) {
 	var verifyErr, hashErr, libcErr error
 
@@ -669,12 +708,24 @@ func pickBinaryForPlatform(
 			}
 		}
 
+		if strings.ContainsAny(asset.Name, "\x00\r\n\t\x1b") {
+			libcErr = errors.New("release asset filename contains control characters")
+			continue
+		}
+
 		contentType := detector.DetectContentType(asset.Name)
 		binaryPath := detector.DetectBinaryPathWithHistory(appName, asset.Name, contentType, platform.os, platform.arch, platform.libc, historical)
 
+		if len(digestResolvers) > 0 {
+			if err := digestResolvers[0](&asset); err != nil {
+				hashErr = &candidateError{asset: asset.Name, err: err}
+				continue
+			}
+		}
+
 		hash, err := extractHashFromDigest(asset.Digest)
 		if err != nil {
-			hashErr = err
+			hashErr = &candidateError{asset: asset.Name, err: err}
 			continue
 		}
 
@@ -754,7 +805,7 @@ func printDetectionResults(results []detectionResult, verifyMode bool) {
 				verifiedStr = " (verified)"
 			}
 			fmt.Printf("  %s✓%s %s: %s (contentType: %s, binaryPath: %s)%s\n",
-				colorGreen, colorReset, formatPlatformLabel(r), r.assetName, r.contentType, binaryPathStr, verifiedStr)
+				colorGreen, colorReset, formatPlatformLabel(r), safeReleaseLabel(r.assetName), r.contentType, binaryPathStr, verifiedStr)
 		}
 	}
 
@@ -762,7 +813,7 @@ func printDetectionResults(results []detectionResult, verifyMode bool) {
 		fmt.Printf("\nVerification failed:\n")
 		for _, r := range verificationFailed {
 			fmt.Printf("  %s✗%s %s: %s - %v\n",
-				colorRed, colorReset, formatPlatformLabel(r), r.assetName, r.err)
+				colorRed, colorReset, formatPlatformLabel(r), safeReleaseLabel(r.assetName), r.err)
 		}
 	}
 
@@ -770,7 +821,7 @@ func printDetectionResults(results []detectionResult, verifyMode bool) {
 		fmt.Printf("\nNo SHA-256 hash available:\n")
 		for _, r := range noHash {
 			fmt.Printf("  %s✗%s %s: %s - %v\n",
-				colorRed, colorReset, formatPlatformLabel(r), r.assetName, r.err)
+				colorRed, colorReset, formatPlatformLabel(r), safeReleaseLabel(r.assetName), r.err)
 		}
 	}
 
@@ -817,4 +868,8 @@ func extractHashFromDigest(digest string) (string, error) {
 	}
 
 	return hashValue, nil
+}
+
+func safeReleaseLabel(value string) string {
+	return strings.NewReplacer("\r", "\\r", "\n", "\\n", "\t", "\\t", "\x1b", "\\x1b").Replace(value)
 }

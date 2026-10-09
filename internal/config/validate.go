@@ -435,6 +435,11 @@ func validateBinaryEntry(appName, platform string, info binmanager.BinaryOsArchI
 	if info.URL == "" {
 		errs = append(errs, fmt.Sprintf("app %q (%s): url is required", appName, platform))
 	}
+	if info.Auth != nil {
+		if err := info.Auth.Validate(); err != nil {
+			errs = append(errs, fmt.Sprintf("app %q (%s): invalid download auth: %v", appName, platform, err))
+		}
+	}
 	if info.Hash == "" {
 		errs = append(errs, fmt.Sprintf("app %q (%s): hash is required", appName, platform))
 	} else if !isValidSHA256Hex(info.Hash) {
@@ -1237,6 +1242,11 @@ func ValidateRuntimes(runtimes MapOfRuntimes) error {
 							}
 							if info.URL == "" {
 								errs = append(errs, fmt.Sprintf("runtime %q (%s): url is required", name, platform))
+							}
+							if info.Auth != nil {
+								if err := info.Auth.Validate(); err != nil {
+									errs = append(errs, fmt.Sprintf("runtime %q (%s): invalid download auth: %v", name, platform, err))
+								}
 							}
 							if info.Hash == "" {
 								errs = append(errs, fmt.Sprintf("runtime %q (%s): hash is required", name, platform))

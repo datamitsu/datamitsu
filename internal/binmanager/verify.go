@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/datamitsu/datamitsu/internal/httpretry"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
 // VerifyRetryNotifier is told about every repeated verification download, so
@@ -37,10 +38,10 @@ func IsDownloadError(err error) bool {
 // downloadForVerify fetches url for a verification, retrying transient
 // failures under the shared policy and reporting each retry through
 // VerifyRetryNotifier. A failure is a DownloadError.
-func downloadForVerify(ctx context.Context, url, destDir string) (string, error) {
+func downloadForVerify(ctx context.Context, url, destDir string, auth ...*httpx.RequestAuth) (string, error) {
 	var path string
 	err := httpretry.Retry(ctx, "GET "+url, VerifyRetryNotifier, func() error {
-		downloaded, err := downloadFile(ctx, url, destDir)
+		downloaded, err := downloadFile(ctx, url, destDir, auth...)
 		if err != nil {
 			return err
 		}
@@ -62,6 +63,7 @@ func VerifyBinaryExtraction(
 	hashType BinHashType,
 	contentType BinContentType,
 	binaryPath *string,
+	auth ...*httpx.RequestAuth,
 ) error {
 	if hash == "" {
 		return errors.New("hash is empty: verification requires a non-empty hash")
@@ -75,7 +77,7 @@ func VerifyBinaryExtraction(
 		_ = os.RemoveAll(tempDir)
 	}()
 
-	downloadedPath, err := downloadForVerify(ctx, url, tempDir)
+	downloadedPath, err := downloadForVerify(ctx, url, tempDir, auth...)
 	if err != nil {
 		return err
 	}
@@ -148,8 +150,8 @@ func checkExecutableFormat(path string) error {
 
 // DownloadFileForVerify downloads a file to destDir for verify-all, retrying
 // transient failures; a failure is a DownloadError.
-func DownloadFileForVerify(ctx context.Context, url string, destDir string) (string, error) {
-	return downloadForVerify(ctx, url, destDir)
+func DownloadFileForVerify(ctx context.Context, url string, destDir string, auth ...*httpx.RequestAuth) (string, error) {
+	return downloadForVerify(ctx, url, destDir, auth...)
 }
 
 // VerifyFileHashPublic verifies a file's hash. Public wrapper around verifyFileHash for verify-all.

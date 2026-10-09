@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/releaseprovider"
+
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
@@ -110,9 +112,10 @@ func TestRunPullGithub_VerifiesEachAssetOnce(t *testing.T) {
 	defer func() { verifyExtractionFlag = false }()
 	withRetryNotices(t)
 
-	path := filepath.Join(t.TempDir(), "githubApps.json")
+	path := filepath.Join(t.TempDir(), "binaryApps.json")
 	state := &appstate.State{
-		Apps:     map[string]*appstate.AppMetadata{"once": {Owner: "o", Repo: "once", Tag: "v1"}},
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
+		Apps:     map[string]*appstate.AppMetadata{"once": {Source: "github", Repository: "o/once", Tag: "v1"}},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
 	if err := appstate.Save(path, state); err != nil {
@@ -121,10 +124,10 @@ func TestRunPullGithub_VerifiesEachAssetOnce(t *testing.T) {
 
 	var err error
 	stderr := captureStderr(func() {
-		_ = captureStdout(func() { err = runPullGithub(pullGithubCmd, []string{path}) })
+		_ = captureStdout(func() { err = runPullReleases(pullReleasesCmd, []string{path}) })
 	})
 	if err != nil {
-		t.Fatalf("runPullGithub() = %v\nstderr:\n%s", err, stderr)
+		t.Fatalf("runPullReleases() = %v\nstderr:\n%s", err, stderr)
 	}
 	if downloads != 1 {
 		t.Errorf("asset downloaded %d times, want once", downloads)
@@ -178,11 +181,12 @@ func TestRunPullGithub_VerifyDownloadFailureFailsTheApp(t *testing.T) {
 		ConfigHash: "old",
 		Binaries:   binmanager.MapOfBinaries{"darwin": {"amd64": {"unknown": binmanager.BinaryOsArchInfo{URL: "https://example.test/v0/flaky", Hash: strings.Repeat("cd", 32), ContentType: binmanager.BinContentTypeTarGz}}}},
 	}
-	path := filepath.Join(t.TempDir(), "githubApps.json")
+	path := filepath.Join(t.TempDir(), "binaryApps.json")
 	state := &appstate.State{
+		Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps: map[string]*appstate.AppMetadata{
-			"fine":  {Owner: "o", Repo: "fine", Tag: "v1"},
-			"flaky": {Owner: "o", Repo: "flaky", Tag: "v1"},
+			"fine":  {Source: "github", Repository: "o/fine", Tag: "v1"},
+			"flaky": {Source: "github", Repository: "o/flaky", Tag: "v1"},
 		},
 		Binaries: map[string]*appstate.BinariesEntry{"flaky": previous},
 	}
@@ -192,10 +196,10 @@ func TestRunPullGithub_VerifyDownloadFailureFailsTheApp(t *testing.T) {
 
 	var err error
 	stderr := captureStderr(func() {
-		_ = captureStdout(func() { err = runPullGithub(pullGithubCmd, []string{path}) })
+		_ = captureStdout(func() { err = runPullReleases(pullReleasesCmd, []string{path}) })
 	})
 	if err == nil || err.Error() != "1 of 2 apps failed" {
-		t.Fatalf("runPullGithub() = %v, want 1 of 2 apps failed\nstderr:\n%s", err, stderr)
+		t.Fatalf("runPullReleases() = %v, want 1 of 2 apps failed\nstderr:\n%s", err, stderr)
 	}
 	for _, want := range []string{
 		"retry 2/4 for GET " + assets.URL + "/flaky/flaky-linux-amd64.tar.gz",

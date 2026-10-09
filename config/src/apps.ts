@@ -1,10 +1,10 @@
 /// <reference path="../config.d.ts" />
 
-import githubApps from "./githubApps.json";
+import binaryApps from "./binaryApps.json";
 import nodeApps from "./nodeApps.json";
 import uvApps from "./uvApps.json";
 
-interface AppStateGithub {
+interface AppStateBinary {
   binaries: BinManager.MapOfBinaries;
   configHash: string;
 }
@@ -66,8 +66,8 @@ export const mapOfApps: BinManager.MapOfApps = {
   },
   task: {
     binary: {
-      binaries: githubApps.binaries.task.binaries as unknown as Record<string, AppStateGithub>,
-      version: githubApps.apps.task.tag,
+      binaries: binaryApps.binaries.task.binaries as unknown as Record<string, AppStateBinary>,
+      version: binaryApps.apps.task.tag,
     },
   },
 };

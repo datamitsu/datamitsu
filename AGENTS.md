@@ -459,10 +459,25 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   A new piece of human output checks `ui.Muted()`; `ui.Quiet()` means only
   "stderr is a JSON-L stream", which agent output is not.
 
-## GitHub Manifest Platform Filtering
+## Release Providers
 
-- `githubApps.json` accepts a strict, case-sensitive `platforms` list from
-  `appstate.SupportedPlatforms()`. This matrix also drives GitHub detection.
+- `devtools pull-releases` reads `binaryApps.json` without a schema version or
+  legacy fallback. Each app references `sources` by alias and names a
+  `repository` and `tag`. Provider DTOs live in `internal/releaseasset`;
+  adapters live in `internal/releaseprovider`, outside the detector.
+- Integrity resolution happens only for selected candidates. Checksum files
+  require their own SHA-256 pin before download. GitLab package metadata must
+  belong to the configured project; missing hashes are fatal.
+- `BinaryOsArchInfo.Auth` stores credential references, never values. Install
+  and verification use the same origin-scoped transport and drop auth on
+  cross-origin redirects. Auth is transport-only, not install identity.
+- Changes to binary config fields require checking config-cache and source-farm
+  format versions, because both persist the typed binary definitions.
+
+## Release Manifest Platform Filtering
+
+- `binaryApps.json` accepts a strict, case-sensitive `platforms` list from
+  `appstate.SupportedPlatforms()`. This matrix also drives provider-independent detection.
 - Filter all existing binary entries and save before pulling, even when apps
   are absent or detection is skipped. Keep pre-filter maps for `binaryPath`
   history; failure does not undo pruning or commit a new config hash. Invalidate an

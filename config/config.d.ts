@@ -1493,6 +1493,16 @@ declare global {
 
     interface BinaryOsArchInfo {
       /**
+       * Host-scoped credential reference; the token value is never stored in configuration.
+       */
+      auth?: {
+        accept?: "application/octet-stream";
+        header: "Authorization" | "PRIVATE-TOKEN";
+        origin: string;
+        scheme?: "Bearer" | "token";
+        tokenEnv: string;
+      };
+      /**
        * Path of the binary inside the archive, such as "tool-1.2.3/bin/tool". With `extractDir` it
        * is the command inside the extracted directory, and required.
        */

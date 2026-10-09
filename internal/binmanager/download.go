@@ -149,7 +149,7 @@ func displayName(name, url string) string {
 	return url
 }
 
-func downloadFileInternal(ctx context.Context, url string, destDir string, name string, allowLocalFile bool) (string, error) {
+func downloadFileInternal(ctx context.Context, url string, destDir string, name string, allowLocalFile bool, auth ...*httpx.RequestAuth) (string, error) {
 	if strings.HasPrefix(url, fileScheme) {
 		if !ldflags.LocalArtifactsEnabled() {
 			return "", permanent(fmt.Errorf(
@@ -200,7 +200,19 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 		return "", fmt.Errorf("failed to build download request: %w", err)
 	}
 
-	resp, err := httpClient.Do(req)
+	client := httpClient
+	if len(auth) > 0 && auth[0] != nil {
+		client, err = httpx.WithAuth(httpClient, auth[0])
+		if err != nil {
+			_ = os.Remove(tmpPath)
+			return "", permanent(err)
+		}
+		if err = auth[0].Apply(req); err != nil {
+			_ = os.Remove(tmpPath)
+			return "", permanent(err)
+		}
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		if removeErr := os.Remove(tmpPath); removeErr != nil {
 			log.Warn("failed to remove temp file after download error", zap.String("path", tmpPath), zap.Error(removeErr))
@@ -273,8 +285,8 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 	return tmpPath, nil
 }
 
-func downloadFile(ctx context.Context, url string, destDir string) (string, error) {
-	return downloadFileInternal(ctx, url, destDir, "", false)
+func downloadFile(ctx context.Context, url string, destDir string, auth ...*httpx.RequestAuth) (string, error) {
+	return downloadFileInternal(ctx, url, destDir, "", false, auth...)
 }
 
 // downloadAndVerifyInternal downloads and hash-verifies a file, retrying
@@ -282,14 +294,14 @@ func downloadFile(ctx context.Context, url string, destDir string) (string, erro
 // stops early on a permanent error (4xx, oversized, hash mismatch) or once the
 // parent context is done. The hash is verified after every successful download,
 // so retries only re-fetch — they never weaken verification.
-func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string, allowLocalFile bool) (string, error) {
+func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string, allowLocalFile bool, auth ...*httpx.RequestAuth) (string, error) {
 	// Fetching and verifying are separate spans because they answer different
 	// questions on a cold store: whether the run is bound by the network or by
 	// hashing what it just pulled down.
 	var lastErr error
 	for attempt := 1; attempt <= downloadMaxAttempts; attempt++ {
 		fetchSpan := trace.Start(trace.CatInstall, "artifact.fetch")
-		tmpPath, err := downloadFileInternal(ctx, url, destDir, name, allowLocalFile)
+		tmpPath, err := downloadFileInternal(ctx, url, destDir, name, allowLocalFile, auth...)
 		fetchSpan.EndWith(trace.A("name", name), trace.A("attempt", attempt))
 		if err == nil {
 			cntDownloads.Add(1)
@@ -345,8 +357,8 @@ func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash str
 	return "", fmt.Errorf("after %d attempts: %w", downloadMaxAttempts, lastErr)
 }
 
-func downloadAndVerifyWithName(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string) (string, error) {
-	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, name, false)
+func downloadAndVerifyWithName(ctx context.Context, url string, expectedHash string, hashType BinHashType, destDir string, name string, auth ...*httpx.RequestAuth) (string, error) {
+	return downloadAndVerifyInternal(ctx, url, expectedHash, hashType, destDir, name, false, auth...)
 }
 
 // DownloadAndVerifySHA256 downloads url into destDir (retrying transient
@@ -360,8 +372,8 @@ func downloadAndVerifyWithName(ctx context.Context, url string, expectedHash str
 // instead of fetching one. The hash is still mandatory and verified identically,
 // so this changes the transport, not the trust model; it exists for the
 // build-locally development loop. Leave it false unless a store has a reason.
-func DownloadAndVerifySHA256(ctx context.Context, url, expectedHash, destDir, name string, allowLocalFile bool) (string, error) {
-	return downloadAndVerifyInternal(ctx, url, expectedHash, BinHashTypeSHA256, destDir, name, allowLocalFile)
+func DownloadAndVerifySHA256(ctx context.Context, url, expectedHash, destDir, name string, allowLocalFile bool, auth ...*httpx.RequestAuth) (string, error) {
+	return downloadAndVerifyInternal(ctx, url, expectedHash, BinHashTypeSHA256, destDir, name, allowLocalFile, auth...)
 }
 
 func moveFile(src, dst string) error {

@@ -63,7 +63,7 @@ The global default is **10080 minutes (7 days)**. It applies to every command th
 
 | Command         | Age-filtered registries                               |
 | --------------- | ----------------------------------------------------- |
-| `pull-github`   | GitHub releases                                       |
+| `pull-releases` | GitHub, GitLab, Gitea and Forgejo releases            |
 | `pull-node`     | npm                                                   |
 | `pull-uv`       | PyPI                                                  |
 | `pull-runtimes` | npm (pnpm), GitHub (Bun, uv, and JVM binary releases) |
@@ -80,24 +80,30 @@ Every `pull-*` command accepts `--min-age <minutes>`:
 
 ```bash
 # Pin only releases at least 7 days old (the default)
-datamitsu devtools pull-github apps/githubApps.json --update
+datamitsu devtools pull-releases apps/binaryApps.json --update
 
 # Require 30 days of soak time
 datamitsu devtools pull-node apps/nodeApps.json --update --min-age 43200
 
 # Bypass the filter and take the newest release
-datamitsu devtools pull-github apps/githubApps.json --update --min-age 0
+datamitsu devtools pull-releases apps/binaryApps.json --update --min-age 0
 ```
 
 Each command prints the effective cutoff in its status banner (`Minimum release age: 10080 minutes`, or `disabled` when set to 0).
 
 ### When no release is old enough
 
-A GitHub release list is read a page at a time, and a page with nothing old enough and stable sends the lookup to the next one, up to ten pages (300 releases): a repository that publishes nightly or early-access builds as prereleases does not hide its last stable release.
+`pull-releases` reads release lists across the configured provider until an empty
+page proves the end, requesting up to 100 entries per page. It compares stable
+semantic versions across the collected pages and applies the age cutoff. A
+server may clamp the page size, so a short non-empty page does not stop the
+lookup. If the listing does not finish within ten pages, the command fails and
+asks for an explicit tag instead of silently choosing from an incomplete list.
+The runtime GitHub updater retains its separate bounded lookup.
 
 If every available release is younger than the cutoff, datamitsu's behavior depends on whether a safe fallback exists:
 
-- **`pull-github`** — an _existing_ app keeps its current tag with a warning; a _new_ app (no prior binary) is a **hard error**, since there is nothing safe to pin.
+- **`pull-releases`** — an _existing_ app keeps its current tag with a warning; a _new_ app (no prior binary) is a **hard error**, since there is nothing safe to pin.
 - **`pull-node` / `pull-uv`** — the package is skipped with a warning and keeps its current version.
 - **`pull-runtimes`** — a hard error for that runtime, since runtimes must resolve to a concrete version; it keeps its previous entry, and the other runtimes are still saved.
 
@@ -127,12 +133,12 @@ This version-selection filter — applied when _you_ pin versions with `pull-*` 
 
 `pull-*` ages only the version an app names. Everything that version depends on is resolved later, when `datamitsu config lockfile` generates the app's lock file, and each runtime covers it differently:
 
-| App         | Transitive versions picked by | How the minimum release age reaches them                                                                                                                                                                       |
-| ----------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bun, Node   | pnpm                          | `minimumReleaseAge: 10080` in the app's `pnpm-workspace.yaml` filters the whole tree, top-level package included. See [pnpm (Bun and Node Apps)](#pnpm-bun-and-node-apps).                                     |
-| UV          | uv                            | `--exclude-newer P7D` filters the whole tree; the lock records the window and every install reuses it. See [Release Age of Transitive Dependencies](#release-age-of-transitive-dependencies).                  |
-| Go          | minimal version selection     | Go has no such setting. `config lockfile` checks every resolved module against the effective minimum release age. See [Release Age at Lock Generation](#release-age-at-lock-generation).                       |
-| JVM, binary | nothing — one file            | The artifact is a single file pinned by SHA-256, with no dependency tree. The age applies where its version is chosen: `pull-github` for binary apps. JAR versions are pinned by hand and are not age-checked. |
+| App         | Transitive versions picked by | How the minimum release age reaches them                                                                                                                                                                         |
+| ----------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bun, Node   | pnpm                          | `minimumReleaseAge: 10080` in the app's `pnpm-workspace.yaml` filters the whole tree, top-level package included. See [pnpm (Bun and Node Apps)](#pnpm-bun-and-node-apps).                                       |
+| UV          | uv                            | `--exclude-newer P7D` filters the whole tree; the lock records the window and every install reuses it. See [Release Age of Transitive Dependencies](#release-age-of-transitive-dependencies).                    |
+| Go          | minimal version selection     | Go has no such setting. `config lockfile` checks every resolved module against the effective minimum release age. See [Release Age at Lock Generation](#release-age-at-lock-generation).                         |
+| JVM, binary | nothing — one file            | The artifact is a single file pinned by SHA-256, with no dependency tree. The age applies where its version is chosen: `pull-releases` for binary apps. JAR versions are pinned by hand and are not age-checked. |
 
 ## Bun Apps
 

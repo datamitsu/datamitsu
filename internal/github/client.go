@@ -8,34 +8,24 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/httpretry"
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/releaseasset"
 )
 
 // DefaultBaseURL is the GitHub REST API root.
 const DefaultBaseURL = "https://api.github.com"
 
-// Asset represents a GitHub release asset
-type Asset struct {
-	Name               string `json:"name"`
-	BrowserDownloadURL string `json:"browser_download_url"`
-	Size               int64  `json:"size"`
-	ContentType        string `json:"content_type"`
-	Digest             string `json:"digest,omitempty"` // SHA256 digest in format "sha256:hash"
-}
+// Asset is the provider-neutral asset consumed by runtime and release tooling.
+type Asset = releaseasset.Asset
 
-// Release represents a GitHub release
-type Release struct {
-	TagName     string    `json:"tag_name"`
-	Assets      []Asset   `json:"assets"`
-	PublishedAt time.Time `json:"published_at"`
-	Prerelease  bool      `json:"prerelease"`
-	Draft       bool      `json:"draft"`
-}
+// Release is the shared release metadata used for version selection.
+type Release = releaseasset.Release
 
 // Client is a GitHub API client. Every request is retried under the shared
 // httpretry policy: network failures, 5xx and rate limits that name a short
@@ -52,18 +42,32 @@ type Client struct {
 
 // NewClient creates a new GitHub API client
 func NewClient() *Client {
-	return &Client{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		token:   os.Getenv("GITHUB_TOKEN"), //nolint:forbidigo // third-party token, not a datamitsu env var
-		BaseURL: DefaultBaseURL,
+	return NewClientForSource(DefaultBaseURL, os.Getenv("GITHUB_TOKEN")) //nolint:forbidigo // third-party token, not a datamitsu env var
+}
+
+// NewClientForSource binds an explicit credential to a configured GitHub API origin.
+func NewClientForSource(baseURL, token string) *Client {
+	c := &Client{httpClient: httpx.NewHardenedClient(30 * time.Second), token: token, BaseURL: baseURL}
+	guard := c.httpClient.CheckRedirect
+	c.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if err := guard(req, via); err != nil {
+			return err
+		}
+		origin, err := url.Parse(c.BaseURL)
+		if err != nil {
+			return fmt.Errorf("parse GitHub API origin: %w", err)
+		}
+		if !httpx.SameOrigin(req.URL.String(), origin.String()) {
+			req.Header.Del("Authorization")
+		}
+		return nil
 	}
+	return c
 }
 
 // GetRelease fetches a specific release by tag
 func (c *Client) GetRelease(ctx context.Context, owner, repo, tag string) (*Release, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", c.BaseURL, owner, repo, tag)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", c.BaseURL, url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(tag))
 	return c.fetchRelease(ctx, url)
 }
 
@@ -289,4 +293,9 @@ func rateLimitFromResponse(resp *http.Response, now time.Time) *RateLimitError {
 	// A reset already in the past still names the limit: retry at once.
 	limit.Wait = max(limit.Reset.Sub(now), time.Second)
 	return limit
+}
+
+// RateLimitFromResponse exposes GitHub's primary and secondary limit handling to release providers.
+func RateLimitFromResponse(resp *http.Response, now time.Time) *RateLimitError {
+	return rateLimitFromResponse(resp, now)
 }
