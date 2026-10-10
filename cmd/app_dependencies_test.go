@@ -29,10 +29,10 @@ func TestInitDependencySets(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			root := tt.root
-			root.DependsOn = []string{"dep"}
+			root.DependsOn = edges("dep")
 			cfg := &config.Config{Apps: binmanager.MapOfApps{
 				"root":   root,
-				"dep":    {Node: &binmanager.AppConfigNode{Runtime: "node"}, Lazy: true, DependsOn: []string{"leaf"}},
+				"dep":    {Node: &binmanager.AppConfigNode{Runtime: "node"}, Lazy: true, DependsOn: edges("leaf")},
 				"leaf":   {Binary: &binmanager.AppConfigBinary{}, Lazy: true},
 				"unused": {Node: &binmanager.AppConfigNode{Runtime: "unused"}, Lazy: true},
 			}, Runtimes: config.MapOfRuntimes{
@@ -107,7 +107,7 @@ func TestReportToolsCountsRuntimeDependencies(t *testing.T) {
 			apps := binmanager.MapOfApps{
 				"root": {
 					Required:  true,
-					DependsOn: []string{"dep"},
+					DependsOn: edges("dep"),
 					Binary: &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{
 						syslist.OsType(host.OS): {syslist.ArchType(host.Arch): {string(host.Libc): {
 							URL: "https://example.invalid/root", Hash: strings.Repeat("a", 64), ContentType: binmanager.BinContentTypeBinary,
@@ -184,4 +184,14 @@ func (m *statsRuntimeManager) ResolveCommandInfo(string, binmanager.App) (*binma
 
 func (m *statsRuntimeManager) ComputeAppPath(string, binmanager.App) (string, error) {
 	return filepath.Dir(m.path), nil
+}
+
+// edges builds a dependsOn edge list from plain names, mirroring the
+// normalized string form of the config.
+func edges(names ...string) []binmanager.AppDependency {
+	out := make([]binmanager.AppDependency, 0, len(names))
+	for _, n := range names {
+		out = append(out, binmanager.AppDependency{App: n, Alias: n})
+	}
+	return out
 }

@@ -627,5 +627,14 @@ export default defineConfig((config) => ({
     "fhash",
     // The reasoning-effort level the plan's review provenance names.
     "xhigh",
+    // The pinned schema-delivery app the prepare fixtures and golden files
+    // name, and the short app names the prepare validation tests use.
+    "schepherd",
+    "SCHEPHERD",
+    "shellprep",
+    "nopin",
+    "noargs",
+    "storeph",
+    "badenv",
   ],
 }));

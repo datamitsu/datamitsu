@@ -32,10 +32,12 @@ func AppDependencyClosure(apps MapOfApps, roots []string) ([]string, error) {
 		}
 		state[name] = 1
 		chain = append(chain, name)
-		deps := slices.Clone(app.DependsOn)
-		slices.Sort(deps)
-		for _, dep := range deps {
-			visit(dep)
+		edges := cloneEdges(app.DependsOn)
+		slices.SortFunc(edges, func(a, b AppDependency) int {
+			return strings.Compare(a.App, b.App)
+		})
+		for _, edge := range edges {
+			visit(edge.App)
 		}
 		chain = chain[:len(chain)-1]
 		state[name] = 2

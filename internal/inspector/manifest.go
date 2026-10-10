@@ -24,17 +24,29 @@ type Manifest struct {
 
 // App identifies an executable without its installation payload or environment.
 type App struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Runtime     string   `json:"runtime"`
-	Version     string   `json:"version"`
-	DependsOn   []string `json:"dependsOn"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Runtime     string `json:"runtime"`
+	Version     string `json:"version"`
+	// DependsOn lists direct dependencies; Alias differs from App when the
+	// configuration declared the edge as an object with "as". A reader
+	// navigates by App; Alias is display text only.
+	DependsOn []Dependency `json:"dependsOn"`
+	// Prepared records that the app declares a prepare step. Arguments and
+	// environment stay out of the snapshot by policy.
+	Prepared bool `json:"prepared,omitempty"`
 	// OfficialURL is where a reader learns about this app, and OfficialURLDerived
 	// says whether the configuration chose that page or the core worked it out
 	// from a download URL or a package name. A surface shows the two differently:
 	// one is the maintainer's answer, the other is an address.
 	OfficialURL        string `json:"officialUrl,omitempty"`
 	OfficialURLDerived bool   `json:"officialUrlDerived,omitempty"`
+}
+
+// Dependency is one direct app dependency with its binding alias.
+type Dependency struct {
+	App   string `json:"app"`
+	Alias string `json:"alias"`
 }
 
 // Operation exposes matching and scheduling metadata without executable arguments.
@@ -84,7 +96,11 @@ func Snapshot(cfg *config.Config, version string) Manifest {
 	m := Manifest{SchemaVersion: protocol.SchemaVersion, Name: cfg.DisplayName(), Version: version, Apps: []App{}, Tools: []Tool{}, ProjectTypes: []ProjectType{}, ManagedConfigs: []ManagedConfig{}}
 	for name, app := range cfg.Apps {
 		kind, version := appKind(app)
-		m.Apps = append(m.Apps, App{Name: name, Description: app.Description, Runtime: kind, Version: version, DependsOn: list(app.DependsOn), OfficialURL: app.OfficialURL, OfficialURLDerived: app.OfficialURLDerived})
+		deps := make([]Dependency, 0, len(app.DependsOn))
+		for _, edge := range app.DependsOn {
+			deps = append(deps, Dependency{App: edge.App, Alias: edge.Alias})
+		}
+		m.Apps = append(m.Apps, App{Name: name, Description: app.Description, Runtime: kind, Version: version, DependsOn: deps, Prepared: app.Prepare != nil, OfficialURL: app.OfficialURL, OfficialURLDerived: app.OfficialURLDerived})
 	}
 	for id, tool := range cfg.Tools {
 		t := Tool{ID: id, Name: tool.Name, ProjectTypes: list(tool.ProjectTypes), Skipped: tool.Skip, SkipReason: tool.SkipReason, Operations: []Operation{}}

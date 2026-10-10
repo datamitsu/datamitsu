@@ -178,7 +178,7 @@ func versionCheckArgs(app binmanager.App) (args []string, verifiable bool) {
 // nothing, so naming one in `install` is a likely mistake.
 func warnShellApps(allApps binmanager.MapOfApps, names []string) {
 	for _, name := range names {
-		if app, ok := allApps[name]; ok && app.Shell != nil && len(app.DependsOn) == 0 && !ui.Quiet() {
+		if app, ok := allApps[name]; ok && app.Shell != nil && len(app.DependencyEdges()) == 0 && !ui.Quiet() {
 			fmt.Fprintf(os.Stderr, "Warning: %q is a shell command; nothing to install\n", name)
 		}
 	}

@@ -137,7 +137,11 @@ type App struct {
 
 	Description  string           `json:"description,omitempty"`
 	VersionCheck *AppVersionCheck `json:"versionCheck,omitempty"`
-	DependsOn    []string         `json:"dependsOn,omitempty"`
+	// DependsOn lists the app's direct dependency edges. In config JSON each
+	// entry is an app name or an { app, as } object; in Go it is normalized to
+	// AppDependency (alias defaults to the app name). Consumers that only need
+	// names read DependencyNames(); bindings resolve through the alias.
+	DependsOn []AppDependency `json:"dependsOn,omitempty"`
 
 	// OfficialURL is where a person reads about this app: its documentation, its
 	// repository, its package page. It is a link for people — nothing downloads
@@ -166,6 +170,13 @@ type App struct {
 	Files    map[string]string       `json:"files,omitempty"`
 	Links    map[string]string       `json:"links,omitempty"`
 	Archives map[string]*ArchiveSpec `json:"archives,omitempty"`
+
+	// Prepare declares the app's one-time preparation step: after the app and
+	// its whole dependsOn closure are installed, the step runs once and fills
+	// the prepared state ({store}/.prepared/<app>/<key>/out) that run time
+	// exposes as ${APP_PREPARED}. Nil means the app needs no step; installed
+	// and ready then coincide.
+	Prepare *AppPrepare `json:"prepare,omitempty"`
 }
 
 // ArchiveSpec represents an archive that can be extracted into an app's install directory.
@@ -1448,11 +1459,12 @@ func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo)
 	}
 	paths := strings.NewReplacer("${STORE}", env.GetStorePath(), "${APP_DIR}", appDir)
 	for _, key := range slices.Sorted(maps.Keys(app.RuntimeEnv)) {
-		value, err := expandAppBindings(app.RuntimeEnv[key], func(name string) (string, error) {
-			if !slices.Contains(app.DependsOn, name) {
-				return "", fmt.Errorf("APP_BIN target %q must be listed in direct dependsOn", name)
+		value, err := expandAppBindings(app.RuntimeEnv[key], func(alias string) (string, error) {
+			target, ok := aliasToApp(app.DependsOn, alias)
+			if !ok {
+				return "", fmt.Errorf("APP_BIN target %q must be listed in direct dependsOn", alias)
 			}
-			return bm.getBinaryPath(name)
+			return bm.resolveBindingPath(target)
 		}, paths)
 		if err != nil {
 			return fmt.Errorf("app %q runtimeEnv.%s: %w", appName, key, err)
@@ -1462,6 +1474,55 @@ func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo)
 		}
 	}
 	return nil
+}
+
+// resolveBindingPath returns the executable path a ${APP_BIN:<alias>} binding
+// resolves to, without installing anything: the store path for a native
+// binary, and the runtime-resolved command for a uv or go app (the kinds with
+// a single executable entry point). It mirrors what resolveCommandInfo would
+// run, stopping before any fetch.
+func (bm *BinManager) resolveBindingPath(appName string) (string, error) {
+	app, ok := bm.mapOfApps[appName]
+	if !ok {
+		return "", &AppNotFoundError{AppName: appName}
+	}
+	switch {
+	case app.Binary != nil:
+		return bm.getBinaryPath(appName)
+	case app.Uv != nil, app.Go != nil:
+		if bm.runtimeManager == nil {
+			return "", fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
+		}
+		info, err := bm.runtimeManager.ResolveCommandInfo(appName, app)
+		if err != nil {
+			return "", err
+		}
+		return info.Command, nil
+	default:
+		return "", fmt.Errorf("APP_BIN target %q: %s apps need a launcher (not supported yet)", appName, appKindLabel(app))
+	}
+}
+
+// appKindLabel names an app's kind for error messages.
+func appKindLabel(app App) string {
+	switch {
+	case app.Binary != nil:
+		return "binary"
+	case app.Bun != nil:
+		return "bun"
+	case app.Uv != nil:
+		return "uv"
+	case app.Node != nil:
+		return "node"
+	case app.Jvm != nil:
+		return "jvm"
+	case app.Go != nil:
+		return "go"
+	case app.Shell != nil:
+		return "shell"
+	default:
+		return "unknown"
+	}
 }
 
 // mergeExecEnv merges base environment variables with app-specific overrides.

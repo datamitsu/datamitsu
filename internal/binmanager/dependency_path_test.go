@@ -32,11 +32,11 @@ func dependencyPathFixture(t *testing.T, cacheDir string) (*BinManager, map[stri
 	t.Setenv("DATAMITSU_OFFLINE", "1")
 	apps := binaryAppFixture(t, "root")
 	binary := apps["root"].Binary
-	apps["a"] = App{Binary: binary, DependsOn: []string{"b"}}
+	apps["a"] = App{Binary: binary, DependsOn: edges("b")}
 	apps["b"] = App{Binary: binary}
 	apps["sh"] = App{Shell: &AppConfigShell{Name: "sh"}}
 	apps["runtime"] = App{Uv: &AppConfigUV{}}
-	apps["root"] = App{Binary: binary, DependsOn: []string{"a", "sh", "runtime"}}
+	apps["root"] = App{Binary: binary, DependsOn: edges("a", "sh", "runtime")}
 	runtimeTool := filepath.Join(t.TempDir(), "runtime-tool")
 	if err := os.WriteFile(runtimeTool, []byte("stub"), 0o755); err != nil {
 		t.Fatal(err)

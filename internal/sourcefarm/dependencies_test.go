@@ -32,8 +32,8 @@ func TestPlanDependencyHealthAndRuntimeEnv(t *testing.T) {
 			}
 			binary := &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{osType: {arch: {"unknown": {URL: "https://example.invalid/tool", Hash: "0000000000000000000000000000000000000000000000000000000000000000", ContentType: binmanager.BinContentTypeBinary}}}}}
 			apps := binmanager.MapOfApps{
-				"root": {Binary: binary, DependsOn: []string{"git", "dep"}, RuntimeEnv: map[string]string{"UPSTREAM": "${APP_BIN:git}"}},
-				"dep":  {Binary: binary, DependsOn: []string{"git"}}, "git": {Binary: binary, Lazy: true},
+				"root": {Binary: binary, DependsOn: edges("git", "dep"), RuntimeEnv: map[string]string{"UPSTREAM": "${APP_BIN:git}"}},
+				"dep":  {Binary: binary, DependsOn: edges("git")}, "git": {Binary: binary, Lazy: true},
 			}
 			bm := binmanager.New(apps, nil, nil)
 			dependency, _, err := bm.ResolveCommandInfo("git")
@@ -100,4 +100,14 @@ func TestPlanDependencyHealthAndRuntimeEnv(t *testing.T) {
 			}
 		})
 	}
+}
+
+// edges builds a dependsOn edge list from plain names, mirroring the
+// normalized string form of the config.
+func edges(names ...string) []binmanager.AppDependency {
+	out := make([]binmanager.AppDependency, 0, len(names))
+	for _, n := range names {
+		out = append(out, binmanager.AppDependency{App: n, Alias: n})
+	}
+	return out
 }

@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "c64a3ddc4fcb6d4d963e3f6a6f4f5f14",
+  "pageSetHash": "4d46414a4fbdb24762c28e0980abd59b",
   "pages": [
     {
       "slug": "about",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 82793,
-      "contentHash": "97ab6a1b40a9ca73bcd56eddbc3aeeff"
+      "bytes": 86698,
+      "contentHash": "386193fdd34852721abb33a8896e0998"
     },
     {
       "slug": "reference/ignore-rules",
@@ -514,8 +514,8 @@
       "url": "https://datamitsu.com/docs/reference/template-placeholders.md",
       "title": "Template Placeholders",
       "description": "Reference for template placeholders in tool operation arguments and environment values",
-      "bytes": 8905,
-      "contentHash": "56efaf7c3b764244b30d7c4940e91a61"
+      "bytes": 9883,
+      "contentHash": "7a0d9cfbfc8afcfcb294533e1556cfad"
     },
     {
       "slug": "reference/tool-environment",
