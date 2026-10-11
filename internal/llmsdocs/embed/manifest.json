@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "4d46414a4fbdb24762c28e0980abd59b",
+  "pageSetHash": "8df8b7f6b6ba3604758dd5bbd754e8ea",
   "pages": [
     {
       "slug": "about",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 184690,
-      "contentHash": "427596947cf9f6769f19a6d6c33bd803"
+      "bytes": 184864,
+      "contentHash": "80c4943bb5b26aec110fb771f2925b0f"
     },
     {
       "slug": "reference/comparison",
@@ -514,8 +514,8 @@
       "url": "https://datamitsu.com/docs/reference/template-placeholders.md",
       "title": "Template Placeholders",
       "description": "Reference for template placeholders in tool operation arguments and environment values",
-      "bytes": 9883,
-      "contentHash": "7a0d9cfbfc8afcfcb294533e1556cfad"
+      "bytes": 10475,
+      "contentHash": "937aa553f243f287817b081998c40107"
     },
     {
       "slug": "reference/tool-environment",

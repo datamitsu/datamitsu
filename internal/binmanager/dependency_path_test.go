@@ -107,8 +107,10 @@ func TestDependencyPathExposesTheBinaryClosureByName(t *testing.T) {
 		names = append(names, entry.Name())
 	}
 	// `b` is reached through `a`, which runs straight from the store when called by name, so
-	// it has to be on the root's PATH too. Shell and runtime dependencies cannot be linked.
-	if want := []string{commandName("a"), commandName("b")}; !slices.Equal(names, want) {
+	// it has to be on the root's PATH too. A uv dependency has one executable
+	// entry point and links like a binary; shell apps resolve through the
+	// inherited PATH and cannot be linked.
+	if want := []string{commandName("a"), commandName("b"), commandName("runtime")}; !slices.Equal(names, want) {
 		t.Fatalf("entries = %v, want %v", names, want)
 	}
 	for _, name := range []string{"a", "b"} {
@@ -290,5 +292,43 @@ func TestCommandNameAddsTheWindowsExtensionOnce(t *testing.T) {
 		if got := commandName(app); got != name {
 			t.Fatalf("commandName(%q) = %q, want %q", app, got, name)
 		}
+	}
+}
+
+func TestInstallWithConcurrencyMaterializesWhenAllCached(t *testing.T) {
+	// Every binary already on disk: the zero-download path must still
+	// materialize the dependency PATH directory, or a cached root with a
+	// dependency stays without one until some later command creates it.
+	bm, _ := dependencyPathFixture(t, "")
+	// Only a required root selects the set (includeOptional=false); its
+	// closure brings the dependencies.
+	root := bm.mapOfApps["root"]
+	root.Required = true
+	bm.mapOfApps["root"] = root
+	// Wipe every dependency PATH directory, then run the all-cached path:
+	// it must still materialize them (the exact set follows each app's
+	// closure links).
+	if err := os.RemoveAll(env.GetDependencyPathRoot()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bm.InstallWithConcurrency(context.Background(), false, 2, true); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(env.GetDependencyPathRoot())
+	if err != nil || len(entries) == 0 {
+		t.Fatalf("dependency PATH directory not materialized on the all-cached path: %v", err)
+	}
+	found := false
+	for _, e := range entries {
+		// The root's directory holds its dependencies (a, b, runtime) —
+		// not the root itself.
+		if _, serr := os.Stat(filepath.Join(env.GetDependencyPathRoot(), e.Name(), commandName("a"))); serr == nil {
+			if _, serr := os.Stat(filepath.Join(env.GetDependencyPathRoot(), e.Name(), commandName("b"))); serr == nil {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the root's dependency links are missing from the materialized dependency PATH directories")
 	}
 }

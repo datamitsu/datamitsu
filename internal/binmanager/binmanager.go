@@ -24,6 +24,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/prepare"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
@@ -209,6 +210,18 @@ type RuntimeAppManager interface {
 	ComputeAppPath(appName string, app App) (string, error)
 }
 
+// PreparePathPrefixer is the optional seam a prepare step uses when the
+// resolved CommandInfo carries no runtime-owned PATH prefix: under a
+// relative DATAMITSU_CACHE_DIR the resolve path drops its relative
+// components (its answer is persisted into the farm manifest, where a
+// relative entry would be worse than none), but a prepare step runs once,
+// from a staging workdir, with the app installed — the components are valid
+// for that run and must reach the step, absolutized. runtimemanager.
+// RuntimeManager implements it; test doubles need not.
+type PreparePathPrefixer interface {
+	ResolvePreparePathPrefix(appName string, app App) string
+}
+
 // BinManager downloads, verifies, installs and runs managed apps and bundles.
 type BinManager struct {
 	mapOfApps      MapOfApps
@@ -375,6 +388,12 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 	}
 
 	if len(toDownload) == 0 {
+		// Everything was already cached: still materialize the dependency
+		// links of the whole selection — a cached root with a newly added,
+		// already-cached dependency needs its directory too.
+		if err := bm.materializeDependencyPaths(names, nil); err != nil {
+			return stats, err
+		}
 		return stats, nil
 	}
 
@@ -415,6 +434,15 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 			}
 		} else {
 			stats.Downloaded = append(stats.Downloaded, result.Name)
+		}
+	}
+	// Every install finished: materialize the dependency links of the whole
+	// selection — cached roots too (a cached root with a newly added
+	// dependency needs its directory as much as a downloaded one) — against
+	// fully installed targets (the workers resolved them read-only).
+	if len(stats.Failed) == 0 || !failOnError {
+		if err := bm.materializeDependencyPaths(names, nil); err != nil {
+			return stats, err
 		}
 	}
 
@@ -493,27 +521,54 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 	close(jobs)
 	wg.Wait()
 
-	return errors.Join(closureErr, errors.Join(errs...))
+	// Barrier passed: every install in the set finished. If any failed, the
+	// run is already lost (the caller fails on the join below), and no step
+	// should start against a half-installed closure.
+	if installErr := errors.Join(closureErr, errors.Join(errs...)); installErr != nil {
+		return installErr
+	}
+	// Every install in the set finished: materialize the dependency links
+	// now, against fully installed targets (the workers resolved them
+	// read-only).
+	if err := bm.materializeDependencyPaths(distinct, nil); err != nil {
+		return err
+	}
+	// Prepare the closure's steps, dependencies first. The closure order is
+	// already dependencies-first, so one pass is enough; a step never starts
+	// while another member of its closure is still installing.
+	for _, name := range distinct {
+		if app, ok := bm.mapOfApps[name]; ok && app.Prepare != nil {
+			if err := bm.runPrepareStep(ctx, name); err != nil {
+				return fmt.Errorf("failed to ensure tool %q: %w", name, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // GetCommandInfo returns command information for executing an application
-// Works with all application types: binary, shell, bun, uv, node, jvm, go
+// and leaves it ready: after the closure is installed, every member with a
+// declared prepare step has run it (dependencies first). Works with all
+// application types: binary, shell, bun, uv, node, jvm, go.
 func (bm *BinManager) GetCommandInfo(ctx context.Context, appName string) (*CommandInfo, error) {
-	names, err := AppDependencyClosure(bm.mapOfApps, []string{appName})
+	info, err := bm.getCommandInfoInstallOnly(ctx, appName)
 	if err != nil {
 		return nil, err
 	}
-	var info *CommandInfo
-	for _, name := range names {
-		info, err = bm.getCommandInfo(ctx, name)
-		if err != nil {
-			if name == appName {
-				return nil, err
-			}
-			return nil, fmt.Errorf("failed to prepare dependency %q: %w", name, err)
-		}
+	if err := bm.EnsurePrepared(ctx, appName); err != nil {
+		return nil, err
 	}
 	return info, nil
+}
+
+// GetCommandInfoInstallOnly installs the app and its closure but skips the
+// prepare steps. Maintainer commands use it (config lockfile regenerates
+// locks, verify-all only checks versions): their work does not need prepared
+// state, and skipping it keeps a version sweep from re-downloading a schema
+// catalog just to print a version.
+func (bm *BinManager) GetCommandInfoInstallOnly(ctx context.Context, appName string) (*CommandInfo, error) {
+	return bm.getCommandInfoInstallOnly(ctx, appName)
 }
 
 // ResolveCommandInfo answers "where would this app be, and is it there?"
@@ -535,6 +590,7 @@ func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, er
 		return nil, false, err
 	}
 	var required []string
+	var depMarkers []string
 	installed := true
 	for _, name := range names {
 		info, present, err := bm.resolveCommandInfo(name)
@@ -548,16 +604,40 @@ func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, er
 		if name == appName {
 			// Only the root's dependency PATH directory is a health path: the dependencies are
 			// reached through it and never run with directories of their own.
-			pathEntries, err := bm.addDependencyPath(appName, &CommandInfo{}, bm.getBinaryPath, false)
+			pathEntries, err := bm.addDependencyPath(appName, &CommandInfo{}, bm.resolveBindingPath, false)
 			if err != nil {
 				return nil, false, fmt.Errorf("app %q: %w", appName, err)
 			}
-			required = append(required, pathEntries...)
+			// Health paths collected so far are the dependencies' own view
+			// (each already gated `installed` above); the PATH entries are the
+			// root's, and the marker is the root's readiness. Only the root's
+			// paths gate here — a shell dependency's bare command name is a
+			// health path but never a store artifact.
+			var rootMarkerPaths []string
+			if app := bm.mapOfApps[appName]; app.Prepare != nil {
+				if key, keyErr := bm.ComputePreparedKey(appName); keyErr == nil {
+					rootMarkerPaths = append(rootMarkerPaths, filepath.Join(PreparePath(), appName, key, prepare.MarkerName))
+				}
+			}
+			rootRequired := append(append(slices.Clone(pathEntries), rootMarkerPaths...), depMarkers...)
 			info.RequiredPaths = append(slices.Clone(info.RequiredPaths), required...)
-			pathPresent := len(pathEntries) == 0 || allPathsExist(pathEntries)
+			info.RequiredPaths = append(info.RequiredPaths, pathEntries...)
+			info.RequiredPaths = append(info.RequiredPaths, rootMarkerPaths...)
+			pathPresent := len(rootRequired) == 0 || allPathsExist(rootRequired)
 			return info, installed && pathPresent, nil
 		}
 		required = append(required, info.HealthPaths()...)
+		// A dependency's prepare marker is readiness for the whole closure:
+		// the root cannot be ready while a dependency with a declared step
+		// is unprepared, or the shim would skip the repair the dependency
+		// needs. The marker is a root-level gate, recorded as a health path.
+		if dep := bm.mapOfApps[name]; dep.Prepare != nil {
+			if key, keyErr := bm.ComputePreparedKey(name); keyErr == nil {
+				depMarker := filepath.Join(PreparePath(), name, key, prepare.MarkerName)
+				required = append(required, depMarker)
+				depMarkers = append(depMarkers, depMarker)
+			}
+		}
 	}
 	return nil, false, fmt.Errorf("app '%s' not found in registry", appName)
 }
@@ -925,34 +1005,20 @@ func DescribeApp(name string, app App) AppInfo {
 	return info
 }
 
-// GetExecCmd returns an exec.Cmd ready to execute the given app with args.
+// GetExecCmd returns an exec.Cmd ready to execute the given app with args,
+// leaving the app ready (prepare steps included).
 // For binary apps: ensures binary is cached (downloads if needed).
 // For runtime apps: delegates to runtimeManager.GetCommandInfo.
 // Returns (nil, nil) for shell apps — callers must handle nil.
 // Dependencies are provisioned for every app kind, including shell apps.
 func (bm *BinManager) GetExecCmd(ctx context.Context, name string, args []string) (*exec.Cmd, error) {
-	app, ok := bm.mapOfApps[name]
-	if !ok {
-		return nil, fmt.Errorf("app '%s' not found in registry", name)
-	}
+	return bm.getExecCmd(ctx, name, args, true)
+}
 
-	cmdInfo, err := bm.GetCommandInfo(ctx, name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get command info for %s: %w", name, err)
-	}
-	if app.Shell != nil {
-		// Shell apps have no exec.Cmd; callers check for a nil cmd (documented contract).
-		return nil, nil //nolint:nilnil
-	}
-
-	allArgs := make([]string, 0, len(cmdInfo.Args)+len(args))
-	allArgs = append(allArgs, cmdInfo.Args...)
-	allArgs = append(allArgs, args...)
-
-	cmd := exec.CommandContext(ctx, cmdInfo.Command, allArgs...) //nolint:gosec // G204: command path comes from the trusted managed store and args from validated config
-	cmd.Env = mergeExecEnv(os.Environ(), cmdInfo.Env)
-
-	return cmd, nil
+// GetExecCmdInstallOnly is GetExecCmd without the prepare steps, for
+// maintainer commands whose work does not need prepared state.
+func (bm *BinManager) GetExecCmdInstallOnly(ctx context.Context, name string, args []string) (*exec.Cmd, error) {
+	return bm.getExecCmd(ctx, name, args, false)
 }
 
 // Exec runs application as child process with environment variables passed through
@@ -1036,6 +1102,119 @@ func (bm *BinManager) BinaryAvailable(name string) (available bool, detail strin
 	return true, ""
 }
 
+// AppInstalled reports whether the app's own files are present in the store,
+// regardless of prepare state: an installed app whose prepare step has not
+// run yet is installed. Read-only; a false answer never fabricates a skip a
+// repair would not (the prepare path itself installs).
+func (bm *BinManager) AppInstalled(appName string) bool {
+	info, err := bm.resolveRawCommandInfo(appName)
+	if err != nil {
+		return false
+	}
+	app := bm.mapOfApps[appName]
+	if app.Shell != nil {
+		// A shell app has no store artifact; it is always as installed as it
+		// can be.
+		return true
+	}
+	return allPathsExist(info.HealthPaths())
+}
+
+// getCommandInfoInstallOnly is the historical GetCommandInfo body: install
+// the closure serially (dependencies first), no preparation.
+func (bm *BinManager) getCommandInfoInstallOnly(ctx context.Context, appName string) (*CommandInfo, error) {
+	names, err := AppDependencyClosure(bm.mapOfApps, []string{appName})
+	if err != nil {
+		return nil, err
+	}
+	var info *CommandInfo
+	for _, name := range names {
+		info, err = bm.getCommandInfo(ctx, name)
+		if err != nil {
+			if name == appName {
+				return nil, err
+			}
+			return nil, fmt.Errorf("failed to install dependency %q: %w", name, err)
+		}
+	}
+	// The whole closure is installed (this loop is serial and
+	// dependencies-first): materialize each member's dependency links now,
+	// so they never point at a half-written install.
+	if err := bm.materializeDependencyPaths(names, info); err != nil {
+		return nil, err
+	}
+	return info, nil
+}
+
+func (bm *BinManager) getExecCmd(ctx context.Context, name string, args []string, prepareSteps bool) (*exec.Cmd, error) {
+	app, ok := bm.mapOfApps[name]
+	if !ok {
+		return nil, fmt.Errorf("app '%s' not found in registry", name)
+	}
+
+	var cmdInfo *CommandInfo
+	var err error
+	if prepareSteps {
+		cmdInfo, err = bm.GetCommandInfo(ctx, name)
+	} else {
+		cmdInfo, err = bm.GetCommandInfoInstallOnly(ctx, name)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get command info for %s: %w", name, err)
+	}
+	if app.Shell != nil {
+		// Shell apps have no exec.Cmd; callers check for a nil cmd (documented contract).
+		return nil, nil //nolint:nilnil
+	}
+
+	allArgs := make([]string, 0, len(cmdInfo.Args)+len(args))
+	allArgs = append(allArgs, cmdInfo.Args...)
+	allArgs = append(allArgs, args...)
+
+	cmd := exec.CommandContext(ctx, cmdInfo.Command, allArgs...) //nolint:gosec // G204: command path comes from the trusted managed store and args from validated config
+	cmd.Env = mergeExecEnv(os.Environ(), cmdInfo.Env)
+
+	return cmd, nil
+}
+
+// resolveRawCommandInfo is resolveCommandInfo without mergeAppEnv: the
+// CommandInfo carries only what the runtime and the dependency path own.
+// A prepare step applies app.env and prepare.env itself, in that order, and
+// must be able to tell runtime-owned keys apart from app.env keys — the
+// merged form would let the app's own env shadow its prepare.env.
+func (bm *BinManager) resolveRawCommandInfo(appName string) (*CommandInfo, error) {
+	app, ok := bm.mapOfApps[appName]
+	if !ok {
+		return nil, fmt.Errorf("app '%s' not found in registry", appName)
+	}
+	var cmdInfo *CommandInfo
+	switch {
+	case app.Shell != nil:
+		cmdInfo = &CommandInfo{Type: "shell", Command: app.Shell.Name, Args: app.Shell.Args}
+	case app.Binary != nil:
+		binPath, err := bm.getBinaryPath(appName)
+		if err != nil {
+			return nil, err
+		}
+		cmdInfo = &CommandInfo{Type: "binary", Command: binPath}
+	case app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
+		if bm.runtimeManager == nil {
+			return nil, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
+		}
+		ci, err := bm.runtimeManager.ResolveCommandInfo(appName, app)
+		if err != nil {
+			return nil, err
+		}
+		cmdInfo = ci
+	default:
+		return nil, fmt.Errorf("app '%s' has no valid configuration", appName)
+	}
+	if _, err := bm.addDependencyPath(appName, cmdInfo, bm.resolveBindingPath, false); err != nil {
+		return nil, fmt.Errorf("app %q: %w", appName, err)
+	}
+	return cmdInfo, nil
+}
+
 func (bm *BinManager) resolveCommandInfo(appName string) (*CommandInfo, bool, error) {
 	app, ok := bm.mapOfApps[appName]
 	if !ok {
@@ -1092,7 +1271,7 @@ func (bm *BinManager) resolveCommandInfo(appName string) (*CommandInfo, bool, er
 	if err := bm.mergeAppEnv(appName, app, cmdInfo); err != nil {
 		return nil, false, err
 	}
-	if _, err := bm.addDependencyPath(appName, cmdInfo, bm.getBinaryPath, false); err != nil {
+	if _, err := bm.addDependencyPath(appName, cmdInfo, bm.resolveBindingPath, false); err != nil {
 		return nil, false, fmt.Errorf("app %q: %w", appName, err)
 	}
 
@@ -1179,12 +1358,60 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 	if err := bm.mergeAppEnv(appName, app, cmdInfo); err != nil {
 		return nil, err
 	}
-	installDependency := func(dep string) (string, error) { return bm.getOrInstallBinaryPath(ctx, dep) }
-	if _, err := bm.addDependencyPath(appName, cmdInfo, installDependency, true); err != nil {
+	// Resolve dependencies read-only here and defer the .dependency-path
+	// materialization: this call runs concurrently inside EnsureTools and
+	// InstallWithConcurrency workers, where one worker's root app can
+	// materialize links against a dependency another worker is still
+	// installing (a dangling venv link exists, so the repair pass would
+	// accept it; a Windows hard-link against a missing target fails).
+	// Every caller that finishes a concurrent install set re-materializes
+	// once its barrier passed (materializeDependencyPaths); the serial
+	// install paths (getCommandInfoInstallOnly's per-member loop) run
+	// dependencies-first in one goroutine, so materializing per member there
+	// is safe.
+	installDependency := func(dep string) (string, error) {
+		depApp, ok := bm.mapOfApps[dep]
+		if !ok {
+			return "", &AppNotFoundError{AppName: dep}
+		}
+		// Binaries install through their download path: the binary is a
+		// single store file, and getOrInstallBinaryPath is safe to call
+		// concurrently (the download is single-flighted). uv and go
+		// dependencies resolve read-only: their closure member installs
+		// through its own getCommandInfo call in the same set.
+		if depApp.Binary != nil {
+			return bm.getOrInstallBinaryPath(ctx, dep)
+		}
+		return bm.resolveBindingPath(dep)
+	}
+	// addDependencyPath also composes PATH into the info it gets; hand it a
+	// throwaway so the returned cmdInfo keeps the runtime-owned PATH alone.
+	// The barrier caller (materializeDependencyPaths) composes the final
+	// PATH — dependency dir plus inherited tail — exactly once.
+	if _, err := bm.addDependencyPath(appName, &CommandInfo{}, installDependency, false); err != nil {
 		return nil, fmt.Errorf("app %q: %w", appName, err)
 	}
 
 	return cmdInfo, nil
+}
+
+// materializeDependencyPaths creates the .dependency-path directory of the
+// named apps' links after the installation barrier passed: by then every
+// member of each closure is fully installed, so links never point at a
+// half-written venv or go bin. root, when non-nil, receives the root app's
+// composed PATH — the caller hands the same CommandInfo it returns, whose
+// dependency directory was resolved read-only during the concurrent phase.
+func (bm *BinManager) materializeDependencyPaths(names []string, root *CommandInfo) error {
+	for _, name := range names {
+		info := root
+		if info == nil || name != names[len(names)-1] {
+			info = &CommandInfo{}
+		}
+		if _, err := bm.addDependencyPath(name, info, bm.resolveBindingPath, true); err != nil {
+			return fmt.Errorf("app %q: %w", name, err)
+		}
+	}
+	return nil
 }
 
 func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, BinaryOsArchInfo, error) {
@@ -1430,6 +1657,11 @@ func (bm *BinManager) installInternal(ctx context.Context, includeOptional bool)
 			return fmt.Errorf("failed to install %s: %w", name, err)
 		}
 	}
+	// The serial loop finished (dependencies-first): materialize the
+	// dependency links against fully installed targets.
+	if err := bm.materializeDependencyPaths(names, nil); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -1458,6 +1690,15 @@ func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo)
 		cmdInfo.Env[k] = env.ExpandPlaceholders(v, appDir)
 	}
 	paths := strings.NewReplacer("${STORE}", env.GetStorePath(), "${APP_DIR}", appDir)
+	if app.Prepare != nil {
+		// ${APP_PREPARED} names the placed state directory (marker's parent,
+		// out/ child): the step already ran by the time an app runs, so the
+		// run-time value points at the placed tree.
+		if key, keyErr := bm.ComputePreparedKey(appName); keyErr == nil {
+			stateOut := filepath.Join(PreparePath(), appName, key, "out")
+			paths = strings.NewReplacer("${STORE}", env.GetStorePath(), "${APP_DIR}", appDir, "${APP_PREPARED}", stateOut)
+		}
+	}
 	for _, key := range slices.Sorted(maps.Keys(app.RuntimeEnv)) {
 		value, err := expandAppBindings(app.RuntimeEnv[key], func(alias string) (string, error) {
 			target, ok := aliasToApp(app.DependsOn, alias)

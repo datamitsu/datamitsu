@@ -87,7 +87,7 @@ func TestTheEmbeddedModuleNameIsReserved(t *testing.T) {
 	}
 	err = ValidateTools(MapOfTools{
 		"ruff": {Name: "ruff", OutputParser: &OutputParser{Module: ReservedParserModule, Parser: "sarif"}},
-	}, MapOfParsers{"core": {URL: "https://example.com/x.wasm", Hash: validParserHash()}})
+	}, MapOfParsers{"core": {URL: "https://example.com/x.wasm", Hash: validParserHash()}}, nil)
 	if err == nil || !strings.Contains(err.Error(), `outputParser module "embedded" is the fallback built into datamitsu`) {
 		t.Errorf("ValidateTools(module embedded) = %v, want the reserved-module error", err)
 	}

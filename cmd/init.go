@@ -111,7 +111,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	rm := runtimemanager.New(cfg.Runtimes)
 	binMgr := binmanager.New(cfg.Apps, cfg.Bundles, rm)
 
-	var runtimeCount, toolCount, bundleCount, linkCount, failed int
+	var runtimeCount, toolCount, bundleCount, linkCount, preparedCount, failed int
 
 	if !initSkipDownload && !initDryRun {
 		// Seed the install set from the declared OCI bundle first (demand-
@@ -151,6 +151,19 @@ func runInit(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	// The prepare phase: every installed app that declares a step runs it
+	// once (dependencies first), including binaries the tools phase found
+	// already cached. --skip-download and --dry-run skip it with the install
+	// phases, and it runs before initCommands, which may invoke prepared
+	// apps.
+	if !initSkipDownload && !initDryRun {
+		n, f, pErr := reportPrepared(ctx, disp, binMgr, cfg, initAll)
+		if pErr != nil {
+			return fmt.Errorf("failed to prepare apps: %w", pErr)
+		}
+		preparedCount, failed = n, failed+f
+	}
+
 	if !initDryRun {
 		n, f, bErr := reportBundles(ctx, disp, binMgr, initSkipDownload)
 		if bErr != nil {
@@ -175,6 +188,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 		runtimes: runtimeCount,
 		tools:    toolCount,
 		bundles:  bundleCount,
+		prepared: preparedCount,
 		links:    linkCount,
 		failed:   failed,
 		dur:      ui.FormatDurationShort(time.Since(start).Milliseconds()),
@@ -295,6 +309,53 @@ func reportRuntimes(ctx context.Context, disp *ui.Display, rm *runtimemanager.Ru
 		return 0, 0, fmt.Errorf("failed to download %d runtime(s)", len(stats.Failed))
 	}
 	return len(stats.Downloaded) + len(stats.AlreadyCached), len(stats.Failed), nil
+}
+
+// reportPrepared runs the prepare steps of the init set: every installed
+// app that declares one, dependencies first. The rows distinguish "prepared"
+// (the step ran now) from "ready" (the state was already there — built
+// earlier or seeded from a bundle).
+func reportPrepared(ctx context.Context, disp *ui.Display, binMgr *binmanager.BinManager, cfg *config.Config, includeAll bool) (count, failed int, err error) {
+	names, err := initInstallAppNames(cfg, includeAll)
+	if err != nil {
+		return 0, 0, err
+	}
+	var rows []initRow
+	prepared := 0
+	for _, name := range names {
+		app, ok := cfg.Apps[name]
+		if !ok || app.Prepare == nil {
+			continue
+		}
+		// The init install set is an overapproximation (--all includes
+		// runtime apps nothing provisions): a step runs only for an app
+		// that is actually installed, and an absent one is a visible skip,
+		// not a failure — its first `exec`/`check` installs and prepares it.
+		if !binMgr.AppInstalled(name) {
+			rows = append(rows, initRow{name: name, sym: clr.Faint("⊘"), status: clr.Faint("not installed")})
+			continue
+		}
+		before, keyErr := binMgr.PreparedStateReady(name)
+		if keyErr != nil {
+			rows = append(rows, failRow(name, keyErr))
+			failed++
+			continue
+		}
+		if before {
+			rows = append(rows, initRow{name: name, sym: clr.Green("✓"), status: clr.Faint("ready")})
+			prepared++
+			continue
+		}
+		if err := binMgr.EnsurePrepared(ctx, name); err != nil {
+			rows = append(rows, failRow(name, err))
+			failed++
+			continue
+		}
+		rows = append(rows, initRow{name: name, sym: clr.Green("✓"), status: clr.Faint("prepared")})
+		prepared++
+	}
+	initSection(disp, "prepare", rows)
+	return prepared, failed, nil
 }
 
 func reportTools(ctx context.Context, disp *ui.Display, binMgr *binmanager.BinManager) (count, failed int, err error) {
@@ -525,9 +586,9 @@ func reportInitCommands(ctx context.Context, disp *ui.Display, rootPath string, 
 
 // initFooterCounts carries the tallies shown in the closing bracket rule.
 type initFooterCounts struct {
-	types, runtimes, tools, bundles, links, failed int
-	dur                                            string
-	dryRun, hadError                               bool
+	types, runtimes, tools, bundles, prepared, links, failed int
+	dur                                                      string
+	dryRun, hadError                                         bool
 }
 
 // printInitFooter renders the closing "┗━ … ━" rule summarizing the run.
@@ -548,6 +609,7 @@ func printInitFooter(disp *ui.Display, c initFooterCounts) {
 	parts = add(parts, c.runtimes, "runtime", "runtimes")
 	parts = add(parts, c.tools, "tool", "tools")
 	parts = add(parts, c.bundles, "bundle", "bundles")
+	parts = add(parts, c.prepared, "prepared", "prepared")
 	parts = add(parts, c.links, "link", "links")
 	parts = append(parts, c.dur)
 	body := strings.Join(parts, " · ")
@@ -583,9 +645,13 @@ func shortInitType(s string) string {
 	return s
 }
 
-// commandInfoGetter abstracts GetCommandInfo for testability.
+// commandInfoGetter abstracts GetCommandInfo for testability. The install
+// phase uses the InstallOnly variant: init's own prepare phase runs the
+// steps afterwards, in one place, including apps whose binaries were
+// already cached.
 type commandInfoGetter interface {
 	GetCommandInfo(ctx context.Context, appName string) (*binmanager.CommandInfo, error)
+	GetCommandInfoInstallOnly(ctx context.Context, appName string) (*binmanager.CommandInfo, error)
 }
 
 func installRuntimeAppsWithLinks(ctx context.Context, binMgr *binmanager.BinManager, cfg *config.Config, installAll bool) error {
@@ -746,7 +812,7 @@ func mergeUnique(a, b []string) []string {
 // The list includes dependencies of any kind and is not re-sorted, so prerequisites precede dependents.
 func installSmartInitApps(ctx context.Context, getter commandInfoGetter, appsToInstall []string) error {
 	for _, name := range appsToInstall {
-		if _, err := getter.GetCommandInfo(ctx, name); err != nil {
+		if _, err := getter.GetCommandInfoInstallOnly(ctx, name); err != nil {
 			return fmt.Errorf("failed to install %s: %w", name, err)
 		}
 	}

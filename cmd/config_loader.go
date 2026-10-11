@@ -505,7 +505,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		return nil, nil, nil, err
 	}
 
-	if err := config.ValidateTools(currentConfig.Tools, currentConfig.Parsers); err != nil {
+	if err := config.ValidateTools(currentConfig.Tools, currentConfig.Parsers, currentConfig.Apps); err != nil {
 		return nil, nil, nil, err
 	}
 
