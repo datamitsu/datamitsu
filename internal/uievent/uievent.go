@@ -26,6 +26,8 @@ const (
 	TypeDownload Type = "download"
 	// TypeInstall marks a per-app install boundary (bun/node/uv/go/pnpm/extract).
 	TypeInstall Type = "install"
+	// TypePrepare marks an app's one-time prepare step running (or done).
+	TypePrepare Type = "prepare"
 	// TypeChunk marks per-unit work progress (files processed by a tool).
 	TypeChunk Type = "chunk"
 	// TypeToolRun marks the start/end of a single tool execution.
@@ -55,7 +57,7 @@ const (
 // told them.
 func Types() []Type {
 	return []Type{
-		TypeHello, TypePhase, TypeDownload, TypeInstall, TypeChunk, TypeToolRun,
+		TypeHello, TypePhase, TypeDownload, TypeInstall, TypePrepare, TypeChunk, TypeToolRun,
 		TypeError, TypeDone, TypeLog, TypeReport, TypeDiagnostic,
 	}
 }

@@ -104,6 +104,10 @@ type Executor struct {
 type AppManager interface {
 	GetBinaryPath(ctx context.Context, appName string) (string, error)
 	GetCommandInfo(ctx context.Context, appName string) (*binmanager.CommandInfo, error)
+	// ResolveBindingPath returns the executable a {bin:<alias>} placeholder
+	// names: the alias of a direct dependsOn edge of appName, resolved to a
+	// binary/uv/go target. Read-only: no install, no step.
+	ResolveBindingPath(ctx context.Context, appName, alias string) (string, error)
 }
 
 // DiagnosticParser turns a tool's raw output into resolved diagnostics. It is
@@ -1292,7 +1296,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			break
 		}
 
-		args := e.replacePlaceholders(task.OpConfig.Args, file, task.Files, task.ProjectPath, task.ToolName)
+		args := e.replacePlaceholders(ctx, task.OpConfig.Args, file, task.Files, task.ProjectPath, task.ToolName, task.OpConfig.App)
 		cmdString := e.formatCommandString(cmdInfo, args)
 
 		if e.dryRun {
@@ -1317,7 +1321,7 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			zap.String("file", file),
 			zap.Strings("args", args))
 
-		opEnv := e.replaceEnvPlaceholders(task.OpConfig.Env, task.ProjectPath, task.ToolName)
+		opEnv := e.replaceEnvPlaceholders(ctx, task.OpConfig.Env, task.ProjectPath, task.ToolName, task.OpConfig.App)
 		cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv, task.inherited)
 
 		stdinContent, stdinErr := stdinForOperation(task.OpConfig, file)
@@ -1673,7 +1677,7 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 		Batch:       true,
 	}
 
-	args := e.replacePlaceholders(task.OpConfig.Args, "", files, task.ProjectPath, task.ToolName)
+	args := e.replacePlaceholders(ctx, task.OpConfig.Args, "", files, task.ProjectPath, task.ToolName, task.OpConfig.App)
 	cmdString := e.formatCommandString(cmdInfo, args)
 	result.Command = cmdString
 
@@ -1688,7 +1692,7 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	}
 
 	log.Debug("executing batch command", zap.Strings("args", args), zap.String("workingDir", workingDir))
-	opEnv := e.replaceEnvPlaceholders(task.OpConfig.Env, task.ProjectPath, task.ToolName)
+	opEnv := e.replaceEnvPlaceholders(ctx, task.OpConfig.Env, task.ProjectPath, task.ToolName, task.OpConfig.App)
 	cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv, task.inherited)
 
 	// A batch tool with an outputParser (eslint --format=json, …) emits machine
@@ -1959,7 +1963,9 @@ func mergeChunkResults(ctx context.Context, result *ExecutionResult, chunks [][]
 // {cwd} resolves to projectPath (the task's per-project working directory)
 // {root} resolves to e.rootPath (the git repository root)
 // {toolCache} resolves to the project-specific cache directory (computed per call)
-func (e *Executor) replacePlaceholders(args []string, file string, files []string, projectPath string, toolName string) []string {
+// {bin:<alias>} resolves to the executable of the operation app's direct
+// dependency named by the alias (validated at load; expanded here, read-only).
+func (e *Executor) replacePlaceholders(ctx context.Context, args []string, file string, files []string, projectPath string, toolName string, opApp string) []string {
 	log.Debug("replacePlaceholders",
 		zap.Strings("inputArgs", args),
 		zap.String("file", file),
@@ -2002,6 +2008,13 @@ func (e *Executor) replacePlaceholders(args []string, file string, files []strin
 			arg = strings.ReplaceAll(arg, "{target}", projectPath)
 		}
 
+		// {bin:<alias>} names a dependency of the operation's app. Unlike the
+		// path placeholders it needs the app registry, so it expands only in
+		// argument position (env values go through the same walk below).
+		if opApp != "" && strings.Contains(arg, "{bin:") {
+			arg = e.expandBindingPlaceholders(ctx, arg, opApp)
+		}
+
 		// {root}, {cwd} and {toolCache} are shared with environment-value expansion.
 		arg = e.expandPathPlaceholders(arg, projectPath, toolName)
 
@@ -2010,6 +2023,33 @@ func (e *Executor) replacePlaceholders(args []string, file string, files []strin
 
 	log.Debug("replacePlaceholders result", zap.Strings("outputArgs", result))
 	return result
+}
+
+// expandBindingPlaceholders replaces every {bin:<alias>} in one value with
+// the dependency's executable. A resolution failure passes the value through
+// unchanged with a warning: load-time validation already rejected unknown
+// aliases, so a failure here means the store moved underneath the config,
+// and the tool's own error about the literal path is more useful than ours.
+func (e *Executor) expandBindingPlaceholders(ctx context.Context, value, opApp string) string {
+	for {
+		start := strings.Index(value, "{bin:")
+		if start < 0 {
+			return value
+		}
+		end := strings.IndexByte(value[start:], '}')
+		if end < 0 {
+			return value
+		}
+		end += start
+		alias := value[start+len("{bin:") : end]
+		path, err := e.appManager.ResolveBindingPath(ctx, opApp, alias)
+		if err != nil {
+			log.Warn("{bin:...} resolution failed; passing through",
+				zap.String("app", opApp), zap.String("alias", alias), zap.Error(err))
+			return value
+		}
+		value = value[:start] + path + value[end+1:]
+	}
 }
 
 // expandPathPlaceholders replaces the path placeholders shared by argument and
@@ -2045,18 +2085,22 @@ func (e *Executor) expandPathPlaceholders(s string, projectPath, toolName string
 	return s
 }
 
-// replaceEnvPlaceholders expands path placeholders ({root}, {cwd}, {toolCache}) in
-// tool-operation environment-variable values, mirroring argument expansion so that
-// e.g. GOLANGCI_LINT_CACHE: "{toolCache}" resolves to an absolute path rather than
-// reaching the tool as the literal "{toolCache}". Returns the input unchanged when
-// there are no env vars.
-func (e *Executor) replaceEnvPlaceholders(envMap map[string]string, projectPath, toolName string) map[string]string {
+// replaceEnvPlaceholders expands path placeholders ({root}, {cwd}, {toolCache})
+// and {bin:<alias>} bindings in tool-operation environment-variable values,
+// mirroring argument expansion so that e.g. GOLANGCI_LINT_CACHE: "{toolCache}"
+// resolves to an absolute path rather than reaching the tool as the literal
+// "{toolCache}". Returns the input unchanged when there are no env vars.
+func (e *Executor) replaceEnvPlaceholders(ctx context.Context, envMap map[string]string, projectPath, toolName, opApp string) map[string]string {
 	if len(envMap) == 0 {
 		return envMap
 	}
 	expanded := make(map[string]string, len(envMap))
 	for key, value := range envMap {
-		expanded[key] = e.expandPathPlaceholders(value, projectPath, toolName)
+		value = e.expandPathPlaceholders(value, projectPath, toolName)
+		if opApp != "" && strings.Contains(value, "{bin:") {
+			value = e.expandBindingPlaceholders(ctx, value, opApp)
+		}
+		expanded[key] = value
 	}
 	return expanded
 }

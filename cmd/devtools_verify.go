@@ -937,7 +937,7 @@ func runPhase3RuntimeApps(ctx context.Context, cfg *config.Config, currentOs, cu
 
 		key, fp := runtimeAppKeyAndFP(entry, cfg.Runtimes, currentOs, currentArch)
 
-		_, err := bm.GetCommandInfo(ctx, entry.name)
+		_, err := bm.GetCommandInfoInstallOnly(ctx, entry.name)
 		r := runtimeAppResult{
 			AppName: entry.name,
 			Kind:    entry.kind,
@@ -1167,7 +1167,7 @@ func runPhase5VersionChecks(ctx context.Context, cfg *config.Config, bm *binmana
 
 		expectedVersion := getAppVersion(entry.app)
 
-		execCmd, err := bm.GetExecCmd(ctx, entry.name, versionArgs)
+		execCmd, err := bm.GetExecCmdInstallOnly(ctx, entry.name, versionArgs)
 		if err != nil || execCmd == nil {
 			r := versionCheckResult{
 				AppName:  entry.name,

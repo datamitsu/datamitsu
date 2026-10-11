@@ -49,7 +49,7 @@ func TestValidateToolsRejectsUnknownGranularityAndArity(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateTools(MapOfTools{
 				"tool": {Operations: map[OperationType]ToolOperation{OpLint: tt.op}},
-			}, nil)
+			}, nil, nil)
 
 			if err == nil {
 				t.Fatalf("ValidateTools accepted %+v, want an error mentioning %q", tt.op, tt.wantErr)
@@ -91,7 +91,7 @@ func TestValidateToolsAcceptsDeclaredGranularityAndArity(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := ValidateTools(MapOfTools{
 				"tool": {Operations: map[OperationType]ToolOperation{OpLint: tt.op}},
-			}, nil); err != nil {
+			}, nil, nil); err != nil {
 				t.Errorf("ValidateTools rejected %+v: %v", tt.op, err)
 			}
 		})
@@ -164,7 +164,7 @@ func TestValidateToolsRejectsAnArityThatContradictsTheArgs(t *testing.T) {
 		"tool": {Operations: map[OperationType]ToolOperation{
 			OpLint: {App: "x", Arity: ArityOne, Scope: ToolScopePerProject, Args: []string{"{files}"}},
 		}},
-	}, nil)
+	}, nil, nil)
 
 	if err == nil {
 		t.Fatal("ValidateTools accepted arity \"one\" for args carrying {files}")

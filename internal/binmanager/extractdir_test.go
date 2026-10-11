@@ -120,8 +120,10 @@ func TestExtractDirBinaryAppRunsBinaryPath(t *testing.T) {
 				t.Errorf("ResolveCommandInfo() = (%q, installed=%v), want (%q, true)", info.Command, installed, command)
 			}
 
-			// A dependent finds the command, not the directory, on its PATH.
-			userInfo, err := bm.getCommandInfo(ctx, "user")
+			// A dependent finds the command, not the directory, on its
+			// PATH. The public path installs the closure and materializes
+			// the dependency directory once the installs finished.
+			userInfo, err := bm.GetCommandInfo(ctx, "user")
 			if err != nil {
 				t.Fatal(err)
 			}

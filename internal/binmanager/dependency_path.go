@@ -20,16 +20,20 @@ type dependencyLink struct {
 	target string
 }
 
-// dependencyLinks lists the binary apps in appName's dependsOn closure as PATH entries.
+// dependencyLinks lists the single-executable apps in appName's dependsOn
+// closure as PATH entries.
 //
 // The store names a binary by its config hash, so without this directory a tool that looks a
 // helper up by name (a linter running `shellcheck`) cannot find it at all.
 //
 // The whole closure, not only direct dependencies: a dependency invoked by name through this
 // directory runs straight from the store, not through datamitsu, so it never gets a PATH
-// directory of its own and would miss its own helpers. Only native binary apps qualify, the same
-// targets `${APP_BIN:…}` accepts: a runtime-managed app is a command plus arguments, which a PATH
-// entry cannot carry, and a shell app already resolves through the inherited PATH.
+// directory of its own and would miss its own helpers. Native binary apps qualify, the same
+// targets `${APP_BIN:…}` accepts, and so do uv and go apps: both have one
+// executable entry point (a venv script with an absolute shebang, a built
+// binary), which a PATH entry can carry. Node, bun and jvm apps need a
+// launcher that does not exist yet, and a shell app already resolves through
+// the inherited PATH.
 func (bm *BinManager) dependencyLinks(appName string, resolve func(string) (string, error)) ([]dependencyLink, error) {
 	closure, err := AppDependencyClosure(bm.mapOfApps, []string{appName})
 	if err != nil {
@@ -37,7 +41,11 @@ func (bm *BinManager) dependencyLinks(appName string, resolve func(string) (stri
 	}
 	var links []dependencyLink
 	for _, dep := range slices.Sorted(slices.Values(closure)) {
-		if dep == appName || bm.mapOfApps[dep].Binary == nil {
+		if dep == appName {
+			continue
+		}
+		app := bm.mapOfApps[dep]
+		if app.Binary == nil && app.Uv == nil && app.Go == nil {
 			continue
 		}
 		path, err := resolve(dep)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -299,4 +300,38 @@ func nodeRequiredPaths(appEnvPath, packageName, nodeBinPath string, rc config.Ru
 		paths = append(paths, nodeBinPath)
 	}
 	return paths
+}
+
+// preparePathPrefixNode is nodeCommandInfo's PATH prefix with the relative
+// components absolutized instead of dropped: a prepare step runs from a
+// staging workdir with the app installed, so the components are valid for
+// that run even under a relative DATAMITSU_CACHE_DIR. Mirrors the component
+// order of nodeCommandInfo (dependency bin before the runtime bin dir; a
+// bare-word system interpreter contributes nothing).
+func (rm *RuntimeManager) preparePathPrefixNode(appName string, appConfig *binmanager.AppConfigNode, files map[string]string, archives map[string]*binmanager.ArchiveSpec) string {
+	appEnvPath, runtimeName, _, err := rm.resolveNodeAppEnvPathWith(appName, appConfig, files, archives)
+	if err != nil {
+		return ""
+	}
+	nodeBinPath, err := rm.resolveNodeBinPath(runtimeName)
+	if err != nil {
+		return ""
+	}
+	parts := make([]string, 0, 2)
+	addDir := func(dir string) {
+		if dir == "" || dir == "." {
+			return
+		}
+		if !filepath.IsAbs(dir) {
+			if abs, aerr := filepath.Abs(dir); aerr == nil {
+				dir = abs
+			} else {
+				return
+			}
+		}
+		parts = append(parts, dir)
+	}
+	addDir(filepath.Join(appEnvPath, "node_modules", ".bin"))
+	addDir(filepath.Dir(nodeBinPath))
+	return strings.Join(parts, string(os.PathListSeparator))
 }

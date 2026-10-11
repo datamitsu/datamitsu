@@ -86,6 +86,10 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.4.1** - Tool operations accept `{bin:<alias>}` placeholders: the
+  exact executable of the operation app's direct dependency, bound under the
+  edge's alias (binary, uv and go targets). Validated at load time against the
+  app's `dependsOn` edges.
 - **after v0.4.1** - Apps declare a one-time preparation step:
   `apps.<name>.prepare` runs once after the app and its whole `dependsOn`
   closure are installed and fills a keyed, project-independent state exposed

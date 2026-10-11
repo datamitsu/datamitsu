@@ -202,8 +202,15 @@ func TestResolveDependencyRuntimeHealth(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if installed != present || !slices.Equal(info.RequiredPaths, want) {
-			t.Fatalf("installed=%v, health=%v", installed, info.RequiredPaths)
+		// The uv dependency links into the dependency PATH directory, so the
+		// runtime stubs alone no longer decide readiness: the link directory
+		// is a health path of the closure and gates `installed` exactly like a
+		// binary dependency's link does (see TestDependencyPathResolutionNeverWrites).
+		if installed {
+			t.Fatalf("present=%v: installed=true, want false until the dependency PATH directory exists", present)
+		}
+		if !slices.Contains(info.RequiredPaths, filepath.Join(dir, "middle")) {
+			t.Fatalf("health paths %v lack the closure runtime health", info.RequiredPaths)
 		}
 	}
 }

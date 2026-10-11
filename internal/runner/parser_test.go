@@ -206,6 +206,10 @@ func (a shellApps) GetCommandInfo(_ context.Context, app string) (*binmanager.Co
 	return a[app], nil
 }
 
+func (shellApps) ResolveBindingPath(context.Context, string, string) (string, error) {
+	return "", os.ErrNotExist
+}
+
 // TestParseFailureThroughTheExecutor follows a parse that fails in a loaded
 // module through the whole path: the process is parse-failed, the task reports
 // ParseFailed, no pass is cached, and the run warns once for the tool however

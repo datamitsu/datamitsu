@@ -42,7 +42,9 @@ func (m *mockRuntimeAppManager) ResolveCommandInfo(appName string, app App) (*Co
 	if m.resolveCommandInfoFunc != nil {
 		return m.resolveCommandInfoFunc(appName, app)
 	}
-	return nil, errors.New("mock: ResolveCommandInfo not implemented")
+	// Default: a read-only answer that records nothing — PATH assembly only
+	// needs a path, and tests count GetCommandInfo calls.
+	return &CommandInfo{Command: filepath.Join(os.TempDir(), "mock-"+appName)}, nil
 }
 
 func (m *mockRuntimeAppManager) ComputeAppPath(appName string, app App) (string, error) {

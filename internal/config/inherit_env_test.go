@@ -7,7 +7,7 @@ import (
 
 func validateOp(op ToolOperation) error {
 	op.App, op.Scope = "x", ToolScopeRepository
-	return ValidateTools(MapOfTools{"tool": {Operations: map[OperationType]ToolOperation{OpLint: op}}}, nil)
+	return ValidateTools(MapOfTools{"tool": {Operations: map[OperationType]ToolOperation{OpLint: op}}}, nil, nil)
 }
 
 func TestValidateToolsInheritEnv(t *testing.T) {

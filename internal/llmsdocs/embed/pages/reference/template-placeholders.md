@@ -14,11 +14,18 @@ Tool operation **arguments** (`args`) and **environment-variable values** (`env`
 | `{cwd}`       | Per-project working directory         |   ✅   |  ✅   | `"{cwd}/src"`               |
 | `{toolCache}` | Per-project, per-tool cache directory |   ✅   |  ✅   | `"{toolCache}/tsbuildinfo"` |
 | `{target}`    | The single directory a scanner scans  |   ✅   |  ❌   | `"{target}"`                |
+| `{bin:<alias>}` | Executable of the operation app's dependency | ✅ | ✅ | `"{bin:validator} check {files}"` |
 
 `{file}`, `{files}` and `{target}` are argument concepts and are **not**
 available in `env` values (an environment variable holds a single string, not an
 argument list). The path placeholders `{root}`, `{cwd}` and `{toolCache}` work in
 both `args` and `env`.
+
+`{bin:<alias>}` names a direct `dependsOn` edge of the operation's app
+(by alias — `{ app: "jsonschema", as: "validator" }` binds as
+`{bin:validator}`) and resolves to the dependency's exact executable:
+binary, uv and go targets today. It is validated at load time against the
+app's edges, and expansion is read-only: no install, no prepare step.
 
 :::warning Unknown placeholders are a hard error
 datamitsu validates every `{placeholder}` in tool `args` and `env` at config-load
