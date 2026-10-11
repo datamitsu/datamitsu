@@ -24,6 +24,10 @@ func (shellApps) GetCommandInfo(context.Context, string) (*binmanager.CommandInf
 	return &binmanager.CommandInfo{Type: "shell", Command: "sh"}, nil
 }
 
+func (shellApps) ResolveBindingPath(_ context.Context, _ string, alias string) (string, error) {
+	return "sh", nil
+}
+
 // recordingPlan has one group per name; each group's task appends its name to
 // ran.log in root, so the log is the order groups actually ran in.
 func recordingPlan(root string, names ...string) *tooling.ExecutionPlan {

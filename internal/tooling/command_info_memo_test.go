@@ -39,6 +39,10 @@ func (m *countingAppManager) GetCommandInfo(_ context.Context, appName string) (
 	return nil, fmt.Errorf("app not found: %s", appName)
 }
 
+func (m *countingAppManager) ResolveBindingPath(ctx context.Context, appName, alias string) (string, error) {
+	return m.GetBinaryPath(ctx, alias)
+}
+
 func (m *countingAppManager) callsFor(app string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

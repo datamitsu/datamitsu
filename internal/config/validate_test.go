@@ -2731,7 +2731,7 @@ func TestValidateTools(t *testing.T) {
 				},
 			},
 		}
-		if err := ValidateTools(tools, nil); err != nil {
+		if err := ValidateTools(tools, nil, nil); err != nil {
 			t.Errorf("ValidateTools() = %v, want nil", err)
 		}
 	})
@@ -2742,7 +2742,7 @@ func TestValidateTools(t *testing.T) {
 				OpLint: {Args: []string{"--cache={toolcache}"}}, // wrong case
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -2757,7 +2757,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Env: map[string]string{"CACHE": "{cache}"}},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "{cache}") {
 			t.Errorf("expected error naming {cache}, got: %v", err)
 		}
@@ -2769,7 +2769,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Env: map[string]string{"F": "{file}"}},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "{file}") {
 			t.Errorf("expected {file} rejected in env, got: %v", err)
 		}
@@ -2784,7 +2784,7 @@ func TestValidateTools(t *testing.T) {
 				},
 			}},
 		}
-		if err := ValidateTools(tools, nil); err != nil {
+		if err := ValidateTools(tools, nil, nil); err != nil {
 			t.Errorf("globs/templates should not be flagged, got: %v", err)
 		}
 	})
@@ -2798,7 +2798,7 @@ func TestValidateTools(t *testing.T) {
 				OpLint: {Input: ToolInputFile, Output: ToolOutputInplace},
 			}},
 		}
-		if err := ValidateTools(tools, nil); err != nil {
+		if err := ValidateTools(tools, nil, nil); err != nil {
 			t.Errorf("valid input/output modes should pass, got: %v", err)
 		}
 	})
@@ -2810,7 +2810,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Input: ToolInputStdin, Output: ToolOutputStdout},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "require scope") {
 			t.Errorf("expected scope requirement error, got: %v", err)
 		}
@@ -2822,7 +2822,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Output: ToolOutputStdout, Scope: ToolScopeRepository},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "require scope") {
 			t.Errorf("expected scope requirement error, got: %v", err)
 		}
@@ -2836,7 +2836,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Output: ToolOutputStdout, Scope: ToolScopePerFile, Args: []string{"{files}"}},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), `infer arity "many"`) {
 			t.Errorf("expected arity incompatibility error, got: %v", err)
 		}
@@ -2849,7 +2849,7 @@ func TestValidateTools(t *testing.T) {
 				OpLint: {Output: ToolOutputStdout, Scope: ToolScopePerFile},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "only valid on the \"fix\" operation") {
 			t.Errorf("expected fix-only error for stdout on lint, got: %v", err)
 		}
@@ -2861,7 +2861,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Input: ToolInputMode("pipe")},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "invalid input mode") {
 			t.Errorf("expected invalid input mode error, got: %v", err)
 		}
@@ -2873,7 +2873,7 @@ func TestValidateTools(t *testing.T) {
 				OpLint: {Output: ToolOutputMode("file")},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "invalid output mode") {
 			t.Errorf("expected invalid output mode error, got: %v", err)
 		}
@@ -2892,7 +2892,7 @@ func TestValidateTools(t *testing.T) {
 		parsers := MapOfParsers{
 			"hadolint": {URL: "https://example.com/h.wasm", Hash: strings.Repeat("a", 64)},
 		}
-		if err := ValidateTools(tools, parsers); err != nil {
+		if err := ValidateTools(tools, parsers, nil); err != nil {
 			t.Errorf("ValidateTools() = %v, want nil", err)
 		}
 	})
@@ -2907,7 +2907,7 @@ func TestValidateTools(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -2922,7 +2922,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Args: []string{"{file}"}},
 			}},
 		}
-		if err := ValidateTools(tools, nil); err != nil {
+		if err := ValidateTools(tools, nil, nil); err != nil {
 			t.Errorf("ValidateTools() = %v, want nil", err)
 		}
 	})

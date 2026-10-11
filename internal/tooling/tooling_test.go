@@ -38,6 +38,10 @@ func (m *mockAppManager) GetBinaryPath(_ context.Context, appName string) (strin
 	return "", fmt.Errorf("binary not found: %s", appName)
 }
 
+func (m *mockAppManager) ResolveBindingPath(ctx context.Context, _ string, alias string) (string, error) {
+	return m.GetBinaryPath(ctx, alias)
+}
+
 func (m *mockAppManager) GetCommandInfo(_ context.Context, appName string) (*binmanager.CommandInfo, error) {
 	if m.err != nil {
 		return nil, m.err
@@ -219,7 +223,7 @@ func TestReplacePlaceholders(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := executor.replacePlaceholders(tt.args, tt.file, tt.files, tt.projectPath, tt.toolName)
+			result := executor.replacePlaceholders(context.Background(), tt.args, tt.file, tt.files, tt.projectPath, tt.toolName, "")
 
 			if len(result) != len(tt.expected) {
 				t.Errorf("len(result) = %d, want %d", len(result), len(tt.expected))
@@ -248,33 +252,30 @@ func TestReplaceEnvPlaceholders(t *testing.T) {
 	}
 
 	t.Run("nil env returned unchanged", func(t *testing.T) {
-		if got := executor.replaceEnvPlaceholders(nil, "", "golangci-lint"); got != nil {
+		if got := executor.replaceEnvPlaceholders(context.Background(), nil, "", "golangci-lint", ""); got != nil {
 			t.Errorf("replaceEnvPlaceholders(nil) = %v, want nil", got)
 		}
 	})
 
 	t.Run("toolCache resolves to the absolute per-project cache path", func(t *testing.T) {
-		got := executor.replaceEnvPlaceholders(
-			map[string]string{"GOLANGCI_LINT_CACHE": "{toolCache}"}, "", "golangci-lint",
-		)
+		got := executor.replaceEnvPlaceholders(context.Background(),
+			map[string]string{"GOLANGCI_LINT_CACHE": "{toolCache}"}, "", "golangci-lint", "")
 		if got["GOLANGCI_LINT_CACHE"] != rootCachePath {
 			t.Errorf("GOLANGCI_LINT_CACHE = %q, want %q", got["GOLANGCI_LINT_CACHE"], rootCachePath)
 		}
 	})
 
 	t.Run("toolCache uses per-project isolation", func(t *testing.T) {
-		got := executor.replaceEnvPlaceholders(
-			map[string]string{"GOLANGCI_LINT_CACHE": "{toolCache}"}, "/root/services/api", "golangci-lint",
-		)
+		got := executor.replaceEnvPlaceholders(context.Background(),
+			map[string]string{"GOLANGCI_LINT_CACHE": "{toolCache}"}, "/root/services/api", "golangci-lint", "")
 		if got["GOLANGCI_LINT_CACHE"] != projectCachePath {
 			t.Errorf("GOLANGCI_LINT_CACHE = %q, want %q", got["GOLANGCI_LINT_CACHE"], projectCachePath)
 		}
 	})
 
 	t.Run("root and cwd expand in values", func(t *testing.T) {
-		got := executor.replaceEnvPlaceholders(
-			map[string]string{"ROOT": "{root}", "CWD": "{cwd}/x"}, "/root/services/api", "",
-		)
+		got := executor.replaceEnvPlaceholders(context.Background(),
+			map[string]string{"ROOT": "{root}", "CWD": "{cwd}/x"}, "/root/services/api", "", "")
 		if got["ROOT"] != "/root" {
 			t.Errorf("ROOT = %q, want %q", got["ROOT"], "/root")
 		}
@@ -284,7 +285,7 @@ func TestReplaceEnvPlaceholders(t *testing.T) {
 	})
 
 	t.Run("values without placeholders are unchanged", func(t *testing.T) {
-		got := executor.replaceEnvPlaceholders(map[string]string{"FOO": "bar"}, "", "golangci-lint")
+		got := executor.replaceEnvPlaceholders(context.Background(), map[string]string{"FOO": "bar"}, "", "golangci-lint", "")
 		if got["FOO"] != "bar" {
 			t.Errorf("FOO = %q, want %q", got["FOO"], "bar")
 		}
@@ -300,7 +301,7 @@ func TestPlaceholderSetsMatchExecutor(t *testing.T) {
 
 	for _, name := range config.ToolArgPlaceholders {
 		token := "{" + name + "}"
-		got := executor.replacePlaceholders([]string{token}, "f.go", []string{"f.go"}, "/root/p", "tool")
+		got := executor.replacePlaceholders(context.Background(), []string{token}, "f.go", []string{"f.go"}, "/root/p", "tool", "")
 		for _, g := range got {
 			if strings.Contains(g, token) {
 				t.Errorf("arg placeholder %s is validator-allowed but not substituted by the executor", token)
@@ -310,7 +311,7 @@ func TestPlaceholderSetsMatchExecutor(t *testing.T) {
 
 	for _, name := range config.ToolEnvPlaceholders {
 		token := "{" + name + "}"
-		got := executor.replaceEnvPlaceholders(map[string]string{"V": token}, "/root/p", "tool")
+		got := executor.replaceEnvPlaceholders(context.Background(), map[string]string{"V": token}, "/root/p", "tool", "")
 		if strings.Contains(got["V"], token) {
 			t.Errorf("env placeholder %s is validator-allowed but not substituted by the executor", token)
 		}
@@ -326,7 +327,7 @@ func TestReplacePlaceholders_ToolCacheComputedPerCall(t *testing.T) {
 			t.Fatalf("failed to compute project cache path: %v", err)
 		}
 
-		result := executor.replacePlaceholders([]string{"{toolCache}/foo"}, "", nil, "", "tsc")
+		result := executor.replacePlaceholders(context.Background(), []string{"{toolCache}/foo"}, "", nil, "", "tsc", "")
 		if len(result) != 1 {
 			t.Fatalf("len(result) = %d, want 1", len(result))
 		}
@@ -337,8 +338,8 @@ func TestReplacePlaceholders_ToolCacheComputedPerCall(t *testing.T) {
 	})
 
 	t.Run("different tools get different cache paths", func(t *testing.T) {
-		result1 := executor.replacePlaceholders([]string{"{toolCache}"}, "", nil, "", "tsc")
-		result2 := executor.replacePlaceholders([]string{"{toolCache}"}, "", nil, "", "eslint")
+		result1 := executor.replacePlaceholders(context.Background(), []string{"{toolCache}"}, "", nil, "", "tsc", "")
+		result2 := executor.replacePlaceholders(context.Background(), []string{"{toolCache}"}, "", nil, "", "eslint", "")
 
 		if len(result1) != 1 || len(result2) != 1 {
 			t.Fatalf("unexpected result lengths: %d, %d", len(result1), len(result2))
@@ -349,8 +350,8 @@ func TestReplacePlaceholders_ToolCacheComputedPerCall(t *testing.T) {
 	})
 
 	t.Run("different projects get different cache paths", func(t *testing.T) {
-		result1 := executor.replacePlaceholders([]string{"{toolCache}"}, "", nil, "/root/packages/frontend", "tsc")
-		result2 := executor.replacePlaceholders([]string{"{toolCache}"}, "", nil, "/root/packages/backend", "tsc")
+		result1 := executor.replacePlaceholders(context.Background(), []string{"{toolCache}"}, "", nil, "/root/packages/frontend", "tsc", "")
+		result2 := executor.replacePlaceholders(context.Background(), []string{"{toolCache}"}, "", nil, "/root/packages/backend", "tsc", "")
 
 		if len(result1) != 1 || len(result2) != 1 {
 			t.Fatalf("unexpected result lengths: %d, %d", len(result1), len(result2))
@@ -366,7 +367,7 @@ func TestReplacePlaceholders_ToolCacheComputedPerCall(t *testing.T) {
 			t.Fatalf("failed to compute project cache path: %v", err)
 		}
 
-		result := executor.replacePlaceholders([]string{"{toolCache}"}, "", nil, "/root/packages/frontend", "tsc")
+		result := executor.replacePlaceholders(context.Background(), []string{"{toolCache}"}, "", nil, "/root/packages/frontend", "tsc", "")
 		if len(result) != 1 {
 			t.Fatalf("len(result) = %d, want 1", len(result))
 		}
@@ -386,7 +387,7 @@ func TestReplacePlaceholders_ToolCacheComputedPerCall(t *testing.T) {
 			t.Fatalf("failed to compute project cache path: %v", err)
 		}
 
-		result := executor.replacePlaceholders([]string{"{toolCache}"}, "", nil, "", "golangci-lint")
+		result := executor.replacePlaceholders(context.Background(), []string{"{toolCache}"}, "", nil, "", "golangci-lint", "")
 		if len(result) != 1 {
 			t.Fatalf("len(result) = %d, want 1", len(result))
 		}
@@ -401,8 +402,8 @@ func TestReplacePlaceholders_ToolCacheComputedPerCall(t *testing.T) {
 	})
 
 	t.Run("projectPath equal to rootPath treated as root-level", func(t *testing.T) {
-		rootResult := executor.replacePlaceholders([]string{"{toolCache}"}, "", nil, "", "tsc")
-		sameResult := executor.replacePlaceholders([]string{"{toolCache}"}, "", nil, "/root", "tsc")
+		rootResult := executor.replacePlaceholders(context.Background(), []string{"{toolCache}"}, "", nil, "", "tsc", "")
+		sameResult := executor.replacePlaceholders(context.Background(), []string{"{toolCache}"}, "", nil, "/root", "tsc", "")
 
 		if len(rootResult) != 1 || len(sameResult) != 1 {
 			t.Fatalf("unexpected result lengths: %d, %d", len(rootResult), len(sameResult))
@@ -413,7 +414,7 @@ func TestReplacePlaceholders_ToolCacheComputedPerCall(t *testing.T) {
 	})
 
 	t.Run("empty toolName still produces valid cache path", func(t *testing.T) {
-		result := executor.replacePlaceholders([]string{"{toolCache}/output"}, "", nil, "", "")
+		result := executor.replacePlaceholders(context.Background(), []string{"{toolCache}/output"}, "", nil, "", "", "")
 		if len(result) != 1 {
 			t.Fatalf("len(result) = %d, want 1", len(result))
 		}

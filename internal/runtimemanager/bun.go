@@ -270,3 +270,38 @@ func (rm *RuntimeManager) bunCommandInfo(appName string, appConfig *binmanager.A
 		RequiredPaths: requiredPaths,
 	}, pathPrefix, nil
 }
+
+// preparePathPrefixBun is bunCommandInfo's PATH prefix with the relative
+// components absolutized instead of dropped: a prepare step runs from a
+// staging workdir with the app installed, so the components are valid for
+// that run even under a relative DATAMITSU_CACHE_DIR. Mirrors the component
+// order of bunCommandInfo (alias dir, dependency bin, runtime bin).
+func (rm *RuntimeManager) preparePathPrefixBun(appName string, appConfig *binmanager.AppConfigBun, files map[string]string, archives map[string]*binmanager.ArchiveSpec) string {
+	appEnvPath, runtimeName, _, err := rm.resolveBunAppEnvPathWith(appName, appConfig, files, archives)
+	if err != nil {
+		return ""
+	}
+	bunBinPath, err := rm.ResolveRuntimePath(runtimeName)
+	if err != nil {
+		return ""
+	}
+	parts := make([]string, 0, 3)
+	for _, dir := range []string{
+		filepath.Dir(bunNodeAliasPath(appEnvPath)),
+		filepath.Join(appEnvPath, "node_modules", ".bin"),
+		filepath.Dir(bunBinPath),
+	} {
+		if dir == "" || dir == "." {
+			continue
+		}
+		if !filepath.IsAbs(dir) {
+			if abs, aerr := filepath.Abs(dir); aerr == nil {
+				dir = abs
+			} else {
+				continue
+			}
+		}
+		parts = append(parts, dir)
+	}
+	return strings.Join(parts, string(os.PathListSeparator))
+}

@@ -51,6 +51,24 @@ export default defineConfig((config) => ({
     "gosum",
     "needsdep",
     "gosource",
+    // The prepare step's vocabulary: the init set over-approximates, and a
+    // killed process tree leaves neither its unzippers nor downloaders.
+    "overapproximation",
+    "unzippers",
+    "downloaders",
+    "rerr",
+    "absolutizing",
+    "JOBOBJECT",
+    "argdir",
+    "argmade",
+    "cerr",
+    "merr",
+    "ntdll",
+    "Prefixer",
+    "absolutized",
+    "serr",
+    "aerr",
+    "backslashed",
     "releaseprovider",
     "APIURL",
     ...config.words,
@@ -635,6 +653,13 @@ export default defineConfig((config) => ({
     // The pinned schema-delivery app the prepare fixtures and golden files
     // name, and the short app names the prepare validation tests use.
     "schepherd",
+    // The prepare-engine fixtures and docs: the store lock package name,
+    // the fake step binary names, and the markerless repair term.
+    "storelock",
+    "stepmain",
+    "stepapp",
+    "markerless",
+    "Markerless",
     "SCHEPHERD",
     "shellprep",
     "nopin",

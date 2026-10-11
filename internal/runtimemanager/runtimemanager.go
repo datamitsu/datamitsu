@@ -375,6 +375,26 @@ func (rm *RuntimeManager) ResolveCommandInfo(appName string, app binmanager.App)
 	}
 }
 
+// ResolvePreparePathPrefix returns the runtime-owned PATH prefix for a
+// prepare step: the same components the resolve path records, but
+// absolutized instead of dropped. The resolve path's contract drops
+// relative directories because its answer is persisted into the source-mode
+// farm manifest and replayed from other working directories — a relative
+// entry would be worse than none there. A prepare step runs once, from a
+// staging workdir, with the app fully installed: the components are valid
+// for this run and must reach the step even under a relative
+// DATAMITSU_CACHE_DIR. Non-runtime apps (shell, binary) answer empty.
+func (rm *RuntimeManager) ResolvePreparePathPrefix(appName string, app binmanager.App) string {
+	switch {
+	case app.Bun != nil:
+		return rm.preparePathPrefixBun(appName, app.Bun, app.Files, app.Archives)
+	case app.Node != nil:
+		return rm.preparePathPrefixNode(appName, app.Node, app.Files, app.Archives)
+	default:
+		return ""
+	}
+}
+
 // RuntimeInstallResult reports the outcome of installing a single runtime.
 type RuntimeInstallResult struct {
 	Name  string

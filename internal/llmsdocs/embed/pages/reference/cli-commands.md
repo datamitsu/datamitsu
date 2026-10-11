@@ -73,7 +73,7 @@ datamitsu exec eslint --fix src/
 
 ## install
 
-Install one or more managed apps (and optionally runtimes) into the store **without executing them**. Where `exec` prepares and runs an app, `install` materializes its files and exits — the building block for the per-app stages of a generated Dockerfile (see [devtools dockerfile](#devtools-dockerfile)).
+Install one or more managed apps (and optionally runtimes) into the store and leave them **ready**. Where `exec` installs, prepares and then runs an app, `install` materializes its files, runs its declared `prepare` step (see [prepare](./configuration-api.md#one-time-preparation-step-prepare)) and exits — the building block for the per-app stages of a generated Dockerfile (see [devtools dockerfile](#devtools-dockerfile)).
 
 ```bash
 datamitsu install [app...]
@@ -84,7 +84,7 @@ datamitsu install [app...]
 | `--runtime <name>` | Install the named runtime(s) only, without any app (repeatable)    |
 | `--no-verify`      | Skip the post-install version check (verification runs by default) |
 
-By default, each installed app's version command (`--version`, or its configured `versionCheck.args`) is run after installation, so a broken install fails the command instead of producing a broken artifact. Apps whose version check is disabled, and shell apps, are skipped. Pass `--no-verify` to skip the check.
+The prepare step always runs before the version check; `--no-verify` skips only the check. By default, each installed app's version command (`--version`, or its configured `versionCheck.args`) is run after installation, so a broken install fails the command instead of producing a broken artifact. Apps whose version check is disabled, and shell apps, are skipped.
 
 **Examples:**
 

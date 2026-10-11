@@ -123,7 +123,7 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "Reinstalling %s...\n", appName)
-		if _, err := freshBinMgr.GetCommandInfo(ctx, appName); err != nil {
+		if _, err := freshBinMgr.GetCommandInfoInstallOnly(ctx, appName); err != nil {
 			return fmt.Errorf("failed to reinstall %q: %w", appName, err)
 		}
 		lockContent, err = readLockFile(freshInstallPath, app)

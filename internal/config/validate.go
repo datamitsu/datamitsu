@@ -3,10 +3,12 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -828,11 +830,66 @@ func findUnknownColonPlaceholders(value string) []string {
 			continue
 		}
 		name, _ := placeholderColonForm(value[start:end])
-		if name != "managedConfig" {
+		if name != "managedConfig" && name != "bin" {
 			unknown = append(unknown, value[start:end])
 		}
 	}
 	return unknown
+}
+
+// validateOpBinPlaceholders checks every {bin:<alias>} in a tool operation's
+// args and env values: the alias must name a direct dependsOn edge of the
+// operation's app (bound under that alias), and the target must be a
+// binary, uv or go app — the kinds whose executable a PATH entry or a
+// binding can carry.
+func validateOpBinPlaceholders(toolName string, opType string, op ToolOperation, apps binmanager.MapOfApps) []string {
+	if op.App == "" {
+		return nil
+	}
+	app, ok := apps[op.App]
+	if !ok {
+		return nil // a missing operation app is another validator's error
+	}
+	// The alias map: every direct edge, by alias.
+	aliases := make(map[string]binmanager.AppDependency, len(app.DependsOn))
+	for _, edge := range app.DependsOn {
+		aliases[edge.Alias] = edge
+	}
+	var errs []string
+	check := func(value string) {
+		for _, loc := range toolPlaceholderColonPattern.FindAllStringIndex(value, -1) {
+			start, end := loc[0], loc[1]
+			if start > 0 && value[start-1] == '{' {
+				continue
+			}
+			if end < len(value) && value[end] == '}' {
+				continue
+			}
+			name, alias := placeholderColonForm(value[start:end])
+			if name != "bin" {
+				continue
+			}
+			edge, ok := aliases[alias]
+			if !ok {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: {bin:%s}: app %q has no dependency with alias %q",
+					toolName, opType, alias, op.App, alias))
+				continue
+			}
+			if target := apps[edge.App]; target.Binary == nil && target.Uv == nil && target.Go == nil {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: {bin:%s}: target %q needs a launcher (not supported yet)",
+					toolName, opType, alias, edge.App))
+			}
+		}
+	}
+	for _, arg := range op.Args {
+		check(arg)
+	}
+	for _, key := range slices.Sorted(maps.Keys(op.Env)) {
+		check(op.Env[key])
+	}
+	return errs
 }
 
 func placeholderSet(names []string) map[string]bool {
@@ -860,7 +917,7 @@ func placeholderList(names []string) string {
 // must name an existing entry in parsers — a dangling reference is a load-time
 // config error (there is no existing app-ref check to mirror; this follows the
 // runtime-ref validation style).
-func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
+func ValidateTools(tools MapOfTools, parsers MapOfParsers, apps binmanager.MapOfApps) error {
 	argAllowed := placeholderSet(ToolArgPlaceholders)
 	envAllowed := placeholderSet(ToolEnvPlaceholders)
 
@@ -1045,6 +1102,12 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 					))
 				}
 			}
+
+			// {bin:<alias>} names a direct dependency of the operation's app,
+			// bound under that alias. Both the args and env walks above let
+			// the token through (it is a known colon form), so membership is
+			// checked here, once, against the app's edges.
+			errs = append(errs, validateOpBinPlaceholders(toolName, opType, op, apps)...)
 			errs = append(errs, noColorEnvErrors(toolName, opType, op.Env)...)
 			errs = append(errs, inheritEnvErrors(toolName, opType, op.InheritEnv)...)
 			errs = append(errs, failOnErrors(toolName, opType, op.FailOn)...)

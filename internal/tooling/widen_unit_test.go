@@ -147,7 +147,7 @@ func TestRepositoryScopeNeverSeesUnitGranularity(t *testing.T) {
 				Scope: config.ToolScopeRepository, Granularity: config.GranularityUnit,
 			},
 		}},
-	}, nil)
+	}, nil, nil)
 
 	if err == nil {
 		t.Fatal("repository scope with granularity \"unit\" now loads; the planner's " +

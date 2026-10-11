@@ -92,6 +92,10 @@ configuration should do about it.
   may be empty for a stdlib-only module. `config lockfile` generates the lock
   from the staged source (`go mod tidy`), never from a remote package of the
   same name.
+- **after v0.4.1** - Tool operations accept `{bin:<alias>}` placeholders: the
+  exact executable of the operation app's direct dependency, bound under the
+  edge's alias (binary, uv and go targets). Validated at load time against the
+  app's `dependsOn` edges.
 - **after v0.4.1** - Apps declare a one-time preparation step:
   `apps.<name>.prepare` runs once after the app and its whole `dependsOn`
   closure are installed and fills a keyed, project-independent state exposed

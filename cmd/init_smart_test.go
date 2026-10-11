@@ -302,6 +302,10 @@ type mockCommandInfoGetter struct {
 	err   error
 }
 
+func (m *mockCommandInfoGetter) GetCommandInfoInstallOnly(ctx context.Context, appName string) (*binmanager.CommandInfo, error) {
+	return m.GetCommandInfo(ctx, appName)
+}
+
 func (m *mockCommandInfoGetter) GetCommandInfo(_ context.Context, appName string) (*binmanager.CommandInfo, error) {
 	m.calls = append(m.calls, appName)
 	if m.err != nil {
