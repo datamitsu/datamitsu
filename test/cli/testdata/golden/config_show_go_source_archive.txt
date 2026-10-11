@@ -1,0 +1,28 @@
+{
+  "apps": {
+    "my-gen": {
+      "officialUrl": "https://pkg.go.<VERSION>/example.com/mygen/cmd/mygen",
+      "officialUrlDerived": true,
+      "go": {
+        "packageName": "example.com/mygen/cmd/mygen",
+        "version": "v0.1.0",
+        "lockFile": "br:222222222222222222222222222222222222222222222222"
+      },
+      "archives": {
+        "main": {
+          "inline": "tar.br:G/8H6Acib5eV9JF25olVlCTzxvE13kIrbIt/y0qL80AT7bynDElONOtPj8jW7oNBWZlIyKjGxK9jN+ciBHVLsERBCScEOcJ+G91+74cuZ7XF+wUC"
+        }
+      }
+    }
+  },
+  "runtimes": {
+    "go": {
+      "kind": "go",
+      "mode": "system",
+      "system": {
+        "command": "/usr/local/go/bin/go",
+        "systemVersion": "1.22.0"
+      }
+    }
+  }
+}

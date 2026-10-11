@@ -1225,8 +1225,9 @@ declare global {
       /**
        * Named archives to extract into the app's install directory. Archive names can be referenced
        * in Links to create symlinks. Archives are extracted before Files are written, allowing
-       * Files to override. Only valid for Bun, UV, and Node apps; using this field on a binary,
-       * JVM, Go, or shell app is a configuration error.
+       * Files to override. Valid for Bun, UV, Node, and Go apps (a Go app's archives carry its
+       * module source — the source-blob form); using this field on a binary, JVM, or shell app is a
+       * configuration error.
        */
       archives?: Record<string, ArchiveSpec>;
       binary?: AppConfigBinary;
@@ -1268,8 +1269,9 @@ declare global {
       env?: Record<string, string>;
       /**
        * Static file contents to write into the app's install directory before the package manager
-       * runs. Keys are filenames; values are file contents. Only valid for Bun, UV, and Node apps;
-       * using this field on a binary, JVM, Go, or shell app is a configuration error.
+       * runs. Keys are filenames; values are file contents. Valid for Bun, UV, Node, and Go apps
+       * (for a Go app these stage the module source — the source-blob form); using this field on a
+       * binary, JVM, or shell app is a configuration error.
        *
        * Special handling for `pnpm-workspace.yaml` on Bun and Node apps: the entry is NOT written
        * verbatim. Instead, the installer parses it and shallow-merges it on top of the recommended
@@ -1297,7 +1299,7 @@ declare global {
       lazy?: boolean;
       /**
        * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install
-       * directory. Only valid for Bun, UV, and Node apps; using this field on a binary, JVM, Go, or
+       * directory. Valid for Bun, UV, Node, and Go apps; using this field on a binary, JVM, or
        * shell app is a configuration error.
        */
       links?: Record<string, string>;

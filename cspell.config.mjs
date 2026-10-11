@@ -46,6 +46,11 @@ export default defineConfig((config) => ({
   ],
   words: [
     "releaseasset",
+    // The Go source-blob example app (configuration-api, go_source_test).
+    "mygen",
+    "gosum",
+    "needsdep",
+    "gosource",
     // The prepare step's vocabulary: the init set over-approximates, and a
     // killed process tree leaves neither its unzippers nor downloaders.
     "overapproximation",
