@@ -6,15 +6,15 @@ Tool operation **arguments** (`args`) and **environment-variable values** (`env`
 
 ## Available Placeholders
 
-| Placeholder   | Resolves To                           | `args` | `env` | Typical Use Case            |
-| ------------- | ------------------------------------- | :----: | :---: | --------------------------- |
-| `{file}`      | Single file path (per-file scope)     |   ✅   |  ❌   | `"{file}"`                  |
-| `{files}`     | Separate arguments per file           |   ✅   |  ❌   | `"{files}"`                 |
-| `{root}`      | Git repository root                   |   ✅   |  ✅   | `"{root}/.config"`          |
-| `{cwd}`       | Per-project working directory         |   ✅   |  ✅   | `"{cwd}/src"`               |
-| `{toolCache}` | Per-project, per-tool cache directory |   ✅   |  ✅   | `"{toolCache}/tsbuildinfo"` |
-| `{target}`    | The single directory a scanner scans  |   ✅   |  ❌   | `"{target}"`                |
-| `{bin:<alias>}` | Executable of the operation app's dependency | ✅ | ✅ | `"{bin:validator} check {files}"` |
+| Placeholder     | Resolves To                                  | `args` | `env` | Typical Use Case                  |
+| --------------- | -------------------------------------------- | :----: | :---: | --------------------------------- |
+| `{file}`        | Single file path (per-file scope)            |   ✅   |  ❌   | `"{file}"`                        |
+| `{files}`       | Separate arguments per file                  |   ✅   |  ❌   | `"{files}"`                       |
+| `{root}`        | Git repository root                          |   ✅   |  ✅   | `"{root}/.config"`                |
+| `{cwd}`         | Per-project working directory                |   ✅   |  ✅   | `"{cwd}/src"`                     |
+| `{toolCache}`   | Per-project, per-tool cache directory        |   ✅   |  ✅   | `"{toolCache}/tsbuildinfo"`       |
+| `{target}`      | The single directory a scanner scans         |   ✅   |  ❌   | `"{target}"`                      |
+| `{bin:<alias>}` | Executable of the operation app's dependency |   ✅   |  ✅   | `"{bin:validator} check {files}"` |
 
 `{file}`, `{files}` and `{target}` are argument concepts and are **not**
 available in `env` values (an environment variable holds a single string, not an

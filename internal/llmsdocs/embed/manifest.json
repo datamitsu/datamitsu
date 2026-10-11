@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "bae62b964bacda9d06f74a0a3f56be45",
+  "pageSetHash": "8df8b7f6b6ba3604758dd5bbd754e8ea",
   "pages": [
     {
       "slug": "about",
@@ -514,8 +514,8 @@
       "url": "https://datamitsu.com/docs/reference/template-placeholders.md",
       "title": "Template Placeholders",
       "description": "Reference for template placeholders in tool operation arguments and environment values",
-      "bytes": 10348,
-      "contentHash": "45e93a6920c8908c7586af4b9c28b91a"
+      "bytes": 10475,
+      "contentHash": "937aa553f243f287817b081998c40107"
     },
     {
       "slug": "reference/tool-environment",
