@@ -365,7 +365,7 @@ func TestValidateApps_BinaryAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for binary app with files/links, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, node, and go apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -384,7 +384,7 @@ func TestValidateApps_ShellAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for shell app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, node, and go apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -1037,7 +1037,7 @@ func TestValidateApps_JVM_FilesLinksRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for JVM app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, node, and go apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -1595,7 +1595,7 @@ func TestValidateApps_ValidGoRuntimeRef(t *testing.T) {
 	}
 }
 
-func TestValidateApps_Go_FilesLinksArchivesRejected(t *testing.T) {
+func TestValidateApps_Go_FilesLinksArchivesAccepted(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
 			Kind: RuntimeKindGo,
@@ -1619,12 +1619,11 @@ func TestValidateApps_Go_FilesLinksArchivesRejected(t *testing.T) {
 		},
 	}
 
-	_, err := ValidateApps(apps, runtimes)
-	if err == nil {
-		t.Fatal("ValidateApps() expected error for Go app with files/links, got nil")
-	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
-		t.Errorf("unexpected error message: %v", err)
+	// A Go app's files/links/archives stage the source of an unpublished
+	// program: the installer writes them into the app directory before
+	// `go build`, and the archive hashes fold into the install identity.
+	if _, err := ValidateApps(apps, runtimes); err != nil {
+		t.Fatalf("ValidateApps() rejected a Go app with files/links: %v", err)
 	}
 }
 
@@ -2295,7 +2294,7 @@ func TestValidateApps_Archives_BinaryAppRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for binary app with archives")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, node, and go apps") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

@@ -46,9 +46,11 @@ func parseGoLockFile(lockFile string) (goMod, goSum string, err error) {
 	if lf.Mod == "" {
 		return "", "", errors.New("go lock file missing mod (go.mod) content")
 	}
-	if lf.Sum == "" {
-		return "", "", errors.New("go lock file missing sum (go.sum) content")
-	}
+	// An EMPTY sum is a valid lock for a module on the standard library
+	// alone: go.sum carries checksum entries only for imported modules, and
+	// a stdlib-only source has none. The build still runs -mod=readonly, so
+	// a module that DOES import something without a checksum fails there —
+	// the refusal the verification contract needs.
 	return lf.Mod, lf.Sum, nil
 }
 
@@ -85,6 +87,11 @@ func BuildGoLockFileJSON(goMod, goSum string) (string, error) {
 //     that"), and an explicit GONOSUMDB overrides the GOPRIVATE-derived default,
 //     so clearing GOPRIVATE alone leaves an inherited GONOSUMDB=* able to skip
 //     verification while `go get` records go.sum entries during generation.
+//   - GOWORK=off disables workspace mode: a go.work shipped in the source (or
+//     inherited) would let the build resolve modules across workspace
+//
+// directories and write go.work.sum even under -mod=readonly, defeating the
+// mandatory-checksum refusal.
 //
 // These must stay identical across both flows, which is why they live here
 // rather than being duplicated in the build and generation env builders.
@@ -99,6 +106,7 @@ func goBaseEnvVars(baseDir string) map[string]string {
 		"GONOPROXY":   "",
 		"GONOSUMDB":   "",
 		"GOINSECURE":  "",
+		"GOWORK":      "off",
 	}
 }
 
@@ -340,6 +348,26 @@ func removeStaleGoModFiles(workDir string) error {
 // checked afterwards against minAgeMinutes (0 skips the check). Unlike uv's
 // window, nothing records the value, so it can follow the effective setting.
 func (rm *RuntimeManager) GenerateGoLockFiles(ctx context.Context, appName string, appConfig *binmanager.AppConfigGo, workDir string, minAgeMinutes int) error {
+	return rm.generateGoLockFiles(ctx, appName, appConfig, nil, nil, workDir, minAgeMinutes)
+}
+
+// GenerateGoLockFilesFromSource is the source-aware variant for an app that
+// ships its own module (files/archives): the source is staged into workDir
+// FIRST, and the lockfile is produced from the staged module itself —
+// `go mod tidy` against the source's own go.mod, never `go get <pkg>@<ver>`.
+// The generated lock therefore describes the shipped module, and the install
+// build (which stages the same source and overlays this lock) compiles the
+// BLOB, not a remote package that happens to share the name.
+func (rm *RuntimeManager) GenerateGoLockFilesFromSource(ctx context.Context, appName string, appConfig *binmanager.AppConfigGo, files map[string]string, archives map[string]*binmanager.ArchiveSpec, workDir string, minAgeMinutes int) error {
+	return rm.generateGoLockFiles(ctx, appName, appConfig, files, archives, workDir, minAgeMinutes)
+}
+
+// generateGoLockFiles is the shared body. With files/archives set (the
+// source-blob form) the flow stages the source and requires its go.mod: the
+// module path must come from the shipped module, because packageName points
+// INSIDE it. Without them, the classic wrapper flow applies: `go mod init
+// datamitsu-<app>` + `go get packageName@version`.
+func (rm *RuntimeManager) generateGoLockFiles(ctx context.Context, appName string, appConfig *binmanager.AppConfigGo, files map[string]string, archives map[string]*binmanager.ArchiveSpec, workDir string, minAgeMinutes int) error {
 	if appConfig.PackageName == "" {
 		return fmt.Errorf("app %q has no packageName; cannot generate lock file", appName)
 	}
@@ -361,15 +389,26 @@ func (rm *RuntimeManager) GenerateGoLockFiles(ctx context.Context, appName strin
 		return fmt.Errorf("failed to create work directory: %w", err)
 	}
 
-	// Start from a clean module: a leftover go.mod would make `go mod init` fail.
-	if err := removeStaleGoModFiles(workDir); err != nil {
+	sourceMode := len(files) > 0 || len(archives) > 0
+	if sourceMode {
+		// Stage the module source before any go command: the module this
+		// lockfile describes is the staged tree, and its go.mod carries the
+		// module path packageName points inside. A clean-module wipe would
+		// delete it again, so staging replaces the wipe here.
+		if err := binmanager.WriteAppFiles(ctx, workDir, files, archives); err != nil {
+			return fmt.Errorf("failed to stage app files/archives for %q: %w", appName, err)
+		}
+		if _, statErr := os.Stat(filepath.Join(workDir, "go.mod")); statErr != nil {
+			return fmt.Errorf("app %q ships its source but no go.mod; the source form requires the module file (its module path is what packageName points inside)", appName)
+		}
+	} else if err := removeStaleGoModFiles(workDir); err != nil {
 		return err
 	}
 
 	envVars := getGoGenEnvVars(workDir)
 	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOBIN"} {
 		if err := os.MkdirAll(envVars[key], 0o755); err != nil {
-			return fmt.Errorf("failed to create directory %q: %w", envVars[key], err)
+			return fmt.Errorf("failed to create directory %q: %w", key, err)
 		}
 	}
 	fullEnv := buildEnvWithOverrides(os.Environ(), envVars)
@@ -388,14 +427,25 @@ func (rm *RuntimeManager) GenerateGoLockFiles(ctx context.Context, appName strin
 		zap.String("package", appConfig.PackageName),
 		zap.String("version", appConfig.Version),
 		zap.String("go_path", goPath),
+		zap.Bool("from_source", sourceMode),
 	)
 
-	if err := runGo(os.Stderr, "mod", "init", "datamitsu-"+appName); err != nil {
-		return fmt.Errorf("failed to init go module for %q: %w", appName, err)
-	}
+	if sourceMode {
+		// The staged go.mod names the module; tidy resolves the imports the
+		// source actually makes and writes their checksums. go.sum may end
+		// up empty (stdlib-only source) — that is a valid lock.
+		if err := runGo(os.Stderr, "mod", "tidy"); err != nil {
+			return fmt.Errorf("failed to tidy the staged module for %q: %w", appName, err)
+		}
+	} else {
+		// Start from a clean module: a leftover go.mod would make `go mod init` fail.
+		if err := runGo(os.Stderr, "mod", "init", "datamitsu-"+appName); err != nil {
+			return fmt.Errorf("failed to init go module for %q: %w", appName, err)
+		}
 
-	if err := runGo(os.Stderr, "get", appConfig.PackageName+"@"+appConfig.Version); err != nil {
-		return fmt.Errorf("failed to resolve %s@%s for %q: %w", appConfig.PackageName, appConfig.Version, appName, err)
+		if err := runGo(os.Stderr, "get", appConfig.PackageName+"@"+appConfig.Version); err != nil {
+			return fmt.Errorf("failed to resolve %s@%s for %q: %w", appConfig.PackageName, appConfig.Version, appName, err)
+		}
 	}
 
 	if minAgeMinutes <= 0 {

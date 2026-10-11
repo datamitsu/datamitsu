@@ -101,13 +101,16 @@ func TestParseGoLockFile_MissingMod(t *testing.T) {
 	}
 }
 
-func TestParseGoLockFile_MissingSum(t *testing.T) {
-	_, _, err := parseGoLockFile(`{"mod": "module datamitsu-x\n\ngo 1.22\n"}`)
-	if err == nil {
-		t.Error("expected error when sum field is missing")
+func TestParseGoLockFile_MissingSumAllowedForStdlibOnly(t *testing.T) {
+	// A module on the standard library alone has no go.sum entries; the
+	// missing field is the empty lock. The build's -mod=readonly still
+	// refuses a module that imports something without a checksum.
+	mod, sum, err := parseGoLockFile(`{"mod": "module datamitsu-x\n\ngo 1.22\n"}`)
+	if err != nil {
+		t.Fatalf("parseGoLockFile rejected a stdlib-only lock (missing sum): %v", err)
 	}
-	if err != nil && !strings.Contains(err.Error(), "sum") {
-		t.Errorf("expected error to mention sum field, got: %v", err)
+	if mod == "" || sum != "" {
+		t.Fatalf("parseGoLockFile = (%q, %q); want the mod and an empty sum", mod, sum)
 	}
 }
 
@@ -118,10 +121,13 @@ func TestParseGoLockFile_EmptyMod(t *testing.T) {
 	}
 }
 
-func TestParseGoLockFile_EmptySum(t *testing.T) {
-	_, _, err := parseGoLockFile(`{"mod": "module x\ngo 1.22\n", "sum": ""}`)
-	if err == nil {
-		t.Error("expected error when sum field is empty")
+func TestParseGoLockFile_EmptySumAllowedForStdlibOnly(t *testing.T) {
+	mod, sum, err := parseGoLockFile(`{"mod": "module x\ngo 1.22\n", "sum": ""}`)
+	if err != nil {
+		t.Fatalf("parseGoLockFile rejected a stdlib-only lock (empty sum): %v", err)
+	}
+	if mod == "" || sum != "" {
+		t.Fatalf("parseGoLockFile = (%q, %q); want the mod and an empty sum", mod, sum)
 	}
 }
 
@@ -223,6 +229,7 @@ func TestGetGoEnvVars(t *testing.T) {
 		"GONOPROXY":   "",
 		"GONOSUMDB":   "",
 		"GOINSECURE":  "",
+		"GOWORK":      "off",
 		"GOFLAGS":     "-mod=readonly -trimpath",
 	}
 
@@ -513,6 +520,7 @@ func TestGetGoGenEnvVars(t *testing.T) {
 		"GONOPROXY":   "",
 		"GONOSUMDB":   "",
 		"GOINSECURE":  "",
+		"GOWORK":      "off",
 		"GOFLAGS":     "",
 	}
 

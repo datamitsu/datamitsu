@@ -1,9 +1,12 @@
 package cli_test
 
 import (
+	"archive/tar"
+	"bytes"
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/clitest"
 )
 
@@ -129,5 +132,72 @@ func TestConfigShowDependsOnLegacyStrings(t *testing.T) {
 	}
 	if !strings.Contains(res.Stdout, `"app": "upstream"`) {
 		t.Errorf("legacy edge did not normalize to the object form:\n%s", res.Stdout)
+	}
+}
+
+// goSourceConfigJS declares a Go app that ships its module source as an inline
+// archive: the PR-4 form (previously rejected by validation). The inline
+// payload is a real brotli tar (validation decodes it); the lockFile stays an
+// opaque string here — config show never interprets it.
+func goSourceConfigJS(t *testing.T) string {
+	t.Helper()
+	var tarBuf bytes.Buffer
+	tw := tar.NewWriter(&tarBuf)
+	body := "package main\n\nfunc main() {}\n"
+	if err := tw.WriteHeader(&tar.Header{Name: "main.go", Mode: 0o644, Size: int64(len(body))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write([]byte(body)); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	inline, err := binmanager.CompressArchive(tarBuf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return `globalThis.getBeforeConfigs = () => [];
+globalThis.getConfig = () => ({
+  runtimes: {
+    go: { kind: "go", mode: "system", system: { command: "/usr/local/go/bin/go", systemVersion: "1.22.0" } },
+  },
+  apps: {
+    "my-gen": {
+      go: {
+        packageName: "example.com/mygen/cmd/mygen",
+        version: "v0.1.0",
+        lockFile: "br:` + strings.Repeat("2", 48) + `",
+      },
+      archives: { main: { inline: "` + inline + `" } },
+    },
+  },
+});
+globalThis.getMinVersion = () => "0.0.0";
+`
+}
+
+// TestConfigShowGoSourceArchive freezes `config show` for a Go app carrying
+// an inline source archive: the archives map survives load and validation
+// accepts the app (the pre-PR-4 form failed with "files/links/archives are
+// only supported on bun, uv, and node apps").
+func TestConfigShowGoSourceArchive(t *testing.T) {
+	p := clitest.NewProject(t)
+	cfg := p.WriteFile("gosource.config.js", goSourceConfigJS(t))
+	norm := clitest.NewNormalizer()
+
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		"--no-auto-config", "--config", cfg, "config", "show")
+	if res.ExitCode != 0 {
+		t.Fatalf("`config show` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
+	}
+	clitest.AssertGolden(t, "config_show_go_source_archive", norm.Apply(res.Stdout))
+
+	if !strings.Contains(res.Stdout, `"archives"`) {
+		t.Errorf("config show does not carry the source archive:\n%s", res.Stdout)
+	}
+	if !strings.Contains(res.Stdout, `"packageName": "example.com/mygen/cmd/mygen"`) {
+		t.Errorf("config show does not carry the Go app:\n%s", res.Stdout)
 	}
 }

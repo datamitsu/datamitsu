@@ -307,12 +307,17 @@ func TestReadLockFile(t *testing.T) {
 		}
 	})
 
-	t.Run("missing-go-sum", func(t *testing.T) {
+	t.Run("missing-go-sum-is-the-empty-lock", func(t *testing.T) {
 		dir := t.TempDir()
 		mustWrite(t, filepath.Join(dir, "go.mod"), "module example.com/x\n")
-		_, err := readLockFile(dir, binmanager.App{Go: &binmanager.AppConfigGo{}})
-		if err == nil || !strings.Contains(err.Error(), "failed to read go.sum") {
-			t.Fatalf("missing-go.sum err = %v", err)
+		// go mod tidy writes no go.sum for a stdlib-only module; reading one
+		// back is the empty lock, not an error.
+		content, err := readLockFile(dir, binmanager.App{Go: &binmanager.AppConfigGo{}})
+		if err != nil {
+			t.Fatalf("missing go.sum err = %v, want the empty lock", err)
+		}
+		if !strings.Contains(content, "example.com/x") {
+			t.Fatalf("lock content = %q, want the go.mod wrapped", content)
 		}
 	})
 }
