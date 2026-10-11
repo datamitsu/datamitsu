@@ -46,6 +46,11 @@ export default defineConfig((config) => ({
   ],
   words: [
     "releaseasset",
+    // The Go source-blob example app (configuration-api, go_source_test).
+    "mygen",
+    "gosum",
+    "needsdep",
+    "gosource",
     "releaseprovider",
     "APIURL",
     ...config.words,

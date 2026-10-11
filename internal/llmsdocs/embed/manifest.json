@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "4d46414a4fbdb24762c28e0980abd59b",
+  "pageSetHash": "20ce58c2d8dbb92b4c449781a3dc5d52",
   "pages": [
     {
       "slug": "about",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 86698,
-      "contentHash": "386193fdd34852721abb33a8896e0998"
+      "bytes": 88083,
+      "contentHash": "f02a6489805b5f98964a48a534e8427e"
     },
     {
       "slug": "reference/ignore-rules",

@@ -122,7 +122,8 @@ source-mode-specific: a config using a name outside this set fails to load.
 
 All app kinds share metadata, environment, and version-check fields. The common
 schema also exposes managed-content fields, but config validation accepts
-`files`, `links`, and `archives` only on Bun, UV, and Node apps.
+`files`, `links`, and `archives` only on Bun, UV, Node, and Go apps (for a Go
+app they carry the module source — the [source-blob form](#go-apps)).
 
 ```typescript
 interface AppCommon {
@@ -131,9 +132,9 @@ interface AppCommon {
   lazy?: boolean; // Defer installation and link creation until first exec
   dependsOn?: AppDependency[]; // Apps that must be available when this app runs
   officialUrl?: string; // Where a person reads about this app (never fetched)
-  files?: Record<string, string>; // Bun/UV/Node only: filename → static content
-  links?: Record<string, string>; // Bun/UV/Node only: linkName → relativePath
-  archives?: Record<string, ArchiveSpec>; // Bun/UV/Node only: name → archive
+  files?: Record<string, string>; // Bun/UV/Node/Go only: filename → static content
+  links?: Record<string, string>; // Bun/UV/Node/Go only: linkName → relativePath
+  archives?: Record<string, ArchiveSpec>; // Bun/UV/Node/Go only: name → archive
   env?: Record<string, string>; // Install-time and run-time environment
   runtimeEnv?: Record<string, string>; // Execution-only environment (all app kinds)
   versionCheck?: {
@@ -632,6 +633,23 @@ interface AppConfigGo {
 ```
 
 The tool is built with `go build -trimpath -mod=readonly` in an isolated, hardened environment. See the [Supply Chain Security](../guides/supply-chain-security.md#go-go-apps) guide for the full defense model.
+
+**Shipping your own program as a source blob.** A Go app may carry its module source in `files`/`archives` (the same inline/external [archive form](#archives) other app kinds use). The source is staged into the app directory before the build, the lock file's `go.mod`/`go.sum` overwrite any files of the same name, and `packageName` points at the package **inside** the shipped module:
+
+```javascript
+const apps = {
+  "my-gen": {
+    go: {
+      packageName: "example.com/mygen/cmd/mygen", // package inside the shipped module
+      version: "v0.1.0",
+      lockFile: "br:...", // go.mod + go.sum of the shipped module itself
+    },
+    archives: { main: { inline: "tar.br:..." } }, // the module source
+  },
+};
+```
+
+The lock file must describe the shipped module (generate it with `datamitsu config lockfile`, which stages the source and runs `go mod tidy` against **its** `go.mod`), so the build compiles the blob, never a remote package that happens to share the name. The archive content folds into the app's install identity — new source means a new install path. A module on the standard library alone legitimately has an **empty `go.sum`**; a module that imports something without a checksum entry still fails the `-mod=readonly` build.
 
 ### Shell Apps
 
@@ -1575,7 +1593,7 @@ interface ArchiveSpec {
 
 **Extraction order:** Archives extracted first (sorted alphabetically), then `files` written (files overwrite archive contents). Package manager runs after both.
 
-Archives are supported on UV apps, node apps, and bundles.
+Archives are supported on UV apps, node apps, Go apps (the [source-blob form](#go-apps)), and bundles.
 
 ## Ignore Rules
 

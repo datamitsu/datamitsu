@@ -143,8 +143,8 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			continue
 		}
 
-		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil || app.Go != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
-			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on bun, uv, and node apps", appName))
+		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
+			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on bun, uv, node, and go apps", appName))
 			continue
 		}
 

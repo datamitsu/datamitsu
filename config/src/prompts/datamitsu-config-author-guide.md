@@ -86,6 +86,12 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.4.1** - Go apps may carry `files`/`archives` (the source-blob
+  form): the module source is staged before the build and the lock file must
+  describe the shipped module itself — `packageName` points inside it. `go.sum`
+  may be empty for a stdlib-only module. `config lockfile` generates the lock
+  from the staged source (`go mod tidy`), never from a remote package of the
+  same name.
 - **after v0.4.1** - Apps declare a one-time preparation step:
   `apps.<name>.prepare` runs once after the app and its whole `dependsOn`
   closure are installed and fills a keyed, project-independent state exposed
