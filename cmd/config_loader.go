@@ -6,7 +6,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -421,7 +423,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 
 	var managedLayers []config.ManagedConfigLayer
 	for _, source := range sources {
-		result, resultEngine, processErr := processConfigSource(ctx, currentConfig, source, resolved, stack, opts, obs)
+		result, resultEngine, processErr := processConfigSource(ctx, currentConfig, source, resolved, stack, opts, obs, "")
 		if processErr != nil {
 			return nil, nil, nil, processErr
 		}
@@ -678,8 +680,10 @@ func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoCon
 // accumulated input. The resolved map collects all processed URLs for reporting.
 // The stack map tracks URLs in the current recursion path for cycle detection;
 // URLs are added before recursing and removed after, so shared (diamond)
-// dependencies are allowed while true cycles are still caught.
-func processConfigSource(ctx context.Context, input *config.Config, source configSource, resolved map[string]bool, stack map[string]bool, opts loadConfigOptions, obs *chainObservations) (*config.Config, *engine.Engine, error) {
+// dependencies are allowed while true cycles are still caught. A remote layer
+// inherits its parent's minimum version: it declares none of its own, and the
+// version a bundle consumer must run is the parent's.
+func processConfigSource(ctx context.Context, input *config.Config, source configSource, resolved map[string]bool, stack map[string]bool, opts loadConfigOptions, obs *chainObservations, inheritedMinVersion string) (*config.Config, *engine.Engine, error) {
 	sourceSpan := trace.Start(trace.CatConfig, "configSource")
 	defer sourceSpan.EndWith(trace.A("name", source.name))
 
@@ -715,6 +719,7 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 	// Default config is embedded and always matches the current version.
 	// Remote configs (loaded via getRemoteConfigs) are library configs that
 	// inherit the version requirement from their parent.
+	declaredMinVersion := inheritedMinVersion
 	if !source.isDefault && !source.isRemote {
 		sourceLabel := source.name
 		if source.path != "" {
@@ -743,6 +748,7 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 		if minVersionStr == "" {
 			return nil, nil, fmt.Errorf("config %s: getMinVersion() must return non-empty string", sourceLabel)
 		}
+		declaredMinVersion = minVersionStr
 
 		skipped, err := version.CompareVersions(ldflags.Version, minVersionStr)
 		if err != nil {
@@ -795,7 +801,7 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 					name:     entry.URL,
 					content:  content,
 					isRemote: true,
-				}, resolved, stack, opts, obs)
+				}, resolved, stack, opts, obs, declaredMinVersion)
 				delete(stack, entry.URL)
 				if remoteErr != nil {
 					return nil, nil, remoteErr
@@ -847,6 +853,14 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 		parsedConfig.IgnoreRules = append(chainedInput.IgnoreRules, parsedConfig.IgnoreRules...)
 	}
 
+	// A prepare-era construction in this layer must be matched by the layer's
+	// own getMinVersion: an older core silently drops the field and hands the
+	// app a literal ${APP_PREPARED}. Warnings go through obs so a cache hit
+	// replays them (the miss's stderr must not depend on cache warmth).
+	for _, w := range config.PrepareFeatureWarnings(source.name, declaredMinVersion, parsedConfig.Apps) {
+		obs.warn(w)
+	}
+
 	// oci chains as a scalar through {...input} spreads; a layer that reshapes
 	// its output without spreading silently drops it (there is no re-inject).
 	// Surface that silent drop at debug level.
@@ -868,6 +882,14 @@ func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, 
 	resultObj := resultVal.ToObject(vm)
 	managedConfigsVal := resultObj.Get("managedConfigs")
 	usesManagedConfigs := managedConfigsVal != nil && !goja.IsUndefined(managedConfigsVal)
+
+	// dependsOn edges arrive as strings or {app, as} objects. goja's ExportTo
+	// converts by reflection and cannot turn a string into a struct, so the
+	// mixed form is normalized in the JS value first: every edge becomes an
+	// object the typed export understands.
+	if err := normalizeDependsOnEdges(vm, resultObj); err != nil {
+		return nil, fmt.Errorf("failed to export config: %w", err)
+	}
 
 	cfg := &config.Config{}
 
@@ -911,6 +933,81 @@ func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, 
 	}
 
 	return cfg, nil
+}
+
+// normalizeDependsOnEdges rewrites every app's dependsOn entries in the JS
+// result object into the {app, as} form. A plain string becomes
+// {app: name, as: name}; an object is validated to carry a string app (and
+// as, when present, a string) and gets its as defaulted. Entries are copied
+// into a fresh array rather than mutated in place: a frozen or non-standard
+// object cannot reject writes silently, and null/sparse entries are rejected
+// with their index instead of reaching ExportTo as a generic conversion
+// error. Goja returns a nil Value for an absent property (not undefined), so
+// every absence check covers nil as well.
+func normalizeDependsOnEdges(vm *goja.Runtime, resultObj *goja.Object) error {
+	appsVal := resultObj.Get("apps")
+	if appsVal == nil || goja.IsUndefined(appsVal) || goja.IsNull(appsVal) {
+		return nil
+	}
+	appsObj := appsVal.ToObject(vm)
+	for _, appName := range appsObj.Keys() {
+		appVal := appsObj.Get(appName)
+		if appVal == nil || goja.IsUndefined(appVal) || goja.IsNull(appVal) {
+			continue
+		}
+		appObj := appVal.ToObject(vm)
+		depsVal := appObj.Get("dependsOn")
+		if depsVal == nil || goja.IsUndefined(depsVal) || goja.IsNull(depsVal) {
+			continue
+		}
+		depsObj := depsVal.ToObject(vm)
+		if depsObj.ClassName() != "Array" {
+			return fmt.Errorf("apps.%s.dependsOn must be an array", appName)
+		}
+		lengthVal := depsObj.Get("length")
+		if lengthVal == nil || goja.IsUndefined(lengthVal) || goja.IsNull(lengthVal) {
+			continue
+		}
+		length := int(lengthVal.ToInteger())
+		normalized := make([]any, 0, length)
+		for i := range length {
+			entry := depsObj.Get(strconv.Itoa(i))
+			switch {
+			case entry == nil || goja.IsUndefined(entry) || goja.IsNull(entry):
+				return fmt.Errorf("apps.%s.dependsOn[%d]: must be an app name or {app, as}, got nothing", appName, i)
+			case isJSString(entry):
+				name := entry.String()
+				if name == "" {
+					return fmt.Errorf("apps.%s.dependsOn[%d]: empty dependency name", appName, i)
+				}
+				normalized = append(normalized, map[string]any{"app": name, "as": name})
+			default:
+				entryObj := entry.ToObject(vm)
+				app := entryObj.Get("app")
+				if !isJSString(app) || app.String() == "" {
+					return fmt.Errorf("apps.%s.dependsOn[%d]: must be an app name or {app, as}", appName, i)
+				}
+				as := entryObj.Get("as")
+				// A missing as is a nil Value in goja, not undefined.
+				if as == nil || goja.IsUndefined(as) || goja.IsNull(as) {
+					normalized = append(normalized, map[string]any{"app": app.String(), "as": app.String()})
+					continue
+				}
+				if !isJSString(as) {
+					return fmt.Errorf("apps.%s.dependsOn[%d].as must be a string", appName, i)
+				}
+				normalized = append(normalized, map[string]any{"app": app.String(), "as": as.String()})
+			}
+		}
+		if err := appObj.Set("dependsOn", normalized); err != nil {
+			return fmt.Errorf("apps.%s.dependsOn: %w", appName, err)
+		}
+	}
+	return nil
+}
+
+func isJSString(v goja.Value) bool {
+	return v != nil && !goja.IsUndefined(v) && !goja.IsNull(v) && v.ExportType() != nil && v.ExportType().Kind() == reflect.String
 }
 
 // discoverAutoConfig searches for datamitsu.config.js, datamitsu.config.mjs and datamitsu.config.ts at the git root.

@@ -212,9 +212,33 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 - `ResolveCommandInfo` stays read-only.
 - `runtimeEnv` is execution-only and never affects install identity or installer
   environments. Runtime-owned environment keys retain precedence.
-- `${APP_BIN:<name>}` expands only in `runtimeEnv`, requires a direct
-  `dependsOn` edge, and supports only native binary targets. Reject it in app
-  `env` values; other config data and environment keys remain literal.
+- `dependsOn` edges are `AppDependency{App, Alias}`: a plain name in config
+  JSON normalizes to alias = app name; an object `{app, as}` binds the
+  dependency under an alias. `normalizeDependsOnEdges` (config loader) rewrites
+  the JS value before `vm.ExportTo`, because goja cannot convert a string into
+  a struct. Consumers reading names use `DependencyNames()`/`dependencyAlias`;
+  Dockerfile slices serialize the canonical object form.
+- `${APP_BIN:<alias>}` expands only in `runtimeEnv` and `prepare`, requires a
+  direct `dependsOn` edge (by name or alias), and supports binary, uv and go
+  targets. Node, bun and jvm need a launcher that does not exist yet. Reject it
+  in app `env` values; other config data and environment keys remain literal.
+- `apps.<name>.prepare` declares a one-time step that fills
+  `{store}/.prepared/<app>/<key>/out` after the app and its whole closure are
+  installed; run time exposes it as `${APP_PREPARED}` (runtimeEnv only, and
+  only when `prepare` is declared). The key (`ComputePreparedKey`) is a pure
+  function of the protocol version, the app identity, store-relative install
+  paths, the closure with each dependency's own prepared key, the alias map,
+  binPath, symbolic args, prepare.env, app.env and the PATH mode — never
+  absolute paths, `HOME`, time, the datamitsu version, `runtimeEnv`, `network`
+  or timeouts. `prepare.args`/`env` accept only `${APP_PREPARED}`,
+  `${APP_DIR}` and `${APP_BIN:<alias>}`: `${STORE}` and every tool placeholder
+  are errors (the state is project-independent). `prepare.env` rejects `PATH`
+  and the isolation keys (TMPDIR, TEMP, TMP, XDG_CACHE/DATA/STATE_HOME).
+  Validation lives in `internal/config/app_prepare.go`; the rules are the
+  contract, keep error messages teaching. A config layer using `prepare`,
+  object edges or `${APP_PREPARED}` must raise `getMinVersion()`;
+  `config.PrepareFeatureWarnings` warns when it does not, through the
+  cache-replayed warning channel.
 - Every native binary app in an app's `dependsOn` closure is on its `PATH` under
   its app name, through a content-addressed `{store}/.dependency-path/<hash>/`
   of symlinks (`binmanager/dependency_path.go`). `getCommandInfo` creates it;

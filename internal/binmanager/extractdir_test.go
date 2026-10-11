@@ -52,7 +52,7 @@ func extractDirFixture(t *testing.T, archive string, contentType BinContentType,
 	}}
 	return New(MapOfApps{
 		"tool": {Required: true, Binary: binary},
-		"user": {Shell: &AppConfigShell{Name: "sh"}, DependsOn: []string{"tool"}},
+		"user": {Shell: &AppConfigShell{Name: "sh"}, DependsOn: edges("tool")},
 	}, nil, nil)
 }
 

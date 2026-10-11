@@ -21,7 +21,7 @@ func TestRuntimeEnvCommandResolution(t *testing.T) {
 			t.Setenv("DATAMITSU_OFFLINE", "1")
 			apps := binaryAppFixture(t, "dep")
 			root := apps["dep"]
-			root.DependsOn = []string{"dep"}
+			root.DependsOn = edges("dep")
 			root.Env = map[string]string{"COMMON": "${STORE}/common"}
 			root.RuntimeEnv = map[string]string{"EXACT": "${APP_BIN:dep}", "PATHS": "${STORE}:${APP_DIR}", "RESERVED": "user"}
 			if kind == "shell" {
@@ -124,7 +124,7 @@ func TestRuntimeEnvResolutionErrors(t *testing.T) {
 			t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 			apps := binaryAppFixture(t, "dep")
 			apps["unsupported"] = App{Binary: &AppConfigBinary{}}
-			app := App{Shell: &AppConfigShell{Name: "echo"}, DependsOn: tt.deps, RuntimeEnv: map[string]string{"BIN": tt.value}}
+			app := App{Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges(tt.deps...), RuntimeEnv: map[string]string{"BIN": tt.value}}
 			apps["root"] = app
 			bm := New(apps, nil, nil)
 			if _, err := bm.getCommandInfo(context.Background(), "root"); err == nil || !strings.Contains(err.Error(), tt.want) {
@@ -178,8 +178,8 @@ func TestResolveDependencyRuntimeHealth(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	dir := t.TempDir()
 	apps := MapOfApps{
-		"root":   {Shell: &AppConfigShell{Name: "echo"}, DependsOn: []string{"middle"}},
-		"middle": {Uv: &AppConfigUV{}, DependsOn: []string{"leaf"}},
+		"root":   {Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges("middle")},
+		"middle": {Uv: &AppConfigUV{}, DependsOn: edges("leaf")},
 		"leaf":   {Node: &AppConfigNode{}},
 	}
 	mock := &mockRuntimeAppManager{resolveCommandInfoFunc: func(name string, _ App) (*CommandInfo, error) {
@@ -215,7 +215,7 @@ func TestRuntimeEnvPreservesLiteralPaths(t *testing.T) {
 			t.Setenv("DATAMITSU_OFFLINE", "1")
 			apps := binaryAppFixture(t, "dep")
 			root := apps["dep"]
-			root.DependsOn = []string{"dep"}
+			root.DependsOn = edges("dep")
 			root.RuntimeEnv = map[string]string{"BINDING": "${APP_BIN:dep}", "DIR": "${APP_DIR}", "STORE": "${STORE}", "MIXED": "${APP_BIN:dep}|${STORE}|${APP_DIR}|${APP_BIN:dep}"}
 			apps["root"] = root
 			bm := New(apps, nil, nil)

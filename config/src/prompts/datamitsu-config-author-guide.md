@@ -86,6 +86,17 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.4.1** - Apps declare a one-time preparation step:
+  `apps.<name>.prepare` runs once after the app and its whole `dependsOn`
+  closure are installed and fills a keyed, project-independent state exposed
+  to the app as `${APP_PREPARED}`. `dependsOn` entries may also be objects
+  (`{ app, as }`) that bind a dependency under an alias for
+  `${APP_BIN:<alias>}`; `${APP_BIN}` now resolves binary, uv and go targets.
+  Raise `getMinVersion()` to at least the first version with these fields —
+  an older core silently drops `prepare` and passes `${APP_PREPARED}` through
+  as a literal string. A literal `{word:…}` in tool arguments is now a load
+  error (previously it reached the tool unchanged); quote it or use a
+  supported placeholder.
 - **after v0.4.0** - Hash pins are canonical `alg:value` digests:
   `"sha256:<64 lowercase hex>"` for every download pin (`hash`, `jarHash`,
   archive hashes, parser hashes) and `"xxh3:<32 lowercase hex>"` for

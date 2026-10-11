@@ -129,6 +129,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 	errs = append(errs, findCaseFoldCollisions(appNames)...)
 	errs = append(errs, validateAppDependencies(apps, appNames)...)
 	errs = append(errs, validateAppRuntimeEnv(apps, appNames)...)
+	errs = append(errs, validateAppPrepare(apps, appNames)...)
 	errs = append(errs, validateAppOfficialURLs(apps, appNames)...)
 
 	for _, appName := range appNames {
@@ -775,6 +776,21 @@ var (
 // by findUnknownPlaceholders, so only genuine placeholder-shaped tokens validate.
 var toolPlaceholderPattern = regexp.MustCompile(`\{[A-Za-z][A-Za-z0-9_]*\}`)
 
+// toolPlaceholderColonPattern matches the colon form ({name:value}) used by
+// {managedConfig:<key>} and, with prepare, {bin:<alias>}. Today the bare-name
+// pattern above does not see these tokens, so an unknown colon form reached
+// the tool as a literal — contrary to the documented "unknown placeholder is
+// a hard error". Validation accepts known forms and rejects the rest.
+var toolPlaceholderColonPattern = regexp.MustCompile(`\{[A-Za-z][A-Za-z0-9_]*:[^{}\s]*\}`)
+
+// placeholderColonForm splits a matched colon form into its name and
+// argument. The caller has already matched toolPlaceholderColonPattern.
+func placeholderColonForm(token string) (name, arg string) {
+	inner := token[1 : len(token)-1]
+	name, arg, _ = strings.Cut(inner, ":")
+	return name, arg
+}
+
 func findUnknownPlaceholders(value string, allowed map[string]bool) []string {
 	var unknown []string
 	for _, loc := range toolPlaceholderPattern.FindAllStringIndex(value, -1) {
@@ -789,6 +805,31 @@ func findUnknownPlaceholders(value string, allowed map[string]bool) []string {
 		name := value[start+1 : end-1]
 		if !allowed[name] {
 			unknown = append(unknown, "{"+name+"}")
+		}
+	}
+	return unknown
+}
+
+// findUnknownColonPlaceholders reports {name:…} tokens whose name is not a
+// known colon form. The bare-name pattern above cannot see these, and before
+// this check an unknown colon form reached the tool as a literal — contrary
+// to the documented "unknown placeholder is a hard error". Today the only
+// supported colon form is {managedConfig:<key>}; {bin:<alias>} arrives with
+// the prepare work and joins the allowlist there.
+func findUnknownColonPlaceholders(value string) []string {
+	var unknown []string
+	for _, loc := range toolPlaceholderColonPattern.FindAllStringIndex(value, -1) {
+		start, end := loc[0], loc[1]
+		// Skip doubled braces, mirroring the bare-name matcher.
+		if start > 0 && value[start-1] == '{' {
+			continue
+		}
+		if end < len(value) && value[end] == '}' {
+			continue
+		}
+		name, _ := placeholderColonForm(value[start:end])
+		if name != "managedConfig" {
+			unknown = append(unknown, value[start:end])
 		}
 	}
 	return unknown
@@ -977,6 +1018,12 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 						toolName, opType, ph, placeholderList(ToolArgPlaceholders),
 					))
 				}
+				for _, ph := range findUnknownColonPlaceholders(arg) {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: unknown placeholder %s in args (supported: {managedConfig:<key>})",
+						toolName, opType, ph,
+					))
+				}
 			}
 
 			envKeys := make([]string, 0, len(op.Env))
@@ -989,6 +1036,12 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 					errs = append(errs, fmt.Sprintf(
 						"tool %q operation %q: unsupported placeholder %s in env %q (supported: %s)",
 						toolName, opType, ph, key, placeholderList(ToolEnvPlaceholders),
+					))
+				}
+				for _, ph := range findUnknownColonPlaceholders(op.Env[key]) {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: unknown placeholder %s in env %q (supported: {managedConfig:<key>})",
+						toolName, opType, ph, key,
 					))
 				}
 			}

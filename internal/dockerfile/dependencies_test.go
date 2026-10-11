@@ -19,10 +19,10 @@ func TestDependencySlices(t *testing.T) {
 			apps["ruff"].Uv.LockFile = "locked"
 			apps["go-tool"].Go.LockFile = "locked"
 			apps["dm-internal-upstream"] = binmanager.App{Binary: &binmanager.AppConfigBinary{}, Lazy: true}
-			edges := map[string][]string{root: {"eslint", "ruff", "ktlint", "go-tool"}, "eslint": {"dm-internal-upstream"}, "ruff": {"dm-internal-upstream"}}
-			for name, deps := range edges {
+			edgeMap := map[string][]string{root: {"eslint", "ruff", "ktlint", "go-tool"}, "eslint": {"dm-internal-upstream"}, "ruff": {"dm-internal-upstream"}}
+			for name, deps := range edgeMap {
 				app := apps[name]
-				app.DependsOn = deps
+				app.DependsOn = edges(deps...)
 				if name == "eslint" {
 					app.RuntimeEnv = map[string]string{"UPSTREAM": "${APP_BIN:dm-internal-upstream}"}
 				}
@@ -108,8 +108,8 @@ func TestPlanDependencyAvailability(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{
-				"a-proxy":  {Node: &binmanager.AppConfigNode{Runtime: "node"}, DependsOn: []string{"middle"}},
-				"middle":   {Binary: linuxBin(map[syslist.ArchType][]string{"amd64": {"musl"}}), DependsOn: []string{"upstream"}},
+				"a-proxy":  {Node: &binmanager.AppConfigNode{Runtime: "node"}, DependsOn: edges("middle")},
+				"middle":   {Binary: linuxBin(map[syslist.ArchType][]string{"amd64": {"musl"}}), DependsOn: edges("upstream")},
 				"upstream": {Binary: tt.dependency},
 			}
 			runtimes := config.MapOfRuntimes{"node": {Kind: config.RuntimeKindNode}}
@@ -134,9 +134,19 @@ func TestPlanDependencyAvailability(t *testing.T) {
 }
 
 func TestSlicesRejectUnknownDependency(t *testing.T) {
-	apps := binmanager.MapOfApps{"root": {Binary: &binmanager.AppConfigBinary{}, DependsOn: []string{"typo"}}}
+	apps := binmanager.MapOfApps{"root": {Binary: &binmanager.AppConfigBinary{}, DependsOn: edges("typo")}}
 	_, err := BuildSlices(BuildPlan(apps, nil), apps, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "typo") {
 		t.Fatalf("error = %v", err)
 	}
+}
+
+// edges builds a dependsOn edge list from plain names, mirroring the
+// normalized string form of the config.
+func edges(names ...string) []binmanager.AppDependency {
+	out := make([]binmanager.AppDependency, 0, len(names))
+	for _, n := range names {
+		out = append(out, binmanager.AppDependency{App: n, Alias: n})
+	}
+	return out
 }

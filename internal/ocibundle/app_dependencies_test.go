@@ -17,13 +17,13 @@ func TestExpectedSubtreesAppDependencies(t *testing.T) {
 			storeRoot := testStore(t)
 			cfg, want := testUVConfig(t)
 			root := binaryReVerifyConfig(t).Apps["tool"]
-			root.DependsOn = []string{"middle"}
+			root.DependsOn = edges("middle")
 			if kind == "shell" {
 				root.Binary = nil
 				root.Shell = &binmanager.AppConfigShell{Name: "echo"}
 			}
 			cfg.Apps["root"] = root
-			cfg.Apps["middle"] = binmanager.App{Binary: binaryReVerifyConfig(t).Apps["tool"].Binary, DependsOn: []string{"mytool"}}
+			cfg.Apps["middle"] = binmanager.App{Binary: binaryReVerifyConfig(t).Apps["tool"].Binary, DependsOn: edges("mytool")}
 			dep := cfg.Apps["mytool"]
 			dep.Required = false
 			dep.Lazy = true
@@ -48,7 +48,7 @@ func TestExpectedSubtreesAppDependencies(t *testing.T) {
 func TestSeedAppDependencyClosure(t *testing.T) {
 	storeRoot := testStore(t)
 	cfg, expected := testUVConfig(t)
-	cfg.Apps["root"] = binmanager.App{Shell: &binmanager.AppConfigShell{Name: "echo"}, DependsOn: []string{"mytool"}}
+	cfg.Apps["root"] = binmanager.App{Shell: &binmanager.AppConfigShell{Name: "echo"}, DependsOn: edges("mytool")}
 	src := newFakeSource()
 	layers := make([]ocispec.Descriptor, 0, len(expected))
 	for subtree := range expected {
@@ -72,4 +72,14 @@ func TestSeedAppDependencyClosure(t *testing.T) {
 			t.Errorf("dependency subtree not seeded: %v", err)
 		}
 	}
+}
+
+// edges builds a dependsOn edge list from plain names, mirroring the
+// normalized string form of the config.
+func edges(names ...string) []binmanager.AppDependency {
+	out := make([]binmanager.AppDependency, 0, len(names))
+	for _, n := range names {
+		out = append(out, binmanager.AppDependency{App: n, Alias: n})
+	}
+	return out
 }

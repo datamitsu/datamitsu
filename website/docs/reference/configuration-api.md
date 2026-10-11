@@ -132,7 +132,7 @@ interface AppCommon {
   description?: string; // Human-readable text shown in app listings
   required?: boolean; // Whether the app is required for init
   lazy?: boolean; // Defer installation and link creation until first exec
-  dependsOn?: string[]; // Apps that must be available when this app runs
+  dependsOn?: AppDependency[]; // Apps that must be available when this app runs
   officialUrl?: string; // Where a person reads about this app (never fetched)
   files?: Record<string, string>; // Bun/UV/Node only: filename → static content
   links?: Record<string, string>; // Bun/UV/Node only: linkName → relativePath
@@ -199,6 +199,26 @@ apps: {
 #### App dependencies (`dependsOn`)
 
 `dependsOn` names other apps that must be installed before this app runs.
+Each entry is an app name or an object that also names the role under which
+this app refers to the dependency in `${APP_BIN:<alias>}` bindings; the alias
+defaults to the app name and must be unique among this app's direct
+dependencies (case-insensitive).
+
+```typescript
+type AppDependency = string | { app: string; as?: string };
+```
+
+```javascript
+const apps = {
+  "doc-lint": {
+    binary: docLintBinary,
+    // "shellcheck" binds as "shellcheck"; jsonschema binds as "validator"
+    dependsOn: ["shellcheck", { app: "jsonschema", as: "validator" }],
+    runtimeEnv: { VALIDATOR_BIN: "${APP_BIN:validator}" },
+  },
+};
+```
+
 Provisioning expands selected roots to their transitive dependency closure,
 installs dependencies before dependents, and deduplicates shared dependencies.
 This applies to `init`, `install`, `exec`, planner tools (`check`, `lint`, `fix`),
@@ -207,8 +227,10 @@ roots; a dependency need not have `required: true` and cannot opt out with `lazy
 
 Every name must exist in `apps`. Self-references, duplicate names in one list,
 and cycles are validation errors; cycle errors show the dependency chain.
-Shell apps may declare dependencies but cannot be dependency targets, because
-core cannot install a host PATH command.
+Aliases follow the app-name pattern (`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`), and
+one edge per target app keeps the alias unambiguous. Shell apps may declare
+dependencies but cannot be dependency targets, because core cannot install a
+host PATH command.
 
 A dependency is a run-time availability contract. Neither `dependsOn` nor
 `runtimeEnv` changes the app's install identity: changing either does not
@@ -302,11 +324,18 @@ As with `env`, keys the runtime sets for the app win, inherited values do not,
 and `PATH` is rejected. A key present in both `env` and `runtimeEnv` on the same
 app is a validation error.
 
-Values support `${STORE}` and `${APP_DIR}`, plus `${APP_BIN:<name>}`: the exact
-executable path of a native binary app. The target must be in this app's
-**direct** `dependsOn` list. A transitive edge alone is insufficient. Runtime
-apps and shell apps are rejected as binding targets: a runtime app needs a
-command and arguments, not just a binary path.
+Values support `${STORE}` and `${APP_DIR}`, plus `${APP_BIN:<alias>}`: the exact
+executable path of a binary, uv or go app — the kinds with a single executable
+entry point. The target must be in this app's **direct** `dependsOn` list
+(by name or alias). A transitive edge alone is insufficient. Runtime apps
+(node, bun, jvm) and shell apps are rejected as binding targets: they need a
+launcher that does not exist yet.
+
+When the app declares a `prepare` step, `runtimeEnv` also supports
+`${APP_PREPARED}`: the app's prepared-state directory
+(`{store}/.prepared/<app>/<key>/out`), the same tree the step filled. Subpaths
+are allowed (`${APP_PREPARED}/browsers`). Using it without a declared step, or
+in `env` (which installers see), is a validation error.
 
 ```javascript
 runtimeEnv: {
@@ -328,6 +357,59 @@ or file contents can contain the literal syntax.
 
 See [Wrapping a private binary](../how-to/maintain-wrapper.md#wrapping-a-private-binary)
 for a complete binding example and the source-farm repair contract.
+
+#### One-time preparation step (`prepare`)
+
+`prepare` declares a step that runs **once**, after the app and its whole
+`dependsOn` closure are installed, to fill the app's prepared state: data the
+app would otherwise download lazily at first run — a schema catalog, a browser,
+a compiled artifact. Run time exposes the result as `${APP_PREPARED}`.
+
+```typescript
+interface AppPrepare {
+  args: string[]; // required, may be empty
+  env?: Record<string, string>;
+  binPath?: string; // another executable of this app's own install
+  network: boolean; // required
+  path?: "declared" | "inherit"; // default "declared"
+}
+```
+
+The step is the app's own executable run directly, without a shell. The
+prepared state lives in `{store}/.prepared/<app>/<key>/out`, keyed by the app
+identity, its dependency closure, and the step description — a new dependency
+version or a changed argument list prepares a new state, and identical
+configurations share one. The state is project-independent: it is shared by
+every project of the user and ships in OCI bundles.
+
+**Placeholders.** `args` and `env` accept `${APP_PREPARED}` (the directory the
+step fills), `${APP_DIR}`, and `${APP_BIN:<alias>}` (a direct dependency).
+`${STORE}` and every project-bound tool placeholder (`{root}`, `{cwd}`,
+`{file}`, `{files}`, `{target}`, `{toolCache}`) are validation errors: the
+prepared state cannot depend on a project. Everything the step needs must be
+spelled out explicitly — the inherited environment is available for proxies
+and credentials, but it is not part of the key, so a step that reads a
+behavior-changing variable from it may produce different states on different
+machines. Neutralize such variables with explicit arguments.
+
+**Network and offline.** `network` is required. Under `DATAMITSU_OFFLINE`, an
+unprepared step that needs the network is refused before the process starts.
+
+**PATH.** `path: "declared"` (default) limits the step to the runtime's own
+directories and the binaries of its dependency closure — nothing from the host.
+Use `"inherit"` when the step genuinely needs host utilities; the choice is
+part of the key.
+
+**Isolation.** `PATH`, `TMPDIR`, `TEMP`, `TMP`, `XDG_CACHE_HOME`,
+`XDG_DATA_HOME` and `XDG_STATE_HOME` are rejected in `prepare.env`: datamitsu
+points them at throwaway directories inside the step layout. `XDG_CONFIG_HOME`
+and `HOME` stay available — tools read registry credentials through them.
+
+**Version requirement.** A config layer using `prepare`, object
+`dependsOn` edges or `${APP_PREPARED}` must raise its `getMinVersion()`:
+an older core silently drops the field and hands the app a literal
+`${APP_PREPARED}`. Datamitsu warns when it sees the construction without the
+matching minimum version.
 
 ### Binary Apps
 
