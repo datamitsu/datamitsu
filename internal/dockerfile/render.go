@@ -304,6 +304,14 @@ func writeFinalStage(b *strings.Builder, plan Plan, opts RenderOptions) {
 		writeCopy(b, stageName("parser-", ps.Module), opts.storeAbs(parserSubtree(ps.Module)))
 	}
 
+	// Prepared state subtrees: one layer per app with a prepare step, copied
+	// from the app's own stage (where the step ran against the installed
+	// closure). The state directory carries its readiness marker, so a
+	// consumer that seeds this layer never runs the step.
+	for _, app := range plan.PreparedApps {
+		writeCopy(b, stageName("app-", app), opts.storeAbs(preparedSubtree(app)))
+	}
+
 	// Writable store/config dirs for both run-time users. `COPY --link` above
 	// recreates the destination's parent dirs (/dm, /dm/store, …) as root:root
 	// 0755 in its own layer, shadowing dm-base's datamitsu:0 ones. Restore

@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "bae62b964bacda9d06f74a0a3f56be45",
+  "pageSetHash": "c166ad31990c931473925260c818dc9b",
   "pages": [
     {
       "slug": "about",
@@ -316,8 +316,8 @@
       "url": "https://datamitsu.com/docs/guides/oci-bundles.md",
       "title": "OCI Bundles",
       "description": "An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app, or a WASM output-parser module), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.",
-      "bytes": 12592,
-      "contentHash": "50e9526be39e165876ed47f4a0127f93"
+      "bytes": 13276,
+      "contentHash": "ab78e6ba0876317ca1cb0a6fc30b4730"
     },
     {
       "slug": "guides/reports",
@@ -514,8 +514,8 @@
       "url": "https://datamitsu.com/docs/reference/template-placeholders.md",
       "title": "Template Placeholders",
       "description": "Reference for template placeholders in tool operation arguments and environment values",
-      "bytes": 10348,
-      "contentHash": "45e93a6920c8908c7586af4b9c28b91a"
+      "bytes": 10475,
+      "contentHash": "937aa553f243f287817b081998c40107"
     },
     {
       "slug": "reference/tool-environment",

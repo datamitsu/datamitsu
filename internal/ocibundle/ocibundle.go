@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/logger"
+	"github.com/datamitsu/datamitsu/internal/prepare"
 
 	"go.uber.org/zap"
 )
@@ -32,7 +33,7 @@ const (
 	// carries (e.g. ".bin/golangci-lint/<hash>"). Layers without it are base
 	// rootfs/config layers of the runnable image and are skipped.
 	AnnotationSubtree = "com.datamitsu.subtree"
-	// AnnotationKind is the optional layer content kind: binary|runtime|app|uv-python|parser.
+	// AnnotationKind is the optional layer content kind: binary|runtime|app|uv-python|parser|prepared.
 	AnnotationKind = "com.datamitsu.kind"
 	// AnnotationApp optionally names the app/runtime a layer belongs to.
 	AnnotationApp = "com.datamitsu.app"
@@ -51,8 +52,31 @@ var log = logger.Logger.With(zap.Namespace("ocibundle"))
 // verify it against (see seedLayer).
 const parsersSubtreeRoot = ".parsers/"
 
+// preparedSubtreeRoot is the store subtree carrying prepared app state
+// (.prepared/<app>/<key>). Named because presence checks treat it
+// specially: a state directory only counts when its readiness marker is
+// there (see subtreeReady), so an interrupted placement never masks a
+// missing layer.
+const preparedSubtreeRoot = ".prepared/"
+
 // subtreeRoots are the only store subtrees a bundle layer may write into.
-var subtreeRoots = []string{".bin/", ".runtimes/", ".apps/", ".uv/python", parsersSubtreeRoot}
+var subtreeRoots = []string{".bin/", ".runtimes/", ".apps/", ".uv/python", parsersSubtreeRoot, preparedSubtreeRoot}
+
+// subtreeReady reports whether a store subtree is present AND complete. For
+// every root except .prepared/ a plain stat is the answer (content-addressed
+// trees are placed atomically). A prepared state directory is only ready
+// with its marker file: an interrupted placement or a deleted marker leaves
+// a directory that must not satisfy any seed decision.
+func subtreeReady(storeRoot, subtree string) bool {
+	dest := filepath.Join(storeRoot, filepath.FromSlash(subtree))
+	if _, err := os.Stat(dest); err != nil {
+		return false
+	}
+	if !strings.HasPrefix(subtree, preparedSubtreeRoot) {
+		return true
+	}
+	return prepare.Ready(dest)
+}
 
 // validateSubtree rejects malformed subtree annotations: absolute paths,
 // traversal, or anything outside the known store subtree roots. A layer with
@@ -154,8 +178,12 @@ func markerSatisfied(storeRoot, digest string) bool {
 		return false
 	}
 	for _, subtree := range marker.Subtrees {
-		if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(subtree))); err != nil {
-			log.Debug("seed marker is stale: recorded subtree is missing from the store",
+		// subtreeReady, not a bare stat: a recorded prepared state whose
+		// marker was deleted is an incomplete store, exactly like a missing
+		// subtree — re-running the full seed must repair it, and `store
+		// status` must not call the store fully seeded.
+		if !subtreeReady(storeRoot, subtree) {
+			log.Debug("seed marker is stale: recorded subtree is missing or incomplete",
 				zap.String("digest", digest), zap.String("subtree", subtree))
 			return false
 		}

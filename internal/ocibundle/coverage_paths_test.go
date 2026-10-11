@@ -132,7 +132,7 @@ func TestPlaceSubtree_DestinationAlreadyExistsDropsStaged(t *testing.T) {
 
 	// Destination already present: placeSubtree must drop the staged copy
 	// (the content-addressed winner already holds identical content).
-	if err := placeSubtree(staged, dest); err != nil {
+	if err := placeSubtree(staged, dest, ".bin/tool/abc123"); err != nil {
 		t.Fatalf("placeSubtree: %v", err)
 	}
 	if _, err := os.Stat(staged); !os.IsNotExist(err) {
@@ -154,7 +154,7 @@ func TestPlaceSubtree_RenamesIntoFreshDest(t *testing.T) {
 	}
 	dest := filepath.Join(root, "nested", "dest")
 
-	if err := placeSubtree(staged, dest); err != nil {
+	if err := placeSubtree(staged, dest, ".bin/tool/abc123"); err != nil {
 		t.Fatalf("placeSubtree: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "f")); err != nil {
