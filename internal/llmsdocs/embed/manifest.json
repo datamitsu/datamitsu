@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "e30e9cfc4094c025074e5f74d96c6932",
+  "pageSetHash": "e248c17ebfe30d60c1bebe359062e4dc",
   "pages": [
     {
       "slug": "about",
@@ -316,8 +316,8 @@
       "url": "https://datamitsu.com/docs/guides/oci-bundles.md",
       "title": "OCI Bundles",
       "description": "An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app, or a WASM output-parser module), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.",
-      "bytes": 12592,
-      "contentHash": "50e9526be39e165876ed47f4a0127f93"
+      "bytes": 13276,
+      "contentHash": "ab78e6ba0876317ca1cb0a6fc30b4730"
     },
     {
       "slug": "guides/reports",

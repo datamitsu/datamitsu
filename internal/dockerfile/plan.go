@@ -91,6 +91,12 @@ type Plan struct {
 	// from an anonymous HTTPS GET. Surfaced so the CLI can say so before the
 	// build fails somewhere less legible. Sorted.
 	RegistrySourcedParsers []string
+	// PreparedApps lists apps included in the plan that declare a prepare
+	// step, whose prepared state must be COPYed into the final image as its
+	// own .prepared/<app> layer. Sorted. A dependency with a step belongs
+	// here too: its state is copied from its own stage, where the step ran
+	// against the installed closure.
+	PreparedApps []string
 }
 
 // classifyApp mirrors runtimemanager.runtimeAppRef's precedence without
@@ -172,6 +178,15 @@ func BuildPlan(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, opts ..
 
 	var plan Plan
 	neededRuntimes := make(map[string]config.RuntimeKind)
+	// Every included app with a prepare step contributes its prepared state;
+	// collected here (single ordered pass) so render and ocimap share one
+	// traversal and cannot drift.
+	prepared := make(map[string]bool)
+	includePrepared := func(name string, app binmanager.App) {
+		if app.Prepare != nil {
+			prepared[name] = true
+		}
+	}
 
 	for _, name := range appNames {
 		app := apps[name]
@@ -184,6 +199,7 @@ func BuildPlan(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, opts ..
 				plan.LibcExcluded = append(plan.LibcExcluded, name) // no binary for the target libc
 			default:
 				plan.BinaryStages = append(plan.BinaryStages, BinaryStage{App: name})
+				includePrepared(name, app)
 			}
 			continue
 		}
@@ -195,7 +211,9 @@ func BuildPlan(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, opts ..
 		}
 		neededRuntimes[runtimeName] = runtimes[runtimeName].Kind
 		plan.RuntimeAppStages = append(plan.RuntimeAppStages, RuntimeAppStage{App: name, Kind: kind, Runtime: runtimeName})
+		includePrepared(name, app)
 	}
+	plan.PreparedApps = sortedKeys(prepared)
 
 	runtimeNames := make([]string, 0, len(neededRuntimes))
 	for name := range neededRuntimes {
@@ -256,4 +274,17 @@ func (p Plan) ValidateDependencies(apps binmanager.MapOfApps) error {
 		}
 	}
 	return nil
+}
+
+// sortedKeys returns the map's keys sorted, nil for an empty map.
+func sortedKeys(m map[string]bool) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
