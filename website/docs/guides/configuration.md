@@ -211,6 +211,7 @@ See the [Ignore Rules reference](/docs/reference/ignore-rules) for full syntax d
 Configuration files run in a JavaScript VM (goja) with access to several built-in APIs:
 
 - **Format utilities**: `YAML.parse()`/`YAML.stringify()`, `TOML.parse()`/`TOML.stringify()`, `INI.parse()`/`INI.stringify()` for parsing and generating config file content
+- **Nested settings**: `merge(base, overrides, ...)` recursively combines plain objects into a new object. Later values win, including `false`, `0` and `null`; arrays replace rather than append. Nested objects and arrays are copied without mutating inputs. Cyclic settings and non-object sources are rejected.
 - **Path utilities**: `tools.Path.join()`, `tools.Path.abs()`, `tools.Path.rel()`, `tools.Path.forImport()`
 - **Config links**: `tools.Config.linkPath()` for computing paths to `.datamitsu/` symlinks
 - **Ignore utilities**: `tools.Ignore.parse()`, `tools.Ignore.stringify()` for working with ignore patterns

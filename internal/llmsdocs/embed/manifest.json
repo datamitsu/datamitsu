@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "3d34815c96d7fae56b0f52bd835258b0",
+  "pageSetHash": "f0ca79a6d4e540407797fa78d3ec8c14",
   "pages": [
     {
       "slug": "about",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 12649,
-      "contentHash": "1cfdf9613369264bc64c0c674ad2fa6b"
+      "bytes": 12959,
+      "contentHash": "06c26f9de851d5ee739e83666746723d"
     },
     {
       "slug": "guides/managed-configs",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 184864,
-      "contentHash": "80c4943bb5b26aec110fb771f2925b0f"
+      "bytes": 185441,
+      "contentHash": "15537316198346a369007b12803032ff"
     },
     {
       "slug": "reference/comparison",

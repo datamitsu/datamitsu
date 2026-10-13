@@ -23,6 +23,9 @@ type ManagedConfigLayerHistory struct {
 	// pass. The pass skips such a layer and carries on, so the last generated
 	// content no longer says what reconciliation would write for the file.
 	RenderFailed bool
+	// SourceLayers retains live callbacks for forced per-project rendering.
+	// It belongs to reconciliation's VM-backed layer map, never a cached config.
+	SourceLayers []ManagedConfigLayer `json:"-"`
 }
 
 // ManagedConfigLayerMap maps filename to layer history.

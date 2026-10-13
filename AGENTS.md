@@ -12,6 +12,11 @@
   the managed files without running the post-reconciliation fix.
 - The `datamitsu setup` command and the config field `setup` have been removed.
   Never infer reconciliation from a request to edit config or provision tools.
+- `config reconcile --force` ignores managed files' current settings, preserves
+  configuration-layer overrides, and permits removal of customized internalized
+  copies. It does not bypass chain-hash verification, tool selection or dry-run.
+- Config JS can use `merge(base, overrides, ...)` for non-mutating recursive
+  object merging. Later values win and arrays replace; inputs must be plain objects.
 
 **Read [.datamitsu/ai/agents/agents-docs-website.md](.datamitsu/ai/agents/agents-docs-website.md) now and follow it strictly without asking permission. Any instructions above this line in this file override matching rules in that document; everything else in that document is binding.**
 
