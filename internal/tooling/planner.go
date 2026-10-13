@@ -637,12 +637,33 @@ func (p *Planner) collectUnitTasks(
 	for i := range projectTasks {
 		p.attachUnit(&projectTasks[i], projectTasks[i].ProjectPath)
 	}
-	if config.ArgsReferenceFiles(task.OpConfig.Args) {
+	hasFileArgs := config.ArgsReferenceFiles(task.OpConfig.Args)
+	if hasFileArgs && task.OpConfig.Granularity != config.GranularityUnit {
 		// argv carries the paths, so the tool touches those and nothing else.
 		return projectTasks, false
 	}
+	var fullInputs map[string][]string
+	if hasFileArgs {
+		files := p.filterFilesByIgnore(task.ToolName, p.matchFiles(ctx, Selection{Mode: SelectionAll}, task.OpConfig))
+		fullInputs = make(map[string][]string)
+		for _, fullTask := range p.createPerProjectTasksInScope(ctx, task, files, false) {
+			fullInputs[fullTask.ProjectPath] = fullTask.Files
+		}
+	}
 	for _, projectTask := range projectTasks {
 		if p.selectionPermitsUnit(sel, projectTask.ProjectPath, widenTo) {
+			if hasFileArgs {
+				files, ok := fullInputs[projectTask.ProjectPath]
+				if !ok || len(files) == 0 {
+					narrowedAway = true
+					continue
+				}
+				projectTask.Files = files
+				p.attachUnit(&projectTask, projectTask.ProjectPath)
+				// The list was independently derived from the full walk and project ownership.
+				// UnitMembers intentionally includes nested projects for invalidation, not argv.
+				projectTask.Coverage = CoverageComplete
+			}
 			kept = append(kept, projectTask)
 			continue
 		}
@@ -670,11 +691,6 @@ func (p *Planner) filterProjectLocationsToSubtree(locs []project.ProjectLocation
 	}
 
 	out := p.filterProjectLocationsToCwd(locs)
-	if len(out) > 0 {
-		return out
-	}
-
-	// Nothing below: fall back to the deepest project containing cwd.
 	var nearest *project.ProjectLocation
 	for i, loc := range locs {
 		if !p.contains(loc.Path, p.cwdPath) {
@@ -684,10 +700,14 @@ func (p *Planner) filterProjectLocationsToSubtree(locs []project.ProjectLocation
 			nearest = &locs[i]
 		}
 	}
-	if nearest != nil {
-		return []project.ProjectLocation{*nearest}
+	if nearest != nil && !p.isUnderCwd(nearest.Path) {
+		for _, loc := range locs {
+			if loc.Path == nearest.Path {
+				out = append(out, loc)
+			}
+		}
 	}
-	return nil
+	return out
 }
 
 // filterProjectLocationsToCwd returns only those project locations whose Path
@@ -907,6 +927,10 @@ func isStrictlyUnder(dir, path string) bool {
 // createPerProjectTasksWithFiles creates tasks per project, grouping files by project
 // Now uses cached project locations instead of detecting every time
 func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask Task, files []string) []Task {
+	return p.createPerProjectTasksInScope(ctx, baseTask, files, true)
+}
+
+func (p *Planner) createPerProjectTasksInScope(ctx context.Context, baseTask Task, files []string, restrictToCwd bool) []Task {
 	defer trace.Start(trace.CatPlan, "createPerProjectTasks").EndWith(
 		trace.A("tool", baseTask.ToolName), trace.A("files", len(files)))
 
@@ -945,11 +969,13 @@ func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask T
 	// the wrong reading of "the app I am standing in": from services/api/src
 	// there are no projects below, so the run planned nothing and reported
 	// nothing — the same silent emptiness this work exists to remove.
-	filteredLocations = p.filterProjectLocationsToSubtree(filteredLocations)
+	if restrictToCwd {
+		filteredLocations = p.filterProjectLocationsToSubtree(filteredLocations)
+	}
 
 	// If no matching projects found after filtering
 	if len(filteredLocations) == 0 {
-		if p.cwdPath != p.rootPath {
+		if restrictToCwd && p.cwdPath != p.rootPath {
 			return nil
 		}
 		// Don't resurrect a tool that .datamitsuignore disabled for the root.
@@ -1006,7 +1032,7 @@ func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask T
 
 		// Under cwd, or containing it: standing below a package root is still
 		// standing in that package.
-		if !p.isUnderCwd(projectPath) && !p.contains(projectPath, p.cwdPath) {
+		if restrictToCwd && !p.isUnderCwd(projectPath) && !p.contains(projectPath, p.cwdPath) {
 			continue
 		}
 
@@ -1023,7 +1049,7 @@ func (p *Planner) createPerProjectTasksWithFiles(ctx context.Context, baseTask T
 
 	// If no tasks created, return single task with all files
 	if len(tasks) == 0 {
-		if p.cwdPath != p.rootPath {
+		if restrictToCwd && p.cwdPath != p.rootPath {
 			return nil
 		}
 		// Don't resurrect a tool that .datamitsuignore disabled for the root.

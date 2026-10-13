@@ -1041,3 +1041,24 @@ its parser keeps the path as the message and leaves those missing fields unset. 
 carry an `error` token and 1-based UTF-16 columns. ktlint's JSON reporter uses the `errors` key
 as its level token and also counts columns in UTF-16. Both recordings use synthetic inputs
 with an emoji before the diagnostic to distinguish code units from bytes and code points.
+
+## Python, SQL and OpenAPI parser recordings
+
+Explicit unit granularity with file arguments widens to the complete owned project
+input when the policy permits it. Use the planner's independently derived project
+ownership mapping for argv, not UnitMembers (which includes nested projects for
+invalidation). Preserve the target-only policy and include the input vector in the
+verdict identity when ownership changes.
+
+ty's concise reporter carries rule names and 1-based Unicode scalar columns.
+sqruff's JSON reporter maps filenames to findings and emits parsing errors only
+with --parsing-errors; its printed Warning level stays a warning even when the
+process fails. JSON ranges with identical start/end points do not supply a span.
+An unchanged sqruff fix prints "N files processed, nothing to fix." even with
+--format json; recognize that precise success summary so its fix verdict is cached.
+vacuum's annotation reporter carries the actual document filename and the rule in
+title; retain those fields instead of using the filename-free legacy JSON report.
+Emoji probes establish Unicode scalar columns for all three pinned reporters.
+The tooling_strategy_test.go test loads their real recordings through the public
+WASM fixture. Parser changes still require build:parsers:fixture and a future
+published artifact before a consuming config can update its release pin.

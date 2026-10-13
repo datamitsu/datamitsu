@@ -26,23 +26,26 @@ Recorded with the versions the reference configuration pinned at the time, with
 the arguments it passes (minus cache paths, and `--no-config` for golangci-lint
 so a repository config cannot enable other linters):
 
-| Parser          | Tool and version      | Arguments                                                                                  |
-| --------------- | --------------------- | ------------------------------------------------------------------------------------------ |
-| `actionlint`    | actionlint v1.7.12    | `-no-color -format '{{json .}}' <workflow>`                                                |
-| `checkmake`     | checkmake v0.3.2      | `--format={{.LineNumber}}:{{.Rule}}:{{.Violation}}\n <makefile>`                           |
-| `cspell`        | cspell 10.0.1         | `lint -c cspell.json --quiet --no-must-find-files --unique <file>`                         |
-| `dclint`        | dclint 3.1.0          | `--formatter json <compose file>`                                                          |
-| `dotenv_linter` | dotenv-linter v4.0.0  | `check <file>`                                                                             |
-| `eslint`        | eslint 10.9.0         | `--quiet --format=json -c eslint.config.mjs <file>`                                        |
-| `golangci_lint` | golangci-lint v2.13.1 | `run --no-config --allow-parallel-runners --output.json.path=stdout`                       |
-| `hadolint`      | hadolint v2.15.1      | `-c hadolint.yaml --format=json <dockerfile>`                                              |
-| `harper_cli`    | harper-cli v2.8.0     | `lint --dialect us --format compact <file>`                                                |
-| `ktfmt`         | ktfmt 0.62            | `--dry-run --set-exit-if-changed <files>` (syntax fixture contains emoji before the error) |
-| `ktlint`        | ktlint 1.8.0          | `--reporter=json --log-level=none <files>` (function naming enabled in `.editorconfig`)    |
-| `protolint`     | protolint v0.57.0     | `lint --reporter json <file>`                                                              |
-| `tsc`           | TypeScript 7.0.2      | `--noEmit` in a directory with a strict `tsconfig.json`                                    |
-| `vale`          | vale v3.18.0          | `--config .vale.ini --output JSON <file>` (`BasedOnStyles = Vale`)                         |
-| `yamllint`      | yamllint 1.38.0       | `-c .yamllint.yaml --strict -f parsable <file>` (`extends: default`)                       |
+| Parser          | Tool and version      | Arguments                                                                                        |
+| --------------- | --------------------- | ------------------------------------------------------------------------------------------------ |
+| `actionlint`    | actionlint v1.7.12    | `-no-color -format '{{json .}}' <workflow>`                                                      |
+| `checkmake`     | checkmake v0.3.2      | `--format={{.LineNumber}}:{{.Rule}}:{{.Violation}}\n <makefile>`                                 |
+| `cspell`        | cspell 10.0.1         | `lint -c cspell.json --quiet --no-must-find-files --unique <file>`                               |
+| `dclint`        | dclint 3.1.0          | `--formatter json <compose file>`                                                                |
+| `dotenv_linter` | dotenv-linter v4.0.0  | `check <file>`                                                                                   |
+| `eslint`        | eslint 10.9.0         | `--quiet --format=json -c eslint.config.mjs <file>`                                              |
+| `golangci_lint` | golangci-lint v2.13.1 | `run --no-config --allow-parallel-runners --output.json.path=stdout`                             |
+| `hadolint`      | hadolint v2.15.1      | `-c hadolint.yaml --format=json <dockerfile>`                                                    |
+| `harper_cli`    | harper-cli v2.8.0     | `lint --dialect us --format compact <file>`                                                      |
+| `ktfmt`         | ktfmt 0.62            | `--dry-run --set-exit-if-changed <files>` (syntax fixture contains emoji before the error)       |
+| `ktlint`        | ktlint 1.8.0          | `--reporter=json --log-level=none <files>` (function naming enabled in `.editorconfig`)          |
+| `ty`            | ty 0.0.82             | `check --output-format concise <file>`                                                           |
+| `sqruff`        | sqruff 0.40.0         | `lint --config .sqruff --format json --parsing-errors <file>`                                    |
+| `vacuum`        | vacuum 0.30.6         | `lint --github-annotations --no-banner --no-style --no-update-check --fail-severity warn <file>` |
+| `protolint`     | protolint v0.57.0     | `lint --reporter json <file>`                                                                    |
+| `tsc`           | TypeScript 7.0.2      | `--noEmit` in a directory with a strict `tsconfig.json`                                          |
+| `vale`          | vale v3.18.0          | `--config .vale.ini --output JSON <file>` (`BasedOnStyles = Vale`)                               |
+| `yamllint`      | yamllint 1.38.0       | `-c .yamllint.yaml --strict -f parsable <file>` (`extends: default`)                             |
 
 To record a pair again, run the tool through the configuration's own app
 (`datamitsu exec <app> -- <arguments>`) over a clean input and over one with a

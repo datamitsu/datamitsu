@@ -96,6 +96,7 @@ pub mod tidy;
 pub mod trivy;
 pub mod tsc;
 pub mod twigcs;
+pub mod ty;
 pub mod vacuum;
 pub mod vale;
 pub mod verilator;
@@ -209,6 +210,7 @@ pub(crate) fn samples(tool: &str) -> Option<&'static [crate::contract::Sample]> 
 		trivy,
 		tsc,
 		twigcs,
+		ty,
 		vacuum,
 		vale,
 		verilator,
@@ -333,6 +335,7 @@ pub(crate) const DESCRIPTORS: &[&ToolCapability] = &[
 	&trivy::DESCRIPTOR,
 	&tsc::DESCRIPTOR,
 	&twigcs::DESCRIPTOR,
+	&ty::DESCRIPTOR,
 	&vacuum::DESCRIPTOR,
 	&vale::DESCRIPTOR,
 	&verilator::DESCRIPTOR,
@@ -451,6 +454,7 @@ pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opt
 		"trivy" => Some(trivy::parse(stdout, stderr, exit_code)),
 		"tsc" => Some(tsc::parse(stdout, stderr, exit_code)),
 		"twigcs" => Some(twigcs::parse(stdout, stderr, exit_code)),
+		"ty" => Some(ty::parse(stdout, stderr, exit_code)),
 		"vacuum" => Some(vacuum::parse(stdout, stderr, exit_code)),
 		"vale" => Some(vale::parse(stdout, stderr, exit_code)),
 		"verilator" => Some(verilator::parse(stdout, stderr, exit_code)),

@@ -1,12 +1,5 @@
-//! vacuum — OpenAPI linter. Ported from the none-ls diagnostics/vacuum builtin.
-//!
-//! vacuum emits JSON shaped as `{ "resultSet": { "results": [ … ] } }`, where each
-//! result is `{ message, ruleId, ruleSeverity, range: { start:{line,character},
-//! end:{line,character} } }`. That nesting is beyond the flat `json_diag::Attrs`
-//! mapper, so the navigation is hand-written over `tinyjson`. Despite the
-//! LSP-style names, `vacuum report` counts lines and characters from 1 and its
-//! end is exclusive (the key `info` at the start of line 2 is `2:1`–`2:5`), so the
-//! range passes through unchanged.
+//! Annotation titles carry rule names and annotation properties carry the actual source file.
+//! The legacy JSON report has no filename; keep its 1-based ranges without inventing one.
 
 use std::collections::HashMap;
 
@@ -25,18 +18,41 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 		Level("warn", severity::WARNING),
 		Level("info", severity::INFO),
 		Level("hint", severity::HINT),
+		Level("warning", severity::WARNING),
+		Level("notice", severity::INFO),
 	],
-	column_unit: "",
+	column_unit: "utf-32",
 	category: "",
 	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
-		args: &["report", "--stdin", "--stdout"],
-		stdin: true,
+		args: &[
+			"lint",
+			"--github-annotations",
+			"--no-banner",
+			"--no-style",
+			"--no-update-check",
+			"{file}",
+		],
+		stdin: false,
 	}],
 };
 
-pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
+pub fn parse(stdout: &[u8], stderr: &[u8], exit_code: i32) -> Vec<RawDiagnostic> {
+	let annotations = crate::format::github_annotations::parse(stdout, stderr, exit_code);
+	if annotations.recognized {
+		return annotations
+			.diagnostics
+			.into_iter()
+			.map(|mut d| {
+				d.source = Some(DESCRIPTOR.name.into());
+				// The pinned annotation renderer adds a byte length to a scalar column.
+				d.end_row = None;
+				d.end_col = None;
+				d
+			})
+			.collect();
+	}
 	let text = String::from_utf8_lossy(stdout);
 	let value: JsonValue = match text.parse() {
 		Ok(v) => v,
@@ -66,7 +82,7 @@ fn diag_of(value: &JsonValue) -> Option<RawDiagnostic> {
 		col,
 		end_row,
 		end_col,
-		source: Some("Vacuum".to_string()),
+		source: Some(DESCRIPTOR.name.to_string()),
 		code: get_str(map, "ruleId"),
 		severity: get_str(map, "ruleSeverity").and_then(|s| severity::of(DESCRIPTOR.severities, &s)),
 		..RawDiagnostic::default()
@@ -102,6 +118,28 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn annotations_keep_the_document_path_rule_and_start() {
+		let output =
+			b"::error title=info-description,file=api/openapi.yaml,col=1,endColumn=5,line=2,endLine=2::Missing description\n";
+		let out = parse(output, b"", 1);
+		assert_eq!(out.len(), 1);
+		assert_eq!(out[0].file.as_deref(), Some("api/openapi.yaml"));
+		assert_eq!(out[0].code.as_deref(), Some("info-description"));
+		assert_eq!(out[0].source.as_deref(), Some("vacuum"));
+		assert_eq!(out[0].severity, Some(severity::ERROR));
+		assert_eq!((out[0].row, out[0].col, out[0].end_col), (Some(2), Some(1), None));
+	}
+
+	#[test]
+	fn annotation_byte_lengths_are_not_unicode_scalar_end_columns() {
+		let output =
+			b"::error title=title-length,file=openapi.yaml,col=10,endColumn=18,line=3,endLine=3::Title is too long\n";
+		let out = parse(output, b"", 1);
+		assert_eq!((out[0].row, out[0].col), (Some(3), Some(10)));
+		assert_eq!((out[0].end_row, out[0].end_col), (None, None));
+	}
+
+	#[test]
 	fn parses_nested_result() {
 		let json = br#"{
             "resultSet": {
@@ -123,7 +161,7 @@ mod tests {
 		assert_eq!(out[0].message, "Operation must define an operationId");
 		assert_eq!(out[0].code.as_deref(), Some("operation-operationId"));
 		assert_eq!(out[0].severity, Some(severity::WARNING));
-		assert_eq!(out[0].source.as_deref(), Some("Vacuum"));
+		assert_eq!(out[0].source.as_deref(), Some("vacuum"));
 		assert_eq!(out[0].row, Some(12));
 		assert_eq!(out[0].col, Some(4));
 		assert_eq!(out[0].end_row, Some(12));
