@@ -978,6 +978,16 @@ on the per-file cache — and is only correct when a file's result cannot depend
 its neighbours. datamitsu rejects it when the file list never reaches the tool,
 since such an operation cannot have a per-file verdict at all.
 
+An explicitly declared `granularity: "unit"` on a per-project operation with
+`{file}` or `{files}` requests the complete eligible file set owned by that
+project. A source selection widens to that set when the policy allows it;
+`--widen-to=target` reports the operation as not narrowable. Nested projects
+keep their own input sets and configurations. The complete input vector is
+part of the unit verdict identity, so changing project ownership cannot reuse
+a pass for a different set of source files. Inferred unit granularity retains
+the existing narrowed-argv behavior; declare the full-input contract explicitly
+for analyses whose findings depend on callers and sibling modules.
+
 Declaring `unit` or `repo` is otherwise safe: it can only cause more work. The
 one rejected combination is `scope: "repository"` with `granularity: "unit"` — a
 repository-scoped operation starts one process at the git root and is never split
