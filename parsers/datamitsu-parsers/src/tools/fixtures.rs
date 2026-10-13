@@ -57,6 +57,8 @@ pub(crate) fn recorded() -> Vec<(&'static str, crate::contract::Sample)> {
 		pair!("golangci_lint"),
 		pair!("hadolint"),
 		pair!("harper_cli"),
+		pair!("ktfmt"),
+		pair!("ktlint"),
 		pair!("protolint"),
 		pair!("tsc"),
 		pair!("vale"),
@@ -93,6 +95,8 @@ fn clean_output_yields_nothing() {
 		("golangci_lint", recording!("golangci_lint", "clean")),
 		("hadolint", recording!("hadolint", "clean")),
 		("harper_cli", recording!("harper_cli", "clean")),
+		("ktfmt", recording!("ktfmt", "clean")),
+		("ktlint", recording!("ktlint", "clean")),
 		("protolint", recording!("protolint", "clean")),
 		("tsc", recording!("tsc", "clean")),
 		("vale", recording!("vale", "clean")),
@@ -567,6 +571,61 @@ fn yamllint_findings() {
 				severity: Some(severity::ERROR),
 				code: Some("colons".into()),
 				file: Some("findings.yaml".into()),
+				..RawDiagnostic::default()
+			},
+		],
+	);
+}
+
+#[test]
+fn ktfmt_recording_preserves_paths_and_syntax_coordinates() {
+	assert_findings(
+		"ktfmt",
+		&recording!("ktfmt", "findings"),
+		&[
+			RawDiagnostic {
+				message: "/work/Unformatted.kt".to_string(),
+				file: Some("/work/Unformatted.kt".to_string()),
+				source: Some("ktfmt".to_string()),
+				..RawDiagnostic::default()
+			},
+			RawDiagnostic {
+				message: "Expecting an expression".to_string(),
+				file: Some("/work/Broken.kt".to_string()),
+				row: Some(1),
+				col: Some(46),
+				severity: Some(severity::ERROR),
+				source: Some("ktfmt".to_string()),
+				..RawDiagnostic::default()
+			},
+		],
+	);
+}
+
+#[test]
+fn ktlint_recording_preserves_utf16_positions_and_rule_identity() {
+	assert_findings(
+		"ktlint",
+		&recording!("ktlint", "findings"),
+		&[
+			RawDiagnostic {
+				message: "Not a valid Kotlin file (1:46 expecting an expression)".to_string(),
+				file: Some("/work/Broken.kt".to_string()),
+				row: Some(1),
+				col: Some(46),
+				severity: Some(severity::ERROR),
+				source: Some("ktlint".to_string()),
+				..RawDiagnostic::default()
+			},
+			RawDiagnostic {
+				message: "Function name should start with a lowercase letter (except factory methods) and use camel case"
+					.to_string(),
+				file: Some("/work/Naming.kt".to_string()),
+				row: Some(1),
+				col: Some(23),
+				severity: Some(severity::ERROR),
+				code: Some("standard:function-naming".to_string()),
+				source: Some("ktlint".to_string()),
 				..RawDiagnostic::default()
 			},
 		],

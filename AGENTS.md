@@ -1033,3 +1033,11 @@ source/version/date text outside it for bundled snapshots. External `ConfigEmbed
 frames link to their own artifact and must not inherit the bundled snapshot metadata.
 Use a stable hosted HTML URL to update embeds independently of the docs build. Plain Markdown links use the public atlas URL so they also work in the offline
 docs export. React links to the standalone artifact use native anchors, not SPA routing.
+
+## Kotlin parser recordings
+
+ktfmt dry-run writes changed Kotlin paths to stdout without a message, rule, level or position;
+its parser keeps the path as the message and leaves those missing fields unset. Syntax errors
+carry an `error` token and 1-based UTF-16 columns. ktlint's JSON reporter uses the `errors` key
+as its level token and also counts columns in UTF-16. Both recordings use synthetic inputs
+with an emoji before the diagnostic to distinguish code units from bytes and code points.

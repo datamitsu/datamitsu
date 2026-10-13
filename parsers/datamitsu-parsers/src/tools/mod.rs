@@ -45,6 +45,7 @@ pub mod hadolint;
 pub mod haml_lint;
 pub mod harper_cli;
 pub mod knip;
+pub mod ktfmt;
 pub mod ktlint;
 pub mod kube_linter;
 pub mod ltrs;
@@ -157,6 +158,7 @@ pub(crate) fn samples(tool: &str) -> Option<&'static [crate::contract::Sample]> 
 		haml_lint,
 		harper_cli,
 		knip,
+		ktfmt,
 		ktlint,
 		kube_linter,
 		ltrs,
@@ -280,6 +282,7 @@ pub(crate) const DESCRIPTORS: &[&ToolCapability] = &[
 	&haml_lint::DESCRIPTOR,
 	&harper_cli::DESCRIPTOR,
 	&knip::DESCRIPTOR,
+	&ktfmt::DESCRIPTOR,
 	&ktlint::DESCRIPTOR,
 	&kube_linter::DESCRIPTOR,
 	&ltrs::DESCRIPTOR,
@@ -397,6 +400,7 @@ pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opt
 		"haml_lint" => Some(haml_lint::parse(stdout, stderr, exit_code)),
 		"harper_cli" => Some(harper_cli::parse(stdout, stderr, exit_code)),
 		"knip" => Some(knip::parse(stdout, stderr, exit_code)),
+		"ktfmt" => Some(ktfmt::parse(stdout, stderr, exit_code)),
 		"ktlint" => Some(ktlint::parse(stdout, stderr, exit_code)),
 		"kube_linter" => Some(kube_linter::parse(stdout, stderr, exit_code)),
 		"ltrs" => Some(ltrs::parse(stdout, stderr, exit_code)),
