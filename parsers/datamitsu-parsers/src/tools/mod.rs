@@ -45,6 +45,7 @@ pub mod hadolint;
 pub mod haml_lint;
 pub mod harper_cli;
 pub mod knip;
+pub mod ktfmt;
 pub mod ktlint;
 pub mod kube_linter;
 pub mod ltrs;
@@ -95,6 +96,7 @@ pub mod tidy;
 pub mod trivy;
 pub mod tsc;
 pub mod twigcs;
+pub mod ty;
 pub mod vacuum;
 pub mod vale;
 pub mod verilator;
@@ -157,6 +159,7 @@ pub(crate) fn samples(tool: &str) -> Option<&'static [crate::contract::Sample]> 
 		haml_lint,
 		harper_cli,
 		knip,
+		ktfmt,
 		ktlint,
 		kube_linter,
 		ltrs,
@@ -207,6 +210,7 @@ pub(crate) fn samples(tool: &str) -> Option<&'static [crate::contract::Sample]> 
 		trivy,
 		tsc,
 		twigcs,
+		ty,
 		vacuum,
 		vale,
 		verilator,
@@ -280,6 +284,7 @@ pub(crate) const DESCRIPTORS: &[&ToolCapability] = &[
 	&haml_lint::DESCRIPTOR,
 	&harper_cli::DESCRIPTOR,
 	&knip::DESCRIPTOR,
+	&ktfmt::DESCRIPTOR,
 	&ktlint::DESCRIPTOR,
 	&kube_linter::DESCRIPTOR,
 	&ltrs::DESCRIPTOR,
@@ -330,6 +335,7 @@ pub(crate) const DESCRIPTORS: &[&ToolCapability] = &[
 	&trivy::DESCRIPTOR,
 	&tsc::DESCRIPTOR,
 	&twigcs::DESCRIPTOR,
+	&ty::DESCRIPTOR,
 	&vacuum::DESCRIPTOR,
 	&vale::DESCRIPTOR,
 	&verilator::DESCRIPTOR,
@@ -397,6 +403,7 @@ pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opt
 		"haml_lint" => Some(haml_lint::parse(stdout, stderr, exit_code)),
 		"harper_cli" => Some(harper_cli::parse(stdout, stderr, exit_code)),
 		"knip" => Some(knip::parse(stdout, stderr, exit_code)),
+		"ktfmt" => Some(ktfmt::parse(stdout, stderr, exit_code)),
 		"ktlint" => Some(ktlint::parse(stdout, stderr, exit_code)),
 		"kube_linter" => Some(kube_linter::parse(stdout, stderr, exit_code)),
 		"ltrs" => Some(ltrs::parse(stdout, stderr, exit_code)),
@@ -447,6 +454,7 @@ pub fn dispatch(tool: &str, stdout: &[u8], stderr: &[u8], exit_code: i32) -> Opt
 		"trivy" => Some(trivy::parse(stdout, stderr, exit_code)),
 		"tsc" => Some(tsc::parse(stdout, stderr, exit_code)),
 		"twigcs" => Some(twigcs::parse(stdout, stderr, exit_code)),
+		"ty" => Some(ty::parse(stdout, stderr, exit_code)),
 		"vacuum" => Some(vacuum::parse(stdout, stderr, exit_code)),
 		"vale" => Some(vale::parse(stdout, stderr, exit_code)),
 		"verilator" => Some(verilator::parse(stdout, stderr, exit_code)),

@@ -223,7 +223,7 @@ func loadConfig() (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime,
 // commands keep their detection-free, walk-free config load.
 func loadConfigForReconcile(ctx context.Context) (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime, error) {
 	return loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths,
-		loadConfigOptions{detectProjectLocations: true, evaluateManagedConfigContent: true, requireVM: true})
+		loadConfigOptions{detectProjectLocations: true, evaluateManagedConfigContent: true, requireVM: true, retainManagedConfigLayers: reconcileForce})
 }
 
 // loadConfigForChainHash loads config with managed config content evaluated,
@@ -280,6 +280,7 @@ type loadConfigOptions struct {
 	// A load with this off returns an EMPTY layer map, not a partial one, so a
 	// caller that needs the map must ask for it rather than find it thin.
 	evaluateManagedConfigContent bool
+	retainManagedConfigLayers    bool
 	// requireVM declares that the caller uses the returned *goja.Runtime.
 	// loadConfigForReconcile is the only such path (cmd/config_reconcile.go). A load that sets
 	// it never serves from the config-evaluation cache: a hit has an evaluated
@@ -448,6 +449,11 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// Before publish: rendering calls content(), which the verdict must observe.
 	if err := finalizeManagedConfigPlacement(currentConfig, managedLayers, rootPath, layerMap, opts, obs); err != nil {
 		return nil, nil, nil, err
+	}
+	if opts.retainManagedConfigLayers {
+		for _, history := range layerMap {
+			history.SourceLayers = managedLayers
+		}
 	}
 	obs.publish()
 	publishConfigWarnings(obs.warnings)

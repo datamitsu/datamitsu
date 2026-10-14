@@ -32,6 +32,10 @@ declarations do not have it, this version does not accept it.
   behavior the config relies on. Raise it when you adopt a newer feature.
 - Branch on `facts()` and `datamitsuConfigInputs`, not on guesses about the
   machine.
+- Use `merge(base, overrides, ...)` for nested settings: later values win,
+  arrays replace, and plain objects/arrays are copied without mutating inputs.
+  This helper requires a core release that includes it; raise `getMinVersion()`
+  when adopting it.
 
 ## Downloads
 
@@ -80,12 +84,23 @@ writes the configuration; never ship it to consumers.
 - `datamitsu config show` prints the resolved configuration;
   `datamitsu inspect` browses it.
 - `datamitsu check` must pass afterwards.
+- `datamitsu config reconcile --force` regenerates selected managed files from
+  configuration layers without their current file overrides. Project-layer
+  settings still apply. It permits removal of customized internalized copies,
+  respects `--tools` and `--dry-run`, and does not bypass hash verification.
 
 ## Recent changes to review
 
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.5.1** - Config JS exposes `merge(base, overrides, ...)` for
+  recursive, non-mutating settings merges; later values win and arrays replace.
+  Adopt it instead of local merge helpers once the consuming core includes it.
+  `config reconcile --force` discards selected managed files' disk overrides
+  while replaying every configuration layer, including project layers. It keeps
+  tool scoping, dry-run and chain-hash verification, and permits removal of
+  customized internalized copies.
 - **after v0.4.1** - Go apps may carry `files`/`archives` (the source-blob
   form): the module source is staged before the build and the lock file must
   describe the shipped module itself — `packageName` points inside it. `go.sum`

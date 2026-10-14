@@ -89,6 +89,7 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 	e.initConsole()
 	e.initColors()
 	e.initFormats()
+	e.initMerge()
 	e.initTools()
 	e.initFacts()
 	e.initPNPMWorkspaceDefaults()

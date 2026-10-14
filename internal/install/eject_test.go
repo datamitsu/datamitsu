@@ -90,6 +90,23 @@ func TestInternalEntryRefusesToDeleteChangedFiles(t *testing.T) {
 	}
 }
 
+func TestForcedInternalEntryRemovesChangedFile(t *testing.T) {
+	root := t.TempDir()
+	main := writeRepoFile(t, root, ".gitleaks.toml", "custom")
+	installer := installerWithPristine(root, config.MapOfManagedConfigs{".gitleaks.toml": ejectableEntry(config.PlacementInternal)}, "pristine")
+	installer.SetForce(true)
+	if conflicts := installer.EjectConflicts(); len(conflicts) != 0 {
+		t.Fatalf("forced conflicts: %v", conflicts)
+	}
+	results, err := installer.InstallAll(context.Background(), false)
+	if err != nil || results[0].Error != nil {
+		t.Fatalf("forced install: %v, %+v", err, results)
+	}
+	if _, err := os.Stat(main); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("customized file survived forced internalization: %v", err)
+	}
+}
+
 func TestEjectedEntryKeepsChangedAlternate(t *testing.T) {
 	root := t.TempDir()
 	alt := writeRepoFile(t, root, "gitleaks.toml", "custom")

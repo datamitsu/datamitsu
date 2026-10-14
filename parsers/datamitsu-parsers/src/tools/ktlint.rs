@@ -17,7 +17,7 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	description: "An anti-bikeshedding Kotlin linter with built-in formatter.",
 	url: "https://ktlint.github.io/",
 	severities: &[Level(ERRORS, severity::ERROR)],
-	column_unit: "",
+	column_unit: "utf-16",
 	category: "",
 	kind: "tool",
 	operations: &[Operation {
@@ -29,22 +29,27 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 			"**/*.kt",
 			"**/*.kts",
 		],
-		stdin: true,
+		stdin: false,
 	}],
 };
 
 const ERRORS: &str = "errors";
 
 pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
-	let text = String::from_utf8_lossy(stdout);
-	let value: JsonValue = match text.parse() {
-		Ok(v) => v,
-		Err(_) => return Vec::new(),
+	crate::json_diag::find_envelope(stdout, from_files).unwrap_or_default()
+}
+
+fn from_files(value: &JsonValue) -> Option<Vec<RawDiagnostic>> {
+	let JsonValue::Array(files) = value else {
+		return None;
 	};
-	let files = match &value {
-		JsonValue::Array(items) => items,
-		_ => return Vec::new(),
-	};
+	if !files.is_empty()
+		&& !files
+			.iter()
+			.any(|file| matches!(crate::json_diag::member(file, ERRORS), Some(JsonValue::Array(_))))
+	{
+		return None;
+	}
 
 	let level = severity::of(DESCRIPTOR.severities, ERRORS);
 	let mut out = Vec::new();
@@ -67,7 +72,7 @@ pub fn parse(stdout: &[u8], _stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnosti
 			}
 		}
 	}
-	out
+	Some(out)
 }
 
 fn from_error(value: &JsonValue) -> Option<RawDiagnostic> {
@@ -135,6 +140,23 @@ mod tests {
 		assert!(parse(b"not json", b"", 1).is_empty());
 		// file with no errors array.
 		assert!(parse(br#"[{"file":"a.kt"}]"#, b"", 0).is_empty());
+	}
+
+	#[test]
+	fn json_reports_survive_noise_and_keep_multiple_documents() {
+		let mut output = b"JVM startup noise\n{}\n".to_vec();
+		output.extend_from_slice(SAMPLES[0].stdout);
+		output.extend_from_slice(b"\nmore noise\n");
+		output.extend_from_slice(SAMPLES[0].stdout);
+		assert_eq!(parse(&output, b"", 1).len(), 4);
+	}
+
+	#[test]
+	fn clean_json_is_recognized_but_cut_off_reports_are_not_clean() {
+		assert!(crate::tools::answer("ktlint", b"[]", b"", 0).unwrap().recognized);
+		let broken = crate::tools::answer("ktlint", br#"[{"file":"a.kt","errors":["#, b"", 1).unwrap();
+		assert!(!broken.recognized);
+		assert!(broken.partial);
 	}
 
 	#[test]

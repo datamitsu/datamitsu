@@ -169,8 +169,11 @@ run warns once, after its last operation, however many invocations hit the same 
 - `parser module "<module>" could not be loaded, so <n> tool(s) that use it ran without parsing`,
   once per module, with the cause and a pointer to
   [`datamitsu devtools parsers prefetch`](../../reference/cli-commands.md#devtools-parsers);
-- `parser module "<module>" has no parser "<key>", so the output of <tools> is not parsed`,
+- `parser module "<module>" has no parser "<key>"; caching of fix and lint results is disabled for <tools> because its output cannot be parsed`,
   once per key.
+
+Both an unavailable module and a missing parser disable caching of fix and lint
+results for the affected tools.
 
 Whether a tool passed is decided by its exit code and, when a module at
 descriptor schema 2 parsed its output, by its operation's

@@ -1257,8 +1257,8 @@ func TestExecutionParserProblems(t *testing.T) {
 	res := e.run("", nil, "lint")
 	e.wantExit(res, 0)
 	for _, want := range []string{
-		`parser module "core" has no parser "no-such-parser", so the output of alpha is not parsed by it and its lint passes are not cached`,
-		`parser module "missing" could not be loaded, so 1 tool(s) that use it ran without it and their lint passes are not cached`,
+		`parser module "core" has no parser "no-such-parser"; caching of fix and lint results is disabled for alpha because its output cannot be parsed`,
+		`parser module "missing" could not be loaded, so 1 tool(s) that use it ran without it and caching of fix and lint results is disabled for them`,
 	} {
 		if n := strings.Count(res.Stderr, want); n != 1 {
 			t.Errorf("stderr carries %q %d times, want once:\n%s", want, n, res.Stderr)

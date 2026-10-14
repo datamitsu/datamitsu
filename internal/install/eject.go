@@ -45,6 +45,9 @@ func (c *EjectConflictError) Error() string {
 // It does not touch the filesystem, so reconciliation can refuse the whole run
 // before its first write.
 func (i *Installer) EjectConflicts() []*EjectConflictError {
+	if i.force {
+		return nil
+	}
 	names := make([]string, 0, len(i.configs))
 	for name, cfg := range i.configs {
 		if cfg.Ejectable {

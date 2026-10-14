@@ -1,5 +1,42 @@
 declare global {
   /**
+   * Recursively merge plain objects into a new object. Later values win; arrays replace rather than
+   * append. Inputs and their nested objects/arrays are not mutated. Cyclic settings and non-object
+   * sources are rejected.
+   */
+  type MergedSettings<Left, Right> = Right extends (...args: never[]) => unknown
+    ? Right
+    : Left extends (...args: never[]) => unknown
+      ? Right
+      : Right extends readonly unknown[]
+        ? Right
+        : Left extends readonly unknown[]
+          ? Right
+          : Left extends object
+            ? Right extends object
+              ? {
+                  [Key in keyof Left | keyof Right]: Key extends keyof Right
+                    ? Key extends keyof Left
+                      ? {} extends Pick<Right, Key>
+                        ? Left[Key] | MergedSettings<Left[Key], Right[Key]>
+                        : MergedSettings<Left[Key], Right[Key]>
+                      : Right[Key]
+                    : Key extends keyof Left
+                      ? Left[Key]
+                      : never;
+                }
+              : Right
+            : Right;
+  type MergedSources<Sources extends readonly object[], Result = {}> = Sources extends readonly [
+    infer Head extends object,
+    ...infer Tail extends object[],
+  ]
+    ? MergedSources<Tail, MergedSettings<Result, Head>>
+    : number extends Sources["length"]
+      ? Record<string, unknown>
+      : Result;
+  function merge<Sources extends readonly object[]>(...sources: Sources): MergedSources<Sources>;
+  /**
    * Color functions for terminal output. All functions accept any number of arguments, join them
    * with spaces, and return a string with ANSI color codes applied. Respects NO_COLOR, FORCE_COLOR,
    * and CLICOLOR environment variables. Colors are composable: `colors.bold(colors.red("error"))`.

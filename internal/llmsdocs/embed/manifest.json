@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "e248c17ebfe30d60c1bebe359062e4dc",
+  "pageSetHash": "f0ca79a6d4e540407797fa78d3ec8c14",
   "pages": [
     {
       "slug": "about",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 55132,
-      "contentHash": "009de1f384656411dc51e506e1447346"
+      "bytes": 55298,
+      "contentHash": "cb94dbaa7c5c9b21294ad4a4aab5a070"
     },
     {
       "slug": "guides/architecture/planner",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 12649,
-      "contentHash": "1cfdf9613369264bc64c0c674ad2fa6b"
+      "bytes": 12959,
+      "contentHash": "06c26f9de851d5ee739e83666746723d"
     },
     {
       "slug": "guides/managed-configs",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 184864,
-      "contentHash": "80c4943bb5b26aec110fb771f2925b0f"
+      "bytes": 185441,
+      "contentHash": "15537316198346a369007b12803032ff"
     },
     {
       "slug": "reference/comparison",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 88083,
-      "contentHash": "f02a6489805b5f98964a48a534e8427e"
+      "bytes": 88766,
+      "contentHash": "797a43871a12266914cb811e7d97671c"
     },
     {
       "slug": "reference/ignore-rules",
@@ -505,8 +505,8 @@
       "url": "https://datamitsu.com/docs/reference/parser-catalog.md",
       "title": "Parser Catalog",
       "description": "Tools whose output the bundled datamitsu WASM parser module turns into diagnostics",
-      "bytes": 58636,
-      "contentHash": "3d1b10f5af70aa2648d2056083458c04"
+      "bytes": 59630,
+      "contentHash": "38afd5655b5d1660ba69a16f892fa80f"
     },
     {
       "slug": "reference/template-placeholders",

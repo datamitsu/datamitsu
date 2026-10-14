@@ -76,6 +76,12 @@ func verdictIdentity(task Task, unitDirRel, parserModuleHash string) string {
 	for _, arg := range task.OpConfig.Args {
 		parts = append(parts, []byte(arg))
 	}
+	if task.OpConfig.Granularity == config.GranularityUnit && config.ArgsReferenceFiles(task.OpConfig.Args) {
+		parts = append(parts, []byte("owned-unit-files"))
+		for _, file := range task.Files {
+			parts = append(parts, []byte(file))
+		}
+	}
 	for _, kv := range sortedEnv(task.OpConfig.Env) {
 		parts = append(parts, []byte(kv))
 	}

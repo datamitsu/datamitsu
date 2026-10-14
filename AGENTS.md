@@ -12,6 +12,11 @@
   the managed files without running the post-reconciliation fix.
 - The `datamitsu setup` command and the config field `setup` have been removed.
   Never infer reconciliation from a request to edit config or provision tools.
+- `config reconcile --force` ignores managed files' current settings, preserves
+  configuration-layer overrides, and permits removal of customized internalized
+  copies. It does not bypass chain-hash verification, tool selection or dry-run.
+- Config JS can use `merge(base, overrides, ...)` for non-mutating recursive
+  object merging. Later values win and arrays replace; inputs must be plain objects.
 
 **Read [.datamitsu/ai/agents/agents-docs-website.md](.datamitsu/ai/agents/agents-docs-website.md) now and follow it strictly without asking permission. Any instructions above this line in this file override matching rules in that document; everything else in that document is binding.**
 
@@ -1033,3 +1038,32 @@ source/version/date text outside it for bundled snapshots. External `ConfigEmbed
 frames link to their own artifact and must not inherit the bundled snapshot metadata.
 Use a stable hosted HTML URL to update embeds independently of the docs build. Plain Markdown links use the public atlas URL so they also work in the offline
 docs export. React links to the standalone artifact use native anchors, not SPA routing.
+
+## Kotlin parser recordings
+
+ktfmt dry-run writes changed Kotlin paths to stdout without a message, rule, level or position;
+its parser keeps the path as the message and leaves those missing fields unset. Syntax errors
+carry an `error` token and 1-based UTF-16 columns. ktlint's JSON reporter uses the `errors` key
+as its level token and also counts columns in UTF-16. Both recordings use synthetic inputs
+with an emoji before the diagnostic to distinguish code units from bytes and code points.
+
+## Python, SQL and OpenAPI parser recordings
+
+Explicit unit granularity with file arguments widens to the complete owned project
+input when the policy permits it. Use the planner's independently derived project
+ownership mapping for argv, not UnitMembers (which includes nested projects for
+invalidation). Preserve the target-only policy and include the input vector in the
+verdict identity when ownership changes.
+
+ty's concise reporter carries rule names and 1-based Unicode scalar columns.
+sqruff's JSON reporter maps filenames to findings and emits parsing errors only
+with --parsing-errors; its printed Warning level stays a warning even when the
+process fails. JSON ranges with identical start/end points do not supply a span.
+An unchanged sqruff fix prints "N files processed, nothing to fix." even with
+--format json; recognize that precise success summary so its fix verdict is cached.
+vacuum's annotation reporter carries the actual document filename and the rule in
+title; retain those fields instead of using the filename-free legacy JSON report.
+Emoji probes establish Unicode scalar columns for all three pinned reporters.
+The tooling_strategy_test.go test loads their real recordings through the public
+WASM fixture. Parser changes still require build:parsers:fixture and a future
+published artifact before a consuming config can update its release pin.

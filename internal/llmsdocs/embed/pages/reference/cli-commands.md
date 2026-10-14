@@ -1403,6 +1403,18 @@ datamitsu config reconcile --tools golangci-lint --dry-run
 datamitsu config reconcile --tools golangci-lint,prettier
 ```
 
+`--force` regenerates managed files from the Datamitsu configuration layers,
+ignoring their existing on-disk settings. Overrides declared in the project's
+Datamitsu layer still apply. It also permits removal of customized repository
+copies of configs that are internally managed. `--tools` still limits the files,
+and `--dry-run` previews the reset without writing. Hash verification remains
+enabled; `--no-verify-hash` is a separate choice.
+
+```bash
+datamitsu config reconcile --force --tools sqruff --dry-run
+datamitsu config reconcile --force --tools sqruff --skip-fix
+```
+
 ### config show
 
 Display the current configuration as JSON.
