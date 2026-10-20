@@ -83,7 +83,7 @@ func TestRunsPerFile(t *testing.T) {
 
 func TestValidateToolsArity(t *testing.T) {
 	validate := func(op ToolOperation) error {
-		return ValidateTools(MapOfTools{"t": {Operations: map[OperationType]ToolOperation{OpFix: op}}}, nil)
+		return ValidateTools(MapOfTools{"t": {Operations: map[OperationType]ToolOperation{OpFix: op}}}, nil, nil)
 	}
 
 	t.Run("declared arity matching the inference passes", func(t *testing.T) {

@@ -4,11 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
-
-// chainHashPrefix is the canonical algorithm prefix for an expectChainHash pin.
-const chainHashPrefix = "xxh3:"
 
 // ChainHashMismatch is one root-layer expectChainHash pin that did not match the
 // content entering the root layer.
@@ -65,7 +62,7 @@ func ChainHashes(layerMap ManagedConfigLayerMap) []ChainHashEntry {
 		}
 		out = append(out, ChainHashEntry{
 			FileName: name,
-			Hash:     chainHashPrefix + hashutil.XXH3Hex([]byte(incomingToRootLayer(history))),
+			Hash:     digest.XXH3Of([]byte(incomingToRootLayer(history))).String(),
 		})
 	}
 	return out
@@ -97,17 +94,26 @@ func VerifyChainHashes(layerMap ManagedConfigLayerMap) []ChainHashMismatch {
 			continue
 		}
 
-		expectedHex := strings.ToLower(strings.TrimPrefix(pin, chainHashPrefix))
+		// The pin is canonical after load validation. A pin that does not parse
+		// is itself a mismatch — the gate fails closed, never open: manufacturing
+		// a match from an unparsable pin would silence exactly the drift the
+		// pin exists to catch. (--no-verify-hash skips this whole function, so
+		// no escape hatch needs loose parsing here.)
+		expected, perr := digest.ParseXXH3(pin)
 		incoming := incomingToRootLayer(history)
-		actualHex := hashutil.XXH3Hex([]byte(incoming))
-		if expectedHex == actualHex {
+		actual := digest.XXH3Of([]byte(incoming))
+		if perr == nil && expected.Hex() == actual.Hex() {
 			continue
 		}
 
+		expectedStr := pin
+		if perr == nil {
+			expectedStr = expected.String()
+		}
 		mismatches = append(mismatches, ChainHashMismatch{
 			FileName: name,
-			Expected: chainHashPrefix + expectedHex,
-			Actual:   chainHashPrefix + actualHex,
+			Expected: expectedStr,
+			Actual:   actual.String(),
 			Incoming: incoming,
 		})
 	}

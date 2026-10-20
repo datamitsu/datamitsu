@@ -37,8 +37,8 @@ func (e *Executor) FormatContent(ctx context.Context, task Task, absPath string,
 	}
 
 	workingDir := e.getWorkingDir(task)
-	args := e.replacePlaceholders(task.OpConfig.Args, absPath, []string{absPath}, task.ProjectPath, task.ToolName)
-	opEnv := e.replaceEnvPlaceholders(task.OpConfig.Env, task.ProjectPath, task.ToolName)
+	args := e.replacePlaceholders(ctx, task.OpConfig.Args, absPath, []string{absPath}, task.ProjectPath, task.ToolName, task.OpConfig.App)
+	opEnv := e.replaceEnvPlaceholders(ctx, task.OpConfig.Env, task.ProjectPath, task.ToolName, task.OpConfig.App)
 	cmd := e.buildCommand(ctx, cmdInfo, args, workingDir, opEnv, toolenv.Capture(os.Environ(), task.OpConfig.InheritEnv))
 
 	// separate=true keeps the candidate (stdout) apart from diagnostics (stderr),

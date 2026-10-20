@@ -1,10 +1,8 @@
-use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read};
 use std::path::{Component, Path};
 
 use flate2::read::GzDecoder;
-use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveKind {
@@ -21,31 +19,6 @@ impl ArchiveKind {
 		} else {
 			Err(format!("{name} is neither a .tar.gz nor a .zip archive"))
 		}
-	}
-}
-
-/// Fails unless the file's SHA-256 equals expected (hex, any case).
-pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
-	let mut file = File::open(path).map_err(|err| format!("open {}: {err}", path.display()))?;
-	let mut hasher = Sha256::new();
-	let mut buffer = vec![0; 64 * 1024];
-	loop {
-		let read = file
-			.read(&mut buffer)
-			.map_err(|err| format!("read {}: {err}", path.display()))?;
-		if read == 0 {
-			break;
-		}
-		hasher.update(&buffer[..read]);
-	}
-	let actual = hex(&hasher.finalize());
-	if actual.eq_ignore_ascii_case(expected) {
-		Ok(())
-	} else {
-		Err(format!(
-			"SHA-256 mismatch for {}: expected {expected}, got {actual}",
-			file_name(path)
-		))
 	}
 }
 
@@ -111,15 +84,6 @@ fn file_name(path: &Path) -> String {
 	)
 }
 
-fn hex(bytes: &[u8]) -> String {
-	bytes
-		.iter()
-		.fold(String::with_capacity(bytes.len() * 2), |mut out, byte| {
-			let _ = write!(out, "{byte:02x}");
-			out
-		})
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
 	use std::io::Write;
@@ -151,30 +115,10 @@ pub(crate) mod tests {
 		writer.finish().unwrap().into_inner()
 	}
 
-	pub fn sha256_hex(bytes: &[u8]) -> String {
-		hex(&Sha256::digest(bytes))
-	}
-
 	fn write(dir: &Path, name: &str, bytes: &[u8]) -> std::path::PathBuf {
 		let path = dir.join(name);
 		std::fs::write(&path, bytes).unwrap();
 		path
-	}
-
-	#[test]
-	fn verifies_a_matching_digest_in_any_case() {
-		let dir = tempfile::tempdir().unwrap();
-		let path = write(dir.path(), "a.tar.gz", b"payload");
-		verify_sha256(&path, &sha256_hex(b"payload")).unwrap();
-		verify_sha256(&path, &sha256_hex(b"payload").to_uppercase()).unwrap();
-	}
-
-	#[test]
-	fn rejects_a_mismatched_digest() {
-		let dir = tempfile::tempdir().unwrap();
-		let path = write(dir.path(), "a.tar.gz", b"payload");
-		let err = verify_sha256(&path, &sha256_hex(b"other")).unwrap_err();
-		assert!(err.starts_with("SHA-256 mismatch for a.tar.gz"), "{err}");
 	}
 
 	#[test]

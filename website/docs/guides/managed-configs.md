@@ -115,13 +115,14 @@ datamitsu devtools pack-inline-archive ./my-config-dir
 
 ### External Archives
 
-Larger archives can be downloaded from URLs with mandatory SHA-256 hash verification:
+Larger archives can be downloaded from URLs with mandatory SHA-256 hash verification
+(canonical `sha256:<64 lowercase hex>` digests):
 
 ```javascript
 archives: {
   "config-bundle": {
     url: "https://example.com/config-v2.tar.gz",
-    hash: "abc123def456789012345678901234567890123456789012345678901234abcd",
+    hash: "sha256:abc123def456789012345678901234567890123456789012345678901234abcd",
     format: "tar.gz",
   },
 }

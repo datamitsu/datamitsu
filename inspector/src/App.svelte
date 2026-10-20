@@ -78,20 +78,15 @@
   $effect(() => {
     writeHistory();
   });
-  function navigate(view: string) {
-    route.view = view;
-    writeHistory(true);
-  }
-  function restore() {
-    route = readLocation(location.search, location.hash, data);
-    preference = themePreference(location.search);
-  }
-  function reset() {
-    route.q = "";
-    route.project = "";
-    route.runtime = "";
-    route.status = "all";
-    route.operation = "all";
+  // Any origin may set the mode: it changes colors and nothing else, and a
+  // sandboxed frame has no origin of its own to check the host against.
+  function acceptTheme(event: MessageEvent) {
+    const value = readThemeMessage(event.data);
+    if (!value) {
+      return;
+    }
+    preference = value;
+    (event.source as null | WindowProxy)?.postMessage({ type: themeMessage.ack, value }, "*");
   }
   function choose(kind: string, value: string) {
     reset();
@@ -106,16 +101,6 @@
       }
       navigate("operations");
     }
-  }
-  // Any origin may set the mode: it changes colors and nothing else, and a
-  // sandboxed frame has no origin of its own to check the host against.
-  function acceptTheme(event: MessageEvent) {
-    const value = readThemeMessage(event.data);
-    if (!value) {
-      return;
-    }
-    preference = value;
-    (event.source as null | WindowProxy)?.postMessage({ type: themeMessage.ack, value }, "*");
   }
   async function copy(text: string) {
     try {
@@ -132,6 +117,21 @@
       copyField.focus();
       copyField.select();
     }
+  }
+  function navigate(view: string) {
+    route.view = view;
+    writeHistory(true);
+  }
+  function reset() {
+    route.q = "";
+    route.project = "";
+    route.runtime = "";
+    route.status = "all";
+    route.operation = "all";
+  }
+  function restore() {
+    route = readLocation(location.search, location.hash, data);
+    preference = themePreference(location.search);
   }
 </script>
 

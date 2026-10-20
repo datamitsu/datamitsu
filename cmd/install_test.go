@@ -14,6 +14,10 @@ type fakeCommandInfoGetter struct {
 	failOn    string
 }
 
+func (f *fakeCommandInfoGetter) GetCommandInfoInstallOnly(ctx context.Context, appName string) (*binmanager.CommandInfo, error) {
+	return f.GetCommandInfo(ctx, appName)
+}
+
 func (f *fakeCommandInfoGetter) GetCommandInfo(_ context.Context, appName string) (*binmanager.CommandInfo, error) {
 	if appName == f.failOn {
 		return nil, errors.New("install failed")

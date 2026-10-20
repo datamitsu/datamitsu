@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/dop251/goja"
 )
 
@@ -17,7 +17,7 @@ func TestVerifyChainHashes(t *testing.T) {
 	// The "incoming" content for a root-layer pin is the output of the layer
 	// just before the root layer (the upstream chain), hashed byte-for-byte.
 	upstream := "version: 2\nfoo: bar\n"
-	upstreamHash := hashutil.XXH3Hex([]byte(upstream))
+	upstreamHash := digest.XXH3Of([]byte(upstream)).Hex()
 
 	t.Run("no pin → no mismatch", func(t *testing.T) {
 		lm := ManagedConfigLayerMap{
@@ -45,7 +45,9 @@ func TestVerifyChainHashes(t *testing.T) {
 		}
 	})
 
-	t.Run("bare hex pin (no prefix) accepted", func(t *testing.T) {
+	t.Run("bare hex pin (no prefix) fails closed", func(t *testing.T) {
+		// Load validation rejects a bare pin outright; this gate must not
+		// manufacture a match for a value that does not parse.
 		lm := ManagedConfigLayerMap{
 			"x": {
 				FileName:    "x",
@@ -53,8 +55,12 @@ func TestVerifyChainHashes(t *testing.T) {
 				Layers:      []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "t")},
 			},
 		}
-		if got := VerifyChainHashes(lm); len(got) != 0 {
-			t.Fatalf("expected bare-hex match, got %+v", got)
+		got := VerifyChainHashes(lm)
+		if len(got) != 1 {
+			t.Fatalf("expected one mismatch for an unparsable pin, got %+v", got)
+		}
+		if got[0].Actual != "xxh3:"+upstreamHash {
+			t.Fatalf("actual should still be the recomputed chain hash, got %+v", got[0])
 		}
 	})
 
@@ -103,7 +109,7 @@ func TestVerifyChainHashes(t *testing.T) {
 			"x": {
 				FileName:        "x",
 				OriginalContent: &disk,
-				FinalConfig:     ManagedConfig{ExpectChainHash: "xxh3:" + hashutil.XXH3Hex([]byte(disk))},
+				FinalConfig:     ManagedConfig{ExpectChainHash: digest.XXH3Of([]byte(disk)).String()},
 				Layers:          []ManagedConfigLayerEntry{layer("root", "generated")},
 			},
 		}
@@ -115,7 +121,7 @@ func TestVerifyChainHashes(t *testing.T) {
 
 func TestChainHashes(t *testing.T) {
 	upstream := "base output\n"
-	want := "xxh3:" + hashutil.XXH3Hex([]byte(upstream))
+	want := digest.XXH3Of([]byte(upstream)).String()
 
 	lm := ManagedConfigLayerMap{
 		"b.yaml": {Layers: []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "x")}},
@@ -157,7 +163,7 @@ func TestVerifyChainHashes_Pipeline(t *testing.T) {
 	}
 
 	const baseOut = "version: 2\n"
-	goodPin := "xxh3:" + hashutil.XXH3Hex([]byte(baseOut))
+	goodPin := digest.XXH3Of([]byte(baseOut)).String()
 
 	build := func(rootPin string) ManagedConfigLayerMap {
 		lm := make(ManagedConfigLayerMap)

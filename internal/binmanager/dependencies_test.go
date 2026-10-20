@@ -3,8 +3,6 @@ package binmanager
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
@@ -14,13 +12,15 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 func TestAppDependencyClosure(t *testing.T) {
 	apps := MapOfApps{
-		"a": {DependsOn: []string{"c", "b"}},
-		"b": {DependsOn: []string{"d"}},
-		"c": {DependsOn: []string{"d"}},
+		"a": {DependsOn: edges("c", "b")},
+		"b": {DependsOn: edges("d")},
+		"c": {DependsOn: edges("d")},
 		"d": {},
 		"e": {},
 	}
@@ -50,7 +50,7 @@ func TestAppDependencyClosure(t *testing.T) {
 			}
 		})
 	}
-	if !slices.Equal(apps["a"].DependsOn, []string{"c", "b"}) {
+	if !slices.Equal(apps["a"].DependsOn, edges("c", "b")) {
 		t.Fatal("closure mutated dependency list")
 	}
 }
@@ -63,12 +63,12 @@ func TestDependencyProvisioning(t *testing.T) {
 			apps := binaryAppFixture(t, "root")
 			root := apps["root"]
 			root.Required = true
-			root.DependsOn = []string{"left", "right"}
+			root.DependsOn = edges("left", "right")
 			apps["root"] = root
-			apps["left"] = App{Uv: &AppConfigUV{}, DependsOn: []string{"leaf"}, Lazy: true}
-			apps["right"] = App{Node: &AppConfigNode{}, DependsOn: []string{"leaf"}}
+			apps["left"] = App{Uv: &AppConfigUV{}, DependsOn: edges("leaf"), Lazy: true}
+			apps["right"] = App{Node: &AppConfigNode{}, DependsOn: edges("leaf")}
 			apps["leaf"] = App{Bun: &AppConfigBun{}, Lazy: true}
-			apps["shell"] = App{Shell: &AppConfigShell{Name: "echo"}, DependsOn: []string{"root"}}
+			apps["shell"] = App{Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges("root")}
 			dir := t.TempDir()
 			var mu sync.Mutex
 			calls := map[string]int{}
@@ -132,9 +132,9 @@ func TestDependencyFailurePreventsCommandResolution(t *testing.T) {
 		apps    MapOfApps
 		wantErr string
 	}{
-		{"missing", MapOfApps{"root": {Shell: &AppConfigShell{Name: "echo"}, DependsOn: []string{"missing"}}}, "missing"},
-		{"cycle", MapOfApps{"root": {DependsOn: []string{"dep"}}, "dep": {DependsOn: []string{"root"}}}, "root -> dep -> root"},
-		{"install error", MapOfApps{"root": {Shell: &AppConfigShell{Name: "echo"}, DependsOn: []string{"dep"}}, "dep": {Uv: &AppConfigUV{}}}, "install failed"},
+		{"missing", MapOfApps{"root": {Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges("missing")}}, "missing"},
+		{"cycle", MapOfApps{"root": {DependsOn: edges("dep")}, "dep": {DependsOn: edges("root")}}, "root -> dep -> root"},
+		{"install error", MapOfApps{"root": {Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges("dep")}, "dep": {Uv: &AppConfigUV{}}}, "install failed"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			bm := New(tt.apps, nil, &mockRuntimeAppManager{getCommandInfoFunc: func(context.Context, string, App) (*CommandInfo, error) { return nil, errors.New("install failed") }})
@@ -152,7 +152,7 @@ func TestConcurrentAppDependencyInstalls(t *testing.T) {
 	previousClient := httpClient
 	httpClient = &http.Client{Transport: dependencyTransport{payload: payload}}
 	t.Cleanup(func() { httpClient = previousClient })
-	sum := sha256.Sum256(payload)
+	sum := digest.SHA256Of(payload)
 	apps := MapOfApps{}
 	for _, name := range []string{"left", "right", "leaf"} {
 		app := binaryAppFixture(t, name)[name]
@@ -160,13 +160,13 @@ func TestConcurrentAppDependencyInstalls(t *testing.T) {
 			for _, variants := range arches {
 				for libc, info := range variants {
 					info.URL = "https://fixture.invalid/tool"
-					info.Hash = hex.EncodeToString(sum[:])
+					info.Hash = sum.Hex()
 					variants[libc] = info
 				}
 			}
 		}
 		if name != "leaf" {
-			app.DependsOn = []string{"leaf"}
+			app.DependsOn = edges("leaf")
 		}
 		apps[name] = app
 	}
@@ -218,4 +218,14 @@ type dependencyTransport struct{ payload []byte }
 
 func (d dependencyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(d.payload)), ContentLength: int64(len(d.payload)), Header: make(http.Header), Request: req}, nil
+}
+
+// edges builds a dependsOn edge list from plain names, mirroring the
+// normalized string form of the config.
+func edges(names ...string) []AppDependency {
+	out := make([]AppDependency, 0, len(names))
+	for _, n := range names {
+		out = append(out, AppDependency{App: n, Alias: n})
+	}
+	return out
 }

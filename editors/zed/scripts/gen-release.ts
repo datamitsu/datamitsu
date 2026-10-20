@@ -19,13 +19,13 @@ if (version === "") {
 const checksumsPath = process.env.CHECKSUMS_FILE ?? join(REPO_ROOT, "dist", "checksums.txt");
 const checksums = parseChecksums(readFileSync(checksumsPath, "utf8"));
 
-const assets: Record<string, { file: string; sha256: string }> = {};
+const assets: Record<string, { file: string; hash: string }> = {};
 for (const { file, key } of platformAssets(version)) {
   const sha256 = checksums.get(file);
   if (sha256 === undefined) {
     throw new Error(`no checksum for ${file} in ${checksumsPath}`);
   }
-  assets[key] = { file, sha256 };
+  assets[key] = { file, hash: `sha256:${sha256}` };
 }
 
 writeFileSync(

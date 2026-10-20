@@ -196,9 +196,9 @@ func TestSourceDenyListedAppExcluded(t *testing.T) {
 	p := clitest.NewProject(t)
 	p.WriteFile("datamitsu.config.js",
 		"globalThis.getConfig = () => ({ apps: {\n"+
-			"  sudo: { binary: { binaries: { linux: { amd64: { glibc: { url: \"https://example.test/x.tar.gz\", hash: \""+
+			"  sudo: { binary: { binaries: { linux: { amd64: { glibc: { url: \"https://example.test/x.tar.gz\", hash: \"sha256:"+
 			strings.Repeat("11", 32)+"\", contentType: \"tar.gz\" } } },\n"+
-			"    darwin: { arm64: { unknown: { url: \"https://example.test/y.tar.gz\", hash: \""+
+			"    darwin: { arm64: { unknown: { url: \"https://example.test/y.tar.gz\", hash: \"sha256:"+
 			strings.Repeat("22", 32)+"\", contentType: \"tar.gz\" } } } } } },\n"+
 			"}, tools: {}, projectTypes: {} });\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
@@ -450,9 +450,9 @@ func TestSourceRefreshDownloadsNothing(t *testing.T) {
 	p := clitest.NewProject(t)
 	p.WriteFile("datamitsu.config.js",
 		"globalThis.getConfig = () => ({ apps: {\n"+
-			"  shellcheck: { binary: { binaries: { linux: { amd64: { glibc: { url: \"https://example.test/x.tar.gz\", hash: \""+
+			"  shellcheck: { binary: { binaries: { linux: { amd64: { glibc: { url: \"https://example.test/x.tar.gz\", hash: \"sha256:"+
 			strings.Repeat("11", 32)+"\", contentType: \"tar.gz\" } } },\n"+
-			"    darwin: { arm64: { unknown: { url: \"https://example.test/y.tar.gz\", hash: \""+
+			"    darwin: { arm64: { unknown: { url: \"https://example.test/y.tar.gz\", hash: \"sha256:"+
 			strings.Repeat("22", 32)+"\", contentType: \"tar.gz\" } } } } } },\n"+
 			"}, tools: {}, projectTypes: {} });\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")

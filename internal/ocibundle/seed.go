@@ -18,6 +18,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/ocidigest"
 	"github.com/datamitsu/datamitsu/internal/ociref"
+	"github.com/datamitsu/datamitsu/internal/prepare"
 	"github.com/datamitsu/datamitsu/internal/target"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -297,7 +298,7 @@ func classifyLayers(manifest *ocispec.Manifest, storeRoot string, expected map[s
 				continue
 			}
 		}
-		if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(subtree))); err == nil {
+		if subtreeReady(storeRoot, subtree) {
 			log.Debug("subtree already in store, skipping layer", zap.String("subtree", subtree))
 			continue
 		}
@@ -326,14 +327,14 @@ func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, s
 		return nil
 	}
 
-	release, err := lockSubtree(storeRoot, job.subtree)
+	release, err := lockSubtree(ctx, storeRoot, job.subtree)
 	if err != nil {
 		return err
 	}
 	defer release()
 
 	dest := filepath.Join(storeRoot, filepath.FromSlash(job.subtree))
-	if _, err := os.Stat(dest); err == nil {
+	if subtreeReady(storeRoot, job.subtree) {
 		return nil // another process seeded it while we waited for the lock
 	}
 
@@ -364,14 +365,14 @@ func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, s
 		if spec.relPath != "" {
 			file = filepath.Join(staged, filepath.FromSlash(spec.relPath))
 		}
-		if err := binmanager.VerifyFileHashPublic(file, spec.sha256, binmanager.BinHashTypeSHA256); err != nil {
+		if err := binmanager.VerifyFileHashPublic(file, spec.sha256); err != nil {
 			return fmt.Errorf("%w: seeded content for %q does not match the published SHA-256 from the config: %w", errIntegrity, spec.owner, err)
 		}
 		log.Debug("re-verified seeded artifact against published hash",
 			zap.String("subtree", job.subtree), zap.String("owner", spec.owner))
 	}
 
-	if err := placeSubtree(staged, dest); err != nil {
+	if err := placeSubtree(staged, dest, job.subtree); err != nil {
 		return fmt.Errorf("place subtree %q: %w", job.subtree, err)
 	}
 	log.Info("seeded store subtree from oci bundle", zap.String("subtree", job.subtree))
@@ -382,12 +383,26 @@ func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, s
 // the store. The staging area lives under {store}/tmp — same filesystem — so
 // os.Rename is atomic; a concurrently appeared destination wins (content-
 // addressed paths hold identical content).
-func placeSubtree(staged, dest string) error {
+//
+// A PREPARED state directory (subtree under .prepared/) that exists WITHOUT
+// its marker is an interrupted placement, not content: it cannot win the
+// race. It is moved aside under {store}/tmp/stale-prepared-* (never deleted
+// in place — a concurrent reader may hold a descriptor) so the staged,
+// complete state takes its name; the prepare sweeper collects the asides
+// after 24h. The root is decided by the DECLARED subtree, never by probing
+// the destination: an install tree (or anything else) that lacks
+// prepared.json is ordinary content and follows the destination-wins rule.
+func placeSubtree(staged, dest, subtree string) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return fmt.Errorf("create destination parent: %w", err)
 	}
 	if _, err := os.Stat(dest); err == nil {
-		return removeStaged(staged)
+		if !strings.HasPrefix(subtree, preparedSubtreeRoot) || !isDirWithoutMarker(dest) {
+			return removeStaged(staged)
+		}
+		if _, aerr := moveMarkerlessAside(dest); aerr != nil {
+			return fmt.Errorf("defer markerless prepared state: %w", aerr)
+		}
 	}
 	if err := os.Rename(staged, dest); err != nil {
 		if _, statErr := os.Stat(dest); statErr == nil {
@@ -396,6 +411,34 @@ func placeSubtree(staged, dest string) error {
 		return fmt.Errorf("rename staged subtree: %w", err)
 	}
 	return nil
+}
+
+// isDirWithoutMarker reports whether dest is a directory without
+// prepare.MarkerName in it. Callers gate it on the .prepared/ root first.
+func isDirWithoutMarker(dest string) bool {
+	info, err := os.Stat(dest)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	return !prepare.Ready(dest)
+}
+
+// moveMarkerlessAside relocates an interrupted prepared state under
+// {store}/tmp/stale-prepared-* so a complete placement can take its name.
+func moveMarkerlessAside(dest string) (string, error) {
+	tmpRoot := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(dest))), "tmp")
+	if err := os.MkdirAll(tmpRoot, 0o755); err != nil {
+		return "", fmt.Errorf("create tmp root: %w", err)
+	}
+	aside, err := os.MkdirTemp(tmpRoot, "stale-prepared-")
+	if err != nil {
+		return "", fmt.Errorf("create aside directory: %w", err)
+	}
+	if err := os.Rename(dest, filepath.Join(aside, "state")); err != nil {
+		_ = os.RemoveAll(aside)
+		return "", fmt.Errorf("move markerless state aside: %w", err)
+	}
+	return aside, nil
 }
 
 // removeStaged drops a staged copy that lost the placement race (the
@@ -425,7 +468,7 @@ func verifyRequested(storeRoot string, expected map[string]string, manifest *oci
 		if strings.HasPrefix(owner, parserOwnerPrefix) {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(subtree))); err != nil {
+		if !subtreeReady(storeRoot, subtree) {
 			missing = append(missing, subtree)
 		}
 	}
@@ -438,17 +481,41 @@ func verifyRequested(storeRoot string, expected map[string]string, manifest *oci
 	details := make([]string, 0, len(missing))
 	for _, subtree := range missing {
 		// The bundle annotates a layer with the same name this path segment
-		// carries, so the expected path yields the key to look up.
+		// carries, so the expected path yields the key to look up. Prepared
+		// states compare only against prepared layers of the same app —
+		// mixing roots would report an install subtree as "the state the
+		// bundle carries", and the reverse.
+		root := path.Dir(strings.TrimSuffix(subtree, "/"))
 		if inBundle := carried[path.Base(path.Dir(subtree))]; len(inBundle) > 0 {
-			details = append(details, fmt.Sprintf(
-				"%s: expected %s, but the bundle carries %s — this config differs from the one the bundle was built from",
-				expected[subtree], subtree, strings.Join(inBundle, ", ")))
-			continue
+			if same := sameRootSubtrees(inBundle, root); len(same) > 0 {
+				details = append(details, fmt.Sprintf(
+					"%s: expected %s, but the bundle carries %s — this config differs from the one the bundle was built from",
+					expected[subtree], subtree, strings.Join(same, ", ")))
+				continue
+			}
 		}
 		details = append(details, fmt.Sprintf(
 			"%s: expected %s, which the bundle does not carry", expected[subtree], subtree))
 	}
 	return fmt.Errorf("%w:\n  %s", errIncomplete, strings.Join(details, "\n  "))
+}
+
+// sameRootSubtrees filters a bundle's subtree list down to those sharing the
+// expected subtree's store root (the first path segment: .bin, .prepared,
+// .apps, …) — an app's install tree and its prepared state are different
+// things, and a mismatch report must not conflate them.
+func sameRootSubtrees(subtrees []string, subtreePath string) []string {
+	root := ""
+	if i := strings.Index(subtreePath, "/"); i >= 0 {
+		root = subtreePath[:i+1]
+	}
+	var same []string
+	for _, s := range subtrees {
+		if root != "" && strings.HasPrefix(s, root) {
+			same = append(same, s)
+		}
+	}
+	return same
 }
 
 // bundleSubtreesByApp indexes the bundle's annotated layers by the app (or
@@ -471,7 +538,7 @@ func bundleSubtreesByApp(manifest *ocispec.Manifest) map[string][]string {
 
 func allSubtreesPresent(storeRoot string, expected map[string]string) bool {
 	for subtree := range expected {
-		if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(subtree))); err != nil {
+		if !subtreeReady(storeRoot, subtree) {
 			return false
 		}
 	}

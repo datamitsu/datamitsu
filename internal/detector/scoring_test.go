@@ -268,6 +268,92 @@ func TestSelectBestAsset_ForeignArchNotMisclassifiedAsAmd64(t *testing.T) {
 	}
 }
 
+// An asset that names an OS datamitsu does not run on carries an arch token
+// and no OS token it selects, which is exactly what the implicit-Linux rule
+// looks for. tombi's illumos build was recorded for linux/amd64 that way, and
+// it is an ELF, so extraction verification let it through.
+func TestSelectBestAsset_ForeignOSNotClaimedAsLinux(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("tombi-cli-1.5.5-x86_64-unknown-illumos.tar.gz"),
+		makeAsset("tombi-cli-1.5.5-x86_64-unknown-linux-gnu.tar.gz"),
+		makeAsset("tombi-cli-1.5.5-x86_64-unknown-linux-musl.tar.gz"),
+	}
+	best := selectBestAsset(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
+	if best == nil {
+		t.Fatal("expected a result, got nil")
+	}
+	if best.Asset.Name != "tombi-cli-1.5.5-x86_64-unknown-linux-gnu.tar.gz" {
+		t.Errorf("selectBestAsset picked %q, want the linux-gnu build", best.Asset.Name)
+	}
+
+	for _, name := range []string{
+		"tombi-cli-1.5.5-x86_64-unknown-illumos.tar.gz",
+		"tool-1.0-x86_64-solaris.tar.gz",
+		"tool-1.0-x86_64-unknown-netbsd.tar.gz",
+		"tool_1.0_android_arm64.tar.gz",
+		"tool-1.0-aix-ppc64.tar.gz",
+	} {
+		if s := ScoreAsset(makeAsset(name), syslist.OsTypeLinux, syslist.ArchTypeAmd64, ""); s.Total != 0 {
+			t.Errorf("ScoreAsset(%q, linux/amd64).Total = %d, want 0", name, s.Total)
+		}
+	}
+}
+
+// protoc publishes win32 and win64 zips. Neither names an arch the selector
+// knows, so both scored as implicit amd64 and the name order picked win32.
+func TestSelectBestAsset_Win64BeatsWin32(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("protoc-36.2-win32.zip"),
+		makeAsset("protoc-36.2-win64.zip"),
+	}
+	best := selectBestAsset(assets, syslist.OsTypeWindows, syslist.ArchTypeAmd64, "")
+	if best == nil {
+		t.Fatal("expected a result, got nil")
+	}
+	if best.Asset.Name != "protoc-36.2-win64.zip" {
+		t.Errorf("selectBestAsset picked %q, want protoc-36.2-win64.zip", best.Asset.Name)
+	}
+	if s := ScoreAsset(makeAsset("protoc-36.2-win32.zip"), syslist.OsTypeWindows, syslist.ArchTypeAmd64, ""); s.Total != 0 {
+		t.Errorf("win32 scored %d for windows/amd64, want 0", s.Total)
+	}
+	// Electron-style names say win32 for Windows itself; the arch token beside it decides.
+	if s := ScoreAsset(makeAsset("app-win32-x64.zip"), syslist.OsTypeWindows, syslist.ArchTypeAmd64, ""); !s.IsExplicit {
+		t.Error("a win32 name that also says x64 is not an explicit windows/amd64 match")
+	}
+	if s := ScoreAsset(makeAsset("app-win32-x64.zip"), syslist.OsTypeWindows, syslist.ArchType386, ""); s.Total != 0 {
+		t.Errorf("app-win32-x64 scored %d for windows/386, want 0", s.Total)
+	}
+	if s := ScoreAsset(makeAsset("app-win32-arm64.zip"), syslist.OsTypeWindows, syslist.ArchTypeArm64, ""); !s.IsExplicit {
+		t.Error("a win32 name that also says arm64 is not an explicit windows/arm64 match")
+	}
+}
+
+// snyk names its Windows build snyk-win.exe: no "windows" token, and ".exe"
+// only ranked assets that had already matched the OS.
+func TestSelectBestAsset_WinExeIsWindows(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("snyk-alpine"),
+		makeAsset("snyk-linux"),
+		makeAsset("snyk-linux-arm64"),
+		makeAsset("snyk-macos"),
+		makeAsset("snyk-macos-arm64"),
+		makeAsset("snyk-win.exe"),
+	}
+	best := selectBestAsset(assets, syslist.OsTypeWindows, syslist.ArchTypeAmd64, "")
+	if best == nil {
+		t.Fatal("expected a result, got nil")
+	}
+	if best.Asset.Name != "snyk-win.exe" {
+		t.Errorf("selectBestAsset picked %q, want snyk-win.exe", best.Asset.Name)
+	}
+	if got := selectBestAsset(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc"); got == nil || got.Asset.Name != "snyk-linux" {
+		t.Errorf("linux/amd64 picked %v, want snyk-linux", got)
+	}
+	if s := ScoreAsset(makeAsset("tool-x86_64.exe"), syslist.OsTypeLinux, syslist.ArchTypeAmd64, ""); s.Total != 0 {
+		t.Errorf("an .exe with an arch token scored %d for linux/amd64, want 0", s.Total)
+	}
+}
+
 // TestSelectBestAsset_ProtocDarwinForeignArch covers protoc's darwin/amd64 bug
 // (osx-aarch_64 was claimed as amd64).
 func TestSelectBestAsset_ProtocDarwinForeignArch(t *testing.T) {
@@ -420,7 +506,7 @@ func TestDetectBinary_FiltersVsix(t *testing.T) {
 		makeAsset("tombi-vscode-0.1.0-linux-arm64.vsix"),
 	}
 
-	_, err := DetectBinary(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
+	_, err := DetectBinary("", assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
 	if err == nil {
 		t.Fatal("expected error when only .vsix assets are present, got nil")
 	}
@@ -435,7 +521,7 @@ func TestDetectBinary_PrefersArchiveOverVsix(t *testing.T) {
 		makeAsset("tombi-vscode-0.1.0-linux-x64.vsix"),
 	}
 
-	result, err := DetectBinary(assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
+	result, err := DetectBinary("", assets, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -516,7 +602,7 @@ func TestDetectBinary_ScoringBased(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := DetectBinary(tt.assets, tt.osType, tt.archType, tt.libcType)
+			result, err := DetectBinary("", tt.assets, tt.osType, tt.archType, tt.libcType)
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")

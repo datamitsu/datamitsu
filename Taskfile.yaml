@@ -95,7 +95,7 @@ tasks:
     dir: parsers
   build:zed:
     cmds:
-      - cargo build --release --target wasm32-wasip2 --manifest-path editors/zed/Cargo.toml
+      - cargo build --release --locked --target wasm32-wasip2 --manifest-path editors/zed/Cargo.toml
     desc: Build the Zed extension to a WebAssembly component, as Zed does for a dev extension
   # ── Demo ──
   demo:capture:

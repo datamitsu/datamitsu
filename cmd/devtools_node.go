@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 
+	"github.com/datamitsu/datamitsu/internal/jsonsort"
 	"github.com/datamitsu/datamitsu/internal/registry"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 
@@ -90,6 +91,7 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Minimum release age: %s\n", minAgeBanner(minAge))
 	fmt.Printf("Checking %d npm packages...\n\n", len(names))
+	enableRetryNotices()
 
 	var results []npmVersionResult
 	maxNameLen := 0
@@ -99,7 +101,14 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	for _, name := range names {
+	// With --update, a package whose entry changes is saved before the next
+	// lookup, so a later failure or an interrupted run costs nothing already
+	// pulled; a package that fails keeps its previous entry.
+	write := nodeUpdateFlag && !nodeDryRunFlag
+	updatedCount := 0
+	counterWidth := len(strconv.Itoa(len(names)))
+	for i, name := range names {
+		counter := fmt.Sprintf("[%*d/%d]", counterWidth, i+1, len(names))
 		entry := apps[name]
 		result := npmVersionResult{
 			Name:           name,
@@ -111,13 +120,13 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 		switch {
 		case err != nil:
 			result.Error = err.Error()
-			fmt.Printf("  %-*s  %s  -> error: %v\n", maxNameLen, name, result.CurrentVersion, err)
+			fmt.Printf("  %s %-*s  %s  -> error: %v\n", counter, maxNameLen, name, result.CurrentVersion, err)
 		case info == nil:
 			// No version is old enough under the active min-age cutoff: skip with
 			// a warning and keep the current version (no error, no update).
 			fmt.Fprintf(os.Stderr,
-				"  %-*s  %s  -> warning: no version at least %d minutes old; keeping current\n",
-				maxNameLen, name, result.CurrentVersion, minAge)
+				"  %s %-*s  %s  -> warning: no version at least %d minutes old; keeping current\n",
+				counter, maxNameLen, name, result.CurrentVersion, minAge)
 		default:
 			result.LatestVersion = info.Version
 			result.UpdateNeeded = info.Version != entry.Version
@@ -127,7 +136,7 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 			if result.UpdateNeeded {
 				status = "-> " + info.Version
 			}
-			line := fmt.Sprintf("  %-*s  %s  %s", maxNameLen, name, result.CurrentVersion, status)
+			line := fmt.Sprintf("  %s %-*s  %s  %s", counter, maxNameLen, name, result.CurrentVersion, status)
 			if info.Description != "" {
 				line += "  " + info.Description
 			}
@@ -135,22 +144,59 @@ func runPullNode(cmd *cobra.Command, args []string) error {
 		}
 
 		results = append(results, result)
+
+		if !write || result.Error != "" {
+			continue
+		}
+		next := applyNodeResult(entry, result)
+		if next == entry {
+			continue
+		}
+		apps[name] = next
+		if err := writeNodeAppsJSON(file, apps); err != nil {
+			fmt.Fprintf(os.Stderr, "The run stopped at %s; the packages after it were not attempted.\n", name)
+			return fmt.Errorf("error updating %s after %s: %w", file, name, err)
+		}
+		if result.UpdateNeeded {
+			updatedCount++
+		}
 	}
 
-	if nodeUpdateFlag && !nodeDryRunFlag {
-		if err := updateNodeAppsJSON(file, results); err != nil {
-			return fmt.Errorf("error updating %s: %w", file, err)
+	if write {
+		if updatedCount > 0 {
+			fmt.Printf("\n✓ Updated %d versions in %s\n", updatedCount, file)
+		} else {
+			fmt.Printf("\nNo updates to write to %s\n", file)
 		}
 	}
 
 	printNodeSummary(results)
 
+	var failed []failedPackage
 	for _, r := range results {
 		if r.Error != "" {
-			return errors.New("some packages failed to fetch from registry")
+			failed = append(failed, failedPackage{name: r.Name, pkg: r.PackageName, err: r.Error})
 		}
 	}
-	return nil
+	return reportFailedPackages(file, len(results), failed)
+}
+
+// failedPackage is one registry lookup a pull-node or pull-uv run could not finish.
+type failedPackage struct {
+	name, pkg, err string
+}
+
+// reportFailedPackages lists every failed lookup after the summary, says what
+// the file holds for them, and returns an error so the command exits non-zero.
+func reportFailedPackages(file string, total int, failed []failedPackage) error {
+	if len(failed) == 0 {
+		return nil
+	}
+	fmt.Fprintf(os.Stderr, "\n✗ %d of %d packages failed and are left as they were in %s:\n", len(failed), total, file)
+	for _, f := range failed {
+		fmt.Fprintf(os.Stderr, "  %s (%s): %s\n", f.name, f.pkg, f.err)
+	}
+	return fmt.Errorf("%d of %d packages failed", len(failed), total)
 }
 
 func printNodeSummary(results []npmVersionResult) {
@@ -221,7 +267,7 @@ func readNodeAppsJSON(path string) (nodeAppsJSON, error) {
 }
 
 func writeNodeAppsJSON(path string, apps nodeAppsJSON) error {
-	data, err := json.MarshalIndent(apps, "", "  ")
+	data, err := jsonsort.MarshalIndent(apps, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling: %w", err)
 	}
@@ -251,39 +297,14 @@ func writeNodeAppsJSON(path string, apps nodeAppsJSON) error {
 	return nil
 }
 
-func updateNodeAppsJSON(path string, results []npmVersionResult) error {
-	existing, err := readNodeAppsJSON(path)
-	if err != nil {
-		return fmt.Errorf("failed to read existing %s: %w", path, err)
+// applyNodeResult is the entry a successful lookup leaves: the latest version
+// when it moved, and the registry's description unless the registry has none.
+func applyNodeResult(entry nodeAppEntry, r npmVersionResult) nodeAppEntry {
+	if r.UpdateNeeded {
+		entry.Version = r.LatestVersion
 	}
-	apps := make(nodeAppsJSON, len(results))
-	updatedCount := 0
-	for _, r := range results {
-		version := r.CurrentVersion
-		if r.Error == "" && r.UpdateNeeded {
-			version = r.LatestVersion
-			updatedCount++
-		}
-		desc := r.Description
-		if desc == "" && existing != nil {
-			if e, ok := existing[r.Name]; ok {
-				desc = e.Description
-			}
-		}
-		apps[r.Name] = nodeAppEntry{
-			PackageName: r.PackageName,
-			Version:     version,
-			Description: desc,
-		}
+	if r.Description != "" {
+		entry.Description = r.Description
 	}
-
-	if err := writeNodeAppsJSON(path, apps); err != nil {
-		return err
-	}
-	if updatedCount > 0 {
-		fmt.Printf("\n✓ Updated %d versions in %s\n", updatedCount, path)
-	} else {
-		fmt.Printf("\nNo updates to write to %s\n", path)
-	}
-	return nil
+	return entry
 }

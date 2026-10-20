@@ -35,7 +35,7 @@ func TestRegistryLookupsRefuseOffline(t *testing.T) {
 			return err
 		},
 		"temurin": func() error {
-			_, err := GetLatestTemurinMajorVersion(ctx)
+			_, err := GetTemurinMajorVersions(ctx)
 			return err
 		},
 	}

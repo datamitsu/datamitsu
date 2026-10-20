@@ -3,8 +3,6 @@ package binmanager
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -17,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/httpretry"
 	"github.com/datamitsu/datamitsu/internal/httpx"
@@ -194,8 +194,8 @@ func TestDownloadFileSizeLimit(t *testing.T) {
 
 func TestDownloadAndVerify(t *testing.T) {
 	testContent := "test file content for hash verification"
-	hash := sha256.Sum256([]byte(testContent))
-	expectedHash := hex.EncodeToString(hash[:])
+	hash := digest.SHA256Of([]byte(testContent))
+	expectedHash := hash.Hex()
 
 	t.Run("successful download and verification", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +208,7 @@ func TestDownloadAndVerify(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		filePath, err := downloadAndVerifyWithName(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir, "")
+		filePath, err := downloadAndVerifyWithName(context.Background(), server.URL, expectedHash, tmpDir, "")
 		if err != nil {
 			t.Fatalf("downloadAndVerifyWithName() error = %v", err)
 		}
@@ -229,7 +229,7 @@ func TestDownloadAndVerify(t *testing.T) {
 
 		tmpDir := t.TempDir()
 
-		_, err := downloadAndVerifyWithName(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir, "")
+		_, err := downloadAndVerifyWithName(context.Background(), server.URL, expectedHash, tmpDir, "")
 		if err == nil {
 			t.Error("expected hash verification error, got nil")
 		}
@@ -246,7 +246,7 @@ func TestDownloadAndVerify(t *testing.T) {
 		server.Close()
 
 		tmpDir := t.TempDir()
-		_, err := downloadAndVerifyWithName(context.Background(), server.URL, expectedHash, BinHashTypeSHA256, tmpDir, "")
+		_, err := downloadAndVerifyWithName(context.Background(), server.URL, expectedHash, tmpDir, "")
 		if err == nil {
 			t.Error("expected download error, got nil")
 		}
@@ -812,8 +812,8 @@ func TestRetryableStatus(t *testing.T) {
 func TestDownloadAndVerify_RetriesTransientThenSucceeds(t *testing.T) {
 	setFastRetries(t)
 	content := []byte("retry me")
-	sum := sha256.Sum256(content)
-	expected := hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(content)
+	expected := sum.Hex()
 
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -825,7 +825,7 @@ func TestDownloadAndVerify_RetriesTransientThenSucceeds(t *testing.T) {
 	}))
 	defer server.Close()
 
-	path, err := downloadAndVerifyWithName(context.Background(), server.URL, expected, BinHashTypeSHA256, t.TempDir(), "")
+	path, err := downloadAndVerifyWithName(context.Background(), server.URL, expected, t.TempDir(), "")
 	if err != nil {
 		t.Fatalf("expected success after retries, got %v", err)
 	}
@@ -839,8 +839,8 @@ func TestDownloadAndVerify_RetriesTransientThenSucceeds(t *testing.T) {
 
 func TestDownloadAndVerify_HashMismatchNotRetried(t *testing.T) {
 	setFastRetries(t)
-	sum := sha256.Sum256([]byte("the expected content"))
-	expected := hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of([]byte("the expected content"))
+	expected := sum.Hex()
 
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -849,7 +849,7 @@ func TestDownloadAndVerify_HashMismatchNotRetried(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := downloadAndVerifyWithName(context.Background(), server.URL, expected, BinHashTypeSHA256, t.TempDir(), ""); err == nil {
+	if _, err := downloadAndVerifyWithName(context.Background(), server.URL, expected, t.TempDir(), ""); err == nil {
 		t.Fatal("expected hash verification error")
 	}
 	if got := calls.Load(); got != 1 {
@@ -866,7 +866,7 @@ func TestDownloadAndVerify_PermanentStatusNotRetried(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := downloadAndVerifyWithName(context.Background(), server.URL, "deadbeef", BinHashTypeSHA256, t.TempDir(), ""); err == nil {
+	if _, err := downloadAndVerifyWithName(context.Background(), server.URL, digest.SHA256Of([]byte("never served")).Hex(), t.TempDir(), ""); err == nil {
 		t.Fatal("expected error for 404")
 	}
 	if got := calls.Load(); got != 1 {
@@ -883,7 +883,7 @@ func TestDownloadAndVerify_GivesUpAfterMaxAttempts(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := downloadAndVerifyWithName(context.Background(), server.URL, "deadbeef", BinHashTypeSHA256, t.TempDir(), "")
+	_, err := downloadAndVerifyWithName(context.Background(), server.URL, digest.SHA256Of([]byte("never served")).Hex(), t.TempDir(), "")
 	if err == nil {
 		t.Fatal("expected failure after exhausting retries")
 	}
@@ -993,8 +993,8 @@ func TestDownloadAndVerify_FileScheme(t *testing.T) {
 	setFastRetries(t)
 	withLocalArtifactsBuild(t)
 	content := []byte("locally built module")
-	sum := sha256.Sum256(content)
-	expected := hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(content)
+	expected := sum.Hex()
 
 	srcDir := t.TempDir()
 	src := filepath.Join(srcDir, "module.wasm")
@@ -1049,8 +1049,8 @@ func TestFileScheme_NotAllowedByDefault(t *testing.T) {
 	if err := os.WriteFile(src, []byte("x"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-	sum := sha256.Sum256([]byte("x"))
-	hash := hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of([]byte("x"))
+	hash := sum.Hex()
 
 	t.Run("downloadFile", func(t *testing.T) {
 		_, err := downloadFile(context.Background(), "file://"+src, t.TempDir())
@@ -1155,8 +1155,8 @@ func TestFileScheme_DisabledInReleasedBuilds(t *testing.T) {
 	if err := os.WriteFile(src, content, 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-	sum := sha256.Sum256(content)
-	hash := hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(content)
+	hash := sum.Hex()
 
 	// A correct hash and an opted-in call site are both not enough.
 	_, err := DownloadAndVerifySHA256(context.Background(), "file://"+src, hash, t.TempDir(), "core", true)

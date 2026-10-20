@@ -109,9 +109,7 @@ function Install() {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <span className={styles.srOnly} role="status">
-        {copied ? "Copied to clipboard" : ""}
-      </span>
+      <output className={styles.srOnly}>{copied ? "Copied to clipboard" : ""}</output>
       {manual && (
         <textarea
           aria-label="Select and copy installation command"

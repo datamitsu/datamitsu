@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
@@ -16,7 +17,7 @@ func testPNPMBinaries() binmanager.MapOfBinaries {
 	entry := func(asset, binaryPath string, contentType binmanager.BinContentType, hashChar string) binmanager.BinaryOsArchInfo {
 		return binmanager.BinaryOsArchInfo{
 			URL:         "https://github.com/pnpm/pnpm/releases/download/v12.4.1/" + asset,
-			Hash:        strings.Repeat(hashChar, 64),
+			Hash:        "sha256:" + strings.Repeat(hashChar, 64),
 			ContentType: contentType,
 			BinaryPath:  &binaryPath,
 			ExtractDir:  true,
@@ -259,8 +260,8 @@ func TestDefaultConfigPNPMRuntime(t *testing.T) {
 		for arch, byLibc := range byArch {
 			for libc, info := range byLibc {
 				entries++
-				if !isValidSHA256Hex(info.Hash) {
-					t.Errorf("%s/%s/%s: hash %q is not a SHA-256", osType, arch, libc, info.Hash)
+				if err := digest.IsSHA256(info.Hash); err != nil {
+					t.Errorf("%s/%s/%s: hash %q is not a canonical SHA-256 digest", osType, arch, libc, info.Hash)
 				}
 				if !strings.HasPrefix(info.URL, "https://github.com/pnpm/pnpm/releases/download/v"+rt.PNPM.PNPMVersion+"/") {
 					t.Errorf("%s/%s/%s: url %q is not the pinned pnpm release", osType, arch, libc, info.URL)

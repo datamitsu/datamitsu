@@ -8,6 +8,8 @@ An ejectable config whose tool is not named in ejectConfigs lives in
 .datamitsu/configs/, which init writes. Reconciliation removes its repository
 copy, but never one holding changes the configuration would not render again:
 the run is refused before anything is written, and the file is named.
+--force explicitly discards existing file overrides and permits those removals;
+configuration-layer overrides and expectChainHash verification still apply.
 
 This command is intentionally separate from project initialization. After
 editing datamitsu.config.*, run "datamitsu init" to provision tools, runtimes,
@@ -19,6 +21,7 @@ Usage:
 
 Flags:
       --dry-run          Show what would be reconciled without writing files or running fix
+      --force            Regenerate from configuration layers, ignoring existing file overrides and allowing removal of customized internalized configs
   -h, --help             help for reconcile
       --no-verify-hash   Skip expectChainHash verification even when a pinned managed config drifted from its upstream chain
       --opt-in-tools     Include an all-disabled .datamitsuignore in reconciliation so tools are opt-in (enable them by removing names from the list)

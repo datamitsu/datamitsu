@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 )
 
@@ -83,7 +83,10 @@ import (
 // Version 5 retires entries that lack the dependency PATH prefix and its health paths. A release
 // changes DatamitsuVersion anyway, but two development builds share one version string, and a
 // format-4 entry would otherwise keep serving a tool that cannot find its helpers.
-const ManifestFormatVersion = 5
+//
+// Version 6 retires entries that recorded the extracted directory of an extractDir binary app
+// as its command; the command is now the binaryPath inside it.
+const ManifestFormatVersion = 8
 
 // Origin records how the farm's root was established.
 type Origin string
@@ -399,7 +402,7 @@ func ComputeStalenessKey(formatVersion int, datamitsuVersion, root, goos, goarch
 	for _, kv := range sortedEnv {
 		parts = append(parts, []byte(kv))
 	}
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 }
 
 // BuildManifest returns the manifest describing plan. It writes nothing —

@@ -138,7 +138,7 @@ bundles: {
     archives: {
       "data": {
         url: "https://example.com/content-v3.tar.gz",
-        hash: "0000000000000000000000000000000000000000000000000000000000000000", // replace with the expected SHA-256
+        hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000", // replace with the expected SHA-256 digest
         format: "tar.gz",
       },
     },

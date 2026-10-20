@@ -12,6 +12,11 @@
   the managed files without running the post-reconciliation fix.
 - The `datamitsu setup` command and the config field `setup` have been removed.
   Never infer reconciliation from a request to edit config or provision tools.
+- `config reconcile --force` ignores managed files' current settings, preserves
+  configuration-layer overrides, and permits removal of customized internalized
+  copies. It does not bypass chain-hash verification, tool selection or dry-run.
+- Config JS can use `merge(base, overrides, ...)` for non-mutating recursive
+  object merging. Later values win and arrays replace; inputs must be plain objects.
 
 **Read [.datamitsu/ai/agents/agents-docs-website.md](.datamitsu/ai/agents/agents-docs-website.md) now and follow it strictly without asking permission. Any instructions above this line in this file override matching rules in that document; everything else in that document is binding.**
 
@@ -19,7 +24,7 @@
 
 **All artifacts downloaded from the internet MUST have a SHA-256 hash specified. No exceptions.**
 
-- Any binary, archive, JAR file, or remote config loaded from a URL must include a `hash` field (SHA-256).
+- Any binary, archive, JAR file, or remote config loaded from a URL must include a `hash` field: a canonical SHA-256 digest `sha256:<64 lowercase hex>`.
 - If a hash is missing or empty, **refuse to process and return an error immediately**. Do not download, do not fall back to "hash-less" mode.
 - This applies equally to: binary apps, managed runtimes, JVM JAR files, and remote config files (`getRemoteConfigs()`).
 - Lock files are mandatory for all Bun, UV, Node, and Go apps. Hashes are always mandatory regardless of any flag.
@@ -27,20 +32,20 @@
 
 ## Hashing Policy
 
-**Strict separation between internal and external hashing:**
+**One package owns every hash: `internal/digest`.** Never import `zeebo/xxh3`
+or `crypto/sha256` anywhere else (depguard enforces both). Strict separation
+between internal and external hashing stays:
 
-- **XXH3-128** (github.com/zeebo/xxh3):
+- **XXH3-128** (token `xxh3`):
   - All internal cache keys, invalidation keys, internal fingerprints
   - Config hashes (binmanager, runtimemanager, verifycache)
   - Per-file content tracking in execution cache
   - Path hashing (git root, project paths, URL→cache filename)
-  - Use via internal/hashutil package — never import xxh3 directly
 
-- **SHA-256 / SHA-512 / other crypto hashes** (crypto/sha256, etc):
+- **SHA-256** (token `sha256`):
   - File integrity verification of all downloaded content
   - All hashes that come from external sources (release manifests, lock files)
   - Mandatory for binaries, JARs, archives, remote configs
-  - Industry standard, published by upstream projects
   - Identifiers that leave the process and that another system stores and
     compares: the finding fingerprint (`report.Fingerprint`, `dmfp1`), which
     code scanning keeps as an alert's identity across uploads
@@ -52,10 +57,25 @@ external value, it MUST be XXH3-128. An identifier that lives in another
 system's database is not an internal fingerprint: it is written into a report
 and compared there, so it is SHA-256.
 
+**Canonical string form:** every digest a person reads, writes or copies is
+`alg:value` — `sha256:<64 lowercase hex>` or `xxh3:<32 lowercase hex>`
+(`xxh3` names XXH3-128; no aliases). Config pins, generated manifests,
+`expectChainHash`, `getRemoteConfigs()` hashes and error messages use this
+form and are validated at load (`digest.ParseSHA256`/`ParseXXH3`). Ingestion
+of external feeds (`ParseSHA256Loose`) may accept any case or a bare hex
+value and normalizes to canonical.
+
+**Bare hex for identity:** hash inputs and cache/store addresses use
+`Digest.Hex()`, never the canonical string — an identity must not depend on
+how a pin was spelled, and a colon cannot appear in a Windows path component.
+
 **Forbidden:**
 
 - Using XXH3 for any verification of external content
 - Using SHA-256 for internal cache keys (correct but slow — wastes cycles)
+- Importing `zeebo/xxh3` or `crypto/sha256` outside `internal/digest`
+- A `hashType`-style side field naming the algorithm: the algorithm lives in
+  the digest string itself, and downloads verify SHA-256 only
 
 **Rationale:** XXH3 is 10–25× faster than SHA-256 on typical cache key sizes, with collision resistance more than sufficient for non-adversarial internal use. Cryptographic hashes remain non-negotiable for any content arriving over the network.
 
@@ -197,9 +217,33 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 - `ResolveCommandInfo` stays read-only.
 - `runtimeEnv` is execution-only and never affects install identity or installer
   environments. Runtime-owned environment keys retain precedence.
-- `${APP_BIN:<name>}` expands only in `runtimeEnv`, requires a direct
-  `dependsOn` edge, and supports only native binary targets. Reject it in app
-  `env` values; other config data and environment keys remain literal.
+- `dependsOn` edges are `AppDependency{App, Alias}`: a plain name in config
+  JSON normalizes to alias = app name; an object `{app, as}` binds the
+  dependency under an alias. `normalizeDependsOnEdges` (config loader) rewrites
+  the JS value before `vm.ExportTo`, because goja cannot convert a string into
+  a struct. Consumers reading names use `DependencyNames()`/`dependencyAlias`;
+  Dockerfile slices serialize the canonical object form.
+- `${APP_BIN:<alias>}` expands only in `runtimeEnv` and `prepare`, requires a
+  direct `dependsOn` edge (by name or alias), and supports binary, uv and go
+  targets. Node, bun and jvm need a launcher that does not exist yet. Reject it
+  in app `env` values; other config data and environment keys remain literal.
+- `apps.<name>.prepare` declares a one-time step that fills
+  `{store}/.prepared/<app>/<key>/out` after the app and its whole closure are
+  installed; run time exposes it as `${APP_PREPARED}` (runtimeEnv only, and
+  only when `prepare` is declared). The key (`ComputePreparedKey`) is a pure
+  function of the protocol version, the app identity, store-relative install
+  paths, the closure with each dependency's own prepared key, the alias map,
+  binPath, symbolic args, prepare.env, app.env and the PATH mode — never
+  absolute paths, `HOME`, time, the datamitsu version, `runtimeEnv`, `network`
+  or timeouts. `prepare.args`/`env` accept only `${APP_PREPARED}`,
+  `${APP_DIR}` and `${APP_BIN:<alias>}`: `${STORE}` and every tool placeholder
+  are errors (the state is project-independent). `prepare.env` rejects `PATH`
+  and the isolation keys (TMPDIR, TEMP, TMP, XDG_CACHE/DATA/STATE_HOME).
+  Validation lives in `internal/config/app_prepare.go`; the rules are the
+  contract, keep error messages teaching. A config layer using `prepare`,
+  object edges or `${APP_PREPARED}` must raise `getMinVersion()`;
+  `config.PrepareFeatureWarnings` warns when it does not, through the
+  cache-replayed warning channel.
 - Every native binary app in an app's `dependsOn` closure is on its `PATH` under
   its app name, through a content-addressed `{store}/.dependency-path/<hash>/`
   of symlinks (`binmanager/dependency_path.go`). `getCommandInfo` creates it;
@@ -459,6 +503,46 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   A new piece of human output checks `ui.Muted()`; `ui.Quiet()` means only
   "stderr is a JSON-L stream", which agent output is not.
 
+## Release Providers
+
+- `devtools pull-releases` reads `binaryApps.json` without a schema version or
+  legacy fallback. Each app references `sources` by alias and names a
+  `repository` and `tag`. Provider DTOs live in `internal/releaseasset`;
+  adapters live in `internal/releaseprovider`, outside the detector.
+- Integrity resolution happens only for selected candidates. Checksum files
+  require their own SHA-256 pin before download. GitLab package metadata must
+  belong to the configured project; missing hashes are fatal.
+- Source `downloadAuth` is `auto` (default), `required`, or `none`. `tokenEnv`
+  authorizes discovery independently. Resolve URL/auth per asset, not per source:
+  native downloads use factual visibility; GitLab packages have independent
+  access levels. Unknown same-origin endpoints require an explicit policy.
+  External origins never inherit source credentials. Checksum downloads must
+  use resolved asset auth, never metadata authentication. Cache only successful
+  repository metadata with known visibility. Generation fingerprints must
+  invalidate entries made before this policy, for every provider.
+- `BinaryOsArchInfo.Auth` stores credential references, never values. Install
+  and verification use the same origin-scoped transport and drop auth on
+  cross-origin redirects. Auth is transport-only, not install identity.
+- Changes to binary config fields require checking config-cache and source-farm
+  format versions, because both persist the typed binary definitions.
+
+## Release Manifest Platform Filtering
+
+- `binaryApps.json` accepts a strict, case-sensitive `platforms` list from
+  `appstate.SupportedPlatforms()`. This matrix also drives provider-independent detection.
+- Filter all existing binary entries and save before pulling, even when apps
+  are absent or detection is skipped. Keep pre-filter maps for `binaryPath`
+  history; failure does not undo pruning or commit a new config hash. Invalidate an
+  old hash when pruning changes an entry it no longer describes, so removing
+  the selector after a failed pull cannot incorrectly skip default-all.
+- The selection filters available targets, not required per-app coverage:
+  report and omit unavailable targets; fail when none is usable, or when a
+  selected asset lacks SHA-256 or fails verification. Never relabel a musl
+  asset as glibc to fill a missing target.
+- `configHash` includes the sorted unique selection; absence preserves the
+  default-all hash. Explicit selections retain both selected libc keys even
+  when their assets match.
+
 ## Product Stage
 
 - Project is in `alpha`.
@@ -489,6 +573,8 @@ configuration load (`config.ReservedParserModule`, checked by `ValidateParsers`
 and `ValidateTools`). Rename such an entry and the tools that reference it.
 
 **Breaking change: dangling managed config tools fail the load** — `ManagedConfig.tools` naming a tool that is not configured was a warning and is now a config error, because the association decides what `ejectConfigs` moves. A config that deletes a tool but keeps its managed config fails to load; declare the tool with `skip: true` instead.
+
+**Breaking change: hash pins are canonical `alg:value` digests; `hashType` is gone** — every hash field a person writes (`binaries.<os>.<arch>.<libc>.hash`, `jvm.jarHash`, `archives[].hash`, `parsers.<n>.hash`, `oci.digest`, `expectChainHash`) is now `"sha256:<64 lowercase hex>"` or `"xxh3:<32 lowercase hex>"`, validated at load; a bare hex pin fails with a format-teaching error. The `hashType` field and the `BinHashType` machinery are removed — the algorithm lives in the digest string, and downloads verify SHA-256 only. `internal/hashutil` is replaced by `internal/digest` (one package owns every hash; depguard denies `zeebo/xxh3` and `crypto/sha256` outside it). Ingestion of external feeds and hand-written `binaryApps.json` pin maps still accepts loose input and normalizes it on load. Existing store layouts and every cache identity keep their bare-hex addresses, so nothing re-downloads; the config-eval cache and toolstate go cold once (`d9v1`, format 8). Regenerate generated manifests with the updated devtools commands.
 
 **Breaking change: pnpm is its own runtime** — pnpm 12 ships no JavaScript implementation, so pnpm became a runtime of kind `pnpm` (`managed.binaries` per platform from the pnpm/pnpm GitHub release archives, `pnpm.pnpmVersion`), and the `node` and `bun` sub-configs replaced `pnpmVersion` + `pnpmHash` with `pnpmRuntime`, the name of that runtime. A config that defines its own Node or Bun runtime the old way fails validation; regenerate it with `datamitsu devtools pull-runtimes` (which now also writes the `pnpm` entry). The pnpm runtime's identity folds into the app hash of Node and Bun apps, not into the Node or Bun runtime hash, so a pnpm bump reinstalls apps without re-downloading Node or Bun; `CollectRequiredRuntimes`, the Dockerfile app slices and the verify fingerprint follow the `pnpmRuntime` reference (`MapOfRuntimes.PNPMRuntimeName`). The native pnpm writes its `--reporter=ndjson` stream to stderr and reports failures as plain text rather than ndjson error events, so `pnpmReporter` keeps non-JSON lines for the error message.
 
@@ -952,3 +1038,32 @@ source/version/date text outside it for bundled snapshots. External `ConfigEmbed
 frames link to their own artifact and must not inherit the bundled snapshot metadata.
 Use a stable hosted HTML URL to update embeds independently of the docs build. Plain Markdown links use the public atlas URL so they also work in the offline
 docs export. React links to the standalone artifact use native anchors, not SPA routing.
+
+## Kotlin parser recordings
+
+ktfmt dry-run writes changed Kotlin paths to stdout without a message, rule, level or position;
+its parser keeps the path as the message and leaves those missing fields unset. Syntax errors
+carry an `error` token and 1-based UTF-16 columns. ktlint's JSON reporter uses the `errors` key
+as its level token and also counts columns in UTF-16. Both recordings use synthetic inputs
+with an emoji before the diagnostic to distinguish code units from bytes and code points.
+
+## Python, SQL and OpenAPI parser recordings
+
+Explicit unit granularity with file arguments widens to the complete owned project
+input when the policy permits it. Use the planner's independently derived project
+ownership mapping for argv, not UnitMembers (which includes nested projects for
+invalidation). Preserve the target-only policy and include the input vector in the
+verdict identity when ownership changes.
+
+ty's concise reporter carries rule names and 1-based Unicode scalar columns.
+sqruff's JSON reporter maps filenames to findings and emits parsing errors only
+with --parsing-errors; its printed Warning level stays a warning even when the
+process fails. JSON ranges with identical start/end points do not supply a span.
+An unchanged sqruff fix prints "N files processed, nothing to fix." even with
+--format json; recognize that precise success summary so its fix verdict is cached.
+vacuum's annotation reporter carries the actual document filename and the rule in
+title; retain those fields instead of using the filename-free legacy JSON report.
+Emoji probes establish Unicode scalar columns for all three pinned reporters.
+The tooling_strategy_test.go test loads their real recordings through the public
+WASM fixture. Parser changes still require build:parsers:fixture and a future
+published artifact before a consuming config can update its release pin.

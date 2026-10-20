@@ -6,63 +6,55 @@ import (
 
 func TestFingerprintBinary(t *testing.T) {
 	t.Run("same inputs produce same output", func(t *testing.T) {
-		fp1 := FingerprintBinary("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
-		fp2 := FingerprintBinary("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fp1 := FingerprintBinary("https://example.com/bin", "sha256hash", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fp2 := FingerprintBinary("https://example.com/bin", "sha256hash", "application/gzip", "bin", false, "linux", "amd64", "glibc")
 		if fp1 != fp2 {
 			t.Errorf("same inputs produced different fingerprints: %q != %q", fp1, fp2)
 		}
 	})
 
 	t.Run("changed URL produces different output", func(t *testing.T) {
-		fp1 := FingerprintBinary("https://example.com/bin-v1", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
-		fp2 := FingerprintBinary("https://example.com/bin-v2", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fp1 := FingerprintBinary("https://example.com/bin-v1", "sha256hash", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fp2 := FingerprintBinary("https://example.com/bin-v2", "sha256hash", "application/gzip", "bin", false, "linux", "amd64", "glibc")
 		if fp1 == fp2 {
 			t.Error("different URLs should produce different fingerprints")
 		}
 	})
 
 	t.Run("changed hash produces different output", func(t *testing.T) {
-		fp1 := FingerprintBinary("https://example.com/bin", "hash1", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
-		fp2 := FingerprintBinary("https://example.com/bin", "hash2", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fp1 := FingerprintBinary("https://example.com/bin", "hash1", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fp2 := FingerprintBinary("https://example.com/bin", "hash2", "application/gzip", "bin", false, "linux", "amd64", "glibc")
 		if fp1 == fp2 {
 			t.Error("different hashes should produce different fingerprints")
 		}
 	})
 
-	t.Run("changed hashType produces different output", func(t *testing.T) {
-		fp1 := FingerprintBinary("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
-		fp2 := FingerprintBinary("https://example.com/bin", "sha256hash", "sha512", "application/gzip", "bin", false, "linux", "amd64", "glibc")
-		if fp1 == fp2 {
-			t.Error("different hashTypes should produce different fingerprints")
-		}
-	})
-
 	t.Run("changed extractDir produces different output", func(t *testing.T) {
-		fp1 := FingerprintBinary("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
-		fp2 := FingerprintBinary("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", true, "linux", "amd64", "glibc")
+		fp1 := FingerprintBinary("https://example.com/bin", "sha256hash", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fp2 := FingerprintBinary("https://example.com/bin", "sha256hash", "application/gzip", "bin", true, "linux", "amd64", "glibc")
 		if fp1 == fp2 {
 			t.Error("different extractDir should produce different fingerprints")
 		}
 	})
 
 	t.Run("changed os produces different output", func(t *testing.T) {
-		fp1 := FingerprintBinary("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
-		fp2 := FingerprintBinary("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", false, "darwin", "amd64", "unknown")
+		fp1 := FingerprintBinary("https://example.com/bin", "sha256hash", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fp2 := FingerprintBinary("https://example.com/bin", "sha256hash", "application/gzip", "bin", false, "darwin", "amd64", "unknown")
 		if fp1 == fp2 {
 			t.Error("different os should produce different fingerprints")
 		}
 	})
 
 	t.Run("changed arch produces different output", func(t *testing.T) {
-		fp1 := FingerprintBinary("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
-		fp2 := FingerprintBinary("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "arm64", "glibc")
+		fp1 := FingerprintBinary("https://example.com/bin", "sha256hash", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fp2 := FingerprintBinary("https://example.com/bin", "sha256hash", "application/gzip", "bin", false, "linux", "arm64", "glibc")
 		if fp1 == fp2 {
 			t.Error("different arch should produce different fingerprints")
 		}
 	})
 
 	t.Run("output is 32 hex chars (xxh3-128)", func(t *testing.T) {
-		fp := FingerprintBinary("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fp := FingerprintBinary("https://example.com/bin", "sha256hash", "application/gzip", "bin", false, "linux", "amd64", "glibc")
 		if len(fp) != 32 {
 			t.Errorf("fingerprint length = %d, want 32", len(fp))
 		}
@@ -72,10 +64,10 @@ func TestFingerprintBinary(t *testing.T) {
 // A pass recorded before extraction checked the executable format only proved
 // the file was non-empty; --skip-passed must not carry it over.
 func TestFingerprint_ExtractionCheckInvalidatesOlderPasses(t *testing.T) {
-	fields := []string{"https://example.com/bin", "sha256hash", "sha256", "tar.gz", "bin", "false", "linux", "amd64", "glibc"}
+	fields := []string{"https://example.com/bin", "sha256hash", "tar.gz", "bin", "false", "linux", "amd64", "glibc"}
 	for kind, fp := range map[string]string{
-		"binary":  FingerprintBinary(fields[0], fields[1], fields[2], fields[3], fields[4], false, fields[6], fields[7], fields[8]),
-		"runtime": FingerprintRuntime(fields[0], fields[1], fields[2], fields[3], fields[4], false, fields[6], fields[7], fields[8]),
+		"binary":  FingerprintBinary(fields[0], fields[1], fields[2], fields[3], false, fields[5], fields[6], fields[7]),
+		"runtime": FingerprintRuntime(fields[0], fields[1], fields[2], fields[3], false, fields[5], fields[6], fields[7]),
 	} {
 		if before := fingerprintFields(append([]string{kind}, fields...)...); fp == before {
 			t.Errorf("%s fingerprint equals the one recorded before the executable check", kind)
@@ -85,31 +77,31 @@ func TestFingerprint_ExtractionCheckInvalidatesOlderPasses(t *testing.T) {
 
 func TestFingerprintRuntime(t *testing.T) {
 	t.Run("same inputs produce same output", func(t *testing.T) {
-		fp1 := FingerprintRuntime("https://example.com/runtime", "sha256hash", "sha256", "application/gzip", "runtime", true, "linux", "amd64", "glibc")
-		fp2 := FingerprintRuntime("https://example.com/runtime", "sha256hash", "sha256", "application/gzip", "runtime", true, "linux", "amd64", "glibc")
+		fp1 := FingerprintRuntime("https://example.com/runtime", "sha256hash", "application/gzip", "runtime", true, "linux", "amd64", "glibc")
+		fp2 := FingerprintRuntime("https://example.com/runtime", "sha256hash", "application/gzip", "runtime", true, "linux", "amd64", "glibc")
 		if fp1 != fp2 {
 			t.Errorf("same inputs produced different fingerprints: %q != %q", fp1, fp2)
 		}
 	})
 
 	t.Run("changed URL produces different output", func(t *testing.T) {
-		fp1 := FingerprintRuntime("https://example.com/runtime-v1", "sha256hash", "sha256", "application/gzip", "runtime", true, "linux", "amd64", "glibc")
-		fp2 := FingerprintRuntime("https://example.com/runtime-v2", "sha256hash", "sha256", "application/gzip", "runtime", true, "linux", "amd64", "glibc")
+		fp1 := FingerprintRuntime("https://example.com/runtime-v1", "sha256hash", "application/gzip", "runtime", true, "linux", "amd64", "glibc")
+		fp2 := FingerprintRuntime("https://example.com/runtime-v2", "sha256hash", "application/gzip", "runtime", true, "linux", "amd64", "glibc")
 		if fp1 == fp2 {
 			t.Error("different URLs should produce different fingerprints")
 		}
 	})
 
 	t.Run("different from binary fingerprint with same inputs", func(t *testing.T) {
-		fpBin := FingerprintBinary("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
-		fpRt := FingerprintRuntime("https://example.com/bin", "sha256hash", "sha256", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fpBin := FingerprintBinary("https://example.com/bin", "sha256hash", "application/gzip", "bin", false, "linux", "amd64", "glibc")
+		fpRt := FingerprintRuntime("https://example.com/bin", "sha256hash", "application/gzip", "bin", false, "linux", "amd64", "glibc")
 		if fpBin == fpRt {
 			t.Error("binary and runtime fingerprints with same inputs should differ (different prefix)")
 		}
 	})
 
 	t.Run("output is 32 hex chars (xxh3-128)", func(t *testing.T) {
-		fp := FingerprintRuntime("https://example.com/runtime", "sha256hash", "sha256", "application/gzip", "runtime", true, "linux", "amd64", "glibc")
+		fp := FingerprintRuntime("https://example.com/runtime", "sha256hash", "application/gzip", "runtime", true, "linux", "amd64", "glibc")
 		if len(fp) != 32 {
 			t.Errorf("fingerprint length = %d, want 32", len(fp))
 		}

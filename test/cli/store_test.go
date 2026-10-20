@@ -298,22 +298,22 @@ globalThis.getConfig = () => ({
     shellcheck: {
       binary: {
         binaries: {
-          linux: { amd64: { glibc: { url: "https://example.test/shellcheck-linux-amd64.tar.gz", hash: "` + strings.Repeat("11", 32) + `", contentType: "tar.gz" } } },
-          darwin: { arm64: { unknown: { url: "https://example.test/shellcheck-darwin-arm64.tar.gz", hash: "` + strings.Repeat("22", 32) + `", contentType: "tar.gz" } } },
+          linux: { amd64: { glibc: { url: "https://example.test/shellcheck-linux-amd64.tar.gz", hash: "sha256:` + strings.Repeat("11", 32) + `", contentType: "tar.gz" } } },
+          darwin: { arm64: { unknown: { url: "https://example.test/shellcheck-darwin-arm64.tar.gz", hash: "sha256:` + strings.Repeat("22", 32) + `", contentType: "tar.gz" } } },
         },
       },
     },
     prettier: {
       node: { packageName: "prettier", version: "3.8.3", binPath: "bin/prettier.cjs", runtime: "node", lockFile: "{}" },
       archives: {
-        completions: { url: "https://example.test/prettier-completions.tar.gz", hash: "` + strings.Repeat("33", 32) + `", format: "tar.gz" },
+        completions: { url: "https://example.test/prettier-completions.tar.gz", hash: "sha256:` + strings.Repeat("33", 32) + `", format: "tar.gz" },
       },
     },
   },
   oci: { ref: "ghcr.io/datamitsu/example-bundle", digest: "sha256:` + strings.Repeat("44", 32) + `" },
   parsers: {
-    core: { hash: "` + strings.Repeat("55", 32) + `", oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers", digest: "sha256:` + strings.Repeat("66", 32) + `" } },
-    legacy: { hash: "` + strings.Repeat("77", 32) + `", url: "https://example.test/legacy.wasm" },
+    core: { hash: "sha256:` + strings.Repeat("55", 32) + `", oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers", digest: "sha256:` + strings.Repeat("66", 32) + `" } },
+    legacy: { hash: "sha256:` + strings.Repeat("77", 32) + `", url: "https://example.test/legacy.wasm" },
   },
   runtimes: {
     node: {
@@ -322,7 +322,7 @@ globalThis.getConfig = () => ({
       node: { nodeVersion: "22.12.0", pnpmRuntime: "pnpm" },
       managed: {
         binaries: {
-          linux: { amd64: { glibc: { url: "https://example.test/node-linux-amd64.tar.gz", hash: "` + strings.Repeat("99", 32) + `", contentType: "tar.gz", extractDir: true } } },
+          linux: { amd64: { glibc: { url: "https://example.test/node-linux-amd64.tar.gz", hash: "sha256:` + strings.Repeat("99", 32) + `", contentType: "tar.gz", extractDir: true } } },
         },
       },
     },
@@ -332,7 +332,7 @@ globalThis.getConfig = () => ({
       pnpm: { pnpmVersion: "12.4.1" },
       managed: {
         binaries: {
-          linux: { amd64: { glibc: { url: "https://example.test/pnpm-linux-x64.tar.gz", hash: "` + strings.Repeat("88", 32) + `", contentType: "tar.gz", binaryPath: "pnpm", extractDir: true } } },
+          linux: { amd64: { glibc: { url: "https://example.test/pnpm-linux-x64.tar.gz", hash: "sha256:` + strings.Repeat("88", 32) + `", contentType: "tar.gz", binaryPath: "pnpm", extractDir: true } } },
         },
       },
     },

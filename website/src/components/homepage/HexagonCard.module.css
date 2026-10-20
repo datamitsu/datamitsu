@@ -77,8 +77,8 @@
 .iconWrapper {
   width: 52px;
   height: 52px;
-  background: linear-gradient(135deg, rgba(212, 168, 85, 0.15) 0%, rgba(212, 168, 85, 0.05) 100%);
-  border: 1.5px solid rgba(212, 168, 85, 0.35);
+  background: linear-gradient(135deg, rgb(212 168 85 / 15%) 0%, rgb(212 168 85 / 5%) 100%);
+  border: 1.5px solid rgb(212 168 85 / 35%);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -92,22 +92,22 @@
 }
 
 .hexagonCard:hover .iconWrapper {
-  background: linear-gradient(135deg, rgba(212, 168, 85, 0.25) 0%, rgba(212, 168, 85, 0.12) 100%);
-  border-color: rgba(212, 168, 85, 0.6);
+  background: linear-gradient(135deg, rgb(212 168 85 / 25%) 0%, rgb(212 168 85 / 12%) 100%);
+  border-color: rgb(212 168 85 / 60%);
 }
 
 [data-theme="dark"] .iconWrapper {
-  background: linear-gradient(135deg, rgba(212, 168, 85, 0.12) 0%, rgba(212, 168, 85, 0.04) 100%);
-  border-color: rgba(212, 168, 85, 0.25);
+  background: linear-gradient(135deg, rgb(212 168 85 / 12%) 0%, rgb(212 168 85 / 4%) 100%);
+  border-color: rgb(212 168 85 / 25%);
   color: var(--datamitsu-gold-light);
 }
 
 [data-theme="dark"] .hexagonCard:hover .iconWrapper {
-  background: linear-gradient(135deg, rgba(212, 168, 85, 0.22) 0%, rgba(212, 168, 85, 0.1) 100%);
-  border-color: rgba(212, 168, 85, 0.45);
+  background: linear-gradient(135deg, rgb(212 168 85 / 22%) 0%, rgb(212 168 85 / 10%) 100%);
+  border-color: rgb(212 168 85 / 45%);
 }
 
-@media screen and (max-width: 996px) {
+@media screen and (width <= 996px) {
   .hexagonCard {
     padding: 1.5rem 1.25rem;
   }

@@ -8,6 +8,8 @@ export default defineConfig((config) => ({
     // Captured config descriptions and app names belong to the pinned wrapper.
     "website/src/data/reference-config.json",
     "**/*.golangci.yaml",
+    // Tool identifiers include intentional misspellings that typos must recognize.
+    ".typos.toml",
     // Vendored third-party OCI config fixture (single source of truth is the
     // upstream release; not our prose to spell-check).
     "test/e2e/testdata/datamitsu.config.oci-ghcr.js",
@@ -27,9 +29,9 @@ export default defineConfig((config) => ({
     // website/docs. Checking it again would only add a second place to fix the
     // same word — and any edit here would break the snapshot's content hash.
     "internal/llmsdocs/embed/**",
-    // The Zed extension's language list: other projects' language names, copied
-    // exactly as Zed matches them, not our prose.
+    // Zed matches language names verbatim, including names supplied by extensions.
     "editors/zed/extension.toml",
+    "editors/zed/target/**",
   ],
   // Misspellings on purpose: fixtures for the `datamitsu llms` did-you-mean
   // suggester, whose whole job is to map a typo back to the right page. They are
@@ -46,6 +48,55 @@ export default defineConfig((config) => ({
     "darkk",
   ],
   words: [
+    "releaseasset",
+    // The prepare step's vocabulary: the init set over-approximates, and a
+    // killed process tree leaves neither its unzippers nor downloaders.
+    "overapproximation",
+    "unzippers",
+    "downloaders",
+    "rerr",
+    "absolutizing",
+    "JOBOBJECT",
+    "argdir",
+    "argmade",
+    "cerr",
+    "merr",
+    "ntdll",
+    "Prefixer",
+    "absolutized",
+    "serr",
+    "aerr",
+    "backslashed",
+    "ocimap",
+    "withstep",
+    "nostep",
+    "shellstep",
+    "otherkey",
+    // The Go source-blob example app (configuration-api, go_source_test).
+    "mygen",
+    "gosum",
+    "needsdep",
+    "gosource",
+    // The prepare step's vocabulary: the init set over-approximates, and a
+    // killed process tree leaves neither its unzippers nor downloaders.
+    "overapproximation",
+    "unzippers",
+    "downloaders",
+    "rerr",
+    "absolutizing",
+    "JOBOBJECT",
+    "argdir",
+    "argmade",
+    "cerr",
+    "merr",
+    "ntdll",
+    "Prefixer",
+    "absolutized",
+    "serr",
+    "aerr",
+    "backslashed",
+    "releaseprovider",
+    "APIURL",
     ...config.words,
     "nosniff",
     // checkmake's rule for a missing .PHONY target, quoted by the parser tests.
@@ -69,6 +120,16 @@ export default defineConfig((config) => ({
     // The Docusaurus anchor of the inheritEnv heading, which the generated
     // tool-environment page links to from Go.
     "inheritenv",
+    // Operating systems the release detector recognises only to leave alone,
+    // and the attestation and installer formats it filters out of a release.
+    "illumos",
+    "minisig",
+    "intoto",
+    "msix",
+    "msixbundle",
+    "appxbundle",
+    // The package that writes the pull commands' files with sorted keys.
+    "jsonsort",
     // A shell-literal expectation in internal/shellquote: `$'a\xffb'`. The
     // trailing "b" is load-bearing — it is a hex digit, and the test asserts
     // that a shell stops the \x escape after exactly two digits rather than
@@ -605,8 +666,32 @@ export default defineConfig((config) => ({
     "chardata",
     // reviewdog's filter mode that reports every diagnostic.
     "nofilter",
-    // The Zed extension's build target and the Rust APIs it unpacks and hashes
-    // a release with: flate2, tar's Header::set_cksum, u8::is_ascii_hexdigit.
+    // The xxh3 Go package the digest policy names while forbidding direct
+    // imports of it.
+    "zeebo",
+    // Words the digest-unification plan and its review record use.
+    "retargeted",
+    "retarget",
+    "nolints",
+    "fhash",
+    // The reasoning-effort level the plan's review provenance names.
+    "xhigh",
+    // The pinned schema-delivery app the prepare fixtures and golden files
+    // name, and the short app names the prepare validation tests use.
+    "schepherd",
+    // The prepare-engine fixtures and docs: the store lock package name,
+    // the fake step binary names, and the markerless repair term.
+    "storelock",
+    "stepmain",
+    "stepapp",
+    "markerless",
+    "Markerless",
+    "SCHEPHERD",
+    "shellprep",
+    "nopin",
+    "noargs",
+    "storeph",
+    "badenv",
     "wasip",
     "flate",
     "cksum",

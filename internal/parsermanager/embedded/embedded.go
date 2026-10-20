@@ -14,7 +14,7 @@ import (
 	_ "embed"
 	"sync"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 //go:embed fallback.wasm
@@ -26,7 +26,7 @@ func Module() []byte {
 }
 
 var contentKey = sync.OnceValue(func() string {
-	return hashutil.XXH3Multi([]byte("embedded-parser-v1"), module)
+	return digest.XXH3Multi([]byte("embedded-parser-v1"), module).Hex()
 })
 
 // ContentKey identifies the embedded module's bytes. Two builds that report

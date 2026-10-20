@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/shamaton/msgpack/v2"
@@ -28,11 +28,11 @@ func observeFile(path string) Seen {
 	if err != nil {
 		return Seen{At: at}
 	}
-	hash, err := hashutil.XXH3Reader(f)
+	d, err := digest.XXH3Reader(f)
 	if err != nil {
 		return Seen{At: at}
 	}
-	return Seen{Hash: hash, Size: fi.Size(), ModTime: fi.ModTime(), Identity: IdentityOf(fi), At: at}
+	return Seen{Hash: d.Hex(), Size: fi.Size(), ModTime: fi.ModTime(), Identity: IdentityOf(fi), At: at}
 }
 
 func writeFile(t *testing.T, path, content string) {
@@ -181,7 +181,7 @@ func entriesRecordedUnderAnOldRuleMiss(t *testing.T, semantics []byte) {
 	if semantics != nil {
 		parts = append(parts, semantics)
 	}
-	oldKey := hashutil.XXH3Multi(append(parts, configJSON)...)
+	oldKey := digest.XXH3Multi(append(parts, configJSON)...).Hex()
 	rel, _ := filepath.Rel(projectPath, file)
 	old := File{
 		InvalidationKey: oldKey,

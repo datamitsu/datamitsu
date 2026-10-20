@@ -53,7 +53,7 @@ func TestConfig_ParsersOmitEmpty(t *testing.T) {
 }
 
 func validParserHash() string {
-	return strings.Repeat("ab", 32) // 64 lowercase hex chars
+	return "sha256:" + strings.Repeat("ab", 32) // canonical: sha256:<64 lowercase hex>
 }
 
 func TestValidateParsers_NilAndEmptyAreValid(t *testing.T) {
@@ -87,7 +87,7 @@ func TestTheEmbeddedModuleNameIsReserved(t *testing.T) {
 	}
 	err = ValidateTools(MapOfTools{
 		"ruff": {Name: "ruff", OutputParser: &OutputParser{Module: ReservedParserModule, Parser: "sarif"}},
-	}, MapOfParsers{"core": {URL: "https://example.com/x.wasm", Hash: validParserHash()}})
+	}, MapOfParsers{"core": {URL: "https://example.com/x.wasm", Hash: validParserHash()}}, nil)
 	if err == nil || !strings.Contains(err.Error(), `outputParser module "embedded" is the fallback built into datamitsu`) {
 		t.Errorf("ValidateTools(module embedded) = %v, want the reserved-module error", err)
 	}
@@ -142,11 +142,12 @@ func TestValidateParsers_MissingHash(t *testing.T) {
 
 func TestValidateParsers_MalformedHash(t *testing.T) {
 	cases := map[string]string{
-		"too short":   strings.Repeat("ab", 16),
-		"too long":    strings.Repeat("ab", 40),
-		"uppercase":   strings.ToUpper(validParserHash()),
-		"non-hex":     strings.Repeat("zz", 32),
-		"with prefix": "sha256:" + validParserHash(),
+		"too short":       "sha256:" + strings.Repeat("ab", 16),
+		"too long":        "sha256:" + strings.Repeat("ab", 40),
+		"uppercase":       "sha256:" + strings.ToUpper(strings.Repeat("ab", 32)),
+		"non-hex":         "sha256:" + strings.Repeat("zz", 32),
+		"bare hex":        strings.Repeat("ab", 32),
+		"wrong algorithm": "sha512:" + strings.Repeat("ab", 64),
 	}
 	for name, hash := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -157,7 +158,7 @@ func TestValidateParsers_MalformedHash(t *testing.T) {
 			if err == nil {
 				t.Fatalf("ValidateParsers() expected error for %s hash, got nil", name)
 			}
-			if !strings.Contains(err.Error(), "must be a valid SHA-256 hex string") {
+			if !strings.Contains(err.Error(), "must be a canonical SHA-256 digest") {
 				t.Errorf("unexpected error message: %v", err)
 			}
 		})
@@ -190,7 +191,7 @@ func TestValidateParsers_AggregatesAllErrors(t *testing.T) {
 	for _, want := range []string{
 		`parser "a": exactly one of url or oci is required`,
 		`parser "a": hash is required`,
-		`parser "b": hash must be a valid SHA-256 hex string`,
+		`parser "b": hash must be a canonical SHA-256 digest`,
 		`parser "c": oci.ref "NoHost" is not a valid repository reference`,
 		`parser "c": oci.digest "latest" must be "sha256:"`,
 	} {

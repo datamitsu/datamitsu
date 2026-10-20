@@ -29,9 +29,9 @@ func TestExecRuntimeEnvDependency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	binary := &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{osType: {arch: {"unknown": {URL: "https://example.invalid/offline-fixture", Hash: strings.Repeat("0", 64), ContentType: binmanager.BinContentTypeBinary}}}}}
+	binary := &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{osType: {arch: {"unknown": {URL: "https://example.invalid/offline-fixture", Hash: "sha256:" + strings.Repeat("0", 64), ContentType: binmanager.BinContentTypeBinary}}}}}
 	apps := binmanager.MapOfApps{
-		"proxy":            {Binary: binary, DependsOn: []string{"private-upstream"}, RuntimeEnv: map[string]string{"UPSTREAM": "${APP_BIN:private-upstream}"}},
+		"proxy":            {Binary: binary, DependsOn: edges("private-upstream"), RuntimeEnv: map[string]string{"UPSTREAM": "${APP_BIN:private-upstream}"}},
 		"private-upstream": {Binary: binary, Lazy: true},
 	}
 	data, err := json.Marshal(apps)
@@ -92,4 +92,14 @@ globalThis.getMinVersion = () => "0.0.0";
 			clitest.AssertGolden(t, "config_runtime_env_"+tt.name, clitest.NewNormalizer().Apply(fmt.Sprintf("exit: %d\nstdout:\n%s%s%s", res.ExitCode, res.Stdout, "stderr:\n", res.Stderr)))
 		})
 	}
+}
+
+// edges builds a dependsOn edge list from plain names, mirroring the
+// normalized string form of the config.
+func edges(names ...string) []binmanager.AppDependency {
+	out := make([]binmanager.AppDependency, 0, len(names))
+	for _, n := range names {
+		out = append(out, binmanager.AppDependency{App: n, Alias: n})
+	}
+	return out
 }

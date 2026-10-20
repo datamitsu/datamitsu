@@ -17,7 +17,7 @@ import (
 
 func TestSnapshotPortableMetadata(t *testing.T) {
 	cfg := &config.Config{
-		Apps:           binmanager.MapOfApps{"z": {Node: &binmanager.AppConfigNode{Version: "1.2.3", LockFile: "private-lock"}, Env: map[string]string{"TOKEN": "secret-env"}, Files: map[string]string{"private": "secret-file"}}, "a": {Shell: &binmanager.AppConfigShell{Name: "echo"}, DependsOn: []string{"z"}}},
+		Apps:           binmanager.MapOfApps{"z": {Node: &binmanager.AppConfigNode{Version: "1.2.3", LockFile: "private-lock"}, Env: map[string]string{"TOKEN": "secret-env"}, Files: map[string]string{"private": "secret-file"}}, "a": {Shell: &binmanager.AppConfigShell{Name: "echo"}, DependsOn: edges("z")}},
 		Tools:          config.MapOfTools{"check": {Name: "Check", Skip: true, SkipReason: "CI only", Operations: map[config.OperationType]config.ToolOperation{config.OpLint: {App: "z", Args: []string{"secret-argument"}, Env: map[string]string{"TOKEN": "secret-operation"}, Globs: []string{"**/*.ts"}, ExcludeGlobs: []string{"**/vendor/**"}, Priority: 9}}}},
 		ManagedConfigs: config.MapOfManagedConfigs{"tool.js": {Tools: []string{"check"}, DeleteOnly: true, Content: "secret-content"}},
 		ProjectTypes:   config.MapOfProjectTypes{"typescript": {Markers: []string{"tsconfig.json"}}},
@@ -42,8 +42,8 @@ func TestSnapshotPortableMetadata(t *testing.T) {
 			t.Fatalf("export includes %q", secret)
 		}
 	}
-	m.Apps[0].DependsOn[0] = "changed"
-	if cfg.Apps["a"].DependsOn[0] != "z" {
+	m.Apps[0].DependsOn[0] = Dependency{App: "changed", Alias: "changed"}
+	if cfg.Apps["a"].DependsOn[0].App != "z" {
 		t.Fatal("snapshot aliases config data")
 	}
 }
@@ -169,4 +169,14 @@ func TestServeCancellation(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("server did not stop")
 	}
+}
+
+// edges builds a dependsOn edge list from plain names, mirroring the
+// normalized string form of the config.
+func edges(names ...string) []binmanager.AppDependency {
+	out := make([]binmanager.AppDependency, 0, len(names))
+	for _, n := range names {
+		out = append(out, binmanager.AppDependency{App: n, Alias: n})
+	}
+	return out
 }

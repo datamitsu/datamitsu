@@ -1,6 +1,6 @@
 export const defaultView = "universe";
 export interface AppDefinition {
-  dependsOn: string[];
+  dependsOn: Dependency[];
   description: string;
   name: string;
   /**
@@ -11,8 +11,20 @@ export interface AppDefinition {
    * True when the core worked the link out from a download URL or a package name.
    */
   officialUrlDerived?: boolean;
+  /**
+   * True when the app declares a prepare step. Arguments and environment stay out of the snapshot:
+   * this is a flag, not a description.
+   */
+  prepared?: boolean;
   runtime: string;
   version: string;
+}
+export interface Dependency {
+  /**
+   * The role name the configuration bound this dependency under; equals `app` when unset.
+   */
+  alias: string;
+  app: string;
 }
 export interface Manifest {
   apps: AppDefinition[];

@@ -27,12 +27,13 @@ var (
 
 var installCmd = &cobra.Command{
 	Use:   "install [app...]",
-	Short: "Install managed apps and/or runtimes without executing them",
+	Short: "Install managed apps and/or runtimes and leave them ready",
 	Long: `Install one or more managed apps (and optionally runtimes) into the store
-without running them.
+and leave them ready.
 
-Unlike "exec", which prepares and then runs a tool, "install" materializes a
-tool's files and exits. It is the building block for the per-tool and per-runtime
+Unlike "exec", which installs, prepares and then runs a tool, "install"
+materializes a tool's files, runs its declared prepare step and exits. It is
+the building block for the per-tool and per-runtime
 stages of a generated Dockerfile (see "devtools dockerfile"), where each stage
 installs exactly one target so it becomes an independently cacheable layer.
 
@@ -116,6 +117,14 @@ func installUnderDisplay(ctx context.Context, rm *runtimemanager.RuntimeManager,
 		if err := installSmartInitApps(ctx, binMgr, apps); err != nil {
 			return err
 		}
+		// `install` leaves apps ready: the prepare steps run before the
+		// version check, and unconditionally — --no-verify skips only the
+		// version check, never the step that makes the app usable.
+		for _, name := range apps {
+			if err := binMgr.EnsurePrepared(ctx, name); err != nil {
+				return fmt.Errorf("failed to prepare %s: %w", name, err)
+			}
+		}
 	}
 	return nil
 }
@@ -178,7 +187,7 @@ func versionCheckArgs(app binmanager.App) (args []string, verifiable bool) {
 // nothing, so naming one in `install` is a likely mistake.
 func warnShellApps(allApps binmanager.MapOfApps, names []string) {
 	for _, name := range names {
-		if app, ok := allApps[name]; ok && app.Shell != nil && len(app.DependsOn) == 0 && !ui.Quiet() {
+		if app, ok := allApps[name]; ok && app.Shell != nil && len(app.DependencyEdges()) == 0 && !ui.Quiet() {
 			fmt.Fprintf(os.Stderr, "Warning: %q is a shell command; nothing to install\n", name)
 		}
 	}

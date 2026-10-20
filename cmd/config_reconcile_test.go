@@ -390,6 +390,7 @@ func TestConfigReconcileCommandFlags(t *testing.T) {
 	}{
 		{"dry-run", "false"},
 		{"skip-fix", "false"},
+		{"force", "false"},
 		{"opt-in-tools", "false"},
 		{"tools", ""},
 		{"no-verify-hash", "false"},

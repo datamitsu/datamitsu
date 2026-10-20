@@ -21,7 +21,7 @@ func TestRuntimeEnvCommandResolution(t *testing.T) {
 			t.Setenv("DATAMITSU_OFFLINE", "1")
 			apps := binaryAppFixture(t, "dep")
 			root := apps["dep"]
-			root.DependsOn = []string{"dep"}
+			root.DependsOn = edges("dep")
 			root.Env = map[string]string{"COMMON": "${STORE}/common"}
 			root.RuntimeEnv = map[string]string{"EXACT": "${APP_BIN:dep}", "PATHS": "${STORE}:${APP_DIR}", "RESERVED": "user"}
 			if kind == "shell" {
@@ -124,7 +124,7 @@ func TestRuntimeEnvResolutionErrors(t *testing.T) {
 			t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 			apps := binaryAppFixture(t, "dep")
 			apps["unsupported"] = App{Binary: &AppConfigBinary{}}
-			app := App{Shell: &AppConfigShell{Name: "echo"}, DependsOn: tt.deps, RuntimeEnv: map[string]string{"BIN": tt.value}}
+			app := App{Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges(tt.deps...), RuntimeEnv: map[string]string{"BIN": tt.value}}
 			apps["root"] = app
 			bm := New(apps, nil, nil)
 			if _, err := bm.getCommandInfo(context.Background(), "root"); err == nil || !strings.Contains(err.Error(), tt.want) {
@@ -178,8 +178,8 @@ func TestResolveDependencyRuntimeHealth(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	dir := t.TempDir()
 	apps := MapOfApps{
-		"root":   {Shell: &AppConfigShell{Name: "echo"}, DependsOn: []string{"middle"}},
-		"middle": {Uv: &AppConfigUV{}, DependsOn: []string{"leaf"}},
+		"root":   {Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges("middle")},
+		"middle": {Uv: &AppConfigUV{}, DependsOn: edges("leaf")},
 		"leaf":   {Node: &AppConfigNode{}},
 	}
 	mock := &mockRuntimeAppManager{resolveCommandInfoFunc: func(name string, _ App) (*CommandInfo, error) {
@@ -202,8 +202,15 @@ func TestResolveDependencyRuntimeHealth(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if installed != present || !slices.Equal(info.RequiredPaths, want) {
-			t.Fatalf("installed=%v, health=%v", installed, info.RequiredPaths)
+		// The uv dependency links into the dependency PATH directory, so the
+		// runtime stubs alone no longer decide readiness: the link directory
+		// is a health path of the closure and gates `installed` exactly like a
+		// binary dependency's link does (see TestDependencyPathResolutionNeverWrites).
+		if installed {
+			t.Fatalf("present=%v: installed=true, want false until the dependency PATH directory exists", present)
+		}
+		if !slices.Contains(info.RequiredPaths, filepath.Join(dir, "middle")) {
+			t.Fatalf("health paths %v lack the closure runtime health", info.RequiredPaths)
 		}
 	}
 }
@@ -215,7 +222,7 @@ func TestRuntimeEnvPreservesLiteralPaths(t *testing.T) {
 			t.Setenv("DATAMITSU_OFFLINE", "1")
 			apps := binaryAppFixture(t, "dep")
 			root := apps["dep"]
-			root.DependsOn = []string{"dep"}
+			root.DependsOn = edges("dep")
 			root.RuntimeEnv = map[string]string{"BINDING": "${APP_BIN:dep}", "DIR": "${APP_DIR}", "STORE": "${STORE}", "MIXED": "${APP_BIN:dep}|${STORE}|${APP_DIR}|${APP_BIN:dep}"}
 			apps["root"] = root
 			bm := New(apps, nil, nil)

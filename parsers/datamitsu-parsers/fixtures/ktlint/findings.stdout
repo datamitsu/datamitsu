@@ -1,0 +1,24 @@
+[
+    {
+        "file": "/work/Broken.kt",
+        "errors": [
+            {
+                "line": 1,
+                "column": 46,
+                "message": "Not a valid Kotlin file (1:46 expecting an expression)",
+                "rule": ""
+            }
+        ]
+    },
+    {
+        "file": "/work/Naming.kt",
+        "errors": [
+            {
+                "line": 1,
+                "column": 23,
+                "message": "Function name should start with a lowercase letter (except factory methods) and use camel case",
+                "rule": "standard:function-naming"
+            }
+        ]
+    }
+]

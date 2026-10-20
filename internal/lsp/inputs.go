@@ -5,7 +5,7 @@ import (
 	"io/fs"
 	"os"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 // Markers for a watched file with no content to hash. Neither is a valid
@@ -40,7 +40,7 @@ func (d inputDigests) fingerprint() string {
 	for _, path := range sortedKeys(d) {
 		parts = append(parts, []byte(path), []byte(d[path]))
 	}
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 }
 
 func digestFile(path string) string {
@@ -52,9 +52,9 @@ func digestFile(path string) string {
 		return digestUnreadable
 	}
 	defer func() { _ = f.Close() }()
-	sum, err := hashutil.XXH3Reader(f)
+	d, err := digest.XXH3Reader(f)
 	if err != nil {
 		return digestUnreadable
 	}
-	return sum
+	return d.Hex()
 }

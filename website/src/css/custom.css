@@ -1,5 +1,5 @@
-@import "./theme.css";
-@import "./terminal.css";
+@import url("./theme.css");
+@import url("./terminal.css");
 
 /* Navbar styling */
 :root {
@@ -45,15 +45,15 @@
 :root {
   --ifm-menu-color: var(--datamitsu-brown);
   --ifm-menu-color-active: var(--datamitsu-gold-dark);
-  --ifm-menu-color-background-active: rgba(212, 168, 85, 0.1);
-  --ifm-menu-color-background-hover: rgba(212, 168, 85, 0.05);
+  --ifm-menu-color-background-active: rgb(212 168 85 / 10%);
+  --ifm-menu-color-background-hover: rgb(212 168 85 / 5%);
 }
 
 [data-theme="dark"] {
   --ifm-menu-color: var(--datamitsu-brown-light);
   --ifm-menu-color-active: var(--datamitsu-gold-light);
-  --ifm-menu-color-background-active: rgba(212, 168, 85, 0.15);
-  --ifm-menu-color-background-hover: rgba(212, 168, 85, 0.08);
+  --ifm-menu-color-background-active: rgb(212 168 85 / 15%);
+  --ifm-menu-color-background-hover: rgb(212 168 85 / 8%);
 }
 
 /* Link colors */
@@ -79,7 +79,7 @@
 /* Code block styling */
 :root {
   /* Inline code */
-  --ifm-code-background: rgba(212, 168, 85, 0.1);
+  --ifm-code-background: rgb(212 168 85 / 10%);
   --ifm-code-color: var(--datamitsu-brown);
   --ifm-code-border-radius: 4px;
   --ifm-code-padding-vertical: 0.1rem;
@@ -94,7 +94,7 @@
 
 [data-theme="dark"] {
   /* Inline code */
-  --ifm-code-background: rgba(212, 168, 85, 0.15);
+  --ifm-code-background: rgb(212 168 85 / 15%);
   --ifm-code-color: var(--datamitsu-gold-light);
 
   /* Code blocks */
@@ -108,20 +108,20 @@
   --docsearch-text-color: #3d2817;
   --docsearch-highlight-color: #d4a855;
   --docsearch-muted-color: #6b543f;
-  --docsearch-container-background: rgba(61, 40, 23, 0.4);
+  --docsearch-container-background: rgb(61 40 23 / 40%);
   --docsearch-modal-background: #faf6ed;
-  --docsearch-modal-shadow: 0 8px 40px rgba(61, 40, 23, 0.2);
+  --docsearch-modal-shadow: 0 8px 40px rgb(61 40 23 / 20%);
   --docsearch-searchbox-background: #f5efe3;
   --docsearch-searchbox-focus-background: #faf6ed;
   --docsearch-searchbox-shadow: inset 0 0 0 2px #d4a855;
   --docsearch-hit-color: #3d2817;
   --docsearch-hit-active-color: #3d2817;
   --docsearch-hit-background: #faf6ed;
-  --docsearch-hit-shadow: 0 1px 4px rgba(61, 40, 23, 0.1);
+  --docsearch-hit-shadow: 0 1px 4px rgb(61 40 23 / 10%);
   --docsearch-key-gradient: linear-gradient(180deg, #f5efe3, #faf6ed);
-  --docsearch-key-shadow: 0 1px 0 rgba(61, 40, 23, 0.3);
+  --docsearch-key-shadow: 0 1px 0 rgb(61 40 23 / 30%);
   --docsearch-footer-background: #f5efe3;
-  --docsearch-footer-shadow: 0 -1px 0 rgba(212, 168, 85, 0.2);
+  --docsearch-footer-shadow: 0 -1px 0 rgb(212 168 85 / 20%);
   --docsearch-logo-color: #b8923d;
   --docsearch-icon-color: #6b543f;
   --docsearch-icon-stroke-width: 1.6;
@@ -132,9 +132,9 @@
   --docsearch-text-color: #f5efe3;
   --docsearch-highlight-color: #e5c073;
   --docsearch-muted-color: #c9b99a;
-  --docsearch-container-background: rgba(15, 12, 8, 0.7);
+  --docsearch-container-background: rgb(15 12 8 / 70%);
   --docsearch-modal-background: #2a2419;
-  --docsearch-modal-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  --docsearch-modal-shadow: 0 8px 40px rgb(0 0 0 / 50%);
   --docsearch-searchbox-background: #1f1912;
   --docsearch-searchbox-focus-background: #16120d;
   --docsearch-searchbox-shadow: inset 0 0 0 2px #d4a855;
@@ -143,9 +143,9 @@
   --docsearch-hit-background: #1f1912;
   --docsearch-hit-shadow: none;
   --docsearch-key-gradient: linear-gradient(180deg, #2a2419, #1f1912);
-  --docsearch-key-shadow: 0 1px 0 rgba(212, 168, 85, 0.3);
+  --docsearch-key-shadow: 0 1px 0 rgb(212 168 85 / 30%);
   --docsearch-footer-background: #1f1912;
-  --docsearch-footer-shadow: 0 -1px 0 rgba(212, 168, 85, 0.15);
+  --docsearch-footer-shadow: 0 -1px 0 rgb(212 168 85 / 15%);
   --docsearch-logo-color: #d4a855;
   --docsearch-icon-color: #c9b99a;
 }
@@ -155,36 +155,36 @@
 /* Footer keyboard shortcut keys */
 .DocSearch-Commands-Key {
   background: linear-gradient(180deg, #f5efe3, #faf6ed) !important;
-  border-color: rgba(61, 40, 23, 0.2) !important;
-  box-shadow: 0 1px 0 rgba(61, 40, 23, 0.3) !important;
+  border-color: rgb(61 40 23 / 20%) !important;
+  box-shadow: 0 1px 0 rgb(61 40 23 / 30%) !important;
   color: #6b543f !important;
 }
 
 [data-theme="dark"] .DocSearch-Commands-Key {
   background: linear-gradient(180deg, #3d2817, #2a2419) !important;
-  border-color: rgba(212, 168, 85, 0.2) !important;
-  box-shadow: 0 1px 0 rgba(212, 168, 85, 0.3) !important;
+  border-color: rgb(212 168 85 / 20%) !important;
+  box-shadow: 0 1px 0 rgb(212 168 85 / 30%) !important;
   color: #c9b99a !important;
 }
 
 /* Search bar bottom border */
 .DocSearch-Form {
-  border-bottom: 1px solid rgba(212, 168, 85, 0.3) !important;
+  border-bottom: 1px solid rgb(212 168 85 / 30%) !important;
   box-shadow: none !important;
 }
 
 [data-theme="dark"] .DocSearch-Form {
-  border-bottom-color: rgba(212, 168, 85, 0.25) !important;
+  border-bottom-color: rgb(212 168 85 / 25%) !important;
 }
 
 /* Footer top border */
 .DocSearch-Footer {
-  border-top: 1px solid rgba(212, 168, 85, 0.2) !important;
+  border-top: 1px solid rgb(212 168 85 / 20%) !important;
   box-shadow: none !important;
 }
 
 [data-theme="dark"] .DocSearch-Footer {
-  border-top-color: rgba(212, 168, 85, 0.15) !important;
+  border-top-color: rgb(212 168 85 / 15%) !important;
 }
 
 /* Hit breadcrumb path (the blue "Maintaining Wrapper Packages" text) */
@@ -209,68 +209,68 @@
 
 /* Active/selected hit item */
 .DocSearch-Hit[aria-selected="true"] a {
-  background: rgba(212, 168, 85, 0.2) !important;
+  background: rgb(212 168 85 / 20%) !important;
 }
 
 [data-theme="dark"] .DocSearch-Hit[aria-selected="true"] a {
-  background: rgba(212, 168, 85, 0.25) !important;
+  background: rgb(212 168 85 / 25%) !important;
 }
 
 /* Navbar search button */
 .DocSearch-Button {
-  background: rgba(212, 168, 85, 0.12) !important;
-  border: 1px solid rgba(212, 168, 85, 0.25) !important;
+  background: rgb(212 168 85 / 12%) !important;
+  border: 1px solid rgb(212 168 85 / 25%) !important;
   color: #6b543f !important;
 }
 
 .DocSearch-Button:hover {
-  background: rgba(212, 168, 85, 0.2) !important;
+  background: rgb(212 168 85 / 20%) !important;
   box-shadow: none !important;
   color: #3d2817 !important;
 }
 
 [data-theme="dark"] .DocSearch-Button {
-  background: rgba(212, 168, 85, 0.1) !important;
-  border-color: rgba(212, 168, 85, 0.2) !important;
+  background: rgb(212 168 85 / 10%) !important;
+  border-color: rgb(212 168 85 / 20%) !important;
   color: #c9b99a !important;
 }
 
 [data-theme="dark"] .DocSearch-Button:hover {
-  background: rgba(212, 168, 85, 0.18) !important;
+  background: rgb(212 168 85 / 18%) !important;
   box-shadow: none !important;
   color: #f5efe3 !important;
 }
 
 /* Search button keyboard shortcut badge */
 .DocSearch-Button-Key {
-  background: rgba(212, 168, 85, 0.15) !important;
-  border-color: rgba(212, 168, 85, 0.3) !important;
+  background: rgb(212 168 85 / 15%) !important;
+  border-color: rgb(212 168 85 / 30%) !important;
   box-shadow: none !important;
   color: #6b543f !important;
 }
 
 [data-theme="dark"] .DocSearch-Button-Key {
-  background: rgba(212, 168, 85, 0.12) !important;
-  border-color: rgba(212, 168, 85, 0.25) !important;
+  background: rgb(212 168 85 / 12%) !important;
+  border-color: rgb(212 168 85 / 25%) !important;
   color: #c9b99a !important;
 }
 
 /* Additional code block refinements */
 div[class*="codeBlockContainer"] {
-  box-shadow: 0 2px 8px rgba(61, 40, 23, 0.1);
+  box-shadow: 0 2px 8px rgb(61 40 23 / 10%);
 }
 
 [data-theme="dark"] div[class*="codeBlockContainer"] {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
 }
 
 /* Inline code only - not code blocks */
 :not(pre) > code {
-  border: 1px solid rgba(212, 168, 85, 0.2);
+  border: 1px solid rgb(212 168 85 / 20%);
 }
 
 [data-theme="dark"] :not(pre) > code {
-  border-color: rgba(212, 168, 85, 0.25);
+  border-color: rgb(212 168 85 / 25%);
 }
 
 /* Runtime hues, surfaces and text colors arrive as custom properties built from

@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/releaseprovider"
+
 	"github.com/datamitsu/datamitsu/internal/appstate"
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
@@ -98,6 +100,7 @@ func TestBuildBinariesForApp_NestedStorageStructure(t *testing.T) {
 	}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -164,6 +167,7 @@ func TestBuildBinariesForApp_DetectorCalledWithLibcType(t *testing.T) {
 	}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -199,6 +203,7 @@ func TestBuildBinariesForApp_InitializesNestedMaps(t *testing.T) {
 	}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -273,6 +278,7 @@ func TestFormatPlatformLabel(t *testing.T) {
 func TestBuildBinariesForApp_MapsExistBeforeWrite(t *testing.T) {
 	// Verify that maps are properly initialized even when state starts nil
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -320,6 +326,7 @@ func TestBuildBinariesForApp_MapsExistBeforeWrite(t *testing.T) {
 
 func TestBuildBinariesForApp_ConfigHash(t *testing.T) {
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -348,6 +355,7 @@ func TestBuildBinariesForApp_CorrectContentType(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -373,6 +381,7 @@ func TestBuildBinariesForApp_RejectsLibcMismatch(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -407,6 +416,7 @@ func TestBuildBinariesForApp_DoesNotMutateStateOnFailure(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -437,6 +447,7 @@ func TestBuildBinariesForApp_DeduplicatesSingleLinuxBinary(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -478,6 +489,7 @@ func TestBuildBinariesForApp_SeparateMuslBinariesNotDeduplicated(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -522,6 +534,7 @@ func TestBuildBinariesForApp_NoDuplicateURLHashPairs(t *testing.T) {
 	release := &github.Release{TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
+		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
 		Apps:     map[string]*appstate.AppMetadata{},
 		Binaries: map[string]*appstate.BinariesEntry{},
 	}
@@ -557,39 +570,51 @@ func TestBuildBinariesForApp_NoDuplicateURLHashPairs(t *testing.T) {
 	}
 }
 
-func TestExtractHashFromDigest_ValidHash(t *testing.T) {
-	hash, err := extractHashFromDigest("sha256:" + testHash1)
+func TestParseArtifactHash_CanonicalHash(t *testing.T) {
+	hash, err := parseArtifactHash("sha256:" + testHash1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if hash != testHash1 {
-		t.Errorf("hash = %q, want %q", hash, testHash1)
+	// The output is the canonical pin the generated manifest writes.
+	if hash != "sha256:"+testHash1 {
+		t.Errorf("hash = %q, want %q", hash, "sha256:"+testHash1)
 	}
 }
 
-func TestExtractHashFromDigest_InvalidHex(t *testing.T) {
-	_, err := extractHashFromDigest("sha256:not-a-valid-hex-string-of-the-right-length-for-sha256-000000")
+func TestParseArtifactHash_BareHexIsNormalized(t *testing.T) {
+	// Provider feeds arrive bare (GitLab file_sha256); the result is canonical.
+	hash, err := parseArtifactHash(testHash2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hash != "sha256:"+testHash2 {
+		t.Errorf("hash = %q, want %q", hash, "sha256:"+testHash2)
+	}
+}
+
+func TestParseArtifactHash_InvalidHex(t *testing.T) {
+	_, err := parseArtifactHash("sha256:not-a-valid-hex-string-of-the-right-length-for-sha256-000000")
 	if err == nil {
 		t.Error("expected error for invalid hex")
 	}
 }
 
-func TestExtractHashFromDigest_WrongLength(t *testing.T) {
-	_, err := extractHashFromDigest("sha256:abc123")
+func TestParseArtifactHash_WrongLength(t *testing.T) {
+	_, err := parseArtifactHash("sha256:abc123")
 	if err == nil {
 		t.Error("expected error for wrong length")
 	}
 }
 
-func TestExtractHashFromDigest_EmptyDigest(t *testing.T) {
-	_, err := extractHashFromDigest("")
+func TestParseArtifactHash_EmptyDigest(t *testing.T) {
+	_, err := parseArtifactHash("")
 	if err == nil {
 		t.Error("expected error for empty digest")
 	}
 }
 
-func TestExtractHashFromDigest_UnsupportedAlgorithm(t *testing.T) {
-	_, err := extractHashFromDigest("md5:abc123")
+func TestParseArtifactHash_UnsupportedAlgorithm(t *testing.T) {
+	_, err := parseArtifactHash("md5:" + testHash1)
 	if err == nil {
 		t.Error("expected error for unsupported algorithm")
 	}

@@ -1,10 +1,10 @@
 /// <reference path="../config.d.ts" />
 
-import githubApps from "./githubApps.json";
+import binaryApps from "./binaryApps.json";
 import nodeApps from "./nodeApps.json";
 import uvApps from "./uvApps.json";
 
-interface AppStateGithub {
+interface AppStateBinary {
   binaries: BinManager.MapOfBinaries;
   configHash: string;
 }
@@ -30,7 +30,7 @@ export const mapOfApps: BinManager.MapOfApps = {
   },
   ktlint: {
     jvm: {
-      jarHash: "a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75",
+      jarHash: "sha256:a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75",
       jarUrl: "https://github.com/pinterest/ktlint/releases/download/1.8.0/ktlint",
       version: "1.8.0",
     },
@@ -66,8 +66,8 @@ export const mapOfApps: BinManager.MapOfApps = {
   },
   task: {
     binary: {
-      binaries: githubApps.binaries.task.binaries as unknown as Record<string, AppStateGithub>,
-      version: githubApps.apps.task.tag,
+      binaries: binaryApps.binaries.task.binaries as unknown as Record<string, AppStateBinary>,
+      version: binaryApps.apps.task.tag,
     },
   },
 };

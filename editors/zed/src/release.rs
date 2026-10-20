@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use zed_extension_api::serde_json;
 
+use crate::digest;
 use crate::platform::Target;
 
 const REPOSITORY: &str = "datamitsu/datamitsu";
@@ -22,9 +23,10 @@ pub struct Pins {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Asset {
 	pub file: String,
-	pub sha256: String,
+	pub hash: String,
 }
 
 pub fn pinned() -> Result<Pins, String> {
@@ -32,12 +34,15 @@ pub fn pinned() -> Result<Pins, String> {
 }
 
 pub fn parse(json: &str) -> Result<Pins, String> {
-	serde_json::from_str(json).map_err(|err| format!("release.json is malformed: {err}"))
+	let pins: Pins = serde_json::from_str(json).map_err(|err| format!("release.json is malformed: {err}"))?;
+	for asset in pins.assets.values() {
+		digest::validate_sha256(&asset.hash).map_err(|err| format!("the pinned hash of {}: {err}", asset.file))?;
+	}
+	Ok(pins)
 }
 
 impl Pins {
-	/// The asset to download for target. Refuses a placeholder build and any
-	/// asset without a well-formed SHA-256: nothing is downloaded unverified.
+	/// Refuses placeholder builds and targets without a verified archive pin.
 	pub fn asset(&self, target: &Target) -> Result<&Asset, String> {
 		if self.version == PLACEHOLDER_VERSION {
 			return Err(
@@ -52,9 +57,6 @@ impl Pins {
 			.assets
 			.get(&key)
 			.ok_or_else(|| format!("datamitsu {} pins no release asset for {key}", self.version))?;
-		if !is_sha256(&asset.sha256) {
-			return Err(format!("the pinned SHA-256 of {} is not a SHA-256 digest", asset.file));
-		}
 		Ok(asset)
 	}
 
@@ -66,25 +68,16 @@ impl Pins {
 	}
 }
 
-fn is_sha256(value: &str) -> bool {
-	value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
 #[cfg(test)]
 mod tests {
 	use zed_extension_api::{Architecture, Os};
 
 	use super::*;
 
-	const DIGEST: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+	const DIGEST: &str = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 	fn linux() -> Target {
 		Target::from_platform(Os::Linux, Architecture::X8664).unwrap()
-	}
-
-	#[test]
-	fn the_committed_release_json_parses() {
-		pinned().unwrap();
 	}
 
 	#[test]
@@ -97,11 +90,11 @@ mod tests {
 	#[test]
 	fn resolves_the_asset_and_its_url() {
 		let json = format!(
-			r#"{{"version": "0.4.0", "assets": {{"linux_amd64": {{"file": "datamitsu_0.4.0_linux_amd64.tar.gz", "sha256": "{DIGEST}"}}}}}}"#
+			r#"{{"version": "0.4.0", "assets": {{"linux_amd64": {{"file": "datamitsu_0.4.0_linux_amd64.tar.gz", "hash": "{DIGEST}"}}}}}}"#
 		);
 		let pins = parse(&json).unwrap();
 		let asset = pins.asset(&linux()).unwrap();
-		assert_eq!(asset.sha256, DIGEST);
+		assert_eq!(asset.hash, DIGEST);
 		assert_eq!(
 			pins.url(asset),
 			"https://github.com/datamitsu/datamitsu/releases/download/v0.4.0/datamitsu_0.4.0_linux_amd64.tar.gz"
@@ -116,12 +109,30 @@ mod tests {
 	}
 
 	#[test]
-	fn refuses_an_empty_or_malformed_hash() {
-		for sha256 in ["", "abc", &"z".repeat(64)] {
+	fn refuses_invalid_hashes_when_loading_pins() {
+		for hash in [
+			"".to_string(),
+			"abc".to_string(),
+			"a".repeat(64),
+			format!("sha256:{}", "A".repeat(64)),
+			format!("sha256:{}", "z".repeat(64)),
+			format!("xxh3:{}", "a".repeat(32)),
+		] {
 			let json =
-				format!(r#"{{"version": "0.4.0", "assets": {{"linux_amd64": {{"file": "a.tar.gz", "sha256": "{sha256}"}}}}}}"#);
-			let pins = parse(&json).unwrap();
-			assert!(pins.asset(&linux()).is_err(), "accepted sha256 {sha256:?}");
+				format!(r#"{{"version": "0.4.0", "assets": {{"linux_amd64": {{"file": "a.tar.gz", "hash": "{hash}"}}}}}}"#);
+			let err = parse(&json).unwrap_err();
+			assert!(err.contains("sha256:<64 lowercase hex>"), "{err}");
+		}
+	}
+
+	#[test]
+	fn refuses_a_missing_hash_and_the_obsolete_sha256_field() {
+		for asset in [
+			r#"{"file":"a.tar.gz"}"#.to_string(),
+			format!(r#"{{"file":"a.tar.gz","sha256":"{DIGEST}"}}"#),
+		] {
+			let json = format!(r#"{{"version":"0.4.0","assets":{{"linux_amd64":{asset}}}}}"#);
+			assert!(parse(&json).is_err(), "accepted {json}");
 		}
 	}
 }

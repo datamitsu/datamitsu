@@ -135,7 +135,7 @@ entry pointing at the copy inside the linked package:
 ```js
 const parsers = {
   core: {
-    hash: "<printed sha256>",
+    hash: "<printed sha256 digest>",
     url: "file:///abs/path/to/dist/dev-link/datamitsu/parsers/datamitsu_parsers.wasm",
   },
 };
@@ -170,7 +170,7 @@ bytes.
 ```js
 const parsers = {
   core: {
-    hash: "0123…cdef",
+    hash: "sha256:0123…cdef",
     oci: {
       ref: "ghcr.io/datamitsu/datamitsu-parsers-unstable",
       digest: "sha256:89ab…4567",
@@ -179,7 +179,7 @@ const parsers = {
 };
 ```
 
-The `ref`, the `digest` and the matching `sha256` all come from
+The `ref`, the `digest` and the matching `sha256`-prefixed hash all come from
 `parsers-oci.json`, which the release workflow writes after the registry push
 (the manifest digest does not exist before then) and ships inside
 `@datamitsu/datamitsu`, so a wrapper reads the pin out of `node_modules`
@@ -194,7 +194,7 @@ parsers: {
   core: {
     url: "file:///abs/path/to/datamitsu_parsers.wasm",
     oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers-unstable", digest: "sha256:89ab…4567" },
-    hash: "0123…cdef",
+    hash: "sha256:0123…cdef",
   },
 }
 
@@ -202,7 +202,7 @@ parsers: {
 parsers: {
   core: {
     oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers-unstable", digest: "sha256:89ab…4567" },
-    hash: "0123…cdef",
+    hash: "sha256:0123…cdef",
   },
 }
 ```

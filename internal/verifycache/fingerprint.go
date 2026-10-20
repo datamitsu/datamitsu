@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 func fingerprintFields(fields ...string) string {
@@ -12,22 +12,23 @@ func fingerprintFields(fields ...string) string {
 	for i, f := range fields {
 		parts[i] = []byte(f)
 	}
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 }
 
 // extractionCheck names what verifying a download checks. A result recorded
 // under a weaker check must not be skipped as passed, so it changes whenever
-// the check gets stricter: "executable" added the executable-format check.
-const extractionCheck = "executable"
+// the check gets stricter: "executable" added the executable-format check,
+// "executable-in-tree" applied it to the binaryPath of an extractDir entry.
+const extractionCheck = "executable-in-tree"
 
 // FingerprintBinary returns the verification fingerprint for a managed binary.
-func FingerprintBinary(url, hash, hashType, contentType, binaryPath string, extractDir bool, os, arch, libc string) string {
-	return fingerprintFields("binary", extractionCheck, url, hash, hashType, contentType, binaryPath, strconv.FormatBool(extractDir), os, arch, libc)
+func FingerprintBinary(url, hash, contentType, binaryPath string, extractDir bool, os, arch, libc string) string {
+	return fingerprintFields("binary", extractionCheck, url, hash, contentType, binaryPath, strconv.FormatBool(extractDir), os, arch, libc)
 }
 
 // FingerprintRuntime returns the verification fingerprint for a managed runtime.
-func FingerprintRuntime(url, hash, hashType, contentType, binaryPath string, extractDir bool, os, arch, libc string) string {
-	return fingerprintFields("runtime", extractionCheck, url, hash, hashType, contentType, binaryPath, strconv.FormatBool(extractDir), os, arch, libc)
+func FingerprintRuntime(url, hash, contentType, binaryPath string, extractDir bool, os, arch, libc string) string {
+	return fingerprintFields("runtime", extractionCheck, url, hash, contentType, binaryPath, strconv.FormatBool(extractDir), os, arch, libc)
 }
 
 // FingerprintRuntimeApp returns the verification fingerprint for a runtime app.

@@ -261,12 +261,13 @@ async function main() {
   }
 
   const reference = `${REGISTRY}/${repo}`;
-  const record = { digest, module: "core", ref: reference, sha256: hash, tag, version };
+  const pin = `sha256:${hash}`;
+  const record = { digest, module: "core", ref: reference, sha256: pin, tag, version };
   writeFileSync("dist/parsers-oci.json", `${JSON.stringify(record, null, 2)}\n`);
 
   emitOutput("digest", digest);
   emitOutput("ref", reference);
-  emitOutput("sha256", hash);
+  emitOutput("sha256", pin);
   emitOutput("tag", tag);
 
   if (process.env.GITHUB_STEP_SUMMARY) {
@@ -275,10 +276,10 @@ async function main() {
       `### WASM parser module (OCI)\n\n` +
         `- artifact: \`${reference}@${digest}\`\n` +
         `- tag: \`${tag}\`\n` +
-        `- module sha256: \`${hash}\` (also the layer digest)\n\n` +
+        `- module sha256: \`sha256:${hash}\` (also the layer digest)\n\n` +
         "Pin it in a config with:\n\n" +
         "```js\n" +
-        `parsers: { core: { hash: "${hash}", oci: { ref: "${reference}", digest: "${digest}" } } }\n` +
+        `parsers: { core: { hash: "sha256:${hash}", oci: { ref: "${reference}", digest: "${digest}" } } }\n` +
         "```\n",
     );
   }

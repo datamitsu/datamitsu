@@ -32,16 +32,22 @@ declarations do not have it, this version does not accept it.
   behavior the config relies on. Raise it when you adopt a newer feature.
 - Branch on `facts()` and `datamitsuConfigInputs`, not on guesses about the
   machine.
+- Use `merge(base, overrides, ...)` for nested settings: later values win,
+  arrays replace, and plain objects/arrays are copied without mutating inputs.
+  This helper requires a core release that includes it; raise `getMinVersion()`
+  when adopting it.
 
 ## Downloads
 
 - Everything fetched from the network - binary, archive, JAR, runtime, remote
-  config - carries a SHA-256 hash: `hash`, or `jarHash` for a JVM app's JAR. A
-  missing hash fails the load. Never write a placeholder, and never copy a
-  version or a hash from memory.
-- Bump versions with `datamitsu devtools pull-github`, `pull-node`, `pull-uv` and
+  config - carries a SHA-256 digest: `hash`, or `jarHash` for a JVM app's JAR,
+  written canonically as `"sha256:<64 lowercase hex>"` (an `expectChainHash`
+  pin is `"xxh3:<32 lowercase hex>"`). A missing or bare-hex hash fails the
+  load. Never write a placeholder, and never copy a version or a hash from
+  memory.
+- Bump versions with `datamitsu devtools pull-releases`, `pull-node`, `pull-uv` and
   `pull-runtimes`. They read hashes from the published artifacts and apply the
-  minimum release age.
+  minimum release age, writing them in the canonical form.
 - Bun, Node, UV and Go apps need a `lockFile`. Generate it with
   `datamitsu config lockfile <app>` whenever the app's version or dependencies
   change; never edit one by hand.
@@ -78,11 +84,78 @@ writes the configuration; never ship it to consumers.
 - `datamitsu config show` prints the resolved configuration;
   `datamitsu inspect` browses it.
 - `datamitsu check` must pass afterwards.
+- `datamitsu config reconcile --force` regenerates selected managed files from
+  configuration layers without their current file overrides. Project-layer
+  settings still apply. It permits removal of customized internalized copies,
+  respects `--tools` and `--dry-run`, and does not bypass hash verification.
 
 ## Recent changes to review
 
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
+
+- **after v0.5.1** - Config JS exposes `merge(base, overrides, ...)` for
+  recursive, non-mutating settings merges; later values win and arrays replace.
+  Adopt it instead of local merge helpers once the consuming core includes it.
+  `config reconcile --force` discards selected managed files' disk overrides
+  while replaying every configuration layer, including project layers. It keeps
+  tool scoping, dry-run and chain-hash verification, and permits removal of
+  customized internalized copies.
+- **after v0.4.1** - Go apps may carry `files`/`archives` (the source-blob
+  form): the module source is staged before the build and the lock file must
+  describe the shipped module itself — `packageName` points inside it. `go.sum`
+  may be empty for a stdlib-only module. `config lockfile` generates the lock
+  from the staged source (`go mod tidy`), never from a remote package of the
+  same name.
+- **after v0.4.1** - Tool operations accept `{bin:<alias>}` placeholders: the
+  exact executable of the operation app's direct dependency, bound under the
+  edge's alias (binary, uv and go targets). Validated at load time against the
+  app's `dependsOn` edges.
+- **after v0.4.1** - Apps declare a one-time preparation step:
+  `apps.<name>.prepare` runs once after the app and its whole `dependsOn`
+  closure are installed and fills a keyed, project-independent state exposed
+  to the app as `${APP_PREPARED}`. `dependsOn` entries may also be objects
+  (`{ app, as }`) that bind a dependency under an alias for
+  `${APP_BIN:<alias>}`; `${APP_BIN}` now resolves binary, uv and go targets.
+  Raise `getMinVersion()` to at least the first version with these fields —
+  an older core silently drops `prepare` and passes `${APP_PREPARED}` through
+  as a literal string. A literal `{word:…}` in tool arguments is now a load
+  error (previously it reached the tool unchanged); quote it or use a
+  supported placeholder.
+- **after v0.4.0** - Hash pins are canonical `alg:value` digests:
+  `"sha256:<64 lowercase hex>"` for every download pin (`hash`, `jarHash`,
+  archive hashes, parser hashes) and `"xxh3:<32 lowercase hex>"` for
+  `expectChainHash`. Bare hex values fail the load with a format-teaching
+  error, and the `hashType` field is gone: the algorithm is part of the
+  digest. Add the `sha256:` prefix to every existing pin; values are
+  otherwise unchanged. Hand-written `binaryApps.json` pin maps still accept
+  loose input and normalize on load.
+
+- **after v0.4.0** - Release sources accept `downloadAuth: auto | required | none`
+  (default `auto`). `tokenEnv` authorizes discovery independently; download auth
+  is resolved per asset. Public native assets keep anonymous URLs. GitLab package
+  access follows package metadata, and unknown same-origin endpoints require an
+  explicit policy. External origins never receive the source credential.
+  Re-run `pull-releases` once to regenerate entries from the initial multi-source
+  implementation; their generation fingerprints are invalidated automatically.
+  Changing `downloadAuth` also invalidates entries. Missing required tokens fail
+  before download; hashes remain mandatory. See
+  `datamitsu llms reference/cli-commands`.
+
+- **after v0.4.0** - The binary registry is `binaryApps.json`; use
+  `devtools pull-releases` with named `sources` for GitHub, GitLab, Gitea or
+  Forgejo. Replace `owner`/`repo` with `source`/`repository`; the old command
+  and shape are removed. Download `auth` stores origin-scoped token env
+  references, never token values. Missing SHA-256 still refuses downloading;
+  checksum files need their own pinned SHA-256. See
+  `datamitsu llms reference/cli-commands` for the contract and migration.
+
+- **after v0.4.0** - `devtools pull-releases` accepts a strict top-level `platforms`
+  list in its JSON manifest. The list filters available targets; it does not
+  require every selected target in every app. It saves removal of unselected binary records
+  before pulling, even if a pull fails. Changing or removing the list changes
+  `configHash` and reruns detection at the same tag. See
+  `datamitsu llms reference/cli-commands` for supported identifiers.
 
 - **after v0.3.1** - `lint --baseline` and `check --baseline` gate only on the
   findings a baseline does not hold, but never override a tool's exit code
@@ -171,12 +244,46 @@ configuration should do about it.
   end. A CI step or script of the configuration's repository that expects 1
   from a mistaken invocation or from `--fail-on-skip` expects 2 or 4 instead;
   CI runs `datamitsu lint --fail-fast=false`.
-- **after v0.3.1** - `devtools verify-all` and `pull-github --verify-extraction`
+- **after v0.3.1** - Every `devtools pull-*` command that writes its file saves
+  it after each entry that changed, so a failed or interrupted run keeps what it
+  already pulled; `pull-runtimes` no longer discards the runtimes that succeeded
+  when one fails, and pulls pnpm first. The JVM runtime takes the previous
+  Temurin feature release while the newest has no build past the minimum
+  release age, and a GitHub release lookup reads past a first page of
+  prereleases. Commit the successful part of a failed pull and rerun the rest.
+- **after v0.3.1** - Every `devtools pull-*` command works through its entries in
+  alphabetical order with a `[n/N]` counter and writes its file with the keys
+  of every object sorted. The first pull after upgrading rewrites an existing
+  registry in that order; commit that diff on its own.
+- **after v0.3.1** - Every `devtools pull-*` command retries transient failures,
+  prints each retry, reports every app or package that still failed and exits
+  with status 1 when any did. `pull-releases` no longer stops at a brand-new app
+  without an old-enough release; it records the failure and goes on. Under
+  `--verify-extraction` a platform whose asset cannot be downloaded fails the
+  app instead of being dropped or handed to the next asset, and signature,
+  certificate, provenance and SBOM files are never candidates. Let a CI job
+  fail on the exit code instead of grepping the log, run large pulls with
+  `GITHUB_TOKEN` set, and rerun a failed pull: every `pull-*` command keeps a
+  failed entry's previous state.
+- **after v0.3.1** - `extractDir: true` on a binary app runs `binaryPath` inside
+  the extracted directory instead of failing on the directory itself, and
+  requires `binaryPath` and a tar or zip `contentType`; `devtools verify-all`
+  checks that path is an executable. Set it for a tool that reads files beside
+  its binary, such as protoc and its `include/`, after loading the registry,
+  together with the exact `binaryPath` (`bin/protoc`): `pull-releases` writes
+  neither the flag nor a path it could only guess, and a guessed path that
+  passes single-file verification fails a directory install. See
+  `datamitsu llms guides/binary-management`.
+- **after v0.3.1** - `devtools verify-all` and `pull-releases --verify-extraction`
   fail when a `binaryPath` extracts something other than an executable, such as
-  a completion script. `pull-github` keeps a `binaryPath` fixed by hand when the
-  asset's name does not change, and detects builds named only `alpine`. Point
-  any failing `binaryPath` at the real binary; drop hand-added entries that the
-  next `pull-github` now detects.
+  a completion script. `pull-releases` keeps a `binaryPath` fixed by hand when the
+  asset's name does not change, derives the next one from the entry of the same
+  os/arch/libc, and detects builds named only `alpine`, `win64`, `win` or
+  `.exe`; it never records an illumos, Solaris, NetBSD or Android build for
+  Linux, skips installers (`*-setup.exe`, `.msix`, `.dmg`) and prefers the
+  asset named after the app when a release holds several programs. Point any
+  failing `binaryPath` at the real binary; drop hand-added or hand-corrected
+  entries that the next `pull-releases` now detects.
 - **after v0.3.1** - `datamitsu config lockfile` resolves transitive
   dependencies within the minimum release age: uv records the window in the
   lock, and a Go app fails on a module younger than it. Existing locks still

@@ -103,19 +103,27 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to read runtime config: %w", effErr)
 		}
 		// Go apps cannot regenerate a lockfile via reinstall: the build is
-		// mandatory-lockfile and refuses without one. Resolve dependencies with
-		// `go mod init` + `go get` in an isolated temp workdir — generation pulls
-		// 100+MiB of module cache we must not leave behind in the install path —
-		// then read go.mod + go.sum back from there.
+		// mandatory-lockfile and refuses without one. Resolve dependencies in
+		// an isolated temp workdir — generation pulls 100+MiB of module cache
+		// we must not leave behind in the install path — then read go.mod +
+		// go.sum back from there. An app that SHIPS its source (files/
+		// archives) generates from the staged module (`go mod tidy`), so the
+		// lock describes the shipped module and the install build compiles
+		// the blob, never a remote package of the same name. The wrapper
+		// flow (`go mod init` + `go get pkg@ver`) covers the rest.
 		lockContent, err = generateGoLockContent(appName, app, func(workDir string) error {
-			return freshRM.GenerateGoLockFiles(ctx, appName, freshApps[appName].Go, workDir, eff.MinimumReleaseAgeMinutes)
+			freshApp := freshApps[appName]
+			if len(freshApp.Files) > 0 || len(freshApp.Archives) > 0 {
+				return freshRM.GenerateGoLockFilesFromSource(ctx, appName, freshApp.Go, freshApp.Files, freshApp.Archives, workDir, eff.MinimumReleaseAgeMinutes)
+			}
+			return freshRM.GenerateGoLockFiles(ctx, appName, freshApp.Go, workDir, eff.MinimumReleaseAgeMinutes)
 		})
 		if err != nil {
 			return err
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "Reinstalling %s...\n", appName)
-		if _, err := freshBinMgr.GetCommandInfo(ctx, appName); err != nil {
+		if _, err := freshBinMgr.GetCommandInfoInstallOnly(ctx, appName); err != nil {
 			return fmt.Errorf("failed to reinstall %q: %w", appName, err)
 		}
 		lockContent, err = readLockFile(freshInstallPath, app)
@@ -329,9 +337,12 @@ func readLockFile(installPath string, app binmanager.App) (string, error) {
 			return "", fmt.Errorf("failed to read go.mod at %s: %w", goModPath, err)
 		}
 		goSum, err := os.ReadFile(goSumPath)
-		if err != nil {
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return "", fmt.Errorf("failed to read go.sum at %s: %w", goSumPath, err)
 		}
+		// An absent go.sum is a stdlib-only module's empty lock (go mod tidy
+		// writes no file at all when there is nothing to checksum); every
+		// other read error stays fatal.
 
 		return runtimemanager.BuildGoLockFileJSON(string(goMod), string(goSum))
 	}

@@ -2,7 +2,6 @@ package runtimemanager
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -12,9 +11,9 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/ui"
-
 	"go.uber.org/zap"
 )
 
@@ -100,8 +99,9 @@ func downloadAndVerifyJAR(ctx context.Context, name, url, expectedHash, destPath
 	if err := httpx.GuardOffline("JAR download of " + name); err != nil {
 		return err
 	}
-	if expectedHash == "" {
-		return fmt.Errorf("JAR hash is required but not provided for %s", url)
+	pin, err := digest.ParseSHA256Loose(expectedHash)
+	if err != nil {
+		return fmt.Errorf("invalid JAR hash pin for %s: %w", url, err)
 	}
 
 	guard, ctx := httpx.NewStallGuard(ctx, httpx.DefaultStallWindow)
@@ -135,7 +135,7 @@ func downloadAndVerifyJAR(ctx context.Context, name, url, expectedHash, destPath
 		_ = os.Remove(tmpPath)
 	}()
 
-	hasher := sha256.New()
+	hasher := digest.NewSHA256()
 	limited := guard.Reader(io.LimitReader(resp.Body, maxJARDownloadSize+1))
 	// Render a progress bar (or throttled lines in CI) for the JAR transfer,
 	// consistent with binary and runtime downloads.
@@ -158,8 +158,8 @@ func downloadAndVerifyJAR(ctx context.Context, name, url, expectedHash, destPath
 	closed = true
 
 	actualHash := hex.EncodeToString(hasher.Sum(nil))
-	if actualHash != expectedHash {
-		return fmt.Errorf("JAR hash mismatch: expected %s, got %s", expectedHash, actualHash)
+	if actualHash != pin.Hex() {
+		return fmt.Errorf("JAR hash mismatch: expected %s, got sha256:%s", pin.String(), actualHash)
 	}
 
 	if err := moveFile(tmpPath, destPath); err != nil {
@@ -170,8 +170,13 @@ func downloadAndVerifyJAR(ctx context.Context, name, url, expectedHash, destPath
 }
 
 // GetJVMAppPath returns the cache path for an installed JVM app environment.
+// The JAR pin folds by its hex value, so a pin's spelling never moves the store.
 func (rm *RuntimeManager) GetJVMAppPath(appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec, runtimeName string) (string, error) {
-	return rm.GetAppPath(appName, config.RuntimeKindJVM, appConfig.Version, nil, appConfig.JarHash, files, archives, runtimeName)
+	pin := appConfig.JarHash
+	if d, err := digest.ParseSHA256Loose(appConfig.JarHash); err == nil {
+		pin = d.Hex()
+	}
+	return rm.GetAppPath(appName, config.RuntimeKindJVM, appConfig.Version, nil, pin, files, archives, runtimeName)
 }
 
 // GetJVMCommandInfo returns command info for running a JVM app (java -jar <jar>).

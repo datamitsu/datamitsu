@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/ocidigest"
 	"github.com/datamitsu/datamitsu/internal/ociref"
@@ -47,10 +48,6 @@ const (
 	// binary cap or ocibundle's 2 GiB blob cap, neither of which is a sane
 	// ceiling for a single wasm file.
 	MaxParserModuleBytes int64 = 64 << 20
-
-	// sha256Prefix is the digest algorithm prefix. Only sha256 is accepted, on
-	// both the manifest pin and the layer, matching ocidigest.
-	sha256Prefix = "sha256:"
 )
 
 // errIntegrity is the base of every artifact-policy violation: the bytes are
@@ -192,12 +189,16 @@ func SelectWasmLayer(manifestBytes []byte, wantSHA256 string) (ocispec.Descripto
 		return none, fmt.Errorf("%w: layer mediaType is %q, want %q (the layer must be the uncompressed module)",
 			errIntegrity, layer.MediaType, MediaTypeWasm)
 	}
-	// The pivot. The config's mandatory SHA-256 and the OCI layer digest are the
-	// same number by construction, so this single comparison rejects a
+	// The pivot. The config's mandatory SHA-256 and the OCI layer digest are
+	// the same number by construction, so this single comparison rejects a
 	// substituted payload before it is requested.
-	if want := sha256Prefix + wantSHA256; layer.Digest.String() != want {
+	if want, err := digest.ParseSHA256(wantSHA256); err != nil || layer.Digest.String() != want.String() {
+		wantDesc := want.String()
+		if err != nil {
+			wantDesc = wantSHA256
+		}
 		return none, fmt.Errorf("%w: layer digest is %s, want %s (the module the config pins by hash)",
-			errIntegrity, layer.Digest.String(), want)
+			errIntegrity, layer.Digest.String(), wantDesc)
 	}
 	if layer.Size <= 0 || layer.Size > MaxParserModuleBytes {
 		return none, fmt.Errorf("%w: layer size %d is outside (0, %d]", errIntegrity, layer.Size, MaxParserModuleBytes)
@@ -212,42 +213,25 @@ func isIndexMediaType(mediaType string) bool {
 		mediaType == "application/vnd.docker.distribution.manifest.list.v2+json"
 }
 
-// checkSHA256Hex enforces the bare 64-lowercase-hex form the config validator
-// already guarantees. Re-checking here is not redundant: this package takes
-// plain strings from any caller, and an empty hash silently comparing against
-// "sha256:" is precisely the hash-less fetch the security policy forbids.
+// checkSHA256Hex enforces the canonical SHA-256 form. The config validator
+// already guarantees it, but this package takes plain strings from any caller,
+// and an empty hash silently comparing against "sha256:" is precisely the
+// hash-less fetch the security policy forbids.
 func checkSHA256Hex(hash string) error {
 	if hash == "" {
 		return fmt.Errorf("%w: no expected sha256 for the parser module (a hash is mandatory)", errIntegrity)
 	}
-	if !isLowerHex(hash, 64) {
-		return fmt.Errorf("%w: expected sha256 %q must be 64 lowercase hex characters", errIntegrity, hash)
+	if err := digest.IsSHA256(hash); err != nil {
+		return fmt.Errorf("%w: expected sha256 %q must be a canonical sha256:<64 lowercase hex> digest", errIntegrity, hash)
 	}
 	return nil
 }
 
-// checkManifestDigest enforces the "sha256:<64 hex>" pin form before a request
-// is made, so a malformed digest is a local error instead of a registry 404.
-func checkManifestDigest(digest string) error {
-	if len(digest) != len(sha256Prefix)+64 || digest[:len(sha256Prefix)] != sha256Prefix ||
-		!isLowerHex(digest[len(sha256Prefix):], 64) {
-		return fmt.Errorf("%w: oci digest %q must be %q followed by 64 lowercase hex characters",
-			errIntegrity, digest, sha256Prefix)
+// checkManifestDigest enforces the canonical digest form before a request is
+// made, so a malformed digest is a local error instead of a registry 404.
+func checkManifestDigest(digestValue string) error {
+	if err := digest.IsSHA256(digestValue); err != nil {
+		return fmt.Errorf("%w: oci digest %q must be \"sha256:\" followed by 64 lowercase hex characters", errIntegrity, digestValue)
 	}
 	return nil
-}
-
-// isLowerHex reports whether s is exactly n lowercase hex characters.
-func isLowerHex(s string, n int) bool {
-	if len(s) != n {
-		return false
-	}
-	for _, c := range s {
-		switch {
-		case c >= '0' && c <= '9', c >= 'a' && c <= 'f':
-		default:
-			return false
-		}
-	}
-	return true
 }

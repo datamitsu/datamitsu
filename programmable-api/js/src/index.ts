@@ -5,7 +5,9 @@ import { fix } from "./commands/fix.js";
 import { lint } from "./commands/lint.js";
 import { version } from "./commands/version.js";
 
-export default { cache, check, exec, fix, lint, version };
+const api = { cache, check, exec, fix, lint, version };
+
+export default api;
 export { cache } from "./commands/cache.js";
 export type {
   CacheClearOptions,

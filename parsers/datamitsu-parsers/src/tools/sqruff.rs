@@ -1,24 +1,11 @@
-//! sqruff — a high-speed SQL linter written in Rust.
-//!
-//! Ported from the none-ls `diagnostics/sqruff` builtin. It runs
-//! `sqruff lint --format github-annotation-native {file}` and reads diagnostics
-//! from **stderr**. Each line is a GitHub workflow annotation:
-//!
-//! ```text
-//! ::<level> <...>,file=<file>,line=<row>,col=<col>::<rule>: <message>
-//! ```
-//!
-//! e.g. `::error title=sqruff,file=test.sql,line=1,col=1::LT01: Expected only single space.`.
-//! The level is a GitHub annotation level, the line and column are 1-based, and
-//! no end is printed.
-//!
-//! none-ls Lua pattern:
-//! `^::(%w+) .*,file=(.*),line=(%d+),col=(%d+)::(%w+: .*)`
-//! captures (severity, filename, row, col, message).
+//! JSON reports retain filenames and rule codes; --parsing-errors exposes failures with no rule.
+//! Identical start/end coordinates represent points, so the JSON reporter supplies no span.
+//! Legacy GitHub annotations remain readable from stderr.
 
 use crate::capabilities::{Operation, ToolCapability};
 use crate::diagnostic::RawDiagnostic;
 use crate::severity::{self, Level};
+use tinyjson::JsonValue;
 
 pub const DESCRIPTOR: ToolCapability = ToolCapability {
 	name: "sqruff",
@@ -28,20 +15,80 @@ pub const DESCRIPTOR: ToolCapability = ToolCapability {
 		Level("error", severity::ERROR),
 		Level("warning", severity::WARNING),
 		Level("notice", severity::INFO),
+		Level("Error", severity::ERROR),
+		Level("Warning", severity::WARNING),
+		Level("Information", severity::INFO),
+		Level("Hint", severity::HINT),
 	],
-	column_unit: "",
+	column_unit: "utf-32",
 	category: "",
 	kind: "tool",
 	operations: &[Operation {
 		mode: "lint",
-		args: &["lint", "--format", "github-annotation-native", "{file}"],
+		args: &["lint", "--format", "json", "--parsing-errors", "{files}"],
 		stdin: false,
 	}],
 };
 
-pub fn parse(_stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
+pub fn parse(stdout: &[u8], stderr: &[u8], _exit_code: i32) -> Vec<RawDiagnostic> {
+	let text = String::from_utf8_lossy(stdout);
+	if text
+		.trim()
+		.strip_suffix(" files processed, nothing to fix.")
+		.is_some_and(|n| n.parse::<u32>().is_ok())
+	{
+		return Vec::new();
+	}
+	if let Some(out) = crate::json_diag::find_envelope(stdout, from_json) {
+		return out;
+	}
 	// from_stderr = true: diagnostics come from stderr.
 	String::from_utf8_lossy(stderr).lines().filter_map(parse_line).collect()
+}
+
+fn from_json(value: &JsonValue) -> Option<Vec<RawDiagnostic>> {
+	let JsonValue::Object(files) = value else {
+		return None;
+	};
+	if !files.values().all(|v| matches!(v, JsonValue::Array(_))) {
+		return None;
+	}
+	let mut keys: Vec<_> = files.keys().collect();
+	keys.sort();
+	let mut out = Vec::new();
+	for file in keys {
+		let JsonValue::Array(findings) = &files[file] else {
+			continue;
+		};
+		for finding in findings {
+			let Some(message) = crate::json_diag::member(finding, "message").and_then(|v| v.get::<String>()) else {
+				continue;
+			};
+			let range = crate::json_diag::member(finding, "range");
+			let point = |key: &str| {
+				let start = range.and_then(|v| crate::json_diag::member(v, "start"));
+				start
+					.and_then(|v| crate::json_diag::member(v, key))
+					.and_then(|v| v.get::<f64>())
+					.and_then(|n| crate::numconv::json_u32(*n))
+			};
+			out.push(RawDiagnostic {
+				message: message.clone(),
+				file: crate::diagnostic::file_field(file),
+				row: point("line"),
+				col: point("character"),
+				code: crate::json_diag::member(finding, "code")
+					.and_then(|v| v.get::<String>())
+					.cloned(),
+				severity: crate::json_diag::member(finding, "severity")
+					.and_then(|v| v.get::<String>())
+					.and_then(|s| severity::of(DESCRIPTOR.severities, s)),
+				source: Some(DESCRIPTOR.name.into()),
+				..RawDiagnostic::default()
+			});
+		}
+	}
+	Some(out)
 }
 
 fn parse_line(line: &str) -> Option<RawDiagnostic> {
@@ -102,6 +149,40 @@ fn field_after(header: &str, key: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn json_preserves_files_parse_errors_and_printed_levels() {
+		let json = br#"{"bad.sql":[{"range":{"start":{"line":1,"character":7},"end":{"line":1,"character":7}},"message":"Spacing","severity":"Warning","source":"sqruff","code":"LT01"}],"invalid.sql":[{"range":{"start":{"line":1,"character":1}},"message":"Unparsable section","severity":"Warning","code":null}]}"#;
+		let out = parse(json, b"", 1);
+		assert_eq!(out.len(), 2);
+		assert_eq!(out[0].file.as_deref(), Some("bad.sql"));
+		assert_eq!(out[0].code.as_deref(), Some("LT01"));
+		assert_eq!(out[0].severity, Some(severity::WARNING));
+		assert_eq!(out[0].source.as_deref(), Some("sqruff"));
+		assert_eq!(out[0].end_col, None);
+		assert_eq!(out[1].code, None);
+		assert_eq!(out[1].message, "Unparsable section");
+	}
+
+	#[test]
+	fn clean_json_is_recognized_and_truncated_json_is_not() {
+		assert!(
+			crate::tools::answer("sqruff", b"1 files processed, nothing to fix.\n", b"", 0)
+				.unwrap()
+				.recognized
+		);
+		assert!(
+			!crate::tools::answer("sqruff", b"an arbitrary success message", b"", 0)
+				.unwrap()
+				.recognized
+		);
+		assert!(crate::tools::answer("sqruff", b"{}", b"", 0).unwrap().recognized);
+		assert!(
+			!crate::tools::answer("sqruff", br#"{"bad.sql":["#, b"", 1)
+				.unwrap()
+				.recognized
+		);
+	}
 
 	#[test]
 	fn parses_error_annotation() {

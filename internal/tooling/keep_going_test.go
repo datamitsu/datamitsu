@@ -521,6 +521,10 @@ func (ctxAppManager) GetBinaryPath(ctx context.Context, _ string) (string, error
 	return "", ctx.Err()
 }
 
+func (ctxAppManager) ResolveBindingPath(ctx context.Context, _, _ string) (string, error) {
+	return ctxAppManager{}.GetBinaryPath(ctx, "")
+}
+
 func (ctxAppManager) GetCommandInfo(ctx context.Context, _ string) (*binmanager.CommandInfo, error) {
 	<-ctx.Done()
 	return nil, fmt.Errorf("provision: %w", ctx.Err())

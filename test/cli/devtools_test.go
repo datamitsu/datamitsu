@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -16,7 +17,7 @@ var expectedDevtoolsSubcommands = []string{
 	"dockerfile",
 	"pack-inline-archive",
 	"parsers",
-	"pull-github",
+	"pull-releases",
 	"pull-node",
 	"pull-runtimes",
 	"pull-uv",
@@ -48,7 +49,7 @@ var devtoolsHelpCases = []struct {
 	{"bundles", []string{"devtools", "bundles", "--help"}, "devtools_bundles_help"},
 	{"dockerfile", []string{"devtools", "dockerfile", "--help"}, "devtools_dockerfile_help"},
 	{"split-config", []string{"devtools", "split-config", "--help"}, "devtools_split_config_help"},
-	{"pull-github", []string{"devtools", "pull-github", "--help"}, "devtools_pull_github_help"},
+	{"pull-releases", []string{"devtools", "pull-releases", "--help"}, "devtools_pull_releases_help"},
 	{"pull-node", []string{"devtools", "pull-node", "--help"}, "devtools_pull_node_help"},
 	{"pull-uv", []string{"devtools", "pull-uv", "--help"}, "devtools_pull_uv_help"},
 	{"pull-runtimes", []string{"devtools", "pull-runtimes", "--help"}, "devtools_pull_runtimes_help"},
@@ -146,8 +147,8 @@ func TestDevtoolsArgValidation(t *testing.T) {
 			wantMsg: `invalid runtime "bogus"`,
 		},
 		{
-			name:    "pull-github-no-arg",
-			args:    []string{"devtools", "pull-github"},
+			name:    "pull-releases-no-arg",
+			args:    []string{"devtools", "pull-releases"},
 			wantMsg: "accepts 1 arg(s), received 0",
 		},
 		{
@@ -348,5 +349,40 @@ func assertOfflineError(t *testing.T, res clitest.Result, wantMsg string) {
 	if strings.Contains(res.Stderr, "Usage:") || strings.Contains(res.Stdout, "Usage:") {
 		t.Errorf("runtime error printed usage block (SilenceUsage broken):\nstdout:\n%s\nstderr:\n%s",
 			res.Stdout, res.Stderr)
+	}
+}
+
+// TestDevtoolsPullGithubReportsFailures locks the failure contract of a pull:
+// every app is attempted, each failure is listed with its stage and error, the
+// file is left as it was, and the process exits non-zero. The hermetic offline
+// environment makes every GitHub request fail before it leaves the machine.
+func TestDevtoolsPullGithubReportsFailures(t *testing.T) {
+	p := clitest.NewProject(t)
+	state := `{"sources":{"github":{"type":"github","url":"https://github.com"}},"apps":{"alpha":{"source":"github","repository":"o/alpha","tag":"v1"},"beta":{"source":"github","repository":"o/beta","tag":"v2"}},"binaries":{}}` + "\n"
+	path := p.WriteFile("binaryApps.json", state)
+
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "pull-releases", "binaryApps.json")
+	if res.ExitCode != 1 {
+		t.Fatalf("exit = %d, want 1\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+	for _, want := range []string{
+		"2 of 2 apps failed and are left as they were in binaryApps.json",
+		"alpha (release v1): ",
+		"beta (release v2): ",
+		"error: 2 of 2 apps failed",
+	} {
+		if !strings.Contains(res.Stderr, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, res.Stderr)
+		}
+	}
+	if strings.Contains(res.Stdout, "✓ Processed") {
+		t.Errorf("stdout claims success:\n%s", res.Stdout)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != state {
+		t.Errorf("file changed by a run in which every app failed:\n%s", after)
 	}
 }

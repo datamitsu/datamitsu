@@ -51,6 +51,14 @@ func ConfigHome() string {
 	return filepath.Join(homeDir, ".config")
 }
 
+// GetCacheBaseDir returns the cache base directory itself ({base}) — the
+// parent of both cache/ and store/. A child process that must see the same
+// store as this one (a prepare step launching a nested datamitsu) gets this
+// value, not GetCachePath(): DATAMITSU_CACHE_DIR names the base.
+func GetCacheBaseDir() string {
+	return getBasePath()
+}
+
 // GetCachePath returns the cache directory ({base}/cache) for ephemeral data.
 func GetCachePath() string {
 	return filepath.Join(getBasePath(), "cache")

@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"maps"
 	"net/http"
@@ -14,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/engine"
@@ -989,8 +989,8 @@ func TestBuildConfigSourcesFlagSkipsDeclared(t *testing.T) {
 }
 
 func computeHash(content string) string {
-	h := sha256.Sum256([]byte(content))
-	return "sha256:" + hex.EncodeToString(h[:])
+	h := digest.SHA256Of([]byte(content))
+	return "sha256:" + h.Hex()
 }
 
 // ===========================================================================
@@ -1038,12 +1038,12 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-// jvmApp renders a valid jvm app literal (jarHash is a 64-char lowercase hex
-// string so it passes config validation; jvm apps need no lockfile).
+// jvmApp renders a valid jvm app literal (jarHash is a canonical SHA-256
+// digest so it passes config validation; jvm apps need no lockfile).
 func jvmApp(hashChar string, version string) string {
 	return fmt.Sprintf(
 		`{ jvm: { jarUrl: "https://example.com/x.jar", jarHash: %q, version: %q } }`,
-		strings.Repeat(hashChar, 64), version,
+		"sha256:"+strings.Repeat(hashChar, 64), version,
 	)
 }
 
@@ -1276,7 +1276,7 @@ function getConfig(input) {
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-local",
 		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource error: %v", err)
 	}
@@ -1332,7 +1332,7 @@ function getConfig(input) {
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-local",
 		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource error: %v", err)
 	}
@@ -1364,7 +1364,7 @@ function getConfig(input) {
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-missing-hash",
 		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err == nil {
 		t.Fatal("expected error for missing hash")
 	}
@@ -1414,7 +1414,7 @@ function getConfig(input) { return {}; }`, server.URL, remoteAHash)
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-circular",
 		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err == nil {
 		t.Fatal("expected error for circular dependency")
 	}
@@ -1480,7 +1480,7 @@ function getConfig(input) {
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-diamond",
 		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource error (diamond should succeed): %v", err)
 	}
@@ -1624,7 +1624,7 @@ function getConfig(input) {
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-skip-remote",
 		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource error: %v", err)
 	}
@@ -1892,7 +1892,7 @@ function getConfig(input) {
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-cache-on-disk",
 		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource error: %v", err)
 	}
@@ -1955,7 +1955,7 @@ function getConfig(input) {
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-repeat-1",
 		content: localContent,
-	}, resolved1, stack1, loadConfigOptions{}, nil)
+	}, resolved1, stack1, loadConfigOptions{}, nil, "")
 	if err != nil {
 		t.Fatalf("first processConfigSource error: %v", err)
 	}
@@ -1969,7 +1969,7 @@ function getConfig(input) {
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-repeat-2",
 		content: localContent,
-	}, resolved2, stack2, loadConfigOptions{}, nil)
+	}, resolved2, stack2, loadConfigOptions{}, nil, "")
 	if err != nil {
 		t.Fatalf("second processConfigSource error: %v", err)
 	}
@@ -2025,7 +2025,7 @@ function getConfig(input) {
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-cache-1",
 		content: localContent,
-	}, resolved1, stack1, loadConfigOptions{}, nil)
+	}, resolved1, stack1, loadConfigOptions{}, nil, "")
 	if err != nil {
 		t.Fatalf("first call error: %v", err)
 	}
@@ -2038,7 +2038,7 @@ function getConfig(input) {
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-cache-2",
 		content: localContent,
-	}, resolved2, stack2, loadConfigOptions{}, nil)
+	}, resolved2, stack2, loadConfigOptions{}, nil, "")
 	if err != nil {
 		t.Fatalf("expected cache hit, got error: %v", err)
 	}
@@ -2069,7 +2069,7 @@ function getConfig(input) { return { ignoreRules: ["with-version: eslint"] }; }
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-with-min-version",
 		content: content,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource should succeed with valid getMinVersion, got error: %v", err)
 	}
@@ -2095,7 +2095,7 @@ function getConfig(input) { return { ignoreRules: ["no-version: eslint"] }; }
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-no-min-version",
 		content: content,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err == nil {
 		t.Fatal("expected error when getMinVersion is not exported")
 	}
@@ -2115,7 +2115,7 @@ function getConfig(input) { return {}; }
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-non-string-version",
 		content: content,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err == nil {
 		t.Fatal("expected error when getMinVersion returns non-string value")
 	}
@@ -2135,7 +2135,7 @@ function getConfig(input) { return {}; }
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-empty-version",
 		content: content,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err == nil {
 		t.Fatal("expected error when getMinVersion returns empty string")
 	}
@@ -2155,7 +2155,7 @@ function getConfig(input) { return {}; }
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
 		name:    "test-invalid-semver",
 		content: content,
-	}, resolved, stack, loadConfigOptions{}, nil)
+	}, resolved, stack, loadConfigOptions{}, nil, "")
 	if err == nil {
 		t.Fatal("expected error when getMinVersion returns invalid semver")
 	}
@@ -2420,7 +2420,7 @@ function getConfig(input) { return {}; }
 			_, _, err := processConfigSource(context.Background(), nil, configSource{
 				name:    "test-extraction-" + tt.name,
 				content: content,
-			}, resolved, stack, loadConfigOptions{}, nil)
+			}, resolved, stack, loadConfigOptions{}, nil, "")
 			if err != nil {
 				t.Fatalf("expected success for version %q, got error: %v", tt.version, err)
 			}
@@ -2722,7 +2722,7 @@ function getConfig(input) {
 		result, _, err := processConfigSource(context.Background(), input, configSource{
 			name:    "test-order",
 			content: content,
-		}, map[string]bool{}, map[string]bool{}, loadConfigOptions{}, nil)
+		}, map[string]bool{}, map[string]bool{}, loadConfigOptions{}, nil, "")
 		if err != nil {
 			t.Fatalf("processConfigSource error: %v", err)
 		}

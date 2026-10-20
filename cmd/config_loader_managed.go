@@ -5,7 +5,7 @@ import (
 	"sort"
 
 	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 // finalizeManagedConfigPlacement runs once the whole chain is known, which is
@@ -46,7 +46,7 @@ func finalizeManagedConfigPlacement(cfg *config.Config, layers []config.ManagedC
 			if rendered == nil {
 				return fmt.Errorf("managed config %q: ejectable, but no config layer renders content for %s", key, config.InternalConfigRelPath(key))
 			}
-			mc.Render = &config.ManagedConfigRender{Content: *rendered, Hash: hashutil.XXH3Hex([]byte(*rendered))}
+			mc.Render = &config.ManagedConfigRender{Content: *rendered, Hash: digest.XXH3Of([]byte(*rendered)).Hex()}
 			cfg.ManagedConfigs[key] = mc
 		}
 		if opts.evaluateManagedConfigContent {

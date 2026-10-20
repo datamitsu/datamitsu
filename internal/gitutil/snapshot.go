@@ -15,8 +15,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/gitenv"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 )
 
 // Snapshot is the dirty files of a working tree at one moment — those git
@@ -166,7 +166,7 @@ func entryOf(ctx context.Context, path string) (entry, error) {
 		if err != nil {
 			return entry{}, fmt.Errorf("read link: %w", err)
 		}
-		return entry{hash: "link:" + hashutil.XXH3Hex([]byte(target))}, nil
+		return entry{hash: "link:" + digest.XXH3Of([]byte(target)).Hex()}, nil
 	case info.IsDir():
 		return entry{hash: "dir"}, nil
 	case !info.Mode().IsRegular():
@@ -179,11 +179,11 @@ func entryOf(ctx context.Context, path string) (entry, error) {
 		return entry{}, fmt.Errorf("open: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-	hash, err := hashutil.XXH3Reader(stoppableReader{stopped: ctx.Err, r: f})
+	d, err := digest.XXH3Reader(stoppableReader{stopped: ctx.Err, r: f})
 	if err != nil {
 		return entry{}, fmt.Errorf("read: %w", err)
 	}
-	return entry{hash: hash, executable: info.Mode()&0o111 != 0}, nil
+	return entry{hash: d.Hex(), executable: info.Mode()&0o111 != 0}, nil
 }
 
 // stoppableReader stops reading once stopped says why: a large dirty file

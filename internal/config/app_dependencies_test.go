@@ -28,7 +28,7 @@ func TestValidateAppDependencies(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{}
 			for name, deps := range tt.edges {
-				app := binmanager.App{Binary: &binmanager.AppConfigBinary{}, DependsOn: deps}
+				app := binmanager.App{Binary: &binmanager.AppConfigBinary{}, DependsOn: edges(deps...)}
 				if name == tt.shell {
 					app.Binary = nil
 					app.Shell = &binmanager.AppConfigShell{Name: "echo"}
@@ -57,4 +57,14 @@ func TestValidateAppDependencies(t *testing.T) {
 			}
 		})
 	}
+}
+
+// edges builds a dependsOn edge list from plain names, mirroring the
+// normalized string form of the config.
+func edges(names ...string) []binmanager.AppDependency {
+	out := make([]binmanager.AppDependency, 0, len(names))
+	for _, n := range names {
+		out = append(out, binmanager.AppDependency{App: n, Alias: n})
+	}
+	return out
 }

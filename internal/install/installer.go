@@ -28,6 +28,7 @@ type Installer struct {
 	configs          config.MapOfManagedConfigs
 	vm               *goja.Runtime
 	layerMap         *config.ManagedConfigLayerMap
+	force            bool
 }
 
 // NewInstaller creates a new configuration installer. selectedTools scopes
@@ -51,6 +52,12 @@ func NewInstaller(
 		vm:            vm,
 		layerMap:      layerMap,
 	}
+}
+
+// SetForce discards existing file settings and permits explicit replacement or
+// removal of customized managed configs. Configuration-layer overrides remain.
+func (i *Installer) SetForce(force bool) {
+	i.force = force
 }
 
 // SetProjectLocations sets the repo-wide detected project locations (git-root
@@ -130,7 +137,7 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.M
 	mainPath := filepath.Join(targetDir, name)
 	result.FilePath = mainPath
 
-	if cfg.Ejectable {
+	if cfg.Ejectable && !i.force {
 		if conflicts := i.ejectConflicts(name, cfg); len(conflicts) > 0 {
 			result.Error = conflicts[0]
 			return result
@@ -199,7 +206,28 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.M
 	// config loading) would be incorrect for them.
 	var newContent string
 	var usedLayerContent bool
-	if i.layerMap != nil && cfg.Scope == config.ScopeGitRoot {
+	if i.force && i.layerMap != nil {
+		if history := (*i.layerMap)[name]; history != nil && len(history.SourceLayers) > 0 {
+			cc := config.ContentContext{
+				RootPath: i.rootPath, CwdPath: i.cwdPath, Placement: config.PlacementRepo,
+				OutputPath: mainPath, ProjectTypes: i.projectTypes, ProjectLocations: i.projectLocations,
+			}
+			if cfg.Ejectable {
+				cc.ProjectTypes, cc.ProjectLocations = nil, nil
+			}
+			rendered, err := config.RenderManagedConfigWithContext(history.SourceLayers, name, cc)
+			if err != nil {
+				result.Error = err
+				return result
+			}
+			if rendered == nil {
+				result.Action = "skipped"
+				return result
+			}
+			newContent, usedLayerContent = *rendered, true
+		}
+	}
+	if !usedLayerContent && i.layerMap != nil && cfg.Scope == config.ScopeGitRoot {
 		if history, hasHistory := (*i.layerMap)[name]; hasHistory {
 			if layerContent := config.GetLastGeneratedContent(history); layerContent != nil {
 				newContent = *layerContent
@@ -398,6 +426,10 @@ func (i *Installer) generateContent(ctx context.Context, cfg config.ManagedConfi
 		ExistingContent:  existingContent,
 		OriginalContent:  originalContent,
 		ExistingPath:     existingPath,
+	}
+	if i.force {
+		cc.OriginalContent, cc.ExistingContent = nil, nil
+		cc.ExistingPath = nil
 	}
 	if cfg.Ejectable {
 		cc.ProjectTypes, cc.ProjectLocations = nil, nil

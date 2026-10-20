@@ -132,7 +132,7 @@ function getRemoteConfigs() {
   return [
     {
       url: "https://example.com/shared-datamitsu-config.js",
-      hash: "a1b2c3d4e5f6...", // SHA-256 hash (required)
+      hash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", // SHA-256 digest (required)
     },
   ];
 }
@@ -143,7 +143,7 @@ Remote configs are resolved depth-first before the current config's `getConfig()
 
 Key requirements:
 
-- Every remote config **must** have a SHA-256 `hash` for security verification
+- Every remote config **must** have a SHA-256 `hash` for security verification — write it canonically (`sha256:<64 lowercase hex>`); a bare or uppercase value is accepted there and normalized
 - Remote configs are stored under `{store}/.remote-configs`; cached bytes are
   accepted only when their SHA-256 matches (no TTL)
 - Circular dependencies are detected and produce an error
@@ -159,7 +159,7 @@ function getRemoteConfigs() {
   return [
     {
       url: "https://config.myorg.com/datamitsu/base.js",
-      hash: "abc123...",
+      hash: "sha256:abc123...",
     },
   ];
 }
@@ -211,6 +211,7 @@ See the [Ignore Rules reference](/docs/reference/ignore-rules) for full syntax d
 Configuration files run in a JavaScript VM (goja) with access to several built-in APIs:
 
 - **Format utilities**: `YAML.parse()`/`YAML.stringify()`, `TOML.parse()`/`TOML.stringify()`, `INI.parse()`/`INI.stringify()` for parsing and generating config file content
+- **Nested settings**: `merge(base, overrides, ...)` recursively combines plain objects into a new object. Later values win, including `false`, `0` and `null`; arrays replace rather than append. Nested objects and arrays are copied without mutating inputs. Cyclic settings and non-object sources are rejected.
 - **Path utilities**: `tools.Path.join()`, `tools.Path.abs()`, `tools.Path.rel()`, `tools.Path.forImport()`
 - **Config links**: `tools.Config.linkPath()` for computing paths to `.datamitsu/` symlinks
 - **Ignore utilities**: `tools.Ignore.parse()`, `tools.Ignore.stringify()` for working with ignore patterns

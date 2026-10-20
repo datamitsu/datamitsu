@@ -1,0 +1,3 @@
+main.py:2:26: error[invalid-assignment] Object of type `Literal["wrong"]` is not assignable to `int`
+main.py:3:16: error[invalid-argument-type] Argument to function `twice` is incorrect: Expected `int`, found `Literal["wrong"]`
+Found 2 diagnostics

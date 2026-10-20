@@ -6,19 +6,26 @@ Tool operation **arguments** (`args`) and **environment-variable values** (`env`
 
 ## Available Placeholders
 
-| Placeholder   | Resolves To                           | `args` | `env` | Typical Use Case            |
-| ------------- | ------------------------------------- | :----: | :---: | --------------------------- |
-| `{file}`      | Single file path (per-file scope)     |   ✅   |  ❌   | `"{file}"`                  |
-| `{files}`     | Separate arguments per file           |   ✅   |  ❌   | `"{files}"`                 |
-| `{root}`      | Git repository root                   |   ✅   |  ✅   | `"{root}/.config"`          |
-| `{cwd}`       | Per-project working directory         |   ✅   |  ✅   | `"{cwd}/src"`               |
-| `{toolCache}` | Per-project, per-tool cache directory |   ✅   |  ✅   | `"{toolCache}/tsbuildinfo"` |
-| `{target}`    | The single directory a scanner scans  |   ✅   |  ❌   | `"{target}"`                |
+| Placeholder     | Resolves To                                  | `args` | `env` | Typical Use Case                  |
+| --------------- | -------------------------------------------- | :----: | :---: | --------------------------------- |
+| `{file}`        | Single file path (per-file scope)            |   ✅   |  ❌   | `"{file}"`                        |
+| `{files}`       | Separate arguments per file                  |   ✅   |  ❌   | `"{files}"`                       |
+| `{root}`        | Git repository root                          |   ✅   |  ✅   | `"{root}/.config"`                |
+| `{cwd}`         | Per-project working directory                |   ✅   |  ✅   | `"{cwd}/src"`                     |
+| `{toolCache}`   | Per-project, per-tool cache directory        |   ✅   |  ✅   | `"{toolCache}/tsbuildinfo"`       |
+| `{target}`      | The single directory a scanner scans         |   ✅   |  ❌   | `"{target}"`                      |
+| `{bin:<alias>}` | Executable of the operation app's dependency |   ✅   |  ✅   | `"{bin:validator} check {files}"` |
 
 `{file}`, `{files}` and `{target}` are argument concepts and are **not**
 available in `env` values (an environment variable holds a single string, not an
 argument list). The path placeholders `{root}`, `{cwd}` and `{toolCache}` work in
 both `args` and `env`.
+
+`{bin:<alias>}` names a direct `dependsOn` edge of the operation's app
+(by alias — `{ app: "jsonschema", as: "validator" }` binds as
+`{bin:validator}`) and resolves to the dependency's exact executable:
+binary, uv and go targets today. It is validated at load time against the
+app's edges, and expansion is read-only: no install, no prepare step.
 
 :::warning Unknown placeholders are a hard error
 datamitsu validates every `{placeholder}` in tool `args` and `env` at config-load
@@ -214,19 +221,34 @@ Multiple placeholders can appear in a single argument. All are resolved in the o
 
 App `env` and `runtimeEnv` use a separate syntax from tool operation templates:
 
-| Placeholder         | App `env` | App `runtimeEnv` | Resolves to                                         |
-| ------------------- | :-------: | :--------------: | --------------------------------------------------- |
-| `${STORE}`          |    Yes    |       Yes        | Shared store directory                              |
-| `${APP_DIR}`        |    Yes    |       Yes        | This app's install directory, when resolvable       |
-| `${APP_BIN:<name>}` |    No     |       Yes        | Exact executable path of a direct binary dependency |
+| Placeholder          | App `env` |  App `runtimeEnv`   | `prepare` args/env | Resolves to                                              |
+| -------------------- | :-------: | :-----------------: | :----------------: | -------------------------------------------------------- |
+| `${STORE}`           |    Yes    |         Yes         |         No         | Shared store directory                                   |
+| `${APP_DIR}`         |    Yes    |         Yes         |        Yes         | This app's install directory, when resolvable            |
+| `${APP_BIN:<alias>}` |    No     |         Yes         |        Yes         | Exact executable of a direct dependency (binary, uv, go) |
+| `${APP_PREPARED}`    |    No     | Yes, with `prepare` |        Yes         | The app's prepared-state directory                       |
 
 `runtimeEnv` applies only to execution and never enters installer environments
-or install hashes. The APP_BIN target must be a native `binary` app listed in
-the same app's direct `dependsOn`; runtime-managed and shell targets are rejected.
-Missing or platform-unsupported targets produce an error without fetching them.
-Malformed bindings and unknown colon forms in `runtimeEnv` values are errors.
-App `env` rejects `${APP_BIN` values; other config data and environment keys
-remain literal for APP_BIN purposes.
+or install hashes. The `${APP_BIN}` target must be listed in the same app's
+direct `dependsOn` — by name or by the edge's alias (`{ app: "jsonschema",
+as: "validator" }` binds as `${APP_BIN:validator}`); binary, uv and go apps
+resolve today, node/bun/jvm need a launcher that does not exist yet, and
+shell apps are not installable targets. Missing or platform-unsupported
+targets produce an error without fetching them. Malformed bindings and
+unknown colon forms in `runtimeEnv` values are errors.
+
+`${APP_PREPARED}` names the directory a declared `prepare` step fills
+(`{store}/.prepared/<app>/<key>/out`); subpaths are allowed. It is rejected
+without a declared step and in app `env` (installers see `env`, and the state
+does not exist at install time).
+
+Inside a `prepare` step, every other placeholder is an error: the prepared
+state is shared by every project, so project-bound forms (`${STORE}`,
+`{root}`, `{cwd}`, `{file}`, `{files}`, `{target}`, `{toolCache}`) cannot
+enter it.
+
+App `env` rejects `${APP_BIN` and `${APP_PREPARED` values; other config data
+and environment keys remain literal for these purposes.
 
 See [App environments](./configuration-api.md#execution-only-environment-runtimeenv)
 and [Wrapping a private binary](../how-to/maintain-wrapper.md#wrapping-a-private-binary).

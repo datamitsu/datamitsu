@@ -125,13 +125,13 @@
             </p>{/each}
           {#if app.dependsOn.length}<h3>APP DEPENDENCIES</h3>
             <div class="chips">
-              {#each app.dependsOn as dependency (dependency)}<button
+              {#each app.dependsOn as dependency (dependency.alias)}<button
                   onclick={() => {
                     route.q = "";
                     route.project = "";
                     route.runtime = "";
-                    route.app = dependency;
-                  }}>{dependency}</button
+                    route.app = dependency.app;
+                  }}>{dependency.alias}</button
                 >{/each}
             </div>{/if}
           <h3>MANAGED FILES · {files.length}</h3>

@@ -43,7 +43,7 @@ function getRemoteConfigs() {
   return [
     {
       url: "https://config.myorg.com/datamitsu/base.js",
-      hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      hash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
     },
   ];
 }
@@ -65,6 +65,10 @@ globalThis.getMinVersion = () => "1.0.0";
 
 Every remote config requires a SHA-256 hash. This is a strict security
 requirement: datamitsu refuses to load a remote config without a valid hash.
+Write it canonically — `sha256:` followed by 64 lowercase hex characters. A bare
+or uppercase value is accepted here and normalized to canonical, because this
+pin is routinely copied from a release page or a checksum file; every other
+hash pin in `datamitsu.config` accepts the canonical form only.
 
 The publisher should hash the local file **before** uploading it and distribute
 that value through a reviewed release or change:
@@ -114,7 +118,7 @@ function getRemoteConfigs() {
   return [
     {
       url: "https://config.myorg.com/datamitsu/base.js",
-      hash: "abc123...",
+      hash: "sha256:abc123...",
     },
   ];
 }
@@ -144,7 +148,7 @@ This pattern separates the shared configuration (the npm package) from the remot
 Remote configs are cached locally to avoid network requests on every run:
 
 - Cache location: `{store}/.remote-configs/`
-- Cache validity is determined by hash: if the cached content matches the expected SHA-256 hash, it is used without a network request
+- Cache validity is determined by hash match — if the cached content matches the expected SHA-256 hash, it is used without a network request
 - When the hash in your config changes (pointing to a new version), datamitsu fetches the updated content
 
 ## Security
@@ -167,7 +171,7 @@ datamitsu devtools verify-all --no-remote
 
 ## Updating Remote Configs
 
-When a remote config is updated, each consuming project needs to update its hash:
+When a remote config is updated, each consuming project needs to update its hash pin:
 
 1. Compute the new SHA-256 from the local release file
 2. Publish that exact file and its hash

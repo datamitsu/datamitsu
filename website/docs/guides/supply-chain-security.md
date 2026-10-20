@@ -9,10 +9,14 @@ datamitsu treats supply chain integrity as a non-negotiable property of every in
 
 ## Hash Verification (All Downloads)
 
-Every artifact downloaded from the internet must have a SHA-256 hash. This
-includes binary apps, managed runtimes, JVM JAR files, external app and bundle
-archives, pnpm itself, remote config files, and WASM output parsers. If a hash is
-missing, datamitsu refuses to download — there is no permissive fallback mode.
+Every artifact downloaded from the internet must have a SHA-256 hash, pinned as
+a canonical digest — `sha256:` followed by 64 lowercase hex characters; a bare
+64-hex pin is rejected at config load. This includes binary apps, managed
+runtimes, JVM JAR files, external app and bundle archives, pnpm itself, remote
+config files, and WASM output parsers. If a hash is missing, datamitsu refuses
+to download — there is no permissive fallback mode. (The `getRemoteConfigs()`
+pin is the one lenient exception: a bare or uppercase value copied from a
+release page is accepted there and normalized to canonical.)
 
 The hash is verified before the artifact is unpacked or executed. Lock files
 are mandatory for all Bun, Node, UV, and Go apps; their package managers then
@@ -25,7 +29,7 @@ See the [Binary Management](./binary-management.md) guide for the verification p
 
 A [WASM output parser](./architecture/parsers.md) declares its module either as an `https` URL or as an OCI artifact (`oci: { ref, digest }`) — exactly one of the two. Declaring both, or neither, is a config error at load, and there is no fallback between them: a config that pins a registry never reaches back to a URL.
 
-`hash` stays mandatory for both sources. For an OCI source it does double duty: it is also the expected digest of the artifact's single layer. datamitsu requires that layer to have digest `"sha256:" + hash`, so the registry digest chain and the config hash are the same number rather than two independent claims. A registry serving a correctly-digested manifest that points at different content is rejected before one payload byte is requested.
+`hash` stays mandatory for both sources, in the canonical `sha256:<64 lowercase hex>` form. For an OCI source it does double duty: it is also the expected digest of the artifact's single layer — the layer's digest is the same `sha256:`-prefixed value, so the registry digest chain and the config hash are the same number rather than two independent claims. A registry serving a correctly-digested manifest that points at different content is rejected before one payload byte is requested.
 
 The module is therefore hash-checked three times on its way into the store:
 
@@ -66,12 +70,12 @@ The global default is **10080 minutes (7 days)**. It applies to every command th
 
 | Command         | Age-filtered registries                               |
 | --------------- | ----------------------------------------------------- |
-| `pull-github`   | GitHub releases                                       |
+| `pull-releases` | GitHub, GitLab, Gitea and Forgejo releases            |
 | `pull-node`     | npm                                                   |
 | `pull-uv`       | PyPI                                                  |
 | `pull-runtimes` | npm (pnpm), GitHub (Bun, uv, and JVM binary releases) |
 
-Major-version-line lookups are **not** age-filtered, because they select a release _line_ rather than a specific build: the Node.js LTS line and Python stable line (endoflife.date), the Temurin major version (Adoptium API), and the Go release listing (go.dev). Only the concrete binary release or package version chosen within those lines passes through the age filter.
+Major-version-line lookups are **not** age-filtered, because they select a release _line_ rather than a specific build: the Node.js LTS line and Python stable line (endoflife.date), the Temurin major version (Adoptium API), and the Go release listing (go.dev). Only the concrete binary release or package version chosen within those lines passes through the age filter. When the newest Temurin feature release has no build old enough yet — in the days after it ships, its only GA build is younger than the cutoff — the JVM pull takes the previous feature release instead.
 
 ### The `--min-age` flag
 
@@ -83,24 +87,32 @@ Every `pull-*` command accepts `--min-age <minutes>`:
 
 ```bash
 # Pin only releases at least 7 days old (the default)
-datamitsu devtools pull-github apps/githubApps.json --update
+datamitsu devtools pull-releases apps/binaryApps.json --update
 
 # Require 30 days of soak time
 datamitsu devtools pull-node apps/nodeApps.json --update --min-age 43200
 
 # Bypass the filter and take the newest release
-datamitsu devtools pull-github apps/githubApps.json --update --min-age 0
+datamitsu devtools pull-releases apps/binaryApps.json --update --min-age 0
 ```
 
 Each command prints the effective cutoff in its status banner (`Minimum release age: 10080 minutes`, or `disabled` when set to 0).
 
 ### When no release is old enough
 
+`pull-releases` reads release lists across the configured provider until an empty
+page proves the end, requesting up to 100 entries per page. It compares stable
+semantic versions across the collected pages and applies the age cutoff. A
+server may clamp the page size, so a short non-empty page does not stop the
+lookup. If the listing does not finish within ten pages, the command fails and
+asks for an explicit tag instead of silently choosing from an incomplete list.
+The runtime GitHub updater retains its separate bounded lookup.
+
 If every available release is younger than the cutoff, datamitsu's behavior depends on whether a safe fallback exists:
 
-- **`pull-github`** — an _existing_ app keeps its current tag with a warning; a _new_ app (no prior binary) is a **hard error**, since there is nothing safe to pin.
+- **`pull-releases`** — an _existing_ app keeps its current tag with a warning; a _new_ app (no prior binary) is a **hard error**, since there is nothing safe to pin.
 - **`pull-node` / `pull-uv`** — the package is skipped with a warning and keeps its current version.
-- **`pull-runtimes`** — a hard error, since runtimes must resolve to a concrete version.
+- **`pull-runtimes`** — a hard error for that runtime, since runtimes must resolve to a concrete version; it keeps its previous entry, and the other runtimes are still saved.
 
 The error message always points at the `--min-age 0` escape hatch.
 
@@ -128,12 +140,12 @@ This version-selection filter — applied when _you_ pin versions with `pull-*` 
 
 `pull-*` ages only the version an app names. Everything that version depends on is resolved later, when `datamitsu config lockfile` generates the app's lock file, and each runtime covers it differently:
 
-| App         | Transitive versions picked by | How the minimum release age reaches them                                                                                                                                                                       |
-| ----------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bun, Node   | pnpm                          | `minimumReleaseAge: 10080` in the app's `pnpm-workspace.yaml` filters the whole tree, top-level package included. See [pnpm (Bun and Node Apps)](#pnpm-bun-and-node-apps).                                     |
-| UV          | uv                            | `--exclude-newer P7D` filters the whole tree; the lock records the window and every install reuses it. See [Release Age of Transitive Dependencies](#release-age-of-transitive-dependencies).                  |
-| Go          | minimal version selection     | Go has no such setting. `config lockfile` checks every resolved module against the effective minimum release age. See [Release Age at Lock Generation](#release-age-at-lock-generation).                       |
-| JVM, binary | nothing — one file            | The artifact is a single file pinned by SHA-256, with no dependency tree. The age applies where its version is chosen: `pull-github` for binary apps. JAR versions are pinned by hand and are not age-checked. |
+| App         | Transitive versions picked by | How the minimum release age reaches them                                                                                                                                                                         |
+| ----------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bun, Node   | pnpm                          | `minimumReleaseAge: 10080` in the app's `pnpm-workspace.yaml` filters the whole tree, top-level package included. See [pnpm (Bun and Node Apps)](#pnpm-bun-and-node-apps).                                       |
+| UV          | uv                            | `--exclude-newer P7D` filters the whole tree; the lock records the window and every install reuses it. See [Release Age of Transitive Dependencies](#release-age-of-transitive-dependencies).                    |
+| Go          | minimal version selection     | Go has no such setting. `config lockfile` checks every resolved module against the effective minimum release age. See [Release Age at Lock Generation](#release-age-at-lock-generation).                         |
+| JVM, binary | nothing — one file            | The artifact is a single file pinned by SHA-256, with no dependency tree. The age applies where its version is chosen: `pull-releases` for binary apps. JAR versions are pinned by hand and are not age-checked. |
 
 ## Bun Apps
 

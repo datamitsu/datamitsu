@@ -12,7 +12,7 @@ import (
 // host platform (the binary candidate is always found; only the network fetch
 // fails). The URL is unreachable and offline mode blocks it before any request,
 // so this stays fully hermetic.
-const installBinaryConfigJS = `const H = "0000000000000000000000000000000000000000000000000000000000000000";
+const installBinaryConfigJS = `const H = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
 function mkBin() {
   const b = { binaries: {} };
   for (const os of ["linux", "darwin"]) {

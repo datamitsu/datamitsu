@@ -1,0 +1,1 @@
+::error title=operation-operationId,file=openapi.json,col=121,endColumn=126,line=1,endLine=1::the `GET` operation does not contain an `operationId`

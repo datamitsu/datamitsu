@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 // ListFile is the list of the module's sources, relative to the repository
@@ -69,7 +69,7 @@ func Hash(root string, paths []string) (string, error) {
 		buf.Write(data)
 		buf.WriteByte(0)
 	}
-	return hashutil.XXH3Hex(buf.Bytes()), nil
+	return digest.XXH3Of(buf.Bytes()).String(), nil
 }
 
 // Current is the fingerprint of the listed sources as they are under root.
@@ -81,11 +81,16 @@ func Current(root string) (string, error) {
 	return Hash(root, paths)
 }
 
-// Committed is the fingerprint committed beside the module.
+// Committed is the fingerprint committed beside the module, parsed leniently:
+// the file's lifetime crosses the canonical-form migration, and an unparsable
+// value must compare unequal rather than error the test into noise.
 func Committed(root string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(HashFile)))
 	if err != nil {
 		return "", fmt.Errorf("read the committed source hash: %w", err)
+	}
+	if d, perr := digest.ParseXXH3Loose(strings.TrimSpace(string(data))); perr == nil {
+		return d.String(), nil
 	}
 	return strings.TrimSpace(string(data)), nil
 }

@@ -30,7 +30,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/llmsmanifest"
 )
 
@@ -273,7 +273,7 @@ func harvestPages(docsDir string, entries []tocEntry) ([]harvestedPage, error) {
 			title:    title,
 			desc:     desc,
 			body:     body,
-			bodyHash: hashutil.XXH3Hex(body),
+			bodyHash: digest.XXH3Of(body).Hex(),
 		})
 	}
 	return pages, nil

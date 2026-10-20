@@ -6,6 +6,8 @@ An OCI bundle packages the datamitsu tool store as a standard OCI image: one lay
 
 WASM output-parser modules (the `parsers` config entity) ship as their own `.parsers/<module>` layers, materialized in the build by a `devtools parsers prefetch` stage and re-verified against their published SHA-256. So in an airgapped deployment a tool's `outputParser` resolves from the bundle instead of reaching out to the GitHub Release. A parser entry can also pin a registry artifact of its own, independently of any bundle — see [Mirroring everything](#mirroring-everything).
 
+Prepared app state (the [prepare](/docs/reference/configuration-api#one-time-preparation-step-prepare) step's output) ships as its own `.prepared/<app>` layer, built in the app's stage and keyed by the prepared key the consumer's config computes. Seeding that layer makes the state ready **without ever running the step** — the main reason the airgap scenario stays closed end to end. A state directory only counts when its readiness marker is present, so an interrupted placement never masks a missing layer: the next seed (or run) moves the remnant aside and replaces it.
+
 ```mermaid
 flowchart LR
     subgraph Producer["Producer (CI, community toolchain)"]
@@ -139,7 +141,7 @@ parsers: {
 },
 ```
 
-The mirror is not a trust boundary either. A parser artifact's single layer must have digest `sha256:` + the parser's mandatory `hash`, so a manifest that points at different content is rejected **before one payload byte is requested**; the bytes are hashed again while streaming and once more on the file on disk. A registry that rewrites manifests while proxying them changes their digest and fails the pull closed instead of serving something unexpected.
+The mirror is not a trust boundary either. A parser artifact's single layer must have exactly the digest the parser's mandatory `hash` names (the same `sha256:`-prefixed value), so a manifest that points at different content is rejected **before one payload byte is requested**; the bytes are hashed again while streaming and once more on the file on disk. A registry that rewrites manifests while proxying them changes their digest and fails the pull closed instead of serving something unexpected.
 
 :::warning Limitations of a mirrored registry
 datamitsu can authenticate to exactly one registry: **GHCR**, using `GITHUB_TOKEN`, and only when the configured `ref` host is `ghcr.io` — the token is never attached to any other host. There is no docker `config.json`, no credential helper, no user/password, no custom CA bundle. A Harbor, Artifactory or Nexus mirror must therefore allow **anonymous pull** of the mirrored repositories; an authenticated private mirror is not supported yet.
@@ -158,7 +160,7 @@ GHCR is also the only channel for the parser artifact today — unlike the datam
 
 Bundle production deliberately reuses the community toolchain instead of reimplementing a registry client push:
 
-1. `datamitsu devtools dockerfile --emit-oci-map map.json` generates the multi-stage Dockerfile (whose final stage already emits one `COPY --link` layer per store subtree) plus the layer→subtree map.
+1. `datamitsu devtools dockerfile --emit-oci-map map.json` generates the multi-stage Dockerfile (whose final stage already emits one `COPY --link` layer per store subtree — including a `.prepared/<app>` layer for every app with a `prepare` step, `kind: "prepared"` in the map) plus the layer→subtree map.
 2. `docker buildx` builds and pushes the image(s) per platform/libc.
 3. A CI post-process (regctl/crane) writes the `com.datamitsu.subtree` layer annotations and the `com.datamitsu.store-root` manifest annotation from `map.json`, assembles the bundle index with libc descriptor annotations, tags it (untagged indexes are vulnerable to registry cleanup), and optionally signs it with cosign.
 

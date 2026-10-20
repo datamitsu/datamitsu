@@ -191,7 +191,7 @@ function getRemoteConfigs() {
   return [
     {
       url: "https://example.com/shared-base.ts",
-      hash: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef12345678",
+      hash: "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef12345678",
     },
   ];
 }

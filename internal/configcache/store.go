@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/shamaton/msgpack/v2"
 )
 
@@ -218,7 +218,7 @@ func (s *Store) Load(key string) (*Entry, bool) {
 		s.discard(p)
 		return nil, false
 	}
-	if art.FormatVersion != FormatVersion || hashutil.XXH3Hex(art.Payload) != art.PayloadHash {
+	if art.FormatVersion != FormatVersion || digest.XXH3Of(art.Payload).Hex() != art.PayloadHash {
 		s.discard(p)
 		return nil, false
 	}
@@ -263,7 +263,7 @@ func (s *Store) Save(key string, entry *Entry) error {
 	}
 	encoded, err := msgpack.Marshal(artifact{
 		FormatVersion: FormatVersion,
-		PayloadHash:   hashutil.XXH3Hex(body),
+		PayloadHash:   digest.XXH3Of(body).Hex(),
 		Payload:       body,
 	})
 	if err != nil {

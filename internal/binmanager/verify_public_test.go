@@ -2,26 +2,29 @@ package binmanager
 
 import (
 	"archive/zip"
-	"crypto/sha256"
-	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
-func TestIsAllowedDownloadHashType(t *testing.T) {
-	// Security policy: only SHA-256 is permitted for download verification.
-	allowed := []BinHashType{BinHashTypeSHA256}
-	denied := []BinHashType{BinHashTypeSHA1, BinHashTypeSHA384, BinHashTypeSHA512, BinHashTypeMD5, "", "crc32"}
-
-	for _, ht := range allowed {
-		if !IsAllowedDownloadHashType(ht) {
-			t.Errorf("IsAllowedDownloadHashType(%q) = false, want true", ht)
-		}
+func TestVerifyFileHashPublicAlgorithmPolicy(t *testing.T) {
+	// Security policy: download verification is SHA-256 only. A pin naming any
+	// other algorithm — even a valid digest of that algorithm — is refused.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "artifact.bin")
+	if err := os.WriteFile(path, []byte("content"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	for _, ht := range denied {
-		if IsAllowedDownloadHashType(ht) {
-			t.Errorf("IsAllowedDownloadHashType(%q) = true, want false", ht)
+	for _, pin := range []string{
+		"md5:d41d8cd98f00b204e9800998ecf8427e",
+		"sha1:a9993e364706816aba3e25717850c26c9cd0d89d",
+		"sha512:" + strings.Repeat("a", 128),
+	} {
+		if err := VerifyFileHashPublic(path, pin); err == nil {
+			t.Errorf("VerifyFileHashPublic(%q) = nil, want algorithm-refused error", pin)
 		}
 	}
 }
@@ -33,24 +36,24 @@ func TestVerifyFileHashPublic(t *testing.T) {
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(content)
-	good := hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(content)
+	good := sum.Hex()
 
 	t.Run("matching hash succeeds", func(t *testing.T) {
-		if err := VerifyFileHashPublic(path, good, BinHashTypeSHA256); err != nil {
+		if err := VerifyFileHashPublic(path, good); err != nil {
 			t.Errorf("VerifyFileHashPublic() error = %v, want nil", err)
 		}
 	})
 
 	t.Run("wrong hash fails", func(t *testing.T) {
 		bad := "0000000000000000000000000000000000000000000000000000000000000000"
-		if err := VerifyFileHashPublic(path, bad, BinHashTypeSHA256); err == nil {
+		if err := VerifyFileHashPublic(path, bad); err == nil {
 			t.Error("VerifyFileHashPublic() with wrong hash = nil, want error")
 		}
 	})
 
 	t.Run("missing file fails", func(t *testing.T) {
-		if err := VerifyFileHashPublic(filepath.Join(dir, "nope"), good, BinHashTypeSHA256); err == nil {
+		if err := VerifyFileHashPublic(filepath.Join(dir, "nope"), good); err == nil {
 			t.Error("VerifyFileHashPublic() on missing file = nil, want error")
 		}
 	})

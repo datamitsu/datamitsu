@@ -3,6 +3,7 @@ package detector
 import (
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/github"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
@@ -35,6 +36,112 @@ func TestIsNonExecutableFile(t *testing.T) {
 				t.Errorf("IsNonExecutableFile(%q) = %v, want %v", tt.filename, result, tt.expected)
 			}
 		})
+	}
+}
+
+// An installer is a PE file with an arch token, so nothing but its name tells
+// it from a build of the tool; harper's Harper_2.11.0_x64-setup.exe was
+// recorded for windows/amd64 that way.
+func TestIsNonExecutableFile_Packages(t *testing.T) {
+	for _, name := range []string{"Tool_2.0_x64.msix", "Tool_2.0_x64.appx", "Tool_2.0.msixbundle", "Tool_2.0.appxbundle", "Harper_2.11.0_universal.dmg"} {
+		if !IsNonExecutableFile(name) {
+			t.Errorf("IsNonExecutableFile(%q) = false, want true", name)
+		}
+	}
+}
+
+func TestIsInstallerFile(t *testing.T) {
+	tests := []struct {
+		app, filename string
+		want          bool
+	}{
+		{"harper-cli", "Harper_2.11.0_x64-setup.exe", true},
+		{"tool", "tool_setup.exe", true},
+		{"tool", "tool.setup.exe", true},
+		{"tool", "Tool-Setup-x64.exe", true},
+		{"tool", "setup.exe", true},
+		{"tool", "Tool-Installer-2.0.exe", true},
+		{"tool", "tool-installer.tar.gz", true},
+		{"tool", "tool-windows-amd64.exe", false},
+		{"tool", "tool-x86_64-pc-windows-msvc.zip", false},
+		{"setuptools", "setuptools-linux-amd64.tar.gz", false},
+		{"uninstaller", "uninstaller-linux-amd64.tar.gz", false},
+		// An app named after the word keeps its assets.
+		{"installer", "installer-linux-amd64.tar.gz", false},
+		{"setup-tool", "setup-tool-linux-amd64.tar.gz", false},
+	}
+	for _, tt := range tests {
+		if got := IsInstallerFile(tt.app, tt.filename); got != tt.want {
+			t.Errorf("IsInstallerFile(%q, %q) = %v, want %v", tt.app, tt.filename, got, tt.want)
+		}
+	}
+}
+
+func TestNameMatches(t *testing.T) {
+	tests := []struct {
+		app, asset string
+		want       bool
+	}{
+		{"harper-cli", "harper-cli-x86_64-pc-windows-msvc.zip", true},
+		{"harper-cli", "harper-ls-x86_64-pc-windows-msvc.zip", false},
+		{"harper-cli", "harper-c-linux-amd64.tar.gz", false},
+		{"harper-cli", "Harper_2.11.0_x64-setup.exe", false},
+		{"harper", "harper-cli-x86_64-pc-windows-msvc.zip", true},
+		{"golangci-lint", "golangci_lint-1.60.0-linux-amd64.tar.gz", true},
+		{"tofu", "tofu_1.6.0_linux_amd64.zip", true},
+		{"jq", "jq-1.7.1-windows-amd64.exe", true},
+		{"jq", "jquery-linux-amd64.tar.gz", false},
+		{"go", "gopls-linux-amd64.tar.gz", false},
+		{"jdk", "OpenJDK21U-jdk_x64_linux_hotspot_21.0.4_7.tar.gz", true},
+		{"", "anything.zip", false},
+	}
+	for _, tt := range tests {
+		if got := nameMatches(tt.app, tt.asset); got != tt.want {
+			t.Errorf("nameMatches(%q, %q) = %v, want %v", tt.app, tt.asset, got, tt.want)
+		}
+	}
+}
+
+func TestIsAttestationFile(t *testing.T) {
+	tests := []struct {
+		filename string
+		want     bool
+	}{
+		{"age-v1.3.2-darwin-amd64.tar.gz.proof", true},
+		{"tool-linux-amd64.tar.gz.sig", true},
+		{"tool-linux-amd64.tar.gz.asc", true},
+		{"tool-linux-amd64.tar.gz.minisig", true},
+		{"tool-linux-amd64.tar.gz.pem", true},
+		{"tool-linux-amd64.tar.gz.sigstore.json", true},
+		{"tool-linux-amd64.intoto.jsonl", true},
+		{"tool-linux-amd64.sbom", true},
+		{"tool-linux-amd64.spdx.json", true},
+		{"TOOL-LINUX-AMD64.TAR.GZ.SIG", true},
+		{"tool-linux-amd64.tar.gz", false},
+		{"tool-linux-amd64", false},
+		{"signal-desktop.zip", false},
+	}
+	for _, tt := range tests {
+		if got := IsAttestationFile(tt.filename); got != tt.want {
+			t.Errorf("IsAttestationFile(%q) = %v, want %v", tt.filename, got, tt.want)
+		}
+	}
+}
+
+// An attestation scores like the archive it accompanies, so it must never be
+// what a platform falls back to.
+func TestDetectBinaryCandidates_ExcludesAttestations(t *testing.T) {
+	assets := []github.Asset{
+		makeAsset("age-v1.3.2-darwin-amd64.tar.gz"),
+		makeAsset("age-v1.3.2-darwin-amd64.tar.gz.proof"),
+		makeAsset("age-v1.3.2-darwin-amd64.tar.gz.sig"),
+	}
+	candidates, err := DetectBinaryCandidates("", assets, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 1 || candidates[0].Name != "age-v1.3.2-darwin-amd64.tar.gz" {
+		t.Errorf("candidates = %v, want only the archive", candidates)
 	}
 }
 
@@ -85,6 +192,11 @@ func TestMatchOS(t *testing.T) {
 		{"Alpine is not darwin", "binary-alpine", syslist.OsTypeDarwin, false},
 		{"Windows match", "binary-windows-amd64.exe", syslist.OsTypeWindows, true},
 		{"Win64 match", "binary-win64.exe", syslist.OsTypeWindows, true},
+		{"win token", "snyk-win.exe", syslist.OsTypeWindows, true},
+		{"win token between underscores", "tool_win_x64.zip", syslist.OsTypeWindows, true},
+		{"exe suffix alone", "tool.exe", syslist.OsTypeWindows, true},
+		{"darwin is not win", "binary-darwin-amd64", syslist.OsTypeWindows, false},
+		{"win inside a word", "tool-twin-amd64.tar.gz", syslist.OsTypeWindows, false},
 		{"FreeBSD match", "binary-freebsd-amd64", syslist.OsTypeFreebsd, true},
 		{"OpenBSD match", "binary-openbsd-amd64", syslist.OsTypeOpenbsd, true},
 		{"iOS anti-pattern", "binary-ios-arm64", syslist.OsTypeDarwin, false},
@@ -170,6 +282,9 @@ func TestHasAnyArchIndicator(t *testing.T) {
 		{"aarch_64 variant", "protoc-35.0-linux-aarch_64.zip", true},
 		{"64bit variant", "trivy_0.71.0_Linux-64bit.tar.gz", true},
 		{"32bit variant", "trivy_0.71.0_Linux-32bit.tar.gz", true},
+		{"win64", "protoc-36.2-win64.zip", true},
+		{"win32", "protoc-36.2-win32.zip", true},
+		{"win32 between underscores", "app_win32_ia32.zip", true},
 		// Foreign targets datamitsu only recognises — must NOT fall through to
 		// the implicit-amd64 rule in scoring.
 		{"loongarch64", "just-1.51.0-loongarch64-unknown-linux-musl.tar.gz", true},
@@ -194,6 +309,43 @@ func TestHasAnyArchIndicator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := HasAnyArchIndicator(tt.filename); got != tt.expected {
 				t.Errorf("HasAnyArchIndicator(%q) = %v, want %v", tt.filename, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestHasAnyOSIndicator(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		expected bool
+	}{
+		// Targets datamitsu selects.
+		{"linux", "tool-linux-amd64.tar.gz", true},
+		{"alpine", "snyk-alpine", true},
+		{"windows by exe suffix", "snyk-win.exe", true},
+		// Foreign targets datamitsu only recognises — must NOT fall through to
+		// the implicit-Linux rule in scoring.
+		{"illumos", "tombi-cli-1.5.5-x86_64-unknown-illumos.tar.gz", true},
+		{"solaris", "tool-1.0-x86_64-solaris.tar.gz", true},
+		{"sunos", "tool_sunos_amd64.tar.gz", true},
+		{"netbsd", "tool-1.0-x86_64-unknown-netbsd.tar.gz", true},
+		{"dragonfly", "tool-dragonfly-amd64.tar.gz", true},
+		{"haiku", "tool-haiku-x86_64.zip", true},
+		{"android", "tool_1.0_android_arm64.tar.gz", true},
+		{"aix", "tool-1.0-aix-ppc64.tar.gz", true},
+		{"plan9", "tool-plan9-amd64.tar.gz", true},
+		// No OS token at all → false (lets the implicit-Linux rule apply).
+		{"arch only", "tool-1.0-x86_64.tar.gz", false},
+		{"plain name", "tool.tar.gz", false},
+		// Foreign tokens need separators around them.
+		{"aix inside a word", "tool-x86aix64-amd64.tar.gz", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HasAnyOSIndicator(tt.filename); got != tt.expected {
+				t.Errorf("HasAnyOSIndicator(%q) = %v, want %v", tt.filename, got, tt.expected)
 			}
 		})
 	}

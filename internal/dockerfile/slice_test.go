@@ -15,7 +15,7 @@ func samplePNPMRuntime(version string) config.RuntimeConfig {
 		Kind: config.RuntimeKindPNPM,
 		Mode: config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{Binaries: binmanager.MapOfBinaries{
-			"linux": {"amd64": {"glibc": {URL: "https://example.com/pnpm-linux-x64.tar.gz", Hash: strings.Repeat("b", 64), ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &binaryPath, ExtractDir: true}}},
+			"linux": {"amd64": {"glibc": {URL: "https://example.com/pnpm-linux-x64.tar.gz", Hash: "sha256:" + strings.Repeat("b", 64), ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &binaryPath, ExtractDir: true}}},
 		}},
 		PNPM: &config.RuntimeConfigPNPM{PNPMVersion: version},
 	}
@@ -27,7 +27,7 @@ func sampleConfigForSlicing() (binmanager.MapOfApps, config.MapOfRuntimes, confi
 		"prettier":   {Node: &binmanager.AppConfigNode{PackageName: "prettier", Version: "3.8.3", Runtime: "node", BinPath: "bin/prettier.cjs"}},
 		"eslint":     {Bun: &binmanager.AppConfigBun{PackageName: "eslint", Version: "10.9.0", Runtime: "bun", BinPath: "node_modules/eslint/bin/eslint.js"}},
 		"ruff":       {Uv: &binmanager.AppConfigUV{PackageName: "ruff", Version: "0.15.0", Runtime: "uv"}},
-		"ktlint":     {Jvm: &binmanager.AppConfigJVM{JarURL: "https://example.com/ktlint.jar", JarHash: strings.Repeat("c", 64), Version: "1.5.0", Runtime: "jvm"}},
+		"ktlint":     {Jvm: &binmanager.AppConfigJVM{JarURL: "https://example.com/ktlint.jar", JarHash: "sha256:" + strings.Repeat("c", 64), Version: "1.5.0", Runtime: "jvm"}},
 		"go-tool":    {Go: &binmanager.AppConfigGo{PackageName: "example.com/go-tool", Version: "1.0.0", Runtime: "go"}},
 	}
 	runtimes := config.MapOfRuntimes{
@@ -39,7 +39,7 @@ func sampleConfigForSlicing() (binmanager.MapOfApps, config.MapOfRuntimes, confi
 		"pnpm": samplePNPMRuntime("12.4.1"),
 	}
 	parsers := config.MapOfParsers{
-		"core": {URL: "https://example.com/datamitsu_parsers_0.1.8.wasm", Hash: strings.Repeat("a", 64)},
+		"core": {URL: "https://example.com/datamitsu_parsers_0.1.8.wasm", Hash: "sha256:" + strings.Repeat("a", 64)},
 	}
 	return apps, runtimes, parsers
 }
@@ -243,7 +243,7 @@ func TestRenderSlice_OCIParserRoundTrips(t *testing.T) {
 	apps, runtimes, _ := sampleConfigForSlicing()
 	parsers := config.MapOfParsers{
 		"core": {
-			Hash: strings.Repeat("a", 64),
+			Hash: "sha256:" + strings.Repeat("a", 64),
 			OCI: &config.ParserOCI{
 				Ref:    "ghcr.io/datamitsu/datamitsu-parsers",
 				Digest: "sha256:" + strings.Repeat("b", 64),

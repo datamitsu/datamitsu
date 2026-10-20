@@ -24,7 +24,7 @@ func buildGoTestFiles(v string) map[string]string {
 	files := map[string]string{}
 	const hexChars = "0123456789abcdef"
 	for i, spec := range goArchiveSpecs(v) {
-		files[spec.filename] = strings.Repeat(string(hexChars[i]), 64)
+		files[spec.filename] = "sha256:" + strings.Repeat(string(hexChars[i]), 64)
 	}
 	return files
 }
@@ -172,7 +172,7 @@ func TestBuildGoBinaries_UppercaseHashNormalizedAndValid(t *testing.T) {
 
 	for _, spec := range goArchiveSpecs(goTestVersion) {
 		info := binaries[spec.os][spec.arch][spec.libc]
-		want := strings.ToLower(files[spec.filename])
+		want := "sha256:" + strings.ToLower(files[spec.filename])
 		if info.Hash != want {
 			t.Errorf("%s: Hash = %q, want lowercase %q", spec.filename, info.Hash, want)
 		}

@@ -76,7 +76,7 @@ datamitsu exec eslint --fix src/
 
 ## install
 
-Install one or more managed apps (and optionally runtimes) into the store **without executing them**. Where `exec` prepares and runs an app, `install` materializes its files and exits — the building block for the per-app stages of a generated Dockerfile (see [devtools dockerfile](#devtools-dockerfile)).
+Install one or more managed apps (and optionally runtimes) into the store and leave them **ready**. Where `exec` installs, prepares and then runs an app, `install` materializes its files, runs its declared `prepare` step (see [prepare](./configuration-api.md#one-time-preparation-step-prepare)) and exits — the building block for the per-app stages of a generated Dockerfile (see [devtools dockerfile](#devtools-dockerfile)).
 
 ```bash
 datamitsu install [app...]
@@ -87,7 +87,7 @@ datamitsu install [app...]
 | `--runtime <name>` | Install the named runtime(s) only, without any app (repeatable)    |
 | `--no-verify`      | Skip the post-install version check (verification runs by default) |
 
-By default, each installed app's version command (`--version`, or its configured `versionCheck.args`) is run after installation, so a broken install fails the command instead of producing a broken artifact. Apps whose version check is disabled, and shell apps, are skipped. Pass `--no-verify` to skip the check.
+The prepare step always runs before the version check; `--no-verify` skips only the check. By default, each installed app's version command (`--version`, or its configured `versionCheck.args`) is run after installation, so a broken install fails the command instead of producing a broken artifact. Apps whose version check is disabled, and shell apps, are skipped.
 
 **Examples:**
 
@@ -1406,6 +1406,18 @@ datamitsu config reconcile --tools golangci-lint --dry-run
 datamitsu config reconcile --tools golangci-lint,prettier
 ```
 
+`--force` regenerates managed files from the Datamitsu configuration layers,
+ignoring their existing on-disk settings. Overrides declared in the project's
+Datamitsu layer still apply. It also permits removal of customized repository
+copies of configs that are internally managed. `--tools` still limits the files,
+and `--dry-run` previews the reset without writing. Hash verification remains
+enabled; `--no-verify-hash` is a separate choice.
+
+```bash
+datamitsu config reconcile --force --tools sqruff --dry-run
+datamitsu config reconcile --force --tools sqruff --skip-fix
+```
+
 ### config show
 
 Display the current configuration as JSON.
@@ -1457,7 +1469,7 @@ Print the XXH3-128 chain hash that `datamitsu config reconcile` verifies for man
 datamitsu config chain-hash [file...]
 ```
 
-The value is the input to the **topmost** layer, so declare your own entry for the file first (a placeholder `expectChainHash` is enough), then read the real hash here. With no arguments every managed config file is listed as `file  hash`; with exactly one file only its bare hash is printed, which is convenient for scripting.
+The value is the input to the **topmost** layer, so declare your own entry for the file first (a placeholder `expectChainHash` is enough), then read the real hash here. With no arguments every managed config file is listed as `file  hash`; with exactly one file only its hash is printed, ready to paste into a pin — `expectChainHash` accepts only the canonical `xxh3:<32 lowercase hex>` form.
 
 **Examples:**
 
@@ -1509,14 +1521,14 @@ datamitsu config lockfile govulncheck
 
 Developer utility commands for maintaining datamitsu configurations.
 
-### devtools pull-github
+### devtools pull-releases
 
-Update binary configurations from GitHub releases. Requires a file argument specifying the path to the GitHub apps JSON file. If the file doesn't exist, an empty appstate structure is created automatically. Fetches repository descriptions from the GitHub API and stores them in the output JSON.
+Update binary configurations from release providers. Requires a file argument specifying the path to the binary apps JSON file. If the file doesn't exist, an empty appstate structure is created automatically. Fetches repository descriptions from the source API and stores them in the output JSON.
 
 ```bash
-datamitsu devtools pull-github <file>
-datamitsu devtools pull-github config/src/githubApps.json
-datamitsu devtools pull-github config/src/githubApps.json --update
+datamitsu devtools pull-releases <file>
+datamitsu devtools pull-releases config/src/binaryApps.json
+datamitsu devtools pull-releases config/src/binaryApps.json --update
 ```
 
 | Flag                  | Description                                                                                                                                                                                                                |
@@ -1525,7 +1537,7 @@ datamitsu devtools pull-github config/src/githubApps.json --update
 | `--verify-extraction` | Verify that each downloaded asset extracts to an executable (ELF, Mach-O, PE or a `#!` script)                                                                                                                             |
 | `--min-age <minutes>` | Minimum release age before a version is eligible (`-1` = global default of `10080`, `0` = disable, positive = custom). See [Minimum Release Age](/docs/guides/supply-chain-security#minimum-release-age-version-selection) |
 
-The command scans releases for all platform combinations using OS/Arch/Libc target tuples. For Linux, both glibc and musl variants are detected separately; an asset whose name says `alpine` or `musl` counts as a Linux build even without `linux` in it, so `tool-alpine` lands on `linux/amd64/musl`. The output JSON uses a nested three-level storage structure:
+By default, the command scans releases for all platform combinations using OS/Arch/Libc target tuples. For Linux, both glibc and musl variants are detected separately; an asset whose name says `alpine` or `musl` counts as a Linux build even without `linux` in it, so `tool-alpine` lands on `linux/amd64/musl`. The output JSON uses a nested three-level storage structure:
 
 ```json
 {
@@ -1545,25 +1557,169 @@ The command scans releases for all platform combinations using OS/Arch/Libc targ
 }
 ```
 
-Non-Linux platforms use `unknown` as the libc key. If a musl variant is not found for a Linux target, that entry is simply omitted.
+Add an optional top-level `platforms` array to the input manifest to restrict detection:
 
-Before scoring, the detector filters out two categories of assets: checksum files (`.sha256`, `.md5`, `.sha512`, etc.) and non-executable package formats (`.vsix`, `.deb`, `.rpm`, `.nupkg`, `.whl`, `.msi`, `.pkg`). This prevents IDE extensions or package-manager bundles from outscoring actual binaries when releases mix executable and non-executable assets.
+```json
+{
+  "sources": { "github": { "type": "github", "url": "https://github.com" } },
+  "platforms": ["darwin/arm64", "linux/amd64/musl"],
+  "apps": {},
+  "binaries": {}
+}
+```
+
+Accepted identifiers are `darwin/amd64`, `darwin/arm64`, `windows/amd64`,
+`windows/arm64`, `freebsd/amd64`, `freebsd/arm64`, `openbsd/amd64`,
+`openbsd/arm64`, `linux/amd64/glibc`, `linux/amd64/musl`,
+`linux/arm64/glibc` and `linux/arm64/musl`. Values are case-sensitive and exact:
+there are no aliases or whitespace normalization. `linux/amd64` is not accepted.
+An empty array, `null`, an invalid type or an unknown identifier fails before
+filtering or GitHub requests. Repeated identifiers are processed once.
+
+When present, the array removes every unselected platform from existing binary
+entries before pulling releases, including entries without an `apps` record.
+This deletion is saved even if a subsequent pull fails. Only selected platforms
+are detected and, with `--verify-extraction`, downloaded and verified. A selected
+platform without a compatible asset is reported and omitted. The list filters
+available platforms; it does not require every app to publish every selected
+platform. An app fails if none of its selected platforms has a usable asset.
+A missing SHA-256 digest or failed verification still fails the app without
+saving a partial new entry. Explicit selections keep separate glibc and musl
+entries even when they share an asset.
+
+The sorted, unique selection participates in `configHash`: changing the set
+reruns detection at the same tag; reordering it does not. Removing `platforms`
+restores default-all detection at the same tag. Without the field, existing
+all-platform behavior and libc deduplication are preserved.
+
+Non-Linux platforms use `unknown` as the libc key. Without an explicit selection, a missing musl variant is simply omitted.
+
+Before scoring, the detector filters out three categories of assets: checksum files (`.sha256`, `.md5`, `.sha512`, etc.), attestations published beside an asset (`.proof`, `.sig`, `.asc`, `.minisig`, `.pem`, `.crt`, `.sigstore.json`, `.intoto.jsonl`, `.sbom`, `.spdx.json`, `.cdx.json`) and non-executable package formats and installers (`.vsix`, `.deb`, `.rpm`, `.nupkg`, `.whl`, `.msi`, `.msix`, `.appx`, `.pkg`, `.dmg`, and a name in which `setup` or `installer` stands as a word of its own, such as `Harper_2.11.0_x64-setup.exe` — unless the app's own name says so). This prevents IDE extensions, package-manager bundles, a desktop app's installer or a signature file from outscoring — or standing in for — actual binaries when releases mix them.
+
+When a release holds several programs — harper publishes `harper-cli-*`, `harper-ls-*` and the `Harper` desktop app together — the asset whose name carries the app's name as whole tokens (case and separators aside) outranks the others of the same platform, whatever their format. An asset that names the requested libc still ranks above it: a `tool-alpine-*` build is the musl build even when only `tool-cli-linux-*` carries the app's name.
+
+The manifest has no schema version. Every app selects a named source and a
+repository path:
+
+```json
+{
+  "sources": {
+    "github": { "type": "github", "url": "https://github.com" },
+    "codeberg": { "type": "forgejo", "url": "https://codeberg.org" },
+    "gitea": { "type": "gitea", "url": "https://gitea.com" },
+    "gitlab": { "type": "gitlab", "url": "https://gitlab.com" }
+  },
+  "apps": {
+    "tool": { "source": "github", "repository": "owner/tool", "tag": "v1.0.0" }
+  },
+  "binaries": {}
+}
+```
+
+The repository and tag above are illustrative. Use the actual tag your source
+publishes. `repository` accepts nested GitLab namespaces. Supported `type` values
+are exactly `github`, `gitlab`, `gitea` and `forgejo`; Codeberg is a Forgejo
+instance, not a separate provider. `url` is the instance URL, including a
+self-hosted subpath when needed. Optional `apiUrl` overrides the derived API
+root (`/api/v3` for GitHub Enterprise, `/api/v4` for GitLab, `/api/v1` for Gitea
+and Forgejo; public GitHub uses `https://api.github.com`). Source URLs require
+HTTPS; local loopback instances also accept HTTP.
+
+An optional source `tokenEnv` names a third-party token environment variable.
+No token value is saved. It authorizes discovery API requests independently of
+artifact downloads. The optional `downloadAuth` field controls downloads:
+
+| Value            | Behavior                                                                                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `auto` (default) | Resolve access separately for each asset from provider metadata and its endpoint. Public downloads have no auth. Restricted downloads require `tokenEnv`. Unknown access is an error with instructions to select an explicit policy. |
+| `required`       | Require `tokenEnv` and authorize downloads on the configured instance. External origins remain anonymous. This uses the provider's token scheme; it does not configure reverse-proxy Basic auth or SSO.                              |
+| `none`           | Never attach download credentials. Reject endpoints known to require auth; explicitly permit unknown endpoints anonymously. Discovery still uses `tokenEnv`.                                                                         |
+
+For example, a source can specify `"downloadAuth": "none"` alongside a
+`tokenEnv` used only for metadata. Different aliases of one instance can choose
+different policies; app-level overrides are not supported.
+
+GitHub reads explicit repository `private` metadata. Published public native
+assets retain `browser_download_url`; private assets and drafts use the API
+asset URL with an octet-stream Accept header. Gitea and Forgejo native release
+attachments use repository visibility and draft status, retaining their browser
+download URL with a Bearer token when restricted. Successful repository metadata
+with known visibility is cached for the current client; absent visibility is
+never silently treated as public.
+
+GitLab reads `visibility` (`public`, `internal`, or `private`). It prefers the
+original release link target over the permanent redirect URL. Generic-package
+URLs for the same project use `package_registry_access_level`: `public` permits
+anonymous download, `private` requires auth, `enabled` follows project visibility,
+and `disabled` is an error. Missing package policy requires an explicit
+`downloadAuth`. Restricted permanent release URLs use the token-capable release
+API download route. Arbitrary same-origin links, including links to other
+projects, require an explicit policy. External links never inherit repository
+credentials, even when the project is private or the mode is `required`.
+See the [GitLab package registry access rules](https://docs.gitlab.com/user/packages/package_registry/)
+and [project API access levels](https://docs.gitlab.com/api/projects/).
+
+Installation, checksum downloads, and `--verify-extraction` consume the same
+resolved download auth. Missing required tokens fail before the request.
+Cross-origin redirects drop credentials. There is no anonymous-to-authenticated
+fallback after HTTP errors. SHA-256 verification remains mandatory in every mode.
+
+After upgrading from the initial multi-source implementation, run
+`pull-releases` again with the existing tags. The generation fingerprint
+invalidates old entries for all providers once, replacing public download auth
+and GitHub API asset URLs with anonymous download URLs. Changing `downloadAuth`
+also invalidates generated entries.
+
+**Integrity:** GitHub API digests are used directly. GitLab generic-package
+links obtain SHA-256 from package-file metadata for the same project. A source
+without a published digest must use explicit per-app `hashes` (asset filename
+to SHA-256), or `checksums` (checksum asset filename to the checksum file's own
+SHA-256). Only candidate files for selected platforms resolve digests. Checksum
+files are downloaded only with their own validated SHA-256 pin; a binary is
+never downloaded to manufacture its expected hash. GNU SHA-256 lists and BSD
+`SHA256 (filename) = hash` records are supported. Conflicting records are errors.
+
+Per-app pins apply by asset filename. When a new release needs those pins to
+resolve its digests, update them from independently trusted upstream metadata
+before using `--update`. With `--verify-extraction`, a stale matching pin fails verification and keeps
+the previous app entry. Without that flag, a manual `hashes` pin cannot be
+checked against the binary during pulling: the new tag and expected hash are
+recorded, and installation still refuses a mismatching download. Checksum-file
+pins are always verified when fetched. Pins are never refreshed by trusting
+unverified downloaded bytes. Native
+API digests permit automatic updates without maintaining per-app pins.
+
+**Breaking migration:** rename your registry file to `binaryApps.json`, add
+`sources`, and replace each app's `owner`/`repo` with `source`/`repository`.
+Replace `pull-github` with `pull-releases` in scripts. The old command and old
+manifest shape are not accepted. Unknown fields, sources and repository shapes
+fail before pruning or network requests. `configHash` includes the source
+profile, repository, tag, integrity pins and sorted unique platform selection.
+Generated entries record their resolved provider, instance, repository and tag.
 
 **Examples:**
 
 ```bash
-# Check for new releases without modifying the file
-datamitsu devtools pull-github config/src/githubApps.json
+# Detect binaries for the tags the file already pins (apps added or re-pinned by hand)
+datamitsu devtools pull-releases config/src/binaryApps.json
 
 # Update to latest releases
-datamitsu devtools pull-github config/src/githubApps.json --update
+datamitsu devtools pull-releases config/src/binaryApps.json --update
 
 # Update and verify that archives extract correctly
-datamitsu devtools pull-github config/src/githubApps.json --update --verify-extraction
+datamitsu devtools pull-releases config/src/binaryApps.json --update --verify-extraction
 ```
 
+**Failures, retries and the exit code:**
+
+Every app is attempted; one that fails does not stop the others. A request that fails for a transient reason — a network error, a timeout, a 5xx, a rate limit that names a short wait — is made up to four times with backoff, and each retry is printed with the app's request, the attempt and the reason. A 404, a release whose assets carry no digest, or a rate limit with no wait in sight is not retried. The run ends with a report naming every failed app, the stage it failed at (`metadata`, `latest release`, `release <tag>`, `binaries for <tag>`, `verify <platform>`) and the error, plus a hint when the cause is a GitHub rate limit, and exits with status 1 when any app failed.
+
+With `--verify-extraction`, the download of each asset retries the same way. A platform whose asset turns out to be at fault — a hash mismatch, an archive that does not extract, a file that is not an executable — falls back to the next-ranked asset; a download that fails does not, since it says nothing about the asset, and a platform that still cannot be verified fails the app: its previous entry is kept, the report names the platform and the asset (`verify linux/amd64/glibc`), and the run exits with status 1.
+
+The file is saved after each app that succeeds, and each save replaces the file whole. Every entry in it is therefore either the previous state of an app that failed or was not reached, or the complete new state of one that succeeded; a failed app never gets a partial new entry. The deletion of platforms excluded by `platforms` is applied and saved before any app pull, including pulls that fail. A save that fails stops the run, since nothing after it could be recorded either.
+
 :::tip See also
-For a complete workflow including CI automation, see [Maintaining Wrapper Packages — Binary Apps](/docs/how-to/maintain-wrapper#binary-apps-devtools-pull-github).
+For a complete workflow including CI automation, see [Maintaining Wrapper Packages — Binary Apps](/docs/how-to/maintain-wrapper#binary-apps-devtools-pull-releases).
 :::
 
 ### devtools pull-node
@@ -1595,6 +1751,8 @@ datamitsu devtools pull-node config/src/nodeApps.json --update
 datamitsu config lockfile prettier
 datamitsu config lockfile eslint
 ```
+
+Registry requests that fail for a transient reason are made up to four times, each retry printed. With `--update`, a package whose entry changes is saved before the next one is looked up, so a later failure or an interrupted run keeps everything already pulled. A package that still fails keeps its previous entry; the run lists every failed package after the summary and exits with status 1. Without `--update` (or with `--dry-run`) the file is not written.
 
 :::tip See also
 For the full node app update workflow including lock file regeneration, see [Maintaining Wrapper Packages — Node Apps](/docs/how-to/maintain-wrapper#node-apps-npm-devtools-pull-node).
@@ -1629,6 +1787,8 @@ datamitsu devtools pull-uv config/src/uvApps.json --update
 datamitsu config lockfile yamllint
 ```
 
+Registry requests that fail for a transient reason are made up to four times, each retry printed. With `--update`, a package whose entry changes is saved before the next one is looked up, so a later failure or an interrupted run keeps everything already pulled. A package that still fails keeps its previous entry; the run lists every failed package after the summary and exits with status 1. Without `--update` (or with `--dry-run`) the file is not written.
+
 :::tip See also
 For the full UV app update workflow including lock file regeneration, see [Maintaining Wrapper Packages — UV Apps](/docs/how-to/maintain-wrapper#uv-apps-python-devtools-pull-uv).
 :::
@@ -1656,7 +1816,7 @@ The command detects binaries for all platform combinations (OS/Arch/Libc). For L
 - **node**: latest Node.js LTS resolved automatically; archives + SHA-256 from nodejs.org/dist (glibc/darwin/windows, GPG-verified via SHASUMS256.txt.asc) and unofficial-builds.nodejs.org (musl)
 - **pnpm**: newest pnpm 12 release old enough for the minimum release age (judged by its npm publish date), with per-platform archive SHA-256 digests from the matching pnpm/pnpm GitHub release; the Node and Bun entries reference it with `pnpmRuntime: "pnpm"`
 - **UV**: Python stable from endoflife.date, UV binary from GitHub
-- **JVM**: Java version from Adoptium API, Temurin JDK from GitHub
+- **JVM**: Java version from Adoptium API, Temurin JDK from GitHub; when the newest feature release has no build old enough for the minimum release age yet, the previous feature release
 - **go**: latest stable Go release + per-file SHA-256 from go.dev (`https://go.dev/dl/?mode=json`); HTTPS with published SHA-256, no GPG (the git-pinned hash is the integrity anchor, same trust model as the musl Node path)
 
 **Examples:**
@@ -1680,6 +1840,8 @@ datamitsu devtools pull-runtimes --update --runtime pnpm config/src/runtimes.jso
 # Preview changes without writing
 datamitsu devtools pull-runtimes --update --dry-run config/src/runtimes.json
 ```
+
+Upstream requests that fail for a transient reason are made up to four times, each retry printed. Every runtime is attempted, pnpm first and then the rest in alphabetical order, and a runtime whose entry changes is saved before the next one starts, so a later failure or an interrupted run keeps everything already pulled. A runtime that fails keeps its previous entry — so does a Node or Bun entry that would name a pnpm runtime the file does not define — and the run lists every failed runtime with its error and exits with status 1. A save that fails stops the run.
 
 :::tip See also
 For the full runtime update workflow and CI automation, see [Maintaining Wrapper Packages — Runtimes](/docs/how-to/maintain-wrapper#runtimes-devtools-pull-runtimes).
@@ -1930,29 +2092,35 @@ datamitsu devtools tools inspect eslint
 
 **File not found errors:**
 
-If the JSON file argument doesn't exist, `pull-github`, `pull-node`, and `pull-uv` create an empty file automatically. However, `pull-runtimes` requires the `--update` flag to write — running without it produces an error.
+If the JSON file argument doesn't exist, `pull-releases`, `pull-node`, and `pull-uv` create an empty file automatically. However, `pull-runtimes` requires the `--update` flag to write — running without it produces an error.
 
 **GitHub API rate limits:**
 
-When `pull-github` or `pull-runtimes` fails with HTTP 403 or 429 errors, set the `GITHUB_TOKEN` environment variable to authenticate and increase the rate limit:
+Without a token the GitHub API allows 60 requests an hour, and a registry pull of a few dozen apps uses more. A rate limit that asks for a short wait (a `Retry-After` header, or a reset within two minutes) is waited out and retried; one that resets later is reported at once, with the reset time, and the run goes on with the next app and exits non-zero. Set the `GITHUB_TOKEN` environment variable to authenticate and raise the limit:
 
 ```bash
 export GITHUB_TOKEN=ghp_your_token_here
-datamitsu devtools pull-github config/src/githubApps.json --update
+datamitsu devtools pull-releases config/src/binaryApps.json --update
 ```
 
 **Hash mismatches:**
 
-If `verify-all` reports hash mismatches, the upstream binary may have changed without a version bump (a re-released tag). Re-run the corresponding `pull-*` command with `--update` to fetch fresh hashes:
+If `verify-all` reports a hash mismatch, investigate the changed upstream
+artifact before changing the expected hash. For release manifests, update manual
+`hashes` or `checksums` pins only from independently trusted upstream metadata.
+For a re-released tag using native API digests, clear the affected generated
+entry's `configHash` to force discovery while preserving its archive-path history.
+An unchanged tag and config hash skip discovery; `--update` alone does not
+refresh manual pins. Then pull and verify again:
 
 ```bash
-datamitsu devtools pull-github config/src/githubApps.json --update
+datamitsu devtools pull-releases config/src/binaryApps.json --verify-extraction
 datamitsu devtools verify-all
 ```
 
 **Network errors:**
 
-All devtools commands require network access to fetch from GitHub, npm, or PyPI. If you're behind a proxy, ensure `HTTPS_PROXY` is set. For intermittent failures, retry the command — downloads are idempotent.
+Release and package devtools require network access to their configured forge, npm or PyPI. If you're behind a proxy, ensure `HTTPS_PROXY` is set. For intermittent failures, retry the command — downloads are idempotent.
 
 ## cache
 

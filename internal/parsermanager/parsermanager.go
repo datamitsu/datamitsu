@@ -17,8 +17,8 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ociartifact"
 	"github.com/datamitsu/datamitsu/internal/parsermanager/embedded"
@@ -727,7 +727,7 @@ func fetchModule(ctx context.Context, name string, p config.Parser, dir string) 
 	// AFTER the bytes exist on disk, so "the config hash is verified on every
 	// transport" stays true by grep rather than by reasoning. ~1 ms for 377 KiB,
 	// once per module.
-	if err := binmanager.VerifyFileHashPublic(path, p.Hash, binmanager.BinHashTypeSHA256); err != nil {
+	if err := binmanager.VerifyFileHashPublic(path, p.Hash); err != nil {
 		_ = os.Remove(path)
 		return "", fmt.Errorf("hash verification failed: %w", err)
 	}
@@ -751,7 +751,7 @@ func storedModuleIsValid(wasmPath string, p config.Parser) bool {
 	if _, err := os.Stat(wasmPath); err != nil {
 		return false
 	}
-	if err := binmanager.VerifyFileHashPublic(wasmPath, p.Hash, binmanager.BinHashTypeSHA256); err != nil {
+	if err := binmanager.VerifyFileHashPublic(wasmPath, p.Hash); err != nil {
 		log.Warn("stored parser module does not match its declared SHA-256; discarding it and fetching again",
 			zap.String("path", wasmPath),
 			zap.Error(err),
@@ -781,7 +781,11 @@ func storedModuleIsValid(wasmPath string, p config.Parser) bool {
 // so the next migration costs one character. The module's own version lives in
 // its `describe` output rather than the config, so it is not part of the key.
 func cacheKey(p config.Parser) string {
-	return hashutil.XXH3Multi([]byte("parser-v2"), []byte(p.Hash))
+	pin := p.Hash
+	if d, err := digest.ParseSHA256Loose(p.Hash); err == nil {
+		pin = d.Hex()
+	}
+	return digest.XXH3Multi([]byte("parser-v2"), []byte(pin)).Hex()
 }
 
 // moduleDir returns the content-addressed directory for a parser:

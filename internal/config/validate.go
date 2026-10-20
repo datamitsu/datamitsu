@@ -1,18 +1,20 @@
 package config
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/ociref"
 	"github.com/datamitsu/datamitsu/internal/target"
 )
@@ -129,6 +131,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 	errs = append(errs, findCaseFoldCollisions(appNames)...)
 	errs = append(errs, validateAppDependencies(apps, appNames)...)
 	errs = append(errs, validateAppRuntimeEnv(apps, appNames)...)
+	errs = append(errs, validateAppPrepare(apps, appNames)...)
 	errs = append(errs, validateAppOfficialURLs(apps, appNames)...)
 
 	for _, appName := range appNames {
@@ -142,8 +145,8 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			continue
 		}
 
-		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil || app.Go != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
-			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on bun, uv, and node apps", appName))
+		if (app.Binary != nil || app.Shell != nil || app.Jvm != nil) && (len(app.Files) > 0 || len(app.Links) > 0 || len(app.Archives) > 0) {
+			errs = append(errs, fmt.Sprintf("app %q: files/links/archives are only supported on bun, uv, node, and go apps", appName))
 			continue
 		}
 
@@ -155,22 +158,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 						if !isValidLibcKey(libc) {
 							errs = append(errs, fmt.Sprintf("app %q (%s): libc key %q is not valid; must be one of: glibc, musl, unknown", appName, platform, libc))
 						}
-						if info.URL == "" {
-							errs = append(errs, fmt.Sprintf("app %q (%s): url is required", appName, platform))
-						}
-						if info.Hash == "" {
-							errs = append(errs, fmt.Sprintf("app %q (%s): hash is required", appName, platform))
-						} else if !isValidSHA256Hex(info.Hash) {
-							errs = append(errs, fmt.Sprintf("app %q (%s): hash must be a valid SHA-256 hex string (64 lowercase hex characters)", appName, platform))
-						}
-						if info.HashType != nil && !binmanager.IsAllowedDownloadHashType(*info.HashType) {
-							errs = append(errs, fmt.Sprintf("app %q (%s): hash type %q is not allowed for downloads; use sha256", appName, platform, *info.HashType))
-						}
-						if info.BinaryPath != nil {
-							if err := validateSafeRelativePath(*info.BinaryPath, "binaryPath"); err != nil {
-								errs = append(errs, fmt.Sprintf("app %q (%s): %v", appName, platform, err))
-							}
-						}
+						errs = append(errs, validateBinaryEntry(appName, platform, info)...)
 					}
 				}
 			}
@@ -182,8 +170,8 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			}
 			if app.Jvm.JarHash == "" {
 				errs = append(errs, fmt.Sprintf("app %q: jvm.jarHash is required", appName))
-			} else if !isValidSHA256Hex(app.Jvm.JarHash) {
-				errs = append(errs, fmt.Sprintf("app %q: jvm.jarHash must be a valid SHA-256 hex string (64 lowercase hex characters)", appName))
+			} else if _, err := digest.ParseSHA256(app.Jvm.JarHash); err != nil {
+				errs = append(errs, fmt.Sprintf("app %q: jvm.jarHash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", appName, err))
 			}
 			if app.Jvm.Version == "" {
 				errs = append(errs, fmt.Sprintf("app %q: jvm.version is required", appName))
@@ -295,8 +283,8 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 			if isExternal {
 				if archiveSpec.Hash == "" {
 					errs = append(errs, fmt.Sprintf("app %q: archive %q hash is required for external archives (SHA-256)", appName, archiveName))
-				} else if !isValidSHA256Hex(archiveSpec.Hash) {
-					errs = append(errs, fmt.Sprintf("app %q: archive %q hash must be a valid SHA-256 hex string (64 lowercase hex characters)", appName, archiveName))
+				} else if _, err := digest.ParseSHA256(archiveSpec.Hash); err != nil {
+					errs = append(errs, fmt.Sprintf("app %q: archive %q hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", appName, archiveName, err))
 				}
 				if archiveSpec.Format == "" {
 					errs = append(errs, fmt.Sprintf("app %q: archive %q format is required for external archives", appName, archiveName))
@@ -443,6 +431,42 @@ func isValidVersionString(s string) bool {
 	return safeVersionPattern.MatchString(s)
 }
 
+// validateBinaryEntry checks one platform entry of a binary app: its download, its hash, and
+// what runs from it.
+func validateBinaryEntry(appName, platform string, info binmanager.BinaryOsArchInfo) []string {
+	var errs []string
+	if info.URL == "" {
+		errs = append(errs, fmt.Sprintf("app %q (%s): url is required", appName, platform))
+	}
+	if info.Auth != nil {
+		if err := info.Auth.Validate(); err != nil {
+			errs = append(errs, fmt.Sprintf("app %q (%s): invalid download auth: %v", appName, platform, err))
+		}
+	}
+	if info.Hash == "" {
+		errs = append(errs, fmt.Sprintf("app %q (%s): hash is required", appName, platform))
+	} else if _, err := digest.ParseSHA256(info.Hash); err != nil {
+		errs = append(errs, fmt.Sprintf("app %q (%s): hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", appName, platform, err))
+	}
+	if info.BinaryPath != nil {
+		if err := validateSafeRelativePath(*info.BinaryPath, "binaryPath"); err != nil {
+			errs = append(errs, fmt.Sprintf("app %q (%s): %v", appName, platform, err))
+		}
+	}
+	if info.ExtractDir {
+		switch {
+		case info.BinaryPath == nil:
+			errs = append(errs, fmt.Sprintf("app %q (%s): extractDir requires binaryPath, the command inside the extracted directory", appName, platform))
+		case filepath.Clean(*info.BinaryPath) == ".":
+			errs = append(errs, fmt.Sprintf("app %q (%s): binaryPath %q names the extracted directory itself, not a file inside it", appName, platform, *info.BinaryPath))
+		}
+		if !info.ContentType.IsDirectoryArchive() {
+			errs = append(errs, fmt.Sprintf("app %q (%s): extractDir requires an archive contentType (tar, tar.gz, tar.bz2, tar.xz, tar.zst or zip), not %q", appName, platform, info.ContentType))
+		}
+	}
+	return errs
+}
+
 func validateSafeRelativePath(p string, fieldName string) error {
 	if p == "" {
 		return fmt.Errorf("%s must not be empty", fieldName)
@@ -499,11 +523,10 @@ func ValidateOCI(ref *OCIRef) error {
 		}
 	}
 
-	const digestPrefix = "sha256:"
 	switch {
 	case ref.Digest == "":
 		errs = append(errs, "oci: digest is required (sha256:<64 hex>)")
-	case !strings.HasPrefix(ref.Digest, digestPrefix) || !isValidSHA256Hex(strings.TrimPrefix(ref.Digest, digestPrefix)):
+	case digest.IsSHA256(ref.Digest) != nil:
 		errs = append(errs, fmt.Sprintf("oci: digest %q must be \"sha256:\" followed by 64 lowercase hex characters", ref.Digest))
 	}
 
@@ -577,8 +600,8 @@ func ValidateParsers(parsers MapOfParsers) error {
 		}
 		if p.Hash == "" {
 			errs = append(errs, fmt.Sprintf("parser %q: hash is required (SHA-256)", name))
-		} else if !isValidSHA256Hex(p.Hash) {
-			errs = append(errs, fmt.Sprintf("parser %q: hash must be a valid SHA-256 hex string (64 lowercase hex characters)", name))
+		} else if _, err := digest.ParseSHA256(p.Hash); err != nil {
+			errs = append(errs, fmt.Sprintf("parser %q: hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", name, err))
 		}
 		errs = append(errs, validateParserOCI(name, p.OCI)...)
 	}
@@ -610,11 +633,10 @@ func validateParserOCI(name string, oci *ParserOCI) []string {
 		}
 	}
 
-	const digestPrefix = "sha256:"
 	switch {
 	case oci.Digest == "":
 		errs = append(errs, fmt.Sprintf("parser %q: oci.digest is required (sha256:<64 hex>)", name))
-	case !strings.HasPrefix(oci.Digest, digestPrefix) || !isValidSHA256Hex(strings.TrimPrefix(oci.Digest, digestPrefix)):
+	case digest.IsSHA256(oci.Digest) != nil:
 		errs = append(errs, fmt.Sprintf("parser %q: oci.digest %q must be \"sha256:\" followed by 64 lowercase hex characters", name, oci.Digest))
 	}
 
@@ -678,17 +700,6 @@ func ValidateLsp(lsp MapOfLsp, tools MapOfTools) error {
 	return nil
 }
 
-func isValidSHA256Hex(s string) bool {
-	if len(s) != 64 {
-		return false
-	}
-	if s != strings.ToLower(s) {
-		return false
-	}
-	_, err := hex.DecodeString(s)
-	return err == nil
-}
-
 // ValidateManagedConfigs validates managed configuration file entries.
 func ValidateManagedConfigs(managedConfigs MapOfManagedConfigs) error {
 	var errs []string
@@ -704,12 +715,16 @@ func ValidateManagedConfigs(managedConfigs MapOfManagedConfigs) error {
 		if cfg.Scope != "" && cfg.Scope != ScopeProject && cfg.Scope != ScopeGitRoot {
 			errs = append(errs, fmt.Sprintf("managed config %q: scope must be %q, %q, or empty, got %q", name, ScopeProject, ScopeGitRoot, cfg.Scope))
 		}
+		if cfg.ExpectChainHash != "" {
+			if _, err := digest.ParseXXH3(cfg.ExpectChainHash); err != nil {
+				errs = append(errs, fmt.Sprintf("managed config %q: expectChainHash must be a canonical XXH3-128 digest (xxh3:<32 lowercase hex>), %v", name, err))
+			}
+		}
 	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
 	}
-
 	return nil
 }
 
@@ -763,6 +778,21 @@ var (
 // by findUnknownPlaceholders, so only genuine placeholder-shaped tokens validate.
 var toolPlaceholderPattern = regexp.MustCompile(`\{[A-Za-z][A-Za-z0-9_]*\}`)
 
+// toolPlaceholderColonPattern matches the colon form ({name:value}) used by
+// {managedConfig:<key>} and, with prepare, {bin:<alias>}. Today the bare-name
+// pattern above does not see these tokens, so an unknown colon form reached
+// the tool as a literal — contrary to the documented "unknown placeholder is
+// a hard error". Validation accepts known forms and rejects the rest.
+var toolPlaceholderColonPattern = regexp.MustCompile(`\{[A-Za-z][A-Za-z0-9_]*:[^{}\s]*\}`)
+
+// placeholderColonForm splits a matched colon form into its name and
+// argument. The caller has already matched toolPlaceholderColonPattern.
+func placeholderColonForm(token string) (name, arg string) {
+	inner := token[1 : len(token)-1]
+	name, arg, _ = strings.Cut(inner, ":")
+	return name, arg
+}
+
 func findUnknownPlaceholders(value string, allowed map[string]bool) []string {
 	var unknown []string
 	for _, loc := range toolPlaceholderPattern.FindAllStringIndex(value, -1) {
@@ -780,6 +810,86 @@ func findUnknownPlaceholders(value string, allowed map[string]bool) []string {
 		}
 	}
 	return unknown
+}
+
+// findUnknownColonPlaceholders reports {name:…} tokens whose name is not a
+// known colon form. The bare-name pattern above cannot see these, and before
+// this check an unknown colon form reached the tool as a literal — contrary
+// to the documented "unknown placeholder is a hard error". Today the only
+// supported colon form is {managedConfig:<key>}; {bin:<alias>} arrives with
+// the prepare work and joins the allowlist there.
+func findUnknownColonPlaceholders(value string) []string {
+	var unknown []string
+	for _, loc := range toolPlaceholderColonPattern.FindAllStringIndex(value, -1) {
+		start, end := loc[0], loc[1]
+		// Skip doubled braces, mirroring the bare-name matcher.
+		if start > 0 && value[start-1] == '{' {
+			continue
+		}
+		if end < len(value) && value[end] == '}' {
+			continue
+		}
+		name, _ := placeholderColonForm(value[start:end])
+		if name != "managedConfig" && name != "bin" {
+			unknown = append(unknown, value[start:end])
+		}
+	}
+	return unknown
+}
+
+// validateOpBinPlaceholders checks every {bin:<alias>} in a tool operation's
+// args and env values: the alias must name a direct dependsOn edge of the
+// operation's app (bound under that alias), and the target must be a
+// binary, uv or go app — the kinds whose executable a PATH entry or a
+// binding can carry.
+func validateOpBinPlaceholders(toolName string, opType string, op ToolOperation, apps binmanager.MapOfApps) []string {
+	if op.App == "" {
+		return nil
+	}
+	app, ok := apps[op.App]
+	if !ok {
+		return nil // a missing operation app is another validator's error
+	}
+	// The alias map: every direct edge, by alias.
+	aliases := make(map[string]binmanager.AppDependency, len(app.DependsOn))
+	for _, edge := range app.DependsOn {
+		aliases[edge.Alias] = edge
+	}
+	var errs []string
+	check := func(value string) {
+		for _, loc := range toolPlaceholderColonPattern.FindAllStringIndex(value, -1) {
+			start, end := loc[0], loc[1]
+			if start > 0 && value[start-1] == '{' {
+				continue
+			}
+			if end < len(value) && value[end] == '}' {
+				continue
+			}
+			name, alias := placeholderColonForm(value[start:end])
+			if name != "bin" {
+				continue
+			}
+			edge, ok := aliases[alias]
+			if !ok {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: {bin:%s}: app %q has no dependency with alias %q",
+					toolName, opType, alias, op.App, alias))
+				continue
+			}
+			if target := apps[edge.App]; target.Binary == nil && target.Uv == nil && target.Go == nil {
+				errs = append(errs, fmt.Sprintf(
+					"tool %q operation %q: {bin:%s}: target %q needs a launcher (not supported yet)",
+					toolName, opType, alias, edge.App))
+			}
+		}
+	}
+	for _, arg := range op.Args {
+		check(arg)
+	}
+	for _, key := range slices.Sorted(maps.Keys(op.Env)) {
+		check(op.Env[key])
+	}
+	return errs
 }
 
 func placeholderSet(names []string) map[string]bool {
@@ -807,7 +917,7 @@ func placeholderList(names []string) string {
 // must name an existing entry in parsers — a dangling reference is a load-time
 // config error (there is no existing app-ref check to mirror; this follows the
 // runtime-ref validation style).
-func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
+func ValidateTools(tools MapOfTools, parsers MapOfParsers, apps binmanager.MapOfApps) error {
 	argAllowed := placeholderSet(ToolArgPlaceholders)
 	envAllowed := placeholderSet(ToolEnvPlaceholders)
 
@@ -965,6 +1075,12 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 						toolName, opType, ph, placeholderList(ToolArgPlaceholders),
 					))
 				}
+				for _, ph := range findUnknownColonPlaceholders(arg) {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: unknown placeholder %s in args (supported: {managedConfig:<key>})",
+						toolName, opType, ph,
+					))
+				}
 			}
 
 			envKeys := make([]string, 0, len(op.Env))
@@ -979,7 +1095,19 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers) error {
 						toolName, opType, ph, key, placeholderList(ToolEnvPlaceholders),
 					))
 				}
+				for _, ph := range findUnknownColonPlaceholders(op.Env[key]) {
+					errs = append(errs, fmt.Sprintf(
+						"tool %q operation %q: unknown placeholder %s in env %q (supported: {managedConfig:<key>})",
+						toolName, opType, ph, key,
+					))
+				}
 			}
+
+			// {bin:<alias>} names a direct dependency of the operation's app,
+			// bound under that alias. Both the args and env walks above let
+			// the token through (it is a known colon form), so membership is
+			// checked here, once, against the app's edges.
+			errs = append(errs, validateOpBinPlaceholders(toolName, opType, op, apps)...)
 			errs = append(errs, noColorEnvErrors(toolName, opType, op.Env)...)
 			errs = append(errs, inheritEnvErrors(toolName, opType, op.InheritEnv)...)
 			errs = append(errs, failOnErrors(toolName, opType, op.FailOn)...)
@@ -1125,8 +1253,8 @@ func ValidateBundles(bundles binmanager.MapOfBundles, apps binmanager.MapOfApps)
 			if isExternal {
 				if archiveSpec.Hash == "" {
 					errs = append(errs, fmt.Sprintf("bundle %q: archive %q hash is required for external archives (SHA-256)", name, archiveName))
-				} else if !isValidSHA256Hex(archiveSpec.Hash) {
-					errs = append(errs, fmt.Sprintf("bundle %q: archive %q hash must be a valid SHA-256 hex string (64 lowercase hex characters)", name, archiveName))
+				} else if _, err := digest.ParseSHA256(archiveSpec.Hash); err != nil {
+					errs = append(errs, fmt.Sprintf("bundle %q: archive %q hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", name, archiveName, err))
 				}
 				if archiveSpec.Format == "" {
 					errs = append(errs, fmt.Sprintf("bundle %q: archive %q format is required for external archives", name, archiveName))
@@ -1219,13 +1347,15 @@ func ValidateRuntimes(runtimes MapOfRuntimes) error {
 							if info.URL == "" {
 								errs = append(errs, fmt.Sprintf("runtime %q (%s): url is required", name, platform))
 							}
+							if info.Auth != nil {
+								if err := info.Auth.Validate(); err != nil {
+									errs = append(errs, fmt.Sprintf("runtime %q (%s): invalid download auth: %v", name, platform, err))
+								}
+							}
 							if info.Hash == "" {
 								errs = append(errs, fmt.Sprintf("runtime %q (%s): hash is required", name, platform))
-							} else if !isValidSHA256Hex(info.Hash) {
-								errs = append(errs, fmt.Sprintf("runtime %q (%s): hash must be a valid SHA-256 hex string (64 lowercase hex characters)", name, platform))
-							}
-							if info.HashType != nil && !binmanager.IsAllowedDownloadHashType(*info.HashType) {
-								errs = append(errs, fmt.Sprintf("runtime %q (%s): hash type %q is not allowed for downloads; use sha256", name, platform, *info.HashType))
+							} else if _, err := digest.ParseSHA256(info.Hash); err != nil {
+								errs = append(errs, fmt.Sprintf("runtime %q (%s): hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>), %v", name, platform, err))
 							}
 							if info.BinaryPath != nil {
 								if err := validateSafeRelativePath(*info.BinaryPath, "binaryPath"); err != nil {

@@ -15,6 +15,11 @@ indent_style = tab
 indent_size  = 2
 indent_style = tab
 
-# The generated bundle contains whitespace inside JavaScript template literals.
 [internal/inspector/inspector.html]
+trim_trailing_whitespace = false
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.markdown]
 trim_trailing_whitespace = false

@@ -102,6 +102,19 @@ func expectedSubtrees(cfg *config.Config, storeRoot string, needed, neededRuntim
 		}
 		addPath(abs, name)
 
+		// A declared prepare step adds the prepared state subtree to the
+		// expected set: seeding it means the consumer never runs the step
+		// (the marker's presence is the readiness the run path checks).
+		// ComputePreparedKey is a pure function of the config, so the
+		// builder and the consumer agree on the path.
+		if app.Prepare != nil {
+			if key, kerr := mgrs.bm.ComputePreparedKey(name); kerr == nil {
+				addPath(filepath.Join(binmanager.PreparePath(), name, key), "prepared "+name)
+			} else {
+				log.Debug("cannot compute prepared key; bundle cannot cover the step",
+					zap.String("app", name), zap.Error(kerr))
+			}
+		}
 		kind, runtimeRef, isRuntimeApp := runtimeAppKind(app)
 		if !isRuntimeApp {
 			continue

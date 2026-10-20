@@ -1,13 +1,12 @@
 package clitest
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
 )
@@ -26,10 +25,10 @@ func SeedParserModule(tb testing.TB, cacheDir, modulePath string) string {
 	if err != nil {
 		tb.Fatalf("clitest: read parser module %s: %v", modulePath, err)
 	}
-	sum := sha256.Sum256(data)
+	pin := digest.SHA256Of(data)
 	decl := config.Parser{
 		URL:  "https://parsers.example.invalid/module.wasm",
-		Hash: hex.EncodeToString(sum[:]),
+		Hash: pin.String(),
 	}
 
 	dst := filepath.Join(parserStoreDir(tb, cacheDir, decl), parsermanager.WASMFileName)

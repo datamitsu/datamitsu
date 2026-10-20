@@ -3,12 +3,12 @@ package parsermanager
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 )
@@ -29,8 +29,8 @@ func servedManager(t *testing.T, modules map[string][]byte) *Manager {
 			_, _ = w.Write(wasm)
 		}))
 		t.Cleanup(srv.Close)
-		sum := sha256.Sum256(wasm)
-		parsers[name] = config.Parser{URL: srv.URL, Hash: hex.EncodeToString(sum[:])}
+		sum := digest.SHA256Of(wasm)
+		parsers[name] = config.Parser{URL: srv.URL, Hash: sum.Hex()}
 	}
 	m := New(parsers)
 	t.Cleanup(func() { _ = m.Close(context.Background()) })

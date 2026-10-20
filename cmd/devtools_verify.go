@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
@@ -15,6 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
@@ -238,12 +240,8 @@ func binaryJobKeyAndFP(j binaryVerifyJob) (string, string) {
 	if j.info.BinaryPath != nil {
 		binaryPath = *j.info.BinaryPath
 	}
-	hashType := string(binmanager.BinHashTypeSHA256)
-	if j.info.HashType != nil {
-		hashType = string(*j.info.HashType)
-	}
 	key := verifycache.BinaryEntryKey(j.appName, string(j.os), string(j.arch), j.libc)
-	fp := verifycache.FingerprintBinary(j.info.URL, j.info.Hash, hashType, string(j.info.ContentType), binaryPath, j.info.ExtractDir, string(j.os), string(j.arch), j.libc)
+	fp := verifycache.FingerprintBinary(j.info.URL, j.info.Hash, string(j.info.ContentType), binaryPath, j.info.ExtractDir, string(j.os), string(j.arch), j.libc)
 	return key, fp
 }
 
@@ -252,12 +250,8 @@ func runtimeJobKeyAndFP(j runtimeVerifyJob) (string, string) {
 	if j.info.BinaryPath != nil {
 		binaryPath = *j.info.BinaryPath
 	}
-	hashType := string(binmanager.BinHashTypeSHA256)
-	if j.info.HashType != nil {
-		hashType = string(*j.info.HashType)
-	}
 	key := verifycache.RuntimeEntryKey(j.runtimeName, string(j.os), string(j.arch), j.libc)
-	fp := verifycache.FingerprintRuntime(j.info.URL, j.info.Hash, hashType, string(j.info.ContentType), binaryPath, j.info.ExtractDir, string(j.os), string(j.arch), j.libc)
+	fp := verifycache.FingerprintRuntime(j.info.URL, j.info.Hash, string(j.info.ContentType), binaryPath, j.info.ExtractDir, string(j.os), string(j.arch), j.libc)
 	return key, fp
 }
 
@@ -423,6 +417,7 @@ func filterSkippedVersionCheckEntries(entries []versionCheckEntry, sm *verifycac
 
 func runVerifyAll(cmd *cobra.Command, args []string) error {
 	ctx := commandContext(cmd)
+	enableRetryNotices()
 
 	SkipRemoteConfig = verifyNoRemoteFlag
 	defer func() { SkipRemoteConfig = false }()
@@ -678,40 +673,46 @@ func runPhase1BinaryApps(ctx context.Context, cfg *config.Config, concurrency in
 }
 
 func verifyBinaryOrDir(ctx context.Context, info binmanager.BinaryOsArchInfo) error {
-	hashType := binmanager.BinHashTypeSHA256
-	if info.HashType != nil {
-		hashType = *info.HashType
-	}
-
 	if info.ExtractDir {
-		return verifyExtractDir(ctx, info.URL, info.Hash, hashType, info.ContentType)
+		return verifyExtractDir(ctx, info.URL, info.Hash, info.ContentType, info.BinaryPath, info.Auth)
 	}
 
-	return binmanager.VerifyBinaryExtraction(ctx, info.URL, info.Hash, hashType, info.ContentType, info.BinaryPath)
+	return binmanager.VerifyBinaryExtraction(ctx, info.URL, info.Hash, info.ContentType, info.BinaryPath, info.Auth)
 }
 
-func verifyExtractDir(ctx context.Context, url, hash string, hashType binmanager.BinHashType, contentType binmanager.BinContentType) error {
+// verifyExtractDir downloads an extractDir entry, unpacks the whole tree and checks the command
+// it names: binaryPath must be an executable inside the tree, since that is what runs. An entry
+// without one only has to unpack to something.
+func verifyExtractDir(ctx context.Context, url, hash string, contentType binmanager.BinContentType, binaryPath *string, auth ...*httpx.RequestAuth) error {
+	if hash == "" {
+		return errors.New("hash is empty: verification requires a non-empty hash")
+	}
+
 	tempDir, err := os.MkdirTemp("", "datamitsu-verify-dir-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	downloadedPath, err := binmanager.DownloadFileForVerify(ctx, url, tempDir)
+	downloadedPath, err := binmanager.DownloadFileForVerify(ctx, url, tempDir, auth...)
 	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
+		return err
 	}
 
-	if hash == "" {
-		return errors.New("hash is empty: verification requires a non-empty hash")
-	}
-	if err := binmanager.VerifyFileHashPublic(downloadedPath, hash, hashType); err != nil {
+	if err := binmanager.VerifyFileHashPublic(downloadedPath, hash); err != nil {
 		return fmt.Errorf("hash verification failed: %w", err)
 	}
 
 	extractedDir, err := binmanager.ExtractDirForVerify(downloadedPath, contentType, tempDir)
 	if err != nil {
 		return fmt.Errorf("extraction failed: %w", err)
+	}
+
+	if binaryPath != nil {
+		if err := binmanager.CheckExtractedExecutable(filepath.Join(extractedDir, filepath.FromSlash(*binaryPath))); err != nil {
+			return fmt.Errorf("binaryPath %q: %w", *binaryPath, err)
+		}
+		return nil
 	}
 
 	entries, err := os.ReadDir(extractedDir)
@@ -936,7 +937,7 @@ func runPhase3RuntimeApps(ctx context.Context, cfg *config.Config, currentOs, cu
 
 		key, fp := runtimeAppKeyAndFP(entry, cfg.Runtimes, currentOs, currentArch)
 
-		_, err := bm.GetCommandInfo(ctx, entry.name)
+		_, err := bm.GetCommandInfoInstallOnly(ctx, entry.name)
 		r := runtimeAppResult{
 			AppName: entry.name,
 			Kind:    entry.kind,
@@ -1166,7 +1167,7 @@ func runPhase5VersionChecks(ctx context.Context, cfg *config.Config, bm *binmana
 
 		expectedVersion := getAppVersion(entry.app)
 
-		execCmd, err := bm.GetExecCmd(ctx, entry.name, versionArgs)
+		execCmd, err := bm.GetExecCmdInstallOnly(ctx, entry.name, versionArgs)
 		if err != nil || execCmd == nil {
 			r := versionCheckResult{
 				AppName:  entry.name,

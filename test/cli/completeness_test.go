@@ -43,7 +43,7 @@ var testedLeafCommands = map[string]string{
 	"devtools parsers prefetch":    "TestDevtoolsParsersPrefetch",
 	"devtools parsers run":         "TestDevtoolsParsersRun / TestDevtoolsParsersEmbedded",
 	"devtools parsers sniff":       "TestDevtoolsParsersSniff",
-	"devtools pull-github":         "TestDevtoolsArgValidation",
+	"devtools pull-releases":       "TestDevtoolsArgValidation",
 	"devtools pull-node":           "TestDevtoolsArgValidation",
 	"devtools pull-runtimes":       "TestDevtoolsArgValidation",
 	"devtools pull-uv":             "TestDevtoolsArgValidation",

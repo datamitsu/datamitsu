@@ -10,7 +10,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 func internalEntry(content string) config.ManagedConfig {
@@ -19,7 +19,7 @@ func internalEntry(content string) config.ManagedConfig {
 		Scope:     config.ScopeGitRoot,
 		Ejectable: true,
 		Placement: config.PlacementInternal,
-		Render:    &config.ManagedConfigRender{Content: content, Hash: hashutil.XXH3Hex([]byte(content))},
+		Render:    &config.ManagedConfigRender{Content: content, Hash: digest.XXH3Of([]byte(content)).Hex()},
 	}
 }
 

@@ -38,7 +38,7 @@ globalThis.getConfig = (config) => ({
             arm64: {
               unknown: {
                 url: "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-macos-arm64",
-                hash: "<sha256 of that file>",
+                hash: "sha256:<digest of that file>",
                 contentType: "binary",
               },
             },
@@ -47,7 +47,7 @@ globalThis.getConfig = (config) => ({
             amd64: {
               glibc: {
                 url: "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64",
-                hash: "<sha256 of that file>",
+                hash: "sha256:<digest of that file>",
                 contentType: "binary",
               },
             },
@@ -59,15 +59,16 @@ globalThis.getConfig = (config) => ({
 });
 ```
 
-Every platform you actually use needs an entry, and every entry needs a `hash` — a real 64-character
-lowercase SHA-256 hex string, not the placeholder above. That is not a lint rule you can turn off:
-a config with a missing or malformed hash fails to load. See
-[Hash verification is the point](#hash-verification-is-the-point) below.
+Every platform you actually use needs an entry, and every entry needs a `hash` — a canonical
+SHA-256 digest, `sha256:` plus a real 64-character lowercase hex value, not the placeholder above.
+That is not a lint rule you can turn off: a config with a missing or malformed hash fails to load.
+See [Hash verification is the point](#hash-verification-is-the-point) below.
 
 Writing those hashes by hand is not the intended workflow.
-[`datamitsu devtools pull-github`](./maintain-wrapper.md#binary-apps-devtools-pull-github)
-resolves the latest release, downloads every platform tuple and computes the SHA-256 hashes for
-you; the same `devtools pull-node` / `pull-uv` commands do it for npm and PyPI tools, which are
+[`datamitsu devtools pull-releases`](./maintain-wrapper.md#binary-apps-devtools-pull-releases)
+resolves releases through source profiles and records their expected SHA-256
+digests or explicit pins for selected available platforms. It downloads binaries
+only with `--verify-extraction`; the same `devtools pull-node` / `pull-uv` commands do it for npm and PyPI tools, which are
 declared as [runtime-managed apps](../guides/runtime-management.md) with a lock file rather than
 a URL.
 

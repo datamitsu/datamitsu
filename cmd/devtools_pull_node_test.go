@@ -29,7 +29,7 @@ func buildNodeTestShasums(v string) (dist, musl map[string]string) {
 	musl = map[string]string{}
 	const hexChars = "0123456789abcdef"
 	for i, spec := range nodeArchiveSpecs(v) {
-		h := strings.Repeat(string(hexChars[i]), 64)
+		h := "sha256:" + strings.Repeat(string(hexChars[i]), 64)
 		if spec.musl {
 			musl[spec.filename] = h
 		} else {
@@ -335,7 +335,7 @@ func TestBuildNodeBinaries_UppercaseHashNormalizedAndValid(t *testing.T) {
 			t.Errorf("%s/%s/%s: missing entry", spec.os, spec.arch, spec.libc)
 			continue
 		}
-		want := strings.ToLower(all[spec.filename])
+		want := "sha256:" + strings.ToLower(strings.TrimPrefix(all[spec.filename], "sha256:"))
 		if info.Hash != want {
 			t.Errorf("%s: Hash = %q, want lowercase %q", spec.filename, info.Hash, want)
 		}

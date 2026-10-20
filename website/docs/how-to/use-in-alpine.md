@@ -73,12 +73,12 @@ binaries: {
     amd64: {
       glibc: {
         url: "https://example.com/tool_linux_amd64.tar.gz",
-        hash: "abc123...",
+        hash: "sha256:abc123...",
         contentType: "tar.gz",
       },
       musl: {
         url: "https://example.com/tool_linux_amd64_musl.tar.gz",
-        hash: "def456...",
+        hash: "sha256:def456...",
         contentType: "tar.gz",
       },
     },
@@ -87,7 +87,7 @@ binaries: {
     arm64: {
       unknown: {
         url: "https://example.com/tool_darwin_arm64.tar.gz",
-        hash: "789abc...",
+        hash: "sha256:789abc...",
         contentType: "tar.gz",
       },
     },

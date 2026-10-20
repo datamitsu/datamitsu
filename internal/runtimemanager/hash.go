@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
@@ -14,7 +14,7 @@ func lockFileHash(lockFile string) string {
 	if lockFile == "" {
 		return ""
 	}
-	return hashutil.XXH3Hex([]byte(lockFile))
+	return digest.XXH3Of([]byte(lockFile)).Hex()
 }
 
 // goAppLockHash binds the built package path into a Go app's lock hash. A Go
@@ -23,7 +23,7 @@ func lockFileHash(lockFile string) string {
 // on the same cache directory. The NUL separator keeps the two fields
 // unambiguous.
 func goAppLockHash(packageName, lockFile string) string {
-	return hashutil.XXH3Hex([]byte(packageName + "\x00" + lockFile))
+	return digest.XXH3Of([]byte(packageName + "\x00" + lockFile)).Hex()
 }
 
 func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archType syslist.ArchType, libc string) (string, error) {
@@ -56,9 +56,13 @@ func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archTy
 		extractDir = "extractDir"
 	}
 
+	pin := info.Hash
+	if d, err := digest.ParseSHA256Loose(info.Hash); err == nil {
+		pin = d.Hex()
+	}
 	parts := [][]byte{
 		[]byte(info.URL),
-		[]byte(info.Hash),
+		[]byte(pin),
 		[]byte(info.ContentType),
 		[]byte(binaryPath),
 		[]byte(extractDir),
@@ -69,7 +73,7 @@ func calculateRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archTy
 
 	parts = appendKindVersionFields(parts, rc)
 
-	return hashutil.XXH3Multi(parts...), nil
+	return digest.XXH3Multi(parts...).Hex(), nil
 }
 
 // appendKindVersionFields folds the cache-affecting version field(s) for rc's
@@ -103,7 +107,7 @@ func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
 
 	parts = appendKindVersionFields(parts, rc)
 
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 }
 
 func calculateAppHash(appName string, version string, deps map[string]string, runtimeHash string, lockHash string, filesHash string) string {
@@ -126,7 +130,7 @@ func calculateAppHash(appName string, version string, deps map[string]string, ru
 		}
 	}
 
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 }
 
 // calculatePackageAppHash hashes a Node- or Bun-kind package app's identity.
@@ -158,5 +162,5 @@ func calculatePackageAppHash(appName string, packageName string, pkgVersion stri
 		}
 	}
 
-	return hashutil.XXH3Multi(parts...)
+	return digest.XXH3Multi(parts...).Hex()
 }

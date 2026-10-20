@@ -1,0 +1,56 @@
+{
+  "apps": {
+    "jsonschema": {
+      "binary": {
+        "binaries": {
+          "linux": {
+            "amd64": {
+              "glibc": {
+                "url": "https://example.invalid/jsonschema",
+                "hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+                "contentType": "application/octet-stream"
+              }
+            }
+          }
+        },
+        "version": "16.12.0"
+      }
+    },
+    "schepherd": {
+      "dependsOn": [
+        {
+          "app": "jsonschema",
+          "as": "validator"
+        }
+      ],
+      "binary": {
+        "binaries": {
+          "linux": {
+            "amd64": {
+              "glibc": {
+                "url": "https://example.invalid/schepherd",
+                "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "contentType": "application/octet-stream"
+              }
+            }
+          }
+        },
+        "version": "0.1.0"
+      },
+      "runtimeEnv": {
+        "JSONSCHEMA_BIN": "${APP_BIN:validator}",
+        "SCHEPHERD_CACHE_DIR": "${APP_PREPARED}"
+      },
+      "prepare": {
+        "args": [
+          "--config",
+          "",
+          "--cache-dir",
+          "${APP_PREPARED}",
+          "materialize"
+        ],
+        "network": true
+      }
+    }
+  }
+}

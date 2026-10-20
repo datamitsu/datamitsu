@@ -44,7 +44,7 @@ function getConfig(config) {
               amd64: {
                 unknown: {
                   url: "https://github.com/org/mytool/releases/download/v1.0.0/mytool_darwin_amd64.tar.gz",
-                  hash: "<sha256>",
+                  hash: "sha256:<digest>",
                   contentType: "tar.gz",
                   binaryPath: "mytool",
                 },
@@ -52,7 +52,7 @@ function getConfig(config) {
               arm64: {
                 unknown: {
                   url: "https://github.com/org/mytool/releases/download/v1.0.0/mytool_darwin_arm64.tar.gz",
-                  hash: "<sha256>",
+                  hash: "sha256:<digest>",
                   contentType: "tar.gz",
                   binaryPath: "mytool",
                 },
@@ -62,7 +62,7 @@ function getConfig(config) {
               amd64: {
                 glibc: {
                   url: "https://github.com/org/mytool/releases/download/v1.0.0/mytool_linux_amd64.tar.gz",
-                  hash: "<sha256>",
+                  hash: "sha256:<digest>",
                   contentType: "tar.gz",
                   binaryPath: "mytool",
                 },
@@ -268,8 +268,9 @@ Locate the direct download URL for the JAR file, typically from Maven Central or
 ### 2. Obtain the SHA-256 hash
 
 Obtain the digest from the repository's authenticated checksum metadata or a
-signed upstream release manifest. As with binary apps, set `jarHash` before
-allowing datamitsu to download the JAR; a missing hash is a config error.
+signed upstream release manifest. As with binary apps, set `jarHash` — a
+canonical `sha256:<64 lowercase hex>` digest — before allowing datamitsu to
+download the JAR; a missing hash is a config error.
 
 ### 3. Add the app definition
 
@@ -285,7 +286,7 @@ function getConfig(config) {
         jvm: {
           jarUrl:
             "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.0.0/openapi-generator-cli-7.0.0.jar",
-          jarHash: "...",
+          jarHash: "sha256:...", // canonical digest (mandatory)
           version: "7.0.0",
         },
       },

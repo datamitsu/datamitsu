@@ -67,7 +67,7 @@ final Config
 ```
 
 - Each source must export `getMinVersion()` — version is checked before `getConfig()` runs (fail-fast)
-- Each source can export `getRemoteConfigs()` returning `Array<{url: string, hash: string}>` for recursive parent resolution
+- Each source can export `getRemoteConfigs()` returning `Array<{url: string, hash: string}>` for recursive parent resolution. The `hash` is a SHA-256 digest — canonical form recommended; a bare or uppercase value is accepted and normalized there
 - The auto git-root config can export `getBeforeConfigs()` returning `Array<{path: string}>` to load local files as under-layers (parity with `--before-config`). It is honoured only at the git-root layer and skipped entirely when a `--before-config` flag is present; relative paths resolve against the git-root config's directory, no hash is required (local files are not downloads)
 - `ignoreRules` use append semantics across config layers
 - Circular remote config dependencies are detected and produce an error
@@ -122,18 +122,19 @@ source-mode-specific: a config using a name outside this set fails to load.
 
 All app kinds share metadata, environment, and version-check fields. The common
 schema also exposes managed-content fields, but config validation accepts
-`files`, `links`, and `archives` only on Bun, UV, and Node apps.
+`files`, `links`, and `archives` only on Bun, UV, Node, and Go apps (for a Go
+app they carry the module source — the [source-blob form](#go-apps)).
 
 ```typescript
 interface AppCommon {
   description?: string; // Human-readable text shown in app listings
   required?: boolean; // Whether the app is required for init
   lazy?: boolean; // Defer installation and link creation until first exec
-  dependsOn?: string[]; // Apps that must be available when this app runs
+  dependsOn?: AppDependency[]; // Apps that must be available when this app runs
   officialUrl?: string; // Where a person reads about this app (never fetched)
-  files?: Record<string, string>; // Bun/UV/Node only: filename → static content
-  links?: Record<string, string>; // Bun/UV/Node only: linkName → relativePath
-  archives?: Record<string, ArchiveSpec>; // Bun/UV/Node only: name → archive
+  files?: Record<string, string>; // Bun/UV/Node/Go only: filename → static content
+  links?: Record<string, string>; // Bun/UV/Node/Go only: linkName → relativePath
+  archives?: Record<string, ArchiveSpec>; // Bun/UV/Node/Go only: name → archive
   env?: Record<string, string>; // Install-time and run-time environment
   runtimeEnv?: Record<string, string>; // Execution-only environment (all app kinds)
   versionCheck?: {
@@ -196,6 +197,26 @@ apps: {
 #### App dependencies (`dependsOn`)
 
 `dependsOn` names other apps that must be installed before this app runs.
+Each entry is an app name or an object that also names the role under which
+this app refers to the dependency in `${APP_BIN:<alias>}` bindings; the alias
+defaults to the app name and must be unique among this app's direct
+dependencies (case-insensitive).
+
+```typescript
+type AppDependency = string | { app: string; as?: string };
+```
+
+```javascript
+const apps = {
+  "doc-lint": {
+    binary: docLintBinary,
+    // "shellcheck" binds as "shellcheck"; jsonschema binds as "validator"
+    dependsOn: ["shellcheck", { app: "jsonschema", as: "validator" }],
+    runtimeEnv: { VALIDATOR_BIN: "${APP_BIN:validator}" },
+  },
+};
+```
+
 Provisioning expands selected roots to their transitive dependency closure,
 installs dependencies before dependents, and deduplicates shared dependencies.
 This applies to `init`, `install`, `exec`, planner tools (`check`, `lint`, `fix`),
@@ -204,8 +225,10 @@ roots; a dependency need not have `required: true` and cannot opt out with `lazy
 
 Every name must exist in `apps`. Self-references, duplicate names in one list,
 and cycles are validation errors; cycle errors show the dependency chain.
-Shell apps may declare dependencies but cannot be dependency targets, because
-core cannot install a host PATH command.
+Aliases follow the app-name pattern (`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`), and
+one edge per target app keeps the alias unambiguous. Shell apps may declare
+dependencies but cannot be dependency targets, because core cannot install a
+host PATH command.
 
 A dependency is a run-time availability contract. Neither `dependsOn` nor
 `runtimeEnv` changes the app's install identity: changing either does not
@@ -299,11 +322,18 @@ As with `env`, keys the runtime sets for the app win, inherited values do not,
 and `PATH` is rejected. A key present in both `env` and `runtimeEnv` on the same
 app is a validation error.
 
-Values support `${STORE}` and `${APP_DIR}`, plus `${APP_BIN:<name>}`: the exact
-executable path of a native binary app. The target must be in this app's
-**direct** `dependsOn` list. A transitive edge alone is insufficient. Runtime
-apps and shell apps are rejected as binding targets: a runtime app needs a
-command and arguments, not just a binary path.
+Values support `${STORE}` and `${APP_DIR}`, plus `${APP_BIN:<alias>}`: the exact
+executable path of a binary, uv or go app — the kinds with a single executable
+entry point. The target must be in this app's **direct** `dependsOn` list
+(by name or alias). A transitive edge alone is insufficient. Runtime apps
+(node, bun, jvm) and shell apps are rejected as binding targets: they need a
+launcher that does not exist yet.
+
+When the app declares a `prepare` step, `runtimeEnv` also supports
+`${APP_PREPARED}`: the app's prepared-state directory
+(`{store}/.prepared/<app>/<key>/out`), the same tree the step filled. Subpaths
+are allowed (`${APP_PREPARED}/browsers`). Using it without a declared step, or
+in `env` (which installers see), is a validation error.
 
 ```javascript
 runtimeEnv: {
@@ -326,6 +356,59 @@ or file contents can contain the literal syntax.
 See [Wrapping a private binary](../how-to/maintain-wrapper.md#wrapping-a-private-binary)
 for a complete binding example and the source-farm repair contract.
 
+#### One-time preparation step (`prepare`)
+
+`prepare` declares a step that runs **once**, after the app and its whole
+`dependsOn` closure are installed, to fill the app's prepared state: data the
+app would otherwise download lazily at first run — a schema catalog, a browser,
+a compiled artifact. Run time exposes the result as `${APP_PREPARED}`.
+
+```typescript
+interface AppPrepare {
+  args: string[]; // required, may be empty
+  env?: Record<string, string>;
+  binPath?: string; // another executable of this app's own install
+  network: boolean; // required
+  path?: "declared" | "inherit"; // default "declared"
+}
+```
+
+The step is the app's own executable run directly, without a shell. The
+prepared state lives in `{store}/.prepared/<app>/<key>/out`, keyed by the app
+identity, its dependency closure, and the step description — a new dependency
+version or a changed argument list prepares a new state, and identical
+configurations share one. The state is project-independent: it is shared by
+every project of the user and ships in OCI bundles.
+
+**Placeholders.** `args` and `env` accept `${APP_PREPARED}` (the directory the
+step fills), `${APP_DIR}`, and `${APP_BIN:<alias>}` (a direct dependency).
+`${STORE}` and every project-bound tool placeholder (`{root}`, `{cwd}`,
+`{file}`, `{files}`, `{target}`, `{toolCache}`) are validation errors: the
+prepared state cannot depend on a project. Everything the step needs must be
+spelled out explicitly — the inherited environment is available for proxies
+and credentials, but it is not part of the key, so a step that reads a
+behavior-changing variable from it may produce different states on different
+machines. Neutralize such variables with explicit arguments.
+
+**Network and offline.** `network` is required. Under `DATAMITSU_OFFLINE`, an
+unprepared step that needs the network is refused before the process starts.
+
+**PATH.** `path: "declared"` (default) limits the step to the runtime's own
+directories and the binaries of its dependency closure — nothing from the host.
+Use `"inherit"` when the step genuinely needs host utilities; the choice is
+part of the key.
+
+**Isolation.** `PATH`, `TMPDIR`, `TEMP`, `TMP`, `XDG_CACHE_HOME`,
+`XDG_DATA_HOME` and `XDG_STATE_HOME` are rejected in `prepare.env`: datamitsu
+points them at throwaway directories inside the step layout. `XDG_CONFIG_HOME`
+and `HOME` stay available — tools read registry credentials through them.
+
+**Version requirement.** A config layer using `prepare`, object
+`dependsOn` edges or `${APP_PREPARED}` must raise its `getMinVersion()`:
+an older core silently drops the field and hands the app a literal
+`${APP_PREPARED}`. Datamitsu warns when it sees the construction without the
+matching minimum version.
+
 ### Binary Apps
 
 Binary apps download platform-specific executables with hash verification.
@@ -340,7 +423,7 @@ const apps = {
           amd64: {
             glibc: {
               url: "https://github.com/golangci/golangci-lint/releases/download/v2.1.0/golangci-lint-2.1.0-linux-amd64.tar.gz",
-              hash: "abc123...", // SHA-256 (mandatory)
+              hash: "sha256:abc123...", // canonical SHA-256 digest (mandatory)
               contentType: "tar.gz",
               binaryPath: "golangci-lint-2.1.0-linux-amd64/golangci-lint",
             },
@@ -350,7 +433,7 @@ const apps = {
           arm64: {
             unknown: {
               url: "https://github.com/golangci/golangci-lint/releases/download/v2.1.0/golangci-lint-2.1.0-darwin-arm64.tar.gz",
-              hash: "def456...",
+              hash: "sha256:def456...",
               contentType: "tar.gz",
               binaryPath: "golangci-lint-2.1.0-darwin-arm64/golangci-lint",
             },
@@ -374,11 +457,10 @@ interface AppConfigBinary {
 
 interface BinaryOsArchInfo {
   url: string;
-  hash: string; // SHA-256 hash (mandatory)
-  hashType?: "sha256"; // Optional assertion; SHA-256 is the only accepted type
+  hash: string; // Canonical SHA-256 digest "sha256:<64 lowercase hex>" (mandatory)
   contentType: BinContentType;
-  binaryPath?: string; // Path to binary within archive
-  extractDir?: boolean; // Extract entire archive to directory
+  binaryPath?: string; // Path to binary within archive; with extractDir, the command inside the directory (required)
+  extractDir?: boolean; // Extract entire archive to directory and run binaryPath inside it (tar or zip only)
 }
 ```
 
@@ -503,7 +585,7 @@ const apps = {
       version: "7.12.0",
       jarUrl:
         "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.12.0/openapi-generator-cli-7.12.0.jar",
-      jarHash: "abc123...", // SHA-256 (mandatory)
+      jarHash: "sha256:abc123...", // canonical SHA-256 digest (mandatory)
       runtime: "jvm-default",
     },
   },
@@ -516,7 +598,7 @@ const apps = {
 interface AppConfigJVM {
   version: string;
   jarUrl: string;
-  jarHash: string; // SHA-256 hash (mandatory)
+  jarHash: string; // Canonical SHA-256 digest "sha256:<64 lowercase hex>" (mandatory)
   mainClass?: string; // When set, uses java -cp instead of java -jar
   runtime?: string; // Runtime name override
 }
@@ -551,6 +633,23 @@ interface AppConfigGo {
 ```
 
 The tool is built with `go build -trimpath -mod=readonly` in an isolated, hardened environment. See the [Supply Chain Security](../guides/supply-chain-security.md#go-go-apps) guide for the full defense model.
+
+**Shipping your own program as a source blob.** A Go app may carry its module source in `files`/`archives` (the same inline/external [archive form](#archives) other app kinds use). The source is staged into the app directory before the build, the lock file's `go.mod`/`go.sum` overwrite any files of the same name, and `packageName` points at the package **inside** the shipped module:
+
+```javascript
+const apps = {
+  "my-gen": {
+    go: {
+      packageName: "example.com/mygen/cmd/mygen", // package inside the shipped module
+      version: "v0.1.0",
+      lockFile: "br:...", // go.mod + go.sum of the shipped module itself
+    },
+    archives: { main: { inline: "tar.br:..." } }, // the module source
+  },
+};
+```
+
+The lock file must describe the shipped module (generate it with `datamitsu config lockfile`, which stages the source and runs `go mod tidy` against **its** `go.mod`), so the build compiles the blob, never a remote package that happens to share the name. The archive content folds into the app's install identity — new source means a new install path. A module on the standard library alone legitimately has an **empty `go.sum`**; a module that imports something without a checksum entry still fails the `-mod=readonly` build.
 
 ### Shell Apps
 
@@ -660,7 +759,7 @@ const runtimes = {
           amd64: {
             glibc: {
               url: "https://nodejs.org/dist/v26.2.0/node-v26.2.0-linux-x64.tar.xz",
-              hash: "abc123...", // SHA-256 (mandatory)
+              hash: "sha256:abc123...", // canonical SHA-256 digest (mandatory)
               contentType: "tar.xz",
               binaryPath: "node-v26.2.0-linux-x64/bin/node",
               extractDir: true,
@@ -684,7 +783,7 @@ const runtimes = {
           amd64: {
             glibc: {
               url: "https://github.com/pnpm/pnpm/releases/download/v12.4.1/pnpm-linux-x64.tar.gz",
-              hash: "def456...", // SHA-256 (mandatory)
+              hash: "sha256:def456...", // canonical SHA-256 digest (mandatory)
               contentType: "tar.gz",
               binaryPath: "pnpm",
               extractDir: true,
@@ -878,6 +977,16 @@ Declaring `granularity: "file"` is a speed decision — it puts the operation ba
 on the per-file cache — and is only correct when a file's result cannot depend on
 its neighbours. datamitsu rejects it when the file list never reaches the tool,
 since such an operation cannot have a per-file verdict at all.
+
+An explicitly declared `granularity: "unit"` on a per-project operation with
+`{file}` or `{files}` requests the complete eligible file set owned by that
+project. A source selection widens to that set when the policy allows it;
+`--widen-to=target` reports the operation as not narrowable. Nested projects
+keep their own input sets and configurations. The complete input vector is
+part of the unit verdict identity, so changing project ownership cannot reuse
+a pass for a different set of source files. Inferred unit granularity retains
+the existing narrowed-argv behavior; declare the full-input contract explicitly
+for analyses whose findings depend on callers and sibling modules.
 
 Declaring `unit` or `repo` is otherwise safe: it can only cause more work. The
 one rejected combination is `scope: "repository"` with `granularity: "unit"` — a
@@ -1399,8 +1508,8 @@ overrides, update the pin, and re-run. Key properties:
   pins on intermediate layers are ignored.
 - **Byte-for-byte.** The incoming content is hashed verbatim with no
   normalization — any change (upstream _or_ a handler that folds in your on-disk
-  file) moves the hash. Format: `"xxh3:<32-hex>"` (a bare 32-hex value is also
-  accepted).
+  file) moves the hash. Format: `"xxh3:<32 lowercase hex>"` — the only accepted
+  form; a bare 32-hex value is rejected at config load.
 - **Bypass.** Pass `datamitsu config reconcile --no-verify-hash` to skip the check and write
   regardless of drift.
 
@@ -1488,13 +1597,13 @@ interface ArchiveSpec {
   inline?: string; // Brotli-compressed tar: "tar.br:..." prefix
   url?: string; // External archive URL
   format?: string; // Required for external: "tar", "tar.gz", etc.
-  hash?: string; // SHA-256 required for external archives
+  hash?: string; // Canonical SHA-256 digest "sha256:<64 lowercase hex>" — required for external archives
 }
 ```
 
 **Extraction order:** Archives extracted first (sorted alphabetically), then `files` written (files overwrite archive contents). Package manager runs after both.
 
-Archives are supported on UV apps, node apps, and bundles.
+Archives are supported on UV apps, node apps, Go apps (the [source-blob form](#go-apps)), and bundles.
 
 ## Ignore Rules
 
@@ -1593,18 +1702,18 @@ content-addressed in the store, and loaded into a sandboxed WASM runtime
 
 ```typescript
 interface Parser {
-  hash: string; // SHA-256 (64 lowercase hex) — mandatory for every source
+  hash: string; // Canonical SHA-256 digest "sha256:<64 lowercase hex>" — mandatory for every source
   url?: string; // URL of the .wasm module
   oci?: ParserOCI; // registry-sourced module
   // Exactly one of `url` or `oci`. No `version` field — see note below.
 }
 ```
 
-| Field  | Type        | Description                                                       |
-| ------ | ----------- | ----------------------------------------------------------------- |
-| `hash` | `string`    | SHA-256 hash, 64 lowercase hex — **mandatory** for every source   |
-| `url`  | `string`    | URL of the `.wasm` module. Exactly one of `url` or `oci`          |
-| `oci`  | `ParserOCI` | Module pulled from an OCI registry. Exactly one of `url` or `oci` |
+| Field  | Type        | Description                                                                            |
+| ------ | ----------- | -------------------------------------------------------------------------------------- |
+| `hash` | `string`    | Canonical SHA-256 digest, `sha256:<64 lowercase hex>` — **mandatory** for every source |
+| `url`  | `string`    | URL of the `.wasm` module. Exactly one of `url` or `oci`                               |
+| `oci`  | `ParserOCI` | Module pulled from an OCI registry. Exactly one of `url` or `oci`                      |
 
 The entity is intentionally **source + hash only**. A module reports its own
 build-injected version (and the tools it parses) through its WASM `describe`
@@ -1622,7 +1731,7 @@ function getConfig(input) {
     parsers: {
       echo: {
         url: "https://github.com/owner/repo/releases/download/v1.2.3/datamitsu_parsers_1.2.3.wasm",
-        hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       },
     },
   };
@@ -1632,7 +1741,7 @@ function getConfig(input) {
 The SHA-256 `hash` is **mandatory** for every source per the
 [security policy](#security-requirements) — an empty or malformed hash is a
 config error, not a warning (`parser "echo": hash is required (SHA-256)` and
-`parser "echo": hash must be a valid SHA-256 hex string (64 lowercase hex characters)`).
+`parser "echo": hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>)`).
 
 The module is delivered through two channels. As a versioned asset on the GitHub
 Release (`datamitsu_parsers_<version>.wasm`): take the `url` from that release
@@ -1652,7 +1761,7 @@ parsers: {
 parsers: {
   echo: {
     url: "https://example.com/datamitsu_parsers.wasm",
-    hash: "0123…cdef", // 64 lowercase hex
+    hash: "sha256:0123…cdef", // sha256:<64 lowercase hex>
   },
 }
 ```
@@ -1677,7 +1786,7 @@ parsers: {
   echo: {
     url: "https://example.com/datamitsu_parsers.wasm",
     oci: { ref: "ghcr.io/datamitsu/datamitsu-parsers", digest: "sha256:89ab…4567" },
-    hash: "0123…cdef",
+    hash: "sha256:0123…cdef",
   },
 }
 
@@ -1730,7 +1839,7 @@ function getConfig(input) {
           ref: "ghcr.io/datamitsu/datamitsu-parsers",
           digest: "sha256:89abcdef0123456789abcdef0123456789abcdef0123456789abcdef01234567",
         },
-        hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       },
     },
   };
@@ -1749,8 +1858,8 @@ Rules:
   `oci.digest … must be "sha256:" followed by 64 lowercase hex characters` when it
   is malformed.
 - `hash` stays mandatory and does double duty: it is **also** the expected layer
-  blob digest. The artifact's single layer must have digest `"sha256:" + hash`, so
-  the registry digest chain and the config hash are the same number. A manifest
+  blob digest — the layer's digest is the same `sha256:`-prefixed value, so the
+  registry digest chain and the config hash are the same number. A manifest
   that points at other content is rejected before one payload byte is requested,
   and the same `hash` is checked again on the downloaded stream and once more on
   the file on disk.
@@ -1942,13 +2051,14 @@ const toolsConfig = {
 
 ## Security Requirements
 
-All content downloaded from the internet must have a SHA-256 hash specified:
+All content downloaded from the internet must have a SHA-256 hash specified, as a
+canonical digest — `sha256:<64 lowercase hex>`; a bare 64-hex pin no longer loads:
 
 - Binary apps: `hash` field on each platform entry
 - Managed Bun, Node, pnpm, UV/Python, JVM, and Go runtimes: `hash` on every downloaded platform entry
 - JVM apps: `jarHash` field
 - External archives: `hash` field
-- Remote configs: `hash` on every `getRemoteConfigs()` entry
+- Remote configs: `hash` on every `getRemoteConfigs()` entry — the one lenient pin: a bare or uppercase-hex value is accepted there and normalized to canonical, because it is copied from a release page or checksum file
 - Output parsers: `hash` field on each `parsers` entry, whichever source it declares
 - OCI-sourced parsers: `oci.digest` on the entry, **plus** the same mandatory `hash` — which the artifact's single layer must carry as its blob digest
 - OCI store bundles: mandatory `oci.digest`; unpacked artifacts are re-verified against their individual SHA-256 pins
@@ -1957,3 +2067,13 @@ Bun, Node, UV, and Go apps also require lock files. These locks pin transitive p
 content and are installed in frozen/read-only modes. Missing or empty hashes and
 missing lock files are configuration errors, never warnings or hash-less
 fallbacks.
+
+### Authenticated binary downloads
+
+A binary platform entry may carry `auth` with `tokenEnv`, `origin`, `header`
+(`Authorization` or `PRIVATE-TOKEN`), optional `scheme` (`Bearer` or `token`
+for Authorization) and optional `accept: "application/octet-stream"`.
+`origin` contains only scheme and host. Credentials are read through the named
+environment variable at download time, never serialized, and stripped when a
+redirect changes origin. SHA-256 remains mandatory. `pull-releases` generates
+these references from source profiles; public downloads need no `auth`.

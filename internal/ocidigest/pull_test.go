@@ -3,8 +3,6 @@ package ocidigest
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -15,13 +13,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
+
 	"github.com/datamitsu/datamitsu/internal/httpretry"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
 func sha256Digest(data []byte) string {
-	sum := sha256.Sum256(data)
-	return "sha256:" + hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(data)
+	return "sha256:" + sum.Hex()
 }
 
 // setFastBlobRetries shrinks the shared backoff so retry tests run instantly.

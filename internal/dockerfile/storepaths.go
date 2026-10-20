@@ -44,6 +44,16 @@ func parserSubtree(module string) string {
 	return path.Join(".parsers", module)
 }
 
+// preparedSubtree is the store subtree for an app's prepared state
+// ({store}/.prepared/<app>). Like binaryAppSubtree, this is the hash-LESS
+// parent: the state directory (keyed by the prepared key) is its only entry,
+// and the bundle post-process resolves that segment by scanning the layer
+// tar. The key covers the whole prepare closure (config, step, platform), so
+// one parent per app is enough.
+func preparedSubtree(app string) string {
+	return path.Join(".prepared", app)
+}
+
 // runtimeCopiedToFinal reports whether a runtime's own store subtree must be
 // present in the final image. Go builds a self-contained binary, so the Go SDK
 // is build-only; every other kind needs its interpreter/runtime at run time.

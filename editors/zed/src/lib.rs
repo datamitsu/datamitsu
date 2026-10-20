@@ -1,4 +1,5 @@
 mod archive;
+mod digest;
 mod install;
 mod platform;
 mod release;

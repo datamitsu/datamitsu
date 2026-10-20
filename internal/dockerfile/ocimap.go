@@ -16,7 +16,7 @@ import (
 // Subtree. ".uv/python" is already exact (no hash segment).
 type OCIMapEntry struct {
 	Subtree string `json:"subtree"`
-	Kind    string `json:"kind"` // binary|runtime|app|uv-python|parser
+	Kind    string `json:"kind"` // binary|runtime|app|uv-python|parser|prepared
 	App     string `json:"app,omitempty"`
 }
 
@@ -85,6 +85,16 @@ func BuildOCIMap(plan Plan, opts RenderOptions) OCIMap {
 		})
 	}
 
+	// Prepared states: hash-segment-resolved like binaries (the prepared-key
+	// child is the layer's single top-level entry under Subtree). Same
+	// traversal order as writeFinalStage's prepared COPY block.
+	for _, app := range plan.PreparedApps {
+		m.Layers = append(m.Layers, OCIMapEntry{
+			Subtree: preparedSubtree(app),
+			Kind:    "prepared",
+			App:     app,
+		})
+	}
 	return m
 }
 

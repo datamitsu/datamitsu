@@ -13,8 +13,8 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
 	"github.com/shamaton/msgpack/v2"
 )
 
@@ -277,7 +277,7 @@ func TestStoreUnknownFormatVersionIsAMiss(t *testing.T) {
 	}
 	encoded, err := msgpack.Marshal(artifact{
 		FormatVersion: FormatVersion + 1,
-		PayloadHash:   hashutil.XXH3Hex(body),
+		PayloadHash:   digest.XXH3Of(body).Hex(),
 		Payload:       body,
 	})
 	if err != nil {

@@ -2,11 +2,69 @@ package tooling
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/project"
 )
+
+func TestExplicitUnitFileArgsUseOwnedSources(t *testing.T) {
+	for _, cwd := range []string{"/repo", "/repo/svc/a/src"} {
+		t.Run(cwd, func(t *testing.T) {
+			p := noArgvPathPlanner(cwd)
+			p.cachedFiles = []string{
+				"/repo/svc/a/src/values.py", "/repo/svc/a/src/caller.py",
+				"/repo/svc/a/ignored.py", "/repo/svc/a/child/main.py",
+				"/repo/svc/a/src/child/main.py", "/repo/svc/b/main.py",
+			}
+			p.cachedProjects = append(p.cachedProjects, project.ProjectLocation{Path: "/repo/svc/a/child"})
+			p.cachedProjects = append(p.cachedProjects, project.ProjectLocation{Path: "/repo/svc/a/src/child"})
+			p.tools = config.MapOfTools{
+				"analyzer": {Operations: map[config.OperationType]config.ToolOperation{
+					config.OpLint: {
+						App: "analyzer", Args: []string{"{files}"}, Scope: config.ToolScopePerProject,
+						Granularity: config.GranularityUnit, Globs: []string{"**/*.py"},
+						ExcludeGlobs: []string{"**/ignored.py"},
+					},
+				}},
+			}
+			sel := Selection{Mode: SelectionPaths, Paths: []string{"/repo/svc/a/src/values.py"}}
+			tasks, skipped := p.collectTasks(context.Background(), config.OpLint, sel)
+			if len(tasks) != 1 || len(skipped) != 0 {
+				t.Fatalf("tasks = %+v, skipped = %+v", tasks, skipped)
+			}
+			want := []string{"/repo/svc/a/src/values.py", "/repo/svc/a/src/caller.py"}
+			if !slices.Equal(tasks[0].Files, want) {
+				t.Fatalf("files = %v, want %v", tasks[0].Files, want)
+			}
+			if tasks[0].Coverage != CoverageComplete {
+				t.Fatalf("coverage = %s, want complete", tasks[0].Coverage)
+			}
+			p.SetWidenPolicy(nil, config.WidenToTarget)
+			tasks, skipped = p.collectTasks(context.Background(), config.OpLint, sel)
+			if len(tasks) != 0 || len(skipped) != 1 || skipped[0].Reason != SkipReasonNotNarrowable {
+				t.Fatalf("target policy: tasks = %+v, skipped = %+v", tasks, skipped)
+			}
+		})
+	}
+}
+
+func TestExplicitUnitVerdictTracksSourceOwnership(t *testing.T) {
+	task := Task{
+		ToolName: "analyzer", Operation: config.OpLint,
+		OpConfig: config.ToolOperation{
+			Scope: config.ToolScopePerProject, Granularity: config.GranularityUnit,
+			Args: []string{"{files}"},
+		},
+		Files: []string{"/repo/main.py", "/repo/child/main.py"},
+	}
+	before := verdictIdentity(task, "", "")
+	task.Files = []string{"/repo/main.py"}
+	if after := verdictIdentity(task, "", ""); before == after {
+		t.Fatal("a changed project boundary reused the parent's cached input identity")
+	}
+}
 
 // noArgvPathPlanner has two sibling modules and one per-project fix operation
 // whose argv carries no path — the shape of `go fmt ./...`, `golangci-lint run`
@@ -147,7 +205,7 @@ func TestRepositoryScopeNeverSeesUnitGranularity(t *testing.T) {
 				Scope: config.ToolScopeRepository, Granularity: config.GranularityUnit,
 			},
 		}},
-	}, nil)
+	}, nil, nil)
 
 	if err == nil {
 		t.Fatal("repository scope with granularity \"unit\" now loads; the planner's " +

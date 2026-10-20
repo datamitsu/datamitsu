@@ -1,9 +1,6 @@
 package binmanager
 
 import (
-	"crypto/md5"
-	"crypto/sha1"
-	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
 	"os"
@@ -11,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/target"
 )
@@ -416,68 +414,25 @@ func TestGetBundleRoot(t *testing.T) {
 func TestVerifyFileHash(t *testing.T) {
 	testContent := "test file content for hash verification"
 
-	sha256Hash := sha256.Sum256([]byte(testContent))
-	sha256Hex := hex.EncodeToString(sha256Hash[:])
+	sha256Hash := digest.SHA256Of([]byte(testContent))
+	sha256Hex := sha256Hash.Hex()
 
-	sha512Hash := sha512.Sum512([]byte(testContent))
-	sha512Hex := hex.EncodeToString(sha512Hash[:])
+	t.Run("SHA256 canonical pin", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		filePath := filepath.Join(tmpDir, "testfile")
 
-	sha384Hash := sha512.Sum384([]byte(testContent))
-	sha384Hex := hex.EncodeToString(sha384Hash[:])
+		if err := os.WriteFile(filePath, []byte(testContent), 0o644); err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
 
-	sha1Hash := sha1.Sum([]byte(testContent))
-	sha1Hex := hex.EncodeToString(sha1Hash[:])
-
-	md5Hash := md5.Sum([]byte(testContent))
-	md5Hex := hex.EncodeToString(md5Hash[:])
-
-	tests := []struct {
-		name         string
-		hashType     BinHashType
-		expectedHash string
-	}{
-		{
-			name:         "SHA256",
-			hashType:     BinHashTypeSHA256,
-			expectedHash: sha256Hex,
-		},
-		{
-			name:         "SHA512",
-			hashType:     BinHashTypeSHA512,
-			expectedHash: sha512Hex,
-		},
-		{
-			name:         "SHA384",
-			hashType:     BinHashTypeSHA384,
-			expectedHash: sha384Hex,
-		},
-		{
-			name:         "SHA1",
-			hashType:     BinHashTypeSHA1,
-			expectedHash: sha1Hex,
-		},
-		{
-			name:         "MD5",
-			hashType:     BinHashTypeMD5,
-			expectedHash: md5Hex,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
-			filePath := filepath.Join(tmpDir, "testfile")
-
-			if err := os.WriteFile(filePath, []byte(testContent), 0o644); err != nil {
-				t.Fatalf("failed to create test file: %v", err)
-			}
-
-			err := verifyFileHash(filePath, tt.expectedHash, tt.hashType)
-			if err != nil {
-				t.Errorf("verifyFileHash() error = %v", err)
-			}
-		})
-	}
+		if err := verifyFileHash(filePath, "sha256:"+sha256Hex); err != nil {
+			t.Errorf("verifyFileHash() error = %v", err)
+		}
+		// The bare hex form of an external pin is still accepted (loose parse).
+		if err := verifyFileHash(filePath, sha256Hex); err != nil {
+			t.Errorf("verifyFileHash(bare hex) error = %v", err)
+		}
+	})
 
 	t.Run("hash mismatch", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -488,7 +443,7 @@ func TestVerifyFileHash(t *testing.T) {
 		}
 
 		wrongHash := "0000000000000000000000000000000000000000000000000000000000000000"
-		err := verifyFileHash(filePath, wrongHash, BinHashTypeSHA256)
+		err := verifyFileHash(filePath, wrongHash)
 		if err == nil {
 			t.Error("expected hash mismatch error, got nil")
 		}
@@ -498,13 +453,13 @@ func TestVerifyFileHash(t *testing.T) {
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "nonexistent")
 
-		err := verifyFileHash(filePath, sha256Hex, BinHashTypeSHA256)
+		err := verifyFileHash(filePath, sha256Hex)
 		if err == nil {
 			t.Error("expected file not found error, got nil")
 		}
 	})
 
-	t.Run("unsupported hash type", func(t *testing.T) {
+	t.Run("weak algorithm pin is rejected", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "testfile")
 
@@ -512,9 +467,11 @@ func TestVerifyFileHash(t *testing.T) {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
-		err := verifyFileHash(filePath, sha256Hex, BinHashType("invalid"))
+		sha512Hash := sha512.Sum512([]byte(testContent))
+		weakPin := "sha512:" + hex.EncodeToString(sha512Hash[:])
+		err := verifyFileHash(filePath, weakPin)
 		if err == nil {
-			t.Error("expected unsupported hash type error, got nil")
+			t.Error("expected unsupported algorithm error, got nil")
 		}
 	})
 
@@ -526,10 +483,10 @@ func TestVerifyFileHash(t *testing.T) {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
-		emptyHash := sha256.Sum256([]byte(""))
-		emptyHashHex := hex.EncodeToString(emptyHash[:])
+		emptyHash := digest.SHA256Of([]byte(""))
+		emptyHashHex := emptyHash.Hex()
 
-		err := verifyFileHash(filePath, emptyHashHex, BinHashTypeSHA256)
+		err := verifyFileHash(filePath, emptyHashHex)
 		if err != nil {
 			t.Errorf("verifyFileHash() error = %v", err)
 		}

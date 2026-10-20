@@ -16,7 +16,7 @@ func TestValidateRuntimeEnv(t *testing.T) {
 		{name: "multiple", value: "${APP_BIN:dep} ${APP_BIN:dep}"},
 		{name: "missing edge", value: "${APP_BIN:other}", want: "direct dependsOn"},
 		{name: "transitive edge", value: "${APP_BIN:leaf}", want: "direct dependsOn", mutate: func(a binmanager.MapOfApps) {
-			a["dep"] = binmanager.App{Binary: &binmanager.AppConfigBinary{}, DependsOn: []string{"leaf"}}
+			a["dep"] = binmanager.App{Binary: &binmanager.AppConfigBinary{}, DependsOn: edges("leaf")}
 			a["leaf"] = binmanager.App{Binary: &binmanager.AppConfigBinary{}}
 		}},
 		{name: "missing target", value: "${APP_BIN:dep}", want: `APP_BIN target "dep" not found`, mutate: func(a binmanager.MapOfApps) { delete(a, "dep") }},
@@ -53,7 +53,7 @@ func TestValidateRuntimeEnv(t *testing.T) {
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			apps := binmanager.MapOfApps{"root": {Binary: &binmanager.AppConfigBinary{}, DependsOn: []string{"dep"}, RuntimeEnv: map[string]string{"BINDING": tt.value}}, "dep": {Binary: &binmanager.AppConfigBinary{}}}
+			apps := binmanager.MapOfApps{"root": {Binary: &binmanager.AppConfigBinary{}, DependsOn: edges("dep"), RuntimeEnv: map[string]string{"BINDING": tt.value}}, "dep": {Binary: &binmanager.AppConfigBinary{}}}
 			if tt.mutate != nil {
 				tt.mutate(apps)
 			}
@@ -78,16 +78,31 @@ func TestValidateRuntimeEnv(t *testing.T) {
 	}
 }
 
-func TestRuntimeEnvBinaryTargetsOnly(t *testing.T) {
+func TestRuntimeEnvBindingTargetKinds(t *testing.T) {
+	// uv and go apps have a single executable entry point, so bindings can
+	// hand out their paths today. Node, bun, jvm and shell need a launcher
+	// that does not exist yet.
+	supported := map[string]binmanager.App{
+		"uv": {Uv: &binmanager.AppConfigUV{PackageName: "dep", Version: "1", LockFile: "br:x"}},
+		"go": {Go: &binmanager.AppConfigGo{PackageName: "example.com/dep", Version: "v1.0.0", LockFile: "br:x"}},
+	}
+	for name, app := range supported {
+		t.Run(name, func(t *testing.T) {
+			apps := binmanager.MapOfApps{"root": {Binary: &binmanager.AppConfigBinary{}, DependsOn: edges("dep"), RuntimeEnv: map[string]string{"BIN": "${APP_BIN:dep}"}}, "dep": app}
+			if _, err := ValidateApps(apps, nil); err != nil {
+				t.Fatalf("supported target rejected: %v", err)
+			}
+		})
+	}
 	for name, app := range map[string]binmanager.App{
 		"shell": {Shell: &binmanager.AppConfigShell{Name: "echo"}},
 		"bun":   {Bun: &binmanager.AppConfigBun{}}, "node": {Node: &binmanager.AppConfigNode{}},
-		"uv": {Uv: &binmanager.AppConfigUV{}}, "go": {Go: &binmanager.AppConfigGo{}}, "jvm": {Jvm: &binmanager.AppConfigJVM{}},
+		"jvm": {Jvm: &binmanager.AppConfigJVM{}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			apps := binmanager.MapOfApps{"root": {Binary: &binmanager.AppConfigBinary{}, DependsOn: []string{"dep"}, RuntimeEnv: map[string]string{"BIN": "${APP_BIN:dep}"}}, "dep": app}
+			apps := binmanager.MapOfApps{"root": {Binary: &binmanager.AppConfigBinary{}, DependsOn: edges("dep"), RuntimeEnv: map[string]string{"BIN": "${APP_BIN:dep}"}}, "dep": app}
 			_, err := ValidateApps(apps, nil)
-			if err == nil || !strings.Contains(err.Error(), "only binary targets are supported") {
+			if err == nil || !strings.Contains(err.Error(), "need a launcher (not supported yet)") {
 				t.Fatalf("error = %v", err)
 			}
 		})

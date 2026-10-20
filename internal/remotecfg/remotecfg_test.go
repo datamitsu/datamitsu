@@ -2,8 +2,6 @@ package remotecfg
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,12 +9,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 func sha256Hex(s string) string {
-	h := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(h[:])
+	h := digest.SHA256Of([]byte(s))
+	return h.Hex()
 }
 
 // --- CachedConfigPath tests ---
@@ -32,7 +30,7 @@ func TestCachedConfigPath(t *testing.T) {
 		t.Errorf("expected .ts extension, got %s", filepath.Ext(path))
 	}
 
-	expectedHash := hashutil.XXH3Hex([]byte("https://example.com/config.ts"))
+	expectedHash := digest.XXH3Of([]byte("https://example.com/config.ts")).Hex()
 	expectedName := expectedHash + ".ts"
 	if filepath.Base(path) != expectedName {
 		t.Errorf("expected filename %s, got %s", expectedName, filepath.Base(path))

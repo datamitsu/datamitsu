@@ -6,8 +6,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +13,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/syslist"
 )
@@ -39,8 +39,8 @@ func cpHostBinaries(t *testing.T, info BinaryOsArchInfo) MapOfBinaries {
 // cpSHA256Hex returns the lowercase hex SHA-256 of b, matching the format the
 // download-verification paths expect.
 func cpSHA256Hex(b []byte) string {
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(b)
+	return sum.Hex()
 }
 
 // cpServeBytes starts a test server that returns body for every request.
@@ -87,7 +87,7 @@ func TestVerifyBinaryExtraction(t *testing.T) {
 	t.Run("single binary verifies", func(t *testing.T) {
 		body := []byte("#!/bin/sh\necho ok\n")
 		srv := cpServeBytes(t, body)
-		if err := VerifyBinaryExtraction(ctx, srv.URL, cpSHA256Hex(body), BinHashTypeSHA256, BinContentTypeBinary, nil); err != nil {
+		if err := VerifyBinaryExtraction(ctx, srv.URL, cpSHA256Hex(body), BinContentTypeBinary, nil); err != nil {
 			t.Fatalf("VerifyBinaryExtraction() error = %v, want nil", err)
 		}
 	})
@@ -96,7 +96,7 @@ func TestVerifyBinaryExtraction(t *testing.T) {
 		archive := cpTarGzBytes(t, map[string]string{"bin/tool": "\x7fELF binary payload"})
 		srv := cpServeBytes(t, archive)
 		bp := "bin/tool"
-		if err := VerifyBinaryExtraction(ctx, srv.URL, cpSHA256Hex(archive), BinHashTypeSHA256, BinContentTypeTarGz, &bp); err != nil {
+		if err := VerifyBinaryExtraction(ctx, srv.URL, cpSHA256Hex(archive), BinContentTypeTarGz, &bp); err != nil {
 			t.Fatalf("VerifyBinaryExtraction(tar.gz) error = %v, want nil", err)
 		}
 	})
@@ -104,7 +104,7 @@ func TestVerifyBinaryExtraction(t *testing.T) {
 	t.Run("empty hash is rejected", func(t *testing.T) {
 		body := []byte("payload")
 		srv := cpServeBytes(t, body)
-		err := VerifyBinaryExtraction(ctx, srv.URL, "", BinHashTypeSHA256, BinContentTypeBinary, nil)
+		err := VerifyBinaryExtraction(ctx, srv.URL, "", BinContentTypeBinary, nil)
 		if err == nil || !strings.Contains(err.Error(), "hash is empty") {
 			t.Fatalf("VerifyBinaryExtraction(empty hash) = %v, want hash-empty error", err)
 		}
@@ -114,14 +114,14 @@ func TestVerifyBinaryExtraction(t *testing.T) {
 		body := []byte("payload")
 		srv := cpServeBytes(t, body)
 		bad := strings.Repeat("0", 64)
-		err := VerifyBinaryExtraction(ctx, srv.URL, bad, BinHashTypeSHA256, BinContentTypeBinary, nil)
+		err := VerifyBinaryExtraction(ctx, srv.URL, bad, BinContentTypeBinary, nil)
 		if err == nil || !strings.Contains(err.Error(), "hash verification failed") {
 			t.Fatalf("VerifyBinaryExtraction(bad hash) = %v, want hash-verification error", err)
 		}
 	})
 
 	t.Run("download failure is reported", func(t *testing.T) {
-		err := VerifyBinaryExtraction(ctx, "http://127.0.0.1:0/never", strings.Repeat("0", 64), BinHashTypeSHA256, BinContentTypeBinary, nil)
+		err := VerifyBinaryExtraction(ctx, "http://127.0.0.1:0/never", strings.Repeat("0", 64), BinContentTypeBinary, nil)
 		if err == nil || !strings.Contains(err.Error(), "download failed") {
 			t.Fatalf("VerifyBinaryExtraction(download fail) = %v, want download error", err)
 		}
@@ -131,7 +131,7 @@ func TestVerifyBinaryExtraction(t *testing.T) {
 		// Valid hash but the body is not a gzip stream, so extraction fails.
 		body := []byte("not a gzip archive")
 		srv := cpServeBytes(t, body)
-		err := VerifyBinaryExtraction(ctx, srv.URL, cpSHA256Hex(body), BinHashTypeSHA256, BinContentTypeGz, nil)
+		err := VerifyBinaryExtraction(ctx, srv.URL, cpSHA256Hex(body), BinContentTypeGz, nil)
 		if err == nil || !strings.Contains(err.Error(), "extraction failed") {
 			t.Fatalf("VerifyBinaryExtraction(bad archive) = %v, want extraction error", err)
 		}
@@ -143,7 +143,7 @@ func TestVerifyBinaryExtraction(t *testing.T) {
 		})
 		srv := cpServeBytes(t, archive)
 		bp := "buf/etc/bash_completion.d/buf"
-		err := VerifyBinaryExtraction(ctx, srv.URL, cpSHA256Hex(archive), BinHashTypeSHA256, BinContentTypeTarGz, &bp)
+		err := VerifyBinaryExtraction(ctx, srv.URL, cpSHA256Hex(archive), BinContentTypeTarGz, &bp)
 		if err == nil || !strings.Contains(err.Error(), "not an executable") {
 			t.Fatalf("VerifyBinaryExtraction(text file) = %v, want not-an-executable error", err)
 		}

@@ -309,6 +309,14 @@ func RenderManagedConfigFromScratch(layers []ManagedConfigLayer, key, rootPath s
 		outputPath = filepath.Join(rootPath, filepath.FromSlash(InternalConfigRelPath(key)))
 	}
 
+	return RenderManagedConfigWithContext(layers, key, ContentContext{
+		RootPath: rootPath, CwdPath: rootPath, Placement: placement, OutputPath: outputPath,
+	})
+}
+
+// RenderManagedConfigWithContext replays every source layer in a project's
+// actual rendering context, preserving layer output but ignoring disk settings.
+func RenderManagedConfigWithContext(layers []ManagedConfigLayer, key string, cc ContentContext) (*string, error) {
 	var prior *string
 	for _, layer := range layers {
 		mc, ok := layer.Configs[key]
@@ -324,13 +332,9 @@ func RenderManagedConfigFromScratch(layers []ManagedConfigLayer, key, rootPath s
 			continue
 		}
 
-		contextObj := NewContentContextObject(layer.VM, ContentContext{
-			RootPath:        rootPath,
-			CwdPath:         rootPath,
-			Placement:       placement,
-			OutputPath:      outputPath,
-			ExistingContent: prior,
-		})
+		cc.ExistingContent = prior
+		cc.OriginalContent, cc.ExistingPath = nil, nil
+		contextObj := NewContentContextObject(layer.VM, cc)
 		cntManagedConfigCalls.Add(1)
 		result, err := contentFunc(goja.Undefined(), contextObj)
 		if err != nil {

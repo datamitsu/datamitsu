@@ -150,11 +150,11 @@ func TestPullUVRuntime_PythonLookupError(t *testing.T) {
 // nil data and binaries. The resolved major is interpolated into the upstream
 // repo name, so a silent stale fallback would be especially dangerous here.
 func TestPullJVMRuntime_TemurinLookupError(t *testing.T) {
-	orig := getLatestTemurinMajorVersion
-	defer func() { getLatestTemurinMajorVersion = orig }()
+	orig := getTemurinMajorVersions
+	defer func() { getTemurinMajorVersions = orig }()
 
-	getLatestTemurinMajorVersion = func(_ context.Context) (string, error) {
-		return "25", errors.New("simulated lookup failure")
+	getTemurinMajorVersions = func(_ context.Context) ([]string, error) {
+		return nil, errors.New("simulated lookup failure")
 	}
 
 	// minAge is irrelevant here: the Temurin lookup fails before any network call.

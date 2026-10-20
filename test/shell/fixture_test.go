@@ -2,8 +2,6 @@ package shell_test
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -15,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/clitest"
 	"github.com/datamitsu/datamitsu/internal/gitenv"
@@ -73,8 +73,8 @@ func stubScript(name, version string) string {
 // against it for real: this tier serves over loopback, but nothing about the
 // verification path is stubbed out.
 func sha256Hex(s string) string {
-	sum := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of([]byte(s))
+	return "sha256:" + sum.Hex()
 }
 
 // stubApp is one binary app a rendered config declares: a name, the loopback URL

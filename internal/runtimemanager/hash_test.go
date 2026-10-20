@@ -7,7 +7,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
 )
@@ -1060,7 +1060,7 @@ func TestLockFileHash(t *testing.T) {
 
 	t.Run("returns xxh3-128 of lockFile content", func(t *testing.T) {
 		lockContent := "lockfile: content here"
-		expected := hashutil.XXH3Hex([]byte(lockContent))
+		expected := digest.XXH3Of([]byte(lockContent)).Hex()
 
 		result := lockFileHash(lockContent)
 		if result != expected {

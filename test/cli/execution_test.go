@@ -777,7 +777,7 @@ func TestExecutionSetupErrorIsReported(t *testing.T) {
 // operation that plans it.
 func hostUninstallable(tool, operation string) string {
 	build := `{ url: "https://example.invalid/unreachable", contentType: "raw",
-  hash: "3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" }`
+  hash: "sha256:3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" }`
 	return fmt.Sprintf(`c.apps["unreachable"] = { binary: { binaries: { %s: { %s: { glibc: %s, musl: %s, unknown: %s } } } } };
 c.tools[%q] = { name: %q, operations: { %s: { app: "unreachable", args: [], scope: "repository" } } };
 `, runtime.GOOS, runtime.GOARCH, build, build, build, tool, tool, operation)
@@ -1242,7 +1242,7 @@ func TestExecutionParserProblems(t *testing.T) {
 	module := filepath.Join("..", "..", "internal", "parsermanager", "testdata", "echo.wasm")
 	spec := fixtureSpec
 	spec.Parsers = strings.Replace(clitest.SeedParserModule(t, e.cache, module), "{",
-		`{"missing":{"url":"https://parsers.example.invalid/missing.wasm","hash":"`+strings.Repeat("1", 64)+`"},`, 1)
+		`{"missing":{"url":"https://parsers.example.invalid/missing.wasm","hash":"sha256:`+strings.Repeat("1", 64)+`"},`, 1)
 	perFile := func(name, parser, parserModule string) string {
 		return clitest.ShellTool(name, passScript+"; echo finding", clitest.ToolOpSpec{
 			Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
@@ -1257,8 +1257,8 @@ func TestExecutionParserProblems(t *testing.T) {
 	res := e.run("", nil, "lint")
 	e.wantExit(res, 0)
 	for _, want := range []string{
-		`parser module "core" has no parser "no-such-parser", so the output of alpha is not parsed by it and its lint passes are not cached`,
-		`parser module "missing" could not be loaded, so 1 tool(s) that use it ran without it and their lint passes are not cached`,
+		`parser module "core" has no parser "no-such-parser"; caching of fix and lint results is disabled for alpha because its output cannot be parsed`,
+		`parser module "missing" could not be loaded, so 1 tool(s) that use it ran without it and caching of fix and lint results is disabled for them`,
 	} {
 		if n := strings.Count(res.Stderr, want); n != 1 {
 			t.Errorf("stderr carries %q %d times, want once:\n%s", want, n, res.Stderr)
@@ -1302,7 +1302,7 @@ func nativeSkipped() string {
 	}
 	return fmt.Sprintf(`c.apps["native"] = { binary: { binaries: { %s: { amd64: { unknown: {
   url: "https://example.invalid/native", contentType: "raw",
-  hash: "3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" } } } } } };
+  hash: "sha256:3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea" } } } } } };
 c.tools["native"] = { name: "native", operations: { lint: { app: "native", args: [], scope: "repository" } } };
 `, otherOS)
 }

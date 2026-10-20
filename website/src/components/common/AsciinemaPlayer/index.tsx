@@ -29,6 +29,7 @@ interface LoadOutcome {
   runKey: string;
   state: "error" | "loaded";
 }
+const DEFAULT_OPTIONS: NonNullable<AsciinemaPlayerProperties["options"]> = {};
 
 // Hook: Detect Docusaurus theme (light/dark)
 function useDocusaurusTheme(): "dark" | "light" {
@@ -65,7 +66,7 @@ function useDocusaurusTheme(): "dark" | "light" {
 }
 
 const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerProperties>(
-  ({ className, onError, onLoad, options = {}, src }, reference): ReactNode => {
+  ({ className, onError, onLoad, options = DEFAULT_OPTIONS, src }, reference): ReactNode => {
     const { siteConfig } = useDocusaurusContext();
     const containerReference = useRef<HTMLDivElement>(null);
     const playerInstance = useRef<AsciinemaPlayerInstance | null>(null);
@@ -188,10 +189,10 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
         <div ref={containerReference} style={containerOpacityStyle} />
 
         {loadingState === "loading" && (
-          <div aria-live="polite" className={styles.loadingOverlay} role="status">
+          <output aria-live="polite" className={styles.loadingOverlay}>
             <div aria-hidden="true" className={styles.spinner} />
             <div className={styles.loadingText}>Loading terminal recording...</div>
-          </div>
+          </output>
         )}
 
         {loadingState === "error" && (
@@ -202,7 +203,7 @@ const AsciinemaPlayer = forwardRef<AsciinemaPlayerHandle, AsciinemaPlayerPropert
             <div className={styles.errorMessage}>
               {errorState?.message || "Failed to load terminal recording"}
             </div>
-            <button className={styles.retryButton} onClick={retryLoad}>
+            <button className={styles.retryButton} onClick={retryLoad} type="button">
               Retry
             </button>
           </div>

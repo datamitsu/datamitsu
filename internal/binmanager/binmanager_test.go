@@ -4,8 +4,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +18,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
@@ -42,7 +42,9 @@ func (m *mockRuntimeAppManager) ResolveCommandInfo(appName string, app App) (*Co
 	if m.resolveCommandInfoFunc != nil {
 		return m.resolveCommandInfoFunc(appName, app)
 	}
-	return nil, errors.New("mock: ResolveCommandInfo not implemented")
+	// Default: a read-only answer that records nothing — PATH assembly only
+	// needs a path, and tests count GetCommandInfo calls.
+	return &CommandInfo{Command: filepath.Join(os.TempDir(), "mock-"+appName)}, nil
 }
 
 func (m *mockRuntimeAppManager) ComputeAppPath(appName string, app App) (string, error) {
@@ -59,8 +61,8 @@ func (m *mockRuntimeAppManager) ComputeAppPath(appName string, app App) (string,
 // verified content.
 func TestConcurrentDownloadSameBinary(t *testing.T) {
 	testContent := []byte("#!/bin/sh\necho hello\n")
-	hash := sha256.Sum256(testContent)
-	expectedHash := hex.EncodeToString(hash[:])
+	hash := digest.SHA256Of(testContent)
+	expectedHash := hash.Hex()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -131,8 +133,8 @@ func TestConcurrentDownloadSameBinary(t *testing.T) {
 // calls for the same uninstalled binary trigger exactly one download.
 func TestGetBinaryPath_SingleFlight(t *testing.T) {
 	testContent := []byte("#!/bin/sh\necho hello\n")
-	hash := sha256.Sum256(testContent)
-	expectedHash := hex.EncodeToString(hash[:])
+	hash := digest.SHA256Of(testContent)
+	expectedHash := hash.Hex()
 
 	var hits atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -208,8 +210,8 @@ func TestGetBinaryPath_SingleFlight(t *testing.T) {
 // returns immediately without performing a download.
 func TestGetBinaryPath_AlreadyInstalled(t *testing.T) {
 	testContent := []byte("#!/bin/sh\necho hello\n")
-	hash := sha256.Sum256(testContent)
-	expectedHash := hex.EncodeToString(hash[:])
+	hash := digest.SHA256Of(testContent)
+	expectedHash := hash.Hex()
 
 	var hits atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -270,8 +272,8 @@ func TestGetBinaryPath_AlreadyInstalled(t *testing.T) {
 // deduplicating repeated names.
 func TestEnsureTools_InstallsDistinctOnceMixedKinds(t *testing.T) {
 	testContent := []byte("#!/bin/sh\necho hello\n")
-	hash := sha256.Sum256(testContent)
-	expectedHash := hex.EncodeToString(hash[:])
+	hash := digest.SHA256Of(testContent)
+	expectedHash := hash.Hex()
 
 	var hits atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -568,8 +570,8 @@ func TestGetCommandInfo_MergesAppEnv_NilEnvUnchanged(t *testing.T) {
 
 func TestGetCommandInfo_MergesAppEnv_Binary(t *testing.T) {
 	testContent := []byte("#!/bin/sh\necho hi\n")
-	hash := sha256.Sum256(testContent)
-	expectedHash := hex.EncodeToString(hash[:])
+	hash := digest.SHA256Of(testContent)
+	expectedHash := hash.Hex()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1813,8 +1815,8 @@ func TestGetInstallRoot_NotInstalled(t *testing.T) {
 
 func TestGetExecCmd_BinaryApp(t *testing.T) {
 	testContent := []byte("#!/bin/sh\necho hello\n")
-	hash := sha256.Sum256(testContent)
-	expectedHash := hex.EncodeToString(hash[:])
+	hash := digest.SHA256Of(testContent)
+	expectedHash := hash.Hex()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -2223,8 +2225,8 @@ func TestWriteAppFiles_ExternalArchiveWithServer(t *testing.T) {
 		"hello.txt": "hello world",
 	})
 
-	hash := sha256.Sum256(tarData)
-	hashHex := hex.EncodeToString(hash[:])
+	hash := digest.SHA256Of(tarData)
+	hashHex := hash.Hex()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(tarData)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	clr "github.com/datamitsu/datamitsu/internal/color"
+	"github.com/datamitsu/datamitsu/internal/ocibundle"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/traverser"
@@ -127,6 +128,14 @@ func execApp(ctx context.Context, appName string, args []string) error {
 	rm := runtimemanager.New(c.Runtimes)
 	b := binmanager.New(c.Apps, c.Bundles, rm)
 
+	// Seed from the declared OCI bundle first, like init/install/the runner:
+	// an online exec on a clean machine should take a bundle's ready-made
+	// prepared state instead of re-running the step against the network.
+	// (Offline keeps skipping the seed, as everywhere.)
+	if err := ocibundle.AutoSeed(ctx, c, []string{appName}, nil); err != nil {
+		return fmt.Errorf("failed to seed store from oci bundle: %w", err)
+	}
+
 	// Render install/download progress on a scoped display, then tear it down
 	// BEFORE handing the terminal to the executed tool. The tool may be
 	// long-running or interactive (a dev server, watch mode), so it must own a
@@ -137,7 +146,7 @@ func execApp(ctx context.Context, appName string, args []string) error {
 	d.Close()
 	restore()
 	if err != nil {
-		return fmt.Errorf("failed to prepare %s: %w", appName, err)
+		return fmt.Errorf("failed to install %s: %w", appName, err)
 	}
 
 	// A link-app installed lazily by GetExecCmd (e.g. slidev, whose Links

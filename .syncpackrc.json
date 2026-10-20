@@ -5,7 +5,19 @@
         "**"
       ],
       "dependencyTypes": [
+        "peer"
+      ],
+      "packages": [
         "**"
+      ],
+      "range": "^"
+    },
+    {
+      "dependencies": [
+        "**"
+      ],
+      "dependencyTypes": [
+        "!peer"
       ],
       "packages": [
         "**"

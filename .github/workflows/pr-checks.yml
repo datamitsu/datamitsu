@@ -29,9 +29,9 @@ jobs:
             parsers/target
           restore-keys: |
             wasm-parsers-${{ runner.os }}-
-      - # Bake the PR version into the module's `describe` output (option_env! in
-        # parsers/src/capabilities.rs), mirroring release.yml.
-        env:
+      # Bake the PR version into the module's `describe` output (option_env! in
+      # parsers/src/capabilities.rs), mirroring release.yml.
+      - env:
           DATAMITSU_PARSERS_VERSION: 0.0.0-pr.${{ github.event.pull_request.number }}
         name: Build WASM parser modules
         run: |
@@ -106,9 +106,9 @@ jobs:
             parsers/target
           restore-keys: |
             wasm-parsers-${{ runner.os }}-
-      - # Bake the PR version into the module's `describe` output (option_env! in
-        # parsers/src/capabilities.rs), mirroring release.yml.
-        env:
+      # Bake the PR version into the module's `describe` output (option_env! in
+      # parsers/src/capabilities.rs), mirroring release.yml.
+      - env:
           DATAMITSU_PARSERS_VERSION: 0.0.0-pr.${{ github.event.pull_request.number }}
         name: Build WASM parser modules
         run: |

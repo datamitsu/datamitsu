@@ -2,9 +2,8 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"time"
@@ -162,27 +161,12 @@ func getPyPIFullResponse(ctx context.Context, packageName string) (*pypiFullResp
 		return nil, err
 	}
 	url := fmt.Sprintf("%s/pypi/%s/json", pypiBaseURL, packageName)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build request: %w", err)
-	}
-	resp, err := pypiHTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch PyPI package %s: %w", packageName, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("PyPI package %q not found", packageName)
-	}
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return nil, fmt.Errorf("PyPI registry returned status %d for %s: %s", resp.StatusCode, packageName, string(body))
-	}
-
 	var result pypiFullResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 100<<20)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode PyPI response for %s: %w", packageName, err)
+	if err := getJSON(ctx, pypiHTTPClient, "PyPI registry", url, 100<<20, &result); err != nil {
+		if errors.Is(err, errNotFound) {
+			return nil, fmt.Errorf("PyPI package %q not found", packageName)
+		}
+		return nil, fmt.Errorf("failed to fetch PyPI package %s: %w", packageName, err)
 	}
 	return &result, nil
 }
@@ -191,28 +175,12 @@ func getPyPIPackageInfoFromURL(ctx context.Context, url, packageName string) (*P
 	if err := httpx.GuardOffline("PyPI registry lookup"); err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build request: %w", err)
-	}
-	resp, err := pypiHTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch PyPI package %s: %w", packageName, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("PyPI package %q not found", packageName)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return nil, fmt.Errorf("PyPI registry returned status %d for %s: %s", resp.StatusCode, packageName, string(body))
-	}
-
 	var result pypiResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode PyPI response for %s: %w", packageName, err)
+	if err := getJSON(ctx, pypiHTTPClient, "PyPI registry", url, 10<<20, &result); err != nil {
+		if errors.Is(err, errNotFound) {
+			return nil, fmt.Errorf("PyPI package %q not found", packageName)
+		}
+		return nil, fmt.Errorf("failed to fetch PyPI package %s: %w", packageName, err)
 	}
 
 	return &PyPIPackageInfo{

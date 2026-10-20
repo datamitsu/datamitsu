@@ -179,9 +179,9 @@ function TerminalDemoInner(): ReactNode {
         }
         theme="auto"
       >
-        <div aria-atomic="true" aria-live="polite" className={styles.srOnly} role="status">
+        <output aria-atomic="true" aria-live="polite" className={styles.srOnly}>
           {announcement}
-        </div>
+        </output>
 
         <div
           aria-labelledby={`tab-${activeKind}`}

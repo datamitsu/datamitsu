@@ -1,4 +1,5 @@
 /* ── Player Container ── */
+
 /* No height of its own: the player is sized from the recording's own cols and
    rows, and a floor here would leave dead space under it wherever the card is
    narrow enough that the terminal renders shorter than the floor. */
@@ -7,6 +8,7 @@
 }
 
 /* ── Loading & Error States ── */
+
 /* In flow rather than overlaid: these render only while the player element is
    empty, so they carry the box themselves instead of filling one. */
 .loadingOverlay {
@@ -26,7 +28,7 @@
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid rgba(212, 168, 85, 0.2);
+  border: 3px solid rgb(212 168 85 / 20%);
   border-top-color: var(--datamitsu-gold);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -42,11 +44,11 @@
   margin-top: 1rem;
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.875rem;
-  color: rgba(212, 168, 85, 0.7);
+  color: rgb(212 168 85 / 70%);
 }
 
 [data-theme="light"] .loadingText {
-  color: rgba(61, 40, 23, 0.7);
+  color: rgb(61 40 23 / 70%);
 }
 
 .errorContainer {
@@ -73,13 +75,13 @@
 .errorMessage {
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.875rem;
-  color: rgba(212, 168, 85, 0.7);
+  color: rgb(212 168 85 / 70%);
   max-width: 400px;
   line-height: 1.5;
 }
 
 [data-theme="light"] .errorMessage {
-  color: rgba(61, 40, 23, 0.7);
+  color: rgb(61 40 23 / 70%);
 }
 
 .retryButton {
@@ -108,8 +110,9 @@
 }
 
 /* ── Accessibility ── */
+
 /* High contrast mode support */
-@media (prefers-contrast: high) {
+@media (prefers-contrast: more) {
   .retryButton:focus {
     outline-width: 3px;
   }

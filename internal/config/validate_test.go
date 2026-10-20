@@ -365,7 +365,7 @@ func TestValidateApps_BinaryAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for binary app with files/links, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, node, and go apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -384,7 +384,7 @@ func TestValidateApps_ShellAppWithFilesRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for shell app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, node, and go apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -951,7 +951,7 @@ func TestValidateApps_JVM_Valid(t *testing.T) {
 		"openapi-generator": {
 			Jvm: &binmanager.AppConfigJVM{
 				JarURL:  "https://example.com/openapi-generator.jar",
-				JarHash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				JarHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				Version: "7.0.0",
 			},
 		},
@@ -1037,7 +1037,7 @@ func TestValidateApps_JVM_FilesLinksRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateApps() expected error for JVM app with files, got nil")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, node, and go apps") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -1263,7 +1263,7 @@ func TestValidateApps_ValidExplicitRuntimeRef(t *testing.T) {
 		"openapi-generator": {
 			Jvm: &binmanager.AppConfigJVM{
 				JarURL:  "https://example.com/openapi-generator.jar",
-				JarHash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				JarHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				Version: "7.0.0",
 				Runtime: "jvm",
 			},
@@ -1595,7 +1595,7 @@ func TestValidateApps_ValidGoRuntimeRef(t *testing.T) {
 	}
 }
 
-func TestValidateApps_Go_FilesLinksArchivesRejected(t *testing.T) {
+func TestValidateApps_Go_FilesLinksArchivesAccepted(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
 			Kind: RuntimeKindGo,
@@ -1619,12 +1619,11 @@ func TestValidateApps_Go_FilesLinksArchivesRejected(t *testing.T) {
 		},
 	}
 
-	_, err := ValidateApps(apps, runtimes)
-	if err == nil {
-		t.Fatal("ValidateApps() expected error for Go app with files/links, got nil")
-	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
-		t.Errorf("unexpected error message: %v", err)
+	// A Go app's files/links/archives stage the source of an unpublished
+	// program: the installer writes them into the app directory before
+	// `go build`, and the archive hashes fold into the install identity.
+	if _, err := ValidateApps(apps, runtimes); err != nil {
+		t.Fatalf("ValidateApps() rejected a Go app with files/links: %v", err)
 	}
 }
 
@@ -2033,7 +2032,7 @@ func TestValidateApps_Archives_ValidExternal(t *testing.T) {
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"dist": {
 					URL:    "https://example.com/dist.tar.gz",
-					Hash:   "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+					Hash:   "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 					Format: binmanager.BinContentTypeTarGz,
 				},
 			},
@@ -2233,7 +2232,7 @@ func TestValidateApps_Archives_ExternalInvalidHash(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid hash")
 	}
-	if !strings.Contains(err.Error(), "hash must be a valid SHA-256 hex string") {
+	if !strings.Contains(err.Error(), "hash must be a canonical SHA-256 digest") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -2244,7 +2243,7 @@ func TestValidateApps_Archives_ExternalMissingFormat(t *testing.T) {
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"dist": {
 					URL:  "https://example.com/dist.tar.gz",
-					Hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+					Hash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				},
 			},
 		},
@@ -2295,7 +2294,7 @@ func TestValidateApps_Archives_BinaryAppRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for binary app with archives")
 	}
-	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, and node apps") {
+	if !strings.Contains(err.Error(), "files/links/archives are only supported on bun, uv, node, and go apps") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -2388,7 +2387,7 @@ func TestValidateBundles_ValidWithArchives(t *testing.T) {
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"data": {
 					URL:    "https://example.com/data.tar.gz",
-					Hash:   "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+					Hash:   "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 					Format: binmanager.BinContentTypeTarGz,
 				},
 			},
@@ -2732,7 +2731,7 @@ func TestValidateTools(t *testing.T) {
 				},
 			},
 		}
-		if err := ValidateTools(tools, nil); err != nil {
+		if err := ValidateTools(tools, nil, nil); err != nil {
 			t.Errorf("ValidateTools() = %v, want nil", err)
 		}
 	})
@@ -2743,7 +2742,7 @@ func TestValidateTools(t *testing.T) {
 				OpLint: {Args: []string{"--cache={toolcache}"}}, // wrong case
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -2758,7 +2757,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Env: map[string]string{"CACHE": "{cache}"}},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "{cache}") {
 			t.Errorf("expected error naming {cache}, got: %v", err)
 		}
@@ -2770,7 +2769,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Env: map[string]string{"F": "{file}"}},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "{file}") {
 			t.Errorf("expected {file} rejected in env, got: %v", err)
 		}
@@ -2785,7 +2784,7 @@ func TestValidateTools(t *testing.T) {
 				},
 			}},
 		}
-		if err := ValidateTools(tools, nil); err != nil {
+		if err := ValidateTools(tools, nil, nil); err != nil {
 			t.Errorf("globs/templates should not be flagged, got: %v", err)
 		}
 	})
@@ -2799,7 +2798,7 @@ func TestValidateTools(t *testing.T) {
 				OpLint: {Input: ToolInputFile, Output: ToolOutputInplace},
 			}},
 		}
-		if err := ValidateTools(tools, nil); err != nil {
+		if err := ValidateTools(tools, nil, nil); err != nil {
 			t.Errorf("valid input/output modes should pass, got: %v", err)
 		}
 	})
@@ -2811,7 +2810,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Input: ToolInputStdin, Output: ToolOutputStdout},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "require scope") {
 			t.Errorf("expected scope requirement error, got: %v", err)
 		}
@@ -2823,7 +2822,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Output: ToolOutputStdout, Scope: ToolScopeRepository},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "require scope") {
 			t.Errorf("expected scope requirement error, got: %v", err)
 		}
@@ -2837,7 +2836,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Output: ToolOutputStdout, Scope: ToolScopePerFile, Args: []string{"{files}"}},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), `infer arity "many"`) {
 			t.Errorf("expected arity incompatibility error, got: %v", err)
 		}
@@ -2850,7 +2849,7 @@ func TestValidateTools(t *testing.T) {
 				OpLint: {Output: ToolOutputStdout, Scope: ToolScopePerFile},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "only valid on the \"fix\" operation") {
 			t.Errorf("expected fix-only error for stdout on lint, got: %v", err)
 		}
@@ -2862,7 +2861,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Input: ToolInputMode("pipe")},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "invalid input mode") {
 			t.Errorf("expected invalid input mode error, got: %v", err)
 		}
@@ -2874,7 +2873,7 @@ func TestValidateTools(t *testing.T) {
 				OpLint: {Output: ToolOutputMode("file")},
 			}},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "invalid output mode") {
 			t.Errorf("expected invalid output mode error, got: %v", err)
 		}
@@ -2893,7 +2892,7 @@ func TestValidateTools(t *testing.T) {
 		parsers := MapOfParsers{
 			"hadolint": {URL: "https://example.com/h.wasm", Hash: strings.Repeat("a", 64)},
 		}
-		if err := ValidateTools(tools, parsers); err != nil {
+		if err := ValidateTools(tools, parsers, nil); err != nil {
 			t.Errorf("ValidateTools() = %v, want nil", err)
 		}
 	})
@@ -2908,7 +2907,7 @@ func TestValidateTools(t *testing.T) {
 				},
 			},
 		}
-		err := ValidateTools(tools, nil)
+		err := ValidateTools(tools, nil, nil)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -2923,7 +2922,7 @@ func TestValidateTools(t *testing.T) {
 				OpFix: {Args: []string{"{file}"}},
 			}},
 		}
-		if err := ValidateTools(tools, nil); err != nil {
+		if err := ValidateTools(tools, nil, nil); err != nil {
 			t.Errorf("ValidateTools() = %v, want nil", err)
 		}
 	})

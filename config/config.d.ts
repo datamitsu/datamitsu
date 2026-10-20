@@ -1,5 +1,42 @@
 declare global {
   /**
+   * Recursively merge plain objects into a new object. Later values win; arrays replace rather than
+   * append. Inputs and their nested objects/arrays are not mutated. Cyclic settings and non-object
+   * sources are rejected.
+   */
+  type MergedSettings<Left, Right> = Right extends (...args: never[]) => unknown
+    ? Right
+    : Left extends (...args: never[]) => unknown
+      ? Right
+      : Right extends readonly unknown[]
+        ? Right
+        : Left extends readonly unknown[]
+          ? Right
+          : Left extends object
+            ? Right extends object
+              ? {
+                  [Key in keyof Left | keyof Right]: Key extends keyof Right
+                    ? Key extends keyof Left
+                      ? {} extends Pick<Right, Key>
+                        ? Left[Key] | MergedSettings<Left[Key], Right[Key]>
+                        : MergedSettings<Left[Key], Right[Key]>
+                      : Right[Key]
+                    : Key extends keyof Left
+                      ? Left[Key]
+                      : never;
+                }
+              : Right
+            : Right;
+  type MergedSources<Sources extends readonly object[], Result = {}> = Sources extends readonly [
+    infer Head extends object,
+    ...infer Tail extends object[],
+  ]
+    ? MergedSources<Tail, MergedSettings<Result, Head>>
+    : number extends Sources["length"]
+      ? Record<string, unknown>
+      : Result;
+  function merge<Sources extends readonly object[]>(...sources: Sources): MergedSources<Sources>;
+  /**
    * Color functions for terminal output. All functions accept any number of arguments, join them
    * with spaces, and return a string with ANSI color codes applied. Respects NO_COLOR, FORCE_COLOR,
    * and CLICOLOR environment variables. Colors are composable: `colors.bold(colors.red("error"))`.
@@ -681,8 +718,8 @@ declare global {
        * silently clobbering local overrides.
        *
        * Opt-in per file and verified only on the root layer (intermediate layers are ignored). The
-       * content is hashed byte-for-byte, with no normalization. Format: "xxh3:<32-hex>" (a bare
-       * 32-hex value is also accepted). Bypass the check with `--no-verify-hash`.
+       * content is hashed byte-for-byte, with no normalization. Format: "xxh3:<32 lowercase hex>" —
+       * canonical form only, validated at config load. Bypass the check with `--no-verify-hash`.
        *
        * @example
        *   "xxh3:0a1b2c3d4e5f60718293a4b5c6d7e8f9";
@@ -835,10 +872,10 @@ declare global {
      */
     interface Parser {
       /**
-       * SHA-256 hash (64 lowercase hex characters) of the .wasm module. Mandatory per the security
-       * policy for every source — an empty or malformed hash is a config error. For an `oci` source
-       * it must also equal the artifact's single layer blob digest, so a mismatch is rejected
-       * before the module is downloaded.
+       * Canonical SHA-256 digest of the .wasm module: "sha256:<64 lowercase hex>". Mandatory per
+       * the security policy for every source — an empty or malformed hash is a config error. For an
+       * `oci` source it must also equal the artifact's single layer blob digest, so a mismatch is
+       * rejected before the module is downloaded.
        */
       hash: string;
 
@@ -1225,16 +1262,23 @@ declare global {
       /**
        * Named archives to extract into the app's install directory. Archive names can be referenced
        * in Links to create symlinks. Archives are extracted before Files are written, allowing
-       * Files to override. Only valid for Bun, UV, and Node apps; using this field on a binary,
-       * JVM, Go, or shell app is a configuration error.
+       * Files to override. Valid for Bun, UV, Node, and Go apps (a Go app's archives carry its
+       * module source — the source-blob form); using this field on a binary, JVM, or shell app is a
+       * configuration error.
        */
       archives?: Record<string, ArchiveSpec>;
       binary?: AppConfigBinary;
       bun?: AppConfigBun;
       /**
-       * Managed apps required at run time, installed transitively even when lazy or optional.
+       * Managed apps required at run time, installed transitively even when lazy or optional. Each
+       * entry is an app name, or an object that also names the role under which this app refers to
+       * the dependency in `${APP_BIN:<alias>}` bindings. The alias defaults to the app name and
+       * must be unique among this app's direct dependencies.
+       *
+       * @example
+       *   dependsOn: ["shellcheck", { app: "jsonschema", as: "validator" }];
        */
-      dependsOn?: string[];
+      dependsOn?: AppDependency[];
       /**
        * Human-readable description of the app, shown in exec listing.
        */
@@ -1262,8 +1306,9 @@ declare global {
       env?: Record<string, string>;
       /**
        * Static file contents to write into the app's install directory before the package manager
-       * runs. Keys are filenames; values are file contents. Only valid for Bun, UV, and Node apps;
-       * using this field on a binary, JVM, Go, or shell app is a configuration error.
+       * runs. Keys are filenames; values are file contents. Valid for Bun, UV, Node, and Go apps
+       * (for a Go app these stage the module source — the source-blob form); using this field on a
+       * binary, JVM, or shell app is a configuration error.
        *
        * Special handling for `pnpm-workspace.yaml` on Bun and Node apps: the entry is NOT written
        * verbatim. Instead, the installer parses it and shallow-merges it on top of the recommended
@@ -1291,7 +1336,7 @@ declare global {
       lazy?: boolean;
       /**
        * Symlinks to create in .datamitsu/ directory, mapping link name to relative path in install
-       * directory. Only valid for Bun, UV, and Node apps; using this field on a binary, JVM, Go, or
+       * directory. Valid for Bun, UV, Node, and Go apps; using this field on a binary, JVM, or
        * shell app is a configuration error.
        */
       links?: Record<string, string>;
@@ -1324,11 +1369,18 @@ declare global {
        *   officialUrl: "https://eslint.org/docs/latest/";
        */
       officialUrl?: string;
+      /**
+       * One-time step that fills this app's prepared state after the app and its whole dependsOn
+       * closure are installed. Run time exposes the result as `${APP_PREPARED}` (runtimeEnv). The
+       * step is the app's own executable run directly, without a shell.
+       */
+      prepare?: AppPrepare;
       required?: boolean;
       /**
        * Execution-only env, outside install identity; keys must not overlap `env`. Supports
-       * `${STORE}`, `${APP_DIR}`, and `${APP_BIN:<name>}` for the exact executable of a native
-       * binary in direct `dependsOn`. Datamitsu/runtime-owned keys win.
+       * `${STORE}`, `${APP_DIR}`, and `${APP_BIN:<name>}` for the exact executable of a dependency
+       * in direct `dependsOn` (binary, uv and go apps), and `${APP_PREPARED}` when `prepare` is
+       * set. Datamitsu/runtime-owned keys win.
        */
       runtimeEnv?: Record<string, string>;
       shell?: AppConfigShell;
@@ -1396,6 +1448,9 @@ declare global {
     }
 
     interface AppConfigJVM {
+      /**
+       * Canonical SHA-256 digest of the JAR: "sha256:<64 lowercase hex>".
+       */
       jarHash: string;
       jarUrl: string;
       /**
@@ -1447,6 +1502,60 @@ declare global {
       version: string;
     }
 
+    /**
+     * An edge of `dependsOn`: an app name, or an object that also names the role under which this
+     * app refers to the dependency in `${APP_BIN:<alias>}` bindings.
+     */
+    type AppDependency =
+      | string
+      | {
+          /**
+           * App name in `apps`.
+           */
+          app: string;
+          /**
+           * Alias for bindings. Default: `app`. Unique among this app's direct edges
+           * (case-insensitive).
+           */
+          as?: string;
+        };
+
+    /**
+     * One-time step that fills this app's prepared state.
+     */
+    interface AppPrepare {
+      /**
+       * Arguments of the step. Supports `${APP_PREPARED}` (the directory the step fills),
+       * `${APP_DIR}` (this app's install directory) and `${APP_BIN:<alias>}` (a direct dependency).
+       * Rejected: `${STORE}` and every tool placeholder ({root}, {cwd}, {file}, {files}, {target},
+       * {toolCache}) — the prepared state is shared by every project. May be empty.
+       */
+      args: string[];
+      /**
+       * Another executable of this app's own installation to run instead of the app's main command,
+       * relative to the install directory. Node, bun and uv apps, and binary apps with extractDir.
+       * Default: the app itself.
+       */
+      binPath?: string;
+      /**
+       * Environment for the step only; same placeholders as `args`. `PATH` and the temporary
+       * directories (TMPDIR, TEMP, TMP, XDG_CACHE_HOME, XDG_DATA_HOME, XDG_STATE_HOME) are owned by
+       * datamitsu during the step and rejected here.
+       */
+      env?: Record<string, string>;
+      /**
+       * Whether the step needs the network. Required: under DATAMITSU_OFFLINE an unprepared step
+       * that needs it is refused before the process starts.
+       */
+      network: boolean;
+      /**
+       * What the step finds on PATH. "declared" (default): the runtime's own directories and the
+       * binaries of this app's dependsOn closure only. "inherit": additionally the inherited host
+       * PATH.
+       */
+      path?: "declared" | "inherit";
+    }
+
     interface AppVersionCheck {
       /**
        * Custom arguments for version check. Defaults to ["--version"] if absent.
@@ -1470,8 +1579,8 @@ declare global {
       format?: "tar" | "tar.bz2" | "tar.gz" | "tar.xz" | "tar.zst";
 
       /**
-       * SHA-256 hash (64 lowercase hex characters). Required for external archives per security
-       * policy.
+       * Canonical SHA-256 digest ("sha256:<64 lowercase hex>"). Required for external archives per
+       * security policy.
        */
       hash?: string;
 
@@ -1492,19 +1601,34 @@ declare global {
     }
 
     interface BinaryOsArchInfo {
+      /**
+       * Host-scoped credential reference; the token value is never stored in configuration.
+       */
+      auth?: {
+        accept?: "application/octet-stream";
+        header: "Authorization" | "PRIVATE-TOKEN";
+        origin: string;
+        scheme?: "Bearer" | "token";
+        tokenEnv: string;
+      };
+      /**
+       * Path of the binary inside the archive, such as "tool-1.2.3/bin/tool". With `extractDir` it
+       * is the command inside the extracted directory, and required.
+       */
       binaryPath?: string;
       contentType: BinContentType;
       /**
-       * When true, extracts the entire archive to a directory instead of a single binary. Used for
-       * runtimes like JDK that need the full directory tree (bin/, lib/, etc.).
+       * When true, extracts the entire archive to a directory instead of a single binary: for
+       * runtimes like JDK that need the full directory tree (bin/, lib/, etc.), and for tools like
+       * protoc that read files beside their binary (include/). What runs is `binaryPath` inside
+       * that directory; the contentType must be a tar or zip archive.
        */
       extractDir?: boolean;
 
-      hash: string;
       /**
-       * @default sha256
+       * Canonical SHA-256 digest of the artifact: "sha256:<64 lowercase hex>".
        */
-      hashType?: BinHashType;
+      hash: string;
       url: string;
     }
 
@@ -1520,8 +1644,6 @@ declare global {
       | "xz"
       | "zip"
       | "zst";
-
-    type BinHashType = "sha256";
 
     interface Bundle {
       /**

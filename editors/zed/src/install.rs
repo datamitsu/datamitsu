@@ -3,6 +3,7 @@ use std::io;
 use std::path::Path;
 
 use crate::archive::{self, ArchiveKind};
+use crate::digest;
 use crate::platform::Target;
 use crate::release::{Asset, Pins};
 
@@ -59,7 +60,7 @@ fn stage(
 	let kind = ArchiveKind::from_file_name(&asset.file)?;
 	let archive = format!("{staging}/{}", asset.file);
 	host.download(&pins.url(asset), &archive)?;
-	archive::verify_sha256(&root.join(&archive), &asset.sha256)?;
+	digest::verify_sha256(&root.join(&archive), &asset.hash)?;
 	let binary = format!("{staging}/{}", target.binary_name());
 	archive::extract_binary(&root.join(&archive), kind, target.binary_name(), &root.join(&binary))?;
 	fs::remove_file(root.join(&archive)).map_err(|err| format!("remove {archive}: {err}"))?;
@@ -95,7 +96,8 @@ mod tests {
 	use zed_extension_api::{Architecture, Os};
 
 	use super::*;
-	use crate::archive::tests::{sha256_hex, tar_gz};
+	use crate::archive::tests::tar_gz;
+	use crate::digest::sha256;
 	use crate::release;
 
 	struct FakeHost {
@@ -128,9 +130,9 @@ mod tests {
 		Target::from_platform(Os::Linux, Architecture::X8664).unwrap()
 	}
 
-	fn pins(version: &str, sha256: &str) -> Pins {
+	fn pins(version: &str, hash: &str) -> Pins {
 		release::parse(&format!(
-			r#"{{"version": "{version}", "assets": {{"linux_amd64": {{"file": "datamitsu_{version}_linux_amd64.tar.gz", "sha256": "{sha256}"}}}}}}"#
+			r#"{{"version": "{version}", "assets": {{"linux_amd64": {{"file": "datamitsu_{version}_linux_amd64.tar.gz", "hash": "{hash}"}}}}}}"#
 		))
 		.unwrap()
 	}
@@ -149,7 +151,7 @@ mod tests {
 		let archive = tar_gz(&[("datamitsu", b"binary")]);
 		let host = host(root.path(), archive.clone());
 
-		let binary = install(root.path(), &pins("0.4.0", &sha256_hex(&archive)), &linux(), &host).unwrap();
+		let binary = install(root.path(), &pins("0.4.0", &sha256(&archive)), &linux(), &host).unwrap();
 
 		assert_eq!(binary, "datamitsu-0.4.0/datamitsu");
 		assert_eq!(fs::read(root.path().join(&binary)).unwrap(), b"binary");
@@ -178,7 +180,13 @@ mod tests {
 		fs::write(root.path().join("datamitsu-0.4.0/datamitsu"), b"binary").unwrap();
 		let host = host(root.path(), Vec::new());
 
-		let binary = install(root.path(), &pins("0.4.0", &"0".repeat(64)), &linux(), &host).unwrap();
+		let binary = install(
+			root.path(),
+			&pins("0.4.0", &format!("sha256:{}", "0".repeat(64))),
+			&linux(),
+			&host,
+		)
+		.unwrap();
 
 		assert_eq!(binary, "datamitsu-0.4.0/datamitsu");
 		assert!(host.calls.borrow().is_empty());
@@ -189,7 +197,7 @@ mod tests {
 		let root = tempfile::tempdir().unwrap();
 		let host = host(root.path(), tar_gz(&[("datamitsu", b"tampered")]));
 
-		let err = install(root.path(), &pins("0.4.0", &sha256_hex(b"expected")), &linux(), &host).unwrap_err();
+		let err = install(root.path(), &pins("0.4.0", &sha256(b"expected")), &linux(), &host).unwrap_err();
 
 		assert!(err.starts_with("SHA-256 mismatch"), "{err}");
 		assert!(!root.path().join("datamitsu-0.4.0").exists());
@@ -207,7 +215,7 @@ mod tests {
 		let archive = tar_gz(&[("datamitsu", b"binary")]);
 		let host = host(root.path(), archive.clone());
 
-		install(root.path(), &pins("0.4.0", &sha256_hex(&archive)), &linux(), &host).unwrap();
+		install(root.path(), &pins("0.4.0", &sha256(&archive)), &linux(), &host).unwrap();
 
 		assert!(!root.path().join("datamitsu-0.4.0/junk").exists());
 		assert!(!root.path().join("datamitsu-0.3.1").exists());

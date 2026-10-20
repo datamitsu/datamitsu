@@ -2,9 +2,8 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -193,27 +192,12 @@ func getNPMFullResponse(ctx context.Context, packageName string) (*npmFullRespon
 		return nil, err
 	}
 	url := fmt.Sprintf("%s/%s", npmRegistryBaseURL, npmPackagePath(packageName))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build request: %w", err)
-	}
-	resp, err := npmHTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch npm package %s: %w", packageName, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("npm package %q not found", packageName)
-	}
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return nil, fmt.Errorf("npm registry returned status %d for %s: %s", resp.StatusCode, packageName, string(body))
-	}
-
 	var result npmFullResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 100<<20)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode npm response for %s: %w", packageName, err)
+	if err := getJSON(ctx, npmHTTPClient, "npm registry", url, 100<<20, &result); err != nil {
+		if errors.Is(err, errNotFound) {
+			return nil, fmt.Errorf("npm package %q not found", packageName)
+		}
+		return nil, fmt.Errorf("failed to fetch npm package %s: %w", packageName, err)
 	}
 	return &result, nil
 }
@@ -222,28 +206,12 @@ func getNPMPackageInfoFromURL(ctx context.Context, url, packageName string) (*NP
 	if err := httpx.GuardOffline("npm registry lookup"); err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build request: %w", err)
-	}
-	resp, err := npmHTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch npm package %s: %w", packageName, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("npm package %q not found", packageName)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return nil, fmt.Errorf("npm registry returned status %d for %s: %s", resp.StatusCode, packageName, string(body))
-	}
-
 	var result npmLatestResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode npm response for %s: %w", packageName, err)
+	if err := getJSON(ctx, npmHTTPClient, "npm registry", url, 10<<20, &result); err != nil {
+		if errors.Is(err, errNotFound) {
+			return nil, fmt.Errorf("npm package %q not found", packageName)
+		}
+		return nil, fmt.Errorf("failed to fetch npm package %s: %w", packageName, err)
 	}
 
 	return &NPMPackageInfo{

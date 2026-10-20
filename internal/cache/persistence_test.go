@@ -20,6 +20,10 @@ func reopen(t *testing.T, cacheDir, projectPath string) *Cache {
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
+	// A marked-dirty cache saves 100ms later from a timer. Registered after the
+	// caller's TempDir, this runs before its removal: an unstopped timer writes
+	// into the directory while it is being deleted, and the cleanup fails.
+	t.Cleanup(c.Shutdown)
 	return c
 }
 

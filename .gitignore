@@ -33,6 +33,7 @@
 
 # Dependencies
 **/node_modules/
+**/.pnpm-store/
 **/vendor/
 **/.pnp.*
 **/.yarn/cache

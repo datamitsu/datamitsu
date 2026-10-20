@@ -186,7 +186,7 @@ func TestDownloadAndVerifyJAR_ContextPropagated(t *testing.T) {
 	destPath := filepath.Join(t.TempDir(), "app.jar")
 
 	start := time.Now()
-	err := downloadAndVerifyJAR(ctx, "test-jar", server.URL, "deadbeef", destPath)
+	err := downloadAndVerifyJAR(ctx, "test-jar", server.URL, "sha256:"+strings.Repeat("ab", 32), destPath)
 	elapsed := time.Since(start)
 
 	if err == nil {

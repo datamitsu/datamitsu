@@ -2,8 +2,6 @@ package runner
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,7 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
-	"github.com/datamitsu/datamitsu/internal/hashutil"
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 
@@ -63,12 +61,12 @@ func coreModule(t *testing.T) *parsermanager.Manager {
 		_, _ = w.Write(wasm)
 	}))
 	t.Cleanup(srv.Close)
-	sum := sha256.Sum256(wasm)
+	sum := digest.SHA256Of(wasm)
 
 	// The parsers entry is named "core", NOT after the dispatch key — proving
 	// module and parser are independent (so versions can be aliased freely).
 	mgr := parsermanager.New(config.MapOfParsers{
-		"core": {URL: srv.URL, Hash: hex.EncodeToString(sum[:])},
+		"core": {URL: srv.URL, Hash: sum.Hex()},
 	})
 	t.Cleanup(func() { _ = mgr.Close(context.Background()) })
 	return mgr
@@ -124,9 +122,9 @@ func TestDiagnosticParser_Unavailable(t *testing.T) {
 		_, _ = w.Write(wasm)
 	}))
 	t.Cleanup(srv.Close)
-	sum := sha256.Sum256(wasm)
+	sum := digest.SHA256Of(wasm)
 	mgr := parsermanager.New(config.MapOfParsers{
-		"core":   {URL: srv.URL, Hash: hex.EncodeToString(sum[:])},
+		"core":   {URL: srv.URL, Hash: sum.Hex()},
 		"broken": {URL: srv.URL, Hash: strings.Repeat("0", 64)},
 	})
 	t.Cleanup(func() { _ = mgr.Close(context.Background()) })
@@ -154,12 +152,12 @@ func TestDiagnosticParser_Unavailable(t *testing.T) {
 		t.Fatalf("pending = %q, want one warning for the module and one for the key", got)
 	}
 	if !strings.HasPrefix(got[0], `parser module "broken" could not be loaded, so 2 tool(s) that use it ran without it `+
-		`and their lint passes are not cached; `+
+		`and caching of fix and lint results is disabled for them; `+
 		`"datamitsu devtools parsers prefetch" fetches it ahead of a run: `) {
 		t.Errorf("module warning = %q", got[0])
 	}
-	if want := `parser module "core" has no parser "no-such-parser", so the output of alpha, beta is not parsed by it ` +
-		`and its lint passes are not cached`; got[1] != want {
+	if want := `parser module "core" has no parser "no-such-parser"; caching of fix and lint results is disabled for alpha, beta ` +
+		`because its output cannot be parsed`; got[1] != want {
 		t.Errorf("key warning = %q, want %q", got[1], want)
 	}
 	if again := problems.pending(); len(again) != 0 {
@@ -206,6 +204,10 @@ func (a shellApps) GetBinaryPath(context.Context, string) (string, error) { retu
 
 func (a shellApps) GetCommandInfo(_ context.Context, app string) (*binmanager.CommandInfo, error) {
 	return a[app], nil
+}
+
+func (shellApps) ResolveBindingPath(context.Context, string, string) (string, error) {
+	return "", os.ErrNotExist
 }
 
 // TestParseFailureThroughTheExecutor follows a parse that fails in a loaded
@@ -446,11 +448,11 @@ func observeFile(t *testing.T, path string) cache.Seen {
 		t.Fatal(err)
 	}
 	defer func() { _ = f.Close() }()
-	hash, err := hashutil.XXH3Reader(f)
+	hash, err := digest.XXH3Reader(f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return cache.Seen{Hash: hash}
+	return cache.Seen{Hash: hash.Hex()}
 }
 
 func TestPlannedParserModulesIncludeTheFallback(t *testing.T) {

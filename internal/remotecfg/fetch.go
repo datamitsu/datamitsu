@@ -2,13 +2,12 @@ package remotecfg
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 )
 
@@ -30,7 +29,7 @@ func FetchRemoteConfig(ctx context.Context, url, expectedHash string) (string, e
 		return "", fmt.Errorf("remote config %s: hash is required", url)
 	}
 
-	if err := validateHashFormat(expectedHash); err != nil {
+	if _, err := parseExpectedHash(expectedHash); err != nil {
 		return "", fmt.Errorf("remote config %s: %w", url, err)
 	}
 
@@ -69,36 +68,20 @@ func FetchRemoteConfig(ctx context.Context, url, expectedHash string) (string, e
 	return string(data), nil
 }
 
-func validateHashFormat(expectedHash string) error {
-	hexHash := expectedHash
-	if len(expectedHash) > 7 && expectedHash[:7] == "sha256:" {
-		hexHash = expectedHash[7:]
-	}
-
-	if len(hexHash) != 64 {
-		return fmt.Errorf("invalid hash: expected 64 hex characters, got %d", len(hexHash))
-	}
-
-	for _, c := range hexHash {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-			return fmt.Errorf("invalid hash: contains non-lowercase-hex character %q", c)
-		}
-	}
-
-	return nil
+// parseExpectedHash parses the declared pin once, leniently — a person copies
+// this value from a registry page or a README, so the canonical prefix and the
+// case are normalized rather than demanded.
+func parseExpectedHash(expectedHash string) (digest.Digest, error) {
+	return digest.ParseSHA256Loose(expectedHash)
 }
 
 func verifyHash(data []byte, expectedHash, url string) error {
-	hexHash := expectedHash
-	if len(expectedHash) > 7 && expectedHash[:7] == "sha256:" {
-		hexHash = expectedHash[7:]
+	pin, err := parseExpectedHash(expectedHash)
+	if err != nil {
+		return fmt.Errorf("invalid hash: %w", err)
 	}
-
-	h := sha256.Sum256(data)
-	actualHash := hex.EncodeToString(h[:])
-
-	if actualHash != hexHash {
-		return fmt.Errorf("remote config %s: hash mismatch: expected %s, got %s", url, hexHash, actualHash)
+	if actual := digest.SHA256Of(data); actual.Hex() != pin.Hex() {
+		return fmt.Errorf("remote config %s: hash mismatch: expected %s, got %s", url, pin.String(), actual.String())
 	}
 	return nil
 }

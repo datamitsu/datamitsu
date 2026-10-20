@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -119,14 +117,14 @@ func BundleStatus(ctx context.Context, cfg *config.Config) (*Status, error) {
 		if !ok {
 			continue
 		}
-		_, statErr := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(subtree)))
+		present := subtreeReady(storeRoot, subtree)
 		bundleSubtrees[subtree] = true
 		status.Layers = append(status.Layers, LayerStatus{
 			Subtree:   subtree,
 			Kind:      desc.Annotations[AnnotationKind],
 			App:       desc.Annotations[AnnotationApp],
 			SizeBytes: desc.Size,
-			Present:   statErr == nil,
+			Present:   present,
 		})
 	}
 	sort.Slice(status.Layers, func(i, j int) bool { return status.Layers[i].Subtree < status.Layers[j].Subtree })
@@ -149,7 +147,7 @@ func BundleStatus(ctx context.Context, cfg *config.Config) (*Status, error) {
 			if !bundleSubtrees[subtree] {
 				coverage.Covered = false
 			}
-			if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(subtree))); err != nil {
+			if !subtreeReady(storeRoot, subtree) {
 				coverage.Present = false
 			}
 		}

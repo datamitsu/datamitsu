@@ -5,14 +5,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -47,8 +47,8 @@ func vcStateManager(t *testing.T) *verifycache.StateManager {
 
 // vcSHA256Hex returns the lowercase hex SHA-256 of b.
 func vcSHA256Hex(b []byte) string {
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
+	sum := digest.SHA256Of(b)
+	return sum.Hex()
 }
 
 // vcTarGz builds an in-memory tar.gz from name->content entries.
@@ -104,21 +104,6 @@ func TestVerifyBinaryOrDir(t *testing.T) {
 		}
 		if err := verifyBinaryOrDir(ctx, info); err != nil {
 			t.Fatalf("verifyBinaryOrDir(binary) error = %v, want nil", err)
-		}
-	})
-
-	t.Run("explicit hashType is honored", func(t *testing.T) {
-		body := []byte("\x7fELF payload-with-explicit-hashtype")
-		srv := vcServe(t, body)
-		ht := binmanager.BinHashTypeSHA256
-		info := binmanager.BinaryOsArchInfo{
-			URL:         srv.URL,
-			Hash:        vcSHA256Hex(body),
-			HashType:    &ht,
-			ContentType: binmanager.BinContentTypeBinary,
-		}
-		if err := verifyBinaryOrDir(ctx, info); err != nil {
-			t.Fatalf("verifyBinaryOrDir(explicit hashType) error = %v, want nil", err)
 		}
 	})
 
