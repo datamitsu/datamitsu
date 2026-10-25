@@ -1,5 +1,11 @@
 # Contributing
 
+## Development toolchains
+
+Go builds require Go 1.27.3 or newer, as declared in `go.mod`. Parser builds use
+Rust 1.99.1 from `parsers/rust-toolchain.toml`; keep its embedded container pins
+aligned and regenerate both parser WASM artifacts when changing that compiler.
+
 ## Testing
 
 Standard Go testing, stdlib `testing` only (no testify) — table-driven, `t.TempDir`/`t.Setenv`.
