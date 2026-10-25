@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -13,10 +14,18 @@ import (
 
 // uvPythonMetadataBaseURL is the raw-content root of the uv repository. uv
 // resolves `--python <version>` against a CPython download table compiled into
-// the binary at build time, and that table lives at
-// crates/uv-python/download-metadata.json in the tagged source tree — so the
-// file at a given tag is exactly what that uv release can install.
+// the binary at build time, and that table lives in the tagged source tree —
+// so the file at a given tag is exactly what that uv release can install.
+//
+// uv 0.12.24 split the uv-python crate and the table moved from
+// crates/uv-python/ to crates/uv-python-managed/; older tags keep only the old
+// path, so both are tried, newest layout first.
 var uvPythonMetadataBaseURL = "https://raw.githubusercontent.com/astral-sh/uv"
+
+var uvPythonMetadataPaths = []string{
+	"crates/uv-python-managed/download-metadata.json",
+	"crates/uv-python/download-metadata.json",
+}
 
 var uvPythonHTTPClient = httpx.NewHardenedClient(60 * time.Second)
 
@@ -43,8 +52,21 @@ type uvPythonEntry struct {
 // "No interpreter found for Python <version>".
 func GetUVSupportedPythonVersions(ctx context.Context, uvVersion string) (map[string]bool, error) {
 	tag := strings.TrimPrefix(uvVersion, "v")
-	url := fmt.Sprintf("%s/%s/crates/uv-python/download-metadata.json", uvPythonMetadataBaseURL, tag)
-	return getUVSupportedPythonVersionsFromURL(ctx, url)
+	var lastErr error
+	for _, path := range uvPythonMetadataPaths {
+		url := fmt.Sprintf("%s/%s/%s", uvPythonMetadataBaseURL, tag, path)
+		versions, err := getUVSupportedPythonVersionsFromURL(ctx, url)
+		if err == nil {
+			return versions, nil
+		}
+		// Only a 404 moves on to the next layout; anything else (network,
+		// decode, empty table) is a real failure.
+		if !errors.Is(err, errNotFound) {
+			return nil, err
+		}
+		lastErr = err
+	}
+	return nil, fmt.Errorf("uv %s publishes no Python download metadata: %w", tag, lastErr)
 }
 
 func getUVSupportedPythonVersionsFromURL(ctx context.Context, url string) (map[string]bool, error) {

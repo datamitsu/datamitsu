@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -59,6 +60,84 @@ func TestGetUVSupportedPythonVersions(t *testing.T) {
 		}
 		if len(versions) != 3 {
 			t.Errorf("expected 3 versions, got %d: %v", len(versions), versions)
+		}
+	})
+
+	t.Run("falls back to the pre-0.12.24 metadata path", func(t *testing.T) {
+		url := serveMetadata(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, "uv-python-managed") {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(metadataFixture())
+		})
+		origBase := uvPythonMetadataBaseURL
+		uvPythonMetadataBaseURL = url
+		t.Cleanup(func() { uvPythonMetadataBaseURL = origBase })
+
+		versions, err := GetUVSupportedPythonVersions(context.Background(), "0.12.1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !versions["3.14.6"] {
+			t.Fatalf("expected 3.14.6 in %v", versions)
+		}
+	})
+
+	t.Run("metadata missing from every layout is an error", func(t *testing.T) {
+		url := serveMetadata(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		})
+		origBase := uvPythonMetadataBaseURL
+		uvPythonMetadataBaseURL = url
+		t.Cleanup(func() { uvPythonMetadataBaseURL = origBase })
+
+		if _, err := GetUVSupportedPythonVersions(context.Background(), "0.12.1"); err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("prefers the current layout without touching the old path", func(t *testing.T) {
+		var oldPathRequests int
+		url := serveMetadata(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, "crates/uv-python/") {
+				oldPathRequests++
+			}
+			_ = json.NewEncoder(w).Encode(metadataFixture())
+		})
+		origBase := uvPythonMetadataBaseURL
+		uvPythonMetadataBaseURL = url
+		t.Cleanup(func() { uvPythonMetadataBaseURL = origBase })
+
+		if _, err := GetUVSupportedPythonVersions(context.Background(), "0.13.5"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if oldPathRequests != 0 {
+			t.Errorf("old layout was requested %d times although the new one answered", oldPathRequests)
+		}
+	})
+
+	t.Run("a non-404 failure does not fall back", func(t *testing.T) {
+		var oldPathRequests int
+		url := serveMetadata(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, "crates/uv-python/") {
+				oldPathRequests++
+				_ = json.NewEncoder(w).Encode(metadataFixture())
+				return
+			}
+			// 403 is permanent: an implementation that treats it as "try the
+			// next layout" would succeed here and the counter would catch it.
+			w.WriteHeader(http.StatusForbidden)
+		})
+		origBase := uvPythonMetadataBaseURL
+		uvPythonMetadataBaseURL = url
+		t.Cleanup(func() { uvPythonMetadataBaseURL = origBase })
+
+		if _, err := GetUVSupportedPythonVersions(context.Background(), "0.13.5"); err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if oldPathRequests != 0 {
+			t.Errorf("a permanent failure fell back to the old layout (%d requests)", oldPathRequests)
 		}
 	})
 

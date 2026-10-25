@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+	"github.com/datamitsu/datamitsu/internal/syslist"
 )
 
 func TestApplyNodeResult(t *testing.T) {
@@ -281,6 +283,92 @@ func TestRunPullRuntimes_SavesEachRuntimeBeforeTheNext(t *testing.T) {
 		if got := runtimeVersion(saved[name]); got != want {
 			t.Errorf("%s = %q, want %q", name, got, want)
 		}
+	}
+}
+
+// A file that a previous broken run left holding only go and pnpm gains the
+// missing runtimes on the next run, and the go/pnpm entries keep every
+// platform binary they had: a failing runtime never costs the file what it
+// already held.
+func TestRunPullRuntimes_PartialFileKeepsItsEntriesWhileOthersFail(t *testing.T) {
+	setPullRuntimesFlags(t, "", false)
+	path := filepath.Join(t.TempDir(), "runtimes.json")
+
+	goBP, pnpmBP := "go/bin/go", "pnpm"
+	oldGo := buildGoRuntimeJSON(&GoRuntimeData{GoVersion: "1.27.2"}, binmanager.MapOfBinaries{
+		syslist.OsTypeDarwin: {
+			syslist.ArchTypeArm64: {"unknown": binmanager.BinaryOsArchInfo{
+				URL: "https://go.dev/dl/go1.27.2.darwin-arm64.tar.gz", Hash: testHash1,
+				ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &goBP, ExtractDir: true,
+			}},
+		},
+		syslist.OsTypeLinux: {
+			syslist.ArchTypeAmd64: {"glibc": binmanager.BinaryOsArchInfo{
+				URL: "https://go.dev/dl/go1.27.2.linux-amd64.tar.gz", Hash: testHash2,
+				ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &goBP, ExtractDir: true,
+			}},
+		},
+	})
+	oldPNPM := buildPNPMRuntimeJSON(&PNPMRuntimeData{PNPMVersion: "12.14.0"}, binmanager.MapOfBinaries{
+		syslist.OsTypeLinux: {
+			syslist.ArchTypeAmd64: {"glibc": binmanager.BinaryOsArchInfo{
+				URL: "https://github.com/pnpm/pnpm/releases/download/v12.14.0/pnpm-linux-x64.tar.gz", Hash: testHash3,
+				ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &pnpmBP, ExtractDir: true,
+			}},
+		},
+	})
+	if err := writeRuntimesJSON(path, RuntimesJSON{"go": oldGo, "pnpm": oldPNPM}); err != nil {
+		t.Fatal(err)
+	}
+
+	var goWhenUVPulled *RuntimeJSON
+	fakeRuntimePulls(t, map[string]func() (*RuntimeJSON, error){
+		"pnpm": func() (*RuntimeJSON, error) { return nil, errors.New("npm is down") },
+		"bun":  func() (*RuntimeJSON, error) { return nil, errors.New("github rate limited") },
+		"go":   func() (*RuntimeJSON, error) { return nil, errors.New("go.dev is down") },
+		"jvm":  func() (*RuntimeJSON, error) { return nil, errors.New("adoptium is down") },
+		"node": func() (*RuntimeJSON, error) { return nil, errors.New("nodejs.org is down") },
+		"uv": func() (*RuntimeJSON, error) {
+			saved, err := readRuntimesJSON(path)
+			if err != nil {
+				return nil, err
+			}
+			goWhenUVPulled = saved["go"]
+			return buildUVRuntimeJSON(&UVRuntimeData{PythonVersion: "3.15.1"}, testPNPMBinaries()), nil
+		},
+	})
+
+	var err error
+	_ = captureStderr(func() {
+		_ = captureStdout(func() { err = runPullRuntimes(nil, []string{path}) })
+	})
+	if err == nil || !strings.Contains(err.Error(), "5 of 6 runtimes failed") {
+		t.Fatalf("runPullRuntimes() = %v, want 5 of 6 runtimes failed", err)
+	}
+
+	if goWhenUVPulled == nil || goWhenUVPulled.Go == nil || goWhenUVPulled.Go.GoVersion != "1.27.2" {
+		t.Fatalf("when uv was pulled the file held go %v, want the original 1.27.2 entry", goWhenUVPulled)
+	}
+	if got := len(goWhenUVPulled.Managed.Binaries[syslist.OsTypeLinux][syslist.ArchTypeAmd64]); got != 1 {
+		t.Errorf("go linux binaries when uv was pulled = %d, want 1", got)
+	}
+
+	saved, err := readRuntimesJSON(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"bun", "jvm", "node"} {
+		if saved[name] != nil {
+			t.Errorf("%s was recorded although it failed", name)
+		}
+	}
+	for name, want := range map[string]string{"go": "go=1.27.2,binaries=2", "pnpm": "pnpm=12.14.0,binaries=1"} {
+		if got := runtimeVersion(saved[name]); got != want {
+			t.Errorf("%s = %q, want %q (binary data must survive)", name, got, want)
+		}
+	}
+	if saved["uv"] == nil || saved["uv"].UV.PythonVersion != "3.15.1" {
+		t.Errorf("uv was not added: %v", saved["uv"])
 	}
 }
 
