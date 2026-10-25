@@ -152,8 +152,8 @@ Annotations are selected **once, after the last operation**, from the whole `rep
    merge is the PR's change set. `push`: `.before` from the event file when it is not the null
    SHA and resolves locally, then `git diff --name-only <before> HEAD`. Otherwise the set is empty
    and one `info` line (a `log` event under jsonl) says why: `touched-file priority off: HEAD^1
-not fetched (set fetch-depth: 2)`, `… HEAD is not the merge commit`, `… before commit not
-fetched (set fetch-depth: 0)`. Two git calls at most, never a failure.
+   not fetched (set fetch-depth: 2)`, `… HEAD is not the merge commit`, `… before commit not
+   fetched (set fetch-depth: 0)`. Two git calls at most, never a failure.
 3. Order within each type bucket (error, warning, notice): touched files first; then round-robin
    over files (the first finding of every file, then the second, …); within a file by row,
    column, source, code, fingerprint; file-less candidates last. A total order, so the output is
@@ -228,13 +228,13 @@ exports it must not move the farm staleness key on every shell switch).
 ### 2.7 Documentation and dogfood
 
 - `website/docs/guides/reports.md` (from plan 6) gains the GitHub recipe: `lint --fail-fast=false
---report sarif=…` with `upload-sarif`, `fetch-depth: 2`, what the ten annotations are and where
+  --report sarif=…` with `upload-sarif`, `fetch-depth: 2`, what the ten annotations are and where
   the rest goes, the `if: always()` pattern; the note that CI runs `lint`, not `check` (index
   §5); the shared budget; the `eslint-compact` residual.
 - `cli-commands.md`: `--annotations`, `--output`, `--report markdown`, `DATAMITSU_ANNOTATIONS`,
   `DATAMITSU_OUTPUT`, the usage errors, the `hello` event's capability list.
 - The agent guide gains two lines: run checks as `datamitsu check --fail-fast=false --output
-agent`; `exec` runs a tool raw, with no parsing and no reports. The config-author guide gets
+  agent`; `exec` runs a tool raw, with no parsing and no reports. The config-author guide gets
   `facts().ci`.
 - `.github/workflows/pr-checks.yml`: `pnpm dm lint --fail-fast=false` (annotations are `auto`), and
   `fetch-depth: 2` on that job's checkout. The SARIF upload joins in plan 8.
@@ -291,13 +291,13 @@ check on a live run, recorded in the PR.
 - Matchers: the four vendored patterns match none of the prefixed `go`/`tsc`/`eslint-stylish`
   fixture lines; the `eslint-compact` residual is asserted as such.
 - `--annotations auto` prints nothing without `GITHUB_ACTIONS`, nothing under `--log-format
-jsonl`, nothing with `--report json=-`, and everything with `--annotations github` under jsonl;
+  jsonl`, nothing with `--report json=-`, and everything with `--annotations github` under jsonl;
   nothing when the plan is empty.
 - Step summary: written when the variable points at a writable file; one `warn` and exit
   unchanged when it does not; the 1 MiB budget honours a pre-filled file; written under jsonl.
 - `--output agent`: byte-stable golden for plan 1's S2/S5 fixtures with `--fail-fast=false`; the
   same finding set as `--output human` for an exit-1, warnings-only invocation under `failOn:
-error` (both print every warning) and for an ordinary gating run; a message with a newline is
+  error` (both print every warning) and for an ordinary gating run; a message with a newline is
   one record.
 - `facts().ci.vendor` reads `github` in a config evaluated with `GITHUB_ACTIONS=true` and
   `gitea` with `GITEA_ACTIONS=true` set as well.

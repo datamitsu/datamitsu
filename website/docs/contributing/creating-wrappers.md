@@ -322,7 +322,7 @@ Wrapper packages can reference remote configuration files for additional layerin
 
 ```javascript
 /**
- * @returns {Array<{url: string, hash: string}>}
+ * @returns {{ url: string; hash: string }[]}
  */
 function getRemoteConfigs() {
   return [

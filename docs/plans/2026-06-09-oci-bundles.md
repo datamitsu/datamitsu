@@ -646,7 +646,7 @@ added later without touching the pull code.
   **Binary-only entries for foreign targets (windows/amd64, darwin/amd64) need the
   target-override helper (v3.6):** binmanager is host-bound (`HostTarget()`, §1) — it can't
   "download windows binaries from linux" by itself; the new `devtools oci-binary-store --target
-<os>/<arch>[/<libc>] --output <dir>` iterates the config declarations for the given target
+  <os>/<arch>[/<libc>] --output <dir>` iterates the config declarations for the given target
   through the same download+SHA-256-verify+extract (no execution) and lays out the subtree tree
   for `oci-layer`. This is small but NOT zero Go code — an explicit part of Phase 4. All these
   manifests are added to the same bundle index. ⚠ Go app layers: GOPATH/GOMODCACHE live INSIDE
@@ -846,7 +846,7 @@ proxy+TLS guard).
 - **manifest body digest mismatch / blob digest|size mismatch** → fatal, a dedicated exit code,
   the message `expected <d> got <d>`, no retry.
 - **offline + miss** → fatal: `tool X not in seed and DATAMITSU_OFFLINE set; remove offline or
-extend bundle digest <d>`.
+  extend bundle digest <d>`.
 - **stale/partial seed online** → warn + fall-through to the network, listing the uncovered
   tools.
 - **no os/arch in the index** → online: warn + fall-through; offline: fatal with the list of the

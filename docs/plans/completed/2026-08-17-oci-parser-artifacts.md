@@ -408,8 +408,8 @@ match the file's existing style. `internal/config/config.d.ts` is the byte-ident
  */
 interface ParserOCI {
   /**
-   * Artifact manifest digest, "sha256:" followed by 64 lowercase hex characters. Mandatory —
-   * a tag never pins content, and the module hash changes on every build anyway.
+   * Artifact manifest digest, "sha256:" followed by 64 lowercase hex characters. Mandatory — a tag
+   * never pins content, and the module hash changes on every build anyway.
    */
   digest: string;
 
@@ -421,8 +421,8 @@ interface ParserOCI {
   ref: string;
 
   /**
-   * RESERVED. Setting it is currently a config error: this build cannot verify sigstore
-   * signatures. The mandatory `hash` verifies the module bytes.
+   * RESERVED. Setting it is currently a config error: this build cannot verify sigstore signatures.
+   * The mandatory `hash` verifies the module bytes.
    */
   signer?: OCISigner;
 }
@@ -430,9 +430,9 @@ interface ParserOCI {
 interface Parser {
   /**
    * SHA-256 hash (64 lowercase hex characters) of the .wasm module. Mandatory per the security
-   * policy for every source — an empty or malformed hash is a config error. For an `oci`
-   * source it must also equal the artifact's single layer blob digest, so a mismatch is
-   * rejected before the module is downloaded.
+   * policy for every source — an empty or malformed hash is a config error. For an `oci` source it
+   * must also equal the artifact's single layer blob digest, so a mismatch is rejected before the
+   * module is downloaded.
    */
   hash: string;
 
@@ -1088,7 +1088,7 @@ All paths relative to `WRAPPER = /Users/shibanet0/ghq/github.com/shibanet0/datam
      (`release.yml:327`). This is structural, not an oversight: §2.9 keeps the default config on the
      https url. Fix: add a `--config <path>` flag to the script and a second `fresh-init` matrix leg
      that first runs `cp datamitsu.config.js /tmp/oci.js && node scripts/inject-oci-pin.ts --file
-/tmp/oci.js --parser-ref … --parser-digest …` with a **static, already-published** test pin.
+     /tmp/oci.js --parser-ref … --parser-digest …` with a **static, already-published** test pin.
    - Add one assertion: `datamitsu devtools parsers list` exits 0. Not polish — `executor.go` warns
      and returns raw output on any parser error, so a broken pin, a private package or a bad digest
      degrades silently and the current smoke test still passes. `devtools parsers list` forces
@@ -1176,8 +1176,8 @@ Files: `internal/ociref/` (new), `internal/config/validate.go`, `internal/ocibun
 8. **Runner ordering** — move `ocibundle.AutoSeed` (`runner.go:542`) ahead of `Prewarm`
    (`runner.go:324`), preserving the `sc.binMgr != nil` guard; eyeball the progress-bar ordering.
 9. **Prose sweep, same commit** (all currently say "url+hash"): `parsermanager.go:191, 290, 313,
-352-353`, `capabilities.go:12, 100`, `dockerfile/storepaths.go:40`, `config.go:359-360, 371,
-396-397`, `cmd/devtools_parsers.go:68`, `capabilities_test.go:52`.
+   352-353`, `capabilities.go:12, 100`, `dockerfile/storepaths.go:40`, `config.go:359-360, 371,
+   396-397`, `cmd/devtools_parsers.go:68`, `capabilities_test.go:52`.
 10. `go test ./...` — expect `parsermanager`/`ocibundle` store-path tests and
     `test/cli/testdata/golden/devtools_parsers_prefetch_help.txt` to need regeneration (that golden
     embeds "matching url+hash" — the draft wrongly asserted no parsers golden would move).

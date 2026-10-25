@@ -87,7 +87,7 @@ Four design questions are already settled by measurement, and must not be re-ope
   `go test ./test/cli/ -count=2`.
 - **CRITICAL: run the test suite with `umask 022`.** With the common `umask 002` the source-mode
   tests fail on the _test binary's own file mode_ (`source mode needs it owner-executable and not
-group- or world-writable`). That failure is environmental and unrelated to any change; do not
+  group- or world-writable`). That failure is environmental and unrelated to any change; do not
   "fix" it in the source.
 - **CRITICAL: update this plan file when scope changes during implementation.**
 - Behavior must not change on a miss, and must not change _observably_ on a hit. Every `test/cli`

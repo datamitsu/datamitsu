@@ -85,7 +85,7 @@ func gitCommonDir(root string) string {
 	}
 
 	// A linked worktree's git directory names the main repository in commondir.
-	data, err := os.ReadFile(filepath.Join(gitDir, "commondir")) // #nosec G304 -- fixed name under the git directory
+	data, err := os.ReadFile(filepath.Join(gitDir, "commondir")) // #nosec G304 G703 -- Git worktrees require reading this fixed metadata file outside the checkout.
 	if err != nil {
 		return gitDir
 	}

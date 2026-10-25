@@ -175,11 +175,11 @@ func parseRootIndex(content string) (title, tagline string, entries []tocEntry, 
 // "https://datamitsu.com/docs/guides/architecture/caching.md" ->
 // "guides/architecture/caching".
 func slugFromURL(url string) (string, bool) {
-	i := strings.LastIndex(url, docsURLMarker)
-	if i < 0 {
+	_, after, ok := strings.CutLast(url, docsURLMarker)
+	if !ok {
 		return "", false
 	}
-	slug := url[i+len(docsURLMarker):]
+	slug := after
 	slug = strings.TrimSuffix(slug, ".md")
 	if slug == "" {
 		return "", false

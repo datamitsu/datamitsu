@@ -475,7 +475,7 @@ What has to change to allow a second worker:
 - at the start, after pinning the snapshot and running the sweep (§3.8);
 - after planning and filtering;
 - after the managed-config preflight, `CheckConfigFiles(root, snapshot.managedConfigs,
-plan.ManagedConfigRefs())`, which runs before `EnsureTools` and before any cache is consulted;
+  plan.ManagedConfigRefs())`, which runs before `EnsureTools` and before any cache is consulted;
 - after `EnsureTools`, which always finishes its install;
 - before each priority group;
 - from Stage 2b, between the tasks of a group, through the executor stop hook the transport
@@ -782,17 +782,24 @@ for a plan of its own.
 interface DatamitsuInitializationOptions {
   format?: { widenTo?: "target" | "unit"; timeoutMs?: number; tools?: Record<string, boolean> };
   diagnostics?: {
-    /** Default: DATAMITSU_LSP_DIAGNOSTICS, then true (D4). false: no lint lane at all. */
+    /**
+     * Default: DATAMITSU_LSP_DIAGNOSTICS, then true (D4). false: no lint lane at all.
+     */
     enabled?: boolean;
-    /** Stage 2a. Default: DATAMITSU_LSP_DIAGNOSTICS_WIDEN_TO, then "unit". "repo" is not in the enum. */
+    /**
+     * Stage 2a. Default: DATAMITSU_LSP_DIAGNOSTICS_WIDEN_TO, then "unit". "repo" is not in the
+     * enum.
+     */
     widenTo?: "target" | "unit";
     /**
-     * false vetoes a tool. true opts in a unit operation that declares no globs and lifts the
+     * False vetoes a tool. true opts in a unit operation that declares no globs and lifts the
      * session's widenTo for it; it never lifts the project's execution.widenTo.lint.
      */
     tools?: Record<string, boolean>;
   };
-  /** The client reads the JSON-L stream on stderr; notices are not repeated as LSP messages. */
+  /**
+   * The client reads the JSON-L stream on stderr; notices are not repeated as LSP messages.
+   */
   jsonlEvents?: boolean;
 }
 ```

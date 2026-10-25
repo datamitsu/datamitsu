@@ -384,7 +384,7 @@ config load (measured: ~226 ms before the startup plan, ~60 ms after).
       whole environment via `facts().env` (`internal/facts/facts.go:51`) and this repo's own
       `datamitsu.config.ts` already branches on `facts().env.DATAMITSU_BENCH`. A config
       branching on a non-`DATAMITSU_` variable will not invalidate the key. `datamitsu source
-refresh --force` is the escape hatch. Tracking the variables the VM actually read
+  refresh --force` is the escape hatch. Tracking the variables the VM actually read
       requires goja read-instrumentation and is explicitly deferred
 - [x] `Load(path)` / `Validate(manifest) (fresh bool)` API, where `Validate` performs only
       `lstat` calls and the key comparison — no config load, no allocation-heavy work

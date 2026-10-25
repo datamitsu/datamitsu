@@ -130,7 +130,7 @@ Every process gets an **extraction outcome**, the vocabulary the index §2.5 fix
   `parser-unavailable`). The executor logs the failure at `debug`; the runner prints one warning
   per tool per run (`output parser failed for <tool>: <first error>`), one per run when a module
   fails to load (naming how many tools will run uncached and suggesting `datamitsu devtools
-parsers prefetch`), and one per run for an unknown parser key. An unknown key is an extraction
+  parsers prefetch`), and one per run for an unknown parser key. An unknown key is an extraction
   failure that blocks the pass; it is not a config load error, because `describe` needs the
   module and loading must stay offline-safe.
 - `--no-parse` and `DATAMITSU_NO_PARSE` no longer disable parsing. The executor parses whenever a
@@ -150,9 +150,9 @@ parsers prefetch`), and one per run for an unknown parser key. An unknown key is
   served from the memo); a file that changed during the run records nothing; a failed hash
   records nothing.
 - API (`internal/cache`): `type Seen struct{ Hash string; Size int64; ModTime, ChangeTime
-time.Time; Identity FileIdentity; At time.Time }`, `Check(file, tool string, op Operation, seen
-Seen, enabled bool) (run bool)`, `AfterLint(file, tool string, seen Seen, unchanged bool,
-enabled bool) error`. `AfterFix` keeps its comparison. `markPassed`'s append-without-compare
+  time.Time; Identity FileIdentity; At time.Time }`, `Check(file, tool string, op Operation, seen
+  Seen, enabled bool) (run bool)`, `AfterLint(file, tool string, seen Seen, unchanged bool,
+  enabled bool) error`. `AfterFix` keeps its comparison. `markPassed`'s append-without-compare
   path goes away.
 - **Upgrade.** `calculateInvalidationKey` gains a constant cache-semantics component; this PR
   sets it to `c2v1`, so every entry recorded by the old writer misses once and cannot hit the
