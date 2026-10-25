@@ -15,6 +15,7 @@ func TestConfigReconcileForce(t *testing.T) {
 	base := p.WriteFile("base.config.js", `
 globalThis.getMinVersion = () => "0.0.0";
 globalThis.getConfig = () => ({
+  version: "1.0.0",
   apps: { shell: { shell: { name: "sh" } } }, runtimes: {},
   projectTypes: { sample: { markers: ["**/fixture.marker"] } },
   tools: {
@@ -93,8 +94,8 @@ func TestForcedReconcileReplaysFinalOwnerAndSourceVMs(t *testing.T) {
 	p := clitest.NewProject(t)
 	base := p.WriteFile("base.config.js", `
 globalThis.getMinVersion = () => "0.0.0";
-globalThis.getConfig = () => ({ apps: { shell: { shell: { name: "sh" } } }, runtimes: {},
-  bundles: { base: { files: { "base.txt": "base" }, links: { "base.txt": "base.txt" } } },
+globalThis.getConfig = () => ({ version: "1.0.0", apps: { shell: { shell: { name: "sh" } } }, runtimes: {},
+  bundles: { base: { files: { "base.txt": "fixture" }, links: { "base.txt": "base.txt" } } },
   tools: { first: { operations: { lint: { app: "shell", args: [], scope: "repository" } } },
            second: { operations: { lint: { app: "shell", args: [], scope: "repository" } } } },
   managedConfigs: { "root.json": { scope: "git-root", tools: ["first"], content: ctx =>
@@ -122,7 +123,7 @@ func TestForcedReconcileAcceptsValidPin(t *testing.T) {
 	p := clitest.NewProject(t)
 	base := p.WriteFile("base.config.js", `
 globalThis.getMinVersion = () => "0.0.0";
-globalThis.getConfig = () => ({ apps: {}, runtimes: {}, tools: {},
+globalThis.getConfig = () => ({ version: "1.0.0", apps: {}, runtimes: {}, tools: {},
   managedConfigs: { "root.json": { scope: "git-root", content: ctx => JSON.stringify(merge({value:"default"}, JSON.parse(ctx.originalContent || "{}"))) } }
 });`)
 	projectText := `globalThis.getMinVersion = () => "0.0.0";

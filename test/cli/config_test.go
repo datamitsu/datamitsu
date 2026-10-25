@@ -43,10 +43,6 @@ func TestConfigHelpGolden(t *testing.T) {
 	}
 }
 
-// TestConfigShow freezes `config show` against the minimal config: the no-op
-// config returns empty collections which marshal (omitempty) to a bare object,
-// so the contract is the literal "{}" plus the guarantee that it is valid JSON
-// with no keys.
 func TestConfigShow(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
@@ -58,14 +54,6 @@ func TestConfigShow(t *testing.T) {
 		t.Fatalf("`config show` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
 	clitest.AssertGolden(t, "config_show", norm.Apply(res.Stdout))
-
-	var obj map[string]any
-	if err := json.Unmarshal([]byte(res.Stdout), &obj); err != nil {
-		t.Fatalf("`config show` did not emit valid JSON: %v\nstdout:\n%s", err, res.Stdout)
-	}
-	if len(obj) != 0 {
-		t.Errorf("minimal config show should be empty, got keys: %v", keysOf(obj))
-	}
 }
 
 // TestConfigTypes asserts `config types` prints a non-empty .d.ts whose leading
@@ -240,7 +228,7 @@ func TestConfigRuntimeExecutionVariables(t *testing.T) {
 // deterministic across runs and machines.
 const chainHashConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
-  apps: {}, runtimes: {}, tools: {},
+  version: "1.0.0",
   managedConfigs: {
     "alpha.txt": { content: () => "alpha\n" },
     "beta.config.json": { content: () => "{}\n" },
@@ -384,13 +372,4 @@ func sortedCopy(s []string) []string {
 func firstLine(s string) string {
 	line, _, _ := strings.Cut(s, "\n")
 	return line
-}
-
-// keysOf returns the keys of m (order unspecified) for error messages.
-func keysOf(m map[string]any) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
 }

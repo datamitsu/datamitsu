@@ -13482,6 +13482,7 @@ const mapOfRuntimes = runtimes_default;
 function getConfig(cfg) {
   const datamitsuAgentPrompt = cfg.sharedStorage?.["datamitsu-agent-prompt"] || "";
   return {
+    version: "1.0.0",
     apps: mapOfApps,
     bundles: {
       agents_md: {

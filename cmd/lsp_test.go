@@ -21,7 +21,7 @@ func TestLspLoaderWatchesAMissingBeforeConfig(t *testing.T) {
 	writeFile(t, filepath.Join(root, ldflags.PackageName+".config.js"), `
 function getBeforeConfigs() { return [{ path: "./node_modules/wrapper/base.js" }]; }
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-auto: prettier"] }; }`)
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-auto: prettier"] }; }`)
 
 	loader := newLspLoader()
 	if loader.Watch(root) == nil {
@@ -40,7 +40,7 @@ function getConfig(input) { return { ignoreRules: ["from-auto: prettier"] }; }`)
 	}
 	writeFile(t, wrapper, `
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-wrapper: eslint"] }; }`)
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-wrapper: eslint"] }; }`)
 	cfg, watch, err := loader.Load(context.Background(), root)
 	if err != nil {
 		t.Fatalf("load after the install: %v", err)

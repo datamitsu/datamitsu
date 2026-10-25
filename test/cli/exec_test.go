@@ -13,6 +13,7 @@ import (
 // prove the listing sorts.
 const execToolsConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
+  version: "1.0.0",
   apps: {
     "bun-tool": {
       bun: {

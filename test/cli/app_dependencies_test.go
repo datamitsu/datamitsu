@@ -17,7 +17,7 @@ func TestConfigAppDependencies(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := clitest.NewProject(t)
 			cfg := p.WriteFile("apps.config.js", `globalThis.getBeforeConfigs = () => [];
-globalThis.getConfig = () => ({apps: {`+tt.apps+`}, runtimes: {}, managedConfigs: {}, tools: {}});
+globalThis.getConfig = () => ({version: "1.0.0", apps: {`+tt.apps+`}, runtimes: {}, managedConfigs: {}, tools: {}});
 globalThis.getMinVersion = () => "0.0.0";
 `)
 			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--config", cfg, "config", "show")

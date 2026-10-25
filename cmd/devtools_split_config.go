@@ -50,7 +50,7 @@ func runSplitConfig(ctx context.Context) error {
 	}
 
 	plan := dockerfile.BuildPlan(cfg.Apps, cfg.Runtimes, dockerfile.PlanOptions{Parsers: cfg.Parsers})
-	slices, err := dockerfile.BuildSlices(plan, cfg.Apps, cfg.Runtimes, cfg.Parsers)
+	slices, err := dockerfile.BuildSlices(cfg, plan, cfg.Apps, cfg.Runtimes, cfg.Parsers)
 	if err != nil {
 		return err
 	}

@@ -32,6 +32,7 @@ import (
 // extra name.
 const machineConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = () => ({
+  version: "1.0.0",
   apps: {
     "machine-tool": { binary: { binaries: {
       linux: { amd64: { glibc: { url: "https://example.test/x.tar.gz", hash: "` + machineHashA + `", contentType: "tar.gz" } } },
@@ -69,7 +70,7 @@ func writeMachineConfig(t *testing.T) (*clitest.BareDir, string) {
 // Goldens use it rather than machineConfigJS, whose exclusions write reasons to
 // stderr that belong to TestSourceConfigExclusionsStillApply.
 const emptyMachineConfigJS = "globalThis.getBeforeConfigs = () => [];\n" +
-	"globalThis.getConfig = () => ({ apps: {}, tools: {}, projectTypes: {} });\n" +
+	"globalThis.getConfig = () => ({ version: \"1.0.0\", apps: {}, tools: {}, projectTypes: {} });\n" +
 	"globalThis.getMinVersion = () => \"0.0.0\";\n"
 
 // configFarmHashRE matches the per-chain directory name in a config farm path.
@@ -156,7 +157,7 @@ func TestSourceExplicitConfigCannotInjectIntoStdout(t *testing.T) {
 		"console.log(\"echo pwned\");\n"+
 			"globalThis.getBeforeConfigs = () => [];\n"+
 			"globalThis.getConfig = () => { console.log(\"rm -rf /\"); "+
-			"return { apps: {}, tools: {}, projectTypes: {} }; };\n"+
+			"return { version: \"1.0.0\", apps: {}, tools: {}, projectTypes: {} }; };\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
 	noisyCache := t.TempDir()
 	noisyRes := clitest.Run(t, clitest.RunOptions{Dir: noisy.Dir, CacheDir: noisyCache, Env: sourceEnv()},
@@ -458,7 +459,7 @@ func TestSourceConfigDoesNotMergeTheSurroundingRepository(t *testing.T) {
 
 	p := clitest.NewProject(t)
 	p.WriteFile("datamitsu.config.js",
-		"globalThis.getConfig = () => ({ apps: { \"project-only\": { shell: { name: \"true\" } } },"+
+		"globalThis.getConfig = () => ({ version: \"1.0.0\", apps: { \"project-only\": { shell: { name: \"true\" } } },"+
 			" tools: {}, projectTypes: {} });\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
 

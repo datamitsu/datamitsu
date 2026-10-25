@@ -1,4 +1,5 @@
 {
+  "version": "1.0.0",
   "apps": {
     "my-gen": {
       "officialUrl": "https://pkg.go.<VERSION>/example.com/mygen/cmd/mygen",

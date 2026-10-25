@@ -673,10 +673,10 @@ func writeBeforeConfigAuto(t *testing.T, dir, getBeforeConfigsBody string) strin
 	autoPath := filepath.Join(dir, ldflags.PackageName+".config.js")
 	var src string
 	if getBeforeConfigsBody == "" {
-		src = `function getConfig(input) { return {}; }`
+		src = `function getConfig(input) { return { version: "1.0.0" }; }`
 	} else {
 		src = fmt.Sprintf(
-			"function getBeforeConfigs() { return %s; }\nfunction getConfig(input) { return {}; }",
+			"function getBeforeConfigs() { return %s; }\nfunction getConfig(input) { return { version: \"1.0.0\" }; }",
 			getBeforeConfigsBody,
 		)
 	}
@@ -688,7 +688,7 @@ func writeBeforeConfigAuto(t *testing.T, dir, getBeforeConfigsBody string) strin
 
 func writeStubConfig(t *testing.T, path string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(`function getConfig(input) { return {}; }`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`function getConfig(input) { return { version: "1.0.0" }; }`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -842,7 +842,7 @@ func TestDiscoverBeforeConfigsFunctionThrowsErrors(t *testing.T) {
 	dir := t.TempDir()
 	autoPath := filepath.Join(dir, ldflags.PackageName+".config.js")
 	src := "function getBeforeConfigs() { throw new Error('boom'); }\n" +
-		"function getConfig(input) { return {}; }"
+		"function getConfig(input) { return { version: \"1.0.0\" }; }"
 	if err := os.WriteFile(autoPath, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1096,7 +1096,7 @@ function getMinVersion() { return "0.0.0"; }
 %s
 function getConfig(input) {
     var apps = _merge(input && input.apps ? input.apps : {}, { "shared-tool": %s });
-    return {
+    return { version: "1.0.0",
         apps: apps,
         ignoreRules: ["from-shared: eslint"],
         managedConfigs: { ".editorconfig": { scope: "git-root", content: function(ctx) { return "from-shared"; } } }
@@ -1113,7 +1113,7 @@ function getConfig(input) {
         "shared-tool": %s,
         "auto-tool": %s
     });
-    return {
+    return { version: "1.0.0",
         apps: apps,
         ignoreRules: ["from-auto: prettier"],
         managedConfigs: { ".editorconfig": { scope: "git-root", content: function(ctx) { return (ctx.existingContent || "") + "\nfrom-auto"; } } }
@@ -1179,20 +1179,20 @@ func TestBeforeConfigsRootOnlyNoChaining(t *testing.T) {
 	nestedPath := filepath.Join(root, "nested.js")
 	writeFile(t, nestedPath, `
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-nested: hadolint"] }; }`)
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-nested: hadolint"] }; }`)
 
 	sharedPath := filepath.Join(root, "shared.js")
 	// shared declares getBeforeConfigs -> nested; this must be ignored.
 	writeFile(t, sharedPath, `
 function getBeforeConfigs() { return [{ path: "./nested.js" }]; }
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-shared: eslint"] }; }`)
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-shared: eslint"] }; }`)
 
 	autoPath := filepath.Join(root, ldflags.PackageName+".config.js")
 	writeFile(t, autoPath, `
 function getBeforeConfigs() { return [{ path: "./shared.js" }]; }
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-auto: prettier"] }; }`)
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-auto: prettier"] }; }`)
 
 	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, false, nil)
 	if err != nil {
@@ -1220,19 +1220,19 @@ func TestBeforeConfigsFlagOverridesDeclared(t *testing.T) {
 	declaredPath := filepath.Join(root, "declared.js")
 	writeFile(t, declaredPath, `
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-declared: eslint"] }; }`)
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-declared: eslint"] }; }`)
 
 	autoPath := filepath.Join(root, ldflags.PackageName+".config.js")
 	writeFile(t, autoPath, `
 function getBeforeConfigs() { return [{ path: "./declared.js" }]; }
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-auto: prettier"] }; }`)
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-auto: prettier"] }; }`)
 
 	flagDir := t.TempDir()
 	flagPath := filepath.Join(flagDir, "flag.js")
 	writeFile(t, flagPath, `
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-flag: shellcheck"] }; }`)
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-flag: shellcheck"] }; }`)
 
 	// --before-config flag set -> getBeforeConfigs() must be skipped entirely.
 	cfg, _, _, err := loadConfigWithPaths(context.Background(), []string{flagPath}, false, nil)
@@ -1356,7 +1356,7 @@ function getRemoteConfigs() {
     return [{ url: "http://example.com/remote.ts", hash: "" }];
 }
 function getConfig(input) {
-    return {};
+		return { version: "1.0.0" };
 }`
 
 	resolved := make(map[string]bool)
@@ -1502,7 +1502,7 @@ func TestBeforeConfigOrdering(t *testing.T) {
 	beforePath := filepath.Join(beforeDir, "before.js")
 	if err := os.WriteFile(beforePath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-before: eslint"] }; }`,
 	), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1511,7 +1511,7 @@ function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
 	configPath := filepath.Join(configDir, "override.js")
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-override: prettier"] }; }`,
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-override: prettier"] }; }`,
 	), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1568,7 +1568,7 @@ func TestLoadConfigString(t *testing.T) {
 		t.Fatalf("engine.New error: %v", err)
 	}
 
-	content := `function getConfig(input) { return { ignoreRules: ["test-rule: eslint"] }; }`
+	content := `function getConfig(input) { return { version: "1.0.0", ignoreRules: ["test-rule: eslint"] }; }`
 	if err := loadConfigString(e, content, "test-source"); err != nil {
 		t.Fatalf("loadConfigString error: %v", err)
 	}
@@ -1598,11 +1598,11 @@ func TestSkipRemoteConfigSkipsHTTPRequests(t *testing.T) {
 	var requestCount int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
-		_, _ = w.Write([]byte(`function getConfig(input) { return {}; }`))
+		_, _ = w.Write([]byte(`function getConfig(input) { return { version: "1.0.0" }; }`))
 	}))
 	defer server.Close()
 
-	remoteContent := `function getConfig(input) { return {}; }`
+	remoteContent := `function getConfig(input) { return { version: "1.0.0" }; }`
 	remoteHash := computeHash(remoteContent)
 
 	localContent := fmt.Sprintf(`
@@ -1666,7 +1666,7 @@ function getRemoteConfigs() {
     return [{ url: "%s/remote.ts", hash: "%s" }];
 }
 function getConfig(input) {
-    return { ignoreRules: ["from-local: prettier"] };
+    return { version: "1.0.0", ignoreRules: ["from-local: prettier"] };
 }`, server.URL, remoteHash)
 	if err := os.WriteFile(beforePath, []byte(beforeContent), 0o644); err != nil {
 		t.Fatal(err)
@@ -1722,7 +1722,7 @@ func TestSharedStorageFlowsThroughConfigChain(t *testing.T) {
 	if err := os.WriteFile(rootPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
-			return { sharedStorage: { "my-key": "root-value", "other": "data" } };
+			return { version: "1.0.0", sharedStorage: { "my-key": "root-value", "other": "data" } };
 		}`,
 	), 0o644); err != nil {
 		t.Fatal(err)
@@ -1734,7 +1734,7 @@ function getConfig(input) {
 function getConfig(input) {
 			var ss = input.sharedStorage || {};
 			ss["child-key"] = "child-value";
-			return { sharedStorage: ss };
+			return { version: "1.0.0", sharedStorage: ss };
 		}`,
 	), 0o644); err != nil {
 		t.Fatal(err)
@@ -2173,7 +2173,7 @@ func TestLoadConfigWithLowMinVersion(t *testing.T) {
 	configPath := filepath.Join(configDir, "low-version.js")
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["low-version: eslint"] }; }`,
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["low-version: eslint"] }; }`,
 	), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -2236,7 +2236,7 @@ func TestLoadConfigWithDevVersionAlwaysPasses(t *testing.T) {
 	configPath := filepath.Join(configDir, "dev-version.js")
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["dev-version: eslint"] }; }`,
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["dev-version: eslint"] }; }`,
 	), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -2258,7 +2258,7 @@ func TestLoadConfigMultiLayerVersionCheck(t *testing.T) {
 	beforePath := filepath.Join(beforeDir, "before.js")
 	if err := os.WriteFile(beforePath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-before: eslint"] }; }`,
 	), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -2267,7 +2267,7 @@ function getConfig(input) { return { ignoreRules: ["from-before: eslint"] }; }`,
 	configPath := filepath.Join(configDir, "config.js")
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["from-config: prettier"] }; }`,
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["from-config: prettier"] }; }`,
 	), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -2398,6 +2398,72 @@ func TestDefaultConfigHasGetMinVersion(t *testing.T) {
 	}
 }
 
+func TestResolvedConfigVersionLayers(t *testing.T) {
+	withTestVersion(t, "1.0.0")
+	tests := []struct {
+		name    string
+		layers  []string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:   "inherits core version",
+			layers: []string{"function getConfig(input) { return input; }"},
+			want:   "core",
+		},
+		{
+			name: "explicit base version",
+			layers: []string{`
+function getConfig(input) { return { version: "1.0.0" }; }
+`},
+			want: "1.0.0",
+		},
+		{
+			name: "later override",
+			layers: []string{`
+function getConfig(input) { return { version: "1.0.0" }; }
+`, `
+function getConfig(input) { return { version: "release" }; }
+`},
+			want: "release",
+		},
+		{
+			name: "final version required",
+			layers: []string{`
+function getConfig(input) { return { version: "1.0.0" }; }
+`, `
+function getConfig(input) { return {}; }
+`},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			paths := make([]string, 0, len(tt.layers))
+			for i, layer := range tt.layers {
+				path := filepath.Join(dir, fmt.Sprintf("layer-%d.js", i))
+				writeFile(t, path, "function getMinVersion() { return \"0.0.0\"; }\n"+layer)
+				paths = append(paths, path)
+			}
+			cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, paths)
+			if tt.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "version:") {
+					t.Fatalf("expected missing final version validation, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("loadConfigWithPaths error: %v", err)
+			}
+			if cfg.Version != tt.want {
+				t.Errorf("resolved version = %q, want %q", cfg.Version, tt.want)
+			}
+		})
+	}
+}
+
 func TestProcessConfigSourceGetMinVersionExtractionFromVM(t *testing.T) {
 	// Verify that getMinVersion() is correctly extracted and its value
 	// is used for version validation. A config with v-prefixed version
@@ -2464,7 +2530,7 @@ func TestLoadConfigImplEvaluatesInitContent(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(`
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
-    return {
+    return { version: "1.0.0",
         managedConfigs: {
             ".editorconfig": {
                 scope: "git-root",
@@ -2506,7 +2572,7 @@ func TestLoadConfigImplMergesLayersAcrossSources(t *testing.T) {
 	if err := os.WriteFile(beforePath, []byte(`
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
-    return {
+    return { version: "1.0.0",
         managedConfigs: {
             ".editorconfig": {
                 scope: "git-root",
@@ -2524,7 +2590,7 @@ function getConfig(input) {
 	if err := os.WriteFile(configPath, []byte(`
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
-    return {
+    return { version: "1.0.0",
         managedConfigs: {
             ".editorconfig": {
                 scope: "git-root",
@@ -2567,7 +2633,7 @@ func TestLoadConfigImplSkipsFailedContentEvaluation(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(`
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
-    return {
+    return { version: "1.0.0",
         managedConfigs: {
             "test-fail-eval.txt": {
                 scope: "git-root",
@@ -2613,7 +2679,7 @@ func TestLoadConfigUnstableVersionBypassesHighMinVersion(t *testing.T) {
 	configPath := filepath.Join(configDir, "high-version.js")
 	if err := os.WriteFile(configPath, []byte(
 		`function getMinVersion() { return "99.0.0"; }
-function getConfig(input) { return { ignoreRules: ["unstable-bypass: eslint"] }; }`,
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["unstable-bypass: eslint"] }; }`,
 	), 0o644); err != nil {
 		t.Fatal(err)
 	}

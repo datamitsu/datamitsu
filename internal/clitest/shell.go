@@ -141,7 +141,7 @@ func ShellConfig(spec ShellConfigSpec, tools ...string) string {
 	var b strings.Builder
 	b.WriteString("globalThis.getBeforeConfigs = () => [];\n")
 	b.WriteString("globalThis.getConfig = () => {\n")
-	b.WriteString("const c = { apps: {}, runtimes: {}, managedConfigs: {}, tools: {}, projectTypes: " +
+	b.WriteString("const c = { version: \"1.0.0\", apps: {}, runtimes: {}, managedConfigs: {}, tools: {}, projectTypes: " +
 		jsLiteral(types) + ", parsers: " + parsers + " };\n")
 	for _, tool := range tools {
 		b.WriteString(tool)

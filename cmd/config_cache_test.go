@@ -154,7 +154,7 @@ func TestConfigCacheMissesWhenAConfigFileChanges(t *testing.T) {
 
 	writeFile(t, path, `
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["second: eslint"] }; }`)
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["second: eslint"] }; }`)
 
 	second, _, vm := loadCached(t, path)
 	if servedFromCache(vm) {
@@ -363,7 +363,7 @@ func TestConfigCacheRefusesAChainEditedMidEvaluation(t *testing.T) {
 
 	writeFile(t, path, `
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["after: eslint"] }; }`)
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["after: eslint"] }; }`)
 
 	c.save(&chainObservations{}, &configcache.Entry{Config: &config.Config{}})
 	if n := configEvalArtifactCount(t, cacheHome); n != 0 {
@@ -380,7 +380,7 @@ func TestConfigCacheDisabledWhenTheChainChangesWhileResolving(t *testing.T) {
 
 	writeFile(t, path, `
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { ignoreRules: ["after: eslint"] }; }`)
+function getConfig(input) { return { version: "1.0.0", ignoreRules: ["after: eslint"] }; }`)
 
 	c := newConfigCache(context.Background(), configCacheParams{
 		sources:       []configSource{{name: path, path: path}},

@@ -294,10 +294,10 @@ func TestStoreImportArgValidation(t *testing.T) {
 func refsConfigJS() string {
 	return `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = () => ({
+  version: "1.0.0",
   apps: {
-    shellcheck: {
-      binary: {
-        binaries: {
+    shellcheck: { binary: {
+      binaries: {
           linux: { amd64: { glibc: { url: "https://example.test/shellcheck-linux-amd64.tar.gz", hash: "sha256:` + strings.Repeat("11", 32) + `", contentType: "tar.gz" } } },
           darwin: { arm64: { unknown: { url: "https://example.test/shellcheck-darwin-arm64.tar.gz", hash: "sha256:` + strings.Repeat("22", 32) + `", contentType: "tar.gz" } } },
         },

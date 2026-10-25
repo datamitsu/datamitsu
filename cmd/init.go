@@ -65,8 +65,6 @@ func runInit(_ *cobra.Command, _ []string) error {
 		restore()
 	}()
 
-	disp.Banner(ldflags.PackageName, ldflags.Version)
-
 	cwdPath, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get cwd: %w", err)
@@ -85,6 +83,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+	disp.Banner(ldflags.PackageName, ldflags.Version, ciText(cfg.DisplayName()), ciText(cfg.Version))
 
 	detector := project.NewDetector(rootPath, cfg.ProjectTypes)
 	projectTypes, err := detector.DetectAll(ctx)

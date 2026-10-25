@@ -57,3 +57,31 @@ func TestValidateNameRejectsNamesNoSurfaceCanShow(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateVersionRequiresLabel(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{name: "missing", wantErr: true},
+		{name: "release", value: "1.2.3"},
+		{name: "core", value: "core"},
+		{name: "v prefix", value: "v1.2.3"},
+		{name: "prerelease", value: "1.2.3-rc.1"},
+		{name: "blank", value: " \t", wantErr: true},
+		{name: "leading whitespace", value: " core", wantErr: true},
+		{name: "trailing whitespace", value: "core ", wantErr: true},
+		{name: "newline", value: "core\nnext", wantErr: true},
+		{name: "nul", value: "core\x00", wantErr: true},
+		{name: "80 runes", value: strings.Repeat("界", MaxNameLength)},
+		{name: "81 runes", value: strings.Repeat("界", MaxNameLength+1), wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateVersion(tc.value)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("ValidateVersion(%q) error = %v, wantErr %v", tc.value, err, tc.wantErr)
+			}
+		})
+	}
+}

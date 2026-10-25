@@ -13,6 +13,7 @@ Every config file must export:
 
 - **`getMinVersion()`** — Returns a semver string specifying the minimum datamitsu version required. Checked before `getConfig()` is called. Configs without this function fail to load.
 - **`getConfig(config)`** — Receives the previous layer's config and returns a new `Config` object.
+- **`version`** — Required top-level configuration release label, validated after all layers resolve. It must be nonempty, one line, at most 80 characters, with no leading or trailing whitespace. It may be a package release version or a static label such as `core`; semver is not required. It is inherited as a scalar and may be overridden by later layers. It is independent of `getMinVersion()`, which names the minimum compatible datamitsu core version.
 - **`getRemoteConfigs()`** _(optional)_ — Returns remote parent configs to load before this config.
 - **`getBeforeConfigs()`** _(optional)_ — Returns local config files to load as under-layers, the config-declared equivalent of the `--before-config` flag. Honoured **only** in the auto-discovered git-root config, and **not evaluated** when a `--before-config` flag is passed (the flag wins).
 
@@ -31,6 +32,7 @@ The `getConfig()` function returns a `Config` object:
 
 ```typescript
 interface Config {
+  version: string;
   name?: string;
   apps?: BinManager.MapOfApps;
   runtimes?: BinManager.MapOfRuntimes;
@@ -55,18 +57,20 @@ interface Config {
 
 Configuration is loaded in layers, each receiving the previous result as input:
 
-```
+```text
+
 default (embedded config.js)
-  ↓ [getRemoteConfigs() resolved depth-first, if exported]
---before-config flags  (for wrappers/libraries)
-  ↓ [getRemoteConfigs() resolved depth-first]
-declared before-configs  (auto config's getBeforeConfigs(), only when no --before-config flag)
-  ↓ [getRemoteConfigs() resolved depth-first]
+↓ [getRemoteConfigs() resolved depth-first, if exported]
+--before-config flags (for wrappers/libraries)
+↓ [getRemoteConfigs() resolved depth-first]
+declared before-configs (auto config's getBeforeConfigs(), only when no --before-config flag)
+↓ [getRemoteConfigs() resolved depth-first]
 auto (datamitsu.config.{js,mjs,ts} at git root)
-  ↓ [getRemoteConfigs() resolved depth-first]
---config flags  (for CI/testing overrides)
-  ↓
+↓ [getRemoteConfigs() resolved depth-first]
+--config flags (for CI/testing overrides)
+↓
 final Config
+
 ```
 
 - Each source must export `getMinVersion()` — version is checked before `getConfig()` runs (fail-fast)
@@ -74,6 +78,20 @@ final Config
 - The auto git-root config can export `getBeforeConfigs()` returning `Array<{path: string}>` to load local files as under-layers (parity with `--before-config`). It is honoured only at the git-root layer and skipped entirely when a `--before-config` flag is present; relative paths resolve against the git-root config's directory, no hash is required (local files are not downloads)
 - `ignoreRules` use append semantics across config layers
 - Circular remote config dependencies are detected and produce an error
+
+## Configuration Version (`version`)
+
+Every resolved configuration requires a top-level version label. It must be
+nonempty, one line, at most 80 characters, with no leading or trailing
+whitespace. A package release version is suitable, but semver is not required:
+a static label such as `core` is also valid. The embedded default supplies
+`core`; a layer that discards the input config must supply its own value.
+
+The field is inherited as a normal scalar and later layers may override it;
+the loader validates only the final resolved value. This identifies the
+configuration release, not a core compatibility declaration: `getMinVersion()`
+independently returns the semver minimum datamitsu core version each source
+requires. Existing configs without a version fail to load.
 
 ## Name (`name`)
 

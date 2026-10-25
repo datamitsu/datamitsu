@@ -177,7 +177,7 @@ func runConfigReconcile(_ *cobra.Command, _ []string) error {
 	}
 	defer closeReconcile()
 
-	disp.Banner(ldflags.PackageName, ldflags.Version)
+	disp.Banner(ldflags.PackageName, ldflags.Version, ciText(cfg.DisplayName()), ciText(cfg.Version))
 
 	disp.PhaseOpen("config reconcile")
 	if detectedCount == 0 {

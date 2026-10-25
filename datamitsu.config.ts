@@ -35,6 +35,7 @@ const applyBench = (config: config.Config): config.Config => {
 };
 
 const getConfig = (config: config.Config) => {
+  config.version = "core"; // TODO: delete after upgrade datamitsu-config
   config.ejectConfigs ??= [];
   for (const tool of ["editorconfig-checker", "gitleaks", "trufflehog"]) {
     if (!config.ejectConfigs.includes(tool)) {

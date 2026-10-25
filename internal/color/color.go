@@ -76,6 +76,8 @@ var (
 	Yellow = color.New(color.FgYellow).SprintFunc()
 	// Cyan renders its arguments in cyan.
 	Cyan = color.New(color.FgCyan).SprintFunc()
+	// Orange distinguishes configuration identity from the CLI and status colors.
+	Orange = Color256(208)
 	// Bold renders its arguments in bold.
 	Bold = color.New(color.Bold).SprintFunc()
 	// Faint renders its arguments faint (dimmed).

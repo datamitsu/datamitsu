@@ -39,7 +39,7 @@ func TestExecRuntimeEnvDependency(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := p.WriteFile("bindings.config.js", `globalThis.getBeforeConfigs = () => [];
-globalThis.getConfig = () => ({apps: `+string(data)+`, tools: {}, runtimes: {}});
+globalThis.getConfig = () => ({version: "1.0.0", apps: `+string(data)+`, tools: {}, runtimes: {}});
 globalThis.getMinVersion = () => "0.0.0";
 `)
 	bm := binmanager.New(apps, nil, nil)
@@ -82,7 +82,7 @@ func TestConfigRuntimeEnvValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := clitest.NewProject(t)
 			cfg := p.WriteFile("bindings.config.js", `globalThis.getBeforeConfigs = () => [];
-globalThis.getConfig = () => ({`+tt.extra+`});
+globalThis.getConfig = () => ({version: "1.0.0", `+tt.extra+`});
 globalThis.getMinVersion = () => "0.0.0";
 `)
 			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--config", cfg, "config", "show")

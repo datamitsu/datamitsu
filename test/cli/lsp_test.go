@@ -160,6 +160,7 @@ func stderrEvents(t *testing.T, stderr string) []map[string]any {
 // from the editor with lsp: false.
 const lspPolicyConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = () => ({
+  version: "1.0.0",
   apps: {
     "append-a": { shell: { name: "sh", args: ["-c", "printf a >> \"$1\"", "append-a"] } },
     "append-b": { shell: { name: "sh", args: ["-c", "printf b >> \"$1\"", "append-b"] } },
@@ -270,8 +271,8 @@ func TestLspSessionPolicy(t *testing.T) {
 func appendConfigJS(letter string) string {
 	return `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = () => ({
+  version: "1.0.0",
   apps: { "append": { shell: { name: "sh", args: ["-c", "printf ` + letter + ` >> \"$1\"", "append"] } } },
-  runtimes: {},
   managedConfigs: {},
   tools: {
     append: { name: "append", operations: { fix: { app: "append", args: ["{file}"], scope: "per-file", globs: ["**/*.txt"] } } },
@@ -476,7 +477,7 @@ globalThis.getMinVersion = () => "0.0.0";
 const noisyConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = () => {
   console.log("hello from config");
-  return { apps: {}, runtimes: {}, managedConfigs: {}, tools: {} };
+  return { version: "1.0.0", apps: {}, runtimes: {}, managedConfigs: {}, tools: {} };
 };
 globalThis.getMinVersion = () => "0.0.0";
 `

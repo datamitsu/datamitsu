@@ -522,7 +522,11 @@ type Config struct {
 	// the last layer that sets it wins. Unset stays empty rather than defaulted,
 	// so naming a configuration is what changes the cache key, not upgrading to a
 	// core that knows about names; read it through DisplayName.
-	Name           string                  `json:"name,omitempty"`
+	Name string `json:"name,omitempty"`
+	// Version identifies this resolved configuration; it resolves as a scalar,
+	// with the last layer that sets it winning. The loader requires it on the
+	// final config.
+	Version        string                  `json:"version,omitempty"`
 	Apps           binmanager.MapOfApps    `json:"apps,omitempty"`
 	Bundles        binmanager.MapOfBundles `json:"bundles,omitempty"`
 	Runtimes       MapOfRuntimes           `json:"runtimes,omitempty"`

@@ -146,6 +146,7 @@ func TestLoaderRendersAnEntryALaterLayerOnlyPassesThrough(t *testing.T) {
 func TestLoaderObservesRemoteContentFunctionsItRenders(t *testing.T) {
 	isolateCacheTree(t)
 	remote := `function getConfig(input) { return {
+		version: "1.0.0",
 		tools: { gitleaks: { name: "gitleaks", operations: { lint: { app: "gitleaks", args: ["{managedConfig:.gitleaks.toml}"] } } } },
 		managedConfigs: { ".gitleaks.toml": { scope: "git-root", tools: ["gitleaks"], ejectable: true, content: () => String(Date.now()) } },
 	}; }`

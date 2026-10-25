@@ -179,7 +179,7 @@ graph TD
     J --> K[final Config]
 ```
 
-Each config file must export `getMinVersion()` (minimum datamitsu version, checked before loading) and `getConfig(prev)` (receives the previous layer and returns a new config). This enables inheritance and progressive customization while ensuring version compatibility.
+Every config file must export `getMinVersion()` (the minimum datamitsu core version, as semver) and `getConfig(prev)` (the layer transform). The final resolved config also requires a top-level `version`: a nonempty, single-line label of at most 80 characters, without surrounding whitespace. It may be a release version or a static label such as `core`; semver is not required. Layers inherit and may override this scalar, independently of `getMinVersion()`.
 
 Your git-root config can also export `getBeforeConfigs()` to declare local under-layers — the config-declared equivalent of `--before-config`. This lets a globally installed datamitsu load a shared wrapper config without the flag. It is skipped when `--before-config` is passed (the flag wins). See [Configuration → Declared Before-Configs](../guides/configuration.md#declared-before-configs-getbeforeconfigs).
 

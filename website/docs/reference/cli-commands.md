@@ -202,6 +202,13 @@ passes through. An operation gets a stripped variable back with
 [`inheritEnv`](./configuration-api.md#inheriting-host-variables-inheritenv); the
 [Tool Environment](./tool-environment.md) page lists them all.
 
+The run opens with two rounded boxes: the CLI name and version in green, and
+the resolved configuration name and version in orange, without a `config`
+label. An unnamed configuration displays `datamitsu.config`. The boxes sit
+side by side when they fit, stack on narrow terminals, and truncate long
+names while retaining the version when space permits. This header appears
+once per run; `--explain` and `--output agent` suppress it.
+
 `check` closes with the wall clock of the whole command:
 
 ```console
