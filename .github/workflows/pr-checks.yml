@@ -235,17 +235,17 @@ jobs:
       # writes nothing, and a pull request from a fork gets a read-only token.
       - if: always() && hashFiles('lint-sarif/datamitsu-1.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
         name: Upload SARIF to code scanning (tools 1-20)
-        uses: github/codeql-action/upload-sarif@8498dc4c2b27cdd99baf0f87955b29ebbf30c78d # v4.39.1
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: lint-sarif/datamitsu-1.sarif
       - if: always() && hashFiles('lint-sarif/datamitsu-2.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
         name: Upload SARIF to code scanning (tools 21-40)
-        uses: github/codeql-action/upload-sarif@8498dc4c2b27cdd99baf0f87955b29ebbf30c78d # v4.39.1
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: lint-sarif/datamitsu-2.sarif
       - if: always() && hashFiles('lint-sarif/datamitsu-3.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
         name: Upload SARIF to code scanning (tools 41-60)
-        uses: github/codeql-action/upload-sarif@8498dc4c2b27cdd99baf0f87955b29ebbf30c78d # v4.39.1
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: lint-sarif/datamitsu-3.sarif
       # A fourth file would go unread: fail rather than leave tools out.
