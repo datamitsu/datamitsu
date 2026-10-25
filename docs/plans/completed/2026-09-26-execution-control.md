@@ -127,7 +127,7 @@ output" as "clean"). Today it is hidden or absent. From this plan:
   keyed by (tool, dir, plan index) — a stable identity that exists before plan 3 introduces the
   executor's `TaskID`; plan 3 replaces the key with `TaskID` without changing the output.
 - **Results block.** After the tool lines, one line per such task: `⊘ <tool> [dir]  cancelled
-(fail-fast)` for a started-then-cancelled task and `⊘ <tool> [dir]  not started (fail-fast)`
+  (fail-fast)` for a started-then-cancelled task and `⊘ <tool> [dir]  not started (fail-fast)`
   for an unreached one, in the style of planner skips; the footer adds `· N cancelled`.
 - **Events.** Both kinds end with `status: "skip"` (the `StatusSkip` value granularity plan
   §11.4 reserved), never `"fail"`: a cancelled task is not a failure. An unreached task emits one
@@ -138,7 +138,7 @@ output" as "clean"). Today it is hidden or absent. From this plan:
   fail-fast `cancel` sets. Exact start/terminal pairing for per-file tasks sharing one
   directory still waits for plan 3's unique ids; until then the chain assertion of plan 1
   tolerates that one known ambiguity and nothing else. `done` gains `cancelled *int
-json:"cancelled,omitempty"`, counted separately from `skipped` (planner skips and
+  json:"cancelled,omitempty"`, counted separately from `skipped` (planner skips and
   `skip: true`); a pointer so zero can be written when a consumer asks for it.
 - **`ExecutionResult`** is unchanged; the runner reads `Cancelled` and `FailureReason`.
 - The human summary's `(N failed)` does not count cancelled runs: they are not failures.
@@ -163,7 +163,7 @@ After both operations of `check`, one closing rule in the footer style:
   untouched); `fix` and `lint` alone keep their footer as the last line; `RunContinuation`
   (reconcile's post-fix) never prints it.
 - **Run-level event.** `{type: "done", op_id: "cmd-N", op: "check"|"fix"|"lint", status,
-success, duration_ms: <wall clock>, tools, runs, failed, skipped, cancelled, complete}` — sums
+  success, duration_ms: <wall clock>, tools, runs, failed, skipped, cancelled, complete}` — sums
   over the operations, emitted for every execution of the three commands (D22: only the human
   line is `check`-only; the event is what granularity plan §11.4 asked for). `complete` is a
   `*bool` meaning execution completeness: every planned operation ran and no task was cancelled

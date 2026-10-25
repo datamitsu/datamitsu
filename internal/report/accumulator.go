@@ -857,11 +857,11 @@ const (
 
 // taskSeq is the plan-order number a task ID ends with, "<tool>:<dir>:<seq>".
 func taskSeq(taskID string) int {
-	i := strings.LastIndexByte(taskID, ':')
-	if i < 0 {
+	_, after, ok := strings.CutLast(taskID, ":")
+	if !ok {
 		return 0
 	}
-	n, _ := strconv.Atoi(taskID[i+1:])
+	n, _ := strconv.Atoi(after)
 	return n
 }
 

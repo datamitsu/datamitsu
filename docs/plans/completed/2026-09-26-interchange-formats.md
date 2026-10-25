@@ -63,7 +63,7 @@ emits.
   severities `error`, `warning`, `info`. Jenkins Warnings NG computes new/fixed against a
   reference build for it, as for SARIF.
 - reviewdog's rdjsonl is one `Diagnostic` JSON object per line (`message`, `location{path,
-range{start{line,column}, end}}`, `severity` `ERROR|WARNING|INFO`, `source{name,url}`,
+  range{start{line,column}, end}}`, `severity` `ERROR|WARNING|INFO`, `source{name,url}`,
   `code{value,url}`, `suggestions`); columns are UTF-8 bytes and the range end is exclusive
   (`proto/rdf/reviewdog.proto`, confirmed by review).
 - `go.mod` has no JSON Schema or XSD validator; there is no maintained pure-Go XSD validator;
@@ -102,7 +102,7 @@ range{start{line,column}, end}}`, `severity` `ERROR|WARNING|INFO`, `source{name,
   required).
 - **Incompleteness (R8).** SARIF omits the tool's run. Every other format is written in full and
   gets a **companion** `<path>.completeness.json` — `{schema: "datamitsu.completeness/1",
-complete, incomplete: [reasons], tools: [{name, complete, incomplete}], exports}` — because a
+  complete, incomplete: [reasons], tools: [{name, complete, incomplete}], exports}` — because a
   CodeClimate array, a Checkstyle tree and an rdjsonl stream have no field for the claim, and a
   consumer that reads the artifact alone cannot tell a clean run from a missing tool; JUnit
   carries the same facts in suite `properties` as well. One `warn` `log` line per incomplete
@@ -177,7 +177,7 @@ complete, incomplete: [reasons], tools: [{name, complete, incomplete}], exports}
   `columnKind` is `unicodeCodePoints`, which is what the `Chars` span counts (SARIF §3.14.27
   requires the declaration for text results).
 - **Category.** `automationDetails.id` is `datamitsu/` (trailing slash; index §6). `--report
-sarif=<path>?category=<name>` writes `<name>/`. The documentation says to set the category
+  sarif=<path>?category=<name>` writes `<name>/`. The documentation says to set the category
   **in the file**, through that option, because the action's input cannot override it (§1); a
   matrix job passes `?category=datamitsu-${{ matrix.os }}`.
 - **Omission rule (R8).** A tool whose `ToolRun.Complete` is false is not written; the run for it
@@ -208,7 +208,7 @@ sarif=<path>?category=<name>` writes `<name>/`. The documentation says to set th
   requests from forks cannot upload; private repositories need the code-scanning licence; a
   tool that is never uploaded again (removed, renamed — `driver.name` is the config key — or
   skipped by condition) keeps its alerts open forever, and `DELETE /repos/{o}/{r}/code-scanning/
-analyses/{id}?confirm_delete` is the escape hatch that erases that history; `if: always()`
+  analyses/{id}?confirm_delete` is the escape hatch that erases that history; `if: always()`
   together with an exit-code check so a refused write does not upload a stale file.
 - **Live verification, once, before this renderer's PR merges,** through
   `github/codeql-action/upload-sarif` in `datamitsu/sarif-alert-lifecycle-test`: upload the
@@ -228,7 +228,7 @@ analyses/{id}?confirm_delete` is the escape hatch that erases that history; `if:
 - One `testcase` per `FileResult`: `classname="<tool>"`, `name="<root-relative path>"`,
   `time="<seconds>"`:
   - a file with a gating finding on it → `<failure type="threshold" message="N findings at or
-above failOn=<level>">` whose text lists them as `path:row:col: severity source(code): message`;
+    above failOn=<level>">` whose text lists them as `path:row:col: severity source(code): message`;
   - non-gating findings on a passing file go to `<system-out>` as text;
   - cached and clean files, including the clean members of a failed whole-unit invocation, are
     plain passes.

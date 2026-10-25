@@ -192,7 +192,6 @@ stylelint:
     priority: 10
     globs: ["**/*.css"] # css overlaps with prettier — placed in separate sub-group
 
-
 # Better: put stylelint at a different priority, or accept sequential execution
 ```
 

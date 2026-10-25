@@ -411,7 +411,7 @@ func classifyGitLink(top string) (string, gitLinkKind) {
 
 	// A pointer to a git directory that is not there is a broken checkout, and
 	// what git makes of it is git's to say.
-	if info, err := os.Stat(gitdir); err != nil || !info.IsDir() {
+	if info, err := os.Stat(gitdir); err != nil || !info.IsDir() { // #nosec G703 -- Git pointers may name external directories; only directory metadata is inspected.
 		return "", gitLinkUnknown
 	}
 

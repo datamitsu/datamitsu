@@ -53,7 +53,7 @@ selection rules of plan 7 and their own injection defences.
   `\r`→`%0D`, `\n`→`%0A`, `]`→`%5D` and `%`→`%AZP25` (decoded by default since 2021); the agent
   keeps ten issues per type (`error`, `warning`; no `info`) per task (confirmed by review against
   `ExecutionContext.cs`). Command: `##vso[task.logissue type=…;sourcepath=…;linenumber=…;
-columnnumber=…;code=…]<message>`.
+  columnnumber=…;code=…]<message>`.
 - **TeamCity** (service-messages documentation, read 2026-09-26): escaping `'`→`|'`, `|`→`||`,
   `\n`→`|n`, `\r`→`|r`, `[`→`|[`, `]`→`|]`, other characters `|0xNNNN`; a message needs no
   particular position on the line; `##teamcity[disableServiceMessages]` …
@@ -83,8 +83,8 @@ serialization. A trend is built outside datamitsu.
 ### 2.2 `report diff`, `report baseline`, `--baseline`
 
 - **Baseline document** `datamitsu.baseline/1`: `{schema, fingerprint: "dmfp1", createdAt,
-datamitsu: {version, configuration}, source: {startedAt, ci: {sha, ref}, complete, incomplete},
-fingerprints: [sorted hex]}`. `datamitsu report baseline <run.json> --output <baseline.json>`
+  datamitsu: {version, configuration}, source: {startedAt, ci: {sha, ref}, complete, incomplete},
+  fingerprints: [sorted hex]}`. `datamitsu report baseline <run.json> --output <baseline.json>`
   writes it from an own report. An incomplete source is allowed with a `warn` line (fewer
   fingerprints only means fewer suppressed findings) and recorded in `source`.
 - `--baseline <file>` on `lint|check` accepts a baseline document or an own report (from which
@@ -141,7 +141,7 @@ fingerprints: [sorted hex]}`. `datamitsu report baseline <run.json> --output <ba
 ### 2.4 Azure and TeamCity (D2, D6)
 
 - `--annotations azure`: `##vso[task.logissue type=error|warning;sourcepath=<root-relative>;
-linenumber=<row>;columnnumber=<chars col>;code=<source(code)>]<message>` with plan 7's selection
+  linenumber=<row>;columnnumber=<chars col>;code=<source(code)>]<message>` with plan 7's selection
   (touched files from `git diff --name-only origin/<SYSTEM_PULLREQUEST_TARGETBRANCH>...HEAD` when
   that ref resolves, else off with the reason), the index's severity table (`info`/`hint`
   omitted), ten per type; the property escaping of §1 and `%`→`%AZP25` in the message; `auto`
@@ -227,7 +227,7 @@ reports two `created` entries; a patch of a file formatted twice has two hunks i
 ## 6. Risks
 
 - **Baselines rot.** A committed baseline hides findings forever if nobody prunes it; `report
-diff` against the current run shows what it still hides, and the guide says to regenerate it on
+  diff` against the current run shows what it still hides, and the guide says to regenerate it on
   purpose, not on schedule.
 - **Baselines cannot silence exit codes** (§2.2): documented with the exit-zero recommendation.
 - **`git status` on a huge repository** costs seconds when the index is cold, once per

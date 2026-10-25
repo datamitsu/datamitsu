@@ -67,7 +67,7 @@ in CI, and stale-checked by a Go test against a committed source hash.
   different directories are byte-identical without flags; `DATAMITSU_PARSERS_VERSION` changes
   the bytes; without remapping the module carries six machine-specific strings
   (`~/.cargo/registry/…/tinyjson-2.5.1/src/parser.rs` and five `~/.rustup/toolchains/<tc>/lib/
-rustlib/src/rust/library/…` paths that appear only when `rust-src` is installed); with
+  rustlib/src/rust/library/…` paths that appear only when `rust-src` is installed); with
   `--remap-path-prefix` for cargo home, the sysroot source tree (mapped to `/rustc/<commit>`)
   and the workspace, two directories give the same bytes. `tinyjson` has no build script and no
   proc-macro. The empty-module floor is 91 848 bytes; the full module is 403 292 bytes.
@@ -153,17 +153,17 @@ exports it too, so `devtools parsers run fallback` works with any build.
 - **One source of the toolchain version:** `parsers/rust-toolchain.toml` pins the exact `rustc`
   and the `wasm32-unknown-unknown` target; `pr-checks.yml` and `release.yml` install through
   `rustup` from it. `parsers/embedded.Dockerfile` takes `ARG RUST_VERSION` and is `FROM
-rust:${RUST_VERSION}-slim@sha256:<digest>`; `parsers/embedded.lock` holds the version and the
+  rust:${RUST_VERSION}-slim@sha256:<digest>`; `parsers/embedded.lock` holds the version and the
   digest on two lines and is the only other place the version appears. The gate (below) reads
   the toolchain file, passes the version as the build arg, and asserts `rustc -vV` **inside** the
   container names that version, so a digest of a different rustc cannot pass.
 - `task build:parsers:embedded`:
   1. `docker build --platform linux/amd64 --build-arg RUST_VERSION=<from toolchain file> -t
-datamitsu-parsers-embedded -f parsers/embedded.Dockerfile parsers`;
+     datamitsu-parsers-embedded -f parsers/embedded.Dockerfile parsers`;
   2. `docker run --rm --platform linux/amd64 --user "$(id -u):$(id -g)" -e CARGO_HOME=/cargo -e
-CARGO_TARGET_DIR=/src/target-embedded -e CARGO_INCREMENTAL=0 -v "$PWD/parsers:/src" -v
-datamitsu-cargo-home:/cargo -w /src datamitsu-parsers-embedded cargo build --release
---locked --target wasm32-unknown-unknown --no-default-features --features format` with the
+     CARGO_TARGET_DIR=/src/target-embedded -e CARGO_INCREMENTAL=0 -v "$PWD/parsers:/src" -v
+     datamitsu-cargo-home:/cargo -w /src datamitsu-parsers-embedded cargo build --release
+     --locked --target wasm32-unknown-unknown --no-default-features --features format` with the
      three `--remap-path-prefix` flags of §1 as hygiene and no `DATAMITSU_PARSERS_VERSION` —
      a separate target directory so native and container artifacts never share one, the
      caller's uid so nothing root-owned lands in the checkout, a named volume as a writable cargo
@@ -172,18 +172,18 @@ datamitsu-cargo-home:/cargo -w /src datamitsu-parsers-embedded cargo build --rel
   4. `go run ./internal/parsermanager/embedded/cmd/sourcehash` writes
      `internal/parsermanager/embedded/fallback.wasm.sources` (below).
      `task build:parsers` keeps building the public module and gains an explicit `task
-build:parsers:fixture` that copies it to `internal/parsermanager/testdata/echo.wasm`.
+     build:parsers:fixture` that copies it to `internal/parsermanager/testdata/echo.wasm`.
 - **CI gate** (`pr-checks.yml`, the `llmsdocs/embed` pattern, a required status check on
   `main`): the same container build, the `rustc -vV` assertion, `cmp` with the committed file;
   on mismatch upload the built module as the workflow artifact `embedded-fallback-wasm` and fail
   with `::error::the embedded fallback module is stale; download the artifact of this run and
-commit it as internal/parsermanager/embedded/fallback.wasm, or run task
-build:parsers:embedded`. A contributor never needs Docker or Rust to make the gate green.
+  commit it as internal/parsermanager/embedded/fallback.wasm, or run task
+  build:parsers:embedded`. A contributor never needs Docker or Rust to make the gate green.
 - **Source hash** (the second freshness check of D8f, without a build script): the files listed
   in `parsers/datamitsu-parsers/embedded-sources.txt` (the `format` feature's sources,
   `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `embedded.lock`, `embedded.Dockerfile`) are
   hashed by Go — sorted repository-relative paths, each contributing `path NUL length NUL bytes
-NUL` with CRLF folded to LF — with XXH3-128 through `internal/hashutil` (a local staleness
+  NUL` with CRLF folded to LF — with XXH3-128 through `internal/hashutil` (a local staleness
   fingerprint, never compared with an external value: Hashing Policy). The build task commits the
   hex in `fallback.wasm.sources`; a Go test in `internal/parsermanager/embedded` recomputes it
   over the working tree and fails with "embedded module is stale: run task
@@ -334,7 +334,7 @@ the wrapper bumps the hash at checkpoint R3 (or earlier, with R2).
   `ldflags.Version` and different embedded bytes do not share per-file or unit passes;
   `datamitsu config runtime | jq .maxParseInputBytes`.
 - End to end: ruff (`--output-format sarif` declared as `parser: "sarif"`), shellcheck (`-f
-checkstyle` as `checkstyle-xml`), typos (`--format brief` as `gcc`) parse in a gated e2e run.
+  checkstyle` as `checkstyle-xml`), typos (`--format brief` as `gcc`) parse in a gated e2e run.
 
 ---
 

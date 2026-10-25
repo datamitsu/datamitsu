@@ -92,7 +92,7 @@ func TestLoaderRejectsInvalidEjectDeclarations(t *testing.T) {
 // An ejectConfigs name the pinned configuration does not define is wrapper
 // version drift, not a broken chain: the load succeeds, the placement of every
 // entry is the internal one, and the warning replays on a cache hit.
-func TestLoaderWarnsOnAnUnconfiguredEjectName(t *testing.T) {
+func TestLoaderWarnsOnAnUnknownEjectName(t *testing.T) {
 	isolateCacheTree(t)
 	observed := swapLoggerWithObserver(t, zapcore.WarnLevel)
 	base := writeStandaloneConfig(t, ejectableBaseLayer)

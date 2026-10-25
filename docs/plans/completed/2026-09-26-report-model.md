@@ -304,15 +304,15 @@ DATAMITSU_REPORT=json=out/run.json,sarif=out/run.sarif   the env twin; a flag na
 
 - Under `--log-format jsonl`, one flat event per finding with `Reported: true`:
   `{type: "diagnostic", op_id: <task op id>, tool, dir, file, row, col, end_row, end_col,
-severity, code, source, msg, fingerprint, provenance, reported: true, gates}`. `--events
-diagnostics=all` (and `DATAMITSU_EVENTS=diagnostics=all`) emits every finding. Synthetic
+  severity, code, source, msg, fingerprint, provenance, reported: true, gates}`. `--events
+  diagnostics=all` (and `DATAMITSU_EVENTS=diagnostics=all`) emits every finding. Synthetic
   findings are never emitted.
 - `uievent.Event` stays flat. New fields are pointers with `omitempty` (`Reported *bool`,
   `Gates *bool`, `FindingsError *int`, …) set only on the events that carry them: `tool_run done`
   carries `findings_error`, `findings_warning`, `findings_info`, `findings_hint` (explicit zero
   through the pointer) and `cached`; nothing appears on `phase`, `chunk` or `download`.
 - The stream opens with `{type: "hello", op_id: "stream", schema: "datamitsu.report/1",
-events: "diagnostic,report,…"}` (a comma-separated string, not an array, to respect the
+  events: "diagnostic,report,…"}` (a comma-separated string, not an array, to respect the
   flat-envelope rule), so a reader can tell "no diagnostic events" from "zero findings".
 - `JSONLSink.Emit` records the encoder's first error; the runner checks `Failed()` at the end
   and exits 1 with the error on stdout — a broken stderr is not an unwritten artifact and does

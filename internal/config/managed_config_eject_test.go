@@ -44,7 +44,7 @@ func TestValidateEject(t *testing.T) {
 		}
 	})
 
-	t.Run("an unconfigured name warns instead of failing", func(t *testing.T) {
+	t.Run("an unknown name warns instead of failing", func(t *testing.T) {
 		cfg := ejectFixture()
 		cfg.EjectConfigs = []string{"no-such-tool"}
 		warnings, err := ValidateEject(cfg)

@@ -212,6 +212,10 @@ jobs:
           # annotations of the files a pull request touched come first.
           fetch-depth: 2
       - uses: ./.github/actions/setup-environment
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - name: Install Python packaging development dependencies
+        run: uv sync --project packaging/python --locked --only-group dev --no-install-project
       - name: Check Go modules are tidy
         run: |
           go mod tidy

@@ -271,7 +271,7 @@ The trust boundary lives here, in one branch.
 - User-facing messages go through `farmLabel`/`refreshHint`, so a rootless farm is named by its
   config chain and told to run `source refresh --config <path> --force` instead of "in that
   repository". A git-root farm's messages are byte-identical to before — `go test ./test/cli/
--count=2` is unchanged.
+  -count=2` is unchanged.
 
 ### Task 4: Wire `source` to accept the explicit path
 
