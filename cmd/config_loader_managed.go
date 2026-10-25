@@ -23,8 +23,12 @@ func finalizeManagedConfigPlacement(cfg *config.Config, layers []config.ManagedC
 	if err := config.ValidateManagedConfigToolRefs(cfg.ManagedConfigs, cfg.Tools); err != nil {
 		return err
 	}
-	if err := config.ValidateEject(cfg); err != nil {
+	ejectWarnings, err := config.ValidateEject(cfg)
+	if err != nil {
 		return err
+	}
+	for _, w := range ejectWarnings {
+		obs.warn(w)
 	}
 	config.ApplyManagedConfigPlacements(cfg)
 

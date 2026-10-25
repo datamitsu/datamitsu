@@ -35,8 +35,24 @@ func TestValidateEject(t *testing.T) {
 	t.Run("a valid declaration passes", func(t *testing.T) {
 		cfg := ejectFixture()
 		cfg.EjectConfigs = []string{"gitleaks"}
-		if err := ValidateEject(cfg); err != nil {
+		warnings, err := ValidateEject(cfg)
+		if err != nil {
 			t.Fatalf("ValidateEject() = %v", err)
+		}
+		if len(warnings) != 0 {
+			t.Fatalf("ValidateEject() warnings = %v, want none", warnings)
+		}
+	})
+
+	t.Run("an unknown name warns instead of failing", func(t *testing.T) {
+		cfg := ejectFixture()
+		cfg.EjectConfigs = []string{"no-such-tool"}
+		warnings, err := ValidateEject(cfg)
+		if err != nil {
+			t.Fatalf("ValidateEject() = %v", err)
+		}
+		if len(warnings) != 1 || !strings.Contains(warnings[0], `"no-such-tool" is not a configured tool`) {
+			t.Fatalf("ValidateEject() warnings = %v, want one naming the tool", warnings)
 		}
 	})
 
@@ -45,7 +61,6 @@ func TestValidateEject(t *testing.T) {
 		mutate func(*Config)
 		want   string
 	}{
-		{"unknown tool", func(c *Config) { c.EjectConfigs = []string{"no-such-tool"} }, `"no-such-tool" is not a configured tool`},
 		{"tool without an ejectable config", func(c *Config) { c.EjectConfigs = []string{"eslint"} }, `tool "eslint" has no ejectable managed config`},
 		{"duplicate", func(c *Config) { c.EjectConfigs = []string{"gitleaks", "gitleaks"} }, "listed more than once"},
 		{"empty name", func(c *Config) { c.EjectConfigs = []string{""} }, "must not be empty"},
@@ -86,7 +101,7 @@ func TestValidateEject(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := ejectFixture()
 			tt.mutate(cfg)
-			err := ValidateEject(cfg)
+			_, err := ValidateEject(cfg)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("ValidateEject() = %v, want an error containing %q", err, tt.want)
 			}

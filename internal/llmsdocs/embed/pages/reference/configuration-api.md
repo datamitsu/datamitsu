@@ -1449,7 +1449,11 @@ return { ...input, ejectConfigs: ["gitleaks"] };
   the file by name will not find it.
 - **`ejectConfigs`** names tools, not files; every ejectable entry whose `tools`
   include a named tool moves into the repository. Each name must be a configured
-  tool that owns at least one ejectable entry. Duplicates are an error.
+  tool that owns at least one ejectable entry. Duplicates are an error. A name
+  that is not a configured tool only warns — the project layer usually pins a
+  shared configuration, and an older or newer release of it may not define the
+  tool yet or any more, which must not stop every datamitsu command in the
+  repository. A configured name that owns no ejectable entry is an error.
 - **Rendering.** An internal render has no `originalContent` and an empty project
   context; `context.placement` is `"internal"`. Build a path that the file itself
   resolves (a JavaScript import, a file-relative `extends`) from

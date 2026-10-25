@@ -85,9 +85,15 @@ func validRelocatableKey(key string) bool {
 }
 
 // ValidateEject checks the ejectable declarations and the project's
-// ejectConfigs against the final chain.
-func ValidateEject(cfg *Config) error {
+// ejectConfigs against the final chain. ejectConfigs is the project's
+// preference list and must survive wrapper version drift: a layer pins an
+// older wrapper whose tools no longer (or not yet) include a name, so a name
+// outside cfg.Tools is a warning the config-evaluation cache replays, not a
+// load error. A name that IS configured but owns no ejectable managed config
+// cannot be satisfied at all and stays an error.
+func ValidateEject(cfg *Config) ([]string, error) {
 	var errs []string
+	var warnings []string
 
 	keys := make([]string, 0, len(cfg.ManagedConfigs))
 	for key := range cfg.ManagedConfigs {
@@ -129,7 +135,7 @@ func ValidateEject(cfg *Config) error {
 		case seen[name]:
 			errs = append(errs, fmt.Sprintf("ejectConfigs: %q is listed more than once", name))
 		case !hasTool(cfg.Tools, name):
-			errs = append(errs, fmt.Sprintf("ejectConfigs: %q is not a configured tool", name))
+			warnings = append(warnings, fmt.Sprintf("ejectConfigs: %q is not a configured tool; ignoring it (the pinned configuration does not define it)", name))
 		case !owners[name]:
 			errs = append(errs, fmt.Sprintf("ejectConfigs: tool %q has no ejectable managed config", name))
 		}
@@ -137,9 +143,9 @@ func ValidateEject(cfg *Config) error {
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
+		return nil, fmt.Errorf("config validation failed:\n  %s", strings.Join(errs, "\n  "))
 	}
-	return nil
+	return warnings, nil
 }
 
 // ejectableKeyCollisions reports ejectable keys that .datamitsu/configs/
