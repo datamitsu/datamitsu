@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs inside Docker (node:24-slim, linux/amd64).
+# Runs inside Docker (node:26.7.0-trixie-slim@sha256:5758d367d7b4f48b73a9bb3530e687e47efb289f3b43f9c0450a25225ae0db5d, linux/amd64).
 # Installs git + pnpm, clones ovineko/ovineko, runs datamitsu, writes cold.cast + warm.cast.
 set -e
 

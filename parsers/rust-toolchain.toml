@@ -2,7 +2,7 @@
 # the release workflow and the embedded module's container build
 # (embedded.Dockerfile, embedded.lock) all install from it.
 [toolchain]
-channel = "1.98.0"
+channel = "1.99.1"
 components = ["rustfmt"]
 profile = "minimal"
 targets = ["wasm32-unknown-unknown"]
