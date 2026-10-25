@@ -94,6 +94,12 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.5.1** - A name in a project layer's `ejectConfigs` that the
+  configuration chain does not define is now a warning, not a load error: a
+  project pinning your configuration must keep working when a release adds,
+  renames or drops a tool. `ejectConfigs` needs no coordination with the tools
+  a layer defines. A configured name that owns no ejectable managed config is
+  still a load error.
 - **after v0.5.1** - Config JS exposes `merge(base, overrides, ...)` for
   recursive, non-mutating settings merges; later values win and arrays replace.
   Adopt it instead of local merge helpers once the consuming core includes it.

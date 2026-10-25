@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 const ejectableBaseLayer = `
@@ -70,7 +72,6 @@ func TestLoaderRejectsInvalidEjectDeclarations(t *testing.T) {
 		project string
 		want    string
 	}{
-		{"unknown tool", `return { ...input, ejectConfigs: ["no-such-tool"] };`, `"no-such-tool" is not a configured tool`},
 		{"dangling managed config tool", `return { ...input, managedConfigs: { ...input.managedConfigs, "x.yml": { tools: ["nope"], content: () => "" } } };`, `unknown tool "nope"`},
 		{"placeholder naming no config", `return { ...input, tools: { ...input.tools, other: { name: "other", operations: { lint: { app: "x", args: ["{managedConfig:missing.toml}"] } } } } };`, "names no managed config"},
 		{"content that throws", `return { ...input, managedConfigs: { ".gitleaks.toml": { scope: "git-root", tools: ["gitleaks"], ejectable: true, content: () => { throw new Error("boom"); } } } };`, "boom"},
@@ -86,6 +87,41 @@ func TestLoaderRejectsInvalidEjectDeclarations(t *testing.T) {
 			}
 		})
 	}
+}
+
+// An ejectConfigs name the pinned configuration does not define is wrapper
+// version drift, not a broken chain: the load succeeds, the placement of every
+// entry is the internal one, and the warning replays on a cache hit.
+func TestLoaderWarnsOnAnUnconfiguredEjectName(t *testing.T) {
+	isolateCacheTree(t)
+	observed := swapLoggerWithObserver(t, zapcore.WarnLevel)
+	base := writeStandaloneConfig(t, ejectableBaseLayer)
+	project := writeStandaloneConfig(t, `return { ...input, ejectConfigs: ["no-such-tool"] };`)
+
+	want := `ejectConfigs: "no-such-tool" is not a configured tool`
+	for _, load := range []string{"miss", "hit"} {
+		cfg, _, vm := loadCached(t, base, project)
+		if (load == "hit") != servedFromCache(vm) {
+			t.Fatalf("%s: servedFromCache = %v", load, servedFromCache(vm))
+		}
+		if cfg.ManagedConfigs[".gitleaks.toml"].Placement != config.PlacementInternal {
+			t.Errorf("%s: placement = %q, want internal", load, cfg.ManagedConfigs[".gitleaks.toml"].Placement)
+		}
+		if got := countLogsWith(observed, want); got != 1 {
+			t.Errorf("%s: %d warnings containing %q", load, got, want)
+		}
+		observed.TakeAll()
+	}
+}
+
+func countLogsWith(observed *observer.ObservedLogs, substr string) int {
+	n := 0
+	for _, entry := range observed.TakeAll() {
+		if strings.Contains(entry.Message, substr) {
+			n++
+		}
+	}
+	return n
 }
 
 // A later layer receives earlier layers' entries through the Go-to-JS
