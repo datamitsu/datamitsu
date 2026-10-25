@@ -9,6 +9,19 @@ go test ./...                 # all unit + offline blackbox tests
 go test ./test/cli/ -count=2  # offline CLI golden suite (must be byte-stable)
 ```
 
+### Python packaging checks
+
+Before running `pnpm dm check` in a fresh checkout, install the Python packaging
+development dependencies from the committed lock file:
+
+```bash
+pnpm dm exec uv -- sync --project packaging/python --locked --only-group dev --no-install-project
+```
+
+This supplies Hatchling to the type checker without building or installing the
+platform-specific package. Build-system requirements alone are installed only in
+the isolated build environment.
+
 ### CLI blackbox suite
 
 [`test/cli`](test/cli) runs the compiled binary in subprocesses inside isolated

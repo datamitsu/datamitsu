@@ -141,9 +141,9 @@ commit it was taken from; updating it is a deliberate change.
 ```ts
 interface ToolOperation {
   /**
-   * Host environment variables to hand to the tool even though datamitsu strips them by
-   * default (GITHUB_ACTIONS, agent markers, FORCE_COLOR). Names only: the tool sees the host's
-   * real value, and nothing when the host has none. Use `env` to set a fixed value instead.
+   * Host environment variables to hand to the tool even though datamitsu strips them by default
+   * (GITHUB_ACTIONS, agent markers, FORCE_COLOR). Names only: the tool sees the host's real value,
+   * and nothing when the host has none. Use `env` to set a fixed value instead.
    *
    * @example
    *   inheritEnv: ["GITHUB_ACTIONS"];

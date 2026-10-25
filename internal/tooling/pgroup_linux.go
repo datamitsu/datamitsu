@@ -31,12 +31,12 @@ func groupAlive(pgid int) bool {
 			continue
 		}
 		// The command name before the fields may itself hold ") ".
-		i := bytes.LastIndex(stat, []byte(") "))
-		if i < 0 {
+		_, after, ok := bytes.CutLast(stat, []byte(") "))
+		if !ok {
 			continue
 		}
 		// The fields start with the state, the parent and the process group.
-		fields := bytes.Fields(stat[i+2:])
+		fields := bytes.Fields(after)
 		if len(fields) < 3 || !bytes.Equal(fields[2], want) {
 			continue
 		}

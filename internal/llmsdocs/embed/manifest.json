@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "f0ca79a6d4e540407797fa78d3ec8c14",
+  "pageSetHash": "a443263ad65aa031ca22f15611c63488",
   "pages": [
     {
       "slug": "about",
@@ -31,8 +31,8 @@
       "url": "https://datamitsu.com/docs/contributing/creating-wrappers.md",
       "title": "Creating Wrapper Packages",
       "description": "Build your own datamitsu config distribution package for your team or organization",
-      "bytes": 17086,
-      "contentHash": "3cbb612c6299056e6956431f8d948d27"
+      "bytes": 17083,
+      "contentHash": "cc8736b43e33fa6b340d11387cfc79d5"
     },
     {
       "slug": "contributing",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 55298,
-      "contentHash": "cb94dbaa7c5c9b21294ad4a4aab5a070"
+      "bytes": 55300,
+      "contentHash": "8cc65663c7f4ef46599722af62e03a2d"
     },
     {
       "slug": "guides/architecture/planner",

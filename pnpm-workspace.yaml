@@ -10,7 +10,7 @@ audit:
 autoInstallPeers: true
 blockExoticSubdeps: true
 catalog:
-  "@shibanet0/datamitsu-config": 0.0.0-unstable.20261008.3db1384
+  "@shibanet0/datamitsu-config": 0.6.2
 dangerouslyAllowAllBuilds: false
 dedupeDirectDeps: true
 dedupePeerDependents: true
@@ -53,6 +53,8 @@ trustLockfile: true
 trustPolicy: no-downgrade
 trustPolicyExclude:
   - semver@5.7.2
+  - semver@6.3.1
+  - chokidar@4.0.3
 unsafePerm: false
 updateNotifier: false
 verifyDepsBeforeRun: install

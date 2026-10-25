@@ -611,7 +611,7 @@ so these paths are unreachable outside tests. Every `test/cli` golden is byte-id
 - [x] record the final measurement table in this plan file, replacing the estimates
 - [x] if `scripts/bench-overhead.sh` gained flags or output, update its usage comment —
       **no change needed**, the script is byte-identical to `main` (`git diff main...HEAD --
-scripts/` is empty): it gained no flags and its output shape is unchanged, only the
+  scripts/` is empty): it gained no flags and its output shape is unchanged, only the
       numbers it prints moved
 - [x] add a short note to `website/docs/guides/architecture/execution.md` (or the nearest
       architecture page) describing the config-load cost model and the memo, so the next

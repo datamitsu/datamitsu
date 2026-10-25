@@ -151,8 +151,8 @@ func hasAnySuffix(s string, suffixes []string) bool {
 func Extensions(glob string) []string {
 	// Only the last path segment can carry the extension.
 	filename := glob
-	if i := strings.LastIndexByte(glob, '/'); i >= 0 {
-		filename = glob[i+1:]
+	if _, after, ok := strings.CutLast(glob, "/"); ok {
+		filename = after
 	}
 
 	// Must start with "*." to be an extension pattern.

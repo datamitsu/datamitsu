@@ -148,9 +148,9 @@ as they are), so this part does not wait for the module release.
 ```ts
 interface ToolOperation {
   /**
-   * The lowest severity that fails the run: "error" (default), "warning", "info" or "hint".
-   * The tool's own exit code always fails the run too; failOn only adds failures, never removes
-   * them. The terminal shows findings at this severity and above.
+   * The lowest severity that fails the run: "error" (default), "warning", "info" or "hint". The
+   * tool's own exit code always fails the run too; failOn only adds failures, never removes them.
+   * The terminal shows findings at this severity and above.
    *
    * @example
    *   failOn: "warning";
@@ -173,7 +173,7 @@ interface ToolOperation {
   decision is committed). `GateDecision{Failed bool; Reason string; Gating []int}` names the
   findings that gate.
 - **Gate.** A process whose exit code is 0 and which has a finding with `severity.Level() <=
-failOn.Level()` is marked failed with `FailureReason: FailureReasonThreshold` (new) and the
+  failOn.Level()` is marked failed with `FailureReason: FailureReasonThreshold` (new) and the
   error `"<n> findings at or above failOn=<level>"`; `FileResult.Success` is false for the files
   the gating findings belong to; under fail-fast the per-file loop stops after it as it does after
   a non-zero exit. A non-zero exit stays a failure at any threshold. The gate applies to **fix

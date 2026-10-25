@@ -474,7 +474,7 @@ The bytes are committed as `internal/parsermanager/embedded/fallback.wasm`, and
 two checks keep them honest:
 
 - **A CI job rebuilds them and compares, byte for byte.** `task
-build:parsers:embedded` builds the module in a `linux/amd64` container from a
+  build:parsers:embedded` builds the module in a `linux/amd64` container from a
   digest-pinned `rust` image, as the caller's user, with a separate target
   directory and the cargo home, the toolchain's sources and the workspace
   remapped to fixed paths; built twice on one machine, or natively with the same
