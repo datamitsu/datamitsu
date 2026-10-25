@@ -5,8 +5,6 @@
 Go builds require Go 1.27.3 or newer, as declared in `go.mod`. Parser builds use
 Rust 1.99.1 from `parsers/rust-toolchain.toml`; keep its embedded container pins
 aligned and regenerate both parser WASM artifacts when changing that compiler.
-The project configuration pins golangci-lint 2.15.0 because the inherited binary
-cannot read Go 1.27 export data. Run `pnpm dm init` after changing that pin.
 
 ## Testing
 
