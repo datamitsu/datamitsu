@@ -302,6 +302,9 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   longer holds, and an entry under "Recent changes to review" naming the first
   release that has it (`after v<latest tag>` until one does) and what a
   configuration should do. Drop entries older than the two latest minor releases.
+  For the required config-release `version` change, the author guide records the
+  first affected release after the latest tag and explains the migration: add a
+  nonempty one-line label up to 80 characters, distinct from `getMinVersion()`.
 - Rules in both guides point at `datamitsu llms` pages instead of copying them.
 
 ## Output Parsers
@@ -776,6 +779,14 @@ JSON (`configuration`), and the inspector's snapshot caption. The snapshot
 manifest carries the already-defaulted name, and no surface — inspector, website
 or documentation copy — types a person's or package's name to describe a
 configuration.
+
+The top-level configuration `version` is required on the final resolved config
+and follows normal scalar layer inheritance. The embedded default supplies
+`core`; a layer that discards the input config must supply its own value. It is a
+nonempty one-line label up to 80 characters with no surrounding whitespace; it
+may be a package release version or a static label such as `core`, with no
+semver requirement. `getMinVersion()` remains the separate semver minimum core
+version. Never promise config JS can import or read package metadata.
 
 The display document is the **inspector manifest** everywhere it is named: the
 `inspector-manifest` script element, the `datamitsu-inspector-manifest.json` the

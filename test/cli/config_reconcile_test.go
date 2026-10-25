@@ -13,7 +13,7 @@ import (
 // config entries. It exercises tool scoping and opt-in-ignore behavior offline.
 const reconcileToolsConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = () => ({
-  apps: {}, runtimes: {}, managedConfigs: {},
+  version: "1.0.0",
   tools: {
     "alpha": { name: "alpha", operations: { lint: { app: "alpha-bin", args: ["x"], scope: "repository" } } },
     "beta":  { name: "beta",  operations: { lint: { app: "beta-bin",  args: ["y"], scope: "repository" } } }
@@ -119,6 +119,7 @@ func TestConfigReconcileUnknownTools(t *testing.T) {
 
 const reconcileWritesConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = () => ({
+  version: "1.0.0",
   apps: {
     "fix-recorder": { shell: { name: "sh", args: ["-c", "printf fixed > fix-ran.txt"] } },
   },
@@ -247,7 +248,7 @@ func TestRemovedSetupCommandCannotWrite(t *testing.T) {
 }
 
 const chainDriftBeforeConfigJS = `globalThis.getConfig = () => ({
-  apps: {}, runtimes: {}, tools: {},
+  version: "1.0.0",
   managedConfigs: { "drift.txt": { content: () => "upstream\n" } },
 });
 globalThis.getMinVersion = () => "0.0.0";
@@ -255,7 +256,7 @@ globalThis.getMinVersion = () => "0.0.0";
 
 const chainDriftRootConfigJS = `globalThis.getBeforeConfigs = () => [{ path: "before.config.js" }];
 globalThis.getConfig = () => ({
-  apps: {}, runtimes: {}, tools: {},
+  version: "1.0.0",
   managedConfigs: { "drift.txt": { content: () => "root\n", expectChainHash: "xxh3:00000000000000000000000000000000" } },
 });
 globalThis.getMinVersion = () => "0.0.0";

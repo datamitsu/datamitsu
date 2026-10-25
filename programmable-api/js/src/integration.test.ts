@@ -28,6 +28,7 @@ const MINIMAL_CONFIG = [
   'globalThis.getMinVersion = () => "0.0.0";',
   "globalThis.getBeforeConfigs = () => [];",
   "globalThis.getConfig = () => ({",
+  '  version: "integration",',
   '  apps: { "hello-shell": { description: "say hi", shell: { name: "echo" } } },',
   "  managedConfigs: {},",
   "  runtimes: {},",

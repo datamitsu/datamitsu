@@ -16,6 +16,7 @@ import (
 // exit 0. A run with no detected project type plans nothing, hence the marker.
 const fixersConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = () => ({
+  version: "1.0.0",
   apps: {
     clean: { shell: { name: "sh", args: ["-c", 'echo "$0" >> "$MARKERS"; echo "tidied $1"', "clean"] } },
     dirty: { shell: { name: "sh", args: ["-c", 'echo "$0" >> "$MARKERS"; echo "$1:1:1: error: still broken" >&2', "dirty"] } },

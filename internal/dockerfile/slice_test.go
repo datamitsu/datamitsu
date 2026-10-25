@@ -68,6 +68,26 @@ func TestBuildSlices_EverySliceLoads(t *testing.T) {
 	}
 }
 
+func TestBuildSlices_PreservesSourceIdentity(t *testing.T) {
+	apps, runtimes, parsers := sampleConfigForSlicing()
+	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	for _, slice := range mustBuildSlices(t, plan, apps, runtimes, parsers) {
+		js, err := RenderSlice(slice.Config)
+		if err != nil {
+			t.Fatalf("RenderSlice(%s): %v", slice.FileName, err)
+		}
+		var got config.Config
+		start := strings.Index(js, "getConfig() { return ") + len("getConfig() { return ")
+		end := strings.LastIndex(js, "; }")
+		if err := json.Unmarshal([]byte(js[start:end]), &got); err != nil {
+			t.Fatalf("%s contains invalid config JSON: %v", slice.FileName, err)
+		}
+		if got.Version != "2.4.1" || got.Name != "test.config" {
+			t.Errorf("%s identity = name %q version %q, want test.config / 2.4.1", slice.FileName, got.Name, got.Version)
+		}
+	}
+}
+
 func TestSliceFileName(t *testing.T) {
 	if got := SliceFileName("app-prettier"); got != "app-prettier.js" {
 		t.Errorf("SliceFileName = %q, want app-prettier.js", got)
@@ -297,7 +317,8 @@ func TestBuildPlan_URLParserIsNotFlaggedAsRegistrySourced(t *testing.T) {
 
 func mustBuildSlices(t *testing.T, plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, parsers config.MapOfParsers) []Slice {
 	t.Helper()
-	slices, err := BuildSlices(plan, apps, runtimes, parsers)
+	source := &config.Config{Name: "test.config", Version: "2.4.1"}
+	slices, err := BuildSlices(source, plan, apps, runtimes, parsers)
 	if err != nil {
 		t.Fatal(err)
 	}

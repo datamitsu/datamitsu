@@ -12,6 +12,7 @@ function getConfig(config: config.Config): config.Config {
       ...config.apps,
       ...mapOfApps,
     },
+    name: "embedded",
     runtimes: {
       ...config.runtimes,
       ...mapOfRuntimes,
@@ -22,6 +23,7 @@ function getConfig(config: config.Config): config.Config {
       "datamitsu-config-author-prompt": DATAMITSU_CONFIG_AUTHOR_GUIDE,
       "pnpm-workspace-defaults": YAML.stringify(pnpmWorkspaceDefaults),
     },
+    version: "core",
   };
 
   return configOutput;

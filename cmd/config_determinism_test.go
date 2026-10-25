@@ -60,8 +60,8 @@ func writeStandaloneConfig(t *testing.T, body string) string {
 	writeFile(t, path, `
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) {
-`+body+`
-}`)
+	return Object.assign({ version: "1.0.0" }, (function() { `+body+` })());
+	}`)
 	return path
 }
 

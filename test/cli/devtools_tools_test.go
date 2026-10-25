@@ -50,7 +50,7 @@ func TestDevtoolsToolsCommandSetDrift(t *testing.T) {
 // runs them) so `devtools tools list` is deterministic and offline.
 const toolsListConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
-  apps: { "a": { shell: { name: "true" } }, "b": { shell: { name: "true" } } },
+  version: "1.0.0",
   runtimes: {}, managedConfigs: {}, bundles: {},
   tools: {
     "alpha": { name: "Alpha", projectTypes: ["x"], operations: { lint: { app: "a", args: ["{file}"], scope: "per-file" } } },

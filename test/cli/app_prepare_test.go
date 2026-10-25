@@ -16,6 +16,7 @@ import (
 func prepareConfigJS() string {
 	return `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = () => ({
+  version: "1.0.0",
   apps: {
     schepherd: {
       binary: { binaries: { linux: { amd64: { glibc: { url: "https://example.invalid/schepherd", hash: "sha256:` + strings.Repeat("0", 64) + `", contentType: "application/octet-stream" } } } }, version: "0.1.0" },
@@ -105,7 +106,7 @@ func TestConfigShowPrepareValidation(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			p := clitest.NewProject(t)
-			cfg := p.WriteFile("bad.config.js", "globalThis.getBeforeConfigs = () => [];\nglobalThis.getConfig = () => ({ apps: { "+tt.appJS+" } });\nglobalThis.getMinVersion = () => \"0.0.0\";\n")
+			cfg := p.WriteFile("bad.config.js", "globalThis.getBeforeConfigs = () => [];\nglobalThis.getConfig = () => ({ version: \"1.0.0\", apps: { "+tt.appJS+" } });\nglobalThis.getMinVersion = () => \"0.0.0\";\n")
 			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
 				"--no-auto-config", "--config", cfg, "config", "show")
 			if res.ExitCode == 0 {
@@ -120,7 +121,7 @@ func TestConfigShowPrepareValidation(t *testing.T) {
 
 func TestConfigShowDependsOnLegacyStrings(t *testing.T) {
 	p := clitest.NewProject(t)
-	cfg := p.WriteFile("legacy.config.js", "globalThis.getBeforeConfigs = () => [];\nglobalThis.getConfig = () => ({ apps: {\n"+
+	cfg := p.WriteFile("legacy.config.js", "globalThis.getBeforeConfigs = () => [];\nglobalThis.getConfig = () => ({ version: \"1.0.0\", apps: {\n"+
 		"  proxy: { shell: { name: \"echo\" }, dependsOn: [\"upstream\"], runtimeEnv: { UP: \"${APP_BIN:upstream}\" } },\n"+
 		"  upstream: { binary: { binaries: { linux: { amd64: { glibc: { url: \"https://example.invalid/u\", hash: \"sha256:"+strings.Repeat("a", 64)+"\", contentType: \"application/octet-stream\" } } } } } },\n"+
 		"} });\nglobalThis.getMinVersion = () => \"0.0.0\";\n")
@@ -160,6 +161,7 @@ func goSourceConfigJS(t *testing.T) string {
 
 	return `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = () => ({
+  version: "1.0.0",
   runtimes: {
     go: { kind: "go", mode: "system", system: { command: "/usr/local/go/bin/go", systemVersion: "1.22.0" } },
   },

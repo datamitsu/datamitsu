@@ -15,7 +15,7 @@ datamitsu looks for a configuration file at your git root. Create one of:
 - `datamitsu.config.js` (JavaScript)
 - `datamitsu.config.mjs` (ES modules)
 
-Here's a minimal example that adds [hadolint](https://github.com/hadolint/hadolint) (a Dockerfile linter):
+Here's a minimal example that adds [hadolint](https://github.com/hadolint/hadolint) (a Dockerfile linter). It uses `1.0.0` as the project's configuration version label:
 
 ```typescript
 /// <reference path=".datamitsu/datamitsu.config.d.ts" />
@@ -24,6 +24,7 @@ Here's a minimal example that adds [hadolint](https://github.com/hadolint/hadoli
 function getConfig(prev) {
   return {
     ...prev,
+    version: "1.0.0",
     apps: {
       ...prev.apps,
       hadolint: {
@@ -179,7 +180,7 @@ graph TD
     F --> G[final Config]
 ```
 
-Every config must export `getMinVersion()` (returns the minimum datamitsu version required) and `getConfig(prev)` (receives the previous layer's config and returns a new config that extends or overrides it). A source may also declare hash-pinned remote parents with `getRemoteConfigs()`; they are resolved depth-first immediately before that source. See [Config Loading Order](../guides/configuration.md#config-loading-order) for the full rules.
+Every config exports `getMinVersion()` and `getConfig(prev)`. The final resolved config also requires a top-level `version`: a nonempty, single-line label of at most 80 characters, without surrounding whitespace. It may be a release version or a static label such as `core`; semver is not required. It is inherited normally and can be overridden by later layers. Unlike `version`, `getMinVersion()` must return a semver minimum for the datamitsu core. A project can begin with `version: "1.0.0"`.
 
 ## Next Steps
 

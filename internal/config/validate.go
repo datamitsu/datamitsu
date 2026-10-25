@@ -43,6 +43,25 @@ func ValidateName(name string) error {
 	return nil
 }
 
+// ValidateVersion requires a nonempty, single-line release or display label.
+func ValidateVersion(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("config validation failed:\n  version: %q is required and must not be blank", value)
+	}
+	if value != strings.TrimSpace(value) {
+		return fmt.Errorf("config validation failed:\n  version: %q must not have leading or trailing whitespace", value)
+	}
+	if len([]rune(value)) > MaxNameLength {
+		return fmt.Errorf("config validation failed:\n  version: %d characters exceeds the %d allowed", len([]rune(value)), MaxNameLength)
+	}
+	for _, r := range value {
+		if unicode.IsControl(r) {
+			return fmt.Errorf("config validation failed:\n  version: %q contains a control character; use a single line of text", value)
+		}
+	}
+	return nil
+}
+
 // validateAppOfficialURLs checks every app's declared link. Kept out of the
 // per-app loop, like the other set-level checks, so doValidateApps stays under
 // the cyclomatic-complexity ceiling.

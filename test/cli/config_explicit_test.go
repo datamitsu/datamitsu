@@ -25,6 +25,7 @@ import (
 // nothing, keeping the run hermetic and offline.
 const explicitAppConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
+  version: "1.0.0",
   apps: { "machine-tool": { shell: { name: "true" } } },
   runtimes: {}, managedConfigs: {}, tools: {}
 });
@@ -36,6 +37,7 @@ globalThis.getMinVersion = () => "0.0.0";
 // its half of the chain contributes.
 const autoOnlyAppConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
+  version: "1.0.0",
   apps: { "auto-app": { shell: { name: "true" } } },
   runtimes: {}, managedConfigs: {}, tools: {}
 });

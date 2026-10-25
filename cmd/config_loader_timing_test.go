@@ -18,7 +18,7 @@ func writeTimingFixtureConfig(t *testing.T, path string) {
 	t.Helper()
 	writeFile(t, path, `
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { apps: {} }; }
+function getConfig(input) { return { version: "1.0.0", apps: {} }; }
 `)
 }
 
@@ -158,7 +158,7 @@ func BenchmarkLoadConfig(b *testing.B) {
 	root := benchGitRoot(b)
 	writeBenchFile(b, filepath.Join(root, ldflags.PackageName+".config.js"), `
 function getMinVersion() { return "0.0.0"; }
-function getConfig(input) { return { apps: {} }; }
+function getConfig(input) { return { version: "1.0.0", apps: {} }; }
 `)
 
 	ctx := context.Background()

@@ -208,6 +208,7 @@ func TestDevtoolsArgValidation(t *testing.T) {
 // is installed, so both report "not installed".
 const appsListConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
+  version: "1.0.0",
   apps: {
     "hello-shell": { shell: { name: "echo" }, description: "say hi" },
     "ztool": { shell: { name: "true" } }
@@ -221,6 +222,7 @@ globalThis.getMinVersion = () => "0.0.0";
 // `devtools bundles list` is deterministic and offline.
 const bundlesListConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
+  version: "1.0.0",
   apps: {}, runtimes: {}, managedConfigs: {}, tools: {},
   bundles: {
     "alpha-bundle": { version: "1.0", files: { "a.txt": "hi" } },

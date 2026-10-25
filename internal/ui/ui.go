@@ -21,11 +21,12 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"unicode/utf8"
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/term"
 
+	"github.com/mattn/go-runewidth"
+	terminal "github.com/vbauerster/cupwriter"
 	"github.com/vbauerster/mpb/v8"
 )
 
@@ -110,17 +111,49 @@ func (d *Display) Header(title string) {
 	d.writeLine(d.out, clr.Bold(clr.Cyan("▶ "+title)))
 }
 
-// Banner prints a rounded box with the program name and version — the branded
-// header shown once at the top of a run. The box hugs its content (no empty
-// padding) so it doesn't look sparse.
-func (d *Display) Banner(name, version string) {
-	content := name + "  " + version
-	rule := strings.Repeat("─", utf8.RuneCountInString(content)+2)
-	mid := clr.Green("│ ") + clr.Bold(clr.Green(name)) + clr.Faint("  "+version) + clr.Green(" │")
+// Banner identifies the CLI and resolved configuration once at the top of a run.
+func (d *Display) Banner(name, version, configName, configVersion string) {
+	width, _, err := terminal.New(d.out, false).GetTermSize()
+	if err != nil || width < 1 {
+		width = 80
+	}
+	for _, line := range bannerLines(name, version, configName, configVersion, width) {
+		d.writeLine(d.out, line)
+	}
+}
 
-	d.writeLine(d.out, clr.Green("╭"+rule+"╮"))
-	d.writeLine(d.out, mid)
-	d.writeLine(d.out, clr.Green("╰"+rule+"╯"))
+func bannerLines(name, version, configName, configVersion string, width int) []string {
+	product := name + "  " + version
+	configuration := configName + "  " + configVersion
+	box := func(label, release string, color func(...any) string) []string {
+		space := max(1, width-4)
+		if runewidth.StringWidth(release)+3 < space {
+			label = runewidth.Truncate(label, space-runewidth.StringWidth(release)-2, "…")
+		} else {
+			label = runewidth.Truncate(label+"  "+release, space, "…")
+			release = ""
+		}
+		content := label
+		styled := clr.Bold(color(label))
+		if release != "" {
+			content += "  " + release
+			styled += clr.Faint(color("  " + release))
+		}
+		rule := strings.Repeat("─", runewidth.StringWidth(content)+2)
+		return []string{color("╭" + rule + "╮"), color("│ ") + styled + color(" │"), color("╰" + rule + "╯")}
+	}
+	if width < 5 {
+		return []string{runewidth.Truncate(product, width, ""), runewidth.Truncate(configuration, width, "")}
+	}
+	cli := box(name, version, clr.Green)
+	config := box(configName, configVersion, clr.Orange)
+	if runewidth.StringWidth(product)+runewidth.StringWidth(configuration)+9 <= width {
+		for i := range cli {
+			cli[i] += " " + config[i]
+		}
+		return cli
+	}
+	return append(cli, config...)
 }
 
 // Errorln prints a line to stderr (safe above active bars).

@@ -18,7 +18,7 @@ import (
 // --explain returns before any install step, so this is fully offline+deterministic.
 const explainToolsConfigJS = `globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = (config) => ({
-  apps: {}, runtimes: {}, managedConfigs: {},
+  version: "1.0.0",
   tools: {
     "alpha": {
       name: "alpha",

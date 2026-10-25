@@ -13,7 +13,8 @@ import (
 // copies whatever config path it receives into seen.txt, so a test can tell
 // which file the tool actually read. __EJECT__ is the project's ejectConfigs.
 const ejectConfigJS = `globalThis.getConfig = () => ({
-  apps: { "cfg-reader": { shell: { name: "sh", args: ["-c", "cat \"$1\" > seen.txt", "cfg-reader"] } } },
+  version: "1.0.0",
+  apps: { "cfg-reader": { shell: { name: "sh", args: ["-c", 'cp "$1" seen.txt', "reader"] } } },
   runtimes: {},
   projectTypes: { fixture: { markers: ["fixture.marker"] } },
   tools: {

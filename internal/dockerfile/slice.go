@@ -30,17 +30,14 @@ type Slice struct {
 // COPY lines and split-config's output so they always line up.
 func SliceFileName(stage string) string { return stage + ".js" }
 
-// BuildSlices returns one minimal config slice per stage in the plan: a runtime
-// stage gets its runtime plus, for Node and Bun, the pnpm runtime it references
-// (which that stage installs for the app stages built FROM it); each app stage
-// gets its dependency closure plus the runtimes and pnpm references needed to
-// install it. A parser stage gets only its `parsers` entry. Order mirrors the
-// plan for deterministic output.
-func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, parsers config.MapOfParsers) ([]Slice, error) {
+// BuildSlices returns one minimal config slice per stage in the plan, preserving
+// the source configuration's identity on each generated config.
+func BuildSlices(source *config.Config, plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, parsers config.MapOfParsers) ([]Slice, error) {
 	if err := plan.ValidateDependencies(apps); err != nil {
 		return nil, err
 	}
 
+	identity := source
 	slices := make([]Slice, 0, len(plan.RuntimeStages)+len(plan.RuntimeAppStages)+len(plan.BinaryStages)+len(plan.ParserStages))
 
 	for _, rt := range plan.RuntimeStages {
@@ -55,7 +52,7 @@ func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRunt
 		slices = append(slices, Slice{
 			StageName: stage,
 			FileName:  SliceFileName(stage),
-			Config:    &config.Config{Runtimes: sliceRuntimes},
+			Config:    withIdentity(&config.Config{Runtimes: sliceRuntimes}, identity),
 		})
 	}
 
@@ -72,7 +69,7 @@ func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRunt
 			return nil, fmt.Errorf("slice for app %q: %w", name, err)
 		}
 		stage := stageName("app-", name)
-		slices = append(slices, Slice{StageName: stage, FileName: SliceFileName(stage), Config: cfg})
+		slices = append(slices, Slice{StageName: stage, FileName: SliceFileName(stage), Config: withIdentity(cfg, identity)})
 	}
 
 	for _, ps := range plan.ParserStages {
@@ -80,11 +77,17 @@ func BuildSlices(plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRunt
 		slices = append(slices, Slice{
 			StageName: stage,
 			FileName:  SliceFileName(stage),
-			Config:    &config.Config{Parsers: config.MapOfParsers{ps.Module: parsers[ps.Module]}},
+			Config:    withIdentity(&config.Config{Parsers: config.MapOfParsers{ps.Module: parsers[ps.Module]}}, identity),
 		})
 	}
 
 	return slices, nil
+}
+
+func withIdentity(cfg, identity *config.Config) *config.Config {
+	cfg.Name = identity.Name
+	cfg.Version = identity.Version
+	return cfg
 }
 
 func appSlice(root string, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes) (*config.Config, error) {
@@ -117,9 +120,8 @@ func appSlice(root string, apps binmanager.MapOfApps, runtimes config.MapOfRunti
 }
 
 // RenderSlice serializes a minimal config into a self-contained JS config module
-// that `datamitsu install --config` can load. getMinVersion returns "0.0.0" so a
-// slice never trips the wrapper's version gate, and getConfig ignores its input
-// and returns exactly this stage's app/runtime and dependency closure.
+// that `datamitsu install --config` can load. getConfig ignores its input and
+// returns exactly this stage's app/runtime and dependency closure.
 //
 // The output is a projection of the Go struct, not a round-trip of the author's
 // config: json.Marshal writes the fields this binary knows about, with this

@@ -32,6 +32,7 @@ func TestProcessConfigSourceOCIParsing(t *testing.T) {
 	result := runOCIConfigSource(t, nil, "oci-parse", `
 function getConfig(input) {
     return {
+        version: "1.0.0",
         oci: {
             ref: "ghcr.io/owner/repo",
             digest: "`+testOCIDigest+`",
@@ -68,6 +69,7 @@ func TestProcessConfigSourceParserOCIParsing(t *testing.T) {
 	result := runOCIConfigSource(t, nil, "parser-oci-parse", `
 function getConfig(input) {
     return {
+        version: "1.0.0",
         parsers: {
             core: {
                 hash: "sha256:`+strings.Repeat("ab", 32)+`",
@@ -103,12 +105,12 @@ func TestProcessConfigSourceParserOCIOverridesURL(t *testing.T) {
 	hash := "sha256:" + strings.Repeat("ab", 32)
 	first := runOCIConfigSource(t, nil, "parser-url", `
 function getConfig(input) {
-    return { ...input, parsers: { core: { url: "https://example.com/core.wasm", hash: "`+hash+`" } } };
+    return { ...input, version: input.version, parsers: { core: { url: "https://example.com/core.wasm", hash: "`+hash+`" } } };
 }`)
 	second := runOCIConfigSource(t, first, "parser-oci", `
 function getConfig(input) {
     return {
-        ...input,
+        version: input.version,
         parsers: {
             ...input.parsers,
             core: { hash: input.parsers.core.hash, oci: { ref: "harbor.corp.example/dm/parsers", digest: "`+testOCIDigest+`" } },
@@ -134,11 +136,11 @@ function getConfig(input) {
 func TestProcessConfigSourceOCILastWins(t *testing.T) {
 	first := runOCIConfigSource(t, nil, "oci-first", `
 function getConfig(input) {
-    return { ...input, oci: { ref: "ghcr.io/owner/first", digest: "`+testOCIDigest+`" } };
+    return { ...input, version: input.version, oci: { ref: "ghcr.io/owner/first", digest: "`+testOCIDigest+`" } };
 }`)
 	second := runOCIConfigSource(t, first, "oci-second", `
 function getConfig(input) {
-    return { ...input, oci: { ref: "ghcr.io/owner/second", digest: "`+testOCIDigest+`" } };
+    return { ...input, version: input.version, oci: { ref: "ghcr.io/owner/second", digest: "`+testOCIDigest+`" } };
 }`)
 
 	if second.OCI == nil {
@@ -152,11 +154,11 @@ function getConfig(input) {
 func TestProcessConfigSourceOCISpreadInherits(t *testing.T) {
 	first := runOCIConfigSource(t, nil, "oci-set", `
 function getConfig(input) {
-    return { ...input, oci: { ref: "ghcr.io/owner/repo", digest: "`+testOCIDigest+`" } };
+    return { ...input, version: input.version, oci: { ref: "ghcr.io/owner/repo", digest: "`+testOCIDigest+`" } };
 }`)
 	second := runOCIConfigSource(t, first, "oci-inherit", `
 function getConfig(input) {
-    return { ...input, ignoreRules: ["docs/**: *"] };
+    return { ...input, version: input.version, ignoreRules: ["docs/**: *"] };
 }`)
 
 	if second.OCI == nil {
@@ -172,11 +174,11 @@ func TestProcessConfigSourceOCINonSpreadDrops(t *testing.T) {
 
 	first := runOCIConfigSource(t, nil, "oci-set", `
 function getConfig(input) {
-    return { ...input, oci: { ref: "ghcr.io/owner/repo", digest: "`+testOCIDigest+`" } };
+    return { ...input, version: input.version, oci: { ref: "ghcr.io/owner/repo", digest: "`+testOCIDigest+`" } };
 }`)
 	second := runOCIConfigSource(t, first, "oci-drop", `
 function getConfig(input) {
-    return { ignoreRules: ["docs/**: *"] };
+    return { version: input.version, ignoreRules: ["docs/**: *"] };
 }`)
 
 	if second.OCI != nil {
@@ -202,11 +204,11 @@ func TestProcessConfigSourceOCIUndefinedAndNullReset(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			first := runOCIConfigSource(t, nil, "oci-set", `
 function getConfig(input) {
-    return { ...input, oci: { ref: "ghcr.io/owner/repo", digest: "`+testOCIDigest+`" } };
+    return { ...input, version: input.version, oci: { ref: "ghcr.io/owner/repo", digest: "`+testOCIDigest+`" } };
 }`)
 			second := runOCIConfigSource(t, first, "oci-reset", `
 function getConfig(input) {
-    return { ...input, oci: `+resetJS+` };
+    return { ...input, version: input.version, oci: `+resetJS+` };
 }`)
 			if second.OCI != nil {
 				t.Errorf("OCI = %+v, want nil after explicit %s reset", second.OCI, name)
@@ -222,7 +224,7 @@ function getConfig(input) {
 func TestProcessConfigSourceOCINilUnderSpread(t *testing.T) {
 	first := runOCIConfigSource(t, nil, "oci-absent", `
 function getConfig(input) {
-    return { ...input, ignoreRules: [] };
+    return { ...input, version: input.version, ignoreRules: [] };
 }`)
 	if first.OCI != nil {
 		t.Fatalf("OCI = %+v, want nil for a config that never set it", first.OCI)

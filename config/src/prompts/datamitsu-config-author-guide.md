@@ -28,8 +28,19 @@ declarations do not have it, this version does not accept it.
 - Keep evaluation deterministic. A config that reads the clock, calls
   `Math.random()` or writes to `console.*` still loads, but is never cached, so
   every command evaluates the whole chain again.
-- `getMinVersion()` returns the oldest datamitsu that has every field and
-  behavior the config relies on. Raise it when you adopt a newer feature.
+- `version` identifies the configuration release and is required on the final
+  resolved configuration. The embedded default supplies `core`, inherited as a
+  normal scalar; a standalone config that discards the incoming config must
+  supply its own value. Use a nonempty, single-line label of at most 80
+  characters with no leading or trailing whitespace; it may be a package release
+  version or a static label such as `core`, with no semver requirement. Layers
+  may override it; validation checks the final result.
+- Set `version` manually or populate it with your own build process. Datamitsu
+  does not prescribe version generation. Config JS cannot import or read package
+  metadata. See `datamitsu llms reference/configuration-api`.
+- `getMinVersion()` independently returns the oldest datamitsu core that has
+  every field and behavior the config relies on. It remains a semver string; raise
+  it when adopting a newer feature. It does not set or replace `version`.
 - Branch on `facts()` and `datamitsuConfigInputs`, not on guesses about the
   machine.
 - Use `merge(base, overrides, ...)` for nested settings: later values win,
@@ -94,12 +105,21 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.5.2** - The final resolved configuration requires a top-level
+  `version`, a nonempty one-line label of at most 80 characters with no
+  surrounding whitespace. It may be a package release version or a static label
+  such as `core`; semver is not required. The embedded default supplies `core`,
+  inherited as a normal scalar. A layer that discards the input config must
+  supply its own value. `getMinVersion()` remains the separate semver minimum
+  core version.
+
 - **after v0.5.1** - A name in a project layer's `ejectConfigs` that the
   configuration chain does not define is now a warning, not a load error: a
   project pinning your configuration must keep working when a release adds,
   renames or drops a tool. `ejectConfigs` needs no coordination with the tools
   a layer defines. A configured name that owns no ejectable managed config is
   still a load error.
+
 - **after v0.5.1** - Config JS exposes `merge(base, overrides, ...)` for
   recursive, non-mutating settings merges; later values win and arrays replace.
   Adopt it instead of local merge helpers once the consuming core includes it.

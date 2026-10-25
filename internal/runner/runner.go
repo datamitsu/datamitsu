@@ -1161,7 +1161,7 @@ func runSequential(
 	// Branded banner once at the top (skipped in explain/json so that output
 	// stays clean/machine-readable, and when running as a continuation).
 	if showBanner && sc.explainLevel == "" {
-		ui.Current().Banner(ldflags.PackageName, ldflags.Version)
+		ui.Current().Banner(ldflags.PackageName, ldflags.Version, toolText(sc.cfg.DisplayName()), toolText(sc.cfg.Version))
 	}
 
 	ctx, stopInterrupt := notifyInterrupt(context.Background())

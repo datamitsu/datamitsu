@@ -23,7 +23,7 @@ func sourceEnv() []string {
 
 // sourceAutoConfigJS is an auto-discoverable config declaring no apps at all,
 // which is what makes activation output depend on nothing but the farm path.
-const sourceAutoConfigJS = "globalThis.getConfig = () => ({ apps: {}, tools: {}, projectTypes: {} });\n" +
+const sourceAutoConfigJS = "globalThis.getConfig = () => ({ version: \"1.0.0\", apps: {}, tools: {}, projectTypes: {} });\n" +
 	"globalThis.getMinVersion = () => \"0.0.0\";\n"
 
 // writeAutoConfig writes sourceAutoConfigJS into the project so it is picked up
@@ -133,7 +133,7 @@ func TestSourceConfigCannotInjectIntoStdout(t *testing.T) {
 	noisy.WriteFile("datamitsu.config.js",
 		"console.log(\"echo pwned\");\n"+
 			"globalThis.getConfig = () => { console.log(\"rm -rf /\"); "+
-			"return { apps: {}, tools: {}, projectTypes: {} }; };\n"+
+			"return { version: \"1.0.0\", apps: {}, tools: {}, projectTypes: {} }; };\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
 	noisyCache := t.TempDir()
 	noisyRes := clitest.Run(t, clitest.RunOptions{Dir: noisy.Dir, CacheDir: noisyCache, Env: sourceEnv()},
@@ -167,7 +167,7 @@ func TestSourceConfigCannotInjectIntoStdout(t *testing.T) {
 func TestSourceShellAppNotInFarm(t *testing.T) {
 	p := clitest.NewProject(t)
 	p.WriteFile("datamitsu.config.js",
-		"globalThis.getConfig = () => ({ apps: {\n"+
+		"globalThis.getConfig = () => ({ version: \"1.0.0\", apps: {\n"+
 			"  echo: { shell: { name: \"echo\" } },\n"+
 			"}, tools: {}, projectTypes: {} });\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
@@ -195,7 +195,7 @@ func TestSourceShellAppNotInFarm(t *testing.T) {
 func TestSourceDenyListedAppExcluded(t *testing.T) {
 	p := clitest.NewProject(t)
 	p.WriteFile("datamitsu.config.js",
-		"globalThis.getConfig = () => ({ apps: {\n"+
+		"globalThis.getConfig = () => ({ version: \"1.0.0\", apps: {\n"+
 			"  sudo: { binary: { binaries: { linux: { amd64: { glibc: { url: \"https://example.test/x.tar.gz\", hash: \"sha256:"+
 			strings.Repeat("11", 32)+"\", contentType: \"tar.gz\" } } },\n"+
 			"    darwin: { arm64: { unknown: { url: \"https://example.test/y.tar.gz\", hash: \"sha256:"+
@@ -309,7 +309,7 @@ func TestSourceFishActivation(t *testing.T) {
 func TestSourceStatus(t *testing.T) {
 	p := clitest.NewProject(t)
 	p.WriteFile("datamitsu.config.js",
-		"globalThis.getConfig = () => ({ apps: {\n"+
+		"globalThis.getConfig = () => ({ version: \"1.0.0\", apps: {\n"+
 			"  echo: { shell: { name: \"echo\" } },\n"+
 			"  sudo: { shell: { name: \"sudo\" } },\n"+
 			"}, tools: {}, projectTypes: {} });\n"+
@@ -449,7 +449,7 @@ func TestSourceRefresh(t *testing.T) {
 func TestSourceRefreshDownloadsNothing(t *testing.T) {
 	p := clitest.NewProject(t)
 	p.WriteFile("datamitsu.config.js",
-		"globalThis.getConfig = () => ({ apps: {\n"+
+		"globalThis.getConfig = () => ({ version: \"1.0.0\", apps: {\n"+
 			"  shellcheck: { binary: { binaries: { linux: { amd64: { glibc: { url: \"https://example.test/x.tar.gz\", hash: \"sha256:"+
 			strings.Repeat("11", 32)+"\", contentType: \"tar.gz\" } } },\n"+
 			"    darwin: { arm64: { unknown: { url: \"https://example.test/y.tar.gz\", hash: \"sha256:"+

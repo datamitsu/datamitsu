@@ -491,6 +491,9 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	if err := config.ValidateName(currentConfig.Name); err != nil {
 		return nil, nil, nil, err
 	}
+	if err := config.ValidateVersion(currentConfig.Version); err != nil {
+		return nil, nil, nil, err
+	}
 
 	// Once, here: the stored config carries the links it derived, so a cache hit
 	// and a fresh evaluation show a reader the same thing.

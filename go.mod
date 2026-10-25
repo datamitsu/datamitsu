@@ -13,6 +13,7 @@ require (
 	github.com/goccy/go-yaml v1.19.2
 	github.com/klauspost/compress v1.20.0
 	github.com/mattn/go-isatty v0.0.24
+	github.com/mattn/go-runewidth v0.0.28
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/pelletier/go-toml/v2 v2.4.3
@@ -21,6 +22,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/tetratelabs/wazero v1.12.0
 	github.com/ulikunitz/xz v0.5.16
+	github.com/vbauerster/cupwriter v0.0.4
 	github.com/vbauerster/mpb/v8 v8.16.1
 	github.com/zeebo/xxh3 v1.1.0
 	go.uber.org/zap v1.28.0
@@ -43,9 +45,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
-	github.com/mattn/go-runewidth v0.0.28 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/vbauerster/cupwriter v0.0.4 // indirect
 	github.com/xyproto/randomstring v1.2.0 // indirect
 	github.com/zeebo/assert v1.3.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

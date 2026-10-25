@@ -84,7 +84,7 @@ func TestBannerIncludesNameAndVersion(t *testing.T) {
 	var out bytes.Buffer
 	d := newPlainDisplay(&out, &out)
 
-	d.Banner("datamitsu", "v1.2.3")
+	d.Banner("datamitsu", "v1.2.3", "example config", "1.0.0")
 
 	got := out.String()
 	if !strings.Contains(got, "datamitsu") || !strings.Contains(got, "v1.2.3") {

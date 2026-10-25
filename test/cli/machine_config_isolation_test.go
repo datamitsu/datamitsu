@@ -32,7 +32,7 @@ const machineOnlyAppName = "machine-only-app"
 // location were ever read the name would surface in `config show` and in the
 // invalidation key rather than being silently absorbed.
 const machineLevelConfigJS = `globalThis.getConfig = (config) => ({
-  ...config,
+  version: "1.0.0",
   apps: { ...(config.apps || {}), "` + machineOnlyAppName + `": { shell: { name: "true" } } }
 });
 globalThis.getMinVersion = () => "0.0.0";

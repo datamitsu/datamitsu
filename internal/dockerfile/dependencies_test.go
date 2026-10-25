@@ -125,7 +125,7 @@ func TestPlanDependencyAvailability(t *testing.T) {
 				if err == nil || !strings.Contains(err.Error(), want) {
 					t.Fatalf("error = %v, want %q", err, want)
 				}
-				if _, err := BuildSlices(plan, apps, runtimes, nil); err == nil {
+				if _, err := BuildSlices(&config.Config{}, plan, apps, runtimes, nil); err == nil {
 					t.Fatal("incomplete plan produced slices")
 				}
 			}
@@ -135,7 +135,7 @@ func TestPlanDependencyAvailability(t *testing.T) {
 
 func TestSlicesRejectUnknownDependency(t *testing.T) {
 	apps := binmanager.MapOfApps{"root": {Binary: &binmanager.AppConfigBinary{}, DependsOn: edges("typo")}}
-	_, err := BuildSlices(BuildPlan(apps, nil), apps, nil, nil)
+	_, err := BuildSlices(&config.Config{}, BuildPlan(apps, nil), apps, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "typo") {
 		t.Fatalf("error = %v", err)
 	}

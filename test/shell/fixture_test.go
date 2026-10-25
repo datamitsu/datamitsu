@@ -102,6 +102,7 @@ func configJS(apps ...stubApp) string {
 	}
 	return fmt.Sprintf(`globalThis.getBeforeConfigs = () => [];
 globalThis.getConfig = () => ({
+  version: "1.0.0",
   apps: {
 %s  },
   tools: {},
@@ -123,7 +124,7 @@ const poisonedConfigJS = `throw new Error("` + poisonMarker + `");
 // emptyConfigJS is the config on the `none` branch: a real, valid project that
 // simply declares no apps.
 const emptyConfigJS = `globalThis.getBeforeConfigs = () => [];
-globalThis.getConfig = () => ({ apps: {}, tools: {}, projectTypes: {} });
+globalThis.getConfig = () => ({ version: "1.0.0", apps: {}, tools: {}, projectTypes: {} });
 globalThis.getMinVersion = () => "0.0.0";
 `
 

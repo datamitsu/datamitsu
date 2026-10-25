@@ -1,8 +1,8 @@
 exit code: 4
 ===STDOUT===
-╭<RULE>╮
-│ datamitsu  <VERSION> │
-╰<RULE>╯
+╭<RULE>╮ ╭<RULE>╮
+│ datamitsu  <VERSION> │ │ datamitsu.config  1.0.0 │
+╰<RULE>╯ ╰<RULE>╯
 
 ┏━ lint <RULE>
 ┃ fixture

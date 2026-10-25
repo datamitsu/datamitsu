@@ -489,6 +489,16 @@ declare global {
        * Tool definitions
        */
       tools?: MapOfTools;
+
+      /**
+       * Required nonempty, single-line label identifying this configuration (up to 80 characters).
+       * Layers resolve this as a scalar: the last layer that sets it wins. Leading or trailing
+       * whitespace and control characters are not allowed; it need not be a semantic version.
+       *
+       * @example
+       *   return { ...input, version: "core" };
+       */
+      version: string;
     }
 
     /**

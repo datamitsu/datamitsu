@@ -217,7 +217,7 @@ function mkBin() {
   return b;
 }
 globalThis.getBeforeConfigs = () => [];
-globalThis.getConfig = (config) => ({ apps: { "mytool": { binary: mkBin() } }, runtimes: {}, managedConfigs: {}, tools: {} });
+globalThis.getConfig = (config) => ({ version: "1.0.0", apps: { "mytool": { binary: mkBin() } }, runtimes: {}, managedConfigs: {}, tools: {} });
 globalThis.getMinVersion = () => "0.0.0";
 `
 
