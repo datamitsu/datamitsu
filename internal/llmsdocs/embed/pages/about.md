@@ -160,6 +160,7 @@ Layer configurations from base → company → team → project:
 function getConfig(prev) {
   return {
     ...prev,
+    version: "1.0.0",
     apps: {
       ...prev.apps,
       // Remove a tool for this project

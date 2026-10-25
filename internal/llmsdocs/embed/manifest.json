@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "ab15bdd69f329b96735c23f2c56126fb",
+  "pageSetHash": "cc915f60e740b1d0d83a31c83437b9ac",
   "pages": [
     {
       "slug": "about",
@@ -13,8 +13,8 @@
       "url": "https://datamitsu.com/docs/about.md",
       "title": "About datamitsu",
       "description": "Learn why datamitsu exists and how it helps teams standardize their development toolchains",
-      "bytes": 9476,
-      "contentHash": "778cda156890852b15ffbb8bb63e9ac8"
+      "bytes": 9498,
+      "contentHash": "4210af08739105e0013fe31b9e95446e"
     },
     {
       "slug": "contributing/brand-guidelines",
@@ -31,8 +31,8 @@
       "url": "https://datamitsu.com/docs/contributing/creating-wrappers.md",
       "title": "Creating Wrapper Packages",
       "description": "Build your own datamitsu config distribution package for your team or organization",
-      "bytes": 17083,
-      "contentHash": "cc8736b43e33fa6b340d11387cfc79d5"
+      "bytes": 17265,
+      "contentHash": "ad65d7be11e1cab636fa52722edd5409"
     },
     {
       "slug": "contributing",
@@ -87,8 +87,8 @@
       "url": "https://datamitsu.com/docs/getting-started/core-concepts.md",
       "title": "Core Concepts",
       "description": "Understanding the key concepts behind datamitsu",
-      "bytes": 8945,
-      "contentHash": "95801b74a73a0923bec6bb3bffa52830"
+      "bytes": 9134,
+      "contentHash": "9620e0c19eee3150281bc1576e439360"
     },
     {
       "slug": "getting-started/installation/docker",
@@ -197,8 +197,8 @@
       "url": "https://datamitsu.com/docs/getting-started/quick-start.md",
       "title": "Quick Start",
       "description": "Get up and running with datamitsu in minutes",
-      "bytes": 5722,
-      "contentHash": "983ec701732cfcfd7656ca01555f1ebb"
+      "bytes": 5857,
+      "contentHash": "5793df1bc5c6f1ccdce7c8b0f508bae9"
     },
     {
       "slug": "guides/architecture/caching",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 12959,
-      "contentHash": "06c26f9de851d5ee739e83666746723d"
+      "bytes": 13683,
+      "contentHash": "342ac9604f65d36225935ca6810bc66d"
     },
     {
       "slug": "guides/managed-configs",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 185441,
-      "contentHash": "15537316198346a369007b12803032ff"
+      "bytes": 185875,
+      "contentHash": "27d0addd43bac6218c32ceb408b0c768"
     },
     {
       "slug": "reference/comparison",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 89081,
-      "contentHash": "f6de85a3662a47d0abe47ff0190d519b"
+      "bytes": 90328,
+      "contentHash": "73a6d61373b575f5c24235dd954e2447"
     },
     {
       "slug": "reference/ignore-rules",

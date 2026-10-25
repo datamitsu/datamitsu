@@ -86,7 +86,9 @@ npm init -y
 
 ### Step 2: Create the Configuration File
 
-Create `config/datamitsu.config.js` (or `.ts`):
+Create `config/datamitsu.config.js` (or `.ts`). Set `version` explicitly, or
+populate it using your own build process. Datamitsu does not prescribe how
+wrapper authors maintain this label.
 
 ```javascript
 /**
@@ -96,6 +98,7 @@ Create `config/datamitsu.config.js` (or `.ts`):
 function getConfig(prev) {
   return {
     ...prev,
+    version: "1.0.0",
     apps: {
       ...prev.apps,
       // Define your tools here
@@ -223,7 +226,7 @@ chmod +x bin/datamitsu
   "bin": {
     "datamitsu": "./bin/datamitsu"
   },
-  "files": ["bin/", "config/"],
+  "files": ["bin/", "config/datamitsu.config.js"],
   "peerDependencies": {
     "datamitsu": "^0.1.0"
   },
