@@ -170,7 +170,7 @@ func TestConfigActivationExportsTheChain(t *testing.T) {
 
 	bash := renderBash(a)
 	fish := renderFish(a)
-	for name, clear := range map[string]string{
+	for name, clearCommand := range map[string]string{
 		"bash": "unset " + env.SourceRootVarName() + "\n",
 		"fish": "set -e -g " + env.SourceRootVarName() + "\n",
 	} {
@@ -183,7 +183,7 @@ func TestConfigActivationExportsTheChain(t *testing.T) {
 		// that activation. Leaving it behind would have this shell advertise a
 		// repository it is no longer pinned to — well-formed and wrong, which a
 		// prompt and a bug report both read as current.
-		if !strings.Contains(out, clear) {
+		if !strings.Contains(out, clearCommand) {
 			t.Errorf("%s activation did not clear a stale %s:\n%s", name, env.SourceRootVarName(), out)
 		}
 	}
