@@ -259,8 +259,8 @@ for the complete list and effective defaults.
 ## Inspect a resolved tool
 
 This reference snapshot selects ESLint from the wrapper `@shibanet0/datamitsu-config`,
-`0.0.0-unstable.20260912.f201136`, captured on 2026-09-22. It is enabled,
-runs per project, and declares fix priority 6 and lint priority 9. These are
+`0.6.3`, captured on 2026-10-26. It is enabled,
+runs per project, and declares fix priority 6 and lint priority 12. These are
 the wrapper's choices, not core defaults. The inspector shows the merged result,
 not layer provenance.
 
