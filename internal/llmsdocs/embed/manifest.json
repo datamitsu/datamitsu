@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "cc915f60e740b1d0d83a31c83437b9ac",
+  "pageSetHash": "2d8d207dc1f8407cbb9d000579ec5b37",
   "pages": [
     {
       "slug": "about",
@@ -280,8 +280,8 @@
       "url": "https://datamitsu.com/docs/guides/config-inspector.md",
       "title": "Config Inspector",
       "description": "Open the resolved configuration for your repository, inspect a tool's scope and file patterns,",
-      "bytes": 17163,
-      "contentHash": "d6d13ee2ade40f7176f4b8295847693d"
+      "bytes": 17145,
+      "contentHash": "be282b36bc6cce9305f6c813271be332"
     },
     {
       "slug": "guides/configuration",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 13683,
-      "contentHash": "342ac9604f65d36225935ca6810bc66d"
+      "bytes": 13658,
+      "contentHash": "b73cd0fe9c5d49afe6620de12db51eb8"
     },
     {
       "slug": "guides/managed-configs",
@@ -334,8 +334,8 @@
       "url": "https://datamitsu.com/docs/guides/runtime-management.md",
       "title": "Runtime Management",
       "description": "Managing Bun, UV (Python), Node.js, JVM, and Go runtimes with datamitsu",
-      "bytes": 19525,
-      "contentHash": "6fec73b7e6d4ed6e9cb8ed8bb872bf30"
+      "bytes": 19506,
+      "contentHash": "2171e331167b78546f39242b74c2a339"
     },
     {
       "slug": "guides/source-mode",
@@ -370,8 +370,8 @@
       "url": "https://datamitsu.com/docs/guides/using-wrappers.md",
       "title": "Using Wrapper Packages",
       "description": "How to install and use datamitsu wrapper packages in your projects",
-      "bytes": 14115,
-      "contentHash": "e4463c267d425a05a501fc0b7e752cf4"
+      "bytes": 14098,
+      "contentHash": "eef0d6f9ebf86527b60ba73704837d33"
     },
     {
       "slug": "how-to/add-new-tool",

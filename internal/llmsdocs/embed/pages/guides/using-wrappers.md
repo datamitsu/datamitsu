@@ -558,9 +558,9 @@ Wrapper packages are the key to datamitsu's value: install once, get everything 
 
 ## Explore the reference wrapper
 
-The reference wrapper `@shibanet0/datamitsu-config`, `0.0.0-unstable.20260912.f201136`,
-captured on 2026-09-22: 111 apps across six runtime families - native binary 75,
-Node.js 20, Python 11, JVM 3, Go 1 and Shell 1. These are one maintainer's choices.
+The reference wrapper `@shibanet0/datamitsu-config`, `0.6.3`,
+captured on 2026-10-26: 117 apps across seven runtime families - native binary 78,
+Node.js 15, Python 10, Bun 6, Go 4, JVM 3 and Shell 1. These are one maintainer's choices.
 The orbit is illustrative; colors represent runtime membership.
 
 <ConfigEmbed view="universe" />

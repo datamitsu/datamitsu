@@ -100,7 +100,7 @@ tasks:
         docker run --rm --platform linux/amd64 \
           --volume "$(pwd)/scripts:/scripts:ro" \
           --volume "$(pwd)/website/static:/output" \
-          node:26.7.0-trixie-slim@sha256:5758d367d7b4f48b73a9bb3530e687e47efb289f3b43f9c0450a25225ae0db5d
+          node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec \
           sh /scripts/docker-capture.sh
       # The capture writes its metadata beside the casts, the only directory the
       # container is given; the website reads it from its data folder.

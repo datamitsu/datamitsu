@@ -165,8 +165,8 @@ settings:
 catalogs:
   default:
     '@shibanet0/datamitsu-config':
-      specifier: 0.0.0-unstable.20261025.08ce66e
-      version: 0.0.0-unstable.20261025.08ce66e
+      specifier: 0.6.3
+      version: 0.6.3
 
 overrides:
   '@docusaurus/plugin-ideal-image': 3.10.2
@@ -182,7 +182,7 @@ importers:
     devDependencies:
       '@shibanet0/datamitsu-config':
         specifier: 'catalog:'
-        version: 0.0.0-unstable.20261025.08ce66e
+        version: 0.6.3
       '@types/node':
         specifier: 26.6.5
         version: 26.6.5
@@ -194,7 +194,7 @@ importers:
     devDependencies:
       '@shibanet0/datamitsu-config':
         specifier: 'catalog:'
-        version: 0.0.0-unstable.20261025.08ce66e
+        version: 0.6.3
       '@types/node':
         specifier: 26.6.5
         version: 26.6.5
@@ -221,7 +221,7 @@ importers:
     devDependencies:
       '@shibanet0/datamitsu-config':
         specifier: 'catalog:'
-        version: 0.0.0-unstable.20261025.08ce66e
+        version: 0.6.3
       '@sveltejs/vite-plugin-svelte':
         specifier: 7.3.1
         version: 7.3.1(svelte@5.57.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
@@ -254,7 +254,7 @@ importers:
         version: 4.0.0
       '@shibanet0/datamitsu-config':
         specifier: 'catalog:'
-        version: 0.0.0-unstable.20261025.08ce66e
+        version: 0.6.3
       '@types/node':
         specifier: 26.6.5
         version: 26.6.5
@@ -276,7 +276,7 @@ importers:
         version: link:../../packaging/npm/datamitsu
       '@shibanet0/datamitsu-config':
         specifier: 'catalog:'
-        version: 0.0.0-unstable.20261025.08ce66e
+        version: 0.6.3
       '@types/node':
         specifier: 26.6.5
         version: 26.6.5
@@ -343,7 +343,7 @@ importers:
         version: 3.10.2(@swc/core@1.16.18)(@swc/html@1.16.18)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.30))(csso@5.0.5)(esbuild@0.28.2)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.30)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sharp@0.32.6)(supports-color@8.1.1)(svgo@3.3.5)
       '@shibanet0/datamitsu-config':
         specifier: 'catalog:'
-        version: 0.0.0-unstable.20261025.08ce66e
+        version: 0.6.3
       '@types/react':
         specifier: 19.3.0
         version: 19.3.0
@@ -1413,48 +1413,48 @@ packages:
     peerDependencies:
       postcss: ^8.4
 
-  '@datamitsu/datamitsu-darwin-arm64@0.0.0-unstable.20261025.a25a13a':
-    resolution: {integrity: sha512-vJ4XM3yVobY1ICeYtpGBCel1zss6bu0WW3UvqZhSW9lBs7m51TyjrGhe855QzLvXp/WetZYnnYeNFdmkBMD3WA==}
+  '@datamitsu/datamitsu-darwin-arm64@0.5.3':
+    resolution: {integrity: sha512-TbI+XI+MJwYDTGHABe+5WJ8PgTyADcdQpikzSHq8IswKsZ0RpBAGOMuQB400SlNiwIYo/+cR566dnqLBKBWEKA==}
     cpu: [arm64]
     os: [darwin]
 
-  '@datamitsu/datamitsu-darwin-x64@0.0.0-unstable.20261025.a25a13a':
-    resolution: {integrity: sha512-FFieW3Mc32E/4EmMUG9RmCCVZpgUdaSY2pJ+lfDxDGTyFSbJudSXy8Lx+WlXI+v+GLL1lcp6UrDvscJY6ZljnA==}
+  '@datamitsu/datamitsu-darwin-x64@0.5.3':
+    resolution: {integrity: sha512-VFmcCWYKlnDGbUcVBaHalNUPnZfcFr6dOjsoXdY3Wg5AYgYFKGyf0Od+DL09GYUwXnnZ1erTWfI7xkDodlb8+A==}
     cpu: [x64]
     os: [darwin]
 
-  '@datamitsu/datamitsu-freebsd-arm64@0.0.0-unstable.20261025.a25a13a':
-    resolution: {integrity: sha512-j0cWaSQ7tTG3lrLAxwlibWEdD3CQtWBEcKTC7uM5AUi2CS+lKy+N9Zk/PSuonhzdu/EtR9vHX9nAnKrpQxHOjw==}
+  '@datamitsu/datamitsu-freebsd-arm64@0.5.3':
+    resolution: {integrity: sha512-FNhdseB0KMUiDRQ7v8zlm/qIgU0IrxL8oS277RzUD+MBTRBqBGvkeJupO/XCS6KkXd++5TUTFmud/0rnYpZq/g==}
     cpu: [arm64]
     os: [freebsd]
 
-  '@datamitsu/datamitsu-freebsd-x64@0.0.0-unstable.20261025.a25a13a':
-    resolution: {integrity: sha512-zsf3XGCgzX83RoXeIWNHh1JYhMgDnshGjlPDkwuv5goHgOBORl4+1/6ZMwPuCNk14/BhRhkmTeM+Usxv36N1fA==}
+  '@datamitsu/datamitsu-freebsd-x64@0.5.3':
+    resolution: {integrity: sha512-3k+59SW336CxRC5LCnc2dUSA3DLg3+yx4Wv+iDbl/D4+0SAz/WVWmz0Y+ZLqnSRm0ohToSTtPwW07PO5O9X0Sw==}
     cpu: [x64]
     os: [freebsd]
 
-  '@datamitsu/datamitsu-linux-arm64@0.0.0-unstable.20261025.a25a13a':
-    resolution: {integrity: sha512-z0OY3iHTcqIqn8d3Ka7FvRWurLRGTugBixkXWzFRodID7cLRK/JATMNVVrPsMddtSNRWJelXzCrVnKbW0z7N7w==}
+  '@datamitsu/datamitsu-linux-arm64@0.5.3':
+    resolution: {integrity: sha512-LsmWNsxSRcLEVfd1P75aPpHOwRxo5a9R3TcbQ27LjZICFmBpVcuodD+MKV5ZpJMetttKFA69cflK+9NM9onx5g==}
     cpu: [arm64]
     os: [linux]
 
-  '@datamitsu/datamitsu-linux-x64@0.0.0-unstable.20261025.a25a13a':
-    resolution: {integrity: sha512-PYF9OLkBnckwkpMhFXybD4sFQlUJquc9JMN/kBmjfD37AivqLDRiMgRNHwaS39LFAd4weRLU7CnjYcaQod+roQ==}
+  '@datamitsu/datamitsu-linux-x64@0.5.3':
+    resolution: {integrity: sha512-+onvlJi80NUp+M8L3M0+CSrirE3/Ac4iqkAQj/2EKUq2GzV9AyI5sRArOBAYu4O/5jIHfbwRWbc4ymhEDg5QVw==}
     cpu: [x64]
     os: [linux]
 
-  '@datamitsu/datamitsu-win32-arm64@0.0.0-unstable.20261025.a25a13a':
-    resolution: {integrity: sha512-CYq+BlFcqU2luVtDh2vQaU+6376zi1KcXxATMjw1F8ZOIIKIl5kTfATQtvmzuwcqSYcvjUhVNpNcUONugUicVQ==}
+  '@datamitsu/datamitsu-win32-arm64@0.5.3':
+    resolution: {integrity: sha512-Kl/9pH8IZMgvocw9STw04+wSHTJUdv7hvslFETrxxyRmhGko8wDSElWRnDHNGRzH3H1KAupc/64nhyiv96q+9Q==}
     cpu: [arm64]
     os: [win32]
 
-  '@datamitsu/datamitsu-win32-x64@0.0.0-unstable.20261025.a25a13a':
-    resolution: {integrity: sha512-UbnB/SclqiWD5qfHEUEQUZNBl6S4nerspfM+5GIfGgHkGoqFoBmbkHhFNLhjJtnBWmsj43X0p/9rf89Jd+GzhQ==}
+  '@datamitsu/datamitsu-win32-x64@0.5.3':
+    resolution: {integrity: sha512-jCcW3nWy7q9D7gCINmN1ChHn5bQ3JCoJH3iCY67Bv0SWFKSvFpNBkuDMrAOHuKsJV7fwvywJwMoql0rQh8j5mA==}
     cpu: [x64]
     os: [win32]
 
-  '@datamitsu/datamitsu@0.0.0-unstable.20261025.a25a13a':
-    resolution: {integrity: sha512-PRe6NhtfHFYSP8dCgxaI3/DdiI6L2iHoBcPvvJMWVZ0U1Wdq8vr4t76ykEcx7TIbLK+0zd46c1EAYcHv12+njA==}
+  '@datamitsu/datamitsu@0.5.3':
+    resolution: {integrity: sha512-a2PdQF6S3G6Db51cwOYkGAOqhTib6c41IlfJAI023krrhj6X2Ho/qioIa+YiwM//SG0BLuVEZlURNs1o2P8Z/g==}
     engines: {node: '>=22.12.0'}
     hasBin: true
 
@@ -2661,8 +2661,8 @@ packages:
     resolution: {integrity: sha512-Nqc90v4lWCXyakD6xNyNACBJNJ0tNCwj2WNk/7ivyacYHxiITVgmLUFXTBOeCdy79iz6HtN9Y31uw/jbLrdOAg==}
     engines: {node: '>=20.0.0'}
 
-  '@shibanet0/datamitsu-config@0.0.0-unstable.20261025.08ce66e':
-    resolution: {integrity: sha512-H7fcb0WsjTI1fXgQu8uu+XtSwDouvWrhcTzDEtYSUXObtfdrl+8rMsLhERq2rKC5oH3HHt6eWYWuf5Y3moiVLw==}
+  '@shibanet0/datamitsu-config@0.6.3':
+    resolution: {integrity: sha512-kungF3tbq5Rs2avBpgH3w9uiihek+GHuZIFn2e1kb9+PrNxftEQtKXSQwryi1nTDswL+g9UaMcaX4+gC6Y0Ytg==}
     engines: {node: '>=22.12.0'}
     hasBin: true
 
@@ -9278,42 +9278,42 @@ snapshots:
     dependencies:
       postcss: 8.5.30
 
-  '@datamitsu/datamitsu-darwin-arm64@0.0.0-unstable.20261025.a25a13a':
+  '@datamitsu/datamitsu-darwin-arm64@0.5.3':
     optional: true
 
-  '@datamitsu/datamitsu-darwin-x64@0.0.0-unstable.20261025.a25a13a':
+  '@datamitsu/datamitsu-darwin-x64@0.5.3':
     optional: true
 
-  '@datamitsu/datamitsu-freebsd-arm64@0.0.0-unstable.20261025.a25a13a':
+  '@datamitsu/datamitsu-freebsd-arm64@0.5.3':
     optional: true
 
-  '@datamitsu/datamitsu-freebsd-x64@0.0.0-unstable.20261025.a25a13a':
+  '@datamitsu/datamitsu-freebsd-x64@0.5.3':
     optional: true
 
-  '@datamitsu/datamitsu-linux-arm64@0.0.0-unstable.20261025.a25a13a':
+  '@datamitsu/datamitsu-linux-arm64@0.5.3':
     optional: true
 
-  '@datamitsu/datamitsu-linux-x64@0.0.0-unstable.20261025.a25a13a':
+  '@datamitsu/datamitsu-linux-x64@0.5.3':
     optional: true
 
-  '@datamitsu/datamitsu-win32-arm64@0.0.0-unstable.20261025.a25a13a':
+  '@datamitsu/datamitsu-win32-arm64@0.5.3':
     optional: true
 
-  '@datamitsu/datamitsu-win32-x64@0.0.0-unstable.20261025.a25a13a':
+  '@datamitsu/datamitsu-win32-x64@0.5.3':
     optional: true
 
-  '@datamitsu/datamitsu@0.0.0-unstable.20261025.a25a13a':
+  '@datamitsu/datamitsu@0.5.3':
     dependencies:
       tinyexec: 1.3.1
     optionalDependencies:
-      '@datamitsu/datamitsu-darwin-arm64': 0.0.0-unstable.20261025.a25a13a
-      '@datamitsu/datamitsu-darwin-x64': 0.0.0-unstable.20261025.a25a13a
-      '@datamitsu/datamitsu-freebsd-arm64': 0.0.0-unstable.20261025.a25a13a
-      '@datamitsu/datamitsu-freebsd-x64': 0.0.0-unstable.20261025.a25a13a
-      '@datamitsu/datamitsu-linux-arm64': 0.0.0-unstable.20261025.a25a13a
-      '@datamitsu/datamitsu-linux-x64': 0.0.0-unstable.20261025.a25a13a
-      '@datamitsu/datamitsu-win32-arm64': 0.0.0-unstable.20261025.a25a13a
-      '@datamitsu/datamitsu-win32-x64': 0.0.0-unstable.20261025.a25a13a
+      '@datamitsu/datamitsu-darwin-arm64': 0.5.3
+      '@datamitsu/datamitsu-darwin-x64': 0.5.3
+      '@datamitsu/datamitsu-freebsd-arm64': 0.5.3
+      '@datamitsu/datamitsu-freebsd-x64': 0.5.3
+      '@datamitsu/datamitsu-linux-arm64': 0.5.3
+      '@datamitsu/datamitsu-linux-x64': 0.5.3
+      '@datamitsu/datamitsu-win32-arm64': 0.5.3
+      '@datamitsu/datamitsu-win32-x64': 0.5.3
 
   '@discoveryjs/json-ext@0.5.7': {}
 
@@ -11348,10 +11348,10 @@ snapshots:
 
   '@secretlint/types@10.2.2': {}
 
-  '@shibanet0/datamitsu-config@0.0.0-unstable.20261025.08ce66e':
+  '@shibanet0/datamitsu-config@0.6.3':
     dependencies:
       '@commander-js/extra-typings': 15.0.0(commander@15.0.0)
-      '@datamitsu/datamitsu': 0.0.0-unstable.20261025.a25a13a
+      '@datamitsu/datamitsu': 0.5.3
       commander: 15.0.0
       execa: 10.1.1
       fast-glob: 3.3.3
