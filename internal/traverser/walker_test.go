@@ -465,14 +465,14 @@ func TestFindFilesFromPathReturnsSortedPaths(t *testing.T) {
 func TestFindFilesFromPathVisitReportsWalkedDirs(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	for _, d := range []string{"sub", filepath.Join("sub", "nested"), "skipme", ".git", filepath.Join(".git", "refs")} {
+	for _, d := range []string{"sub", filepath.Join("sub", "nested"), "excluded", ".git", filepath.Join(".git", "refs")} {
 		_ = os.MkdirAll(filepath.Join(tmpDir, d), 0o755)
 	}
 	_ = os.WriteFile(filepath.Join(tmpDir, "root.txt"), []byte("x"), 0o644)
 	_ = os.WriteFile(filepath.Join(tmpDir, "sub", "inner.txt"), []byte("x"), 0o644)
 	_ = os.WriteFile(filepath.Join(tmpDir, "sub", "nested", "deep.txt"), []byte("x"), 0o644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "skipme", "hidden.txt"), []byte("x"), 0o644)
-	_ = os.WriteFile(filepath.Join(tmpDir, ".gitignore"), []byte("skipme/\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "excluded", "hidden.txt"), []byte("x"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".gitignore"), []byte("excluded/\n"), 0o644)
 
 	var mu sync.Mutex
 	var dirs []string
