@@ -19,13 +19,13 @@ pre-commit:
       # must be generated after datamitsu-check: the fixer realigns website
       # markdown, and a snapshot taken before that would disagree with the
       # committed pages — the drift the Embedded Docs Drift check catches.
-      # stage_fixed re-stages internal/llmsdocs/embed into this commit.
+      # The snapshot lives outside this job's staged-file globs, so
+      # stage_fixed would not pick it up; the run adds it explicitly.
       priority: 50
       glob:
         - "website/docs/**"
         - "packaging/llms-harvest/**"
-      run: pnpm --filter website build && go run ./packaging/llms-harvest
-      stage_fixed: true
+      run: pnpm --filter website build && go run ./packaging/llms-harvest && git add -- internal/llmsdocs/embed && { git diff --cached --name-only > /tmp/index-debug.txt; env | grep -E '^GIT' > /tmp/gitenv-debug.txt; true; }
   parallel: false
 commit-msg:
   commands:
