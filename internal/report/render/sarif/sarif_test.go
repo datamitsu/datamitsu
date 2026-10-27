@@ -421,7 +421,7 @@ func TestCorePlacementToolRun(t *testing.T) {
 						Fingerprint: fp, FingerprintBasis: report.BasisRow,
 						Tool: "datamitsu", Source: "datamitsu", Code: "config-placement",
 						Severity: "error", Reported: true, Gates: true, Kind: "issue",
-						Message:   "Datamitsu config must be located at the repository git root",
+						Message:    "Datamitsu config must be located at the repository git root",
 						Provenance: "core",
 						Location:   report.Location{Path: "pkg/datamitsu.config.js", Row: 1, Col: 1, Precision: "unknown"},
 					}},
@@ -435,8 +435,8 @@ func TestCorePlacementToolRun(t *testing.T) {
 		t.Fatalf("runs = %+v, want one datamitsu run", log.Runs)
 	}
 	toolRun := log.Runs[0]
-	if len(toolRun.Rules) != 1 || toolRun.Rules[0].ID != "config-placement" {
-		t.Errorf("rules = %+v, want config-placement", toolRun.Rules)
+	if len(toolRun.Tool.Driver.Rules) != 1 || toolRun.Tool.Driver.Rules[0].ID != "config-placement" {
+		t.Errorf("rules = %+v, want config-placement", toolRun.Tool.Driver.Rules)
 	}
 	if len(toolRun.Results) != 1 {
 		t.Fatalf("results = %+v, want one", toolRun.Results)
@@ -446,7 +446,7 @@ func TestCorePlacementToolRun(t *testing.T) {
 		t.Errorf("result = %+v", res)
 	}
 	if got := res.Locations[0].PhysicalLocation; got.ArtifactLocation != (ArtifactLocation{URI: "pkg/datamitsu.config.js", URIBaseID: "%SRCROOT%"}) ||
-		*got.Region != (Region{StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 2}) {
+		*got.Region != (Region{StartLine: 1, EndLine: 1}) {
 		t.Errorf("location = %+v", got)
 	}
 	if res.PartialFingerprints["datamitsu/v1"] != fp {

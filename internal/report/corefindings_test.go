@@ -74,7 +74,7 @@ func TestAddCoreFindings(t *testing.T) {
 
 	// Ordinals distinguish findings on one line of one file; these are two
 	// distinct paths, so each rests on ordinal 0. Identity is path-based.
-	var fingerprints []string
+	fingerprints := make([]string, 0, len(inv.Findings))
 	for _, f := range inv.Findings {
 		fingerprints = append(fingerprints, f.Fingerprint)
 		if f.Kind != kindIssue || f.Provenance != provenanceCore || f.Severity != "error" ||
@@ -108,6 +108,37 @@ func TestAddCoreFindingsIdempotentBuilds(t *testing.T) {
 	second := op.Operation()
 	if n := len(second.Tools); n != 1 {
 		t.Fatalf("tools after rebuild = %d, want still one", n)
+	}
+}
+
+// What the terminal printed is what visible consumers show: a reported core
+// finding has Shown set (agent output, annotations and Markdown read
+// report.Visible, which keys on Shown), a baselined one does not and fails
+// nothing.
+func TestAddCoreFindingsVisibility(t *testing.T) {
+	reported := placementDiag("sub/datamitsu.config.js")
+	baselined := placementDiag("sub/.datamitsuignore")
+	baselined.Reported, baselined.Gates, baselined.Baselined = false, false, true
+
+	acc := NewAccumulator(testOptions())
+	op := acc.BeginOperation("lint", nil, nil)
+	got := op.AddCoreFindings("datamitsu", []diagnostic.Diagnostic{reported, baselined})
+	if len(got) != 2 {
+		t.Fatalf("AddCoreFindings = %d findings, want 2", len(got))
+	}
+	if !got[0].Finding.Shown || got[1].Finding.Shown {
+		t.Errorf("shown = %v, %v; want the reported finding shown and the baselined one hidden",
+			got[0].Finding.Shown, got[1].Finding.Shown)
+	}
+
+	run := acc.Build(BuildInfo{Selection: Selection{Mode: "all"}})
+	tr := run.Operations[0].Tools[0]
+	inv := tr.Invocations[0]
+	if inv.ExitCode == nil || *inv.ExitCode != 1 || inv.Success || inv.FailureKind != FailureThreshold {
+		t.Errorf("invocation = %+v, want a threshold failure while one finding gates", inv)
+	}
+	if !tr.Complete {
+		t.Errorf("incomplete = %v, want complete with a failed-but-findings invocation", tr.Incomplete)
 	}
 }
 

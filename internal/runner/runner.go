@@ -168,6 +168,15 @@ type sharedContext struct {
 	// annotator anchors each parsed process's findings for the report, in the
 	// gate hook; nil when nothing reads them.
 	annotator *report.Annotator
+	// baselineMatcher marks the findings a baseline holds, in the gate hook
+	// and for the core placement check; nil when no baseline was given.
+	baselineMatcher *report.BaselineMatcher
+	// placement holds the config-placement diagnostics the walk below the git
+	// root produced (empty when none or under --explain); placementGated says
+	// whether any of them reaches the threshold, which fails the lint
+	// operation.
+	placement      []diagnostic.Diagnostic
+	placementGated bool
 	// startedAt stamps the report: SOURCE_DATE_EPOCH or the clock at the
 	// start of the run.
 	startedAt time.Time
@@ -443,6 +452,15 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	if operation == config.OpFix && len(plan.Groups) > 0 {
 		opRecord.ChangesNotObserved(report.ChangesNotExecuted, "")
 	}
+	// The core config-placement check reports through the lint operation: its
+	// findings were computed from the run's walk before any operation ran. The
+	// report may hold no accumulator (nothing reads this run), but the check's
+	// printing and failure must not depend on that — only its event stream does.
+	placementHere := operation == config.OpLint && len(sc.placement) > 0
+	var placementEvents []report.ToolFinding
+	if placementHere {
+		placementEvents = opRecord.AddCoreFindings(placementTool, sc.placement)
+	}
 	opDuration := int64(0)
 	defer func() { opRecord.End(retErr == nil, opDuration) }()
 
@@ -450,17 +468,22 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// any explicit skips — recording unsupported-platform ones for --fail-on-skip
 	// — instead of leaving them invisible.
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
-		sc.recordOp(opSummary{op: operation, skipped: len(plan.Skipped)})
+		summary := opSummary{op: operation, skipped: len(plan.Skipped)}
+		if placementHere {
+			summary.tools = 1
+			if sc.placementGated {
+				summary.failed = 1
+			}
+		}
+		sc.recordOp(summary)
 		if sc.agentOutput() {
-			sc.printAgentOperation(agentOperation{op: operation, record: opRecord, note: sc.footerNote(operation)})
+			sc.printAgentOperation(agentOperation{op: operation, record: opRecord, summary: summary, note: sc.footerNote(operation)})
 		}
 		if len(plan.Skipped) > 0 {
 			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth, sc.footerNote(operation))
 			sc.recordSkips(plan.Skipped)
 			sc.recordCoverage(plan)
-			return nil
-		}
-		if !ui.Muted() {
+		} else if !ui.Muted() {
 			msg := "ℹ️  No applicable tools found"
 			if len(projectTypes) == 0 {
 				msg = "⚠️  No project types detected"
@@ -469,6 +492,12 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 				msg += " · " + note
 			}
 			fmt.Println(msg)
+		}
+		if placementHere {
+			printPlacementFindings(sc.placement, sc.nameWidth, sc.cwdPath)
+			if sc.placementGated {
+				return fmt.Errorf("datamitsu: %d config placement violation(s) below the git root", len(sc.placement))
+			}
 		}
 		return nil
 	}
@@ -530,6 +559,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		Status: uievent.StatusStart,
 		Op:     string(operation),
 	})
+	sc.emitDiagnostics(runOpID, placementEvents)
 
 	// Open the operation block: bold bracket header + dimmed project types. The
 	// matched-tool list is omitted — the per-tool results below cover it.
@@ -787,8 +817,11 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		cacheHits, cacheMisses = int(stats.Hits), int(stats.Misses)
 	}
 
-	// Calculate total wall-clock time and failure state.
-	hasFailures := execErr != nil || incomplete
+	// Calculate total wall-clock time and failure state. A core placement
+	// finding that reaches the threshold fails the lint operation like a
+	// gating tool finding does — the lint operation owns these findings, a
+	// fix-only operation never does.
+	hasFailures := execErr != nil || incomplete || (placementHere && sc.placementGated)
 	var totalWallClockTime int64
 	for _, groupResult := range results {
 		totalWallClockTime += groupResult.WallClockDuration
@@ -801,15 +834,25 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// summary footer (the footer doubles as the "complete" marker, so no separate
 	// line is printed). The print helpers self-suppress in JSON-L mode.
 	toolGroups := groupResultsByTool(results)
-	if len(toolGroups) > 0 {
+	placementTools, placementFailed := 0, 0
+	if placementHere {
+		placementTools = 1
+		if sc.placementGated {
+			placementFailed = 1
+		}
+	}
+	if placementHere || len(toolGroups) > 0 {
 		sc.openCommandRegion()
 	}
-	if len(toolGroups) > 0 || len(plan.Skipped) > 0 || len(stopped) > 0 {
+	if len(toolGroups) > 0 || len(plan.Skipped) > 0 || len(stopped) > 0 || placementHere {
 		printGroupedResults(toolGroups, sc.nameWidth, env.IsTimingsEnabled())
 		printStoppedTasks(stopped, sc.nameWidth)
 		printUnrunFiles(results, sc.rootPath, sc.nameWidth, cause)
 		printSkippedTools(plan.Skipped, sc.nameWidth)
-		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped), len(stopped), sc.footerNote(operation))
+		if placementHere {
+			printPlacementFindings(sc.placement, sc.nameWidth, sc.cwdPath)
+		}
+		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped), len(stopped), sc.footerNote(operation), placementTools, placementFailed)
 	}
 
 	// Typed completion event for this operation (the JSON-L twin of the footer).
@@ -821,12 +864,14 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			failedTools++
 		}
 	}
+	totalTools := len(toolGroups) + placementTools
+	failedTools += placementFailed
 	ui.Emit(uievent.Event{
 		Type:       uievent.TypeDone,
 		OpID:       runOpID,
 		Status:     doneStatus(!hasFailures),
 		Op:         string(operation),
-		Tools:      len(toolGroups),
+		Tools:      totalTools,
 		Runs:       totalRuns,
 		Failed:     failedTools,
 		Skipped:    len(plan.Skipped),
@@ -836,7 +881,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	opDuration = totalWallClockTime
 	summary := opSummary{
 		op:         operation,
-		tools:      len(toolGroups),
+		tools:      totalTools,
 		runs:       totalRuns,
 		failed:     failedTools,
 		skipped:    len(plan.Skipped),
@@ -1061,7 +1106,7 @@ func renderSkipOnlyBlock(operation, targetLine string, skipped []tooling.Skipped
 	}
 	fmt.Println(clr.Faint("┃"))
 	printSkippedTools(skipped, nameWidth)
-	printOperationFooter(nil, 0, 0, 0, len(skipped), 0, note)
+	printOperationFooter(nil, 0, 0, 0, len(skipped), 0, note, 0, 0)
 }
 
 func (sc *sharedContext) footerNote(operation config.OperationType) string {
@@ -1204,7 +1249,12 @@ func (sc *sharedContext) runOperations(ctx context.Context, operations []config.
 	// is not just a saving — buildIgnoreMatcher validates the .datamitsuignore
 	// files this list yields and the planner applies their rules, so a divergence
 	// would mean linting one set of rules and enforcing another.
-	allFiles, err := traverser.FindFilesFromPath(ctx, sc.rootPath, sc.rootPath)
+	//
+	// The core config-placement check rides the same walk: the callback collects
+	// the .datamitsu directories it descends into, FindPlacementViolations
+	// matches the reserved names in the file list.
+	onDir, reservedDirs := reservedDirCollector()
+	allFiles, err := traverser.FindFilesFromPathVisit(ctx, sc.rootPath, sc.rootPath, onDir)
 	if err != nil {
 		return fmt.Errorf("scanning %s: %w", sc.rootPath, err)
 	}
@@ -1218,6 +1268,7 @@ func (sc *sharedContext) runOperations(ctx context.Context, operations []config.
 		if err := sc.refuseCrowdedReports(ctx, operations); err != nil {
 			return err
 		}
+		sc.checkConfigPlacement(bundled.FindPlacementViolations(sc.rootPath, allFiles, reservedDirs()))
 	}
 
 	if hasFix && sc.explainLevel == "" {
@@ -1874,13 +1925,13 @@ func phaseTop(operation string) string {
 // printOperationFooter renders the closing bracket rule that summarizes the
 // operation (tool/run counts, wall-clock time, failures, cancelled tasks, skips,
 // cache hit rate and an optional note).
-func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, cacheHits, cacheMisses, skipped, cancelled int, note string) {
+func printOperationFooter(toolGroups []toolExecutionGroup, wallClockTime int64, cacheHits, cacheMisses, skipped, cancelled int, note string, placementTools, placementFailed int) {
 	if ui.Muted() {
 		return
 	}
-	totalTools := len(toolGroups)
+	totalTools := len(toolGroups) + placementTools
 	totalRuns := 0
-	failedTools := 0
+	failedTools := placementFailed
 	for _, group := range toolGroups {
 		totalRuns += group.totalRuns
 		if group.failedRuns > 0 {

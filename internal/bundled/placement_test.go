@@ -23,12 +23,13 @@ func TestFindPlacementViolations(t *testing.T) {
 	nestedDir := filepath.Join(root, "sub", ".datamitsu")
 
 	files := []string{
-		filepath.Join(root, configNames[0]),               // root: legal
-		filepath.Join(root, ".datamitsuignore"),           // root: legal
-		nestedConfig,                                      // violation
-		nestedIgnore,                                      // violation
-		filepath.Join(root, "pkg", "main.go"),             // unrelated
-		filepath.Join(root, ".datamitsu", "configs", "x"), // inside root dir: not a reserved base
+		filepath.Join(root, configNames[0]),                   // root: legal
+		filepath.Join(root, ".datamitsuignore"),               // root: legal
+		nestedConfig,                                          // violation
+		nestedIgnore,                                          // violation
+		filepath.Join(root, "pkg", "main.go"),                 // unrelated
+		filepath.Join(root, ".datamitsu", "configs", "x"),     // inside root dir: not a reserved base
+		filepath.Join(root, "vendor", "datamitsu.config.mjs"), // violation
 	}
 	dirs := []string{
 		root,                              // the root itself: legal
@@ -36,7 +37,6 @@ func TestFindPlacementViolations(t *testing.T) {
 		nestedDir,                         // violation
 		filepath.Join(root, "sub"),        // unrelated
 	}
-	files = append(files, filepath.Join(root, "vendor", "datamitsu.config.mjs"))
 
 	got := FindPlacementViolations(root, files, dirs)
 

@@ -30,6 +30,11 @@ The `.datamitsu/` directory is:
 - Contains a `datamitsu.config.d.ts` file with TypeScript type definitions for IDE autocomplete when editing `datamitsu.config.js`/`.ts`/`.mjs` files
 - Verified after creation (symlink existence, correct target, target file exists)
 
+The `.datamitsu/` directory belongs at the git root only. One below it — usually
+the leftover of an `init` run inside a subproject — is a dead artifact that the
+core [config-placement check](./configuration.md#config-placement) reports in
+`lint` and `check`.
+
 ## App Links
 
 Apps declare links using the `links` field, which maps link names to relative paths within the app's install directory:

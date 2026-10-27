@@ -218,6 +218,9 @@ func (o *OperationRecord) AddCoreFindings(tool string, diags []diagnostic.Diagno
 		}
 		f := o.acc.finding(tool, d, tr)
 		f.Provenance = provenanceCore
+		// What the check printed is what the report shows: a baselined
+		// finding is neither printed nor shown.
+		f.Shown = d.Reported
 		inv.Findings = append(inv.Findings, f)
 	}
 	// A core check fails exactly where a tool that exited 0 under a gating

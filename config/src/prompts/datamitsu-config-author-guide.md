@@ -105,6 +105,16 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.5.3** - `.datamitsuignore` is root-only: a file below the git root
+  no longer applies its rules, and the core config-placement check reports it
+  (and any `datamitsu.config.*` or `.datamitsu/` below the root) as an error
+  that fails `lint`/`check`. Move every nested file's rules into the root file,
+  prefixing relative globs with its directory (`src/.datamitsuignore` rule
+  `*.go: tool` becomes `src/*.go: tool`; a `**/`-prefixed pattern needs both
+  `src/…` and `src/**/…` forms — see the
+  [Ignore Rules reference](/docs/reference/ignore-rules#migrating-nested-rules)),
+  then delete the nested files. A wrapper-generated root file is unaffected.
+
 - **after v0.5.2** - The final resolved configuration requires a top-level
   `version`, a nonempty one-line label of at most 80 characters with no
   surrounding whitespace. It may be a package release version or a static label
