@@ -1208,7 +1208,11 @@ func (sc *sharedContext) runOperations(ctx context.Context, operations []config.
 	if err != nil {
 		return fmt.Errorf("scanning %s: %w", sc.rootPath, err)
 	}
-	ignoreFiles := bundled.IgnoreFilesIn(allFiles)
+	rootIgnoreFile, hasRootIgnore := bundled.RootIgnoreFile(allFiles, sc.rootPath)
+	var ignoreFiles []string
+	if hasRootIgnore {
+		ignoreFiles = []string{rootIgnoreFile}
+	}
 	sc.planner.SeedFiles(allFiles)
 	if sc.explainLevel == "" {
 		if err := sc.refuseCrowdedReports(ctx, operations); err != nil {

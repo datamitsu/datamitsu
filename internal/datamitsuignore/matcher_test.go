@@ -6,14 +6,14 @@ import (
 
 func TestMatcherEmpty(t *testing.T) {
 	m := NewMatcher()
-	if m.IsDisabled("eslint", "src/main.js") {
+	if m.IsDisabled("eslint", "README.md") {
 		t.Error("empty matcher should not disable anything")
 	}
 }
 
 func TestMatcherBasicDisable(t *testing.T) {
 	m := NewMatcher()
-	err := m.AddFile("", "**/*.md: eslint, prettier")
+	err := m.AddFile("**/*.md: eslint, prettier")
 	if err != nil {
 		t.Fatalf("AddFile error: %v", err)
 	}
@@ -43,15 +43,11 @@ func TestMatcherBasicDisable(t *testing.T) {
 
 func TestMatcherInversion(t *testing.T) {
 	m := NewMatcher()
-	// Root disables eslint for all markdown
-	err := m.AddFile("", "**/*.md: eslint")
+	// The disable applies to all markdown; the later scoped inversion
+	// re-enables eslint for docs markdown.
+	err := m.AddFile("**/*.md: eslint\n!docs/**/*.md: eslint")
 	if err != nil {
-		t.Fatalf("AddFile root error: %v", err)
-	}
-	// docs/ re-enables eslint for its own markdown
-	err = m.AddFile("docs", "!**/*.md: eslint")
-	if err != nil {
-		t.Fatalf("AddFile docs error: %v", err)
+		t.Fatalf("AddFile error: %v", err)
 	}
 
 	tests := []struct {
@@ -75,14 +71,11 @@ func TestMatcherInversion(t *testing.T) {
 	}
 }
 
-func TestMatcherParentOverrideChildReEnable(t *testing.T) {
+func TestMatcherScopedReEnable(t *testing.T) {
 	m := NewMatcher()
-	// Root disables prettier for everything
-	if err := m.AddFile("", "**/*: prettier"); err != nil {
-		t.Fatal(err)
-	}
-	// src/ re-enables prettier
-	if err := m.AddFile("src", "!**/*: prettier"); err != nil {
+	// Root disables prettier for everything; the later scoped inversion
+	// re-enables prettier under src/.
+	if err := m.AddFile("**/*: prettier\n!src/**/*: prettier"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -93,13 +86,13 @@ func TestMatcherParentOverrideChildReEnable(t *testing.T) {
 		t.Error("src/main.js: prettier should be re-enabled")
 	}
 	if m.IsDisabled("prettier", "src/lib/util.js") {
-		t.Error("src/lib/util.js: prettier should be re-enabled by src/ rule")
+		t.Error("src/lib/util.js: prettier should be re-enabled by the src/ rule")
 	}
 }
 
 func TestMatcherMultipleTools(t *testing.T) {
 	m := NewMatcher()
-	if err := m.AddFile("", "**/*.gen.go: golangci-lint, gofmt"); err != nil {
+	if err := m.AddFile("**/*.gen.go: golangci-lint, gofmt"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -116,8 +109,8 @@ func TestMatcherMultipleTools(t *testing.T) {
 
 func TestMatcherScopedGlobs(t *testing.T) {
 	m := NewMatcher()
-	// A rule in a subdirectory with a non-** glob should be scoped to that dir
-	if err := m.AddFile("vendor", "*.go: golangci-lint"); err != nil {
+	// A root rule with a directory-prefixed glob scopes to that subtree.
+	if err := m.AddFile("vendor/*.go: golangci-lint"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -131,7 +124,7 @@ func TestMatcherScopedGlobs(t *testing.T) {
 
 func TestMatcherAddFileError(t *testing.T) {
 	m := NewMatcher()
-	err := m.AddFile("", "bad line without colon")
+	err := m.AddFile("bad line without colon")
 	if err == nil {
 		t.Fatal("expected error for invalid content")
 	}
@@ -148,7 +141,7 @@ vendor/**/*: eslint, prettier
 # But keep prettier for vendor docs
 !vendor/docs/**/*: prettier
 `
-	if err := m.AddFile("", content); err != nil {
+	if err := m.AddFile(content); err != nil {
 		t.Fatal(err)
 	}
 
@@ -169,19 +162,19 @@ vendor/**/*: eslint, prettier
 	}
 }
 
-func TestMatcherNoRulesForDir(t *testing.T) {
+func TestMatcherRuleForOtherSubtree(t *testing.T) {
 	m := NewMatcher()
-	if err := m.AddFile("other", "**/*.js: eslint"); err != nil {
+	if err := m.AddFile("other/**/*.js: eslint"); err != nil {
 		t.Fatal(err)
 	}
 	if m.IsDisabled("eslint", "src/main.js") {
-		t.Error("rule in 'other' should not affect 'src'")
+		t.Error("rule scoped to 'other' should not affect 'src'")
 	}
 }
 
 func TestMatcherWildcardDisablesAllTools(t *testing.T) {
 	m := NewMatcher()
-	if err := m.AddFile("", "vendor/**/*: *"); err != nil {
+	if err := m.AddFile("vendor/**/*: *"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -209,12 +202,9 @@ func TestMatcherWildcardDisablesAllTools(t *testing.T) {
 
 func TestMatcherWildcardInversion(t *testing.T) {
 	m := NewMatcher()
-	// Root disables all tools for vendor
-	if err := m.AddFile("", "vendor/**/*: *"); err != nil {
-		t.Fatal(err)
-	}
-	// vendor/docs re-enables all tools
-	if err := m.AddFile("vendor/docs", "!**/*: *"); err != nil {
+	// Disable all tools for vendor; the later scoped inversion re-enables
+	// everything under vendor/docs.
+	if err := m.AddFile("vendor/**/*: *\n!vendor/docs/**/*: *"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -234,12 +224,9 @@ func TestMatcherWildcardInversion(t *testing.T) {
 
 func TestMatcherWildcardInversionClearsSpecific(t *testing.T) {
 	m := NewMatcher()
-	// Root disables specific tools
-	if err := m.AddFile("", "**/*: eslint, prettier"); err != nil {
-		t.Fatal(err)
-	}
-	// Subdirectory re-enables everything via wildcard inversion
-	if err := m.AddFile("src", "!**/*: *"); err != nil {
+	// Disable specific tools; the later wildcard inversion re-enables
+	// everything under src/.
+	if err := m.AddFile("**/*: eslint, prettier\n!src/**/*: *"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -258,10 +245,7 @@ func TestMatcherWildcardDisableSpecificReEnable(t *testing.T) {
 	// Blanket disable everything, then re-enable a single tool for markdown.
 	// The specific inversion must win over the wildcard "*" disable.
 	m := NewMatcher()
-	if err := m.AddFile("", "**/*: *"); err != nil {
-		t.Fatal(err)
-	}
-	if err := m.AddFile("", "!**/*.md: eslint"); err != nil {
+	if err := m.AddFile("**/*: *\n!**/*.md: eslint"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -282,10 +266,7 @@ func TestMatcherWildcardResetsPriorSpecificException(t *testing.T) {
 	// A later blanket "**/*: *" must override an earlier specific re-enable:
 	// the broader, later rule wins.
 	m := NewMatcher()
-	if err := m.AddFile("", "!**/*: eslint"); err != nil {
-		t.Fatal(err)
-	}
-	if err := m.AddFile("", "**/*: *"); err != nil {
+	if err := m.AddFile("!**/*: eslint\n**/*: *"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -296,7 +277,7 @@ func TestMatcherWildcardResetsPriorSpecificException(t *testing.T) {
 
 func TestIsProjectDisabledBasic(t *testing.T) {
 	m := NewMatcher()
-	if err := m.AddFile("", "vendor/**/*: eslint"); err != nil {
+	if err := m.AddFile("vendor/**/*: eslint"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -323,12 +304,8 @@ func TestIsProjectDisabledBasic(t *testing.T) {
 
 func TestIsProjectDisabledInversion(t *testing.T) {
 	m := NewMatcher()
-	// Disable eslint for all vendor
-	if err := m.AddFile("", "vendor/**/*: eslint"); err != nil {
-		t.Fatal(err)
-	}
-	// Re-enable eslint for vendor/docs
-	if err := m.AddFile("vendor/docs", "!**/*: eslint"); err != nil {
+	// Disable eslint for all vendor; re-enable it under vendor/docs.
+	if err := m.AddFile("vendor/**/*: eslint\n!vendor/docs/**/*: eslint"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -349,7 +326,7 @@ func TestIsProjectDisabledInversion(t *testing.T) {
 func TestIsProjectDisabledExtensionRulesDoNotDisableProject(t *testing.T) {
 	m := NewMatcher()
 	// Extension-specific rules should NOT disable an entire project
-	if err := m.AddFile("", "**/*.md: eslint"); err != nil {
+	if err := m.AddFile("**/*.md: eslint"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -363,7 +340,7 @@ func TestIsProjectDisabledExtensionRulesDoNotDisableProject(t *testing.T) {
 
 func TestIsProjectDisabledWildcard(t *testing.T) {
 	m := NewMatcher()
-	if err := m.AddFile("", "vendor/**/*: *"); err != nil {
+	if err := m.AddFile("vendor/**/*: *"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -385,20 +362,20 @@ func TestIsProjectDisabledEmpty(t *testing.T) {
 	}
 }
 
-func TestMatcherSameDepthInsertionOrder(t *testing.T) {
+func TestMatcherLaterRuleWins(t *testing.T) {
 	// Config-defined rules (added first) disable eslint for *.md.
 	// File-based rules (added second) re-enable eslint for *.md via inversion.
-	// With stable sort, insertion order is preserved: config rules apply first,
-	// then file rules override. eslint should be enabled (inversion wins).
+	// Insertion order is preserved: config rules apply first, then file rules
+	// override. eslint should be enabled (inversion wins).
 	m := NewMatcher()
-	if err := m.AddFile("", "**/*.md: eslint"); err != nil {
+	if err := m.AddFile("**/*.md: eslint"); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.AddFile("", "!**/*.md: eslint"); err != nil {
+	if err := m.AddFile("!**/*.md: eslint"); err != nil {
 		t.Fatal(err)
 	}
 
 	if m.IsDisabled("eslint", "docs/README.md") {
-		t.Error("eslint should NOT be disabled: second root entry (inversion) should override first")
+		t.Error("eslint should NOT be disabled: second entry (inversion) should override first")
 	}
 }
