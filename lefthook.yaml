@@ -14,6 +14,18 @@ pre-commit:
       priority: 40
       run: pnpm datamitsu check --file-scoped
       stage_fixed: true
+    llms-docs:
+      # The embedded llms snapshot is harvested from the website build, so it
+      # must be generated after datamitsu-check: the fixer realigns website
+      # markdown, and a snapshot taken before that would disagree with the
+      # committed pages — the drift the Embedded Docs Drift check catches.
+      # stage_fixed re-stages internal/llmsdocs/embed into this commit.
+      priority: 50
+      glob:
+        - "website/docs/**"
+        - "packaging/llms-harvest/**"
+      run: pnpm --filter website build && go run ./packaging/llms-harvest
+      stage_fixed: true
   parallel: false
 commit-msg:
   commands:

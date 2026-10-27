@@ -25,10 +25,10 @@ to its own subtree, with deeper rules overriding shallower ones. To carry a
 nested file's rules into the root file, prefix each relative glob with the
 directory the file lived in:
 
-| Nested file          | Nested rule      | Root-file rule        |
-| -------------------- | ---------------- | --------------------- |
-| `src/.datamitsuignore` | `*.go: tool`     | `src/*.go: tool`      |
-| `src/.datamitsuignore` | `**/*.md: tool`  | `src/**/*.md: tool`   |
+| Nested file            | Nested rule     | Root-file rule      |
+| ---------------------- | --------------- | ------------------- |
+| `src/.datamitsuignore` | `*.go: tool`    | `src/*.go: tool`    |
+| `src/.datamitsuignore` | `**/*.md: tool` | `src/**/*.md: tool` |
 
 One caveat: a nested rule that itself starts with `**/` matched from its own
 directory's ancestors too. The nested `src/.datamitsuignore` rule

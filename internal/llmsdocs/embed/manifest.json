@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "4cc4ac76c22efc3c41bda7d40a2d1147",
+  "pageSetHash": "5965de426957f0ef4a859f78d76389f3",
   "pages": [
     {
       "slug": "about",
@@ -487,8 +487,8 @@
       "url": "https://datamitsu.com/docs/reference/ignore-rules.md",
       "title": "Ignore Rules",
       "description": "Reference for .datamitsuignore syntax and usage",
-      "bytes": 8594,
-      "contentHash": "d6d22791d5c11ca968ceebc9940cb0e9"
+      "bytes": 8586,
+      "contentHash": "17b7b552a1eb5d151833a968cc952f83"
     },
     {
       "slug": "reference/js-api",
