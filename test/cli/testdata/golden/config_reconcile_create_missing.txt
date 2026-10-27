@@ -1,0 +1,16 @@
+╭<RULE>╮ ╭<RULE>╮
+│ datamitsu  <VERSION> │ │ datamitsu.config  1.0.0 │
+╰<RULE>╯ ╰<RULE>╯
+
+┏━ config reconcile <RULE>
+┃ 2 locations
+┃ fixture
+┃ create-missing — existing files are never touched
+┃
+┃ created
+┃   + packages/a/.tool.config
+┃   + packages/a/.variant
+┃   + packages/b/.variant
+┃
+┃ skipped existing  1 file untouched
+┗━ ready · 3 files · 3 created · 1 existing · <DUR> <RULE>

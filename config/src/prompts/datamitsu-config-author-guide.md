@@ -115,6 +115,16 @@ configuration should do about it.
   [Ignore Rules reference](/docs/reference/ignore-rules#migrating-nested-rules)),
   then delete the nested files. A wrapper-generated root file is unaffected.
 
+- **after v0.5.3** - `datamitsu config reconcile --create-missing` creates only
+  managed config files that are missing and never touches an existing file, and
+  `config reconcile --json` prints a machine-readable summary. `datamitsu init`
+  records how the binary was invoked in `.datamitsu/launcher.json`, and
+  `facts().binaryCommand` falls back to it. Configurations that ship hooks (for
+  example a lefthook managed config) can add a `config reconcile
+  --create-missing` step before their check command to provision newly added
+  monorepo subprojects; use `facts().binaryCommand` for the invocation so the
+  hook runs datamitsu the way the project installed it.
+
 - **after v0.5.2** - The final resolved configuration requires a top-level
   `version`, a nonempty one-line label of at most 80 characters with no
   surrounding whitespace. It may be a package release version or a static label

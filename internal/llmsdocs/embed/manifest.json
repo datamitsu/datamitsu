@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "5965de426957f0ef4a859f78d76389f3",
+  "pageSetHash": "1ccc1dc62ff6050abec1cdde93d5cdf3",
   "pages": [
     {
       "slug": "about",
@@ -298,8 +298,8 @@
       "url": "https://datamitsu.com/docs/guides/managed-configs.md",
       "title": "Managed Configs",
       "description": "Using managed configuration files, symlinks, and the .datamitsu/ directory",
-      "bytes": 14169,
-      "contentHash": "4b3f46d0530e593bb4082a316af30cfb"
+      "bytes": 16088,
+      "contentHash": "3a5fc593c18938bbc1187876fb209a9f"
     },
     {
       "slug": "guides/managed-content",
@@ -370,8 +370,8 @@
       "url": "https://datamitsu.com/docs/guides/using-wrappers.md",
       "title": "Using Wrapper Packages",
       "description": "How to install and use datamitsu wrapper packages in your projects",
-      "bytes": 14098,
-      "contentHash": "eef0d6f9ebf86527b60ba73704837d33"
+      "bytes": 14866,
+      "contentHash": "b89f75d01a5826eab995e0a8f49cfb38"
     },
     {
       "slug": "how-to/add-new-tool",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 185875,
-      "contentHash": "27d0addd43bac6218c32ceb408b0c768"
+      "bytes": 188082,
+      "contentHash": "d7d3ec5f39c7d8c89cf0e724710e1ec0"
     },
     {
       "slug": "reference/comparison",
