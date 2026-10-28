@@ -1868,9 +1868,11 @@ declare global {
     arch: SysList.ArchType;
 
     /**
-     * Command to run this binary (can be overridden via --binary-command flag or
-     * DATAMITSU_BINARY_COMMAND env var) Useful for npm package wrappers that need to call the
-     * actual binary
+     * Command to run this binary: the --binary-command flag (wrappers inject it), then
+     * DATAMITSU_BINARY_COMMAND, then the launcher marker `datamitsu init` wrote to
+     * .datamitsu/launcher.json (how this repository's init was invoked), then the binary's absolute
+     * path. Useful for npm package wrappers and for hook commands that must invoke datamitsu the
+     * way the project installed it
      */
     binaryCommand: string;
 

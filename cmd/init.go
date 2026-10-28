@@ -15,6 +15,7 @@ import (
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/facts"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/managedconfig"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
@@ -178,6 +179,17 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 	if err := reportInternalConfigs(disp, rootPath, cfg, initDryRun); err != nil {
 		return fmt.Errorf("failed to write internal configs: %w", err)
+	}
+
+	// The launcher marker records how THIS init was invoked, so hook commands
+	// rendered later invoke datamitsu the same way (facts().binaryCommand
+	// falls back to it). Resolution is deliberately marker-free: a repository
+	// that switched install channels re-records on the next init. Written
+	// after the .datamitsu/ swap: the next init's swap drops it and this write
+	// refreshes it.
+	command, _ := facts.ResolveBinaryCommandForInit(BinaryCommandOverride)
+	if err := reportLauncherMarker(disp, rootPath, command, initDryRun); err != nil {
+		return err
 	}
 
 	hookErr := reportInitCommands(ctx, disp, rootPath, projectTypes, cfg, binMgr, initDryRun)
@@ -436,6 +448,29 @@ func reportInternalConfigs(disp *ui.Display, rootPath string, cfg *config.Config
 		suffix += " · " + strings.Join(changes, " · ")
 	}
 	initLabelLine(disp, "configs", value+clr.Faint(suffix))
+	return nil
+}
+
+// reportLauncherMarker records how this init was invoked in
+// .datamitsu/launcher.json, so hook commands rendered later
+// (facts().binaryCommand) invoke datamitsu the same way.
+func reportLauncherMarker(disp *ui.Display, rootPath, command string, dryRun bool) error {
+	ex, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to determine executable path: %w", err)
+	}
+	if err := managedconfig.WriteLauncherMarker(rootPath, managedconfig.LauncherMarker{
+		Command:     command,
+		BinaryPath:  ex,
+		CoreVersion: ldflags.Version,
+	}, dryRun); err != nil {
+		return err
+	}
+	value := command + clr.Faint(" → "+config.DatamitsuDirName+"/"+managedconfig.LauncherMarkerName)
+	if dryRun {
+		value = "would record " + command
+	}
+	initLabelLine(disp, "launcher", value)
 	return nil
 }
 
