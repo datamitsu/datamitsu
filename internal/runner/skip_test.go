@@ -34,7 +34,7 @@ func captureStdout(t *testing.T, fn func()) string {
 }
 
 func TestPrintOperationFooterShowsSkipped(t *testing.T) {
-	out := captureStdout(t, func() { printOperationFooter(nil, 0, 0, 0, 2, 0, "") })
+	out := captureStdout(t, func() { printOperationFooter(nil, 0, 0, 0, 2, 0, "", 0, 0) })
 	if !strings.Contains(out, "2 skipped") {
 		t.Errorf("footer missing skipped count: %q", out)
 	}

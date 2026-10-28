@@ -1337,9 +1337,9 @@ func (p *Planner) initializeCache(ctx context.Context) error {
 	return nil
 }
 
-// buildIgnoreMatcher scans cached files for .datamitsuignore entries and builds
-// a Matcher. Config-defined ignore rules (extraIgnoreRules) are added as
-// root-level rules.
+// buildIgnoreMatcher builds a Matcher from the built-in rule, the
+// config-defined ignore rules (extraIgnoreRules), and the .datamitsuignore at
+// the git root — the only file whose rules apply.
 //
 // A malformed user .datamitsuignore is a hard error rather than a warning: a
 // parse failure drops every rule in that file, which would silently let tools
@@ -1354,14 +1354,14 @@ func (p *Planner) buildIgnoreMatcher() (*datamitsuignore.Matcher, error) {
 	m := datamitsuignore.NewMatcher()
 
 	// Built-in: never run tools on the managed symlinks directory.
-	if err := m.AddFile("", ".datamitsu/**: *"); err != nil {
+	if err := m.AddFile(".datamitsu/**: *"); err != nil {
 		log.Warn("failed to add built-in .datamitsu ignore rule", zap.Error(err))
 	}
 
 	// Config-defined rules are already validated at config load; warn (not fail)
 	// here to avoid double-reporting the same parse error.
 	if len(p.extraIgnoreRules) > 0 {
-		if err := m.AddFile("", strings.Join(p.extraIgnoreRules, "\n")); err != nil {
+		if err := m.AddFile(strings.Join(p.extraIgnoreRules, "\n")); err != nil {
 			log.Warn("failed to parse config-defined ignore rules", zap.Error(err))
 		}
 	}
@@ -1371,10 +1371,14 @@ func (p *Planner) buildIgnoreMatcher() (*datamitsuignore.Matcher, error) {
 		known[name] = true
 	}
 
+	// Only the .datamitsuignore at the git root applies. A .datamitsuignore
+	// anywhere below is a dead artifact — the core config-placement check
+	// reports it; the planner must not silently resurrect its rules.
 	const filename = ".datamitsuignore"
+	rootIgnore := filepath.Join(p.rootPath, filename)
 
 	for _, f := range p.cachedFiles {
-		if filepath.Base(f) != filename {
+		if f != rootIgnore {
 			continue
 		}
 		content, err := os.ReadFile(f)
@@ -1391,14 +1395,7 @@ func (p *Planner) buildIgnoreMatcher() (*datamitsuignore.Matcher, error) {
 				zap.String("tool", tool),
 			)
 		}
-		relDir, err := filepath.Rel(p.rootPath, filepath.Dir(f))
-		if err != nil {
-			return nil, fmt.Errorf("resolving path for %s: %w", f, err)
-		}
-		if relDir == "." {
-			relDir = ""
-		}
-		m.AddRules(relDir, rules)
+		m.AddRules(rules)
 	}
 
 	return m, nil

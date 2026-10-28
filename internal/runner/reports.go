@@ -99,13 +99,12 @@ func (sc *sharedContext) gate() tooling.Gate {
 	if sc.annotator == nil {
 		return threshold
 	}
-	var baseline *report.BaselineMatcher
-	if sc.opts.Baseline != nil {
-		baseline = report.NewBaselineMatcher(sc.opts.Baseline, sc.rootPath)
+	if sc.opts.Baseline != nil && sc.baselineMatcher == nil {
+		sc.baselineMatcher = report.NewBaselineMatcher(sc.opts.Baseline, sc.rootPath)
 	}
 	return func(task tooling.Task, proc *tooling.ProcessResult) tooling.GateDecision {
 		sc.annotator.Annotate(task, proc)
-		baseline.Mark(task, proc)
+		sc.baselineMatcher.Mark(task, proc)
 		return threshold(task, proc)
 	}
 }

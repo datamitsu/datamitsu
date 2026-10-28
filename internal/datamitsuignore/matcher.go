@@ -1,11 +1,14 @@
-// Package datamitsuignore parses .datamitsuignore files and matches their
-// per-directory rules against file paths to decide which tools are disabled.
+// Package datamitsuignore parses the .datamitsuignore file at the git root and
+// matches its rules against file paths to decide which tools are disabled.
+//
+// The file lives only at the repository git root. The former per-directory
+// cascading form was removed: a rule that used to live in a nested
+// .datamitsuignore migrates to the root file with a directory prefix
+// ("sub/.datamitsuignore: *.go" becomes "sub/*.go: tool").
 package datamitsuignore
 
 import (
 	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/globmatch"
 )
@@ -14,27 +17,20 @@ func toSlash(p string) string {
 	return filepath.ToSlash(p)
 }
 
-type dirRules struct {
-	dir   string // relative to root, "" for root
-	rules []preparedRule
-}
-
-// preparedRule is a Rule with everything that does not depend on the path being
-// tested resolved once: the glob scoped to the rule's directory, and that glob
-// compiled.
+// preparedRule is a Rule with its glob compiled once.
 //
 // IsDisabled runs once per (file, tool) — tens of thousands of times when
-// planning a large repository — and used to rebuild the scoped pattern string
-// and re-parse it on every one of those calls.
+// planning a large repository — and used to rebuild the pattern string and
+// re-parse it on every one of those calls.
 type preparedRule struct {
 	rule Rule
 	set  globmatch.Set
 }
 
-// Matcher collects .datamitsuignore rules per directory and determines
-// whether a tool is disabled for a given file path.
+// Matcher collects .datamitsuignore rules and determines whether a tool is
+// disabled for a given file path. Every rule applies from the repository root.
 type Matcher struct {
-	entries []dirRules
+	rules []preparedRule
 }
 
 // NewMatcher creates an empty Matcher.
@@ -42,79 +38,55 @@ func NewMatcher() *Matcher {
 	return &Matcher{}
 }
 
-// AddFile parses .datamitsuignore content and associates the resulting rules
-// with the given directory (relative to root, use "" for root).
-func (m *Matcher) AddFile(relDir string, content string) error {
+// AddFile parses .datamitsuignore content and appends the resulting rules.
+func (m *Matcher) AddFile(content string) error {
 	rules, err := Parse(content)
 	if err != nil {
 		return err
 	}
-	m.AddRules(relDir, rules)
+	m.AddRules(rules)
 	return nil
 }
 
-// AddRules associates already-parsed rules with the given directory (relative to
-// root, use "" for root). Empty rule sets are ignored. Use this when the caller
-// has already parsed the content (e.g. to validate tool names first) to avoid a
-// redundant re-parse.
-func (m *Matcher) AddRules(relDir string, rules []Rule) {
+// AddRules appends already-parsed rules. Empty rule sets are ignored. Use this
+// when the caller has already parsed the content (e.g. to validate tool names
+// first) to avoid a redundant re-parse.
+func (m *Matcher) AddRules(rules []Rule) {
 	if len(rules) == 0 {
 		return
 	}
-	dir := toSlash(relDir)
-	prepared := make([]preparedRule, 0, len(rules))
 	for _, rule := range rules {
-		glob := rule.Glob
-		// A relative glob is scoped to the rule's directory. Resolved here, not
-		// per query.
-		if dir != "" && !strings.HasPrefix(glob, "**/") {
-			glob = dir + "/" + glob
-		}
-		prepared = append(prepared, preparedRule{rule: rule, set: globmatch.New([]string{glob})})
+		m.rules = append(m.rules, preparedRule{rule: rule, set: globmatch.New([]string{rule.Glob})})
 	}
-	m.entries = append(m.entries, dirRules{dir: dir, rules: prepared})
-
-	// Kept sorted here rather than on every query. Rules are applied root-first
-	// so a deeper directory can override a shallower one, and IsDisabled runs
-	// once per (file, tool) — tens of thousands of times on a large repository —
-	// so the ordering must not cost a slice allocation and a sort each time.
-	// A stable sort of an already-ordered slice with one appended entry puts that
-	// entry at the end of its depth group, which is the same order sorting once
-	// at the end would produce.
-	sort.SliceStable(m.entries, func(i, j int) bool {
-		return depth(m.entries[i].dir) < depth(m.entries[j].dir)
-	})
 }
 
-// DisabledEverywhere reports whether toolName is disabled for every path in the
-// tree and no rule anywhere can re-enable it.
+// DisabledEverywhere reports whether toolName is disabled for every path in
+// the tree and no rule anywhere can re-enable it.
 //
 // It exists so a caller can drop a tool before doing any per-file work. The
 // answer is deliberately conservative — it proves the "disabled" case and says
 // false whenever it cannot — because the only sound use of a true is to skip
 // work that would have produced nothing anyway.
 //
-// A proof needs both halves: some root-scoped rule that disables the tool (or
-// every tool) across the whole tree, and no inversion anywhere naming the tool
-// or "*". Only a `**/*` glob at the root covers the tree; a narrower glob such
-// as `**/*.md` leaves paths it does not match enabled.
+// A proof needs both halves: some rule that disables the tool (or every tool)
+// across the whole tree, and no inversion anywhere naming the tool or "*".
+// Only a `**/*` glob covers the tree; a narrower glob such as `**/*.md` leaves
+// paths it does not match enabled.
 func (m *Matcher) DisabledEverywhere(toolName string) bool {
 	disabled := false
-	for _, e := range m.entries {
-		for _, pr := range e.rules {
-			rule := pr.rule
-			for _, tool := range rule.Tools {
-				if rule.Invert && (tool == toolName || tool == "*") {
-					return false
-				}
+	for _, pr := range m.rules {
+		rule := pr.rule
+		for _, tool := range rule.Tools {
+			if rule.Invert && (tool == toolName || tool == "*") {
+				return false
 			}
-			if rule.Invert || e.dir != "" || rule.Glob != "**/*" {
-				continue
-			}
-			for _, tool := range rule.Tools {
-				if tool == toolName || tool == "*" {
-					disabled = true
-				}
+		}
+		if rule.Invert || rule.Glob != "**/*" {
+			continue
+		}
+		for _, tool := range rule.Tools {
+			if tool == toolName || tool == "*" {
+				disabled = true
 			}
 		}
 	}
@@ -123,15 +95,14 @@ func (m *Matcher) DisabledEverywhere(toolName string) bool {
 
 // IsDisabled reports whether toolName should be skipped for relFilePath.
 // relFilePath must be relative to the repository root.
-// Rules are applied from root directory to the file's directory; positive rules
-// add to the disabled set, inversion rules remove from it.
+// Positive rules add to the disabled set, inversion rules remove from it; a
+// later rule wins over an earlier one.
 func (m *Matcher) IsDisabled(toolName string, relFilePath string) bool {
-	if len(m.entries) == 0 {
+	if len(m.rules) == 0 {
 		return false
 	}
 
 	relFilePath = toSlash(relFilePath)
-	fileDir := toSlash(filepath.Dir(relFilePath))
 
 	// wildcard tracks whether a "*" rule currently disables every tool.
 	// override holds the explicit decision for toolName (true=disabled,
@@ -146,31 +117,24 @@ func (m *Matcher) IsDisabled(toolName string, relFilePath string) bool {
 	wildcard := false
 	override, hasOverride := false, false
 
-	// m.entries is kept sorted by directory depth, root first, so rules apply in
-	// precedence order without a per-call sort.
-	for _, e := range m.entries {
-		if !isAncestorOrEqual(e.dir, fileDir) {
+	for _, pr := range m.rules {
+		rule := pr.rule
+		if !ruleMentions(rule, toolName) {
 			continue
 		}
-		for _, pr := range e.rules {
-			rule := pr.rule
-			if !ruleMentions(rule, toolName) {
-				continue
-			}
-			if !pr.set.Match(relFilePath) {
-				continue
-			}
+		if !pr.set.Match(relFilePath) {
+			continue
+		}
 
-			for _, tool := range rule.Tools {
-				switch tool {
-				case "*":
-					// A blanket (re-)enable/disable resets prior per-tool
-					// exceptions: the later, broader rule wins.
-					wildcard = !rule.Invert
-					hasOverride = false
-				case toolName:
-					override, hasOverride = !rule.Invert, true
-				}
+		for _, tool := range rule.Tools {
+			switch tool {
+			case "*":
+				// A blanket (re-)enable/disable resets prior per-tool
+				// exceptions: the later, broader rule wins.
+				wildcard = !rule.Invert
+				hasOverride = false
+			case toolName:
+				override, hasOverride = !rule.Invert, true
 			}
 		}
 	}
@@ -206,22 +170,4 @@ func (m *Matcher) IsProjectDisabled(toolName string, relProjectDir string) bool 
 		synthetic = "x"
 	}
 	return m.IsDisabled(toolName, synthetic)
-}
-
-func isAncestorOrEqual(dir, target string) bool {
-	if dir == "" || dir == "." {
-		return true
-	}
-	if dir == target {
-		return true
-	}
-	prefix := dir + "/"
-	return strings.HasPrefix(target, prefix)
-}
-
-func depth(dir string) int {
-	if dir == "" || dir == "." {
-		return 0
-	}
-	return strings.Count(dir, "/") + 1
 }

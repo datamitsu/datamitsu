@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "2d8d207dc1f8407cbb9d000579ec5b37",
+  "pageSetHash": "5965de426957f0ef4a859f78d76389f3",
   "pages": [
     {
       "slug": "about",
@@ -87,8 +87,8 @@
       "url": "https://datamitsu.com/docs/getting-started/core-concepts.md",
       "title": "Core Concepts",
       "description": "Understanding the key concepts behind datamitsu",
-      "bytes": 9134,
-      "contentHash": "9620e0c19eee3150281bc1576e439360"
+      "bytes": 9154,
+      "contentHash": "3470f52d6f54f270258619925c5e8032"
     },
     {
       "slug": "getting-started/installation/docker",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 13658,
-      "contentHash": "b73cd0fe9c5d49afe6620de12db51eb8"
+      "bytes": 14900,
+      "contentHash": "9c3c7279af9a6c6eeac067785ff47055"
     },
     {
       "slug": "guides/managed-configs",
@@ -298,8 +298,8 @@
       "url": "https://datamitsu.com/docs/guides/managed-configs.md",
       "title": "Managed Configs",
       "description": "Using managed configuration files, symlinks, and the .datamitsu/ directory",
-      "bytes": 13905,
-      "contentHash": "1e0ab4e9277f4dfa79c00342e0775416"
+      "bytes": 14169,
+      "contentHash": "4b3f46d0530e593bb4082a316af30cfb"
     },
     {
       "slug": "guides/managed-content",
@@ -388,8 +388,8 @@
       "url": "https://datamitsu.com/docs/how-to/configure-linters.md",
       "title": "Configure Linters",
       "description": "How to set up and configure linters and formatters with datamitsu",
-      "bytes": 5350,
-      "contentHash": "0e7be0ea475f873d0cae284c666a3890"
+      "bytes": 5478,
+      "contentHash": "d0546737e9303587aae4b2753522f49a"
     },
     {
       "slug": "how-to/machine-level-toolchain",
@@ -487,8 +487,8 @@
       "url": "https://datamitsu.com/docs/reference/ignore-rules.md",
       "title": "Ignore Rules",
       "description": "Reference for .datamitsuignore syntax and usage",
-      "bytes": 7386,
-      "contentHash": "f939ea623e0951349544a9d7ad5ca213"
+      "bytes": 8586,
+      "contentHash": "17b7b552a1eb5d151833a968cc952f83"
     },
     {
       "slug": "reference/js-api",
