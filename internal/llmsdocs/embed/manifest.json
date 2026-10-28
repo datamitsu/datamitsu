@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "cc915f60e740b1d0d83a31c83437b9ac",
+  "pageSetHash": "1ccc1dc62ff6050abec1cdde93d5cdf3",
   "pages": [
     {
       "slug": "about",
@@ -87,8 +87,8 @@
       "url": "https://datamitsu.com/docs/getting-started/core-concepts.md",
       "title": "Core Concepts",
       "description": "Understanding the key concepts behind datamitsu",
-      "bytes": 9134,
-      "contentHash": "9620e0c19eee3150281bc1576e439360"
+      "bytes": 9154,
+      "contentHash": "3470f52d6f54f270258619925c5e8032"
     },
     {
       "slug": "getting-started/installation/docker",
@@ -280,8 +280,8 @@
       "url": "https://datamitsu.com/docs/guides/config-inspector.md",
       "title": "Config Inspector",
       "description": "Open the resolved configuration for your repository, inspect a tool's scope and file patterns,",
-      "bytes": 17163,
-      "contentHash": "d6d13ee2ade40f7176f4b8295847693d"
+      "bytes": 17145,
+      "contentHash": "be282b36bc6cce9305f6c813271be332"
     },
     {
       "slug": "guides/configuration",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 13683,
-      "contentHash": "342ac9604f65d36225935ca6810bc66d"
+      "bytes": 14900,
+      "contentHash": "9c3c7279af9a6c6eeac067785ff47055"
     },
     {
       "slug": "guides/managed-configs",
@@ -298,8 +298,8 @@
       "url": "https://datamitsu.com/docs/guides/managed-configs.md",
       "title": "Managed Configs",
       "description": "Using managed configuration files, symlinks, and the .datamitsu/ directory",
-      "bytes": 13905,
-      "contentHash": "1e0ab4e9277f4dfa79c00342e0775416"
+      "bytes": 16088,
+      "contentHash": "3a5fc593c18938bbc1187876fb209a9f"
     },
     {
       "slug": "guides/managed-content",
@@ -334,8 +334,8 @@
       "url": "https://datamitsu.com/docs/guides/runtime-management.md",
       "title": "Runtime Management",
       "description": "Managing Bun, UV (Python), Node.js, JVM, and Go runtimes with datamitsu",
-      "bytes": 19525,
-      "contentHash": "6fec73b7e6d4ed6e9cb8ed8bb872bf30"
+      "bytes": 19506,
+      "contentHash": "2171e331167b78546f39242b74c2a339"
     },
     {
       "slug": "guides/source-mode",
@@ -370,8 +370,8 @@
       "url": "https://datamitsu.com/docs/guides/using-wrappers.md",
       "title": "Using Wrapper Packages",
       "description": "How to install and use datamitsu wrapper packages in your projects",
-      "bytes": 14115,
-      "contentHash": "e4463c267d425a05a501fc0b7e752cf4"
+      "bytes": 14866,
+      "contentHash": "b89f75d01a5826eab995e0a8f49cfb38"
     },
     {
       "slug": "how-to/add-new-tool",
@@ -388,8 +388,8 @@
       "url": "https://datamitsu.com/docs/how-to/configure-linters.md",
       "title": "Configure Linters",
       "description": "How to set up and configure linters and formatters with datamitsu",
-      "bytes": 5350,
-      "contentHash": "0e7be0ea475f873d0cae284c666a3890"
+      "bytes": 5478,
+      "contentHash": "d0546737e9303587aae4b2753522f49a"
     },
     {
       "slug": "how-to/machine-level-toolchain",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 185875,
-      "contentHash": "27d0addd43bac6218c32ceb408b0c768"
+      "bytes": 188082,
+      "contentHash": "d7d3ec5f39c7d8c89cf0e724710e1ec0"
     },
     {
       "slug": "reference/comparison",
@@ -487,8 +487,8 @@
       "url": "https://datamitsu.com/docs/reference/ignore-rules.md",
       "title": "Ignore Rules",
       "description": "Reference for .datamitsuignore syntax and usage",
-      "bytes": 7386,
-      "contentHash": "f939ea623e0951349544a9d7ad5ca213"
+      "bytes": 8586,
+      "contentHash": "17b7b552a1eb5d151833a968cc952f83"
     },
     {
       "slug": "reference/js-api",

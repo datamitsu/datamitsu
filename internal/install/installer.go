@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,16 +20,17 @@ import (
 
 // Installer handles configuration file installation and patching
 type Installer struct {
-	rootPath         string
-	cwdPath          string
-	projectTypes     []string
-	projectLocations []config.ProjectLocation // repo-wide detected {type, path}; exposed to content()
-	selectedTools    []string                 // nil/empty = no --tools filter (install all applicable)
-	repoProjectTypes []string                 // every type detected anywhere in the repository
-	configs          config.MapOfManagedConfigs
-	vm               *goja.Runtime
-	layerMap         *config.ManagedConfigLayerMap
-	force            bool
+	rootPath          string
+	cwdPath           string
+	projectTypes      []string
+	projectLocations  []config.ProjectLocation // repo-wide detected {type, path}; exposed to content()
+	selectedTools     []string                 // nil/empty = no --tools filter (install all applicable)
+	repoProjectTypes  []string                 // every type detected anywhere in the repository
+	configs           config.MapOfManagedConfigs
+	vm                *goja.Runtime
+	layerMap          *config.ManagedConfigLayerMap
+	force             bool
+	createMissingOnly bool
 }
 
 // NewInstaller creates a new configuration installer. selectedTools scopes
@@ -58,6 +60,15 @@ func NewInstaller(
 // removal of customized managed configs. Configuration-layer overrides remain.
 func (i *Installer) SetForce(force bool) {
 	i.force = force
+}
+
+// SetCreateMissingOnly switches the installer to the `config reconcile
+// --create-missing` mode: it creates only managed config files that are
+// missing and never touches an existing file — no replacement, patching,
+// deletion, or otherFileNameList cleanup. An existing regular file is reported
+// as "skipped-existing"; a path occupied by anything else is an error.
+func (i *Installer) SetCreateMissingOnly(only bool) {
+	i.createMissingOnly = only
 }
 
 // SetProjectLocations sets the repo-wide detected project locations (git-root
@@ -136,6 +147,12 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.M
 	// Use the map key as mainFilename
 	mainPath := filepath.Join(targetDir, name)
 	result.FilePath = mainPath
+
+	// Create-missing mode: nothing below this point may mutate an existing
+	// file, so it diverges before any cleanup, removal, or patching can run.
+	if i.createMissingOnly {
+		return i.createMissing(ctx, name, cfg, mainPath, dryRun, result)
+	}
 
 	if cfg.Ejectable && !i.force {
 		if conflicts := i.ejectConflicts(name, cfg); len(conflicts) > 0 {
@@ -270,6 +287,110 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.M
 	return result
 }
 
+// createMissing implements the `config reconcile --create-missing` safety
+// contract for a single config entry: a missing managed file is created, and
+// every existing file is left byte-for-byte untouched — no replacement,
+// patching, deletion, or otherFileNameList cleanup. An existing regular file
+// (or a symlink to one) is reported as "skipped-existing"; a path occupied by
+// anything else is a collision error, never worked around or removed.
+func (i *Installer) createMissing(ctx context.Context, name string, cfg config.ManagedConfig, mainPath string, dryRun bool, result InstallResult) InstallResult {
+	// deleteOnly entries have nothing to create.
+	if cfg.DeleteOnly {
+		result.Action = "skipped"
+		return result
+	}
+	// Internal placement lives in .datamitsu/configs/ and is written by init;
+	// this mode would otherwise have nothing to do but the repository-copy
+	// removal normal reconcile performs — which is forbidden here.
+	if cfg.Placement == config.PlacementInternal {
+		result.Action = "skipped"
+		return result
+	}
+
+	if _, err := os.Lstat(mainPath); err == nil {
+		return i.classifyExisting(mainPath, result)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		result.Error = fmt.Errorf("failed to inspect %s: %w", mainPath, err)
+		return result
+	}
+
+	if cfg.LinkTarget != "" {
+		return i.installSymlink(mainPath, cfg.LinkTarget, dryRun, result)
+	}
+
+	// Only git-root scoped entries carry eagerly evaluated layer content; every
+	// project-scoped entry renders here with no existing content, exactly like
+	// today's create path. A found-but-empty layer render is a valid file, not
+	// an opt-out, so "found" is tracked separately from the content.
+	newContent := ""
+	usedLayerContent := false
+	if i.layerMap != nil && cfg.Scope == config.ScopeGitRoot {
+		if history, hasHistory := (*i.layerMap)[name]; hasHistory {
+			if layerContent := config.GetLastGeneratedContent(history); layerContent != nil {
+				newContent = *layerContent
+				usedLayerContent = true
+			}
+		}
+	}
+	if !usedLayerContent {
+		var skip bool
+		var err error
+		newContent, skip, err = i.generateContent(ctx, cfg, mainPath, nil, nil, nil)
+		if err != nil {
+			result.Error = fmt.Errorf("failed to generate content: %w", err)
+			return result
+		}
+		// content() returning undefined/null is an explicit opt-out: leave
+		// nothing behind.
+		if skip {
+			result.Action = "skipped"
+			return result
+		}
+	}
+
+	if !dryRun {
+		if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
+			result.Error = fmt.Errorf("failed to create directory: %w", err)
+			return result
+		}
+		// Exclusive create: a file that appeared between the check above and
+		// this write must not be truncated — it is someone's existing file.
+		file, err := os.OpenFile(mainPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if errors.Is(err, os.ErrExist) {
+			return i.classifyExisting(mainPath, result)
+		}
+		if err != nil {
+			result.Error = fmt.Errorf("failed to write file: %w", err)
+			return result
+		}
+		_, writeErr := file.WriteString(newContent)
+		closeErr := file.Close()
+		if writeErr != nil {
+			result.Error = fmt.Errorf("failed to write file: %w", writeErr)
+			return result
+		}
+		if closeErr != nil {
+			result.Error = fmt.Errorf("failed to write file: %w", closeErr)
+			return result
+		}
+	}
+	result.Action = "created"
+	return result
+}
+
+// classifyExisting reports a path that appeared under create-missing between
+// the absence check and the write: a regular file (or a symlink to one) is
+// "skipped-existing", anything else is a collision.
+func (i *Installer) classifyExisting(mainPath string, result InstallResult) InstallResult {
+	if resolved, statErr := os.Stat(mainPath); statErr == nil && resolved.Mode().IsRegular() {
+		result.Action = "skipped-existing"
+		return result
+	}
+	result.Action = "blocked"
+	result.Error = fmt.Errorf("%s exists and is not a regular file; --create-missing never replaces or removes it", mainPath)
+	return result
+}
+
 // installSymlink creates a symlink at mainPath pointing to linkTarget (relative to mainPath's directory).
 // The resolved target must stay within the repository root directory.
 func (i *Installer) installSymlink(mainPath string, linkTarget string, dryRun bool, result InstallResult) InstallResult {
@@ -338,17 +459,32 @@ func (i *Installer) installSymlink(mainPath string, linkTarget string, dryRun bo
 		return result
 	}
 
-	// Remove existing file/symlink at mainPath
+	// Nested managed links (e.g. .config/tool.yml) need their parents, in both
+	// the exclusive create-missing path and the replacing one.
+	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
+		result.Error = fmt.Errorf("failed to create directory: %w", err)
+		return result
+	}
+
+	// Remove existing file/symlink at mainPath. Create-missing never removes:
+	// its exclusive symlink creation below reports a path that appeared as
+	// skipped-existing or blocked instead.
+	if i.createMissingOnly {
+		if err := os.Symlink(relTarget, mainPath); err != nil {
+			if errors.Is(err, os.ErrExist) {
+				return i.classifyExisting(mainPath, result)
+			}
+			result.Error = fmt.Errorf("failed to create symlink at %s: %w", mainPath, err)
+			return result
+		}
+		result.LinkTarget = relTarget
+		return result
+	}
 	if _, err := os.Lstat(mainPath); err == nil {
 		if err := os.Remove(mainPath); err != nil {
 			result.Error = fmt.Errorf("failed to remove existing file at %s: %w", mainPath, err)
 			return result
 		}
-	}
-
-	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
-		result.Error = fmt.Errorf("failed to create directory: %w", err)
-		return result
 	}
 
 	if err := os.Symlink(relTarget, mainPath); err != nil {

@@ -38,26 +38,23 @@ func FuzzParse(f *testing.F) {
 }
 
 // FuzzMatcher asserts that building a matcher from arbitrary content and querying
-// it never panics and is deterministic, for both root- and subdirectory-scoped
-// rule sets (the latter exercises the relative-glob scoping path). Inputs that
-// fail to parse are skipped — malformed parsing is FuzzParse's concern.
+// it never panics and is deterministic. Inputs that fail to parse are skipped —
+// malformed parsing is FuzzParse's concern.
 func FuzzMatcher(f *testing.F) {
 	f.Add("**/*: oxfmt\n!config/**/*: oxfmt", "oxfmt", "config/ci.yaml")
 	f.Add("**/*: *\n!**/*.md: eslint", "eslint", "README.md")
 	f.Add("src/*.go: golangci-lint", "golangci-lint", "src/main.go")
 	f.Fuzz(func(t *testing.T, content, tool, path string) {
-		for _, dir := range []string{"", "sub"} {
-			m := NewMatcher()
-			if err := m.AddFile(dir, content); err != nil {
-				continue
-			}
-			a := m.IsDisabled(tool, path)
-			b := m.IsDisabled(tool, path)
-			if a != b {
-				t.Fatalf("IsDisabled non-deterministic: dir=%q tool=%q path=%q -> %v then %v", dir, tool, path, a, b)
-			}
-			// Must not panic for the project-level probe either.
-			_ = m.IsProjectDisabled(tool, path)
+		m := NewMatcher()
+		if err := m.AddFile(content); err != nil {
+			return
 		}
+		a := m.IsDisabled(tool, path)
+		b := m.IsDisabled(tool, path)
+		if a != b {
+			t.Fatalf("IsDisabled non-deterministic: tool=%q path=%q -> %v then %v", tool, path, a, b)
+		}
+		// Must not panic for the project-level probe either.
+		_ = m.IsProjectDisabled(tool, path)
 	})
 }

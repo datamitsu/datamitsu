@@ -41,6 +41,10 @@ var (
 	// goldens flaky run-to-run and build-to-build. A run of 3+ never appears in
 	// semantic text, while the single bar in "┏━"/"┗━"/"┃" prefixes is preserved.
 	ruleRE = regexp.MustCompile(`[━─]{3,}`)
+	// testBinaryRE matches the compiled test binary's path (a fresh
+	// datamitsu-cli-bin-* temp dir per run) → <BINARY>. The launcher marker line
+	// prints the binary command, so init output carries it.
+	testBinaryRE = regexp.MustCompile(`/tmp/datamitsu-cli-bin-\d+/datamitsu`)
 )
 
 // Normalizer rewrites subprocess output into a stable, machine-independent form
@@ -113,6 +117,9 @@ func (n *Normalizer) Apply(s string) string {
 
 	// 6. Box-drawing rule fills (width-dependent padding) → a single placeholder.
 	s = ruleRE.ReplaceAllString(s, "<RULE>")
+
+	// 7. The test binary's own temp path (launcher marker line) → <BINARY>.
+	s = testBinaryRE.ReplaceAllString(s, "<BINARY>")
 
 	if n.sortLines {
 		s = sortLines(s)

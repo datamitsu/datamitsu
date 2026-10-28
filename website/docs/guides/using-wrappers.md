@@ -117,6 +117,22 @@ This creates config files (`.eslintrc.js`, `.prettierrc`, `.golangci.yml`, etc.)
 in your project based on the wrapper's `managedConfigs` entries. It is separate
 from `init`, which provisions the toolchain and `.datamitsu` links.
 
+#### How hooks invoke datamitsu
+
+Git hooks that the wrapper's managed `lefthook.yaml` writes invoke datamitsu
+through `facts().binaryCommand`. That value resolves, in order:
+
+1. the `--binary-command` flag (the wrapper shim injects it);
+2. the `DATAMITSU_BINARY_COMMAND` environment variable;
+3. the launcher marker `datamitsu init` wrote to `.datamitsu/launcher.json` —
+   a per-machine record (git-ignored) of the command that ran init;
+4. the binary's absolute path.
+
+So a repository initialized through a wrapper renders hook commands through
+that wrapper even when a later `datamitsu` runs directly, and a global install
+records its own path. Re-run `datamitsu init` after changing how datamitsu is
+invoked in a repository; the marker refreshes on every init.
+
 ### Step 5: Run Checks
 
 Run linters and fixers:
@@ -566,9 +582,9 @@ Wrapper packages are the key to datamitsu's value: install once, get everything 
 
 ## Explore the reference wrapper
 
-The reference wrapper `@shibanet0/datamitsu-config`, `0.0.0-unstable.20260912.f201136`,
-captured on 2026-09-22: 111 apps across six runtime families - native binary 75,
-Node.js 20, Python 11, JVM 3, Go 1 and Shell 1. These are one maintainer's choices.
+The reference wrapper `@shibanet0/datamitsu-config`, `0.6.3`,
+captured on 2026-10-26: 117 apps across seven runtime families - native binary 78,
+Node.js 15, Python 10, Bun 6, Go 4, JVM 3 and Shell 1. These are one maintainer's choices.
 The orbit is illustrative; colors represent runtime membership.
 
 <ConfigEmbed view="universe" />

@@ -1329,6 +1329,8 @@ datamitsu config reconcile [flags]
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--dry-run`        | Preview reconciliation without writing files or running `datamitsu fix`                                                                                                    |
 | `--skip-fix`       | Reconcile managed files without running the post-reconciliation `datamitsu fix`                                                                                            |
+| `--create-missing` | Create only managed config files that are missing, leaving every existing file untouched (no replacement, patching, or deletion; never runs the post-reconciliation fix)   |
+| `--json`           | Print a JSON summary of reconciliation results to stdout instead of the human report                                                                                       |
 | `--opt-in-tools`   | Also reconcile an all-disabled `.datamitsuignore` so tools are opt-in (enable them by removing names from the list)                                                        |
 | `--tools`          | Comma-separated list of tools to scope reconciliation to (only their managed config files are considered)                                                                  |
 | `--no-verify-hash` | Skip [`expectChainHash`](./configuration-api.md#pinning-the-upstream-chain-expectchainhash) verification even when a pinned managed config drifted from its upstream chain |
@@ -1369,6 +1371,29 @@ fix already respects the opt-in state. Reconciliation refuses to overwrite an
 existing `.datamitsuignore`; `--dry-run` previews the file without writing it.
 See [Generating an all-disabled file](./ignore-rules.md#generating-an-all-disabled-file).
 
+With `--create-missing`, reconciliation becomes purely additive — the safe
+counterpart for monorepos where subprojects carry their own customized configs.
+It walks every detected project location and creates only the managed config
+files that are missing; every existing file stays byte-for-byte untouched (no
+replacement, patching, deletion, or `otherFileNameList` cleanup), and a path
+occupied by anything that is not a regular file is reported as a collision
+error instead of being removed or worked around. The mode never runs the
+post-reconciliation fix and never rewrites `.datamitsu/configs/` (`init` owns
+both), and `--force` is rejected. A second run after a successful one changes
+nothing and exits 0 with every file reported as skipped-existing. See
+[Create missing only](../guides/managed-configs.md#create-missing-only-monorepo-bootstrap)
+for the hook wiring the wrapper configuration ships.
+
+With `--json`, reconciliation prints a single JSON document to stdout —
+`dryRun`, `createMissing`, per-action `counts`, and one `results` entry per
+config file (`config`, git-root-relative `path`, `action` — one of `created`,
+`patched`, `replaced`, `linked`, `internal`, `deleted`, `skipped`,
+`skipped-existing`, `blocked`, `error` — `scope`, and `error` when the file
+failed). The human report is suppressed; warnings such as chain-hash drift stay
+on stderr, and the exit code is unchanged (existing files are success, real
+errors exit 1). It combines with `--dry-run` and `--create-missing`, so CI can
+assert what a run would create without writing anything.
+
 An [ejectable](./configuration-api.md#keeping-configs-out-of-the-repository-ejectable--ejectconfigs)
 config the project has not ejected lives in `.datamitsu/configs/`, not in the
 repository: reconciliation removes its repository copy — and writes
@@ -1408,6 +1433,12 @@ datamitsu config reconcile --tools golangci-lint --dry-run
 
 # Scope to several tools at once
 datamitsu config reconcile --tools golangci-lint,prettier
+
+# Monorepo bootstrap: create only missing configs, never touch existing ones
+datamitsu config reconcile --create-missing
+
+# Machine-readable summary of a create-missing preview
+datamitsu config reconcile --create-missing --dry-run --json
 ```
 
 `--force` regenerates managed files from the Datamitsu configuration layers,

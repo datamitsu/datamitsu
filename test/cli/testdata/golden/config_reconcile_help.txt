@@ -16,13 +16,24 @@ editing datamitsu.config.*, run "datamitsu init" to provision tools, runtimes,
 bundles, and .datamitsu links. Use "datamitsu config reconcile" only when you
 explicitly intend to rewrite managed project configuration files.
 
+--create-missing is the safe, additive counterpart for monorepos: it walks the
+detected project locations and creates only the managed config files that are
+missing. Every existing file is left byte-for-byte untouched — no replacement,
+patching, deletion, or otherFileNameList cleanup — and a path occupied by
+anything that is not a regular file is an error, never removed or worked
+around. A second run after a successful one changes nothing. The mode never
+runs the post-reconciliation fix and never rewrites .datamitsu/configs/
+(init owns both); --force is rejected.
+
 Usage:
   datamitsu config reconcile [flags]
 
 Flags:
+      --create-missing   Create only managed config files that are missing, leaving every existing file untouched (no replacement, patching, or deletion; never runs the post-reconciliation fix)
       --dry-run          Show what would be reconciled without writing files or running fix
       --force            Regenerate from configuration layers, ignoring existing file overrides and allowing removal of customized internalized configs
   -h, --help             help for reconcile
+      --json             Print a JSON summary of reconciliation results to stdout instead of the human report
       --no-verify-hash   Skip expectChainHash verification even when a pinned managed config drifted from its upstream chain
       --opt-in-tools     Include an all-disabled .datamitsuignore in reconciliation so tools are opt-in (enable them by removing names from the list)
       --skip-fix         Skip running fix after reconciling managed configuration files

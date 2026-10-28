@@ -1,29 +1,29 @@
 {
   "cold": {
-    "cols": 88,
+    "cols": 112,
     "command": "pnpm datamitsu check",
     "cwd": "",
-    "poster": "npt:232.92",
-    "recordedAt": "2026-09-21",
-    "revision": "51308433780f61be834450f24ca627e1fbe91203",
+    "poster": "npt:130.66",
+    "recordedAt": "2026-10-26",
+    "revision": "f839d5c9ceb2f4cc0c039465589b4f6d5eb77f0b",
     "rows": 24
   },
   "scope": {
-    "cols": 88,
-    "command": "pnpm datamitsu lint src/main.ts --tools prettier,syncpack --widen-to=target --explain",
+    "cols": 112,
+    "command": "pnpm datamitsu lint src/main.ts --tools eslint,syncpack --widen-to=target --explain",
     "cwd": "packages/clean-pkg-json",
-    "poster": "npt:5.79",
-    "recordedAt": "2026-09-21",
-    "revision": "51308433780f61be834450f24ca627e1fbe91203",
+    "poster": "npt:0.66",
+    "recordedAt": "2026-10-26",
+    "revision": "f839d5c9ceb2f4cc0c039465589b4f6d5eb77f0b",
     "rows": 24
   },
   "warm": {
-    "cols": 88,
+    "cols": 112,
     "command": "pnpm datamitsu check",
     "cwd": "",
-    "poster": "npt:15.05",
-    "recordedAt": "2026-09-21",
-    "revision": "51308433780f61be834450f24ca627e1fbe91203",
+    "poster": "npt:1.53",
+    "recordedAt": "2026-10-26",
+    "revision": "f839d5c9ceb2f4cc0c039465589b4f6d5eb77f0b",
     "rows": 24
   }
 }

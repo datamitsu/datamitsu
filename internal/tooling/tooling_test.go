@@ -1360,7 +1360,7 @@ func TestCollectTasksRepositoryScopeRespectsDatamitsuignore(t *testing.T) {
 
 	newPlanner := func(rule string) *Planner {
 		m := datamitsuignore.NewMatcher()
-		if err := m.AddFile("", rule); err != nil {
+		if err := m.AddFile(rule); err != nil {
 			t.Fatalf("AddFile(%q) error = %v", rule, err)
 		}
 		return &Planner{
@@ -1419,7 +1419,7 @@ func TestCollectTasksPerProjectScopeRespectsDatamitsuignore(t *testing.T) {
 
 	newPlanner := func(rule string) *Planner {
 		m := datamitsuignore.NewMatcher()
-		if err := m.AddFile("", rule); err != nil {
+		if err := m.AddFile(rule); err != nil {
 			t.Fatalf("AddFile(%q) error = %v", rule, err)
 		}
 		return &Planner{
@@ -1478,7 +1478,7 @@ func TestCollectTasksPerProjectScopeNoProjectsRespectsDatamitsuignore(t *testing
 
 	newPlanner := func(rule string) *Planner {
 		m := datamitsuignore.NewMatcher()
-		if err := m.AddFile("", rule); err != nil {
+		if err := m.AddFile(rule); err != nil {
 			t.Fatalf("AddFile(%q) error = %v", rule, err)
 		}
 		return &Planner{
@@ -2754,10 +2754,8 @@ func TestDatamitsuignoreInversion(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(tmpDir, "src", "notes.md"), []byte("notes"), 0o644)
 	_ = os.WriteFile(filepath.Join(tmpDir, "docs", "guide.md"), []byte("guide"), 0o644)
 
-	// Root disables prettier for all .md
-	_ = os.WriteFile(filepath.Join(tmpDir, ".datamitsuignore"), []byte("**/*.md: prettier\n"), 0o644)
-	// docs/ re-enables prettier
-	_ = os.WriteFile(filepath.Join(tmpDir, "docs", ".datamitsuignore"), []byte("!**/*.md: prettier\n"), 0o644)
+	// Root disables prettier for all .md, then re-enables it for docs.
+	_ = os.WriteFile(filepath.Join(tmpDir, ".datamitsuignore"), []byte("**/*.md: prettier\n!docs/**/*.md: prettier\n"), 0o644)
 
 	tools := config.MapOfTools{
 		"prettier": {

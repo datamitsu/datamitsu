@@ -28,6 +28,9 @@ func writeTestFile(t *testing.T, path, content string) {
 	}
 }
 
+// TestFindIgnoreFiles pins root-only discovery: exactly the .datamitsuignore
+// at the git root is found. Nested files are dead artifacts — the core
+// config-placement check reports them; they are never linted or fixed here.
 func TestFindIgnoreFiles(t *testing.T) {
 	root := t.TempDir()
 
@@ -43,32 +46,21 @@ func TestFindIgnoreFiles(t *testing.T) {
 		}
 	}
 
-	ignoreFiles := []string{
-		".datamitsuignore",
-		filepath.Join("subdir", ".datamitsuignore"),
-		filepath.Join("subdir", "nested", ".datamitsuignore"),
-	}
-	gitIgnoreFile := filepath.Join(".git", ".datamitsuignore")
-
-	for _, f := range ignoreFiles {
-		writeTestFile(t, filepath.Join(root, f), "*.ts: eslint")
-	}
-	writeTestFile(t, filepath.Join(root, gitIgnoreFile), "*.ts: eslint")
+	writeTestFile(t, filepath.Join(root, ".datamitsuignore"), "*.ts: eslint")
+	writeTestFile(t, filepath.Join(root, "subdir", ".datamitsuignore"), "*.ts: eslint")
+	writeTestFile(t, filepath.Join(root, "subdir", "nested", ".datamitsuignore"), "*.ts: eslint")
+	writeTestFile(t, filepath.Join(root, ".git", ".datamitsuignore"), "*.ts: eslint")
 
 	found, err := FindIgnoreFiles(context.Background(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(found) != len(ignoreFiles) {
-		t.Fatalf("expected %d files, got %d: %v", len(ignoreFiles), len(found), found)
+	if len(found) != 1 {
+		t.Fatalf("expected only the root file, got %d: %v", len(found), found)
 	}
-
-	for _, f := range found {
-		rel, _ := filepath.Rel(root, f)
-		if rel == gitIgnoreFile || strings.HasPrefix(rel, ".git"+string(filepath.Separator)) {
-			t.Errorf("should not include files under .git: %s", f)
-		}
+	if found[0] != filepath.Join(root, ".datamitsuignore") {
+		t.Errorf("found = %v, want only %s", found, filepath.Join(root, ".datamitsuignore"))
 	}
 }
 
@@ -269,7 +261,9 @@ func TestRunLintFormattingWarning(t *testing.T) {
 	}
 }
 
-func TestRunFixMultipleFiles(t *testing.T) {
+// TestRunFixRootOnly pins that bundled fix rewrites only the root
+// .datamitsuignore: a nested one is a dead artifact and is left untouched.
+func TestRunFixRootOnly(t *testing.T) {
 	root := t.TempDir()
 
 	sub := filepath.Join(root, "subdir")
@@ -278,7 +272,8 @@ func TestRunFixMultipleFiles(t *testing.T) {
 	}
 
 	writeTestFile(t, filepath.Join(root, ".datamitsuignore"), "*.ts:  eslint\n")
-	writeTestFile(t, filepath.Join(sub, ".datamitsuignore"), "*.go:golangci-lint\n")
+	nested := filepath.Join(sub, ".datamitsuignore")
+	writeTestFile(t, nested, "*.go:golangci-lint\n")
 
 	if err := RunFix(root, discoverForTest(t, root)); err != nil {
 		t.Fatal(err)
@@ -292,12 +287,12 @@ func TestRunFixMultipleFiles(t *testing.T) {
 		t.Errorf("root file not normalized: %s", got1)
 	}
 
-	got2, err := os.ReadFile(filepath.Join(sub, ".datamitsuignore"))
+	got2, err := os.ReadFile(nested)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got2) != "*.go: golangci-lint\n" {
-		t.Errorf("subdir file not normalized: %s", got2)
+	if string(got2) != "*.go:golangci-lint\n" {
+		t.Errorf("nested file must not be rewritten: %s", got2)
 	}
 }
 

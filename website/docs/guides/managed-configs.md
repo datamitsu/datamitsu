@@ -30,6 +30,11 @@ The `.datamitsu/` directory is:
 - Contains a `datamitsu.config.d.ts` file with TypeScript type definitions for IDE autocomplete when editing `datamitsu.config.js`/`.ts`/`.mjs` files
 - Verified after creation (symlink existence, correct target, target file exists)
 
+The `.datamitsu/` directory belongs at the git root only. One below it — usually
+the leftover of an `init` run inside a subproject — is a dead artifact that the
+core [config-placement check](./configuration.md#config-placement) reports in
+`lint` and `check`.
+
 ## App Links
 
 Apps declare links using the `links` field, which maps link names to relative paths within the app's install directory:
@@ -202,6 +207,49 @@ without rewriting your whole project. Entries with no `tools` (shared
 infrastructure like `.gitignore` or `lefthook.yaml`) are skipped whenever
 `--tools` is passed. Add `--dry-run` to preview the scoped plan, or
 `--skip-fix` to write it without running the scoped fix afterward.
+
+### Create missing only (monorepo bootstrap)
+
+`datamitsu config reconcile --create-missing` is the additive counterpart of a
+full reconciliation, safe to run over a monorepo whose subprojects carry their
+own customized configs. It walks every detected project location and creates
+only the managed config files that are missing:
+
+- an existing file is never overwritten, patched, or deleted — not even when it
+  differs from what the configuration would render, and `otherFileNameList`
+  cleanup never runs;
+- a path occupied by anything that is not a regular file (a directory, a
+  symlink into a directory, a broken symlink) is a collision: the run reports
+  it as an error instead of removing or working around it;
+- parent directories are created only for files that are actually written;
+- the mode never runs the post-reconciliation fix and never rewrites
+  `.datamitsu/configs/` — `datamitsu init` owns both, and in the shipped
+  wrapper hooks init runs first;
+- a second run after a successful one changes nothing and reports every file
+  as skipped-existing (exit 0, not an error).
+
+Combine with `--dry-run` to preview create/skip plans, with `--tools` to scope
+the mode, and with `--json` (see
+[config reconcile](../reference/cli-commands.md#config-reconcile)) for a
+machine-readable document of every result. `--force` is rejected in this mode.
+
+A common wiring is a git hook that keeps newly added subprojects provisioned:
+
+```yaml
+pre-commit:
+  commands:
+    datamitsu-ensure-configs:
+      priority: 15
+      run: datamitsu config reconcile --create-missing
+    datamitsu-check:
+      priority: 40
+      run: datamitsu check --file-scoped
+```
+
+The wrapper configuration ships this hook (see
+[using wrappers](./using-wrappers.md)): because the mode is idempotent, a
+subproject added to the monorepo gets its missing tool configs created on the
+next commit without any existing settings being touched.
 
 The `content()` function receives a context object with:
 

@@ -1,9 +1,14 @@
 {
-  "capturedAt": "2026-09-22T10:17:46.000Z",
+  "capturedAt": "2026-10-26T07:37:02.322Z",
   "manifest": {
     "apps": [
       {
-        "dependsOn": [],
+        "dependsOn": [
+          {
+            "alias": "shellcheck",
+            "app": "shellcheck"
+          }
+        ],
         "description": ":octocat: Static checker for GitHub Actions workflow files",
         "name": "actionlint",
         "officialUrl": "https://github.com/rhysd/actionlint",
@@ -18,7 +23,16 @@
         "officialUrl": "https://github.com/FiloSottile/age",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v1.3.1"
+        "version": "v1.3.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "A simple, modern and secure encryption tool (and Go library) with small explicit keys, no config options, and UNIX-style composability.",
+        "name": "age-keygen",
+        "officialUrl": "https://github.com/FiloSottile/age",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.3.2"
       },
       {
         "dependsOn": [],
@@ -36,7 +50,7 @@
         "officialUrl": "https://github.com/asamarts/alint",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v0.15.1"
+        "version": "v0.18.4"
       },
       {
         "dependsOn": [],
@@ -45,7 +59,7 @@
         "officialUrl": "https://github.com/allure-framework/allurectl",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "2.22.0"
+        "version": "2.23.1"
       },
       {
         "dependsOn": [],
@@ -54,7 +68,7 @@
         "officialUrl": "https://github.com/ast-grep/ast-grep",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "0.45.1"
+        "version": "0.51.0"
       },
       {
         "dependsOn": [],
@@ -72,7 +86,7 @@
         "officialUrl": "https://github.com/Bearer/bearer",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v2.1.0"
+        "version": "v2.1.2"
       },
       {
         "dependsOn": [],
@@ -81,7 +95,7 @@
         "officialUrl": "https://pypi.org/project/blint/",
         "officialUrlDerived": true,
         "runtime": "python",
-        "version": "3.2.4"
+        "version": "4.0.1"
       },
       {
         "dependsOn": [],
@@ -90,7 +104,7 @@
         "officialUrl": "https://github.com/bufbuild/buf",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v1.72.0"
+        "version": "v1.74.0"
       },
       {
         "dependsOn": [],
@@ -117,7 +131,7 @@
         "officialUrl": "https://pypi.org/project/checkov/",
         "officialUrlDerived": true,
         "runtime": "python",
-        "version": "3.3.13"
+        "version": "3.3.29"
       },
       {
         "dependsOn": [],
@@ -126,7 +140,7 @@
         "officialUrl": "https://www.npmjs.com/package/@commitlint/cli",
         "officialUrlDerived": true,
         "runtime": "node",
-        "version": "21.2.2"
+        "version": "21.2.3"
       },
       {
         "dependsOn": [],
@@ -135,7 +149,7 @@
         "officialUrl": "https://github.com/open-policy-agent/conftest",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v0.69.0"
+        "version": "v0.71.1"
       },
       {
         "dependsOn": [],
@@ -162,7 +176,7 @@
         "officialUrl": "https://github.com/google/go-containerregistry",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v0.21.9"
+        "version": "v0.22.1"
       },
       {
         "dependsOn": [],
@@ -171,7 +185,7 @@
         "officialUrl": "https://www.npmjs.com/package/cspell",
         "officialUrlDerived": true,
         "runtime": "node",
-        "version": "10.0.1"
+        "version": "10.4.0"
       },
       {
         "dependsOn": [],
@@ -180,7 +194,7 @@
         "officialUrl": "https://github.com/d2lang/d2",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v0.7.1"
+        "version": "v0.9.0"
       },
       {
         "dependsOn": [],
@@ -220,6 +234,33 @@
       },
       {
         "dependsOn": [],
+        "description": "A tool for exploring each layer in a docker image",
+        "name": "dive",
+        "officialUrl": "https://github.com/wagoodman/dive",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.13.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "Fast and powerful Git hooks manager for any type of projects.",
+        "name": "dm-internal-lefthook-upstream",
+        "officialUrl": "https://github.com/evilmartians/lefthook",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v2.2.2"
+      },
+      {
+        "dependsOn": [],
+        "description": "Container Image Linter for Security, Helping build the Best-Practice Docker Image, Easy to start",
+        "name": "dockle",
+        "officialUrl": "https://pkg.go.dev/github.com/goodwithtech/dockle/cmd/dockle",
+        "officialUrlDerived": true,
+        "runtime": "go",
+        "version": "v0.4.15"
+      },
+      {
+        "dependsOn": [],
         "description": "⚡️Lightning-fast linter for .env files. Written in Rust 🦀",
         "name": "dotenv-linter",
         "officialUrl": "https://github.com/dotenv-linter/dotenv-linter",
@@ -228,13 +269,18 @@
         "version": "v4.0.0"
       },
       {
-        "dependsOn": [],
+        "dependsOn": [
+          {
+            "alias": "shellcheck",
+            "app": "shellcheck"
+          }
+        ],
         "description": "droast - a dockerfile linter that actually has opinions 🔥",
         "name": "droast",
         "officialUrl": "https://github.com/immanuwell/dockerfile-roast",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "1.6.1"
+        "version": "1.7.0"
       },
       {
         "dependsOn": [],
@@ -243,7 +289,7 @@
         "officialUrl": "https://github.com/editorconfig-checker/editorconfig-checker",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v3.11.1"
+        "version": "v4.0.2"
       },
       {
         "dependsOn": [],
@@ -251,8 +297,8 @@
         "name": "eslint",
         "officialUrl": "https://www.npmjs.com/package/eslint",
         "officialUrlDerived": true,
-        "runtime": "node",
-        "version": "10.9.0"
+        "runtime": "bun",
+        "version": "10.13.0"
       },
       {
         "dependsOn": [],
@@ -261,7 +307,7 @@
         "officialUrl": "https://github.com/antonmedv/fx",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "39.2.0"
+        "version": "40.0.0"
       },
       {
         "dependsOn": [],
@@ -270,7 +316,7 @@
         "officialUrl": "https://github.com/google/go-containerregistry",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v0.21.9"
+        "version": "v0.22.1"
       },
       {
         "dependsOn": [],
@@ -279,7 +325,7 @@
         "officialUrl": "https://github.com/orhun/git-cliff",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v2.13.1"
+        "version": "v2.14.2"
       },
       {
         "dependsOn": [],
@@ -297,7 +343,7 @@
         "officialUrl": "https://github.com/golang-migrate/migrate",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v4.19.1"
+        "version": "v4.20.1"
       },
       {
         "dependsOn": [],
@@ -306,7 +352,7 @@
         "officialUrl": "https://github.com/golangci/golangci-lint",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v2.13.1"
+        "version": "v2.15.0"
       },
       {
         "dependsOn": [],
@@ -315,7 +361,7 @@
         "officialUrl": "https://github.com/pressly/goose",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v3.27.3"
+        "version": "v3.29.0"
       },
       {
         "dependsOn": [],
@@ -324,7 +370,16 @@
         "officialUrl": "https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck",
         "officialUrlDerived": true,
         "runtime": "go",
-        "version": "v1.3.0"
+        "version": "v1.9.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Like cURL, but for gRPC: Command-line tool for interacting with gRPC servers",
+        "name": "grpcurl",
+        "officialUrl": "https://github.com/fullstorydev/grpcurl",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v1.9.4"
       },
       {
         "dependsOn": [],
@@ -333,7 +388,7 @@
         "officialUrl": "https://github.com/anchore/grype",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v0.117.0"
+        "version": "v0.120.1"
       },
       {
         "dependsOn": [],
@@ -351,14 +406,32 @@
         "officialUrl": "https://github.com/Automattic/harper",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v2.8.0"
+        "version": "v2.13.0"
       },
       {
         "dependsOn": [],
         "description": "The Kubernetes Package Manager",
         "name": "helm",
         "runtime": "binary",
-        "version": "v4.2.4"
+        "version": "v4.3.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "Code formatter for helm charts",
+        "name": "helmfmt",
+        "officialUrl": "https://github.com/digitalstudium/helmfmt",
+        "officialUrlDerived": true,
+        "runtime": "binary",
+        "version": "v0.7.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "curl statistics made simple",
+        "name": "httpstat",
+        "officialUrl": "https://pypi.org/project/httpstat/",
+        "officialUrlDerived": true,
+        "runtime": "python",
+        "version": "2.0.0"
       },
       {
         "dependsOn": [],
@@ -376,7 +449,7 @@
         "officialUrl": "https://github.com/casey/just",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "1.58.0"
+        "version": "1.59.0"
       },
       {
         "dependsOn": [],
@@ -385,16 +458,16 @@
         "officialUrl": "https://www.npmjs.com/package/knip",
         "officialUrlDerived": true,
         "runtime": "node",
-        "version": "6.32.2"
+        "version": "6.41.0"
       },
       {
         "dependsOn": [],
         "description": "A program that reformats Kotlin source code to comply with the common community standard for Kotlin code conventions.",
         "name": "ktfmt",
-        "officialUrl": "https://github.com/facebook/ktfmt",
+        "officialUrl": "https://github.com/Kotlin/ktfmt",
         "officialUrlDerived": true,
         "runtime": "jvm",
-        "version": "v0.62"
+        "version": "v0.65"
       },
       {
         "dependsOn": [],
@@ -428,16 +501,21 @@
         "description": "Kubernetes command-line tool",
         "name": "kubectl",
         "runtime": "binary",
-        "version": "v1.37.0"
+        "version": "v1.37.1"
       },
       {
-        "dependsOn": [],
+        "dependsOn": [
+          {
+            "alias": "dm-internal-lefthook-upstream",
+            "app": "dm-internal-lefthook-upstream"
+          }
+        ],
         "description": "Fast and powerful Git hooks manager for any type of projects.",
         "name": "lefthook",
-        "officialUrl": "https://github.com/evilmartians/lefthook",
+        "officialUrl": "https://www.npmjs.com/package/yaml",
         "officialUrlDerived": true,
-        "runtime": "binary",
-        "version": "v2.1.11"
+        "runtime": "bun",
+        "version": "2.9.1"
       },
       {
         "dependsOn": [],
@@ -445,8 +523,8 @@
         "name": "lefthook-sort",
         "officialUrl": "https://www.npmjs.com/package/yaml",
         "officialUrlDerived": true,
-        "runtime": "node",
-        "version": "2.9.0"
+        "runtime": "bun",
+        "version": "2.9.1"
       },
       {
         "dependsOn": [],
@@ -455,7 +533,7 @@
         "officialUrl": "https://github.com/loeffel-io/ls-lint",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v2.3.1"
+        "version": "v2.3.2"
       },
       {
         "dependsOn": [],
@@ -468,21 +546,12 @@
       },
       {
         "dependsOn": [],
-        "description": "checks the all of the hyperlinks in a markdown text to determine if they are alive or dead",
-        "name": "markdown-link-check",
-        "officialUrl": "https://www.npmjs.com/package/markdown-link-check",
-        "officialUrlDerived": true,
-        "runtime": "node",
-        "version": "3.15.0"
-      },
-      {
-        "dependsOn": [],
         "description": "A fast, flexible, configuration-based command-line interface for linting Markdown/CommonMark files with the `markdownlint` library",
         "name": "markdownlint-cli2",
         "officialUrl": "https://www.npmjs.com/package/markdownlint-cli2",
         "officialUrlDerived": true,
         "runtime": "node",
-        "version": "0.23.2"
+        "version": "0.23.3"
       },
       {
         "dependsOn": [],
@@ -500,25 +569,16 @@
         "officialUrl": "https://www.npmjs.com/package/@mermaid-js/mermaid-cli",
         "officialUrlDerived": true,
         "runtime": "node",
-        "version": "11.16.0"
-      },
-      {
-        "dependsOn": [],
-        "description": "Optional static typing for Python",
-        "name": "mypy",
-        "officialUrl": "https://pypi.org/project/mypy/",
-        "officialUrlDerived": true,
-        "runtime": "python",
-        "version": "2.3.1"
+        "version": "12.0.0"
       },
       {
         "dependsOn": [],
         "description": "OpenAPI Generator allows generation of API client libraries (SDK generation), server stubs, documentation and configuration automatically given an OpenAPI Spec (v2, v3)",
         "name": "openapi-generator",
-        "officialUrl": "https://central.sonatype.com/artifact/org.openapitools/openapi-generator-cli",
+        "officialUrl": "https://github.com/OpenAPITools/openapi-generator",
         "officialUrlDerived": true,
         "runtime": "jvm",
-        "version": "7.20.0"
+        "version": "7.26.0"
       },
       {
         "dependsOn": [],
@@ -527,7 +587,7 @@
         "officialUrl": "https://github.com/google/osv-scanner",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v2.5.1"
+        "version": "v2.7.0"
       },
       {
         "dependsOn": [],
@@ -535,8 +595,8 @@
         "name": "oxfmt",
         "officialUrl": "https://www.npmjs.com/package/oxfmt",
         "officialUrlDerived": true,
-        "runtime": "node",
-        "version": "0.64.0"
+        "runtime": "bun",
+        "version": "0.73.0"
       },
       {
         "dependsOn": [],
@@ -545,7 +605,7 @@
         "officialUrl": "https://github.com/oxipng/oxipng",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v10.2.0"
+        "version": "v10.2.1"
       },
       {
         "dependsOn": [],
@@ -553,8 +613,8 @@
         "name": "oxlint",
         "officialUrl": "https://www.npmjs.com/package/oxlint",
         "officialUrlDerived": true,
-        "runtime": "node",
-        "version": "1.79.0"
+        "runtime": "bun",
+        "version": "1.88.0"
       },
       {
         "dependsOn": [],
@@ -563,7 +623,7 @@
         "officialUrl": "https://github.com/suzuki-shunsuke/pinact",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v4.1.1"
+        "version": "v5.0.0"
       },
       {
         "dependsOn": [],
@@ -572,7 +632,7 @@
         "officialUrl": "https://www.npmjs.com/package/pnpm",
         "officialUrlDerived": true,
         "runtime": "node",
-        "version": "11.22.0"
+        "version": "12.14.0"
       },
       {
         "dependsOn": [],
@@ -581,7 +641,7 @@
         "officialUrl": "https://pypi.org/project/pre-commit/",
         "officialUrlDerived": true,
         "runtime": "python",
-        "version": "4.6.2"
+        "version": "4.7.0"
       },
       {
         "dependsOn": [],
@@ -590,7 +650,7 @@
         "officialUrl": "https://www.npmjs.com/package/prettier",
         "officialUrlDerived": true,
         "runtime": "node",
-        "version": "3.9.6"
+        "version": "3.9.10"
       },
       {
         "dependsOn": [],
@@ -599,7 +659,7 @@
         "officialUrl": "https://github.com/protocolbuffers/protobuf",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v36.0"
+        "version": "v36.2"
       },
       {
         "dependsOn": [],
@@ -608,7 +668,21 @@
         "officialUrl": "https://github.com/yoheimuta/protolint",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v0.57.0"
+        "version": "v0.58.0"
+      },
+      {
+        "dependsOn": [
+          {
+            "alias": "protolint",
+            "app": "protolint"
+          }
+        ],
+        "description": "Native protolint fixes followed by verification of the corrected file",
+        "name": "protolint-fix",
+        "officialUrl": "https://pkg.go.dev/datamitsu.local/protolint-fix",
+        "officialUrlDerived": true,
+        "runtime": "go",
+        "version": "v0.0.0"
       },
       {
         "dependsOn": [],
@@ -626,7 +700,7 @@
         "officialUrl": "https://github.com/astral-sh/ruff",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "0.16.4"
+        "version": "0.17.1"
       },
       {
         "dependsOn": [],
@@ -642,7 +716,7 @@
         "officialUrl": "https://github.com/ossf/scorecard",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v5.5.0"
+        "version": "v5.6.0"
       },
       {
         "dependsOn": [],
@@ -651,7 +725,7 @@
         "officialUrl": "https://pypi.org/project/semgrep/",
         "officialUrlDerived": true,
         "runtime": "python",
-        "version": "1.174.0"
+        "version": "1.181.0"
       },
       {
         "dependsOn": [],
@@ -669,7 +743,16 @@
         "officialUrl": "https://github.com/mvdan/sh",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v3.13.1"
+        "version": "v3.14.1"
+      },
+      {
+        "dependsOn": [],
+        "description": "A full-featured license tool to check and fix license headers and resolve dependencies' licenses.",
+        "name": "skywalking-eyes",
+        "officialUrl": "https://pkg.go.dev/github.com/apache/skywalking-eyes/cmd/license-eye",
+        "officialUrlDerived": true,
+        "runtime": "go",
+        "version": "v0.9.0"
       },
       {
         "dependsOn": [],
@@ -678,7 +761,7 @@
         "officialUrl": "https://www.npmjs.com/package/@slidev/cli",
         "officialUrlDerived": true,
         "runtime": "node",
-        "version": "52.19.1"
+        "version": "53.0.0"
       },
       {
         "dependsOn": [],
@@ -687,7 +770,7 @@
         "officialUrl": "https://github.com/snyk/cli",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v1.1306.4"
+        "version": "v1.1308.0"
       },
       {
         "dependsOn": [],
@@ -700,21 +783,21 @@
       },
       {
         "dependsOn": [],
+        "description": "Alphabetical key sorter for YAML and .properties files",
+        "name": "sort-keys",
+        "officialUrl": "https://www.npmjs.com/package/yaml",
+        "officialUrlDerived": true,
+        "runtime": "bun",
+        "version": "2.9.1"
+      },
+      {
+        "dependsOn": [],
         "description": "Sort an Object or package.json based on the well-known package.json keys",
         "name": "sort-package-json",
         "officialUrl": "https://www.npmjs.com/package/sort-package-json",
         "officialUrlDerived": true,
         "runtime": "node",
-        "version": "4.0.0"
-      },
-      {
-        "dependsOn": [],
-        "description": "A flexible JSON/YAML linter for creating automated style guides, with baked in support for OpenAPI (v3.1, v3.0, and v2.0), Arazzo v1.0, as well as AsyncAPI v2.x.",
-        "name": "spectral",
-        "officialUrl": "https://www.npmjs.com/package/@stoplight/spectral-cli",
-        "officialUrlDerived": true,
-        "runtime": "node",
-        "version": "6.16.3"
+        "version": "4.1.0"
       },
       {
         "dependsOn": [],
@@ -727,21 +810,21 @@
       },
       {
         "dependsOn": [],
-        "description": "The SQL Linter for Humans",
-        "name": "sqlfluff",
-        "officialUrl": "https://pypi.org/project/sqlfluff/",
-        "officialUrlDerived": true,
-        "runtime": "python",
-        "version": "4.3.0"
-      },
-      {
-        "dependsOn": [],
         "description": "Fast SQL formatter/linter",
         "name": "sqruff",
         "officialUrl": "https://github.com/quarylabs/sqruff",
         "officialUrlDerived": true,
         "runtime": "binary",
         "version": "v0.40.0"
+      },
+      {
+        "dependsOn": [],
+        "description": "A mighty CSS linter that helps you avoid errors and enforce conventions.",
+        "name": "stylelint",
+        "officialUrl": "https://www.npmjs.com/package/stylelint",
+        "officialUrlDerived": true,
+        "runtime": "node",
+        "version": "17.16.0"
       },
       {
         "dependsOn": [],
@@ -759,7 +842,7 @@
         "officialUrl": "https://github.com/anchore/syft",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v1.51.0"
+        "version": "v1.54.1"
       },
       {
         "dependsOn": [],
@@ -777,11 +860,11 @@
         "officialUrl": "https://github.com/go-task/task",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v3.53.1"
+        "version": "v3.54.0"
       },
       {
         "dependsOn": [],
-        "description": "",
+        "description": "Generate documentation from Terraform modules in various output formats",
         "name": "terraform-docs",
         "officialUrl": "https://github.com/terraform-docs/terraform-docs",
         "officialUrlDerived": true,
@@ -795,7 +878,7 @@
         "officialUrl": "https://github.com/gruntwork-io/terragrunt",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v1.1.3"
+        "version": "v1.1.6"
       },
       {
         "dependsOn": [],
@@ -822,7 +905,7 @@
         "officialUrl": "https://github.com/opentofu/opentofu",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v1.12.6"
+        "version": "v1.13.1"
       },
       {
         "dependsOn": [],
@@ -831,7 +914,7 @@
         "officialUrl": "https://github.com/tombi-toml/tombi",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v1.5.0"
+        "version": "v1.8.7"
       },
       {
         "dependsOn": [],
@@ -840,7 +923,7 @@
         "officialUrl": "https://github.com/aquasecurity/trivy",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v0.74.0"
+        "version": "v0.76.0"
       },
       {
         "dependsOn": [],
@@ -849,7 +932,7 @@
         "officialUrl": "https://github.com/trufflesecurity/trufflehog",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v3.97.0"
+        "version": "v3.99.2"
       },
       {
         "dependsOn": [],
@@ -867,7 +950,7 @@
         "officialUrl": "https://github.com/astral-sh/ty",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "0.0.73"
+        "version": "0.0.89"
       },
       {
         "dependsOn": [],
@@ -876,7 +959,7 @@
         "officialUrl": "https://github.com/crate-ci/typos",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v1.49.0"
+        "version": "v1.51.1"
       },
       {
         "dependsOn": [],
@@ -894,16 +977,7 @@
         "officialUrl": "https://github.com/typstyle-rs/typstyle",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v0.15.1"
-      },
-      {
-        "dependsOn": [],
-        "description": "converts all comments inside go functions to lowercase",
-        "name": "unfuck-ai-comments",
-        "officialUrl": "https://github.com/umputun/unfuck-ai-comments",
-        "officialUrlDerived": true,
-        "runtime": "binary",
-        "version": "v0.9.3"
+        "version": "v0.15.2"
       },
       {
         "dependsOn": [],
@@ -916,12 +990,12 @@
       },
       {
         "dependsOn": [],
-        "description": "vacuum is the worlds fastest and most versatile OpenAPI, AsyncAPI & JSON Schema linter, docs generator and toolkit. It tears through API specs at light speed. 100% compatible with Spectral rulesets, and OpenAPI 3.0, 3.1 and 3.2",
+        "description": "vacuum is the worlds fastest and most versatile OpenAPI, Arazzo, AsyncAPI & JSON Schema linter, docs generator and toolkit. It tears through API specs at light speed. 100% compatible with Spectral rulesets, and OpenAPI 3.0, 3.1 and 3.2",
         "name": "vacuum",
         "officialUrl": "https://github.com/daveshanley/vacuum",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v0.30.0"
+        "version": "v0.33.1"
       },
       {
         "dependsOn": [],
@@ -930,7 +1004,7 @@
         "officialUrl": "https://github.com/vale-cli/vale",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v3.18.0"
+        "version": "v3.24.0"
       },
       {
         "dependsOn": [],
@@ -939,7 +1013,7 @@
         "officialUrl": "https://github.com/max-sixty/worktrunk",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v0.75.0"
+        "version": "v0.80.0"
       },
       {
         "dependsOn": [],
@@ -975,7 +1049,7 @@
         "officialUrl": "https://github.com/mikefarah/yq",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v4.53.6"
+        "version": "v4.54.1"
       },
       {
         "dependsOn": [],
@@ -984,22 +1058,52 @@
         "officialUrl": "https://pypi.org/project/zensical/",
         "officialUrlDerived": true,
         "runtime": "python",
-        "version": "0.0.57"
+        "version": "0.0.71"
       },
       {
         "dependsOn": [],
-        "description": "Static analysis for GitHub Actions",
+        "description": "Static analysis for GitHub Actions (and more)",
         "name": "zizmor",
         "officialUrl": "https://github.com/zizmorcore/zizmor",
         "officialUrlDerived": true,
         "runtime": "binary",
-        "version": "v1.29.0"
+        "version": "v1.31.1"
       }
     ],
     "managedConfigs": [
       {
         "deleteOnly": false,
+        "name": ".agents/skills/backlog/SKILL.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".agents/skills/cleanup-agents-md/SKILL.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".agents/skills/scaffold-stack/SKILL.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": ".agents/skills/setup-tsconfig/SKILL.md",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "ejectable": true,
         "name": ".alint.yml",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
@@ -1036,34 +1140,6 @@
       },
       {
         "deleteOnly": false,
-        "name": ".codex/prompts/backlog.md",
-        "projectTypes": [],
-        "scope": "git-root",
-        "tools": []
-      },
-      {
-        "deleteOnly": false,
-        "name": ".codex/prompts/cleanup-agents-md.md",
-        "projectTypes": [],
-        "scope": "git-root",
-        "tools": []
-      },
-      {
-        "deleteOnly": false,
-        "name": ".codex/prompts/scaffold-stack.md",
-        "projectTypes": [],
-        "scope": "git-root",
-        "tools": []
-      },
-      {
-        "deleteOnly": false,
-        "name": ".codex/prompts/setup-tsconfig.md",
-        "projectTypes": [],
-        "scope": "git-root",
-        "tools": []
-      },
-      {
-        "deleteOnly": false,
         "name": ".cursor/rules",
         "projectTypes": [],
         "scope": "git-root",
@@ -1072,13 +1148,6 @@
       {
         "deleteOnly": false,
         "name": ".cursorrules",
-        "projectTypes": [],
-        "scope": "git-root",
-        "tools": []
-      },
-      {
-        "deleteOnly": false,
-        "name": ".datamitsu/scripts/check-empty-files.sh",
         "projectTypes": [],
         "scope": "git-root",
         "tools": []
@@ -1095,7 +1164,18 @@
       },
       {
         "deleteOnly": false,
+        "name": ".datamitsuignore",
+        "projectTypes": [
+          "helm-chart"
+        ],
+        "scope": "project",
+        "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "ejectable": true,
         "name": ".dclint.yaml",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
@@ -1115,12 +1195,16 @@
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
-          "editorconfig-checker"
+          "editorconfig-checker",
+          "ktfmt",
+          "ktlint"
         ]
       },
       {
         "deleteOnly": false,
+        "ejectable": true,
         "name": ".editorconfig-checker.json",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
@@ -1159,7 +1243,9 @@
       },
       {
         "deleteOnly": false,
+        "ejectable": true,
         "name": ".gitleaks.toml",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
@@ -1180,11 +1266,33 @@
       },
       {
         "deleteOnly": false,
+        "name": ".helmfmt",
+        "projectTypes": [
+          "helm-chart"
+        ],
+        "scope": "project",
+        "tools": [
+          "helmfmt"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "ejectable": true,
         "name": ".ls-lint.yml",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
           "ls-lint"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": ".markdownlint-cli2.mjs",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "markdownlint-cli2"
         ]
       },
       {
@@ -1205,17 +1313,6 @@
       },
       {
         "deleteOnly": false,
-        "name": ".oxlintrc.json",
-        "projectTypes": [
-          "npm-package"
-        ],
-        "scope": "",
-        "tools": [
-          "oxlint"
-        ]
-      },
-      {
-        "deleteOnly": false,
         "name": ".pinact.yaml",
         "projectTypes": [],
         "scope": "git-root",
@@ -1225,11 +1322,13 @@
       },
       {
         "deleteOnly": false,
-        "name": ".sqruff",
+        "ejectable": true,
+        "name": ".protolint.yaml",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
-          "sqruff"
+          "protolint"
         ]
       },
       {
@@ -1265,7 +1364,9 @@
       },
       {
         "deleteOnly": false,
+        "ejectable": true,
         "name": ".trufflehog-exclude-paths.txt",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
@@ -1274,7 +1375,18 @@
       },
       {
         "deleteOnly": false,
+        "name": ".typos.toml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "typos"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "ejectable": true,
         "name": ".vale.ini",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
@@ -1304,7 +1416,9 @@
       },
       {
         "deleteOnly": false,
+        "ejectable": true,
         "name": ".yamlfmt.yaml",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
@@ -1313,7 +1427,9 @@
       },
       {
         "deleteOnly": false,
+        "ejectable": true,
         "name": ".yamllint.yaml",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
@@ -1340,6 +1456,17 @@
         "projectTypes": [],
         "scope": "git-root",
         "tools": []
+      },
+      {
+        "deleteOnly": false,
+        "name": "buf.yaml",
+        "projectTypes": [
+          "protobuf-project"
+        ],
+        "scope": "project",
+        "tools": [
+          "buf"
+        ]
       },
       {
         "deleteOnly": false,
@@ -1377,6 +1504,19 @@
       },
       {
         "deleteOnly": false,
+        "ejectable": true,
+        "name": "droast.toml",
+        "placement": "internal",
+        "projectTypes": [
+          "docker-project"
+        ],
+        "scope": "git-root",
+        "tools": [
+          "droast"
+        ]
+      },
+      {
+        "deleteOnly": false,
         "name": "eslint.config.mjs",
         "projectTypes": [
           "npm-package"
@@ -1388,7 +1528,9 @@
       },
       {
         "deleteOnly": false,
+        "ejectable": true,
         "name": "hadolint.yaml",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
@@ -1415,7 +1557,19 @@
       },
       {
         "deleteOnly": false,
+        "name": "lychee.toml",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "lychee",
+          "lychee-offline"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "ejectable": true,
         "name": "mdsf.json",
+        "placement": "internal",
         "projectTypes": [],
         "scope": "git-root",
         "tools": [
@@ -1429,6 +1583,17 @@
         "scope": "git-root",
         "tools": [
           "oxfmt"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": "oxlint.config.mts",
+        "projectTypes": [
+          "npm-package"
+        ],
+        "scope": "",
+        "tools": [
+          "oxlint"
         ]
       },
       {
@@ -1453,7 +1618,8 @@
         "deleteOnly": false,
         "name": "prettier.config.mjs",
         "projectTypes": [
-          "npm-package"
+          "npm-package",
+          "typescript-project"
         ],
         "scope": "",
         "tools": [
@@ -1482,27 +1648,48 @@
       },
       {
         "deleteOnly": false,
+        "ejectable": true,
+        "name": "sqruff.toml",
+        "placement": "internal",
+        "projectTypes": [],
+        "scope": "git-root",
+        "tools": [
+          "sqruff"
+        ]
+      },
+      {
+        "deleteOnly": false,
+        "name": "stylelint.config.mjs",
+        "projectTypes": [
+          "npm-package",
+          "typescript-project"
+        ],
+        "scope": "",
+        "tools": [
+          "stylelint"
+        ]
+      },
+      {
+        "deleteOnly": false,
         "name": "turbo.json",
         "projectTypes": [
           "turbo-package"
         ],
         "scope": "git-root",
         "tools": []
-      },
-      {
-        "deleteOnly": false,
-        "name": "ty.toml",
-        "projectTypes": [
-          "python-package"
-        ],
-        "scope": "project",
-        "tools": [
-          "ty"
-        ]
       }
     ],
-    "name": "datamitsu.config",
+    "name": "shibanet0/datamitsu-config",
     "projectTypes": [
+      {
+        "description": "Source tree with a datamitsu configuration",
+        "id": "datamitsu-project",
+        "markers": [
+          "datamitsu.config.js",
+          "datamitsu.config.mjs",
+          "datamitsu.config.ts"
+        ]
+      },
       {
         "description": "Docker image (Dockerfile)",
         "id": "docker-project",
@@ -1556,10 +1743,24 @@
         ]
       },
       {
+        "description": "Buf Protobuf module or workspace",
+        "id": "protobuf-project",
+        "markers": [
+          "**/buf.yaml"
+        ]
+      },
+      {
         "description": "Python project",
         "id": "python-package",
         "markers": [
           "**/pyproject.toml"
+        ]
+      },
+      {
+        "description": "Python source tree with a ty configuration",
+        "id": "python-type-project",
+        "markers": [
+          "**/ty.toml"
         ]
       },
       {
@@ -1619,7 +1820,7 @@
               "**/.github/workflows/*.yaml"
             ],
             "kind": "lint",
-            "priority": 4,
+            "priority": 6,
             "scope": "per-file"
           }
         ],
@@ -1657,13 +1858,13 @@
               "**/*"
             ],
             "kind": "lint",
-            "priority": 34,
+            "priority": 49,
             "scope": "repository"
           }
         ],
         "projectTypes": [],
         "skipReason": "runs in CI only",
-        "skipped": true
+        "skipped": false
       },
       {
         "id": "blint",
@@ -1683,6 +1884,56 @@
         "projectTypes": [],
         "skipReason": "opt-in: pending manual review & config tuning",
         "skipped": true
+      },
+      {
+        "id": "buf",
+        "name": "buf - Protobuf schema lint",
+        "operations": [
+          {
+            "app": "buf",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.proto"
+            ],
+            "kind": "lint",
+            "priority": 4,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "protobuf-project"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "buf-format",
+        "name": "buf - Protobuf formatter",
+        "operations": [
+          {
+            "app": "buf",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.proto"
+            ],
+            "kind": "fix",
+            "priority": 3,
+            "scope": "per-file"
+          },
+          {
+            "app": "buf",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.proto"
+            ],
+            "kind": "lint",
+            "priority": 5,
+            "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
       },
       {
         "id": "cargo-deny",
@@ -1720,7 +1971,7 @@
               "**/*.mk"
             ],
             "kind": "lint",
-            "priority": 22,
+            "priority": 34,
             "scope": "per-file"
           }
         ],
@@ -1739,7 +1990,7 @@
               "**/*"
             ],
             "kind": "lint",
-            "priority": 6,
+            "priority": 8,
             "scope": "per-project"
           }
         ],
@@ -1765,7 +2016,7 @@
               "**/compose.*.yaml"
             ],
             "kind": "fix",
-            "priority": 0,
+            "priority": 26,
             "scope": "repository"
           },
           {
@@ -1782,13 +2033,13 @@
               "**/compose.*.yaml"
             ],
             "kind": "lint",
-            "priority": 0,
+            "priority": 33,
             "scope": "repository"
           }
         ],
         "projectTypes": [],
-        "skipReason": "opt-in: pending manual review & config tuning",
-        "skipped": true
+        "skipReason": "",
+        "skipped": false
       },
       {
         "id": "deptry",
@@ -1826,7 +2077,7 @@
               "**/.env.*"
             ],
             "kind": "fix",
-            "priority": 14,
+            "priority": 18,
             "scope": "per-file"
           },
           {
@@ -1839,7 +2090,7 @@
               "**/.env.*"
             ],
             "kind": "lint",
-            "priority": 17,
+            "priority": 27,
             "scope": "per-file"
           }
         ],
@@ -1857,16 +2108,37 @@
             "globs": [
               "**/Dockerfile",
               "**/Dockerfile.*",
-              "**/*.dockerfile"
+              "**/*.dockerfile",
+              "**/docker-compose.yml",
+              "**/docker-compose.yaml",
+              "**/docker-compose.*.yml",
+              "**/docker-compose.*.yaml",
+              "**/compose.yml",
+              "**/compose.yaml",
+              "**/compose.*.yml",
+              "**/compose.*.yaml",
+              "**/Containerfile",
+              "**/Containerfile.*",
+              "**/*.containerfile",
+              "**/docker-bake.hcl",
+              "**/docker-bake.json",
+              "**/docker-bake.*.hcl",
+              "**/docker-bake.*.json",
+              "**/.dockerignore",
+              "**/*.dockerignore",
+              "**/.containerignore",
+              "droast.toml"
             ],
             "kind": "lint",
-            "priority": 0,
+            "priority": 32,
             "scope": "repository"
           }
         ],
-        "projectTypes": [],
-        "skipReason": "opt-in: pending manual review & config tuning",
-        "skipped": true
+        "projectTypes": [
+          "docker-project"
+        ],
+        "skipReason": "runs in CI only",
+        "skipped": false
       },
       {
         "id": "editorconfig-checker",
@@ -1879,7 +2151,7 @@
               "**/*"
             ],
             "kind": "lint",
-            "priority": 16,
+            "priority": 26,
             "scope": "repository"
           }
         ],
@@ -1906,7 +2178,8 @@
               "**/*.html",
               "**/*.json",
               "**/*.jsonc",
-              "**/*.json5"
+              "**/*.json5",
+              "**/*.svelte"
             ],
             "kind": "fix",
             "priority": 6,
@@ -1927,10 +2200,11 @@
               "**/*.html",
               "**/*.json",
               "**/*.jsonc",
-              "**/*.json5"
+              "**/*.json5",
+              "**/*.svelte"
             ],
             "kind": "lint",
-            "priority": 9,
+            "priority": 12,
             "scope": "per-project"
           }
         ],
@@ -1968,7 +2242,7 @@
             "excludeGlobs": [],
             "globs": [],
             "kind": "fix",
-            "priority": 10,
+            "priority": 11,
             "scope": "per-project"
           },
           {
@@ -1976,7 +2250,7 @@
             "excludeGlobs": [],
             "globs": [],
             "kind": "lint",
-            "priority": 13,
+            "priority": 17,
             "scope": "per-project"
           }
         ],
@@ -1988,14 +2262,36 @@
       },
       {
         "id": "golangci-lint-fmt",
-        "name": "golangci-lint - Go Linter",
+        "name": "golangci-lint - Go Formatter",
         "operations": [
           {
             "app": "golangci-lint",
-            "excludeGlobs": [],
-            "globs": [],
+            "excludeGlobs": [
+              "**/testdata/**",
+              "**/vendor/**",
+              "**/node_modules/**",
+              "**/.*/**"
+            ],
+            "globs": [
+              "**/*.go"
+            ],
             "kind": "fix",
-            "priority": 0,
+            "priority": 12,
+            "scope": "per-project"
+          },
+          {
+            "app": "golangci-lint",
+            "excludeGlobs": [
+              "**/testdata/**",
+              "**/vendor/**",
+              "**/node_modules/**",
+              "**/.*/**"
+            ],
+            "globs": [
+              "**/*.go"
+            ],
+            "kind": "lint",
+            "priority": 18,
             "scope": "per-project"
           }
         ],
@@ -2038,13 +2334,13 @@
               "**/*"
             ],
             "kind": "lint",
-            "priority": 31,
+            "priority": 46,
             "scope": "repository"
           }
         ],
         "projectTypes": [],
         "skipReason": "runs in CI only",
-        "skipped": true
+        "skipped": false
       },
       {
         "id": "hadolint",
@@ -2059,7 +2355,7 @@
               "**/*.dockerfile"
             ],
             "kind": "lint",
-            "priority": 21,
+            "priority": 31,
             "scope": "per-file"
           }
         ],
@@ -2079,13 +2375,13 @@
               "**/*.markdown"
             ],
             "kind": "lint",
-            "priority": 7,
+            "priority": 10,
             "scope": "repository"
           }
         ],
         "projectTypes": [],
-        "skipReason": "",
-        "skipped": false
+        "skipReason": "opt-in: a second spell checker without a project dictionary; cspell owns spelling",
+        "skipped": true
       },
       {
         "id": "helm",
@@ -2099,10 +2395,38 @@
               "**/values.yaml",
               "**/templates/**/*.yaml",
               "**/templates/**/*.yml",
-              "**/templates/**/*.tpl"
+              "**/templates/**/*.tpl",
+              "**/templates/**/*.gotmpl"
             ],
             "kind": "lint",
-            "priority": 23,
+            "priority": 35,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "helm-chart"
+        ],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "helmfmt",
+        "name": "helmfmt - Helm Template Formatter",
+        "operations": [
+          {
+            "app": "helmfmt",
+            "excludeGlobs": [],
+            "globs": [],
+            "kind": "fix",
+            "priority": 29,
+            "scope": "per-project"
+          },
+          {
+            "app": "helmfmt",
+            "excludeGlobs": [],
+            "globs": [],
+            "kind": "lint",
+            "priority": 36,
             "scope": "per-project"
           }
         ],
@@ -2121,7 +2445,7 @@
             "excludeGlobs": [],
             "globs": [],
             "kind": "lint",
-            "priority": 0,
+            "priority": 43,
             "scope": "repository"
           }
         ],
@@ -2129,6 +2453,57 @@
           "npm-package",
           "typescript-project"
         ],
+        "skipReason": "runs in CI only",
+        "skipped": false
+      },
+      {
+        "id": "ktfmt",
+        "name": "ktfmt - Kotlin formatter",
+        "operations": [
+          {
+            "app": "ktfmt",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.kt",
+              "**/*.kts"
+            ],
+            "kind": "fix",
+            "priority": 16,
+            "scope": "per-project"
+          },
+          {
+            "app": "ktfmt",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.kt",
+              "**/*.kts"
+            ],
+            "kind": "lint",
+            "priority": 23,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "ktlint",
+        "name": "ktlint - Kotlin linter",
+        "operations": [
+          {
+            "app": "ktlint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.kt",
+              "**/*.kts"
+            ],
+            "kind": "lint",
+            "priority": 24,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [],
         "skipReason": "",
         "skipped": false
       },
@@ -2144,7 +2519,8 @@
               "**/values.yaml",
               "**/templates/**/*.yaml",
               "**/templates/**/*.yml",
-              "**/templates/**/*.tpl"
+              "**/templates/**/*.tpl",
+              "**/templates/**/*.gotmpl"
             ],
             "kind": "lint",
             "priority": 0,
@@ -2170,7 +2546,7 @@
               "**/.config/lefthook.y*ml"
             ],
             "kind": "fix",
-            "priority": 23,
+            "priority": 28,
             "scope": "per-file"
           }
         ],
@@ -2191,7 +2567,7 @@
               "**/.config/lefthook.y*ml"
             ],
             "kind": "lint",
-            "priority": 29,
+            "priority": 42,
             "scope": "repository"
           }
         ],
@@ -2230,13 +2606,53 @@
               "**/*.markdown"
             ],
             "kind": "lint",
-            "priority": 30,
+            "priority": 45,
             "scope": "repository"
           }
         ],
         "projectTypes": [],
         "skipReason": "runs in CI only (network access)",
-        "skipped": true
+        "skipped": false
+      },
+      {
+        "id": "lychee-offline",
+        "name": "lychee - Link Checker (offline)",
+        "operations": [
+          {
+            "app": "lychee",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.md",
+              "**/*.markdown"
+            ],
+            "kind": "lint",
+            "priority": 44,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "markdownlint-cli2",
+        "name": "markdownlint-cli2 - Markdown structure linter",
+        "operations": [
+          {
+            "app": "markdownlint-cli2",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.md",
+              "**/*.markdown"
+            ],
+            "kind": "lint",
+            "priority": 9,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
       },
       {
         "id": "mdsf",
@@ -2280,13 +2696,13 @@
               "**/*"
             ],
             "kind": "lint",
-            "priority": 33,
+            "priority": 48,
             "scope": "repository"
           }
         ],
         "projectTypes": [],
         "skipReason": "runs in CI only",
-        "skipped": true
+        "skipped": false
       },
       {
         "id": "oxfmt",
@@ -2311,19 +2727,26 @@
               "**/*.css",
               "**/*.scss",
               "**/*.less",
+              "**/*.pcss",
+              "**/*.postcss",
               "**/*.html",
+              "**/*.htm",
+              "**/*.xhtml",
               "**/*.vue",
+              "**/*.svelte",
+              "**/*.hbs",
+              "**/*.handlebars",
+              "**/*.mjml",
               "**/*.graphql",
               "**/*.gql",
+              "**/*.graphqls",
               "**/*.md",
-              "**/*.mdx",
-              "**/*.yaml",
-              "**/*.yml",
-              "**/*.toml"
+              "**/*.markdown",
+              "**/*.mdx"
             ],
             "kind": "fix",
-            "priority": 8,
-            "scope": "repository"
+            "priority": 9,
+            "scope": "per-project"
           },
           {
             "app": "oxfmt",
@@ -2344,19 +2767,26 @@
               "**/*.css",
               "**/*.scss",
               "**/*.less",
+              "**/*.pcss",
+              "**/*.postcss",
               "**/*.html",
+              "**/*.htm",
+              "**/*.xhtml",
               "**/*.vue",
+              "**/*.svelte",
+              "**/*.hbs",
+              "**/*.handlebars",
+              "**/*.mjml",
               "**/*.graphql",
               "**/*.gql",
+              "**/*.graphqls",
               "**/*.md",
-              "**/*.mdx",
-              "**/*.yaml",
-              "**/*.yml",
-              "**/*.toml"
+              "**/*.markdown",
+              "**/*.mdx"
             ],
             "kind": "lint",
-            "priority": 11,
-            "scope": "repository"
+            "priority": 15,
+            "scope": "per-project"
           }
         ],
         "projectTypes": [],
@@ -2384,7 +2814,7 @@
               "**/*.svelte"
             ],
             "kind": "fix",
-            "priority": 2,
+            "priority": 1,
             "scope": "per-project"
           },
           {
@@ -2424,18 +2854,9 @@
             "excludeGlobs": [],
             "globs": [
               "**/.github/workflows/*.yml",
-              "**/.github/workflows/*.yaml"
-            ],
-            "kind": "fix",
-            "priority": 0,
-            "scope": "repository"
-          },
-          {
-            "app": "pinact",
-            "excludeGlobs": [],
-            "globs": [
-              "**/.github/workflows/*.yml",
-              "**/.github/workflows/*.yaml"
+              "**/.github/workflows/*.yaml",
+              "**/.github/actions/*/action.yml",
+              "**/.github/actions/*/action.yaml"
             ],
             "kind": "lint",
             "priority": 0,
@@ -2443,8 +2864,8 @@
           }
         ],
         "projectTypes": [],
-        "skipReason": "opt-in: pending manual review & config tuning",
-        "skipped": true
+        "skipReason": "",
+        "skipped": false
       },
       {
         "id": "pre-commit",
@@ -2457,7 +2878,7 @@
               "**/*"
             ],
             "kind": "fix",
-            "priority": 25,
+            "priority": 31,
             "scope": "repository"
           }
         ],
@@ -2487,11 +2908,10 @@
               "**/*.json",
               "**/*.jsonc",
               "**/*.json5",
-              "**/*.d.ts",
-              "**/*.md"
+              "**/*.d.ts"
             ],
             "kind": "fix",
-            "priority": 7,
+            "priority": 8,
             "scope": "per-project"
           },
           {
@@ -2510,11 +2930,10 @@
               "**/*.json",
               "**/*.jsonc",
               "**/*.json5",
-              "**/*.d.ts",
-              "**/*.md"
+              "**/*.d.ts"
             ],
             "kind": "lint",
-            "priority": 10,
+            "priority": 14,
             "scope": "per-project"
           }
         ],
@@ -2522,21 +2941,21 @@
           "npm-package",
           "typescript-project"
         ],
-        "skipReason": "",
-        "skipped": false
+        "skipReason": "oxfmt owns formatting; two formatters on one file loop (see AGENTS.md)",
+        "skipped": true
       },
       {
         "id": "protolint",
         "name": "protolint - Protocol Buffer Linter",
         "operations": [
           {
-            "app": "protolint",
+            "app": "protolint-fix",
             "excludeGlobs": [],
             "globs": [
               "**/*.proto"
             ],
             "kind": "fix",
-            "priority": 3,
+            "priority": 2,
             "scope": "per-file"
           },
           {
@@ -2566,7 +2985,7 @@
               "**/*.pyi"
             ],
             "kind": "fix",
-            "priority": 11,
+            "priority": 13,
             "scope": "per-project"
           },
           {
@@ -2577,7 +2996,7 @@
               "**/*.pyi"
             ],
             "kind": "lint",
-            "priority": 0,
+            "priority": 19,
             "scope": "per-project"
           }
         ],
@@ -2599,7 +3018,7 @@
               "**/*.pyi"
             ],
             "kind": "fix",
-            "priority": 12,
+            "priority": 14,
             "scope": "per-project"
           },
           {
@@ -2610,7 +3029,7 @@
               "**/*.pyi"
             ],
             "kind": "lint",
-            "priority": 0,
+            "priority": 20,
             "scope": "per-project"
           }
         ],
@@ -2631,7 +3050,7 @@
               "**/*.rs"
             ],
             "kind": "fix",
-            "priority": 16,
+            "priority": 20,
             "scope": "per-project"
           },
           {
@@ -2641,7 +3060,7 @@
               "**/*.rs"
             ],
             "kind": "lint",
-            "priority": 19,
+            "priority": 29,
             "scope": "per-project"
           }
         ],
@@ -2663,7 +3082,7 @@
               "**/*.bash"
             ],
             "kind": "lint",
-            "priority": 20,
+            "priority": 30,
             "scope": "per-file"
           }
         ],
@@ -2683,7 +3102,7 @@
               "**/*.bash"
             ],
             "kind": "fix",
-            "priority": 15,
+            "priority": 19,
             "scope": "per-file"
           },
           {
@@ -2694,8 +3113,67 @@
               "**/*.bash"
             ],
             "kind": "lint",
-            "priority": 18,
+            "priority": 28,
             "scope": "per-file"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "sort-keys-properties",
+        "name": "sort-keys - .properties Key Sorter",
+        "operations": [
+          {
+            "app": "sort-keys",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.properties"
+            ],
+            "kind": "fix",
+            "priority": 5,
+            "scope": "repository"
+          }
+        ],
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "sort-keys-yaml",
+        "name": "sort-keys - YAML Key Sorter",
+        "operations": [
+          {
+            "app": "sort-keys",
+            "excludeGlobs": [
+              "**/pnpm-lock.yaml",
+              "**/*.sops.yaml",
+              "**/*.sops.yml",
+              "**/.sops.yml",
+              "**/*.yaml.enc",
+              "**/*.yml.enc",
+              "**/*.enc.yaml",
+              "**/*.enc.yml",
+              "**/lefthook.y*ml",
+              "**/.lefthook.y*ml",
+              "**/.config/lefthook.y*ml",
+              "**/docker-compose.yml",
+              "**/docker-compose.yaml",
+              "**/docker-compose.*.yml",
+              "**/docker-compose.*.yaml",
+              "**/compose.yml",
+              "**/compose.yaml",
+              "**/compose.*.yml",
+              "**/compose.*.yaml"
+            ],
+            "globs": [
+              "**/*.yaml",
+              "**/*.yml"
+            ],
+            "kind": "fix",
+            "priority": 27,
+            "scope": "repository"
           }
         ],
         "projectTypes": [],
@@ -2713,7 +3191,7 @@
               "**/package.json"
             ],
             "kind": "fix",
-            "priority": 9,
+            "priority": 10,
             "scope": "per-file"
           },
           {
@@ -2723,7 +3201,7 @@
               "**/package.json"
             ],
             "kind": "lint",
-            "priority": 12,
+            "priority": 16,
             "scope": "per-file"
           }
         ],
@@ -2745,7 +3223,7 @@
               "**/*.sql"
             ],
             "kind": "fix",
-            "priority": 0,
+            "priority": 15,
             "scope": "per-project"
           },
           {
@@ -2755,13 +3233,57 @@
               "**/*.sql"
             ],
             "kind": "lint",
-            "priority": 0,
+            "priority": 21,
             "scope": "per-project"
           }
         ],
         "projectTypes": [],
-        "skipReason": "opt-in: pending manual review & config tuning",
-        "skipped": true
+        "skipReason": "",
+        "skipped": false
+      },
+      {
+        "id": "stylelint",
+        "name": "Stylelint - CSS Linter",
+        "operations": [
+          {
+            "app": "stylelint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.css",
+              "**/*.scss",
+              "**/*.html",
+              "**/*.htm",
+              "**/*.xhtml",
+              "**/*.vue",
+              "**/*.svelte"
+            ],
+            "kind": "fix",
+            "priority": 7,
+            "scope": "per-project"
+          },
+          {
+            "app": "stylelint",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.css",
+              "**/*.scss",
+              "**/*.html",
+              "**/*.htm",
+              "**/*.xhtml",
+              "**/*.vue",
+              "**/*.svelte"
+            ],
+            "kind": "lint",
+            "priority": 13,
+            "scope": "per-project"
+          }
+        ],
+        "projectTypes": [
+          "npm-package",
+          "typescript-project"
+        ],
+        "skipReason": "",
+        "skipped": false
       },
       {
         "id": "syncpack",
@@ -2771,17 +3293,19 @@
             "app": "syncpack",
             "excludeGlobs": [],
             "globs": [
-              "**/package.json"
+              "**/package.json",
+              "**/pnpm-workspace.yaml"
             ],
             "kind": "fix",
-            "priority": 1,
+            "priority": 0,
             "scope": "repository"
           },
           {
             "app": "syncpack",
             "excludeGlobs": [],
             "globs": [
-              "**/package.json"
+              "**/package.json",
+              "**/pnpm-workspace.yaml"
             ],
             "kind": "lint",
             "priority": 1,
@@ -2806,7 +3330,7 @@
               "**/*.tf"
             ],
             "kind": "fix",
-            "priority": 21,
+            "priority": 25,
             "scope": "per-project"
           }
         ],
@@ -2827,8 +3351,18 @@
               "**/*.hcl"
             ],
             "kind": "fix",
-            "priority": 20,
-            "scope": "repository"
+            "priority": 24,
+            "scope": "per-file"
+          },
+          {
+            "app": "terragrunt",
+            "excludeGlobs": [],
+            "globs": [
+              "**/*.hcl"
+            ],
+            "kind": "lint",
+            "priority": 0,
+            "scope": "per-file"
           }
         ],
         "projectTypes": [
@@ -2848,7 +3382,7 @@
               "**/*.tf"
             ],
             "kind": "fix",
-            "priority": 18,
+            "priority": 22,
             "scope": "per-project"
           },
           {
@@ -2858,7 +3392,7 @@
               "**/*.tf"
             ],
             "kind": "lint",
-            "priority": 25,
+            "priority": 38,
             "scope": "per-project"
           }
         ],
@@ -2880,7 +3414,7 @@
               "**/*.tfvars"
             ],
             "kind": "fix",
-            "priority": 19,
+            "priority": 23,
             "scope": "per-project"
           },
           {
@@ -2891,7 +3425,7 @@
               "**/*.tfvars"
             ],
             "kind": "lint",
-            "priority": 26,
+            "priority": 39,
             "scope": "per-project"
           }
         ],
@@ -2912,7 +3446,7 @@
               "**/*.toml"
             ],
             "kind": "fix",
-            "priority": 17,
+            "priority": 21,
             "scope": "repository"
           },
           {
@@ -2922,7 +3456,7 @@
               "**/*.toml"
             ],
             "kind": "lint",
-            "priority": 24,
+            "priority": 37,
             "scope": "repository"
           }
         ],
@@ -2941,13 +3475,13 @@
               "**/*"
             ],
             "kind": "lint",
-            "priority": 32,
+            "priority": 47,
             "scope": "repository"
           }
         ],
         "projectTypes": [],
         "skipReason": "runs in CI only",
-        "skipped": true
+        "skipped": false
       },
       {
         "id": "trufflehog",
@@ -2966,7 +3500,7 @@
         ],
         "projectTypes": [],
         "skipReason": "runs in CI only",
-        "skipped": true
+        "skipped": false
       },
       {
         "id": "tsc",
@@ -2980,10 +3514,12 @@
               "**/*.ts",
               "**/*.mts",
               "**/*.cts",
-              "**/*.tsx"
+              "**/*.tsx",
+              "**/tsconfig.json",
+              "**/tsconfig.*.json"
             ],
             "kind": "lint",
-            "priority": 5,
+            "priority": 7,
             "scope": "per-project"
           }
         ],
@@ -3006,15 +3542,13 @@
               "**/*.ipynb"
             ],
             "kind": "lint",
-            "priority": 0,
+            "priority": 22,
             "scope": "per-project"
           }
         ],
-        "projectTypes": [
-          "python-package"
-        ],
-        "skipReason": "opt-in: pending manual review & config tuning",
-        "skipped": true
+        "projectTypes": [],
+        "skipReason": "",
+        "skipped": false
       },
       {
         "id": "typos",
@@ -3046,7 +3580,7 @@
               "**/*.typ"
             ],
             "kind": "fix",
-            "priority": 13,
+            "priority": 17,
             "scope": "per-file"
           },
           {
@@ -3056,7 +3590,7 @@
               "**/*.typ"
             ],
             "kind": "lint",
-            "priority": 15,
+            "priority": 25,
             "scope": "per-file"
           }
         ],
@@ -3076,13 +3610,13 @@
               "**/*.markdown"
             ],
             "kind": "lint",
-            "priority": 8,
+            "priority": 11,
             "scope": "repository"
           }
         ],
         "projectTypes": [],
-        "skipReason": "",
-        "skipped": false
+        "skipReason": "opt-in: a second spell checker without a project dictionary; cspell owns spelling",
+        "skipped": true
       },
       {
         "id": "yamlfmt",
@@ -3091,27 +3625,41 @@
           {
             "app": "yamlfmt",
             "excludeGlobs": [
-              "**/pnpm-lock.yaml"
+              "**/pnpm-lock.yaml",
+              "**/*.sops.yaml",
+              "**/*.sops.yml",
+              "**/.sops.yml",
+              "**/*.yaml.enc",
+              "**/*.yml.enc",
+              "**/*.enc.yaml",
+              "**/*.enc.yml"
             ],
             "globs": [
               "**/*.yaml",
               "**/*.yml"
             ],
             "kind": "fix",
-            "priority": 24,
+            "priority": 30,
             "scope": "repository"
           },
           {
             "app": "yamlfmt",
             "excludeGlobs": [
-              "**/pnpm-lock.yaml"
+              "**/pnpm-lock.yaml",
+              "**/*.sops.yaml",
+              "**/*.sops.yml",
+              "**/.sops.yml",
+              "**/*.yaml.enc",
+              "**/*.yml.enc",
+              "**/*.enc.yaml",
+              "**/*.enc.yml"
             ],
             "globs": [
               "**/*.yaml",
               "**/*.yml"
             ],
             "kind": "lint",
-            "priority": 27,
+            "priority": 40,
             "scope": "repository"
           }
         ],
@@ -3126,14 +3674,21 @@
           {
             "app": "yamllint",
             "excludeGlobs": [
-              "**/pnpm-lock.yaml"
+              "**/pnpm-lock.yaml",
+              "**/*.sops.yaml",
+              "**/*.sops.yml",
+              "**/.sops.yml",
+              "**/*.yaml.enc",
+              "**/*.yml.enc",
+              "**/*.enc.yaml",
+              "**/*.enc.yml"
             ],
             "globs": [
               "**/*.yaml",
               "**/*.yml"
             ],
             "kind": "lint",
-            "priority": 28,
+            "priority": 41,
             "scope": "repository"
           }
         ],
@@ -3149,57 +3704,15 @@
             "app": "yq",
             "excludeGlobs": [
               "**/package.json",
-              "**/package-lock.json"
+              "**/package-lock.json",
+              "**/*.json.enc",
+              "**/*.enc.json"
             ],
             "globs": [
               "**/*.json"
             ],
             "kind": "fix",
             "priority": 4,
-            "scope": "per-file"
-          }
-        ],
-        "projectTypes": [],
-        "skipReason": "",
-        "skipped": false
-      },
-      {
-        "id": "yq-properties",
-        "name": "yq - Properties Key Sorter",
-        "operations": [
-          {
-            "app": "yq",
-            "excludeGlobs": [],
-            "globs": [
-              "**/*.properties"
-            ],
-            "kind": "fix",
-            "priority": 5,
-            "scope": "per-file"
-          }
-        ],
-        "projectTypes": [],
-        "skipReason": "",
-        "skipped": false
-      },
-      {
-        "id": "yq-yaml",
-        "name": "yq - YAML Key Sorter",
-        "operations": [
-          {
-            "app": "yq",
-            "excludeGlobs": [
-              "**/pnpm-lock.yaml",
-              "**/lefthook.y*ml",
-              "**/.lefthook.y*ml",
-              "**/.config/lefthook.y*ml"
-            ],
-            "globs": [
-              "**/*.yaml",
-              "**/*.yml"
-            ],
-            "kind": "fix",
-            "priority": 22,
             "scope": "per-file"
           }
         ],
@@ -3216,7 +3729,9 @@
             "excludeGlobs": [],
             "globs": [
               "**/.github/workflows/*.yml",
-              "**/.github/workflows/*.yaml"
+              "**/.github/workflows/*.yaml",
+              "**/.github/actions/*/action.yml",
+              "**/.github/actions/*/action.yaml"
             ],
             "kind": "lint",
             "priority": 0,
@@ -3231,5 +3746,5 @@
     "version": "dev"
   },
   "package": "@shibanet0/datamitsu-config",
-  "version": "0.0.0-unstable.20260912.f201136"
+  "version": "0.6.3"
 }
