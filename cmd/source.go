@@ -95,7 +95,13 @@ var sourceFishCmd = &cobra.Command{
 	RunE:  func(cmd *cobra.Command, _ []string) error { return runSource(cmd, renderFish) },
 }
 
+var sourceQuiet bool
+
 func init() {
+	sourceBashCmd.Flags().BoolVar(&sourceQuiet, "quiet", false, "Suppress routine source-mode notices and automatic refresh output")
+	sourceZshCmd.Flags().BoolVar(&sourceQuiet, "quiet", false, "Suppress routine source-mode notices and automatic refresh output")
+	sourceFishCmd.Flags().BoolVar(&sourceQuiet, "quiet", false, "Suppress routine source-mode notices and automatic refresh output")
+	sourceRefreshCmd.Flags().BoolVar(&sourceQuiet, "quiet", false, "Suppress routine refresh output")
 	sourceCmd.AddCommand(sourceBashCmd)
 	sourceCmd.AddCommand(sourceZshCmd)
 	sourceCmd.AddCommand(sourceFishCmd)
@@ -144,7 +150,7 @@ func runSource(cmd *cobra.Command, render func(sourceActivation) string) error {
 		}
 	}
 
-	warnSourceFarm(stderr, plan)
+	warnSourceFarm(stderr, plan, sourceQuiet)
 	if _, err := fmt.Fprint(cmd.OutOrStdout(), render(activationFor(target, plan))); err != nil {
 		return fmt.Errorf("write activation code: %w", err)
 	}
@@ -806,7 +812,11 @@ func sourceProjectRoot(ctx context.Context) (string, error) {
 // It writes with fmt.Fprintf rather than through internal/ui on purpose: ui is
 // in JSON-L mode for this command, and these are messages a human is meant to
 // read next to their prompt.
-func warnSourceFarm(stderr io.Writer, plan sourcefarm.Plan) {
+
+func warnSourceFarm(stderr io.Writer, plan sourcefarm.Plan, quiet bool) {
+	if quiet {
+		return
+	}
 	var pending []string
 	for _, e := range plan.Entries {
 		if !e.Installed {
@@ -815,12 +825,10 @@ func warnSourceFarm(stderr io.Writer, plan sourcefarm.Plan) {
 	}
 	if len(pending) > 0 {
 		sort.Strings(pending)
-		_, _ = fmt.Fprintf(stderr, "%s: %d tool(s) not downloaded yet, they install on first use: %s\n",
-			ldflags.PackageName, len(pending), strings.Join(pending, ", "))
+		_, _ = fmt.Fprintf(stderr, "%s: %d tool(s) not downloaded yet, they install on first use: %s\n", ldflags.PackageName, len(pending), strings.Join(pending, ", "))
 	}
-	for _, s := range plan.Shadowed {
-		_, _ = fmt.Fprintf(stderr, "%s: %s now runs this project's version, shadowing %s\n",
-			ldflags.PackageName, s.Name, s.Path)
+	for _, shadow := range plan.Shadowed {
+		_, _ = fmt.Fprintf(stderr, "%s: %s now runs this project's version, shadowing %s\n", ldflags.PackageName, shadow.Name, shadow.Path)
 	}
 }
 
@@ -891,6 +899,7 @@ type sourceActivation struct {
 	FarmDir     string
 	Root        string
 	ConfigPaths []string
+	Quiet       bool
 }
 
 // activationFor pairs a baked plan with the target that selected it. The farm
@@ -902,6 +911,7 @@ func activationFor(target sourceTarget, plan sourcefarm.Plan) sourceActivation {
 		FarmDir:     plan.FarmDir,
 		Root:        target.Root,
 		ConfigPaths: target.ConfigPaths,
+		Quiet:       sourceQuiet,
 	}
 }
 
@@ -922,16 +932,18 @@ type shellVar struct {
 // Both are informational. Nothing resolves a tool through them; the shim answers
 // from the farm directory an invocation arrived through.
 func (a sourceActivation) vars() []shellVar {
-	if a.Root == "" {
-		return []shellVar{
-			{env.SourceFarmVarName(), a.FarmDir},
-			{env.SourceFarmConfigVarName(), strings.Join(a.ConfigPaths, string(os.PathListSeparator))},
-		}
-	}
-	return []shellVar{
-		{env.SourceRootVarName(), a.Root},
+	vars := []shellVar{
 		{env.SourceFarmVarName(), a.FarmDir},
 	}
+	if a.Root == "" {
+		vars = append(vars, shellVar{env.SourceFarmConfigVarName(), strings.Join(a.ConfigPaths, string(os.PathListSeparator))})
+	} else {
+		vars = append(vars, shellVar{env.SourceRootVarName(), a.Root})
+	}
+	if a.Quiet {
+		vars = append(vars, shellVar{env.SourceQuietVarName(), a.FarmDir})
+	}
+	return vars
 }
 
 // staleVars returns the identity variables this origin does not own, which the
@@ -948,8 +960,12 @@ func (a sourceActivation) vars() []shellVar {
 // Both variables are in env.environExcluded, so clearing one cannot perturb any
 // farm's staleness key.
 func (a sourceActivation) staleVars() []string {
-	if a.Root == "" {
-		return []string{env.SourceRootVarName()}
+	stale := []string{}
+	if !a.Quiet {
+		stale = append(stale, env.SourceQuietVarName())
 	}
-	return []string{env.SourceFarmConfigVarName()}
+	if a.Root == "" {
+		return append(stale, env.SourceRootVarName())
+	}
+	return append(stale, env.SourceFarmConfigVarName())
 }

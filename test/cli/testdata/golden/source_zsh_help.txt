@@ -4,7 +4,8 @@ Usage:
   datamitsu source zsh [flags]
 
 Flags:
-  -h, --help   help for zsh
+  -h, --help    help for zsh
+      --quiet   Suppress routine source-mode notices and automatic refresh output
 
 Global Flags:
       --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)

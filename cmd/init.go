@@ -33,6 +33,7 @@ var (
 	initAll               bool
 	initSkipDownload      bool
 	initFailOnDownloadErr bool
+	initQuiet             bool
 )
 
 var initCmd = &cobra.Command{
@@ -44,6 +45,7 @@ By default, downloads only Required binaries with concurrency of 3 (configurable
 }
 
 func init() {
+	initCmd.Flags().BoolVar(&initQuiet, "quiet", false, "Suppress routine output unless managed state changes")
 	initCmd.Flags().BoolVar(&initDryRun, "dry-run", false, "Show what would be done without making changes")
 	initCmd.Flags().BoolVar(&initAll, "all", false, "Download all binaries (both required and optional)")
 	initCmd.Flags().BoolVar(&initSkipDownload, "skip-download", false, "Skip binary downloads")
@@ -60,6 +62,8 @@ func runInit(_ *cobra.Command, _ []string) error {
 	// whole run is framed as one "init" bracket; section bodies print safely
 	// above any active bars.
 	disp := ui.New(term.DetectMode())
+	quietDisplay := initQuiet && !initDryRun && resolveLogFormat() != "jsonl" && !verbose
+	disp.SetQuiet(quietDisplay)
 	restore := ui.Activate(disp)
 	defer func() {
 		disp.Close()
@@ -84,7 +88,9 @@ func runInit(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	disp.Banner(ldflags.PackageName, ldflags.Version, ciText(cfg.DisplayName()), ciText(cfg.Version))
+	if !quietDisplay {
+		disp.Banner(ldflags.PackageName, ldflags.Version, ciText(cfg.DisplayName()), ciText(cfg.Version))
+	}
 
 	detector := project.NewDetector(rootPath, cfg.ProjectTypes)
 	projectTypes, err := detector.DetectAll(ctx)
@@ -112,6 +118,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	binMgr := binmanager.New(cfg.Apps, cfg.Bundles, rm)
 
 	var runtimeCount, toolCount, bundleCount, linkCount, preparedCount, failed int
+	stateChanged := false
 
 	if !initSkipDownload && !initDryRun {
 		// Seed the install set from the declared OCI bundle first (demand-
@@ -125,29 +132,42 @@ func runInit(_ *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
-		if err := ocibundle.AutoSeed(ctx, cfg, apps, runtimes); err != nil {
+		seedChanged, err := ocibundle.AutoSeed(ctx, cfg, apps, runtimes)
+		if err != nil {
 			return fmt.Errorf("failed to seed store from oci bundle: %w", err)
 		}
+		stateChanged = stateChanged || seedChanged
 
-		n, f, rErr := reportRuntimes(ctx, disp, rm, cfg, initAll)
+		n, f, changed, rErr := reportRuntimes(ctx, disp, rm, cfg, initAll)
 		if rErr != nil {
 			return fmt.Errorf("failed to install runtimes: %w", rErr)
 		}
 		runtimeCount, failed = n, failed+f
+		if quietDisplay {
+			stateChanged = stateChanged || changed
+		}
 
+		var beforeTools map[string]bool
+		if quietDisplay {
+			beforeTools = installedToolState(binMgr, cfg)
+		}
 		n, f, rErr = reportTools(ctx, disp, binMgr)
 		if rErr != nil {
 			return fmt.Errorf("failed to install tools: %w", rErr)
 		}
 		toolCount, failed = n, failed+f
-
-		// Install runtime-managed (Bun/Node/UV) link-apps so their config links resolve
-		// below: those referenced by a tool, plus all non-lazy link-apps (whose
-		// links may be consumed by hooks/ManagedConfig, e.g. commitlint). Only apps
-		// marked Lazy (e.g. slidev) are deferred — they install on first `dm exec`.
-		// Install feedback is the shared bars.
+		if quietDisplay {
+			stateChanged = stateChanged || !sameRuntimeState(beforeTools, installedToolState(binMgr, cfg))
+		}
+		var beforeLinks map[string]bool
+		if quietDisplay {
+			beforeLinks = installedRuntimeAppState(binMgr, cfg)
+		}
 		if err := installRuntimeAppsWithLinks(ctx, binMgr, cfg, initAll); err != nil {
 			return fmt.Errorf("failed to install runtime apps with links: %w", err)
+		}
+		if quietDisplay {
+			stateChanged = stateChanged || !sameRuntimeState(beforeLinks, installedRuntimeAppState(binMgr, cfg))
 		}
 	}
 
@@ -157,55 +177,97 @@ func runInit(_ *cobra.Command, _ []string) error {
 	// phases, and it runs before initCommands, which may invoke prepared
 	// apps.
 	if !initSkipDownload && !initDryRun {
+		var beforePrepared map[string]bool
+		if quietDisplay {
+			beforePrepared = preparedState(binMgr, cfg, initAll)
+		}
 		n, f, pErr := reportPrepared(ctx, disp, binMgr, cfg, initAll)
 		if pErr != nil {
 			return fmt.Errorf("failed to prepare apps: %w", pErr)
 		}
 		preparedCount, failed = n, failed+f
+		if quietDisplay {
+			stateChanged = stateChanged || !sameRuntimeState(beforePrepared, preparedState(binMgr, cfg, initAll))
+		}
 	}
 
 	if !initDryRun {
-		n, f, bErr := reportBundles(ctx, disp, binMgr, initSkipDownload)
+		n, f, changed, bErr := reportBundles(ctx, disp, binMgr, initSkipDownload)
 		if bErr != nil {
 			return fmt.Errorf("failed to install bundles: %w", bErr)
 		}
 		bundleCount, failed = n, failed+f
+		if quietDisplay {
+			stateChanged = stateChanged || changed
+		}
 	}
-
+	command, _ := facts.ResolveBinaryCommandForInit(BinaryCommandOverride)
+	ex, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to determine executable path: %w", err)
+	}
+	marker := managedconfig.LauncherMarker{Command: command, BinaryPath: ex, CoreVersion: ldflags.Version}
+	var markerBefore managedconfig.LauncherMarker
+	var hadMarkerBefore bool
+	if quietDisplay {
+		markerBefore, hadMarkerBefore = managedconfig.ReadLauncherMarker(rootPath)
+	}
+	var beforeArtifacts map[string]artifactState
+	if quietDisplay {
+		beforeArtifacts, err = configuredLinkState(rootPath)
+		if err != nil {
+			return fmt.Errorf("failed to inspect managed links: %w", err)
+		}
+	}
 	linkCount, err = reportConfigLinks(disp, rootPath, cfg, binMgr, initDryRun)
 	if err != nil {
 		return fmt.Errorf("failed to set up config links: %w", err)
 	}
-
-	if err := reportInternalConfigs(disp, rootPath, cfg, initDryRun); err != nil {
+	if quietDisplay {
+		afterArtifacts, snapshotErr := configuredLinkState(rootPath)
+		if snapshotErr != nil {
+			return fmt.Errorf("failed to inspect managed links: %w", snapshotErr)
+		}
+		stateChanged = stateChanged || !sameLinkState(beforeArtifacts, afterArtifacts)
+	}
+	changed, err := reportInternalConfigs(disp, rootPath, cfg, initDryRun)
+	if err != nil {
 		return fmt.Errorf("failed to write internal configs: %w", err)
 	}
-
-	// The launcher marker records how THIS init was invoked, so hook commands
-	// rendered later invoke datamitsu the same way (facts().binaryCommand
-	// falls back to it). Resolution is deliberately marker-free: a repository
-	// that switched install channels re-records on the next init. Written
-	// after the .datamitsu/ swap: the next init's swap drops it and this write
-	// refreshes it.
-	command, _ := facts.ResolveBinaryCommandForInit(BinaryCommandOverride)
-	if err := reportLauncherMarker(disp, rootPath, command, initDryRun); err != nil {
+	stateChanged = stateChanged || changed
+	_, err = reportLauncherMarker(disp, rootPath, command, initDryRun)
+	if err != nil {
 		return err
+	}
+	if quietDisplay {
+		stateChanged = stateChanged || !initDryRun && (!hadMarkerBefore || markerBefore != marker)
 	}
 
 	hookErr := reportInitCommands(ctx, disp, rootPath, projectTypes, cfg, binMgr, initDryRun)
 
-	printInitFooter(disp, initFooterCounts{
-		types:    len(projectTypes),
-		runtimes: runtimeCount,
-		tools:    toolCount,
-		bundles:  bundleCount,
-		prepared: preparedCount,
-		links:    linkCount,
-		failed:   failed,
-		dur:      ui.FormatDurationShort(time.Since(start).Milliseconds()),
-		dryRun:   initDryRun,
-		hadError: hookErr != nil,
-	})
+	if quietDisplay {
+		if stateChanged {
+			if _, err := fmt.Fprintln(os.Stdout, "datamitsu: init changed managed state"); err != nil {
+				return fmt.Errorf("write init result: %w", err)
+			}
+		}
+		if failed > 0 {
+			disp.Diagnosticf("Init completed with %d failed item(s)\n", failed)
+		}
+	} else {
+		printInitFooter(disp, initFooterCounts{
+			types:    len(projectTypes),
+			runtimes: runtimeCount,
+			tools:    toolCount,
+			bundles:  bundleCount,
+			prepared: preparedCount,
+			links:    linkCount,
+			failed:   failed,
+			dur:      ui.FormatDurationShort(time.Since(start).Milliseconds()),
+			dryRun:   initDryRun,
+			hadError: hookErr != nil,
+		})
+	}
 
 	if hookErr != nil {
 		return hookErr
@@ -216,9 +278,10 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 // initRow is one item line in an install sub-section (runtimes/tools/bundles).
 type initRow struct {
-	sym    string // colored glyph
-	name   string
-	status string // already-colored status text
+	sym        string
+	name       string
+	status     string
+	diagnostic bool
 }
 
 // okRows builds success rows (green ✓, faint status) for a list of names.
@@ -234,7 +297,7 @@ func okRows(names []string, status string) []initRow {
 func skipRows(names []string) []initRow {
 	rows := make([]initRow, 0, len(names))
 	for _, name := range names {
-		rows = append(rows, initRow{sym: clr.Faint("⊘"), name: name, status: clr.Faint("skipped")})
+		rows = append(rows, initRow{sym: clr.Faint("⊘"), name: name, status: clr.Faint("skipped"), diagnostic: true})
 	}
 	return rows
 }
@@ -248,7 +311,7 @@ func skipRowsWithReason(skipped []binmanager.SkippedBinary) []initRow {
 		if s.Reason != "" {
 			status += ": " + s.Reason
 		}
-		rows = append(rows, initRow{sym: clr.Faint("⊘"), name: s.Name, status: clr.Faint(status)})
+		rows = append(rows, initRow{sym: clr.Faint("⊘"), name: s.Name, status: clr.Faint(status), diagnostic: true})
 	}
 	return rows
 }
@@ -259,7 +322,7 @@ func failRow(name string, err error) initRow {
 	if err != nil {
 		msg = "failed: " + err.Error()
 	}
-	return initRow{sym: clr.Red("✗"), name: name, status: clr.Red(msg)}
+	return initRow{sym: clr.Red("✗"), name: name, status: clr.Red(msg), diagnostic: true}
 }
 
 // initSection renders one "┃ <title>" sub-section with item rows, aligning the
@@ -270,7 +333,6 @@ func initSection(disp *ui.Display, title string, rows []initRow) {
 	}
 	disp.PhaseBody("")
 	disp.PhaseBody(clr.Bold(title))
-
 	width := 0
 	for _, r := range rows {
 		if n := utf8.RuneCountInString(r.name); n > width {
@@ -279,7 +341,12 @@ func initSection(disp *ui.Display, title string, rows []initRow) {
 	}
 	for _, r := range rows {
 		pad := strings.Repeat(" ", width-utf8.RuneCountInString(r.name)+2)
-		disp.PhaseBody("  " + r.sym + " " + r.name + pad + r.status)
+		line := "  " + r.sym + " " + r.name + pad + r.status
+		if disp.IsQuiet() && r.diagnostic {
+			disp.Diagnosticf("%s\n", line)
+		} else {
+			disp.PhaseBody(line)
+		}
 	}
 }
 
@@ -294,20 +361,25 @@ func initLabelLine(disp *ui.Display, label, value string) {
 	disp.PhaseBody(clr.Bold(label) + pad + value)
 }
 
-func reportRuntimes(ctx context.Context, disp *ui.Display, rm *runtimemanager.RuntimeManager, cfg *config.Config, includeAll bool) (count, failed int, err error) {
+func reportRuntimes(ctx context.Context, disp *ui.Display, rm *runtimemanager.RuntimeManager, cfg *config.Config, includeAll bool) (count, failed int, changed bool, err error) {
 	names, err := initRuntimeNames(cfg, includeAll)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
 	if len(names) == 0 {
-		return 0, 0, nil
+		return 0, 0, false, nil
 	}
-
+	var before map[string]bool
+	if disp.IsQuiet() {
+		before = runtimeInstallState(rm, names)
+	}
 	stats, err := rm.InstallRuntimes(ctx, names, env.GetConcurrency())
-	if err != nil {
-		return 0, 0, err
+	if disp.IsQuiet() {
+		changed = !sameRuntimeState(before, runtimeInstallState(rm, names))
 	}
-
+	if err != nil {
+		return 0, 0, changed, err
+	}
 	rows := okRows(stats.Downloaded, "downloaded")
 	rows = append(rows, okRows(stats.AlreadyCached, "cached")...)
 	rows = append(rows, skipRows(stats.Skipped)...)
@@ -315,11 +387,10 @@ func reportRuntimes(ctx context.Context, disp *ui.Display, rm *runtimemanager.Ru
 		rows = append(rows, failRow(f.Name, f.Error))
 	}
 	initSection(disp, "runtimes", rows)
-
 	if initFailOnDownloadErr && len(stats.Failed) > 0 {
-		return 0, 0, fmt.Errorf("failed to download %d runtime(s)", len(stats.Failed))
+		return 0, 0, changed, fmt.Errorf("failed to download %d runtime(s)", len(stats.Failed))
 	}
-	return len(stats.Downloaded) + len(stats.AlreadyCached), len(stats.Failed), nil
+	return len(stats.Downloaded) + len(stats.AlreadyCached), len(stats.Failed), changed, nil
 }
 
 // reportPrepared runs the prepare steps of the init set: every installed
@@ -374,7 +445,6 @@ func reportTools(ctx context.Context, disp *ui.Display, binMgr *binmanager.BinMa
 	if err != nil {
 		return 0, 0, err
 	}
-
 	rows := okRows(stats.Downloaded, "downloaded")
 	rows = append(rows, okRows(stats.AlreadyCached, "cached")...)
 	rows = append(rows, skipRowsWithReason(stats.Skipped)...)
@@ -382,13 +452,11 @@ func reportTools(ctx context.Context, disp *ui.Display, binMgr *binmanager.BinMa
 		rows = append(rows, failRow(f.Name, f.Error))
 	}
 	initSection(disp, "tools", rows)
-
 	return len(stats.Downloaded) + len(stats.AlreadyCached), len(stats.Failed), nil
 }
 
-func reportBundles(ctx context.Context, disp *ui.Display, binMgr *binmanager.BinManager, skipDownload bool) (count, failed int, err error) {
+func reportBundles(ctx context.Context, disp *ui.Display, binMgr *binmanager.BinManager, skipDownload bool) (count, failed int, changed bool, err error) {
 	stats, err := binMgr.InstallBundles(ctx, skipDownload)
-
 	rows := okRows(stats.Installed, "installed")
 	rows = append(rows, okRows(stats.AlreadyCached, "cached")...)
 	rows = append(rows, skipRows(stats.Skipped)...)
@@ -396,11 +464,11 @@ func reportBundles(ctx context.Context, disp *ui.Display, binMgr *binmanager.Bin
 		rows = append(rows, failRow(f.Name, f.Error))
 	}
 	initSection(disp, "bundles", rows)
-
+	changed = len(stats.Installed) > 0
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, changed, err
 	}
-	return len(stats.Installed) + len(stats.AlreadyCached), len(stats.Failed), nil
+	return len(stats.Installed) + len(stats.AlreadyCached), len(stats.Failed), changed, nil
 }
 
 func reportConfigLinks(disp *ui.Display, rootPath string, cfg *config.Config, binMgr *binmanager.BinManager, dryRun bool) (int, error) {
@@ -423,55 +491,52 @@ func reportConfigLinks(disp *ui.Display, rootPath string, cfg *config.Config, bi
 // reportInternalConfigs writes .datamitsu/configs/ — the managed configs that
 // live outside the repository until a project ejects them — and prints one
 // line when there are any.
-func reportInternalConfigs(disp *ui.Display, rootPath string, cfg *config.Config, dryRun bool) error {
+func reportInternalConfigs(disp *ui.Display, rootPath string, cfg *config.Config, dryRun bool) (bool, error) {
 	res, err := managedconfig.WriteInternalConfigs(rootPath, cfg.ManagedConfigs, dryRun)
 	if err != nil {
-		return err
+		return false, err
 	}
 	n := len(res.Written) + len(res.Unchanged)
-	if n == 0 && len(res.Removed) == 0 {
-		return nil
+	if n > 0 || len(res.Removed) > 0 {
+		value := fmt.Sprintf("%d rendered", n)
+		if dryRun {
+			value = fmt.Sprintf("would render %d", n)
+		}
+		var changes []string
+		if len(res.Written) > 0 && len(res.Unchanged) > 0 {
+			changes = append(changes, fmt.Sprintf("%d updated", len(res.Written)))
+		}
+		if len(res.Removed) > 0 {
+			changes = append(changes, fmt.Sprintf("%d removed", len(res.Removed)))
+		}
+		suffix := " → " + config.DatamitsuDirName + "/" + config.InternalConfigsDir + "/"
+		if len(changes) > 0 {
+			suffix += " · " + strings.Join(changes, " · ")
+		}
+		initLabelLine(disp, "configs", value+clr.Faint(suffix))
 	}
-	value := fmt.Sprintf("%d rendered", n)
-	if dryRun {
-		value = fmt.Sprintf("would render %d", n)
-	}
-	var changes []string
-	if len(res.Written) > 0 && len(res.Unchanged) > 0 {
-		changes = append(changes, fmt.Sprintf("%d updated", len(res.Written)))
-	}
-	if len(res.Removed) > 0 {
-		changes = append(changes, fmt.Sprintf("%d removed", len(res.Removed)))
-	}
-	suffix := " → " + config.DatamitsuDirName + "/" + config.InternalConfigsDir + "/"
-	if len(changes) > 0 {
-		suffix += " · " + strings.Join(changes, " · ")
-	}
-	initLabelLine(disp, "configs", value+clr.Faint(suffix))
-	return nil
+	return !dryRun && res.Changed(), nil
 }
 
 // reportLauncherMarker records how this init was invoked in
 // .datamitsu/launcher.json, so hook commands rendered later
 // (facts().binaryCommand) invoke datamitsu the same way.
-func reportLauncherMarker(disp *ui.Display, rootPath, command string, dryRun bool) error {
+func reportLauncherMarker(disp *ui.Display, rootPath, command string, dryRun bool) (bool, error) {
 	ex, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("failed to determine executable path: %w", err)
+		return false, fmt.Errorf("failed to determine executable path: %w", err)
 	}
-	if err := managedconfig.WriteLauncherMarker(rootPath, managedconfig.LauncherMarker{
-		Command:     command,
-		BinaryPath:  ex,
-		CoreVersion: ldflags.Version,
-	}, dryRun); err != nil {
-		return err
+	marker := managedconfig.LauncherMarker{Command: command, BinaryPath: ex, CoreVersion: ldflags.Version}
+	oldMarker, hadMarker := managedconfig.ReadLauncherMarker(rootPath)
+	if err := managedconfig.WriteLauncherMarker(rootPath, marker, dryRun); err != nil {
+		return false, err
 	}
 	value := command + clr.Faint(" → "+config.DatamitsuDirName+"/"+managedconfig.LauncherMarkerName)
 	if dryRun {
 		value = "would record " + command
 	}
 	initLabelLine(disp, "launcher", value)
-	return nil
+	return !dryRun && (!hadMarker || oldMarker != marker), nil
 }
 
 // materializeInstalledLinks (re)builds .datamitsu/ symlinks for every link-app
@@ -611,7 +676,7 @@ func reportInitCommands(ctx context.Context, disp *ui.Display, rootPath string, 
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			disp.PhaseBody("  " + clr.Red(line))
+			disp.Diagnosticf("  %s\n", clr.Red(line))
 		}
 	}
 

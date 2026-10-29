@@ -1,6 +1,7 @@
 package shell_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -146,6 +147,40 @@ func TestBranchSwitchUnderMachineFarm(t *testing.T) {
 
 			res = f.runRawIn(shell, f.Dir, both+chain(shell, "git checkout -q "+branchV1, toolName))
 			assertRan(t, res, branchV1)
+		})
+	}
+}
+
+func TestMostRecentActivationControlsMixedFarmRefreshOutput(t *testing.T) {
+	for _, shell := range configShells {
+		t.Run(shell, func(t *testing.T) {
+			f := newFixture(t)
+			cfg := f.machineConfig()
+			machineQuiet := f.datamitsuIn(f.MachineDir, "source", shell, "--config", cfg, "--quiet")
+			if machineQuiet.ExitCode != 0 {
+				t.Fatalf("quiet machine activation exit = %d: %s", machineQuiet.ExitCode, machineQuiet.Stderr)
+			}
+			configFile, err := os.OpenFile(cfg, os.O_APPEND|os.O_WRONLY, 0)
+			if err != nil {
+				t.Fatalf("open machine config: %v", err)
+			}
+			if _, err := configFile.WriteString("\n// invalidate machine farm\n"); err != nil {
+				_ = configFile.Close()
+				t.Fatalf("change machine config: %v", err)
+			}
+			if err := configFile.Close(); err != nil {
+				t.Fatalf("close machine config: %v", err)
+			}
+			projectNormal := f.datamitsu("source", shell)
+			if projectNormal.ExitCode != 0 {
+				t.Fatalf("normal project activation exit = %d: %s", projectNormal.ExitCode, projectNormal.Stderr)
+			}
+			script := machineQuiet.Stdout + projectNormal.Stdout + machineOnlyTool + "\n"
+			result := f.runRawIn(shell, f.Dir, script)
+			assertRanTool(t, result, machineOnlyTool, machineVersion)
+			if !strings.Contains(result.Stderr, "baked ") {
+				t.Fatalf("normal project activation did not restore machine refresh output: %s", result.Stderr)
+			}
 		})
 	}
 }

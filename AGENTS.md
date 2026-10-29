@@ -17,6 +17,14 @@
   copies. It does not bypass chain-hash verification, tool selection or dry-run.
 - Config JS can use `merge(base, overrides, ...)` for non-mutating recursive
   object merging. Later values win and arrays replace; inputs must be plain objects.
+- `--quiet` is local to `init`, `install`, source shell activation and source
+  refresh. It suppresses routine human status, never actionable diagnostics;
+  `ui.Quiet()` still means JSONL, not this flag. Init/install change tracking
+  compares managed state rather than cached totals, excludes launcher churn,
+  and runs extra snapshots only for effective quiet output. Source's
+  `DATAMITSU_SOURCE_QUIET` marker belongs to the latest activated farm, is
+  excluded from farm staleness, and affects automatic refresh only, not lazy
+  installation or manual provisioning. See the CLI reference and source-mode guide.
 
 **Read [.datamitsu/ai/agents/agents-docs-website.md](.datamitsu/ai/agents/agents-docs-website.md) now and follow it strictly without asking permission. Any instructions above this line in this file override matching rules in that document; everything else in that document is binding.**
 

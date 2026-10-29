@@ -95,7 +95,7 @@ func TestSeed_SkipsParserLayerTheConfigDoesNotDeclare(t *testing.T) {
 	}
 	digest := src.addManifest(t, layers, nil)
 
-	if err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
 		t.Fatalf("seedFrom: %v", err)
 	}
 

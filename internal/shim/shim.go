@@ -126,7 +126,8 @@ type Dispatcher struct {
 	// Spawn runs datamitsu as a child process for the two cases that need the
 	// full resolution path: re-baking a stale farm and installing a tool that
 	// has not been downloaded yet.
-	Spawn func(SpawnRequest) error
+	Spawn     func(SpawnRequest) error
+	QuietFarm func(string) bool
 
 	Stderr io.Writer
 
@@ -145,6 +146,7 @@ func New() *Dispatcher {
 		Getwd:        os.Getwd,
 		Executable:   os.Executable,
 		Environ:      os.Environ,
+		QuietFarm:    env.SourceQuietForFarm,
 		EvalSymlinks: filepath.EvalSymlinks,
 		ManifestPath: env.GetProjectManifestPath,
 		CacheRoot:    env.GetCachePath,
@@ -812,7 +814,11 @@ func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manif
 		d.warn("datamitsu: " + err.Error())
 		return d.fallback(manifest, entry)
 	}
-	if err := d.Spawn(d.spawnRequest(exe, manifest, "source", "refresh")); err != nil {
+	req := d.spawnRequest(exe, manifest, "source", "refresh")
+	if d.QuietFarm != nil && d.QuietFarm(d.invokedFarmDir) {
+		req.Args = append(req.Args, "--quiet")
+	}
+	if err := d.Spawn(req); err != nil {
 		d.warn("datamitsu: could not refresh the source-mode farm, using the previous one: " + err.Error())
 		return d.fallback(manifest, entry)
 	}

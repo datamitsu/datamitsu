@@ -74,13 +74,14 @@ func TestEnviron_ExcludesActivationMarkers(t *testing.T) {
 	// machine-level activation sets it in every shell, so a farm baked without it
 	// would report itself stale from the moment it was activated.
 	t.Setenv(SourceFarmConfigVarName(), "/home/u/.config/datamitsu/datamitsu.config.ts")
+	t.Setenv(SourceQuietVarName(), "/cache/projects/abc/bin")
 
 	after := Environ()
 
 	if !slices.Equal(before, after) {
 		t.Errorf("activation markers changed the fingerprint:\nbefore: %v\nafter:  %v", before, after)
 	}
-	for _, name := range []string{SourceRootVarName(), SourceFarmVarName(), SourceFarmConfigVarName()} {
+	for _, name := range []string{SourceRootVarName(), SourceFarmVarName(), SourceFarmConfigVarName(), SourceQuietVarName()} {
 		for _, kv := range after {
 			if strings.HasPrefix(kv, name+"=") {
 				t.Errorf("Environ() leaked an activation marker: %q", kv)

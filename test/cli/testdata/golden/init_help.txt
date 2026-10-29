@@ -9,6 +9,7 @@ Flags:
       --dry-run                  Show what would be done without making changes
       --fail-on-download-error   Stop init process if any binary download fails
   -h, --help                     help for init
+      --quiet                    Suppress routine output unless managed state changes
       --skip-download            Skip binary downloads
 
 Global Flags:

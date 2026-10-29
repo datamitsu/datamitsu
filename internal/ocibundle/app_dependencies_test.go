@@ -61,7 +61,7 @@ func TestSeedAppDependencyClosure(t *testing.T) {
 		layers = append(layers, src.addLayer(layer, subtree))
 	}
 	digest := src.addManifest(t, layers, nil)
-	if err := seedFrom(t.Context(), cfg, src, "test/bundle", digest, nil, Options{Needed: []string{"root"}}); err != nil {
+	if _, err := seedFromChanged(t.Context(), cfg, src, "test/bundle", digest, nil, Options{Needed: []string{"root"}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := expectedSubtrees(cfg, storeRoot, []string{"root"}, nil); !maps.Equal(got, expected) {
