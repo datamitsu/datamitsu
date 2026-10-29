@@ -589,3 +589,14 @@ func SourceFarmVarName() string {
 func SourceFarmConfigVarName() string {
 	return sourceFarmConfig.Name
 }
+
+// SourceQuietVarName names the private marker exported by source activation.
+func SourceQuietVarName() string {
+	return sourceQuiet.Name
+}
+
+// SourceQuietForFarm reports whether automatic refresh output is quiet for dir.
+func SourceQuietForFarm(dir string) bool {
+	value := os.Getenv(sourceQuiet.Name)
+	return value != "" && filepath.Clean(value) == filepath.Clean(dir)
+}

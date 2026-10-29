@@ -4,7 +4,8 @@ Usage:
   datamitsu source fish [flags]
 
 Flags:
-  -h, --help   help for fish
+  -h, --help    help for fish
+      --quiet   Suppress routine source-mode notices and automatic refresh output
 
 Global Flags:
       --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)

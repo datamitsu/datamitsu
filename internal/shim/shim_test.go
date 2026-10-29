@@ -423,14 +423,15 @@ func TestDispatchStaleManifestRebakesOnce(t *testing.T) {
 		}
 		return nil
 	}
+	h.d.QuietFarm = func(dir string) bool { return dir == h.farmDir }
 	h.invokeThroughFarm("tofu", "plan")
 
 	if code, handled := h.d.Dispatch(); !handled || code != 0 {
 		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
 	}
 
-	if len(h.spawns) != 1 || !equalStrings(h.spawns[0], []string{"source", "refresh"}) {
-		t.Fatalf("spawns = %v, want exactly one [source refresh]", h.spawns)
+	if len(h.spawns) != 1 || !equalStrings(h.spawns[0], []string{"source", "refresh", "--quiet"}) {
+		t.Fatalf("spawns = %v, want exactly one [source refresh --quiet]", h.spawns)
 	}
 	if len(h.execs) != 1 || h.execs[0].path != newTool {
 		t.Fatalf("exec = %v, want one call to %q", h.execs, newTool)

@@ -59,6 +59,7 @@ var environExcluded = func() map[string]bool {
 		sourceRoot.Name:       true,
 		sourceFarm.Name:       true,
 		sourceFarmConfig.Name: true,
+		sourceQuiet.Name:      true,
 	}
 	for name := range observationExcluded {
 		m[name] = true

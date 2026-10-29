@@ -83,8 +83,11 @@ datamitsu install [app...]
 | ------------------ | ------------------------------------------------------------------ |
 | `--runtime <name>` | Install the named runtime(s) only, without any app (repeatable)    |
 | `--no-verify`      | Skip the post-install version check (verification runs by default) |
+| `--quiet`          | Hide routine status; report changes, warnings and errors only      |
 
 The prepare step always runs before the version check; `--no-verify` skips only the check. By default, each installed app's version command (`--version`, or its configured `versionCheck.args`) is run after installation, so a broken install fails the command instead of producing a broken artifact. Apps whose version check is disabled, and shell apps, are skipped.
+
+With `--quiet`, an already-ready installation produces no routine output. Installation and preparation changes produce a concise result; verification still runs, and failures remain visible. Explicit `--verbose` diagnostics and JSONL events are not suppressed.
 
 **Examples:**
 
@@ -112,14 +115,17 @@ datamitsu init
 
 Must be run from the git repository root.
 
-| Flag                       | Description                                        |
-| -------------------------- | -------------------------------------------------- |
-| `--all`                    | Download all binaries (both required and optional) |
-| `--skip-download`          | Skip binary downloads                              |
-| `--fail-on-download-error` | Stop if any binary download fails                  |
-| `--dry-run`                | Show what would be done without making changes     |
+| Flag                       | Description                                                   |
+| -------------------------- | ------------------------------------------------------------- |
+| `--all`                    | Download all binaries (both required and optional)            |
+| `--skip-download`          | Skip binary downloads                                         |
+| `--fail-on-download-error` | Stop if any binary download fails                             |
+| `--dry-run`                | Show what would be done without making changes                |
+| `--quiet`                  | Hide routine status; report changes, warnings and errors only |
 
 Download concurrency is controlled via the `DATAMITSU_CONCURRENCY` env var (default: 3).
+
+`init --quiet` omits banners, progress and cache-hit messages. It reports meaningful changes to datamitsu-managed state, including newly installed components, preparation and repaired project artifacts. Rewriting identical content is not a change. Initialization commands still run with their existing output handling: successful captured output stays hidden, while failure diagnostics remain visible. Changes made by arbitrary initialization commands are not included in datamitsu's change summary. `--dry-run --quiet` still shows the proposed work; explicit `--verbose` diagnostics and JSONL events remain available.
 
 **What init does:**
 
@@ -141,6 +147,9 @@ datamitsu init --all
 
 # Preview what would happen
 datamitsu init --dry-run
+
+# Initialize from a package lifecycle script without repeated cache-hit messages
+datamitsu init --quiet
 ```
 
 ## check
@@ -2771,8 +2780,17 @@ the config changed and re-resolves itself.
 stdout.
 
 stdout carries shell code and nothing else, so the output is always safe to
-`eval`. Warnings — tools not downloaded yet, system binaries this shadows — go
-to stderr.
+`eval`. Routine notices — tools not downloaded yet, system binaries this shadows — go
+to stderr. On `source bash`, `source zsh` and `source fish`, `--quiet` hides these
+notices and routine automatic-refresh status for the most recently activated farm.
+A normal activation clears the preference; another farm lower on `PATH` is unaffected.
+Actionable warnings and errors remain visible,
+and first-use installation progress is unchanged. Manual `init` and `install` commands
+do not inherit the preference. Explicit verbose diagnostics and JSONL events are not suppressed.
+
+```fish
+datamitsu source fish --quiet --config ~/.config/datamitsu/datamitsu.config.js | source
+```
 
 `--no-auto-config` without a `--config` is refused: activating the built-in
 default config would bake a handful of built-in apps into the farm this root's

@@ -284,7 +284,7 @@ func TestWarningsNeverReachStdout(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
-	warnSourceFarm(&stderr, plan)
+	warnSourceFarm(&stderr, plan, false)
 	warnings := stderr.String()
 
 	for _, want := range []string{"tflint", "not downloaded yet", "/usr/local/bin/tofu", "shadowing"} {
@@ -316,7 +316,7 @@ func TestWarnSourceFarmSilentWhenClean(t *testing.T) {
 		Entries: []sourcefarm.Entry{{Name: "tofu", Installed: true}},
 	}
 	var stderr bytes.Buffer
-	warnSourceFarm(&stderr, plan)
+	warnSourceFarm(&stderr, plan, false)
 	if stderr.Len() != 0 {
 		t.Fatalf("a clean farm printed a warning: %q", stderr.String())
 	}

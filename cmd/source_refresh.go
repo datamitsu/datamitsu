@@ -59,7 +59,9 @@ func runSourceRefresh(cmd *cobra.Command) error {
 	}
 
 	if !sourceRefreshForce && sourceManifestDecides(target) && sourceFarmIsFresh(target) {
-		_, _ = fmt.Fprintf(stderr, "%s: source farm for %s is already up to date\n", ldflags.PackageName, target.label())
+		if !sourceQuiet {
+			_, _ = fmt.Fprintf(stderr, "%s: source farm for %s is already up to date\n", ldflags.PackageName, target.label())
+		}
 		return nil
 	}
 
@@ -68,7 +70,7 @@ func runSourceRefresh(cmd *cobra.Command) error {
 		return err
 	}
 
-	summarizeRefresh(stderr, res, target)
+	summarizeRefresh(stderr, res, target, sourceQuiet)
 	if res.MaterializeErr != nil {
 		// Refresh is the repair command: exiting 0 after failing to write the
 		// farm tells a CI step that the toolchain was updated when it still
@@ -103,7 +105,10 @@ func sourceFarmIsFresh(target sourceTarget) bool {
 // A bake that failed but left the previous farm standing reports the failure
 // instead of a count. Printing "baked N tool(s)" for a farm that was not written
 // is the one summary that would send the user away believing the repair worked.
-func summarizeRefresh(stderr io.Writer, res bakeResult, target sourceTarget) {
+func summarizeRefresh(stderr io.Writer, res bakeResult, target sourceTarget, quiet bool) {
+	if quiet && res.MaterializeErr == nil {
+		return
+	}
 	if res.MaterializeErr != nil {
 		// The failure itself is reported twice already if this repeats it:
 		// sourcefarm wrote its own line through Options.Warn, and runSourceRefresh

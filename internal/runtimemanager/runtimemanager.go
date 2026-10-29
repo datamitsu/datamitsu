@@ -303,6 +303,16 @@ func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (st
 	}
 }
 
+// Installed checks the resolved runtime executable without provisioning it.
+func (rm *RuntimeManager) Installed(runtimeName string) bool {
+	resolved, err := rm.computeRuntimeBinPath(runtimeName)
+	if err != nil {
+		return false
+	}
+	info, err := os.Stat(resolved.binPath)
+	return err == nil && !info.IsDir()
+}
+
 // GetCommandInfo installs (if needed) and returns command info for runtime-managed apps.
 // Satisfies binmanager.RuntimeAppManager interface.
 func (rm *RuntimeManager) GetCommandInfo(ctx context.Context, appName string, app binmanager.App) (*binmanager.CommandInfo, error) {
