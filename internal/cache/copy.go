@@ -114,6 +114,27 @@ func CopyProject(cacheDir, srcRoot, dstRoot string, opts CopyOptions) (CopyRepor
 		return CopyReport{}, ErrNoSourceCache
 	}
 
+	// Every write below creates its way through parent directories
+	// (writeFileAtomic's MkdirAll, the tool-cache copier's per-component
+	// creation), and none of them stops at a symlink. An alias pointing
+	// projects/<dstHash> at another namespace — the source's, the store's,
+	// anywhere — would therefore turn the copy into a rewrite of the aliased
+	// cache, the source's included. Refuse before anything is written; the
+	// guard inspects the existing components only, so a dry run decides the
+	// same way without creating the namespace.
+	blocked, err := dirBlockedBySymlink(cacheDir, dstDir)
+	if err != nil {
+		return CopyReport{}, fmt.Errorf("failed to inspect the destination cache directory: %w", err)
+	}
+	if blocked {
+		return CopyReport{}, fmt.Errorf(
+			"refusing to copy into %s: a symlink in its path points at another location", dstDir)
+	}
+	if !opts.DryRun {
+		if err := ensureDirNoLinks(cacheDir, dstDir); err != nil {
+			return CopyReport{}, fmt.Errorf("failed to create the destination cache directory: %w", err)
+		}
+	}
 	report := CopyReport{}
 	if srcHasState {
 		if err := copyToolstate(filepath.Join(srcDir, cacheFileName), filepath.Join(dstDir, cacheFileName), dstRoot, opts.DryRun, &report); err != nil {

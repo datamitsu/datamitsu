@@ -610,6 +610,51 @@ func TestCopyProjectRefusesSymlinkedCacheRoot(t *testing.T) {
 	}
 }
 
+// TestCopyProjectRefusesSymlinkedNamespace: the toolstate write creates its
+// way through parent directories, so an alias pointing projects/<dstHash> at
+// the source's namespace would turn the copy into a rewrite of the source's
+// cache. The copy must refuse before writing anything.
+func TestCopyProjectRefusesSymlinkedNamespace(t *testing.T) {
+	cacheDir := t.TempDir()
+	srcRoot := t.TempDir()
+	dstRoot := t.TempDir()
+
+	src := newWarmCache(t, cacheDir, srcRoot, map[string]string{"a.txt": "one\n"}, "tool-a")
+	srcPath := statePath(cacheDir, srcRoot)
+	before, err := os.ReadFile(srcPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	projectsDir := filepath.Join(cacheDir, "projects")
+	if err := os.MkdirAll(projectsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(
+		filepath.Join(projectsDir, env.HashProjectPath(srcRoot)),
+		filepath.Join(projectsDir, env.HashProjectPath(dstRoot)),
+	); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if _, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{}); err == nil ||
+		errors.Is(err, ErrNoSourceCache) || errors.Is(err, ErrSameProject) {
+		t.Fatalf("error = %v, want a refusal to write through the aliased namespace", err)
+	}
+
+	after, err := os.ReadFile(srcPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Error("the source toolstate must keep its bytes through the refused copy")
+	}
+	state := mustReadState(t, srcPath)
+	if state.ProjectPath != srcRoot || state.InvalidationKey != src.InvalidationKey() {
+		t.Errorf("the source toolstate was rewritten through the alias: ProjectPath=%q", state.ProjectPath)
+	}
+}
+
 // TestCopyProjectDryRunMatchesAwkwardTargets: a dangling symlink and a
 // directory at target names are "already present" to a real copy's O_EXCL,
 // and the dry run must decide the same way.

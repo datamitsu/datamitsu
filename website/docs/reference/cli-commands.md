@@ -2228,15 +2228,15 @@ use. Evaluated configs and the [source-mode](../guides/source-mode.md) farm are
 not copied: both are keyed by absolute paths of their own and rebuild on the
 next run.
 
-| Situation                                                    | Result                                                                                                                                                    |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Source has no cache                                          | A note, exit 0 — not an error                                                                                                                             |
-| Source is the current project                                | A note, exit 0                                                                                                                                            |
-| Source's toolstate exists but does not decode                | Skipped with a warning, exit 0                                                                                                                            |
-| Destination already has a toolstate under the same key       | Entries merge: same content hash unions the pass lists, a hash conflict keeps the destination's entry, verdict collisions keep the more recent validation |
-| Destination's toolstate belongs to a different configuration | The destination's file is kept untouched and reported                                                                                                     |
-| `--source` is empty, missing, or not a directory             | Usage error, exit 2                                                                                                                                       |
-| The source cache exists but cannot be read                   | Error, exit 1                                                                                                                                             |
+| Situation                                                                                            | Result                                                                                                                                                    |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source has no cache                                                                                  | A note, exit 0 — not an error                                                                                                                             |
+| Source is the current project                                                                        | A note, exit 0                                                                                                                                            |
+| Source's toolstate exists but does not decode                                                        | Skipped with a warning, exit 0                                                                                                                            |
+| Destination already has a toolstate under the same key                                               | Entries merge: same content hash unions the pass lists, a hash conflict keeps the destination's entry, verdict collisions keep the more recent validation |
+| Destination's toolstate belongs to a different configuration                                         | The destination's file is kept untouched and reported                                                                                                     |
+| `--source` is empty, missing, or not a directory                                                     | Usage error, exit 2                                                                                                                                       |
+| The cache directories cannot be inspected, or the destination namespace is reached through a symlink | Error, exit 1                                                                                                                                             |
 
 ::::warning `--tool-caches` is best effort
 
