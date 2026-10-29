@@ -5,6 +5,7 @@ Usage:
 
 Available Commands:
   clear       Clear cache
+  copy        Copy cache from another worktree
   path        Print cache directory path
 
 Flags:

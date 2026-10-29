@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "1ccc1dc62ff6050abec1cdde93d5cdf3",
+  "pageSetHash": "11de14f9cf4c9e799720285d22307bca",
   "pages": [
     {
       "slug": "about",
@@ -206,8 +206,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/caching.md",
       "title": "Caching Strategy",
       "description": "How datamitsu caches file-level results and unit or repository verdicts, computes XXH3-128 keys, and persists them safely",
-      "bytes": 28914,
-      "contentHash": "f64b610e0d4213a91768355ded697efc"
+      "bytes": 29486,
+      "contentHash": "203c6ae62a0ebb86e43b5a2db78b53af"
     },
     {
       "slug": "guides/architecture/discovery",
@@ -415,8 +415,8 @@
       "url": "https://datamitsu.com/docs/how-to/manage-cache.md",
       "title": "Manage Cache",
       "description": "How to manage datamitsu's cache, store, and per-project data",
-      "bytes": 6382,
-      "contentHash": "b10c8c1be381fe302b8643ed2b20319f"
+      "bytes": 7333,
+      "contentHash": "7dec5a090c42c580238e687f42545267"
     },
     {
       "slug": "how-to/use-in-alpine",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 188082,
-      "contentHash": "d7d3ec5f39c7d8c89cf0e724710e1ec0"
+      "bytes": 191995,
+      "contentHash": "56a43b2436de4e29e7941b0183196db9"
     },
     {
       "slug": "reference/comparison",

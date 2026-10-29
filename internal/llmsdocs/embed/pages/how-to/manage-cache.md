@@ -32,7 +32,10 @@ its source-mode farm, execution state, and tool-owned caches:
         └── ruff/.ruff_cache/
 ```
 
-The `{hash}` is an XXH3-128 hash of the git root path. Within it, tool caches are organized by project path and tool name.
+The `{hash}` is an XXH3-128 hash of the git root path. A different root path — a
+git worktree — is therefore a different namespace; `datamitsu cache copy` moves
+the lint/fix state from one root into another. Within the namespace, tool caches
+are organized by project path and tool name.
 
 [Machine-level toolchains](machine-level-toolchain.md) have no git root, so they live in a sibling namespace keyed by the config chain instead:
 
@@ -113,6 +116,26 @@ For the current repository this removes the complete `projects/{hash}` namespace
 repository's evaluated config chains. `--all` removes all `projects/` namespaces
 and the entire `config-eval/` tree. Neither form removes machine-level farms in
 `cache/configs/`, downloaded artifacts, or execution traces.
+
+## Warming a New Worktree
+
+A new git worktree has a different absolute root path, so it starts with a cold
+cache namespace. After creating one, copy the lint/fix state from the tree it
+came from:
+
+```bash
+git worktree add ../feature -b feature
+cd ../feature
+datamitsu cache copy --source ../main
+```
+
+The copy is a deep copy — no links — and only the per-file passes and unit
+verdicts travel: a hit still requires the same file bytes and the same
+configuration, so a worktree on another branch runs its tools on everything that
+actually changed. Evaluated configs and the source-mode farm rebuild on the next
+run by themselves. Tool-owned `{toolCache}` directories are only copied with
+`--tool-caches`, which is best effort and safe mainly when both roots hold the
+same commit.
 
 ## Clearing the Store
 

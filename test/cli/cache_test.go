@@ -16,6 +16,7 @@ import (
 // the top-level `cache` listing.
 var expectedCacheSubcommands = []string{
 	"clear",
+	"copy",
 	"path",
 }
 

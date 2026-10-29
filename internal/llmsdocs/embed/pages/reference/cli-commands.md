@@ -2196,6 +2196,56 @@ evaluations](../guides/architecture/startup.md#the-config-evaluation-cache)
 tree, including the machine-level `--config` chains whose farms survive. Clearing
 them costs one re-evaluation and nothing else.
 
+### cache copy
+
+Copy the lint/fix results and verdicts of another project root into the current
+one — what a new git worktree needs to keep the warm cache of the tree it was
+created from.
+
+```bash
+# after `git worktree add ../feature -b feature`
+cd ../feature
+datamitsu cache copy --source ../main
+```
+
+| Flag            | Description                                                        |
+| --------------- | ------------------------------------------------------------------ |
+| `--source`      | Project root to copy the cache from (required)                     |
+| `--dry-run`     | Show what would be copied without copying                          |
+| `--tool-caches` | Also copy the tools' own cache directories (see the warning below) |
+
+The copy is a deep copy: no links, the source is only read, and the destination
+gets its own independent `toolstate`. The per-file passes and unit verdicts
+travel keyed by repository-relative paths and content hashes, so a pass can
+only hit a file whose bytes and configuration are what earned it — a worktree
+on another branch or commit reuses exactly the entries whose content it still
+has, and a changed file runs its tools again.
+The destination is the current project's root — the same root `lint` and `fix`
+use. Evaluated configs and the [source-mode](../guides/source-mode.md) farm are
+not copied: both are keyed by absolute paths of their own and rebuild on the
+next run.
+
+| Situation                                                    | Result                                                                                                                                                    |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source has no cache                                          | A note, exit 0 — not an error                                                                                                                             |
+| Source is the current project                                | A note, exit 0                                                                                                                                            |
+| Source's toolstate exists but does not decode                | Skipped with a warning, exit 0                                                                                                                            |
+| Destination already has a toolstate under the same key       | Entries merge: same content hash unions the pass lists, a hash conflict keeps the destination's entry, verdict collisions keep the more recent validation |
+| Destination's toolstate belongs to a different configuration | The destination's file is kept untouched and reported                                                                                                     |
+| `--source` is empty, missing, or not a directory             | Usage error, exit 2                                                                                                                                       |
+| The source cache exists but cannot be read                   | Error, exit 1                                                                                                                                             |
+
+::::warning `--tool-caches` is best effort
+
+The per-tool cache directories (`{toolCache}`) belong to the tools, and their
+contents carry no portability contract. On diverged branches an add-only copy
+can assemble state neither tree had, and a tool trusting it may report a false
+clean — which datamitsu would then cache as its own pass. Leave the option off
+unless both roots hold the same commit or you accept that risk; files the
+destination already has are never replaced.
+
+::::
+
 ### cache path
 
 Print the absolute path to the global cache directory.
