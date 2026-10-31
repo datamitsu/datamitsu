@@ -29,6 +29,9 @@ export default defineConfig((config) => ({
     // website/docs. Checking it again would only add a second place to fix the
     // same word — and any edit here would break the snapshot's content hash.
     "internal/llmsdocs/embed/**",
+    // Zed matches language names verbatim, including names supplied by extensions.
+    "editors/zed/extension.toml",
+    "editors/zed/target/**",
   ],
   // Misspellings on purpose: fixtures for the `datamitsu llms` did-you-mean
   // suggester, whose whole job is to map a typo back to the right page. They are
@@ -689,5 +692,9 @@ export default defineConfig((config) => ({
     "noargs",
     "storeph",
     "badenv",
+    "wasip",
+    "flate",
+    "cksum",
+    "hexdigit",
   ],
 }));
