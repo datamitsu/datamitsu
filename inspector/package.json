@@ -14,7 +14,7 @@
     "@types/node": "26.6.5",
     "svelte": "5.57.2",
     "svelte-check": "4.7.7",
-    "vite": "8.3.4"
+    "vite": "8.3.5"
   },
   "engines": {
     "node": ">=22.12.0"
