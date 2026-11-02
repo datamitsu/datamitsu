@@ -17,7 +17,7 @@
     "@actions/tool-cache": "4.0.0",
     "@shibanet0/datamitsu-config": "catalog:",
     "@types/node": "26.6.5",
-    "tsdown": "0.23.1",
+    "tsdown": "0.23.2",
     "tsx": "4.23.15"
   },
   "engines": {
