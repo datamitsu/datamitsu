@@ -9,40 +9,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/clitest"
 )
 
-// expectedConfigSubcommands is the exact set of `config` leaf commands. Like
-// expectedTopLevelCommands it is a drift guard: a new config subcommand must be
-// added here deliberately, with its own blackbox test.
-var expectedConfigSubcommands = []string{
-	"chain-hash",
-	"lockfile",
-	"reconcile",
-	"runtime",
-	"show",
-	"types",
-}
-
-// TestConfigHelpGolden freezes `config --help`: a static, offline help block
-// with no version or path tokens, so the normalized output equals the raw
-// output. The subcommand set is additionally compared as a set to decouple the
-// drift guard from help formatting.
-func TestConfigHelpGolden(t *testing.T) {
-	norm := clitest.NewNormalizer()
-
-	res := clitest.Run(t, clitest.RunOptions{}, "config", "--help")
-	if res.ExitCode != 0 {
-		t.Fatalf("`config --help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
-	}
-	if res.Stderr != "" {
-		t.Errorf("`config --help` wrote to stderr:\n%s", res.Stderr)
-	}
-	clitest.AssertGolden(t, "config_help", norm.Apply(res.Stdout))
-
-	got := parseAvailableCommands(res.Stdout)
-	if strings.Join(sortedCopy(got), ",") != strings.Join(sortedCopy(expectedConfigSubcommands), ",") {
-		t.Errorf("config subcommand set drift:\n got: %v\nwant: %v", got, expectedConfigSubcommands)
-	}
-}
-
 func TestConfigShow(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)

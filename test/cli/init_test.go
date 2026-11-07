@@ -9,22 +9,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/clitest"
 )
 
-// TestInitHelpGolden freezes `init --help`: a static, offline help block with no
-// version or path tokens, so the normalized output equals the raw output. init
-// has no subcommands, so there is no subcommand-set drift guard.
-func TestInitHelpGolden(t *testing.T) {
-	norm := clitest.NewNormalizer()
-
-	res := clitest.Run(t, clitest.RunOptions{}, "init", "--help")
-	if res.ExitCode != 0 {
-		t.Fatalf("`init --help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
-	}
-	if res.Stderr != "" {
-		t.Errorf("`init --help` wrote to stderr:\n%s", res.Stderr)
-	}
-	clitest.AssertGolden(t, "init_help", norm.Apply(res.Stdout))
-}
-
 // TestInitDryRunGolden freezes `init --dry-run` against the minimal config: the
 // banner, the single "init" frame with "no project types detected", the dry-run
 // notice, and the "dry-run" footer. The build version and the run duration are

@@ -124,6 +124,28 @@ Two rules matter when touching the snapshot:
   them; `.datamitsuignore` excludes the directory from every tool for this
   reason.
 
+### Updating Release Dependencies
+
+Dependabot updates GitHub Action references, but does not update the GoReleaser
+CLI version supplied through an action's `with.version` input. During dependency
+refreshes, update both the immutable `goreleaser/goreleaser-action` commit and the
+explicit CLI version in `pr-checks.yml` and `release.yml`. Keep both workflows on
+the same CLI release and validate `.goreleaser.yml` with that release before
+publishing.
+
+Managed app and runtime catalogs have a separate update path: use the repository's
+`pull:*` scripts, retain the minimum release age, and commit the generated hashes
+and lockfiles. These catalogs are not package-manager manifests that Dependabot
+can refresh.
+
+The project builds its pinned stable golangci-lint module with the managed Go
+runtime and a dependency lockfile instead of using the upstream prebuilt binary.
+GoCritic reads standard-library export data through the compiler's own decoder;
+a prebuilt linter compiled with an older Go patch can reject the current format.
+Keep the linter's Go runtime aligned with the project toolchain, and regenerate
+its lock with `pnpm dm config lockfile golangci-lint` when changing its module
+version. Do not disable the analyzer or bypass hooks to work around this mismatch.
+
 ## Contribution Guidelines
 
 ### Code Style

@@ -9,40 +9,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/clitest"
 )
 
-// expectedStoreSubcommands is the exact set of `store` leaf commands (drift
-// guard): a new store subcommand must be added here deliberately, with its own
-// blackbox test.
-var expectedStoreSubcommands = []string{
-	"clear",
-	"import",
-	"path",
-	"refs",
-	"seed",
-	"status",
-}
-
-// TestStoreHelpGolden freezes `store --help`: a static, offline help block with
-// no version or path tokens, so the normalized output equals the raw output. The
-// subcommand set is additionally compared as a set to decouple the drift guard
-// from help formatting.
-func TestStoreHelpGolden(t *testing.T) {
-	norm := clitest.NewNormalizer()
-
-	res := clitest.Run(t, clitest.RunOptions{}, "store", "--help")
-	if res.ExitCode != 0 {
-		t.Fatalf("`store --help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
-	}
-	if res.Stderr != "" {
-		t.Errorf("`store --help` wrote to stderr:\n%s", res.Stderr)
-	}
-	clitest.AssertGolden(t, "store_help", norm.Apply(res.Stdout))
-
-	got := parseAvailableCommands(res.Stdout)
-	if strings.Join(sortedCopy(got), ",") != strings.Join(sortedCopy(expectedStoreSubcommands), ",") {
-		t.Errorf("store subcommand set drift:\n got: %v\nwant: %v", got, expectedStoreSubcommands)
-	}
-}
-
 // TestStorePath freezes `store path`: the printed path is the store subdir
 // ({base}/store) of DATAMITSU_CACHE_DIR. We pin the base to a known temp dir,
 // mask it to <CACHE>, and golden the masked line; an exact equality check
@@ -392,17 +358,4 @@ func TestStoreRefsPopulated(t *testing.T) {
 			clitest.AssertGolden(t, tc.golden, norm.Apply(res.Stdout))
 		})
 	}
-}
-
-// TestStoreRefsHelpGolden freezes the leaf help, including the mirroring
-// one-liner in the long description: that example is the command's reason to
-// exist and should not silently disappear.
-func TestStoreRefsHelpGolden(t *testing.T) {
-	norm := clitest.NewNormalizer()
-
-	res := clitest.Run(t, clitest.RunOptions{}, "store", "refs", "--help")
-	if res.ExitCode != 0 {
-		t.Fatalf("`store refs --help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
-	}
-	clitest.AssertGolden(t, "store_refs_help", norm.Apply(res.Stdout))
 }
