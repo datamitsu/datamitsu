@@ -278,7 +278,7 @@ func TestSeed_MarkerDeletionReSeedsPreparedState(t *testing.T) {
 	digest := src.addManifest(t, []ocispec.Descriptor{desc}, nil)
 
 	opts := Options{Needed: []string{"tool"}}
-	if err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, opts); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, opts); err != nil {
 		t.Fatalf("first seed: %v", err)
 	}
 	state := filepath.Join(storeRoot, filepath.FromSlash(subtree))
@@ -292,7 +292,7 @@ func TestSeed_MarkerDeletionReSeedsPreparedState(t *testing.T) {
 	}
 
 	// The second seed must not treat the markerless remnant as satisfied.
-	if err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, opts); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, opts); err != nil {
 		t.Fatalf("second seed (repair): %v", err)
 	}
 	if !prepare.Ready(state) {
@@ -323,7 +323,7 @@ func TestSeed_FullPullRepairsMarkerDeletion(t *testing.T) {
 	digest := src.addManifest(t, []ocispec.Descriptor{desc}, nil)
 
 	// Full pull (Options{}): writes the bundle marker.
-	if err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
 		t.Fatalf("first full pull: %v", err)
 	}
 	state := filepath.Join(storeRoot, filepath.FromSlash(subtree))
@@ -342,7 +342,7 @@ func TestSeed_FullPullRepairsMarkerDeletion(t *testing.T) {
 		t.Fatal("markerSatisfied accepted a store whose recorded prepared state lost its marker")
 	}
 
-	if err := seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
 		t.Fatalf("second full pull (repair): %v", err)
 	}
 	if !prepare.Ready(state) {
@@ -381,7 +381,8 @@ func TestSeedAndPrepareShareTheLock(t *testing.T) {
 		src := newFakeSource()
 		desc := src.addLayer(preparedStateLayer(t, subtree, []byte("raced")), subtree)
 		digest := src.addManifest(t, []ocispec.Descriptor{desc}, nil)
-		seeded <- seedFrom(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: []string{"tool"}})
+		_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: []string{"tool"}})
+		seeded <- err
 	}()
 
 	select {

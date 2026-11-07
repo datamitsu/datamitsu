@@ -298,4 +298,8 @@ var (
 		Name:        strings.ToUpper(ldflags.PackageName) + "_FARM_CONFIG",
 		Description: "Config chain of the source-mode farm activated in this shell (set by `datamitsu source --config`)",
 	}
+	sourceQuiet = envVar{
+		Name:        strings.ToUpper(ldflags.PackageName) + "_SOURCE_QUIET",
+		Description: "Private source-mode session marker for automatic refresh output suppression",
+	}
 )

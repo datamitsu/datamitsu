@@ -23,6 +23,7 @@ import (
 var (
 	installRuntimeNames []string
 	installNoVerify     bool
+	installQuiet        bool
 )
 
 var installCmd = &cobra.Command{
@@ -52,6 +53,7 @@ func init() {
 		"Install the named runtime(s) only, without any app (repeatable)")
 	installCmd.Flags().BoolVar(&installNoVerify, "no-verify", false,
 		"Skip the post-install version check (verification runs by default)")
+	installCmd.Flags().BoolVar(&installQuiet, "quiet", false, "Suppress routine output unless managed state changes")
 	rootCmd.AddCommand(installCmd)
 }
 
@@ -75,58 +77,82 @@ func runInstall(ctx context.Context, apps, runtimes []string, verify bool) error
 
 	// Seed the requested targets from the declared OCI bundle first so the
 	// installs below hit seeded store content instead of the network.
-	if err := ocibundle.AutoSeed(ctx, cfg, apps, runtimes); err != nil {
+	seedChanged, err := ocibundle.AutoSeed(ctx, cfg, apps, runtimes)
+	if err != nil {
 		return err
 	}
 
-	if err := installUnderDisplay(ctx, rm, binMgr, cfg.Apps, apps, runtimes); err != nil {
+	changed, err := installUnderDisplay(ctx, rm, binMgr, cfg.Apps, apps, runtimes, installQuiet)
+	if err != nil {
 		return err
 	}
+	changed = changed || seedChanged
 
 	// Verification runs after the progress display is torn down so each tool's
 	// version command gets a clean terminal (its output is discarded anyway).
 	if verify && len(apps) > 0 {
-		return verifyInstalledApps(ctx, binMgr, cfg.Apps, apps)
+		if err := verifyInstalledApps(ctx, binMgr, cfg.Apps, apps); err != nil {
+			return err
+		}
+	}
+	if installQuiet && changed && resolveLogFormat() != "jsonl" && !verbose {
+		if _, err := fmt.Fprintln(os.Stdout, "Install complete: managed state changed"); err != nil {
+			return fmt.Errorf("write install result: %w", err)
+		}
 	}
 	return nil
 }
 
 // installUnderDisplay installs the requested runtimes and apps while the shared
 // ui progress display is active, tearing it down before returning.
-func installUnderDisplay(ctx context.Context, rm *runtimemanager.RuntimeManager, binMgr *binmanager.BinManager, allApps binmanager.MapOfApps, apps, runtimes []string) error {
+func installUnderDisplay(ctx context.Context, rm *runtimemanager.RuntimeManager, binMgr *binmanager.BinManager, allApps binmanager.MapOfApps, apps, runtimes []string, quiet bool) (bool, error) {
 	d := ui.New(term.DetectMode())
+	d.SetQuiet(quiet && resolveLogFormat() != "jsonl" && !verbose)
 	restore := ui.Activate(d)
 	defer func() {
 		d.Close()
 		restore()
 	}()
 
+	changed := false
 	if len(runtimes) > 0 {
+		before := runtimeInstallState(rm, runtimes)
 		stats, rErr := rm.InstallRuntimes(ctx, runtimes, env.GetConcurrency())
+		changed = !sameRuntimeState(before, runtimeInstallState(rm, runtimes))
 		if rErr != nil {
-			return fmt.Errorf("failed to install runtimes: %w", rErr)
+			return changed, fmt.Errorf("failed to install runtimes: %w", rErr)
 		}
 		if len(stats.Failed) > 0 {
 			first := stats.Failed[0]
-			return fmt.Errorf("failed to install runtime %q: %w", first.Name, first.Error)
+			return changed, fmt.Errorf("failed to install runtime %q: %w", first.Name, first.Error)
 		}
 	}
-
 	if len(apps) > 0 {
 		warnShellApps(allApps, apps)
-		if err := installSmartInitApps(ctx, binMgr, apps); err != nil {
-			return err
+		before := make(map[string]bool, len(apps))
+		beforePrepared := make(map[string]bool, len(apps))
+		for _, name := range apps {
+			before[name] = binMgr.AppInstalled(name)
+			ready, err := binMgr.PreparedStateReady(name)
+			beforePrepared[name] = err == nil && ready
 		}
-		// `install` leaves apps ready: the prepare steps run before the
-		// version check, and unconditionally — --no-verify skips only the
-		// version check, never the step that makes the app usable.
+		if err := installSmartInitApps(ctx, binMgr, apps); err != nil {
+			return changed, err
+		}
 		for _, name := range apps {
 			if err := binMgr.EnsurePrepared(ctx, name); err != nil {
-				return fmt.Errorf("failed to prepare %s: %w", name, err)
+				return changed, fmt.Errorf("failed to prepare %s: %w", name, err)
+			}
+			ready, err := binMgr.PreparedStateReady(name)
+			if err == nil && !beforePrepared[name] && ready {
+				changed = true
+			}
+			if !before[name] && binMgr.AppInstalled(name) {
+				changed = true
 			}
 		}
 	}
-	return nil
+	return changed, nil
 }
 
 // verifyInstalledApps runs each app's version check and fails on the first app
@@ -139,7 +165,7 @@ func verifyInstalledApps(ctx context.Context, binMgr *binmanager.BinManager, all
 		}
 		args, verifiable := versionCheckArgs(app)
 		if !verifiable {
-			if !ui.Quiet() {
+			if !ui.Quiet() && (!installQuiet || verbose) {
 				fmt.Fprintf(os.Stderr, "Note: %q has no runnable version check; skipping verify\n", name)
 			}
 			continue
