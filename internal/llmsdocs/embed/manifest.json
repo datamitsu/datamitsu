@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "f00556b3a748e414c317f06e7b77ae30",
+  "pageSetHash": "b0ed9e99a6ab1e2023f602311cf4078a",
   "pages": [
     {
       "slug": "about",
@@ -343,8 +343,8 @@
       "url": "https://datamitsu.com/docs/guides/source-mode.md",
       "title": "Source Mode",
       "description": "Put a project's declared toolchain on PATH for the current shell, so every tool runs at the version the repository pins — with lazy downloads and invisible branch switching",
-      "bytes": 16264,
-      "contentHash": "0dfa59fee7d77eacc5adb72f252b48c5"
+      "bytes": 17101,
+      "contentHash": "fcc844f961ba6a335c1c4738b0c0406f"
     },
     {
       "slug": "guides/supply-chain-security",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 192355,
-      "contentHash": "9fdf698a086a714985368490305f0832"
+      "bytes": 194176,
+      "contentHash": "d0a7c53bc431ca890ac110ebafb8fb50"
     },
     {
       "slug": "reference/comparison",

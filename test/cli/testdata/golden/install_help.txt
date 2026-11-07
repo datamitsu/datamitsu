@@ -18,6 +18,7 @@ Usage:
 Flags:
   -h, --help              help for install
       --no-verify         Skip the post-install version check (verification runs by default)
+      --quiet             Suppress routine output unless managed state changes
       --runtime strings   Install the named runtime(s) only, without any app (repeatable)
 
 Global Flags:

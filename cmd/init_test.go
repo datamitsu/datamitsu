@@ -441,7 +441,7 @@ func TestInstallBundles_InInitFlow(t *testing.T) {
 	bm := binmanager.New(binmanager.MapOfApps{}, bundles, nil)
 	ctx := context.Background()
 
-	_, _, err := reportBundles(ctx, ui.New(term.Plain), bm, false)
+	_, _, _, err := reportBundles(ctx, ui.New(term.Plain), bm, false)
 	if err != nil {
 		t.Fatalf("reportBundles failed: %v", err)
 	}
@@ -481,7 +481,7 @@ func TestInstallBundles_SkipDownloadSkipsExternal(t *testing.T) {
 	bm := binmanager.New(binmanager.MapOfApps{}, bundles, nil)
 	ctx := context.Background()
 
-	_, _, err := reportBundles(ctx, ui.New(term.Plain), bm, true)
+	_, _, _, err := reportBundles(ctx, ui.New(term.Plain), bm, true)
 	if err != nil {
 		t.Fatalf("reportBundles failed: %v", err)
 	}

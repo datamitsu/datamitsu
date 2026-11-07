@@ -517,7 +517,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// fell back to raw tool output.
 	if sc.binMgr != nil {
 		seedSpan := trace.Start(trace.CatInstall, "ocibundle.AutoSeed")
-		err := ocibundle.AutoSeed(ctx, sc.cfg, plan.GetAppNames(), nil)
+		_, err := ocibundle.AutoSeed(ctx, sc.cfg, plan.GetAppNames(), nil)
 		seedSpan.EndWith(trace.A("apps", len(plan.GetAppNames())))
 		if err != nil {
 			return fmt.Errorf("failed to seed store from oci bundle: %w", err)

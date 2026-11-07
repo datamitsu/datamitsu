@@ -132,7 +132,7 @@ func execApp(ctx context.Context, appName string, args []string) error {
 	// an online exec on a clean machine should take a bundle's ready-made
 	// prepared state instead of re-running the step against the network.
 	// (Offline keeps skipping the seed, as everywhere.)
-	if err := ocibundle.AutoSeed(ctx, c, []string{appName}, nil); err != nil {
+	if _, err := ocibundle.AutoSeed(ctx, c, []string{appName}, nil); err != nil {
 		return fmt.Errorf("failed to seed store from oci bundle: %w", err)
 	}
 

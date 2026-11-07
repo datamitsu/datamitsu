@@ -1,6 +1,7 @@
+unset DATAMITSU_SOURCE_QUIET
 unset DATAMITSU_FARM_CONFIG
-export DATAMITSU_ROOT=$'<TMP>'
 export DATAMITSU_FARM=$'<CACHE>/cache/projects/<ROOT>/bin'
+export DATAMITSU_ROOT=$'<TMP>'
 __datamitsu_path=":$PATH:"
 __datamitsu_path="${__datamitsu_path//:"$DATAMITSU_FARM":/:}"
 __datamitsu_path="${__datamitsu_path#:}"

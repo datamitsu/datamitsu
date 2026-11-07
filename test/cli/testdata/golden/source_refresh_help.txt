@@ -24,6 +24,7 @@ Usage:
 Flags:
       --force   Re-bake even when the manifest is already fresh
   -h, --help    help for refresh
+      --quiet   Suppress routine refresh output
 
 Global Flags:
       --before-config strings   Configuration file(s) to load before auto-discovery (for wrappers/libraries)

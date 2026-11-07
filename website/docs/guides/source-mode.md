@@ -27,10 +27,25 @@ eval "$(datamitsu source zsh)"
 datamitsu source fish | source
 ```
 
-The emitted code does three things and nothing else: it exports `DATAMITSU_ROOT` and `DATAMITSU_FARM`, it puts the farm directory first on `PATH` (removing any earlier copy of itself, so re-activating never duplicates the entry), and it flushes the shell's command hash table. That is the entire contract — stdout carries shell code and nothing else, so the output is always safe to `eval`.
+The emitted code exports the activation identifiers and session notification preference, puts the farm directory first on `PATH` (removing any earlier copy of itself, so re-activating never duplicates the entry), and flushes the shell's command hash table. Stdout carries shell code and nothing else, so the output is always safe to `eval`.
+
+Add `--quiet` to omit routine notices about tools awaiting their first installation and managed tools shadowing system binaries:
+
+```bash
+eval "$(datamitsu source bash --quiet)"
+eval "$(datamitsu source zsh --quiet)"
+```
+
+```fish
+datamitsu source fish --quiet --config ~/.config/datamitsu/datamitsu.config.js | source
+```
+
+The most recent activation controls the notification preference. Quiet applies only to automatic refreshes of that activation's farm; it does not silence another farm lower on `PATH`. A normal activation clears the preference. It does not silence manual `init` or `install` commands, or the first-use installation of a tool. Errors and warnings that require action, including activation of an older farm after a failed rebuild, remain visible. Explicit verbose diagnostics and JSONL events remain available.
 
 ```bash
 $ datamitsu source bash
+unset DATAMITSU_SOURCE_QUIET
+unset DATAMITSU_FARM_CONFIG
 export DATAMITSU_ROOT=$'/home/you/infra'
 export DATAMITSU_FARM=$'/home/you/.cache/datamitsu/cache/projects/02982286cbc2c265e43806925d7f4907/bin'
 __datamitsu_path=":$PATH:"
