@@ -12,7 +12,7 @@ stream.
 
 ## Requirements
 
-VS Code 1.140.0 or newer.
+VS Code 1.144.0 or newer.
 
 A `datamitsu` binary. By default the extension uses one found on your `PATH`; if
 there is none it downloads the version pinned to the extension build (verified by

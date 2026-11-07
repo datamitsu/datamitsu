@@ -22,16 +22,6 @@ var pageCountRE = regexp.MustCompile(`all \d+ pages`)
 // integrity is covered by internal/llmsdocs (manifest ↔ embed) and by the CI
 // drift gate (embed ↔ website/docs).
 
-func TestLlmsHelpGolden(t *testing.T) {
-	norm := clitest.NewNormalizer()
-
-	res := clitest.Run(t, clitest.RunOptions{}, "llms", "--help")
-	if res.ExitCode != 0 {
-		t.Fatalf("`llms --help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
-	}
-	clitest.AssertGolden(t, "llms_help", norm.Apply(res.Stdout))
-}
-
 // TestLlmsRootIndex proves the no-argument output is a usable menu: it names
 // every page under a link target that is the literal argument fetching it, so an
 // agent can pick its next call straight out of this text.

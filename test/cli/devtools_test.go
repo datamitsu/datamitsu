@@ -33,48 +33,6 @@ var (
 	expectedBundlesSubcommands = []string{"inspect", "list", "path"}
 )
 
-// devtoolsHelpCases enumerates every devtools help surface. Each help block is
-// static — no temp paths, durations, or real version tokens — so the goldens are
-// the raw stdout (un-normalized). Normalizing would be actively wrong here: the
-// build version defaults to "dev", and pull-runtimes' help mentions "go.dev",
-// whose "dev" the version rule would mask to "<VERSION>", making that golden
-// build-dependent.
-var devtoolsHelpCases = []struct {
-	name   string   // golden file name
-	args   []string // args after the binary
-	golden string
-}{
-	{"devtools", []string{"devtools", "--help"}, "devtools_help"},
-	{"apps", []string{"devtools", "apps", "--help"}, "devtools_apps_help"},
-	{"bundles", []string{"devtools", "bundles", "--help"}, "devtools_bundles_help"},
-	{"dockerfile", []string{"devtools", "dockerfile", "--help"}, "devtools_dockerfile_help"},
-	{"split-config", []string{"devtools", "split-config", "--help"}, "devtools_split_config_help"},
-	{"pull-releases", []string{"devtools", "pull-releases", "--help"}, "devtools_pull_releases_help"},
-	{"pull-node", []string{"devtools", "pull-node", "--help"}, "devtools_pull_node_help"},
-	{"pull-uv", []string{"devtools", "pull-uv", "--help"}, "devtools_pull_uv_help"},
-	{"pull-runtimes", []string{"devtools", "pull-runtimes", "--help"}, "devtools_pull_runtimes_help"},
-	{"verify-all", []string{"devtools", "verify-all", "--help"}, "devtools_verify_all_help"},
-	{"pack-inline-archive", []string{"devtools", "pack-inline-archive", "--help"}, "devtools_pack_inline_archive_help"},
-}
-
-// TestDevtoolsHelpGolden freezes `devtools --help` and `--help` for every
-// subcommand: exit 0, nothing on stderr, and a normalized==raw static help block.
-func TestDevtoolsHelpGolden(t *testing.T) {
-	for _, tc := range devtoolsHelpCases {
-		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{}, tc.args...)
-			if res.ExitCode != 0 {
-				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s",
-					strings.Join(tc.args, " "), res.ExitCode, res.Stderr)
-			}
-			if res.Stderr != "" {
-				t.Errorf("`%s` wrote to stderr:\n%s", strings.Join(tc.args, " "), res.Stderr)
-			}
-			clitest.AssertGolden(t, tc.golden, res.Stdout)
-		})
-	}
-}
-
 // TestDevtoolsCommandSetDrift asserts the devtools / apps / bundles subcommand
 // sets are exactly the expected sets, decoupled from help formatting.
 func TestDevtoolsCommandSetDrift(t *testing.T) {

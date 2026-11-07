@@ -14,5 +14,4 @@ export default defineConfig({
   entry: { extension: "src/extension.ts" },
   format: "cjs",
   outDir: "dist",
-  platform: "node",
 });

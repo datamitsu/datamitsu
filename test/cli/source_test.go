@@ -95,33 +95,6 @@ func TestSourceActivationGolden(t *testing.T) {
 	}
 }
 
-// TestSourceHelpGolden freezes the help text of the group command and every
-// leaf, which is the documented surface users read before piping the output
-// into eval.
-func TestSourceHelpGolden(t *testing.T) {
-	cases := []struct {
-		golden string
-		args   []string
-	}{
-		{"source_help", []string{"source", "--help"}},
-		{"source_bash_help", []string{"source", "bash", "--help"}},
-		{"source_zsh_help", []string{"source", "zsh", "--help"}},
-		{"source_fish_help", []string{"source", "fish", "--help"}},
-		{"source_status_help", []string{"source", "status", "--help"}},
-		{"source_refresh_help", []string{"source", "refresh", "--help"}},
-	}
-	norm := clitest.NewNormalizer()
-	for _, tc := range cases {
-		t.Run(tc.golden, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{Env: sourceEnv()}, tc.args...)
-			if res.ExitCode != 0 {
-				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s", strings.Join(tc.args, " "), res.ExitCode, res.Stderr)
-			}
-			clitest.AssertGolden(t, tc.golden, norm.Apply(res.Stdout))
-		})
-	}
-}
-
 // TestSourceConfigCannotInjectIntoStdout is the config-injection guard. A repo's
 // datamitsu.config.js runs arbitrary JavaScript, its console.log writes straight
 // to stdout, and stdout here is piped into `eval` — so a config that prints

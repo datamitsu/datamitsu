@@ -1,11 +1,11 @@
 # CLI blackbox test suite
 
-This directory holds the **offline golden contract tests** for datamitsu's
-command-line surface. They run the real, compiled binary in subprocesses inside
-isolated temp git repos and assert stdout/stderr/exit codes against golden
-files. The goal is to freeze the externally-observable CLI behavior so the
-internals can be rewritten with confidence — the CLI surface must not change
-during that rewrite.
+This directory holds the offline blackbox contract tests for datamitsu's CLI.
+They run the real binary in subprocesses inside isolated temp git repos and
+assert observable command behavior. Dynamic execution output continues to use
+reviewable snapshots; help is checked semantically against independent literal
+contracts for command registries, flags and routing, so prose and whitespace
+changes do not require snapshot updates.
 
 The reusable harness lives in [`internal/clitest`](../../internal/clitest):
 
@@ -116,10 +116,22 @@ stderr of one run.
 ## Contract completeness gate
 
 `TestContractCompletenessGate` walks the binary's live `--help` tree and asserts
-the set of leaf commands equals exactly the tested ∪ builtin leaf sets. Adding a
-new leaf command without a blackbox test (or removing one) fails this gate — so
-every command stays covered. When you add a command, add at least one blackbox
-test and register it in the gate's tested-leaf set.
+the set of leaf commands equals exactly the tested ∪ builtin leaf sets. When you
+add a leaf, add a blackbox test and register it in the gate.
+
+`TestHelpSemanticContracts` compares actual help with the independent contracts in
+`testdata/help-contracts.json`, initially extracted from the reviewed help snapshots.
+The contracts cover all former help paths, including cache/config/store command
+registries, usage syntax, exact local and inherited flag sets, shorthands, types,
+optional values, and displayed defaults. Both `--help` and `-h` must succeed on
+stdout with empty stderr. Descriptions and column alignment are not compared;
+the flag library's explicit boolean syntax is normalized to the same boolean
+contract. An intentional interface change requires reviewing the corresponding
+structured contract, not accepting fresh output with `-update`.
+
+Invalid fail-fast and allow-partial values remain usage-error assertions: they
+exit 2, identify the rejected flag or environment variable, never run a tool, and
+do not write a report artifact.
 
 ## Real-shell tier (`test/shell`)
 

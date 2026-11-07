@@ -38,14 +38,15 @@ func deterministicValue(vm *goja.Runtime, rv reflect.Value) goja.Value {
 	if !rv.IsValid() {
 		return goja.Null()
 	}
-	t := rv.Type()
-	if !typeContainsMap(t) {
+	if rv.Kind() == reflect.Slice && rv.IsNil() {
+		return vm.NewArray()
+	}
+	if !typeContainsMap(rv.Type()) {
 		return vm.ToValue(rv.Interface())
 	}
 
-	// Only four kinds can carry a map; everything else is one fallback, so this
-	// is a chain rather than a switch over reflect.Kind.
-	kind := t.Kind()
+	kind := rv.Kind()
+	t := rv.Type()
 
 	if kind == reflect.Interface || kind == reflect.Pointer {
 		if rv.IsNil() {

@@ -59,29 +59,6 @@ type planShape struct {
 	Skipped []any `json:"skipped"`
 }
 
-// TestCheckFixLintHelpGolden freezes `--help` for check, fix and lint. Each help
-// block is static, offline text with no version or path tokens, so the normalized
-// output equals the raw output. The shared --explain documentation block is also
-// asserted present in each.
-func TestCheckFixLintHelpGolden(t *testing.T) {
-	for _, cmd := range []string{"check", "fix", "lint"} {
-		t.Run(cmd, func(t *testing.T) {
-			norm := clitest.NewNormalizer()
-			res := clitest.Run(t, clitest.RunOptions{}, cmd, "--help")
-			if res.ExitCode != 0 {
-				t.Fatalf("`%s --help` exit = %d, want 0\nstderr:\n%s", cmd, res.ExitCode, res.Stderr)
-			}
-			if res.Stderr != "" {
-				t.Errorf("`%s --help` wrote to stderr:\n%s", cmd, res.Stderr)
-			}
-			if !strings.Contains(res.Stdout, "--explain") {
-				t.Errorf("`%s --help` should document --explain:\n%s", cmd, res.Stdout)
-			}
-			clitest.AssertGolden(t, cmd+"_help", norm.Apply(res.Stdout))
-		})
-	}
-}
-
 // runExplain runs `<cmd> --explain=<mode>` against the synthetic config in a fresh
 // project, asserting exit 0 and empty stderr, and returns the normalized stdout
 // (the project dir masked to <TMP>).

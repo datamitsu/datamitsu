@@ -251,9 +251,28 @@ func TestReportNarrowedRun(t *testing.T) {
 		e.wantExit(res, 0)
 		res = e.run("", []string{"DATAMITSU_ALLOW_PARTIAL=1"}, "lint", "Dockerfile", "--report", "json=run.json", "--allow-partial=false")
 		e.wantExit(res, 2)
-		res = e.run("", []string{"DATAMITSU_ALLOW_PARTIAL=yes"}, "lint", "--report", "json=run.json")
+		_, alphaBefore := e.p.Marker("alpha")
+		_, hadolintBefore := e.p.Marker("hadolint")
+		invalidPath := filepath.Join(e.p.Dir, "invalid.json")
+		res = e.run("", []string{"DATAMITSU_ALLOW_PARTIAL=yes"}, "lint", "--report", "json=invalid.json")
 		e.wantExit(res, 2)
-		e.golden("report_allow_partial_invalid_env", res)
+		_, alphaAfter := e.p.Marker("alpha")
+		_, hadolintAfter := e.p.Marker("hadolint")
+		if alphaAfter != alphaBefore || hadolintAfter != hadolintBefore {
+			t.Errorf("invalid DATAMITSU_ALLOW_PARTIAL ran tools: alpha %q -> %q, hadolint %q -> %q", alphaBefore, alphaAfter, hadolintBefore, hadolintAfter)
+		}
+		if !strings.Contains(res.Stderr, "error:") {
+			t.Errorf("invalid environment value should be reported on stderr:\n%s", res.Stderr)
+		}
+		if !strings.Contains(res.Stderr, "DATAMITSU_ALLOW_PARTIAL") {
+			t.Errorf("stderr should identify DATAMITSU_ALLOW_PARTIAL:\n%s", res.Stderr)
+		}
+		if strings.TrimSpace(res.Stdout) != "" {
+			t.Errorf("invalid environment value wrote to stdout:\n%s", res.Stdout)
+		}
+		if _, err := os.Stat(invalidPath); !os.IsNotExist(err) {
+			t.Errorf("invalid environment report stat = %v, want no report artifact", err)
+		}
 	})
 }
 
@@ -425,17 +444,6 @@ func TestReportRender(t *testing.T) {
 				e.wantExit(res, tc.exit)
 				e.golden("report_render_"+tc.name, res)
 			})
-		}
-	})
-
-	t.Run("help", func(t *testing.T) {
-		norm := clitest.NewNormalizer()
-		for _, args := range [][]string{{"report", "--help"}, {"report", "render", "--help"}} {
-			res := clitest.Run(t, clitest.RunOptions{}, args...)
-			if res.ExitCode != 0 {
-				t.Fatalf("%v exit = %d\n%s", args, res.ExitCode, res.Stderr)
-			}
-			clitest.AssertGolden(t, strings.Join(args[:len(args)-1], "_")+"_help", norm.Apply(res.Stdout))
 		}
 	})
 }
