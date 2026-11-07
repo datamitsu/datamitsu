@@ -22,6 +22,7 @@ import (
 var testedLeafCommands = map[string]string{
 	"inspect":                      "TestInspectHelp / TestInspectExport / TestInspectInvalidFlags",
 	"cache clear":                  "TestCacheClearDryRun",
+	"cache copy":                   "TestCacheCopyWarmsNewWorktree / TestCacheCopyNoSourceCache",
 	"cache path project":           "TestCachePathProject",
 	"check":                        "TestExplainPlanGolden / TestCheckFixLintHelpGolden / TestExecutionCheckStopsAfterFix / TestExecutionFixCache / TestAgentOutput",
 	"config chain-hash":            "TestConfigChainHashTable",
