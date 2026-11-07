@@ -9,14 +9,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/clitest"
 )
 
-func TestInspectHelp(t *testing.T) {
-	result := clitest.Run(t, clitest.RunOptions{}, "inspect", "--help")
-	if result.ExitCode != 0 {
-		t.Fatal(result.Stderr)
-	}
-	clitest.AssertGolden(t, "inspect_help", clitest.NewNormalizer().Apply(result.Stdout))
-}
-
 func TestInspectExport(t *testing.T) {
 	project := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(project)

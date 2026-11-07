@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "b0ed9e99a6ab1e2023f602311cf4078a",
+  "pageSetHash": "1c6dfe2d14c9c31fae57a20fa5a5e325",
   "pages": [
     {
       "slug": "about",
@@ -42,8 +42,8 @@
       "url": "https://datamitsu.com/docs/contributing/index.md",
       "title": "Contributing to datamitsu",
       "description": "How to contribute to datamitsu development, documentation, and ecosystem",
-      "bytes": 6660,
-      "contentHash": "e91388c8cf927e629d027e70ff14b999"
+      "bytes": 7933,
+      "contentHash": "8ff875c6d35dd35e3fa0cecd6811f448"
     },
     {
       "slug": "contributing/showcase",

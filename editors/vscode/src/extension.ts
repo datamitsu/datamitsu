@@ -30,8 +30,8 @@ let lifecycle: Promise<void> = Promise.resolve();
 let queuedRestart: undefined | { isImmediate: boolean };
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  // A LogOutputChannel (vscode-languageclient 10 requires one for outputChannel)
-  // also drives the datamitsu.trace.server setting.
+  // A LogOutputChannel drives the language client's outputChannel and the
+  // datamitsu.trace.server setting.
   output = vscode.window.createOutputChannel("datamitsu", { log: true });
   progress = new JsonlProgress(output);
   context.subscriptions.push(output, progress);

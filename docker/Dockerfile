@@ -6,7 +6,7 @@ ARG TARGETARCH
 COPY dist/datamitsu-linux-${TARGETARCH}/datamitsu /datamitsu
 
 # Stage 2: Runtime
-FROM debian:trixie-20261020-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 
 # Static OCI labels (dynamic labels injected via docker/metadata-action in CI)
 LABEL org.opencontainers.image.title="datamitsu" \

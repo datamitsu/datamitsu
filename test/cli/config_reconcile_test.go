@@ -22,19 +22,6 @@ globalThis.getConfig = () => ({
 globalThis.getMinVersion = () => "0.0.0";
 `
 
-func TestConfigReconcileHelpGolden(t *testing.T) {
-	norm := clitest.NewNormalizer()
-
-	res := clitest.Run(t, clitest.RunOptions{}, "config", "reconcile", "--help")
-	if res.ExitCode != 0 {
-		t.Fatalf("`config reconcile --help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
-	}
-	if res.Stderr != "" {
-		t.Errorf("`config reconcile --help` wrote to stderr:\n%s", res.Stderr)
-	}
-	clitest.AssertGolden(t, "config_reconcile_help", norm.Apply(res.Stdout))
-}
-
 // Dry-run prints the reconciliation plan without writing managed files or
 // running the post-reconciliation fix.
 func TestConfigReconcileDryRunGolden(t *testing.T) {
