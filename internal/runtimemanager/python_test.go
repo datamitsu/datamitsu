@@ -337,10 +337,14 @@ exit 42
 	runtimeConfig.System = &config.RuntimeConfigSystem{Command: uvPath}
 	runtimeConfig.UV.PythonDownloads = map[string]config.PythonDownload{"host": runtimeConfig.UV.PythonDownloads["test-cpython-host"]}
 	rm := New(config.MapOfRuntimes{"python": runtimeConfig})
-	got, err := rm.EnsurePython(context.Background(), "python")
+	execution, err := rm.EnsureExecution(context.Background(), "python")
 	if err != nil {
-		t.Fatalf("EnsurePython() = %q, %v", got, err)
+		t.Fatalf("EnsureExecution() = %+v, %v", execution, err)
 	}
+	if execution.Status != RuntimeStatusInstalled || execution.Kind != config.RuntimeKindUV {
+		t.Fatalf("cold Python execution is not ready: %+v", execution)
+	}
+	got := execution.Executable
 	if resolved, err := rm.ResolvePython("python"); err != nil || resolved != got {
 		t.Fatalf("ResolvePython after install = %q, %v", resolved, err)
 	}
