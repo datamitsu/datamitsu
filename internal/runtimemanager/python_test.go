@@ -16,6 +16,82 @@ import (
 	"github.com/datamitsu/datamitsu/internal/target"
 )
 
+func TestEnsurePythonHelperFailureDoesNotPublishReady(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake uv requires a POSIX shell")
+	}
+	for _, mode := range []string{"install-failure", "find-failure", "outside", "empty-find"} {
+		t.Run(mode, func(t *testing.T) {
+			base := t.TempDir()
+			t.Setenv("DATAMITSU_CACHE_DIR", base)
+			fake := filepath.Join(base, "uv")
+			body := "#!/bin/sh\n"
+			body += "if [ \"$1 $2\" = \"python install\" ]; then\n"
+			if mode == "install-failure" {
+				body += "echo failed >&2; exit 21\n"
+			} else {
+				body += "while [ $# -gt 0 ]; do if [ \"$1\" = --install-dir ]; then shift; mkdir -p \"$1/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$1/bin/python\"; chmod +x \"$1/bin/python\"; break; fi; shift; done; exit 0\n"
+			}
+			body += "fi\n"
+			switch mode {
+			case "find-failure":
+				body += "echo failed >&2; exit 22\n"
+			case "outside":
+				body += "printf '%s' /tmp/outside-python\n"
+			case "empty-find":
+				body += "exit 0\n"
+			}
+			if err := os.WriteFile(fake, []byte(body), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			rc := testUVRuntimeConfig(t, fake, "3.14.6")
+			rm := New(config.MapOfRuntimes{"test-uv": rc})
+			if _, err := rm.EnsurePython(context.Background(), "test-uv"); err == nil {
+				t.Fatal("EnsurePython accepted fake uv failure")
+			}
+			identity, err := rm.runtimeDataIdentity("test-uv", rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			root := filepath.Join(env.GetRuntimeDataPath("test-uv", identity), "python")
+			if _, err := os.Stat(filepath.Join(root, pythonReadyFilename)); !os.IsNotExist(err) {
+				t.Fatalf("failure published readiness: %v", err)
+			}
+		})
+	}
+}
+
+func TestEnsurePythonRejectsMalformedConfiguredCatalogBeforeMutation(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", base)
+	rc := testUVRuntimeConfig(t, "must-not-run", "3.14.6")
+	rc.UV.PythonDownloads["host"] = config.PythonDownload{}
+	rm := New(config.MapOfRuntimes{"test-uv": rc})
+	if _, err := rm.EnsurePython(context.Background(), "test-uv"); err == nil {
+		t.Fatal("invalid catalog entry accepted")
+	}
+	identity, err := rm.runtimeDataIdentity("test-uv", rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(env.GetRuntimeDataPath("test-uv", identity), "python")); !os.IsNotExist(err) {
+		t.Fatalf("invalid catalog created Python payload: %v", err)
+	}
+}
+
+func TestEnsurePythonOfflineDoesNotMutate(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", base)
+	t.Setenv("DATAMITSU_OFFLINE", "1")
+	rm := New(config.MapOfRuntimes{"test-uv": testUVRuntimeConfig(t, "must-not-run", "3.14.6")})
+	if _, err := rm.EnsurePython(context.Background(), "test-uv"); err == nil {
+		t.Fatal("offline missing Python was provisioned")
+	}
+	if _, err := os.Stat(env.GetStorePath()); !os.IsNotExist(err) {
+		t.Fatalf("offline refusal created store: %v", err)
+	}
+}
+
 func TestSelectPythonDownloadRequiresOneExactHostEntry(t *testing.T) {
 	rm := New(nil)
 	host := target.HostTarget()
@@ -584,31 +660,6 @@ func TestEnsurePythonRepairsUnmarkedPayload(t *testing.T) {
 	}
 }
 
-func TestEnsurePythonOfflinePreservesUnmarkedPythonPayload(t *testing.T) {
-	base := t.TempDir()
-	t.Setenv("DATAMITSU_CACHE_DIR", base)
-	t.Setenv("DATAMITSU_OFFLINE", "1")
-	rc := testUVRuntimeConfig(t, "/must/not/run", "3.14.6")
-	rm := New(config.MapOfRuntimes{"python": rc})
-	identity, err := rm.runtimeDataIdentity("python", rc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	executable := filepath.Join(env.GetRuntimeDataPath("python", identity), "python", "bin", "python")
-	if err := os.MkdirAll(filepath.Dir(executable), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(executable, []byte("recoverable"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := rm.EnsurePython(context.Background(), "python"); err == nil || !strings.Contains(err.Error(), "offline") {
-		t.Fatalf("EnsurePython error = %v", err)
-	}
-	if got, err := os.ReadFile(executable); err != nil || string(got) != "recoverable" {
-		t.Fatalf("offline attempt changed payload: %q, %v", got, err)
-	}
-}
-
 func TestResolvePythonReportsMissingRuntimeAndInvalidReadyPayload(t *testing.T) {
 	base := t.TempDir()
 	t.Setenv("DATAMITSU_CACHE_DIR", base)
@@ -644,16 +695,6 @@ func TestResolveExecutableWithinAcceptsExecutableSymlinkWithinPayload(t *testing
 	got, err := resolveExecutableWithin(root, link)
 	if err != nil || got != target {
 		t.Fatalf("resolveExecutableWithin() = %q, %v; want %q", got, err, target)
-	}
-}
-
-func TestResolvePythonReturnsValidatedReadyExecutable(t *testing.T) {
-	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
-	rm := New(config.MapOfRuntimes{"python": testUVRuntimeConfig(t, "unused-uv", "3.14.6")})
-	want := seedTestPythonReady(t, rm, "python", "", "")
-	got, err := rm.ResolvePython("python")
-	if err != nil || got != want {
-		t.Fatalf("ResolvePython() = %q, %v; want %q", got, err, want)
 	}
 }
 

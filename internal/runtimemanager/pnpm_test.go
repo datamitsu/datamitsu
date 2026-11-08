@@ -975,3 +975,25 @@ func TestWriteAppWorkspaceFile(t *testing.T) {
 		}
 	})
 }
+
+func TestPNPMAppInstallReportsMissingConfiguredPNPMRuntime(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	appPath := filepath.Join(env.GetStorePath(), ".apps", "node", "tool", "identity")
+	runtimeConfig := config.RuntimeConfig{
+		Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem,
+		System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "22.0.0"},
+		Node:   &config.RuntimeConfigNode{NodeVersion: "22.0.0", PNPMRuntime: "missing-pnpm"},
+	}
+	rm := New(config.MapOfRuntimes{"node": runtimeConfig})
+	err := rm.installPNPMAppOnce(context.Background(), pnpmAppInstallSpec{
+		appName: "tool", packageName: "tool", version: "1.0.0", binPath: "bin/tool",
+		runtimeKind: "node", runtimeName: "node", runtimeVersion: "22.0.0",
+		pnpmRuntime: "missing-pnpm", appEnvPath: appPath, runtimeConfig: runtimeConfig,
+	}, nil, nil, nil, "")
+	if err == nil || !strings.Contains(err.Error(), `runtime "missing-pnpm" referenced by app not found`) {
+		t.Fatalf("installPNPMAppOnce() missing runtime error = %v", err)
+	}
+	if _, err := os.Stat(appPath); !os.IsNotExist(err) {
+		t.Fatalf("PNPM app target changed before prerequisite error: %v", err)
+	}
+}

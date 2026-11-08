@@ -174,3 +174,11 @@ func closeTestFiles(files ...*os.File) {
 		}
 	}
 }
+
+func TestOpenWorkerPipesRejectsInvalidDescriptorArguments(t *testing.T) {
+	for _, args := range [][]string{{}, {"3", "bad", "5", "6", "7"}, {"2", "4", "5", "6", "7"}, {"999999", "4", "5", "6", "7"}} {
+		if _, _, _, _, err := OpenWorkerPipes(args); err == nil {
+			t.Errorf("OpenWorkerPipes(%v) unexpectedly succeeded", args)
+		}
+	}
+}

@@ -2,13 +2,19 @@ package runtimemanager
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/storelock"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
 )
@@ -603,6 +609,62 @@ func TestInstallRuntimes(t *testing.T) {
 			t.Errorf("expected 1 skipped, got %d", len(stats.Skipped))
 		}
 	})
+}
+
+func TestInstallRuntimesReportsVerifiedArtifactFailure(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	var hits int32
+	server := nodeArchiveServer(t, []byte("not the pinned archive"), "", &hits)
+	defer server.Close()
+	runtimes := nodeRuntimeWith(t, server.URL, "sha256:"+strings.Repeat("0", 64), testLibc)
+	rm := New(runtimes)
+	stats, err := rm.InstallRuntimes(context.Background(), []string{"node"}, 1)
+	if err != nil {
+		t.Fatalf("InstallRuntimes() error = %v", err)
+	}
+	if len(stats.Failed) != 1 || stats.Failed[0].Name != "node" {
+		t.Fatalf("InstallRuntimes() failures = %#v, want failed node artifact", stats.Failed)
+	}
+	if atomic.LoadInt32(&hits) != 1 {
+		t.Fatalf("archive requests = %d, want one verified local request", hits)
+	}
+	resolved, err := rm.computeRuntimeBinPath("node")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Dir(resolved.binPath)); !os.IsNotExist(err) {
+		t.Fatalf("failed verification left published runtime payload: %v", err)
+	}
+}
+
+func TestRuntimeAcquisitionCancelsWhileWaitingForStoreLease(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	var hits int32
+	server := nodeArchiveServer(t, []byte("unused"), "", &hits)
+	defer server.Close()
+	rm := New(nodeRuntimeWith(t, server.URL, "sha256:"+strings.Repeat("0", 64), testLibc))
+	release, err := storelock.Clear(context.Background(), env.GetStorePath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	result := make(chan error, 1)
+	go func() {
+		close(started)
+		_, err := rm.getRuntimePath(ctx, "node")
+		result <- err
+	}()
+	<-started
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	if err := <-result; !errors.Is(err, context.Canceled) {
+		t.Fatalf("getRuntimePath() canceled error = %v, want context.Canceled", err)
+	}
+	release()
+	if got := atomic.LoadInt32(&hits); got != 0 {
+		t.Fatalf("runtime downloads before canceled acquisition = %d, want 0", got)
+	}
 }
 
 func TestGetAppPathNode(t *testing.T) {

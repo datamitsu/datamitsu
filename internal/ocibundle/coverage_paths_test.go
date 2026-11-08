@@ -310,3 +310,10 @@ func TestExpectedSubtrees_UnknownAndShellAppsContributeNothing(t *testing.T) {
 		t.Errorf("expected = %v, want empty (unknown + shell apps contribute nothing)", expected)
 	}
 }
+
+func TestExecuteSeedClassifiesLocalLayoutErrors(t *testing.T) {
+	result := ExecuteSeed(context.Background(), SeedRequest{Layout: filepath.Join(t.TempDir(), "missing")})
+	if result.Error == "" || result.Changed || result.Fatal || result.NoPlatform || result.Incomplete {
+		t.Fatalf("missing layout result = %+v", result)
+	}
+}

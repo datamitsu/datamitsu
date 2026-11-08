@@ -224,6 +224,60 @@ func TestComputeRuntimeDataPathRejectsUnknownRuntime(t *testing.T) {
 	}
 }
 
+func TestRuntimeDataPathRejectsManagedRuntimeWithoutArtifacts(t *testing.T) {
+	rm := New(nil)
+	if _, err := rm.runtimeDataPath("uv", config.RuntimeConfig{Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged}); err == nil {
+		t.Fatal("runtimeDataPath accepted a managed runtime without an artifact map")
+	}
+}
+
+func TestRuntimeOwnedEnvironmentRejectsMissingPNPMRuntime(t *testing.T) {
+	runtimes := config.MapOfRuntimes{
+		"node": {
+			Kind:   config.RuntimeKindNode,
+			Mode:   config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "node", SystemVersion: "22"},
+			Node:   &config.RuntimeConfigNode{PNPMRuntime: "absent"},
+		},
+	}
+	rm := New(runtimes)
+	if _, _, err := rm.RuntimeOwnedEnvironment("node", runtimes["node"], "/apps/tool"); err == nil {
+		t.Fatal("RuntimeOwnedEnvironment succeeded without its configured pnpm runtime")
+	}
+}
+
+func TestPNPMRuntimeEnvironmentUsesIdentityScopedCachePaths(t *testing.T) {
+	runtimes := bunSystemRuntime("bun")
+	rc := runtimes["bun"]
+	rm := New(runtimes)
+	root, vars, err := rm.RuntimeOwnedEnvironment("bun", rc, "/apps/tool")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRoot, err := rm.runtimeDataPath("bun", rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != wantRoot {
+		t.Fatalf("runtime data root = %q, want %q", root, wantRoot)
+	}
+	wantStore, err := rm.pnpmDataPath("bun", rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := vars["npm_config_store_dir"]; got != wantStore {
+		t.Fatalf("pnpm store dir = %q, want %q", got, wantStore)
+	}
+	for key, suffix := range map[string]string{
+		"npm_config_cache":                  "npm-cache",
+		"BUN_RUNTIME_TRANSPILER_CACHE_PATH": "bun-cache",
+	} {
+		if got, want := vars[key], filepath.Join(root, suffix); got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
+	}
+}
+
 func TestRuntimeOwnedEnvironmentRejectsUnownedRuntimeKinds(t *testing.T) {
 	rm := New(nil)
 	for _, kind := range []config.RuntimeKind{config.RuntimeKindPNPM, config.RuntimeKind("unknown")} {
@@ -233,5 +287,63 @@ func TestRuntimeOwnedEnvironmentRejectsUnownedRuntimeKinds(t *testing.T) {
 		if _, _, err := rm.RuntimeExecutionEnvironment("custom", config.RuntimeConfig{Kind: kind}); err == nil {
 			t.Errorf("RuntimeExecutionEnvironment accepted kind %q", kind)
 		}
+	}
+}
+
+func TestRuntimeExecutionEnvironmentOwnsRuntimeCaches(t *testing.T) {
+	runtimes := config.MapOfRuntimes{
+		"node": {
+			Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "node", SystemVersion: "22"},
+			Node:   &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: testPNPMRuntimeName},
+		},
+		"uv": {
+			Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "uv", SystemVersion: "1"},
+			UV:     &config.RuntimeConfigUV{PythonVersion: "3.12.0"},
+		},
+		"go": {
+			Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "1.23"},
+			Go:     &config.RuntimeConfigGo{GoVersion: "1.23"},
+		},
+		testPNPMRuntimeName: testPNPMRuntime(),
+	}
+	for name, rc := range runtimes {
+		if name == testPNPMRuntimeName {
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			root, vars, err := New(runtimes).RuntimeExecutionEnvironment(name, rc)
+			if err != nil {
+				t.Fatalf("RuntimeExecutionEnvironment() error = %v", err)
+			}
+			if root == "" || vars == nil {
+				t.Fatalf("RuntimeExecutionEnvironment() = (%q, %v), want owned paths", root, vars)
+			}
+			pathKeys := []string{"npm_config_cache", "npm_config_store_dir", "NODE_COMPILE_CACHE", "UV_CACHE_DIR", "UV_PYTHON_INSTALL_DIR", "GOCACHE", "GOMODCACHE", "GOPATH"}
+			for _, key := range pathKeys {
+				if value := vars[key]; value != "" && !filepath.IsAbs(value) {
+					t.Errorf("runtime-owned cache path %s is not absolute: %q", key, value)
+				}
+			}
+			if _, ok := vars["GOBIN"]; ok {
+				t.Fatal("direct Go runtime environment unexpectedly owns app-local GOBIN")
+			}
+		})
+	}
+	if root, vars, err := New(runtimes).RuntimeExecutionEnvironment("jvm", config.RuntimeConfig{Kind: config.RuntimeKindJVM}); err != nil || root != "" || vars != nil {
+		t.Fatalf("JVM execution env = (%q, %v, %v), want no runtime cache paths", root, vars, err)
+	}
+	if _, _, err := New(runtimes).RuntimeExecutionEnvironment(testPNPMRuntimeName, testPNPMRuntime()); err == nil {
+		t.Fatal("RuntimeExecutionEnvironment accepted a non-executable pnpm runtime")
+	}
+	bunRuntimes := bunSystemRuntime("bun")
+	bunRoot, bunEnv, err := New(bunRuntimes).RuntimeExecutionEnvironment("bun", bunRuntimes["bun"])
+	if err != nil {
+		t.Fatalf("Bun RuntimeExecutionEnvironment() error = %v", err)
+	}
+	if got, want := bunEnv["BUN_RUNTIME_TRANSPILER_CACHE_PATH"], filepath.Join(bunRoot, "bun-cache"); got != want {
+		t.Fatalf("Bun transpiler cache = %q, want %q", got, want)
 	}
 }

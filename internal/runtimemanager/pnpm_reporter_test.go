@@ -158,3 +158,24 @@ func TestPNPMReporterTextBounded(t *testing.T) {
 		t.Errorf("last kept line = %q, want the final line", last)
 	}
 }
+
+func TestPNPMReporterPublishesPackageProgress(t *testing.T) {
+	var reports []struct {
+		phase    string
+		complete int64
+		total    int64
+		unit     string
+	}
+	reporter := newPNPMReporter(nil, func(phase string, complete, total int64, unit string) {
+		reports = append(reports, struct {
+			phase    string
+			complete int64
+			total    int64
+			unit     string
+		}{phase, complete, total, unit})
+	})
+	reporter.line([]byte(`{"name":"pnpm:progress","status":"fetched"}`))
+	if len(reports) != 1 || reports[0].phase != "install" || reports[0].complete != 1 || reports[0].total != -1 || reports[0].unit != "packages" {
+		t.Fatalf("progress reports = %#v, want one package counter update", reports)
+	}
+}

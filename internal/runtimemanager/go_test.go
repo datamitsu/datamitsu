@@ -400,6 +400,36 @@ func TestInstallGoApp_MissingLockFileIsRejected(t *testing.T) {
 	}
 }
 
+func TestInstallGoAppCleansPartialTargetAfterInvalidLock(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	runtimes := config.MapOfRuntimes{
+		"go": {
+			Kind:    config.RuntimeKindGo,
+			Mode:    config.RuntimeModeManaged,
+			Go:      &config.RuntimeConfigGo{GoVersion: "1.22.0"},
+			Managed: &config.RuntimeConfigManaged{Binaries: hostBinaries(t, testLibc, nil)},
+		},
+	}
+	rm := New(runtimes)
+	seedRuntimeTargets(t, rm, "go")
+	appConfig := &binmanager.AppConfigGo{
+		PackageName: "example.invalid/tool",
+		Version:     "v1.0.0",
+		Runtime:     "go",
+		LockFile:    `{"sum":"not-a-go-mod"}`,
+	}
+	appPath, err := rm.GetGoAppPath("tool", appConfig, nil, nil, "go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rm.InstallGoApp(context.Background(), "tool", appConfig, nil, nil, nil); err == nil || !strings.Contains(err.Error(), "missing mod") {
+		t.Fatalf("InstallGoApp() invalid lock error = %v", err)
+	}
+	if _, err := os.Stat(appPath); !os.IsNotExist(err) {
+		t.Fatalf("incomplete app target remains at %q: %v", appPath, err)
+	}
+}
+
 // TestInstallGoApp_ConcurrentSameKeyNoRace launches many goroutines installing
 // the same failing app simultaneously and ensures each caller can wait for the
 // per-target lock and observe the resolution error.

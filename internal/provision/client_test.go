@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"strings"
 	"testing"
@@ -240,5 +241,174 @@ func TestTransportFailureNeverEnablesLocalDispatch(t *testing.T) {
 		if !handled || err == nil || !RemoteSelected() {
 			t.Fatalf("failed worker enabled local dispatch: handled=%v error=%v", handled, err)
 		}
+	}
+}
+
+func TestClientReceivesCorrelatedProgress(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	client := NewClient(clientConn, nil)
+	defer func() { _ = client.Close() }()
+	defer func() { _ = serverConn.Close() }()
+	progress := make(chan json.RawMessage, 1)
+	client.SetProgress(func(event json.RawMessage) { progress <- event })
+	serveDone := make(chan error, 1)
+	go func() {
+		serveDone <- Serve(serverConn, func(ctx context.Context, _ string, _ json.RawMessage) (any, error) {
+			if err := Progress(ctx, map[string]string{"phase": "verify"}); err != nil {
+				return nil, err
+			}
+			return map[string]bool{"ok": true}, nil
+		})
+	}()
+	var result struct {
+		OK bool `json:"ok"`
+	}
+	if err := client.Call(context.Background(), "progress-test", nil, &result); err != nil {
+		t.Fatalf("Call() error = %v", err)
+	}
+	if !result.OK {
+		t.Fatalf("response = %#v", result)
+	}
+	select {
+	case event := <-progress:
+		if string(event) != `{"phase":"verify"}` {
+			t.Fatalf("progress event = %s", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("worker progress did not reach the client")
+	}
+	_ = client.Close()
+	if err := <-serveDone; err != nil {
+		t.Fatalf("Serve() error = %v", err)
+	}
+}
+
+func TestClientRejectsMalformedResponseVersion(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	client := NewClient(clientConn, nil)
+	defer func() { _ = client.Close() }()
+	go func() {
+		defer func() { _ = serverConn.Close() }()
+		var request Request
+		if readFrame(serverConn, &request) == nil {
+			_ = writeFrame(serverConn, Response{Version: ProtocolVersion + 1, ID: request.ID, Kind: "response"})
+		}
+	}()
+	if err := client.Call(context.Background(), "version-test", nil, nil); !errors.Is(err, ErrProtocol) {
+		t.Fatalf("Call() error = %v, want ErrProtocol", err)
+	}
+}
+
+func TestClientRejectsUnmarshalablePayload(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	client := NewClient(clientConn, nil)
+	defer func() { _ = client.Close() }()
+	defer func() { _ = serverConn.Close() }()
+	if err := client.Call(context.Background(), "bad-payload", make(chan int), nil); err == nil || !strings.Contains(err.Error(), "marshal provision request") {
+		t.Fatalf("Call() error = %v, want payload marshal error", err)
+	}
+}
+
+func TestServeReturnsProgressEncodingFailure(t *testing.T) {
+	client, server := net.Pipe()
+	defer func() { _ = client.Close() }()
+	serveDone := make(chan error, 1)
+	go func() {
+		serveDone <- Serve(server, func(ctx context.Context, _ string, _ json.RawMessage) (any, error) {
+			return nil, Progress(ctx, make(chan int))
+		})
+	}()
+	if err := writeFrame(client, Request{Version: ProtocolVersion, ID: 1, Kind: "request", Method: "progress-error"}); err != nil {
+		t.Fatal(err)
+	}
+	var response Response
+	if err := readFrame(client, &response); err != nil {
+		t.Fatalf("read error response: %v", err)
+	}
+	if response.Error == nil || !strings.Contains(response.Error.Message, "encode provisioning progress") {
+		t.Fatalf("response error = %#v, want progress encoding failure", response.Error)
+	}
+	_ = client.Close()
+	if err := <-serveDone; err != nil {
+		t.Fatalf("Serve() error = %v", err)
+	}
+}
+
+func TestReadStartupHandshakeRequiresExactNonceAndEOF(t *testing.T) {
+	nonce := make([]byte, startupNonceSize)
+	if err := ReadStartupHandshake(strings.NewReader(string(nonce))); err != nil {
+		t.Fatalf("valid startup handshake = %v", err)
+	}
+	for _, input := range [][]byte{nil, nonce[:len(nonce)-1], append(append([]byte(nil), nonce...), 1)} {
+		if err := ReadStartupHandshake(strings.NewReader(string(input))); !errors.Is(err, ErrProtocol) {
+			t.Errorf("ReadStartupHandshake(%d bytes) = %v, want ErrProtocol", len(input), err)
+		}
+	}
+	boom := errors.New("pipe read failed")
+	reader := io.MultiReader(strings.NewReader(string(nonce)), errorReader{err: boom})
+	if err := ReadStartupHandshake(reader); !errors.Is(err, ErrProtocol) || !errors.Is(err, boom) {
+		t.Fatalf("non-EOF handshake termination = %v, want protocol and underlying errors", err)
+	}
+}
+
+type errorReader struct{ err error }
+
+func (r errorReader) Read([]byte) (int, error) { return 0, r.err }
+
+func TestWriteFrameRejectsUnmarshalableValues(t *testing.T) {
+	if err := writeFrame(io.Discard, make(chan int)); err == nil || !strings.Contains(err.Error(), "marshal provision frame") {
+		t.Fatalf("writeFrame() error = %v, want JSON marshal failure", err)
+	}
+}
+
+func TestServeRejectsNilHandlerAndInvalidRequestKinds(t *testing.T) {
+	client, server := net.Pipe()
+	if err := Serve(server, nil); err == nil || !strings.Contains(err.Error(), "handler is required") {
+		t.Fatalf("Serve(nil handler) = %v", err)
+	}
+	_ = server.Close()
+	_ = client.Close()
+	for _, req := range []Request{
+		{Version: ProtocolVersion, ID: 1, Kind: "unexpected", Method: "run"},
+		{Version: ProtocolVersion, ID: 1, Kind: "cancel", CancelID: 1, Method: "extra"},
+		{Version: ProtocolVersion, ID: 1, Kind: "cancel", CancelID: 0},
+	} {
+		client, server := net.Pipe()
+		go func() { _ = writeFrame(client, req); _ = client.Close() }()
+		if err := Serve(server, func(context.Context, string, json.RawMessage) (any, error) {
+			t.Error("handler invoked for invalid request")
+			return nil, errors.New("invalid request reached handler")
+		}); !errors.Is(err, ErrProtocol) {
+			t.Errorf("Serve(%#v) = %v, want ErrProtocol", req, err)
+		}
+		_ = server.Close()
+	}
+}
+
+func TestProgressWithoutWorkerContextIsNoop(t *testing.T) {
+	if HasProgress(context.Background()) {
+		t.Fatal("background context unexpectedly reports progress support")
+	}
+	if err := Progress(context.Background(), map[string]string{"phase": "install"}); err != nil {
+		t.Fatalf("Progress() without worker context = %v", err)
+	}
+}
+
+func TestClientRejectsMalformedTypedResponse(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	client := NewClient(clientConn, nil)
+	defer func() { _ = client.Close() }()
+	go func() {
+		defer func() { _ = serverConn.Close() }()
+		var req Request
+		if readFrame(serverConn, &req) == nil {
+			_ = writeFrame(serverConn, Response{Version: ProtocolVersion, ID: req.ID, Kind: "response", Result: json.RawMessage(`[]`)})
+		}
+	}()
+	var result struct {
+		Value string `json:"value"`
+	}
+	if err := client.Call(context.Background(), "malformed-result", nil, &result); err == nil || !strings.Contains(err.Error(), "decode provision response") {
+		t.Fatalf("Call() error = %v, want typed response decode failure", err)
 	}
 }

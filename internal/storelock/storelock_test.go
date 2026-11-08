@@ -363,3 +363,30 @@ func TestValidateTargetRejectsAbsoluteOutsideAndRootTargets(t *testing.T) {
 		}
 	}
 }
+
+func TestLockWithWaitNotifiesOnlyAfterBlocking(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "store")
+	owner, err := Lock(context.Background(), store, ".apps/node/hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner()
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer cancel()
+	notified := false
+	if _, err := LockWithWait(ctx, store, ".apps/node/hash", func() { notified = true }); err == nil {
+		t.Fatal("waiting lock unexpectedly acquired")
+	}
+	if !notified {
+		t.Fatal("wait callback was not called")
+	}
+	called := false
+	release, err := LockWithWait(context.Background(), store, ".apps/node/other", func() { called = true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	if called {
+		t.Fatal("wait callback called without blocking")
+	}
+}

@@ -543,6 +543,30 @@ func TestInstallUVAppMissingRuntimeLeavesStaleVenvUntouched(t *testing.T) {
 	}
 }
 
+func TestInstallUVAppRequiresPinnedPythonBeforeProvisioning(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	runtimes := config.MapOfRuntimes{
+		"uv": {
+			Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "test"},
+			UV:     &config.RuntimeConfigUV{PythonVersion: "3.12.0"},
+		},
+	}
+	rm := New(runtimes)
+	app := &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.37.0", Runtime: "uv"}
+	appPath, err := rm.GetAppPath("yamllint", config.RuntimeKindUV, uvVersionForHash(app.Version, ""), nil, "", nil, nil, "uv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = rm.InstallUVApp(context.Background(), "yamllint", app, nil, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "uv.pythonDownloads with SHA-256 pins is required") {
+		t.Fatalf("InstallUVApp() missing Python pins error = %v", err)
+	}
+	if _, err := os.Stat(appPath); !os.IsNotExist(err) {
+		t.Fatalf("UV app target changed before pinned Python prerequisite failure: %v", err)
+	}
+}
+
 func TestResolveRequiresPython(t *testing.T) {
 	t.Run("app-level value is used when set", func(t *testing.T) {
 		got := resolveRequiresPython(">=3.10")

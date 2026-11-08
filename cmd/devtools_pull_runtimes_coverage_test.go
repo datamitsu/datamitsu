@@ -7,8 +7,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/datamitsu/datamitsu/internal/registry"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+	"github.com/datamitsu/datamitsu/internal/syslist"
+	"github.com/spf13/cobra"
 )
 
 // === Part A.1: writeRuntimesJSON error paths ===
@@ -167,5 +173,146 @@ func TestPullJVMRuntime_TemurinLookupError(t *testing.T) {
 	}
 	if data != nil || binaries != nil {
 		t.Error("expected nil data and binaries when the Temurin lookup fails")
+	}
+}
+
+func TestSelectUVPythonDownloadsFiltersAndCanonicalizes(t *testing.T) {
+	entries := map[string]registry.UVPythonDownload{
+		"linux-x86_64": {
+			Name: "cpython", Arch: registry.UVPythonArch{Family: "amd64"}, OS: "linux", Libc: "gnu",
+			Major: 3, Minor: 14, Patch: 8, URL: "https://example.invalid/python.tar.gz", SHA256: strings.Repeat("A", 64), Build: "build-1",
+		},
+		"free-threaded": {
+			Name: "cpython", Arch: registry.UVPythonArch{Family: "amd64", Variant: "freethreaded"}, OS: "linux", Libc: "gnu",
+			Major: 3, Minor: 14, Patch: 8, URL: "https://example.invalid/python-ft.tar.gz", SHA256: strings.Repeat("b", 64),
+		},
+		"other-version": {Name: "cpython", Major: 3, Minor: 13, Patch: 9, URL: "https://example.invalid/old.tar.gz", SHA256: strings.Repeat("c", 64)},
+	}
+	selected, err := selectUVPythonDownloads(entries, "3.14.8")
+	if err != nil {
+		t.Fatalf("selectUVPythonDownloads() error = %v", err)
+	}
+	if len(selected) != 1 {
+		t.Fatalf("selected entries = %#v, want only stable host-compatible build", selected)
+	}
+	for key, entry := range selected {
+		if key != "linux-x86_64" || entry.Hash != "sha256:"+strings.Repeat("a", 64) || entry.Build != "build-1" {
+			t.Fatalf("selected[%q] = %#v, hash must be canonical", key, entry)
+		}
+	}
+}
+
+func TestSelectUVPythonDownloadsRejectsMissingInvalidOrUnsupportedEntries(t *testing.T) {
+	base := registry.UVPythonDownload{
+		Name: "cpython", Arch: registry.UVPythonArch{Family: "definitely-unsupported"}, OS: "impossible", Libc: "none",
+		Major: 3, Minor: 14, Patch: 8, URL: "https://example.invalid/python.tar.gz", SHA256: strings.Repeat("a", 64),
+	}
+	if got, err := selectUVPythonDownloads(map[string]registry.UVPythonDownload{"unsupported": base}, "3.14.8"); err == nil || got != nil {
+		t.Fatalf("unsupported platform selection = %#v, %v; want an error and no entries", got, err)
+	}
+	base.Arch = registry.UVPythonArch{Family: "amd64"}
+	base.OS, base.Libc = string(syslist.OsTypeLinux), "gnu"
+	base.SHA256 = ""
+	if got, err := selectUVPythonDownloads(map[string]registry.UVPythonDownload{"missing-pin": base}, "3.14.8"); err == nil || got != nil || !strings.Contains(err.Error(), "missing its URL or SHA-256") {
+		t.Fatalf("missing hash selection = %#v, %v", got, err)
+	}
+	base.SHA256 = "not-a-hash"
+	if got, err := selectUVPythonDownloads(map[string]registry.UVPythonDownload{"bad-pin": base}, "3.14.8"); err == nil || got != nil || !strings.Contains(err.Error(), "invalid SHA-256") {
+		t.Fatalf("invalid hash selection = %#v, %v", got, err)
+	}
+}
+
+func TestPullUVRuntimeRejectsMissingOrFailedPinnedCatalog(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/astral-sh/uv/releases" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"tag_name":"0.13.6","published_at":"2026-01-01T00:00:00Z","assets":[]}]`))
+	}))
+	defer server.Close()
+	oldBase := githubBaseURL
+	githubBaseURL = server.URL
+	t.Cleanup(func() { githubBaseURL = oldBase })
+	oldPython := getLatestPythonStableVersion
+	getLatestPythonStableVersion = func(context.Context) (string, error) { return "3.14.8", nil }
+	t.Cleanup(func() { getLatestPythonStableVersion = oldPython })
+	stubUVSupportedPythonVersions(t, map[string]bool{"3.14.8": true}, nil)
+	oldCatalog := getUVPythonDownloads
+	t.Cleanup(func() { getUVPythonDownloads = oldCatalog })
+	t.Run("empty catalog", func(t *testing.T) {
+		getUVPythonDownloads = func(context.Context, string) (map[string]registry.UVPythonDownload, string, error) {
+			return map[string]registry.UVPythonDownload{}, "0.13.6", nil
+		}
+		data, binaries, err := pullUVRuntime(context.Background(), 0)
+		if err == nil || data != nil || binaries != nil || !strings.Contains(err.Error(), "no stable default-GIL entries") {
+			t.Fatalf("pullUVRuntime() = %#v, %#v, %v", data, binaries, err)
+		}
+	})
+	t.Run("catalog fetch failure", func(t *testing.T) {
+		getUVPythonDownloads = func(context.Context, string) (map[string]registry.UVPythonDownload, string, error) {
+			return nil, "", errors.New("catalog unavailable")
+		}
+		data, binaries, err := pullUVRuntime(context.Background(), 0)
+		if err == nil || data != nil || binaries != nil || !strings.Contains(err.Error(), "failed to fetch Python downloads") {
+			t.Fatalf("pullUVRuntime() = %#v, %#v, %v", data, binaries, err)
+		}
+	})
+}
+
+func TestRunPullRuntimesWritesOnlyChangedResults(t *testing.T) {
+	oldUpdate, oldDryRun, oldFilter, oldMinAge, oldPull := pullRuntimesUpdateFlag, pullRuntimesDryRunFlag, pullRuntimesRuntimeFlag, pullRuntimesMinAge, pullOneRuntime
+	t.Cleanup(func() {
+		pullRuntimesUpdateFlag, pullRuntimesDryRunFlag, pullRuntimesRuntimeFlag, pullRuntimesMinAge, pullOneRuntime = oldUpdate, oldDryRun, oldFilter, oldMinAge, oldPull
+	})
+	pullRuntimesUpdateFlag, pullRuntimesDryRunFlag, pullRuntimesRuntimeFlag = true, false, "uv"
+	minAge := 0
+	pullRuntimesMinAge = &minAge
+	current := &RuntimeJSON{Kind: "uv", Mode: "managed", UV: &UVConfigJSON{PythonVersion: "3.14.8"}}
+	pullOneRuntime = func(context.Context, string, int) (*RuntimeJSON, error) { return current, nil }
+	if err := runtimeconfig.Init(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "runtimes.json")
+	cmd := &cobra.Command{}
+	if err := runPullRuntimes(cmd, []string{path}); err != nil {
+		t.Fatalf("initial pull error = %v", err)
+	}
+	first, err := readRuntimesJSON(path)
+	if err != nil || !reflect.DeepEqual(first["uv"], current) {
+		t.Fatalf("saved runtime = %#v, err = %v", first["uv"], err)
+	}
+	if err := runPullRuntimes(cmd, []string{path}); err != nil {
+		t.Fatalf("unchanged pull error = %v", err)
+	}
+	current = &RuntimeJSON{Kind: "uv", Mode: "managed", UV: &UVConfigJSON{PythonVersion: "3.14.9"}}
+	pullRuntimesDryRunFlag = true
+	if err := runPullRuntimes(cmd, []string{path}); err != nil {
+		t.Fatalf("dry-run pull error = %v", err)
+	}
+	afterDryRun, err := readRuntimesJSON(path)
+	if err != nil || !reflect.DeepEqual(afterDryRun["uv"], first["uv"]) {
+		t.Fatalf("dry run changed runtime file: %#v, err = %v", afterDryRun["uv"], err)
+	}
+}
+
+func TestRunPullRuntimesReportsPullFailures(t *testing.T) {
+	oldUpdate, oldDryRun, oldFilter, oldMinAge, oldPull := pullRuntimesUpdateFlag, pullRuntimesDryRunFlag, pullRuntimesRuntimeFlag, pullRuntimesMinAge, pullOneRuntime
+	t.Cleanup(func() {
+		pullRuntimesUpdateFlag, pullRuntimesDryRunFlag, pullRuntimesRuntimeFlag, pullRuntimesMinAge, pullOneRuntime = oldUpdate, oldDryRun, oldFilter, oldMinAge, oldPull
+	})
+	pullRuntimesUpdateFlag, pullRuntimesDryRunFlag, pullRuntimesRuntimeFlag = true, false, "uv"
+	minAge := 0
+	pullRuntimesMinAge = &minAge
+	pullOneRuntime = func(context.Context, string, int) (*RuntimeJSON, error) {
+		return nil, errors.New("fixture pull failure")
+	}
+	if err := runtimeconfig.Init(); err != nil {
+		t.Fatal(err)
+	}
+	err := runPullRuntimes(&cobra.Command{}, []string{filepath.Join(t.TempDir(), "runtimes.json")})
+	if err == nil || !strings.Contains(err.Error(), "uv") || !strings.Contains(err.Error(), "1 of 1") {
+		t.Fatalf("runPullRuntimes() error = %v, want failed-runtime summary", err)
 	}
 }

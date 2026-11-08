@@ -5,12 +5,122 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+	"github.com/datamitsu/datamitsu/internal/storelock"
 )
+
+func TestGenerateLockRejectsUnsupportedAppAndCanceledWorkspace(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	rm := New(config.MapOfRuntimes{})
+	if _, err := rm.GenerateLock(context.Background(), "empty", binmanager.App{}); err == nil || !strings.Contains(err.Error(), "does not support lockfile generation") {
+		t.Fatalf("GenerateLock() unsupported app error = %v", err)
+	}
+
+	release, err := storelock.Clear(context.Background(), env.GetStorePath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	result := make(chan error, 1)
+	go func() {
+		close(started)
+		_, err := withLockWorkspace(ctx, func(context.Context, string) (string, error) {
+			return "", errors.New("callback should not run")
+		})
+		result <- err
+	}()
+	<-started
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	if err := <-result; !errors.Is(err, context.Canceled) {
+		t.Fatalf("withLockWorkspace() canceled error = %v, want context.Canceled", err)
+	}
+	release()
+	if entries, readErr := os.ReadDir(filepath.Join(env.GetStorePath(), ".lockfiles")); readErr == nil && len(entries) != 0 {
+		t.Fatalf("canceled acquisition created workspace entries: %v", entries)
+	} else if readErr != nil && !os.IsNotExist(readErr) {
+		t.Fatal(readErr)
+	}
+}
+
+func TestGenerateLockRoutesBunUVAndGoPrerequisites(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	if err := runtimeconfig.Init(); err != nil {
+		t.Fatal(err)
+	}
+	rm := New(config.MapOfRuntimes{})
+	tests := []struct {
+		name string
+		app  binmanager.App
+	}{
+		{name: "bun", app: binmanager.App{Bun: &binmanager.AppConfigBun{PackageName: "example/tool", Version: "1.0.0", Runtime: "missing"}}},
+		{name: "uv", app: binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "example/tool", Version: "1.0.0", Runtime: "missing"}}},
+		{name: "go", app: binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "example.invalid/tool", Version: "v1.0.0", Runtime: "missing"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := rm.GenerateLock(context.Background(), tt.name, tt.app); err == nil {
+				t.Fatal("GenerateLock succeeded without the required runtime")
+			}
+		})
+	}
+}
+
+func TestGenerateGoLockFromLocalFixtureUsesAndRestoresPrivateWorkspace(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	t.Setenv("GOPROXY", "off")
+	if err := runtimeconfig.Init(); err != nil {
+		t.Fatal(err)
+	}
+	runtimes := config.MapOfRuntimes{
+		"go": {Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "test"}},
+	}
+	rm := New(runtimes)
+	app := binmanager.App{
+		Go:    &binmanager.AppConfigGo{PackageName: "example.invalid/local/tool", Version: "v1.0.0", Runtime: "go", LockFile: "pinned"},
+		Files: map[string]string{"go.mod": "module example.invalid/local\n\ngo 1.20\n"},
+	}
+	pinned, err := rm.GetGoAppPath("local-tool", app.Go, app.Files, app.Archives, "go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(pinned, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pinned, "sentinel"), []byte("pinned"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	content, err := rm.GenerateLock(context.Background(), "local-tool", app)
+	if err != nil {
+		t.Fatalf("GenerateLock() local fixture: %v", err)
+	}
+	mod, _, err := parseGoLockFile(content)
+	if err != nil {
+		t.Fatalf("parseGoLockFile() generated content: %v", err)
+	}
+	if !strings.Contains(mod, "module example.invalid/local") {
+		t.Fatalf("generated go.mod = %q, want local fixture module", mod)
+	}
+	if app.Go.LockFile != "pinned" {
+		t.Fatalf("GenerateLock mutated caller app lock file: %q", app.Go.LockFile)
+	}
+	if got, err := os.ReadFile(filepath.Join(pinned, "sentinel")); err != nil || string(got) != "pinned" {
+		t.Fatalf("pinned installation changed: content=%q err=%v", got, err)
+	}
+	if entries, err := os.ReadDir(filepath.Join(env.GetStorePath(), ".lockfiles")); err == nil && len(entries) != 0 {
+		t.Fatalf("private Go generation workspace leaked: %v", entries)
+	} else if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+}
 
 func TestGenerateLockUsesPrivateWorkspaceAndPreservesPinnedInstall(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
@@ -173,5 +283,27 @@ func TestGenerateLockFailureDoesNotModifyPinnedApp(t *testing.T) {
 	got, err := os.ReadFile(sentinel)
 	if err != nil || string(got) != "pinned" {
 		t.Fatalf("pinned lockfile changed: content=%q err=%v", got, err)
+	}
+}
+
+func TestWithLockWorkspaceReportsParentCreationFailure(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	parent := filepath.Join(env.GetStorePath(), ".lockfiles")
+	if err := os.MkdirAll(env.GetStorePath(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(parent, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	_, err := withLockWorkspace(context.Background(), func(context.Context, string) (string, error) {
+		called = true
+		return "unexpected", nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "create lockfile workspace parent") {
+		t.Fatalf("withLockWorkspace() error = %v, want parent creation failure", err)
+	}
+	if called {
+		t.Fatal("generation callback ran without a private workspace")
 	}
 }
