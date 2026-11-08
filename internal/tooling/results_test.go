@@ -37,6 +37,7 @@ func resultsProject(t *testing.T, failFast bool, script string, names ...string)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(c.Shutdown)
 	e := NewExecutor(root, false, failFast, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
 		"tool": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", script, "tool"}},
 	}}, c)
