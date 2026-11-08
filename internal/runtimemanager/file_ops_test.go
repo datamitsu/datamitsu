@@ -170,3 +170,45 @@ func TestMoveRuntimeFiles(t *testing.T) {
 		}
 	})
 }
+
+func TestPublishRuntimeCopyPublishesDirectoryAndNestedBinary(t *testing.T) {
+	root := t.TempDir()
+	sourceDir := filepath.Join(root, "runtime")
+	if err := os.MkdirAll(filepath.Join(sourceDir, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, "bin", "node"), []byte("node-data"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(root, "store", "node", "identity")
+	if err := publishRuntimeCopy(sourceDir, destination, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(filepath.Join(destination, "bin", "node")); err != nil || string(got) != "node-data" {
+		t.Fatalf("published runtime tree = %q, %v", got, err)
+	}
+
+	binary := filepath.Join(root, "downloaded-node")
+	if err := os.WriteFile(binary, []byte("single-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	nestedDestination := filepath.Join(root, "store", "node", "single")
+	binaryPath := filepath.Join("bin", "node")
+	if err := publishRuntimeCopy(binary, nestedDestination, &binaryPath); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(filepath.Join(nestedDestination, binaryPath)); err != nil || string(got) != "single-binary" {
+		t.Fatalf("published nested binary = %q, %v", got, err)
+	}
+}
+
+func TestPublishRuntimeCopyRefusesUnsafeAndMissingSources(t *testing.T) {
+	root := t.TempDir()
+	unsafe := "../escape"
+	if err := publishRuntimeCopy(filepath.Join(root, "absent"), filepath.Join(root, "out"), &unsafe); err == nil {
+		t.Fatal("publishRuntimeCopy accepted unsafe binary path")
+	}
+	if err := publishRuntimeCopy(filepath.Join(root, "absent"), filepath.Join(root, "out"), nil); err == nil {
+		t.Fatal("publishRuntimeCopy accepted missing runtime source")
+	}
+}

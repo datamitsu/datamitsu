@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -46,5 +47,32 @@ func TestLockAppTargetReusesStoreLeaseAndValidatesTarget(t *testing.T) {
 	}
 	if _, _, err := lockAppTarget(ctx, filepath.Join(storeRoot, "..", "outside")); err == nil {
 		t.Fatal("lockAppTarget accepted a target outside the store")
+	}
+}
+
+func TestMarkAppReadyReplacesMarkerAndRejectsMissingDirectory(t *testing.T) {
+	path := t.TempDir()
+	marker := filepath.Join(path, appReadyMarker)
+	if err := os.WriteFile(marker, []byte("stale"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := markAppReady(path); err != nil {
+		t.Fatal(err)
+	}
+	if !appReady(path) {
+		t.Fatal("markAppReady did not atomically replace the stale marker")
+	}
+	missing := filepath.Join(path, "missing")
+	if err := markAppReady(missing); err == nil {
+		t.Fatal("markAppReady succeeded for missing app directory")
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".datamitsu-app-ready-") {
+			t.Errorf("temporary app marker leaked: %s", entry.Name())
+		}
 	}
 }

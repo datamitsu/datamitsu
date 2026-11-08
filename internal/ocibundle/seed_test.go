@@ -1262,6 +1262,30 @@ func TestSeedRepairsMarkerlessAppDestination(t *testing.T) {
 	}
 }
 
+func TestSeedFailedReadinessPreservesExistingAppPayload(t *testing.T) {
+	storeRoot := testStore(t)
+	subtree := ".apps/uv/tool/" + strings.Repeat("f", 32)
+	dest := filepath.Join(storeRoot, filepath.FromSlash(subtree))
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const existing = "existing payload"
+	if err := os.WriteFile(filepath.Join(dest, "tool"), []byte(existing), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	src := newFakeSource()
+	blob := buildLayer(t, []tarEntry{fileEntry(strings.TrimPrefix(testBuilderRoot, "/")+"/"+subtree+"/tool", []byte("unverified replacement"))})
+	desc := src.addLayer(blob, subtree)
+	job := layerJob{desc: desc, subtree: subtree, comp: compressionGzip}
+	if _, err := seedLayer(context.Background(), src, job, testBuilderRoot, storeRoot, nil); err == nil {
+		t.Fatal("layer without an app readiness marker was accepted")
+	}
+	got, err := os.ReadFile(filepath.Join(dest, "tool"))
+	if err != nil || string(got) != existing {
+		t.Fatalf("existing app payload = %q, err %v; want original bytes preserved", got, err)
+	}
+}
+
 func TestSeedFromLayout_OfflinePythonRuntimeData(t *testing.T) {
 	storeRoot := testStore(t)
 	cfg, _ := testUVConfig(t)

@@ -330,3 +330,36 @@ func TestValidateTargetRejectsTraversalAndSymlinkEscape(t *testing.T) {
 		t.Fatal("symlink escape accepted")
 	}
 }
+
+func TestStoreLockCanceledWaiterDoesNotBlockLaterOwner(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", filepath.Join(base, "cache"))
+	store := filepath.Join(base, "store")
+	ownerRelease, err := Lock(context.Background(), store, ".apps/node/identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+	if _, err := Lock(ctx, store, ".apps/node/identity"); err == nil || !strings.Contains(err.Error(), "deadline exceeded") {
+		t.Fatalf("canceled lock wait = %v, want context deadline", err)
+	}
+	ownerRelease()
+	release, err := Lock(context.Background(), store, ".apps/node/identity")
+	if err != nil {
+		t.Fatalf("lock after canceled waiter = %v", err)
+	}
+	release()
+}
+
+func TestValidateTargetRejectsAbsoluteOutsideAndRootTargets(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "store")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []string{"..", filepath.Join("..", "outside"), root, "."} {
+		if _, err := ValidateTarget(root, target); err == nil {
+			t.Errorf("ValidateTarget(%q) unexpectedly succeeded", target)
+		}
+	}
+}

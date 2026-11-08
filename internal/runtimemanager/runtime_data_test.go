@@ -1,7 +1,10 @@
 package runtimemanager
 
 import (
+	"encoding/json"
+	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -152,5 +155,83 @@ func TestRuntimeOwnedEnvironmentBuildsPerKindPaths(t *testing.T) {
 
 	if root, vars, err := rm.RuntimeOwnedEnvironment("jvm", config.RuntimeConfig{Kind: config.RuntimeKindJVM}, appEnvPath); err != nil || root != "" || vars != nil {
 		t.Fatalf("JVM runtime-owned env = (%q, %v, %v), want no env or data path", root, vars, err)
+	}
+}
+
+func TestRuntimeDefinitionsReturnsTypedConfigSnapshot(t *testing.T) {
+	want := bunSystemRuntime("bun")
+	rm := New(want)
+	data := rm.RuntimeDefinitions()
+	if len(data) == 0 {
+		t.Fatal("RuntimeDefinitions returned empty JSON")
+	}
+	var got config.MapOfRuntimes
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("decode RuntimeDefinitions: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("RuntimeDefinitions = %#v, want %#v", got, want)
+	}
+}
+
+func TestSystemRuntimeDataIdentityIncludesTargetPlatform(t *testing.T) {
+	rc := config.RuntimeConfig{Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "uv", SystemVersion: "0.13.6"}, UV: &config.RuntimeConfigUV{PythonVersion: "3.14.6"}}
+	rm := New(config.MapOfRuntimes{"uv": rc})
+	linux, err := rm.runtimeIdentityHash(rc, "linux", "amd64", "glibc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	darwin, err := rm.runtimeIdentityHash(rc, "darwin", "arm64", "none")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linux == darwin {
+		t.Fatalf("system runtime identity ignored target platform: %q", linux)
+	}
+}
+
+func TestRuntimeInstallResultJSONRoundTrip(t *testing.T) {
+	for _, result := range []RuntimeInstallResult{
+		{Name: "node"},
+		{Name: "uv", Error: errors.New("python pin missing")},
+	} {
+		data, err := json.Marshal(result)
+		if err != nil {
+			t.Fatalf("marshal result: %v", err)
+		}
+		var decoded RuntimeInstallResult
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("unmarshal result: %v", err)
+		}
+		if decoded.Name != result.Name || (decoded.Error == nil) != (result.Error == nil) || (result.Error != nil && decoded.Error.Error() != result.Error.Error()) {
+			t.Fatalf("round-trip = %#v, want %#v", decoded, result)
+		}
+	}
+	var result RuntimeInstallResult
+	if err := json.Unmarshal([]byte("{"), &result); err == nil {
+		t.Fatal("malformed runtime result JSON was accepted")
+	}
+}
+
+func TestComputeRuntimeDataPathRejectsUnknownRuntime(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	rm := New(config.MapOfRuntimes{})
+	if _, err := rm.ComputeRuntimeDataPath("missing"); err == nil {
+		t.Fatal("ComputeRuntimeDataPath accepted an unknown runtime")
+	}
+	if _, _, err := rm.RuntimeExecutionEnvironment("pnpm", testPNPMRuntime()); err == nil {
+		t.Fatal("RuntimeExecutionEnvironment accepted a package-manager-only runtime")
+	}
+}
+
+func TestRuntimeOwnedEnvironmentRejectsUnownedRuntimeKinds(t *testing.T) {
+	rm := New(nil)
+	for _, kind := range []config.RuntimeKind{config.RuntimeKindPNPM, config.RuntimeKind("unknown")} {
+		if _, _, err := rm.RuntimeOwnedEnvironment("custom", config.RuntimeConfig{Kind: kind}, ""); err == nil {
+			t.Errorf("RuntimeOwnedEnvironment accepted kind %q", kind)
+		}
+		if _, _, err := rm.RuntimeExecutionEnvironment("custom", config.RuntimeConfig{Kind: kind}); err == nil {
+			t.Errorf("RuntimeExecutionEnvironment accepted kind %q", kind)
+		}
 	}
 }

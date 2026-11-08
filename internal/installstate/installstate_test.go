@@ -92,3 +92,53 @@ func TestUnavailableStatusStoragePreservesExclusiveOwnership(t *testing.T) {
 	}
 	releaseNext()
 }
+
+func TestNestedAcquirePropagatesProgressToEveryOwner(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	store := filepath.Join(t.TempDir(), "store")
+	parent, releaseParent, err := Acquire(context.Background(), store, ".runtimes/node/identity", "node")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseParent()
+	child, releaseChild, err := Acquire(parent, store, ".bin/pnpm/identity", "pnpm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseChild()
+	Progress(child, PhaseDownload, 4, 10, "bytes")
+	statusDir := filepath.Join(env.GetCachePath(), "store-locks", "status")
+	entries, err := os.ReadDir(statusDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("nested acquisitions published %d statuses, want 2", len(entries))
+	}
+	for _, entry := range entries {
+		data, err := os.ReadFile(filepath.Join(statusDir, entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got status
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Phase != string(PhaseDownload) || got.Completed == nil || *got.Completed != 4 || got.Total == nil || *got.Total != 10 || got.Unit != "bytes" {
+			t.Errorf("nested progress did not reach owner %q: %+v", got.Label, got)
+		}
+	}
+}
+
+func TestValidPhaseRecognizesOnlyInstallLifecycleStages(t *testing.T) {
+	for _, phase := range []string{"download", "verify", "extract", "install", "publish"} {
+		if !validPhase(phase) {
+			t.Errorf("validPhase(%q) = false", phase)
+		}
+	}
+	for _, phase := range []string{"", "complete", "invalid"} {
+		if validPhase(phase) {
+			t.Errorf("validPhase(%q) = true", phase)
+		}
+	}
+}

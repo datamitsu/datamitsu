@@ -161,3 +161,87 @@ func TestEnsureExecutionUsesReadyPythonOfflineWithoutUV(t *testing.T) {
 		t.Fatalf("execution = %#v, want ready pinned Python %q", execution, python)
 	}
 }
+
+func TestEnsureExecutionRejectsUnsupportedKindsAndMissingSystemRuntimes(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	rm := New(config.MapOfRuntimes{
+		"pnpm":         testPNPMRuntime(),
+		"missing-node": {Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "absent-node-command"}, Node: &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: testPNPMRuntimeName}},
+	})
+	if _, err := rm.EnsureExecution(context.Background(), "pnpm"); err == nil || !strings.Contains(err.Error(), "not directly runnable") {
+		t.Fatalf("EnsureExecution(pnpm) = %v, want non-runnable kind error", err)
+	}
+	if _, err := rm.EnsureExecution(context.Background(), "missing-node"); err == nil || !strings.Contains(err.Error(), "executable file not found") {
+		t.Fatalf("EnsureExecution(missing system runtime) = %v, want missing executable diagnostic", err)
+	}
+}
+
+func TestResolveExecutionRejectsUnknownAndMalformedRuntimeKind(t *testing.T) {
+	rm := New(config.MapOfRuntimes{"broken": {Kind: config.RuntimeKind("unknown")}})
+	if _, err := rm.ResolveExecution("absent"); !errors.Is(err, ErrUnknownRuntime) {
+		t.Fatalf("unknown runtime error = %v", err)
+	}
+	if _, err := rm.ResolveExecution("broken"); err == nil || !strings.Contains(err.Error(), "not directly runnable") {
+		t.Fatalf("unsupported kind error = %v", err)
+	}
+}
+
+func TestRuntimeInventorySeparatesUnavailableFromMissing(t *testing.T) {
+	runtimes := config.MapOfRuntimes{
+		"bad/name":    {Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "node"}},
+		"no-platform": {Kind: config.RuntimeKindGo, Mode: config.RuntimeModeManaged, Managed: &config.RuntimeConfigManaged{}},
+		"jvm-system":  {Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "java", SystemVersion: "21"}, JVM: &config.RuntimeConfigJVM{JavaVersion: "21"}},
+		"bun":         {Kind: config.RuntimeKindBun, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "bun"}, Bun: &config.RuntimeConfigBun{BunVersion: "1"}},
+	}
+	rm := New(runtimes)
+	rm.lookPathFunc = func(command string) (string, error) {
+		if command == "java" {
+			return "/runtime/java", nil
+		}
+		return "", errors.New("not found")
+	}
+	entries, err := rm.RuntimeInventory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := make(map[string]RuntimeInventoryEntry, len(entries))
+	for _, entry := range entries {
+		byName[entry.Name] = entry
+	}
+	if got := byName["bad/name"]; got.Status != RuntimeStatusUnavailable || got.Reason == "" {
+		t.Errorf("unsafe name status = %#v", got)
+	}
+	if got := byName["no-platform"]; got.Status != RuntimeStatusUnavailable || got.Reason == "" {
+		t.Errorf("unavailable managed target status = %#v", got)
+	}
+	if got := byName["jvm-system"]; got.Status != RuntimeStatusInstalled || got.Version != "21" || got.Executable != "/runtime/java" {
+		t.Errorf("system JVM inventory = %#v", got)
+	}
+	if got := byName["bun"]; got.Status != RuntimeStatusMissing || got.Runnable || got.Version != "1" {
+		t.Errorf("missing Bun inventory = %#v", got)
+	}
+}
+
+func TestRuntimeConfiguredVersionUsesSystemOverrideThenKindVersion(t *testing.T) {
+	tests := []struct {
+		name string
+		rc   config.RuntimeConfig
+		want string
+	}{
+		{name: "node", rc: config.RuntimeConfig{Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "22"}}, want: "22"},
+		{name: "bun", rc: config.RuntimeConfig{Kind: config.RuntimeKindBun, Bun: &config.RuntimeConfigBun{BunVersion: "1.2"}}, want: "1.2"},
+		{name: "uv", rc: config.RuntimeConfig{Kind: config.RuntimeKindUV, UV: &config.RuntimeConfigUV{PythonVersion: "3.14.6"}}, want: "3.14.6"},
+		{name: "go", rc: config.RuntimeConfig{Kind: config.RuntimeKindGo, Go: &config.RuntimeConfigGo{GoVersion: "1.25"}}, want: "1.25"},
+		{name: "jvm", rc: config.RuntimeConfig{Kind: config.RuntimeKindJVM, JVM: &config.RuntimeConfigJVM{JavaVersion: "25"}}, want: "25"},
+		{name: "pnpm", rc: config.RuntimeConfig{Kind: config.RuntimeKindPNPM, PNPM: &config.RuntimeConfigPNPM{PNPMVersion: "12"}}, want: "12"},
+		{name: "system override", rc: config.RuntimeConfig{Kind: config.RuntimeKindNode, System: &config.RuntimeConfigSystem{SystemVersion: "system-current"}, Node: &config.RuntimeConfigNode{NodeVersion: "configured"}}, want: "system-current"},
+		{name: "missing version", rc: config.RuntimeConfig{Kind: config.RuntimeKind("unknown")}, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := runtimeConfiguredVersion(tt.rc); got != tt.want {
+				t.Fatalf("runtimeConfiguredVersion() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

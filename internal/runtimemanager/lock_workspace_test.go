@@ -42,6 +42,27 @@ func TestGenerateLockUsesPrivateWorkspaceAndPreservesPinnedInstall(t *testing.T)
 	}
 }
 
+func TestWithLockWorkspaceReturnsContentBeforeCleanup(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	want := "generated lock content"
+	got, err := withLockWorkspace(context.Background(), func(_ context.Context, workspace string) (string, error) {
+		if info, err := os.Stat(workspace); err != nil || !info.IsDir() {
+			t.Fatalf("workspace unavailable during generation: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(workspace, "lock"), []byte(want), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return want, nil
+	})
+	if err != nil || got != want {
+		t.Fatalf("withLockWorkspace() = %q, %v", got, err)
+	}
+	entries, err := os.ReadDir(filepath.Join(env.GetStorePath(), ".lockfiles"))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("workspace not cleaned: %v, %v", entries, err)
+	}
+}
+
 func TestWithLockWorkspaceUsesDistinctCleanWorkspaces(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	const workers = 2
@@ -106,5 +127,51 @@ func TestWithLockWorkspaceCleansFailureAndReadOnlyCache(t *testing.T) {
 	}
 	if _, err := os.Stat(workspace); !os.IsNotExist(err) {
 		t.Errorf("workspace %q remains after failure, stat err=%v", workspace, err)
+	}
+}
+
+func TestWithLockWorkspaceGeneratesAndReleasesStoreLease(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	var workspace string
+	content, err := withLockWorkspace(context.Background(), func(ctx context.Context, path string) (string, error) {
+		workspace = path
+		if _, ok := ctx.Value(lockWorkspaceKey{}).(string); !ok {
+			t.Fatal("workspace context missing destination")
+		}
+		return "lock", nil
+	})
+	if err != nil || content != "lock" {
+		t.Fatalf("withLockWorkspace() = %q, %v", content, err)
+	}
+	if _, err := os.Stat(workspace); !os.IsNotExist(err) {
+		t.Fatalf("workspace remains: %v", err)
+	}
+}
+
+func TestGenerateLockFailureDoesNotModifyPinnedApp(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	path := filepath.Join(env.GetStorePath(), ".apps", "node", "tool", "pinned")
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sentinel := filepath.Join(path, "package-lock.json")
+	if err := os.WriteFile(sentinel, []byte("pinned"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := withLockWorkspace(context.Background(), func(_ context.Context, workspace string) (string, error) {
+		if workspace == path {
+			t.Fatal("lock generation used installed app path")
+		}
+		if err := os.WriteFile(filepath.Join(workspace, "package-lock.json"), []byte("generated"), 0o644); err != nil {
+			return "", err
+		}
+		return "", errors.New("generation failed")
+	})
+	if err == nil {
+		t.Fatal("expected generation failure")
+	}
+	got, err := os.ReadFile(sentinel)
+	if err != nil || string(got) != "pinned" {
+		t.Fatalf("pinned lockfile changed: content=%q err=%v", got, err)
 	}
 }

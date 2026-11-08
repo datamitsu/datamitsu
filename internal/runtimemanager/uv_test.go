@@ -488,6 +488,15 @@ func TestInstallUVAppHealthyVenvSkips(t *testing.T) {
 	}
 }
 
+func TestUVAppInheritedOverrideRemovesPythonSelectors(t *testing.T) {
+	for _, key := range []string{"UV_PYTHON_DOWNLOADS_JSON_URL", "uv_python_preference", "UV_CONFIG_FILE", "VIRTUAL_ENV", "CONDA_PREFIX", "UV_CACHE_DIR", "PATH"} {
+		want := strings.HasPrefix(strings.ToUpper(key), "UV_PYTHON") || uvInheritedOverride(key)
+		if got := uvAppInheritedOverride(key); got != want {
+			t.Errorf("uvAppInheritedOverride(%q)=%v, want %v", key, got, want)
+		}
+	}
+}
+
 func TestInstallUVAppMissingRuntimeLeavesStaleVenvUntouched(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink semantics differ on windows")
