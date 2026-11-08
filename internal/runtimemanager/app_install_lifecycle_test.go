@@ -31,6 +31,11 @@ func main() {
  state := map[string]any{"kind": kind, "package": pkg, "mode": mode, "args": os.Args[1:], "env": env}
  if data, err := json.Marshal(state); err == nil { _ = os.WriteFile(os.Getenv("DATAMITSU_HELPER_RECORD"), data, 0600) }
  if mode == "fail" { os.Exit(19) }
+ if mode == "lock" {
+  filename, content := "pnpm-lock.yaml", "lockfileVersion: '9.0'\n"
+  if kind == "uv" { filename, content = "uv.lock", "version = 1\n" }
+  _ = os.WriteFile(filepath.Join(cwd, filename), []byte(content+"# workspace="+cwd+"\n"), 0600)
+ }
  if kind == "uv" {
   venvDir := "bin"
   pythonName := "python"

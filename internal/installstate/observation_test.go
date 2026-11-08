@@ -13,7 +13,7 @@ import (
 )
 
 func TestWaitStatusReportsOnlyFreshTrustedCounters(t *testing.T) {
-	for _, name := range []string{"bytes", "packages", "unknown total", "exceeded total", "negative count", "unknown unit", "stale", "future", "wrong schema", "missing owner", "invalid pid", "invalid phase", "malformed", "missing"} {
+	for _, name := range []string{"bytes", "packages", "unknown total", "exceeded total", "negative count", "unknown unit", "stale", "future", "wrong schema", "missing owner", "invalid pid", "invalid phase", "malformed", "missing", "unavailable directory"} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 			dir := filepath.Join(env.GetCachePath(), "store-locks", "status")
@@ -51,9 +51,16 @@ func TestWaitStatusReportsOnlyFreshTrustedCounters(t *testing.T) {
 				record.PID = 0
 			case "invalid phase":
 				record.Phase = "finished"
+			case "unavailable directory":
+				if err := os.Remove(dir); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(dir, []byte("not a directory"), 0o600); err != nil {
+					t.Fatal(err)
+				}
 			}
 			switch name {
-			case "stale", "future", "wrong schema", "missing owner", "invalid pid", "invalid phase", "malformed", "missing":
+			case "stale", "future", "wrong schema", "missing owner", "invalid pid", "invalid phase", "malformed", "missing", "unavailable directory":
 				want = "Waiting for installation: probe"
 			}
 			data, err := json.Marshal(record)
@@ -63,7 +70,7 @@ func TestWaitStatusReportsOnlyFreshTrustedCounters(t *testing.T) {
 			if name == "malformed" {
 				data = []byte("not-json")
 			}
-			if name != "missing" {
+			if name != "missing" && name != "unavailable directory" {
 				if err := os.WriteFile(filepath.Join(dir, "probe.json"), data, 0o600); err != nil {
 					t.Fatal(err)
 				}
@@ -89,6 +96,11 @@ func TestWaitStatusReportsOnlyFreshTrustedCounters(t *testing.T) {
 			<-done
 			if readErr != nil || line != want+"\n" {
 				t.Fatalf("wait message = %q, error = %v; want %q", line, readErr, want)
+			}
+			if name == "unavailable directory" {
+				if data, err := os.ReadFile(dir); err != nil || string(data) != "not a directory" {
+					t.Fatalf("status observation replaced unavailable storage: %q, %v", data, err)
+				}
 			}
 		})
 	}
