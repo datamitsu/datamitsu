@@ -31,6 +31,15 @@ func prepareTimeout() time.Duration {
 // EnsurePrepared runs the prepare steps of the app's closure (dependencies
 // first) after installation.
 func (bm *BinManager) EnsurePrepared(ctx context.Context, appName string) error {
+	if handled, err := bm.callPrepareApps(ctx, []string{appName}); handled || err != nil {
+		return err
+	}
+	leaseCtx, releaseLease, err := bm.withStoreLease(ctx)
+	if err != nil {
+		return err
+	}
+	defer releaseLease()
+	ctx = leaseCtx
 	names, err := AppDependencyClosure(bm.mapOfApps, []string{appName})
 	if err != nil {
 		return err
@@ -110,19 +119,19 @@ func (bm *BinManager) runPrepareStep(ctx context.Context, appName string) error 
 	// a step that shells out to a dependency (PATH lookup, ${APP_BIN:<alias>})
 	// finds it whatever install path led here (init, exec, the runner).
 	if closure, cerr := AppDependencyClosure(bm.mapOfApps, []string{appName}); cerr == nil {
-		if merr := bm.materializeDependencyPaths(closure, nil); merr != nil {
+		if merr := bm.materializeDependencyPaths(ctx, closure, nil); merr != nil {
 			return merr
 		}
 	} else {
 		return fmt.Errorf("resolve dependency closure: %w", cerr)
 	}
 
-	argv, err := bm.stepCommand(appName, app)
+	argv, err := bm.stepCommand(ctx, appName, app)
 	if err != nil {
 		return err
 	}
 
-	envList, err := bm.stepEnvironment(appName, app)
+	envList, err := bm.stepEnvironment(ctx, appName, app)
 	if err != nil {
 		return err
 	}
@@ -159,15 +168,15 @@ func (bm *BinManager) runPrepareStep(ctx context.Context, appName string) error 
 // -jar and options) — or prepare.binPath inside the install directory —
 // followed by the declared args with every placeholder expanded. The layout
 // tokens stay symbolic: the engine binds them to the staging paths.
-func (bm *BinManager) stepCommand(appName string, app App) ([]string, error) {
+func (bm *BinManager) stepCommand(ctx context.Context, appName string, app App) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("resolve prepare command: %w", err)
+	}
 	installDir, err := bm.ComputeInstallPath(appName)
 	if err != nil {
 		return nil, fmt.Errorf("resolve install directory: %w", err)
 	}
-	// A relative DATAMITSU_CACHE_DIR keeps the install dir relative, but the
-	// step's cwd is the staging workdir: every path handed to the step must
-	// be absolute or it resolves against the wrong directory. This is the
-	// ${APP_DIR} value as well, so absolutize it once, up front.
+	// The step runs in its staging workdir, so executable and APP_DIR paths must be absolute.
 	installDir, err = filepath.Abs(installDir)
 	if err != nil {
 		return nil, fmt.Errorf("absolutize install directory: %w", err)
@@ -274,7 +283,10 @@ func looksLikeRelativePath(arg string) bool {
 // or the uv cache. runtimeEnv is deliberately absent: it is run-time policy,
 // never step identity, and a step must not see a flag like an offline switch
 // meant for the tool's checks.
-func (bm *BinManager) stepEnvironment(appName string, app App) ([]string, error) {
+func (bm *BinManager) stepEnvironment(ctx context.Context, appName string, app App) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("resolve prepare environment: %w", err)
+	}
 	info, err := bm.resolveRawCommandInfo(appName)
 	if err != nil {
 		return nil, err
@@ -436,7 +448,7 @@ func (bm *BinManager) stepPATH(appName string, app App, info *CommandInfo) (stri
 		strict.Env["PATH"] = runtimePrefix
 	}
 	installDep := func(dep string) (string, error) { return bm.resolveBindingPath(dep) }
-	if _, err := bm.addDependencyPath(appName, strict, installDep, false); err != nil {
+	if _, _, _, err := bm.dependencyPathInfo(appName, strict, installDep, ""); err != nil {
 		return "", err
 	}
 	strictPath := strict.Env["PATH"]

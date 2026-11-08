@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
 
@@ -97,8 +99,38 @@ func subtreeLayer(t *testing.T, subtree string, entries []tarEntry) []byte {
 	for i := 1; i < len(segments); i++ {
 		all = append(all, dirEntry(strings.Join(segments[:i], "/")+"/"))
 	}
+	if strings.HasPrefix(subtree, ".apps/") {
+		all = append(all, fileEntry(prefix+"/"+subtree+"/"+appReadyName, []byte(appReadyContent)))
+	}
 	all = append(all, entries...)
 	return buildLayer(t, all)
+}
+
+func pythonRuntimeLayer(t *testing.T, subtree string) []byte {
+	t.Helper()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	executableRel := "bin/python" + filepath.Ext(executable)
+	marker, err := json.Marshal(pythonReadyRecord{Schema: 1, Executable: subtree + "/" + executableRel})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
+	return subtreeLayer(t, subtree, []tarEntry{
+		dirEntry(prefix + "/bin/"),
+		fileEntry(prefix+"/"+executableRel, payload),
+		fileEntry(prefix+"/"+pythonReadyName, marker),
+	})
+}
+
+func TestOCISeededPayloadHelper(t *testing.T) {
+	t.Log("seeded-executable-payload-helper-ran")
 }
 
 // fakeSource is an in-memory blobSource with request counters.
@@ -496,7 +528,7 @@ func TestSeed_RuntimeAppRelocation(t *testing.T) {
 
 	subtree := ".apps/uv/myapp/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
-	pyvenv := "home = " + testBuilderRoot + "/.uv/python/cpython-3.12\nversion = 3.12\n"
+	pyvenv := "home = " + testBuilderRoot + "/.runtime-data/uv/" + strings.Repeat("a", 32) + "/python\nversion = 3.12\n"
 	script := "#!" + testBuilderRoot + "/" + subtree + "/.venv/bin/python\nprint('hi')\n"
 	layer := subtreeLayer(t, subtree, []tarEntry{
 		dirEntry(prefix + "/.venv/"),
@@ -504,7 +536,7 @@ func TestSeed_RuntimeAppRelocation(t *testing.T) {
 		fileEntry(prefix+"/.venv/pyvenv.cfg", []byte(pyvenv)),
 		{
 			name: prefix + "/.venv/bin/python", typeflag: tar.TypeSymlink,
-			linkname: testBuilderRoot + "/.uv/python/cpython-3.12/bin/python3",
+			linkname: testBuilderRoot + "/.runtime-data/uv/" + strings.Repeat("a", 32) + "/python/bin/python3",
 		},
 		fileEntry(prefix+"/.venv/bin/mytool", []byte(script)),
 		fileEntry(prefix+"/data/original.txt", []byte("shared content")),
@@ -524,7 +556,7 @@ func TestSeed_RuntimeAppRelocation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read venv symlink: %v", err)
 	}
-	wantTarget := filepath.Join(storeRoot, ".uv", "python", "cpython-3.12", "bin", "python3")
+	wantTarget := filepath.Join(storeRoot, ".runtime-data", "uv", strings.Repeat("a", 32), "python", "bin", "python3")
 	if linkTarget != wantTarget {
 		t.Errorf("venv symlink = %q, want relocated %q", linkTarget, wantTarget)
 	}
@@ -931,11 +963,12 @@ func TestSeedFromLayout_TamperedBlobFails(t *testing.T) {
 
 func TestValidateSubtreeTable(t *testing.T) {
 	valid := []string{
-		".bin/golangci-lint/0123abcd",
-		".runtimes/node/0123abcd",
-		".apps/uv/cowsay/0123abcd",
-		".uv/python",
-		".uv/python/cpython-3.12",
+		".bin/golangci-lint/0123456789abcdef0123456789abcdef",
+		".runtimes/node/0123456789abcdef0123456789abcdef",
+		".apps/uv/cowsay/0123456789abcdef0123456789abcdef",
+		".parsers/core/0123456789abcdef0123456789abcdef",
+		".prepared/tool/0123456789abcdef0123456789abcdef",
+		".runtime-data/uv/0123456789abcdef0123456789abcdef/python",
 	}
 	for _, s := range valid {
 		if err := validateSubtree(s); err != nil {
@@ -944,7 +977,8 @@ func TestValidateSubtreeTable(t *testing.T) {
 	}
 	invalid := []string{
 		"", "/abs", "../up", ".bin/../escape", "random/place", ".binx/evil",
-		".bin/tool/../../../etc", "./bin/x",
+		".bin/tool/../../../etc", "./bin/x", ".bin/tool", ".bin/tool/abc123",
+		".uv/python", ".uv/python/cpython-3.12", ".runtime-data/uv/0123456789abcdef0123456789abcdef/python/cache",
 	}
 	for _, s := range invalid {
 		if err := validateSubtree(s); err == nil {
@@ -1077,6 +1111,7 @@ func testUVConfig(t *testing.T) (*config.Config, map[string]string) {
 			"uv": {
 				Kind:    config.RuntimeKindUV,
 				Mode:    config.RuntimeModeManaged,
+				UV:      &config.RuntimeConfigUV{PythonVersion: "3.15.2"},
 				Managed: &config.RuntimeConfigManaged{Binaries: binaries},
 			},
 		},
@@ -1098,54 +1133,200 @@ func testUVConfig(t *testing.T) (*config.Config, map[string]string) {
 
 func TestSeed_DemandDrivenPullsRuntimeDependencies(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg, expected := testUVConfig(t)
+	cfg, _ := testUVConfig(t)
+	cfg.Apps["mytool-alt"] = cfg.Apps["mytool"]
+	expected := expectedSubtrees(cfg, storeRoot, []string{"mytool", "mytool-alt"}, nil)
 
-	var appSubtree, runtimeSubtree string
-	wantUVPython := false
+	var appSubtrees []string
+	var runtimeSubtree, pythonSubtree string
 	for subtree := range expected {
 		switch {
-		case strings.HasPrefix(subtree, ".apps/uv/mytool/"):
-			appSubtree = subtree
+		case strings.HasPrefix(subtree, ".apps/uv/"):
+			appSubtrees = append(appSubtrees, subtree)
 		case strings.HasPrefix(subtree, ".runtimes/uv/"):
 			runtimeSubtree = subtree
-		case subtree == uvPythonSubtree:
-			wantUVPython = true
+		case strings.HasPrefix(subtree, ".runtime-data/uv/") && strings.HasSuffix(subtree, "/python"):
+			pythonSubtree = subtree
 		}
 	}
-	if appSubtree == "" || runtimeSubtree == "" || !wantUVPython {
+	if len(appSubtrees) != 2 || runtimeSubtree == "" || pythonSubtree == "" {
 		t.Fatalf("expected subtrees missing pieces: %v", expected)
 	}
 
 	src := newFakeSource()
 	prefix := strings.TrimPrefix(testBuilderRoot, "/")
-	appLayer := subtreeLayer(t, appSubtree, []tarEntry{fileEntry(prefix+"/"+appSubtree+"/marker", []byte("app"))})
+	layers := make([]ocispec.Descriptor, 0, 5)
+	for _, appSubtree := range appSubtrees {
+		appBinary, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := os.ReadFile(appBinary)
+		if err != nil {
+			t.Fatal(err)
+		}
+		appPath := prefix + "/" + appSubtree + "/bin/tool" + filepath.Ext(appBinary)
+		blob := subtreeLayer(t, appSubtree, []tarEntry{fileEntry(appPath, payload)})
+		layers = append(layers, src.addLayer(blob, appSubtree))
+	}
 	rtLayer := subtreeLayer(t, runtimeSubtree, []tarEntry{fileEntry(prefix+"/"+runtimeSubtree, []byte("uv binary"))})
-	pyLayer := subtreeLayer(t, uvPythonSubtree, []tarEntry{fileEntry(prefix+"/"+uvPythonSubtree+"/cpython/bin/python3", []byte("py"))})
-	unrelated := subtreeLayer(t, ".bin/unrelated/0123456789abcdef0123456789abcdef", []tarEntry{
-		fileEntry(prefix+"/.bin/unrelated/0123456789abcdef0123456789abcdef", []byte("x")),
-	})
+	pyLayer := pythonRuntimeLayer(t, pythonSubtree)
+	unrelatedSubtree := ".bin/unrelated/0123456789abcdef0123456789abcdef"
+	unrelated := subtreeLayer(t, unrelatedSubtree, []tarEntry{fileEntry(prefix+"/"+unrelatedSubtree, []byte("x"))})
+	layers = append(layers, src.addLayer(rtLayer, runtimeSubtree), src.addLayer(pyLayer, pythonSubtree), src.addLayer(unrelated, unrelatedSubtree))
 
-	digest := src.addManifest(t, []ocispec.Descriptor{
-		src.addLayer(appLayer, appSubtree),
-		src.addLayer(rtLayer, runtimeSubtree),
-		src.addLayer(pyLayer, uvPythonSubtree),
-		src.addLayer(unrelated, ".bin/unrelated/0123456789abcdef0123456789abcdef"),
-	}, nil)
-
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: []string{"mytool"}}); err != nil {
-		t.Fatalf("seedFrom: %v", err)
+	digest := src.addManifest(t, layers, nil)
+	t.Setenv("DATAMITSU_OFFLINE", "1")
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: []string{"mytool", "mytool-alt"}}); err != nil {
+		t.Fatalf("offline seedFrom: %v", err)
 	}
-
-	if got := src.blobCalls.Load(); got != 3 {
-		t.Errorf("blob calls = %d, want 3 (app + runtime + shared CPython)", got)
+	if got := src.blobCalls.Load(); got != 4 {
+		t.Errorf("blob calls = %d, want 4 (two apps + runtime + one shared Python)", got)
 	}
-	for _, subtree := range []string{appSubtree, runtimeSubtree, uvPythonSubtree} {
-		if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(subtree))); err != nil {
-			t.Errorf("subtree %q not seeded: %v", subtree, err)
+	for _, subtree := range append(appSubtrees, runtimeSubtree, pythonSubtree) {
+		if !subtreeReady(storeRoot, subtree) {
+			t.Errorf("subtree %q is not ready after seed", subtree)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(storeRoot, ".bin", "unrelated")); err == nil {
+	pythonExecutable, err := runtimemanager.New(cfg.Runtimes).ResolvePython("uv")
+	if err != nil {
+		t.Fatalf("resolve seeded Python executable: %v", err)
+	}
+	for _, executable := range append([]string{pythonExecutable}, func() []string {
+		paths := make([]string, 0, len(appSubtrees))
+		for _, subtree := range appSubtrees {
+			paths = append(paths, filepath.Join(storeRoot, filepath.FromSlash(subtree), "bin", "tool"+filepath.Ext(os.Args[0])))
+		}
+		return paths
+	}()...) {
+		cmd := exec.Command(executable, "-test.v", "-test.run=^TestOCISeededPayloadHelper$")
+		output, err := cmd.CombinedOutput()
+		if err != nil || !strings.Contains(string(output), "seeded-executable-payload-helper-ran") {
+			t.Fatalf("offline seeded helper %q: %v, output=%s", executable, err, output)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(unrelatedSubtree))); err == nil {
 		t.Error("unrelated layer was seeded")
+	}
+}
+
+func TestSeedRepairsMarkerlessPythonDestination(t *testing.T) {
+	storeRoot := testStore(t)
+	subtree := ".runtime-data/uv/" + strings.Repeat("c", 32) + "/python"
+	dest := filepath.Join(storeRoot, filepath.FromSlash(subtree))
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, pythonReadyName), []byte(`{"schema":1,"executable":"../outside"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if subtreeReady(storeRoot, subtree) {
+		t.Fatal("markerless Python payload was considered ready")
+	}
+	src := newFakeSource()
+	desc := src.addLayer(pythonRuntimeLayer(t, subtree), subtree)
+	job := layerJob{desc: desc, subtree: subtree, comp: compressionGzip}
+	placed, err := seedLayer(context.Background(), src, job, testBuilderRoot, storeRoot, nil)
+	if err != nil {
+		t.Fatalf("seedLayer: %v", err)
+	}
+	if !placed || !subtreeReady(storeRoot, subtree) {
+		t.Fatal("repaired Python target was not published as ready")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "bin", "python"+filepath.Ext(os.Args[0]))); err != nil {
+		t.Fatalf("repaired executable: %v", err)
+	}
+}
+
+func TestSeedRepairsMarkerlessAppDestination(t *testing.T) {
+	storeRoot := testStore(t)
+	subtree := ".apps/uv/tool/" + strings.Repeat("e", 32)
+	dest := filepath.Join(storeRoot, filepath.FromSlash(subtree))
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "partial"), []byte("incomplete"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	src := newFakeSource()
+	desc := src.addLayer(subtreeLayer(t, subtree, []tarEntry{fileEntry(strings.TrimPrefix(testBuilderRoot, "/")+"/"+subtree+"/tool", []byte("app"))}), subtree)
+	job := layerJob{desc: desc, subtree: subtree, comp: compressionGzip}
+	if _, err := seedLayer(context.Background(), src, job, testBuilderRoot, storeRoot, nil); err != nil {
+		t.Fatalf("seedLayer: %v", err)
+	}
+	if !subtreeReady(storeRoot, subtree) {
+		t.Fatal("repaired app target is not ready")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "partial")); !os.IsNotExist(err) {
+		t.Fatalf("incomplete app payload survived replacement: %v", err)
+	}
+}
+
+func TestSeedFromLayout_OfflinePythonRuntimeData(t *testing.T) {
+	storeRoot := testStore(t)
+	cfg, _ := testUVConfig(t)
+	var pythonSubtree string
+	for subtree := range expectedSubtrees(cfg, storeRoot, nil, []string{"uv"}) {
+		if strings.HasPrefix(subtree, ".runtime-data/uv/") && strings.HasSuffix(subtree, "/python") {
+			pythonSubtree = subtree
+		}
+	}
+	if pythonSubtree == "" {
+		t.Fatal("configured UV runtime has no expected Python target")
+	}
+	src := newFakeSource()
+	desc := src.addLayer(pythonRuntimeLayer(t, pythonSubtree), pythonSubtree)
+	digest := src.addManifest(t, []ocispec.Descriptor{desc}, nil)
+	layoutDir := t.TempDir()
+	blobDir := filepath.Join(layoutDir, "blobs", "sha256")
+	if err := os.MkdirAll(blobDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for blobDigest, data := range map[string][]byte{
+		digest:               src.manifests[digest],
+		desc.Digest.String(): src.blobs[desc.Digest.String()],
+	} {
+		if err := os.WriteFile(filepath.Join(blobDir, strings.TrimPrefix(blobDigest, "sha256:")), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("DATAMITSU_OFFLINE", "1")
+	if err := SeedFromLayout(context.Background(), cfg, layoutDir, digest, nil, Options{}); err != nil {
+		t.Fatalf("offline SeedFromLayout: %v", err)
+	}
+	if !subtreeReady(storeRoot, pythonSubtree) {
+		t.Fatal("relocated Python runtime data is not ready")
+	}
+	marker, err := os.ReadFile(filepath.Join(storeRoot, filepath.FromSlash(pythonSubtree), pythonReadyName))
+	if err != nil || !strings.Contains(string(marker), `"`+pythonSubtree+`/bin/python`+filepath.Ext(os.Args[0])+`"`) {
+		t.Fatalf("Python readiness path did not remain store-relative after offline import: %s, %v", marker, err)
+	}
+}
+
+func TestClassifyLayersRejectsDuplicateAndOverlappingTargets(t *testing.T) {
+	storeRoot := t.TempDir()
+	valid := ".bin/tool/" + strings.Repeat("d", 32)
+	cases := map[string][]string{
+		"duplicate":  {valid, valid},
+		"ancestor":   {".bin/tool", valid},
+		"descendant": {valid, valid + "/child"},
+	}
+	for name, subtrees := range cases {
+		t.Run(name, func(t *testing.T) {
+			src := newFakeSource()
+			layers := make([]ocispec.Descriptor, 0, len(subtrees))
+			for _, subtree := range subtrees {
+				layers = append(layers, src.addLayer([]byte("payload"), subtree))
+			}
+			manifest := &ocispec.Manifest{Layers: layers}
+			if _, _, err := classifyLayers(manifest, storeRoot, nil); err == nil {
+				t.Fatal("classifyLayers accepted duplicate/overlapping target annotations")
+			}
+			entries, err := os.ReadDir(storeRoot)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("classification wrote into store: entries=%v error=%v", entries, err)
+			}
+		})
 	}
 }
 
@@ -1427,5 +1608,56 @@ func TestSeed_UncoveredRequestWithoutRequireRequestedStillSucceeds(t *testing.T)
 	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil,
 		Options{Needed: []string{"tool"}}); err != nil {
 		t.Fatalf("seedFrom without RequireRequested = %v, want nil", err)
+	}
+}
+
+func TestSeed_RejectsSymlinkDestinationBeforeFollowing(t *testing.T) {
+	storeRoot := testStore(t)
+	cfg := &config.Config{}
+	subtree := ".apps/uv/symlink-file/0123456789abcdef0123456789abcdef"
+	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
+	victim := filepath.Join(storeRoot, ".apps", "uv", "neighbor", "victim")
+	if err := os.MkdirAll(filepath.Dir(victim), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const original = "preserve outside data"
+	if err := os.WriteFile(victim, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	layer := subtreeLayer(t, subtree, []tarEntry{
+		{name: prefix + "/owned", typeflag: tar.TypeSymlink, linkname: testBuilderRoot + "/.apps/uv/neighbor/victim"},
+		fileEntry(prefix+"/folder/../owned", []byte("overwrite")),
+	})
+	src := newFakeSource()
+	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err == nil {
+		t.Fatal("symlink followed by duplicate file destination was accepted")
+	}
+	got, err := os.ReadFile(victim)
+	if err != nil || string(got) != original {
+		t.Fatalf("neighbor victim = %q, err %v; want original bytes", got, err)
+	}
+}
+
+func TestSeed_RejectsParentSymlinkBeforeCreatingDirectories(t *testing.T) {
+	storeRoot := testStore(t)
+	cfg := &config.Config{}
+	subtree := ".apps/uv/symlink-parent/0123456789abcdef0123456789abcdef"
+	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
+	victimDir := filepath.Join(storeRoot, ".apps", "uv", "neighbor")
+	if err := os.MkdirAll(victimDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	layer := subtreeLayer(t, subtree, []tarEntry{
+		{name: prefix + "/outside", typeflag: tar.TypeSymlink, linkname: testBuilderRoot + "/.apps/uv/neighbor"},
+		fileEntry(prefix+"/outside/created/deep/file", []byte("no")),
+	})
+	src := newFakeSource()
+	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err == nil {
+		t.Fatal("file under a symlink parent was accepted")
+	}
+	if _, err := os.Lstat(filepath.Join(victimDir, "created")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("outside directory was created: %v", err)
 	}
 }

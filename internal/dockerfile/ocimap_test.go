@@ -66,18 +66,50 @@ func TestBuildOCIMapMirrorsRenderedCopyOrder(t *testing.T) {
 		}
 	}
 
-	// The Go runtime is build-only and must not appear; uv apps carry the
-	// shared CPython entry right after their own layer.
+	// Python data follows runtime app layers and is emitted once per UV runtime.
 	for _, entry := range m.Layers {
 		if entry.Kind == "runtime" && entry.App == "go" {
 			t.Error("build-only go runtime leaked into the oci map")
 		}
 	}
-	wantKinds := []string{"runtime", "runtime", "app", "uv-python", "app", "binary", "binary"}
+	wantKinds := []string{"runtime", "runtime", "app", "app", "python-data", "binary", "binary"}
 	for i, kind := range wantKinds {
 		if m.Layers[i].Kind != kind {
 			t.Errorf("layer %d kind = %q, want %q (layers: %+v)", i, m.Layers[i].Kind, kind, m.Layers)
 		}
+	}
+}
+
+func TestPythonExportSourcesDeduplicatesByRuntime(t *testing.T) {
+	plan := Plan{RuntimeAppStages: []RuntimeAppStage{
+		{App: "z-tool", Kind: config.RuntimeKindUV, Runtime: "z-uv"},
+		{App: "b-tool", Kind: config.RuntimeKindUV, Runtime: "a-uv"},
+		{App: "a-tool", Kind: config.RuntimeKindUV, Runtime: "z-uv"},
+		{App: "node-tool", Kind: config.RuntimeKindNode, Runtime: "node"},
+	}}
+	sources := pythonExportSources(plan)
+	if len(sources) != 2 {
+		t.Fatalf("Python export sources = %+v, want one per UV runtime", sources)
+	}
+	if sources[0].Runtime != "a-uv" || sources[0].App != "b-tool" || sources[1].Runtime != "z-uv" || sources[1].App != "a-tool" {
+		t.Fatalf("Python export sources = %+v, want runtime-sorted lexicographic app owners", sources)
+	}
+	ociMap := BuildOCIMap(plan, DefaultRenderOptions())
+	var pythonLayers []OCIMapEntry
+	for _, entry := range ociMap.Layers {
+		if entry.Kind == "python-data" {
+			pythonLayers = append(pythonLayers, entry)
+		}
+	}
+	if len(pythonLayers) != 2 || pythonLayers[0].Subtree != ".runtime-data/a-uv" || pythonLayers[1].Subtree != ".runtime-data/z-uv" {
+		t.Fatalf("Python OCI layers = %+v, want one per sorted runtime", pythonLayers)
+	}
+	rendered := Render(plan, DefaultRenderOptions())
+	if got := strings.Count(rendered, " AS python-export-"); got != 2 {
+		t.Fatalf("Python export stages = %d, want 2", got)
+	}
+	if !strings.Contains(rendered, "FROM app-b-tool AS python-export-a-uv") || !strings.Contains(rendered, "FROM app-a-tool AS python-export-z-uv") {
+		t.Fatalf("renderer did not choose the selected app stage per runtime:\n%s", rendered)
 	}
 }
 

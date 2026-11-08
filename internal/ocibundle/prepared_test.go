@@ -10,8 +10,8 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/installstate"
 	"github.com/datamitsu/datamitsu/internal/prepare"
-	"github.com/datamitsu/datamitsu/internal/storelock"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -79,7 +79,7 @@ func TestAllSubtreesPresentMarkerlessStateForcesSeed(t *testing.T) {
 	}
 }
 
-func TestPlaceSubtreeDefersMarkerlessPreparedState(t *testing.T) {
+func TestPlaceSubtreeReplacesMarkerlessPreparedState(t *testing.T) {
 	storeRoot := testStore(t)
 	dest := filepath.Join(storeRoot, ".prepared", "tool", "abc123")
 	// An interrupted placement: the directory exists, the marker does not.
@@ -103,7 +103,7 @@ func TestPlaceSubtreeDefersMarkerlessPreparedState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := placeSubtree(staged, dest, ".prepared/tool/abc123"); err != nil {
+	if err := placeSubtree(staged, dest, ".prepared/tool/abc123", storeRoot); err != nil {
 		t.Fatalf("placeSubtree: %v", err)
 	}
 	if !prepare.Ready(dest) {
@@ -112,23 +112,8 @@ func TestPlaceSubtreeDefersMarkerlessPreparedState(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dest, "out", "data.txt")); err != nil {
 		t.Fatalf("placed state content: %v", err)
 	}
-	// The markerless remnant moved aside under tmp, not deleted in place.
-	entries, err := os.ReadDir(filepath.Join(storeRoot, "tmp"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	foundAside := false
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), "stale-prepared-") {
-			foundAside = true
-			remnant := filepath.Join(storeRoot, "tmp", e.Name(), "state", "out", "partial.txt")
-			if _, err := os.Stat(remnant); err != nil {
-				t.Fatalf("aside remnant incomplete: %v", err)
-			}
-		}
-	}
-	if !foundAside {
-		t.Fatalf("markerless state was not moved aside: %v", entries)
+	if _, err := os.Stat(filepath.Join(dest, "out", "partial.txt")); !os.IsNotExist(err) {
+		t.Fatalf("markerless content survived replacement: %v", err)
 	}
 }
 
@@ -150,7 +135,7 @@ func TestPlaceSubtreeKeepsExistingCompleteState(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(staged, "kept.txt"), []byte("staged"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := placeSubtree(staged, dest, ".bin/tool/abc123"); err != nil {
+	if err := placeSubtree(staged, dest, ".bin/tool/abc123", storeRoot); err != nil {
 		t.Fatalf("placeSubtree: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(dest, "kept.txt"))
@@ -371,7 +356,7 @@ func TestSeedAndPrepareShareTheLock(t *testing.T) {
 	stateDir := filepath.Join(storeAbs, filepath.FromSlash(subtree))
 
 	// The prepare engine's lock, exactly as internal/prepare takes it.
-	release, err := storelock.Lock(context.Background(), storeAbs, stateDir)
+	_, release, err := installstate.Acquire(context.Background(), storeAbs, stateDir, "prepared state test")
 	if err != nil {
 		t.Fatal(err)
 	}

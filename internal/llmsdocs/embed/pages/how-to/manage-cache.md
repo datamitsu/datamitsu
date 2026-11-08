@@ -5,6 +5,7 @@
 datamitsu separates ephemeral **cache** state from the global **store** of
 downloaded, verified artifacts. Both are children of the base selected by
 `DATAMITSU_CACHE_DIR`, `XDG_CACHE_HOME`, or the platform fallback.
+When `DATAMITSU_CACHE_DIR` is relative, datamitsu resolves it against the invoking process's working directory before constructing cache and store paths; subprocess workers use the same absolute base.
 
 ## Cache vs Store
 
@@ -79,9 +80,11 @@ The global store holds all downloaded artifacts:
 ├── .bundles/                # Managed static content
 ├── .parsers/                # Downloaded WASM output parsers
 ├── .remote-configs/         # Cached remote configs
-├── .pnpm-store/             # Shared pnpm content-addressable store
-└── .uv/python/              # Python installations managed by uv
+├── .runtime-data/           # Runtime-owned mutable package/build caches and data
 ```
+
+Runtime-owned mutable data is grouped beneath `.runtime-data/<runtime-name>/<identity>/`. The identity is independent of the absolute store location. Changing a runtime name or its effective identity selects new app/runtime data; superseded directories are not migrated or automatically deleted. Use `datamitsu store clear` to remove old store content; there is no per-runtime cleanup command.
+Managed content under `.bundles/` is ready only after its completion marker is written and the staged directory is atomically published. Older markerless bundle entries are incomplete and rebuild once when next provisioned; no config edit or manual migration is required.
 
 ## Viewing Cache Paths
 
@@ -151,6 +154,8 @@ bundles, parsers, package-manager stores, managed Python installations, and
 remote configs. You will need to run `datamitsu init` again to download required
 content.
 :::
+
+Store clearing waits for active provisioning and prevents new provisioning from entering until removal finishes. It does not track or stop user programs already using store content. After clearing, run `datamitsu init` to provision the configured content again.
 
 ## When to Clear Cache
 

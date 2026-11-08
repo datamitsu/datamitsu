@@ -100,6 +100,8 @@ When you change the version, file content, or archive content, the hash changes.
 
 This is atomic — the old content remains until the symlink is switched.
 
+The bundle directory is considered ready only after all configured files and archives are present and a completion marker is written. Provisioning builds it in staging and atomically publishes the completed directory; an interrupted write without the marker is never accepted as ready. Existing markerless `{store}/.bundles/` entries from older runs are rebuilt once on the next provisioning attempt. No configuration change is needed.
+
 ## Using Archives in Bundles
 
 Bundles support the same archive types as apps:

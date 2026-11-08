@@ -135,7 +135,7 @@ func serveTestIndex(t *testing.T, wheels []*testWheel) string {
 	return srv.URL + "/simple"
 }
 
-func requireUVWithPython(t *testing.T) string {
+func requireUVWithPython(t *testing.T) (uvBin, pythonPath, pythonVersion, stdlibPath string) {
 	t.Helper()
 	uvBin, err := exec.LookPath("uv")
 	if err != nil {
@@ -143,21 +143,36 @@ func requireUVWithPython(t *testing.T) string {
 	}
 	cmd := exec.Command(uvBin, "python", "find", "--no-config", ">=3.12")
 	cmd.Env = append(os.Environ(), "UV_PYTHON_DOWNLOADS=never", "UV_PYTHON_INSTALL_DIR="+t.TempDir())
-	if err := cmd.Run(); err != nil {
+	output, err := cmd.Output()
+	if err != nil {
 		t.Skip("uv finds no Python >= 3.12 without downloading one; the release-age window is left unverified")
 	}
-	return uvBin
+	pythonPath = strings.TrimSpace(string(output))
+	versionOutput, err := exec.Command(pythonPath, "--version").CombinedOutput()
+	if err != nil {
+		t.Skip("uv-selected Python cannot report its version; the release-age window is left unverified")
+	}
+	pythonVersion = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(versionOutput)), "Python "))
+	stdlibOutput, err := exec.Command(pythonPath, "-c", "import sysconfig; print(sysconfig.get_path('stdlib'))").Output()
+	if err != nil {
+		t.Skip("uv-selected Python cannot report its standard library path; the release-age window is left unverified")
+	}
+	stdlibPath = strings.TrimSpace(string(stdlibOutput))
+	return uvBin, pythonPath, pythonVersion, stdlibPath
 }
 
 type uvReleaseAgeFixture struct {
-	t        *testing.T
-	uvBin    string
-	indexEnv map[string]string
+	t             *testing.T
+	uvBin         string
+	pythonPath    string
+	pythonVersion string
+	stdlibPath    string
+	indexEnv      map[string]string
 }
 
 func newUVReleaseAgeFixture(t *testing.T) *uvReleaseAgeFixture {
 	t.Helper()
-	uvBin := requireUVWithPython(t)
+	uvBin, pythonPath, pythonVersion, stdlibPath := requireUVWithPython(t)
 	old := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 	fresh := time.Now().Add(-time.Hour)
 	index := serveTestIndex(t, []*testWheel{
@@ -167,8 +182,7 @@ func newUVReleaseAgeFixture(t *testing.T) *uvReleaseAgeFixture {
 		{name: "gadget", version: "2.0.0", uploaded: fresh},
 	})
 	return &uvReleaseAgeFixture{
-		t:        t,
-		uvBin:    uvBin,
+		t: t, uvBin: uvBin, pythonPath: pythonPath, pythonVersion: pythonVersion, stdlibPath: stdlibPath,
 		indexEnv: map[string]string{"UV_DEFAULT_INDEX": index, "UV_PYTHON_DOWNLOADS": "never"},
 	}
 }
@@ -178,9 +192,8 @@ func newUVReleaseAgeFixture(t *testing.T) *uvReleaseAgeFixture {
 func (f *uvReleaseAgeFixture) install(version, lockFile string, files map[string]string) (string, error) {
 	f.t.Helper()
 	f.t.Setenv("DATAMITSU_CACHE_DIR", f.t.TempDir())
-	rm := New(config.MapOfRuntimes{
-		"uv": {Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: f.uvBin}},
-	})
+	rm := New(config.MapOfRuntimes{"uv": testUVRuntimeConfig(f.t, f.uvBin, f.pythonVersion)})
+	seedTestPythonReady(f.t, rm, "uv", f.pythonPath, f.stdlibPath)
 	app := &binmanager.AppConfigUV{PackageName: "widget", Version: version, Runtime: "uv", LockFile: lockFile}
 	if err := rm.InstallUVApp(context.Background(), "widget", app, f.indexEnv, files, nil); err != nil {
 		return "", err

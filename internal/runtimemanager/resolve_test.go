@@ -405,8 +405,9 @@ func TestResolveCommandInfo_RequiredPaths(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveCommandInfo() error = %v", err)
 		}
-		if !slices.Equal(info.RequiredPaths, []string{info.Command}) {
-			t.Errorf("RequiredPaths = %v, want [%s]", info.RequiredPaths, info.Command)
+		marker := filepath.Join(filepath.Dir(info.Artifact), appReadyMarker)
+		if !slices.Equal(info.RequiredPaths, []string{marker, info.Command}) {
+			t.Errorf("RequiredPaths = %v, want [%s %s]", info.RequiredPaths, marker, info.Command)
 		}
 	})
 
@@ -423,8 +424,9 @@ func TestResolveCommandInfo_RequiredPaths(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveCommandInfo() error = %v", err)
 		}
-		if len(info.RequiredPaths) != 0 {
-			t.Errorf("RequiredPaths = %v, want none for a system-mode java the user supplies", info.RequiredPaths)
+		want := []string{filepath.Join(filepath.Dir(info.Artifact), appReadyMarker)}
+		if !slices.Equal(info.RequiredPaths, want) {
+			t.Errorf("RequiredPaths = %v, want %v", info.RequiredPaths, want)
 		}
 	})
 }

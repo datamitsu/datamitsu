@@ -101,6 +101,23 @@ func TestRuntimeKindHashFields(t *testing.T) {
 			}
 		}
 	})
+	t.Run("uv hashes complete catalogs in sorted key order", func(t *testing.T) {
+		entry := func(url string) PythonDownload {
+			return PythonDownload{
+				Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+				Major: 3, Minor: 14, Patch: 6, URL: url, Hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			}
+		}
+		info, _ := LookupRuntimeKind(RuntimeKindUV)
+		rc := RuntimeConfig{Kind: RuntimeKindUV, UV: &RuntimeConfigUV{PythonVersion: "3.14.6", PythonDownloads: map[string]PythonDownload{
+			"z-key": entry("https://example.com/z"), "a-key": entry("https://example.com/a"),
+		}}}
+		got := info.HashFields(rc)
+		want := []string{"3.14.6", "a-key", "cpython", "x86_64", "", "linux", "gnu", "3", "14", "6", "", "https://example.com/a", "", "", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "z-key", "cpython", "x86_64", "", "linux", "gnu", "3", "14", "6", "", "https://example.com/z", "", "", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+		if !slices.Equal(got, want) {
+			t.Fatalf("UV HashFields = %v, want %v", got, want)
+		}
+	})
 
 	t.Run("returns nil when sub-config absent", func(t *testing.T) {
 		for _, kind := range AllRuntimeKinds() {
@@ -114,10 +131,53 @@ func TestRuntimeKindHashFields(t *testing.T) {
 }
 
 func TestRuntimeKindValidate(t *testing.T) {
-	t.Run("uv has no required sub-config validation", func(t *testing.T) {
+	t.Run("uv allows an omitted optional Python version and catalog", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindUV)
-		if info.Validate != nil {
-			t.Error("uv Validate should be nil (pythonVersion is optional)")
+		if errs := info.Validate("rt", RuntimeConfig{Kind: RuntimeKindUV, UV: &RuntimeConfigUV{}}); len(errs) != 0 {
+			t.Errorf("empty optional uv config errors = %v", errs)
+		}
+	})
+
+	t.Run("validates pinned stable default-GIL catalog entries", func(t *testing.T) {
+		info, _ := LookupRuntimeKind(RuntimeKindUV)
+		entry := PythonDownload{
+			Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+			Major: 3, Minor: 14, Patch: 6, URL: "https://example.com/python.tar.zst",
+			Hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		}
+		rc := RuntimeConfig{Kind: RuntimeKindUV, UV: &RuntimeConfigUV{
+			PythonVersion: "3.14.6", PythonDownloads: map[string]PythonDownload{"catalog-key": entry},
+		}}
+		if errs := info.Validate("uv-main", rc); len(errs) != 0 {
+			t.Fatalf("valid Python download rejected: %v", errs)
+		}
+		rc.UV.PythonVersion = ""
+		if errs := info.Validate("uv-main", rc); !strings.Contains(strings.Join(errs, "\n"), "pythonVersion is required") {
+			t.Fatalf("catalog without Python version errors = %v, want version requirement", errs)
+		}
+		rc.UV.PythonVersion = "3.14.6"
+
+		entry.Prerelease = "rc1"
+		rc.UV.PythonDownloads["catalog-key"] = entry
+		if errs := info.Validate("uv-main", rc); !strings.Contains(strings.Join(errs, "\n"), "stable default-GIL") {
+			t.Fatalf("unstable Python download errors = %v, want stable/default-GIL error", errs)
+		}
+	})
+
+	t.Run("rejects version mismatch and noncanonical hash", func(t *testing.T) {
+		info, _ := LookupRuntimeKind(RuntimeKindUV)
+		entry := PythonDownload{
+			Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+			Major: 3, Minor: 14, Patch: 5, URL: "https://example.com/python.tar.zst", Hash: strings.Repeat("a", 64),
+		}
+		rc := RuntimeConfig{Kind: RuntimeKindUV, UV: &RuntimeConfigUV{
+			PythonVersion: "3.14.6", PythonDownloads: map[string]PythonDownload{"catalog-key": entry},
+		}}
+		errs := strings.Join(info.Validate("uv-main", rc), "\n")
+		for _, want := range []string{"does not match uv.pythonVersion", "canonical SHA-256"} {
+			if !strings.Contains(errs, want) {
+				t.Errorf("validation errors %q do not contain %q", errs, want)
+			}
 		}
 	})
 

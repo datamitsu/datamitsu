@@ -86,7 +86,9 @@ import (
 //
 // Version 6 retires entries that recorded the extracted directory of an extractDir binary app
 // as its command; the command is now the binaryPath inside it.
-const ManifestFormatVersion = 8
+// Version 9 adds runtime app completion markers to farm health paths.
+// Version 10 retires entries that do not record runtime-scoped cache paths.
+const ManifestFormatVersion = 10
 
 // Origin records how the farm's root was established.
 type Origin string

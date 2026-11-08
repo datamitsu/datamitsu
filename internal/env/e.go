@@ -124,6 +124,12 @@ var (
 		Description:  "Disable sponsor messages (set to any non-empty value)",
 	}
 
+	installChild = envVar{
+		Name:         strings.ToUpper(ldflags.PackageName) + "_INSTALL_CHILD",
+		DefaultValue: "",
+		Description:  "Internal marker restricting recursive provisioning in installer and prepare subprocesses",
+	}
+
 	binaryCommandOverride = envVar{
 		Name:         strings.ToUpper(ldflags.PackageName) + "_BINARY_COMMAND",
 		DefaultValue: "",

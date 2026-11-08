@@ -349,22 +349,20 @@ func refuseInstallWithEmptySum(t *testing.T, rm *RuntimeManager, inline string) 
 	}
 	appConfig.LockFile = lock
 
-	// The install and the reproduced build each derive their OWN GOMODCACHE
-	// (under the app dir / the build dir): DATAMITSU_CACHE_DIR does not
-	// connect them to the generation's cache. Seed both from the warmed one
-	// so the dependency is provably local and the only possible refusal is
-	// the missing checksum.
-	warmed := filepath.Join(genRoot, "gomodcache")
-	depMarker := filepath.Join(warmed, "golang.org", "x", "mod@v0.17.0")
-	if _, err := os.Stat(depMarker); err != nil {
-		t.Fatalf("warm-up generation did not cache the dependency: %v", err)
-	}
-	appPath, err := rm.GetGoAppPath("needsdep", appConfig, nil, archives, "go")
+	// Generation and installation use the same runtime-owned module cache, so
+	// the dependency warmed above remains available to the read-only build.
+	runtimeName, rc, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindGo)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := copyTree(warmed, filepath.Join(appPath, "gomodcache")); err != nil {
-		t.Fatalf("seed the install module cache: %v", err)
+	runtimeDataPath, err := rm.runtimeDataPath(runtimeName, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmed := filepath.Join(runtimeDataPath, "go-modules")
+	depMarker := filepath.Join(warmed, "golang.org", "x", "mod@v0.17.0")
+	if _, err := os.Stat(depMarker); err != nil {
+		t.Fatalf("warm-up generation did not cache the dependency: %v", err)
 	}
 
 	err = rm.InstallGoApp(context.Background(), "needsdep", appConfig, nil, nil, archives)
@@ -372,12 +370,10 @@ func refuseInstallWithEmptySum(t *testing.T, rm *RuntimeManager, inline string) 
 		t.Fatal("install accepted a pinned dependency with an empty go.sum")
 	}
 
-	// The install's error chain hides the compiler's message (it is printed
-	// to the UI, not returned), so prove WHICH refusal it was by reproducing
-	// the exact build the installer runs — same env, same -mod=readonly —
-	// against the same warmed cache and the empty go.sum. The dir carries a
-	// Go module cache (read-only files), so it is removed with ForceRemoveAll
-	// rather than t.TempDir's plain RemoveAll.
+	// The install error hides the compiler message, so reproduce the build with
+	// the same runtime-owned cache and -mod=readonly settings to identify the
+	// missing-checksum refusal. Its module files are read-only, so cleanup uses
+	// ForceRemoveAll rather than t.TempDir's plain RemoveAll.
 	buildRoot, mkErr := os.MkdirTemp("", "go-refusal-build-*") //nolint:usetesting // a Go module cache holds read-only files; t.TempDir's plain RemoveAll cannot clean it
 	if mkErr != nil {
 		t.Fatal(mkErr)
@@ -390,16 +386,14 @@ func refuseInstallWithEmptySum(t *testing.T, rm *RuntimeManager, inline string) 
 	if err := os.WriteFile(filepath.Join(buildDir, "go.mod"), []byte("module example.com/needsdep\n\ngo 1.22\n\nrequire golang.org/x/mod v0.17.0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// go.sum is deliberately NOT written: the empty lock. The build's module
-	// cache is seeded from the warmed one too, so the refusal cannot be a
-	// download either.
-	if err := copyTree(warmed, filepath.Join(buildDir, "gomodcache")); err != nil {
-		t.Fatalf("seed the reproduced build's module cache: %v", err)
+	_, buildEnvVars, err := rm.RuntimeOwnedEnvironment(runtimeName, rc, buildDir)
+	if err != nil {
+		t.Fatal(err)
 	}
-	goBin, _ := exec.LookPath("go")
-	buildEnv := buildEnvWithOverrides(os.Environ(), getGoEnvVars(buildDir))
+	buildEnvVars["GOFLAGS"] = "-mod=readonly -trimpath"
+	buildEnv := buildEnvWithOverrides(os.Environ(), buildEnvVars)
 	var buildOut bytes.Buffer
-	cmd := exec.Command(goBin, "build", "-trimpath", "-mod=readonly", "-o", filepath.Join(buildDir, "bin", "needsdep"), "example.com/needsdep")
+	cmd := exec.Command(rc.System.Command, "build", "-trimpath", "-mod=readonly", "-o", filepath.Join(buildDir, "bin", "needsdep"), "example.com/needsdep")
 	cmd.Dir = buildDir
 	cmd.Env = buildEnv
 	cmd.Stdout = &buildOut
@@ -441,27 +435,4 @@ func TestInstallGoApp_GoWorkCannotBypassChecksums(t *testing.T) {
 		body: "go 1.22\n\nuse .\n",
 	})
 	refuseInstallWithEmptySum(t, rm, inline)
-}
-
-// copyTree copies a directory tree (module caches carry read-only files, so
-// permissions are widened on the copies).
-func copyTree(src, dst string) error {
-	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, 0o644)
-	})
 }

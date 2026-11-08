@@ -2,7 +2,9 @@ package runtimemanager
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -98,6 +100,31 @@ func makeTestRuntimes() config.MapOfRuntimes {
 				},
 			},
 		},
+	}
+}
+
+func seedRuntimeTarget(t *testing.T, rm *RuntimeManager, name string, content []byte) string {
+	t.Helper()
+	resolved, err := rm.computeRuntimeBinPath(name)
+	if err != nil {
+		t.Fatalf("computeRuntimeBinPath(%q): %v", name, err)
+	}
+	if !resolved.managed {
+		return resolved.binPath
+	}
+	if err := os.MkdirAll(filepath.Dir(resolved.binPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(resolved.binPath, content, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return resolved.binPath
+}
+
+func seedRuntimeTargets(t *testing.T, rm *RuntimeManager, names ...string) {
+	t.Helper()
+	for _, name := range names {
+		seedRuntimeTarget(t, rm, name, []byte("runtime fixture"))
 	}
 }
 
@@ -1598,7 +1625,7 @@ func TestGetRuntimePath_MuslAutoFallback(t *testing.T) {
 		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 	})
 
-	path, err := rm.GetRuntimePath("node")
+	path, err := rm.GetRuntimePath(context.Background(), "node")
 	if err != nil {
 		t.Fatalf("GetRuntimePath() error = %v", err)
 	}

@@ -121,18 +121,16 @@ func TestSeedFromLayout_PathIsNotADirectory(t *testing.T) {
 
 func TestPlaceSubtree_DestinationAlreadyExistsDropsStaged(t *testing.T) {
 	root := t.TempDir()
-	staged := filepath.Join(root, "staged")
+	identity := ".bin/tool/" + strings.Repeat("a", 32)
+	staged := filepath.Join(root, "tmp", "staged")
 	if err := os.MkdirAll(staged, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	dest := filepath.Join(root, "dest")
+	dest := filepath.Join(root, filepath.FromSlash(identity))
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		t.Fatal(err)
 	}
-
-	// Destination already present: placeSubtree must drop the staged copy
-	// (the content-addressed winner already holds identical content).
-	if err := placeSubtree(staged, dest, ".bin/tool/abc123"); err != nil {
+	if err := placeSubtree(staged, dest, identity, root); err != nil {
 		t.Fatalf("placeSubtree: %v", err)
 	}
 	if _, err := os.Stat(staged); !os.IsNotExist(err) {
@@ -145,16 +143,16 @@ func TestPlaceSubtree_DestinationAlreadyExistsDropsStaged(t *testing.T) {
 
 func TestPlaceSubtree_RenamesIntoFreshDest(t *testing.T) {
 	root := t.TempDir()
-	staged := filepath.Join(root, "staged")
+	identity := ".bin/tool/" + strings.Repeat("b", 32)
+	staged := filepath.Join(root, "tmp", "staged")
 	if err := os.MkdirAll(staged, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(staged, "f"), []byte("c"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	dest := filepath.Join(root, "nested", "dest")
-
-	if err := placeSubtree(staged, dest, ".bin/tool/abc123"); err != nil {
+	dest := filepath.Join(root, filepath.FromSlash(identity))
+	if err := placeSubtree(staged, dest, identity, root); err != nil {
 		t.Fatalf("placeSubtree: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "f")); err != nil {

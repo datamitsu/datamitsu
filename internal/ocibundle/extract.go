@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -100,9 +101,15 @@ func extractLayerSubtree(blobPath string, comp layerCompression, opts layerExtra
 		return "", fmt.Errorf("resolve staging directory: %w", err)
 	}
 
+	stageRoot, err := os.OpenRoot(stagingResolved)
+	if err != nil {
+		return "", fmt.Errorf("open staging root: %w", err)
+	}
+	defer func() { _ = stageRoot.Close() }()
 	var total int64
 	var deferredLinks []deferredHardlink
 	sawSubtree := false
+	seen := make(map[string]struct{})
 	tr := tar.NewReader(decompressed)
 	for {
 		hdr, err := tr.Next()
@@ -132,6 +139,10 @@ func extractLayerSubtree(blobPath string, comp layerCompression, opts layerExtra
 		}
 		sawSubtree = true
 
+		if _, exists := seen[rel]; exists {
+			return "", fmt.Errorf("duplicate normalized archive destination %q", rel)
+		}
+		seen[rel] = struct{}{}
 		dest, err := secureDestPath(stagedRoot, stagingResolved, rel)
 		if err != nil {
 			return "", err
@@ -139,7 +150,11 @@ func extractLayerSubtree(blobPath string, comp layerCompression, opts layerExtra
 
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(dest, tarEntryMode(hdr.Mode)|0o755); err != nil {
+			relDest, err := filepath.Rel(stagingResolved, dest)
+			if err != nil {
+				return "", fmt.Errorf("resolve directory destination %q: %w", rel, err)
+			}
+			if err := mkdirAllAt(stageRoot, filepath.ToSlash(relDest), tarEntryMode(hdr.Mode)|0o755); err != nil {
 				return "", fmt.Errorf("create directory %q: %w", rel, err)
 			}
 
@@ -151,12 +166,25 @@ func extractLayerSubtree(blobPath string, comp layerCompression, opts layerExtra
 			if total > maxUnpackedLayerBytes {
 				return "", fmt.Errorf("layer exceeds the %d byte unpacked limit", maxUnpackedLayerBytes)
 			}
-			if err := writeRegularFile(dest, tr, hdr); err != nil {
+			relDest, err := filepath.Rel(stagingResolved, dest)
+			if err != nil {
+				return "", fmt.Errorf("resolve file destination %q: %w", rel, err)
+			}
+			if err := writeRegularFile(stageRoot, filepath.ToSlash(relDest), tr, hdr); err != nil {
 				return "", fmt.Errorf("write file %q: %w", rel, err)
 			}
-
 		case tar.TypeSymlink:
-			if err := createRelocatedSymlink(dest, stagedRoot, hdr.Linkname, opts); err != nil {
+			if err := verifyParentsNoSymlink(stagingResolved, filepath.Dir(dest)); err != nil {
+				return "", fmt.Errorf("symlink destination %q has an unsafe parent: %w", rel, err)
+			}
+			relDest, err := filepath.Rel(stagingResolved, dest)
+			if err != nil {
+				return "", fmt.Errorf("resolve symlink destination %q: %w", rel, err)
+			}
+			if err := mkdirAllAt(stageRoot, filepath.ToSlash(filepath.Dir(relDest)), 0o755); err != nil {
+				return "", fmt.Errorf("create symlink parent for %q: %w", rel, err)
+			}
+			if err := createRelocatedSymlink(stageRoot, filepath.ToSlash(relDest), dest, stagedRoot, hdr.Linkname, opts); err != nil {
 				return "", err
 			}
 
@@ -170,8 +198,6 @@ func extractLayerSubtree(blobPath string, comp layerCompression, opts layerExtra
 			if err != nil {
 				return "", err
 			}
-			// The tar format does not guarantee the link target precedes the
-			// link entry; restore hardlinks after the full pass.
 			deferredLinks = append(deferredLinks, deferredHardlink{src: linkSrc, dest: dest, rel: rel, linkRel: linkRel})
 
 		default:
@@ -184,7 +210,21 @@ func extractLayerSubtree(blobPath string, comp layerCompression, opts layerExtra
 	}
 
 	for _, link := range deferredLinks {
-		if err := os.Link(link.src, link.dest); err != nil {
+		if err := verifyParentsNoSymlink(stagingResolved, filepath.Dir(link.dest)); err != nil {
+			return "", fmt.Errorf("hardlink destination %q has an unsafe parent: %w", link.rel, err)
+		}
+		destRel, err := filepath.Rel(stagingResolved, link.dest)
+		if err != nil {
+			return "", fmt.Errorf("resolve staged hardlink destination %q: %w", link.rel, err)
+		}
+		if err := mkdirAllAt(stageRoot, filepath.ToSlash(filepath.Dir(destRel)), 0o755); err != nil {
+			return "", fmt.Errorf("create hardlink parent for %q: %w", link.rel, err)
+		}
+		srcRel, err := filepath.Rel(stagingResolved, link.src)
+		if err != nil {
+			return "", fmt.Errorf("resolve staged hardlink source %q: %w", link.linkRel, err)
+		}
+		if err := stageRoot.Link(filepath.ToSlash(srcRel), filepath.ToSlash(destRel)); err != nil {
 			return "", fmt.Errorf("restore hardlink %q -> %q: %w", link.rel, link.linkRel, err)
 		}
 	}
@@ -245,25 +285,93 @@ func secureDestPath(stagedRoot, stagingResolved, rel string) (string, error) {
 	}
 
 	parent := filepath.Dir(dest)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return "", fmt.Errorf("create parent directory for %q: %w", rel, err)
-	}
-	resolvedParent, err := filepath.EvalSymlinks(parent)
-	if err != nil {
-		return "", fmt.Errorf("resolve parent directory for %q: %w", rel, err)
-	}
-	if resolvedParent != stagingResolved && !strings.HasPrefix(resolvedParent, stagingResolved+string(filepath.Separator)) {
-		return "", fmt.Errorf("entry %q would be written through a symlink escaping the staging directory", rel)
+	if err := verifyParentsNoSymlink(stagingResolved, parent); err != nil {
+		return "", fmt.Errorf("entry %q has an unsafe parent: %w", rel, err)
 	}
 	return dest, nil
 }
 
-func writeRegularFile(dest string, tr io.Reader, hdr *tar.Header) (retErr error) {
+func verifyParentsNoSymlink(root, parent string) error {
+	rel, err := filepath.Rel(root, parent)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return errors.New("parent escapes staging directory")
+	}
+	if err := requireRealDirectory(root); err != nil {
+		return err
+	}
+	current := root
+	for part := range strings.SplitSeq(rel, string(filepath.Separator)) {
+		if part == "." || part == "" {
+			continue
+		}
+		current = filepath.Join(current, part)
+		err := requireRealDirectory(current)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func requireRealDirectory(p string) error {
+	info, err := os.Lstat(p)
+	if err != nil {
+		return fmt.Errorf("inspect directory %q: %w", p, err)
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%q is not a real directory", p)
+	}
+	return nil
+}
+
+func mkdirAllAt(root *os.Root, rel string, mode os.FileMode) error {
+	current := ""
+	for part := range strings.SplitSeq(rel, "/") {
+		if part == "" || part == "." {
+			continue
+		}
+		if current == "" {
+			current = part
+		} else {
+			current += "/" + part
+		}
+		info, err := root.Lstat(current)
+		if errors.Is(err, fs.ErrNotExist) {
+			if err := root.Mkdir(current, mode); err != nil && !errors.Is(err, fs.ErrExist) {
+				return fmt.Errorf("create directory %q: %w", current, err)
+			}
+			info, err = root.Lstat(current)
+		}
+		if err != nil {
+			return fmt.Errorf("inspect directory %q: %w", current, err)
+		}
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%q is not a real directory", current)
+		}
+	}
+	return nil
+}
+
+func writeRegularFile(root *os.Root, rel string, tr io.Reader, hdr *tar.Header) (retErr error) {
+	if err := mkdirAllAt(root, path.Dir(rel), 0o755); err != nil {
+		return err
+	}
+	if info, err := root.Lstat(rel); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return errors.New("destination is not a regular file")
+		}
+		return errors.New("destination already exists")
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("inspect file destination %q: %w", rel, err)
+	}
 	mode := tarEntryMode(hdr.Mode)
 	if mode == 0 {
 		mode = 0o644
 	}
-	out, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	out, err := root.OpenFile(rel, os.O_CREATE|os.O_WRONLY|os.O_EXCL, mode)
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
@@ -288,7 +396,7 @@ func writeRegularFile(dest string, tr io.Reader, hdr *tar.Header) (retErr error)
 // targets outside the builder store root are skipped with a warning, matching
 // the generic extractor's posture. The value handed to os.Symlink is always
 // re-derived from a containment-checked path, never the raw archive header.
-func createRelocatedSymlink(dest, stagedRoot, linkTarget string, opts layerExtractOptions) error {
+func createRelocatedSymlink(root *os.Root, relDest, dest, stagedRoot, linkTarget string, opts layerExtractOptions) error {
 	var target string
 	if path.IsAbs(linkTarget) {
 		rest, ok := strings.CutPrefix(linkTarget, opts.BuilderStoreRoot+"/")
@@ -330,7 +438,12 @@ func createRelocatedSymlink(dest, stagedRoot, linkTarget string, opts layerExtra
 			return fmt.Errorf("resolve relative symlink %q -> %q: %w", dest, linkTarget, err)
 		}
 	}
-	if err := os.Symlink(target, dest); err != nil {
+	if _, err := root.Lstat(relDest); err == nil {
+		return fmt.Errorf("symlink destination %q already exists", dest)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("inspect symlink destination %q: %w", dest, err)
+	}
+	if err := root.Symlink(target, relDest); err != nil {
 		return fmt.Errorf("create symlink %q -> %q: %w", dest, target, err)
 	}
 	return nil

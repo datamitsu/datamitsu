@@ -64,7 +64,8 @@ chmod +x .venv/bin/tool .venv/bin/python
 			if err := os.WriteFile(uv, []byte(script), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			rm := New(config.MapOfRuntimes{"uv": {Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: uv}}})
+			rm := New(config.MapOfRuntimes{"uv": testUVRuntimeConfig(t, uv, "3.14.0")})
+			seedTestPythonReady(t, rm, "uv", "", "")
 			capture := filepath.Join(dir, "capture")
 			app := binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "tool", Version: "1"}, Env: map[string]string{"DEP_TEST_INSTALL_ENV": "install", "DEP_TEST_CAPTURE": capture}, RuntimeEnv: map[string]string{"DEP_TEST_RUNTIME_ONLY": runtimeValue}}
 			if _, err := rm.GetCommandInfo(context.Background(), "tool", app); err != nil {

@@ -169,9 +169,8 @@ func TestExtractDirBinaryAppMissingBinaryPathFails(t *testing.T) {
 	}
 }
 
-// An emptied installation directory — the runtime manager left one behind when it moved a
-// runtime into its own cache — gives way to the fresh extraction. A directory that still holds
-// something but not the command is never deleted: the install fails naming it.
+// Incomplete installation roots are rebuilt from the verified archive while
+// the content-addressed target lock is held.
 func TestExtractDirBinaryAppInstalledDirectoryWithoutCommand(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the fixture command is a shell script")
@@ -197,7 +196,7 @@ func TestExtractDirBinaryAppInstalledDirectoryWithoutCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("non-empty directory is kept and named", func(t *testing.T) {
+	t.Run("non-empty directory is repaired", func(t *testing.T) {
 		bm := extractDirFixture(t, archive, BinContentTypeTarGz, "tool-1.0/bin/tool")
 		installRoot, err := bm.ComputeInstallPath("tool")
 		if err != nil {
@@ -207,12 +206,15 @@ func TestExtractDirBinaryAppInstalledDirectoryWithoutCommand(t *testing.T) {
 		if err := os.MkdirAll(leftover, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		_, err = bm.getOrInstallBinaryPath(context.Background(), "tool")
-		if err == nil || !strings.Contains(err.Error(), installRoot) || !strings.Contains(err.Error(), "remove the directory") {
-			t.Fatalf("getOrInstallBinaryPath() = %v, want the directory named", err)
+		command, err := bm.getOrInstallBinaryPath(context.Background(), "tool")
+		if err != nil {
+			t.Fatalf("getOrInstallBinaryPath() error = %v", err)
 		}
-		if _, err := os.Stat(leftover); err != nil {
-			t.Errorf("the directory's content was removed: %v", err)
+		if _, err := os.Stat(command); err != nil {
+			t.Fatalf("repaired command %q is unavailable: %v", command, err)
+		}
+		if _, err := os.Stat(leftover); !os.IsNotExist(err) {
+			t.Errorf("incomplete directory content remains, stat error = %v", err)
 		}
 	})
 }

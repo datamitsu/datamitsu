@@ -70,10 +70,8 @@ func TestWrapInstallTimeout(t *testing.T) {
 	}
 }
 
-// TestRunInstallCmd_TimeoutKillsChild proves the subprocess install path uses an
-// exec.CommandContext whose deadline actually kills the child: a long sleep is
-// terminated well before it would finish, and the deadline is surfaced as
-// context.DeadlineExceeded so wrapInstallTimeout can render a clear message.
+// TestRunInstallCmd_TimeoutKillsChild verifies that the shared runner terminates
+// the full process tree on deadline and preserves the timeout error.
 func TestRunInstallCmd_TimeoutKillsChild(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses the POSIX sleep command")
@@ -82,7 +80,7 @@ func TestRunInstallCmd_TimeoutKillsChild(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "sleep", "30")
+	cmd := exec.Command("sleep", "30")
 
 	start := time.Now()
 	err := runInstallCmd(ctx, cmd)
@@ -114,7 +112,7 @@ func TestRunInstallCmd_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "true")
+	cmd := exec.Command("true")
 	if err := runInstallCmd(ctx, cmd); err != nil {
 		t.Errorf("expected nil error for a fast command, got %v", err)
 	}
@@ -130,13 +128,30 @@ func TestRunInstallCmd_FailurePassesThrough(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "false")
+	cmd := exec.Command("false")
 	err := runInstallCmd(ctx, cmd)
 	if err == nil {
 		t.Fatal("expected a non-zero exit error, got nil")
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("a normal failure must not be reported as a timeout: %v", err)
+	}
+}
+
+func TestRunInstallCmdStreamingStderr_DrainsBothStreams(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses POSIX shell")
+	}
+	cmd := exec.Command("sh", "-c", "printf 'out\\n'; printf 'progress\\n' >&2")
+	var lines []string
+	stdout, stderr, err := runInstallCmdStreamingStderr(context.Background(), cmd, func(line string) {
+		lines = append(lines, line)
+	})
+	if err != nil {
+		t.Fatalf("runInstallCmdStreamingStderr: %v", err)
+	}
+	if stdout != "out\n" || stderr != "progress\n" || strings.Join(lines, ",") != "progress" {
+		t.Fatalf("unexpected streams: stdout=%q stderr=%q lines=%q", stdout, stderr, lines)
 	}
 }
 

@@ -3,6 +3,7 @@
 package env
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -16,25 +17,27 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// Path retains the caller's executable search path when adding runtime-owned entries.
+func Path() string { return os.Getenv("PATH") }
+
 func getBasePath() string {
+	var base string
 	if dir := os.Getenv(cacheDir.Name); dir != "" {
-		return dir
+		base = dir
+	} else if dir := os.Getenv("XDG_CACHE_HOME"); dir != "" {
+		base = filepath.Join(dir, ldflags.PackageName)
+	} else if homeDir, err := os.UserHomeDir(); err == nil {
+		base = filepath.Join(homeDir, ".cache", ldflags.PackageName)
+	} else if dir := os.Getenv("LOCALAPPDATA"); dir != "" {
+		base = filepath.Join(dir, ldflags.PackageName)
+	} else {
+		base = filepath.Join(os.TempDir(), ldflags.PackageName+"-cache")
 	}
-
-	if dir := os.Getenv("XDG_CACHE_HOME"); dir != "" {
-		return filepath.Join(dir, ldflags.PackageName)
+	absolute, err := filepath.Abs(base)
+	if err != nil {
+		return base
 	}
-
-	homeDir, err := os.UserHomeDir()
-	if err == nil {
-		return filepath.Join(homeDir, ".cache", ldflags.PackageName)
-	}
-
-	if dir := os.Getenv("LOCALAPPDATA"); dir != "" {
-		return filepath.Join(dir, ldflags.PackageName)
-	}
-
-	return filepath.Join(os.TempDir(), ldflags.PackageName+"-cache")
+	return absolute
 }
 
 // ConfigHome returns the XDG base directory for user configuration:
@@ -342,6 +345,31 @@ func MinimumReleaseAgeMinutes() int {
 		return defaultValue
 	}
 	return value
+}
+
+// InstallChild reports whether this process is an installer or prepare child.
+func InstallChild() bool { return os.Getenv(installChild.Name) != "" }
+
+// RejectInstallChild prevents installer/prepare subprocesses from recursively
+// provisioning or clearing the store while their parent owns its lease.
+func RejectInstallChild(_ string) error {
+	if InstallChild() {
+		return errors.New("datamitsu provisioning is not allowed inside an installer or prepare subprocess")
+	}
+	return nil
+}
+
+// WithInstallChild replaces any inherited install-child marker with the
+// private marker used by installer and prepare subprocesses.
+func WithInstallChild(values []string) []string {
+	result := make([]string, 0, len(values)+1)
+	for _, value := range values {
+		name, _, _ := strings.Cut(value, "=")
+		if name != installChild.Name {
+			result = append(result, value)
+		}
+	}
+	return append(result, installChild.Name+"=1")
 }
 
 // NoSponsor returns true if sponsor messages should be suppressed

@@ -14,10 +14,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// uvPythonSubtree is the shared managed-CPython subtree every uv app venv
-// links its interpreter into (mirrors internal/dockerfile/storepaths.go).
-const uvPythonSubtree = ".uv/python"
-
 // storeManagers bundles the two managers used to replicate the store path
 // math. They are cheap to construct and stateless for path computation.
 type storeManagers struct {
@@ -78,6 +74,14 @@ func expectedSubtrees(cfg *config.Config, storeRoot string, needed, neededRuntim
 				addPath(runtimePath, "runtime "+runtimeName)
 			}
 		}
+		if rc.Kind == config.RuntimeKindUV {
+			dataPath, err := mgrs.rm.ComputeRuntimeDataPath(runtimeName)
+			if err != nil {
+				log.Debug("cannot compute Python runtime data path", zap.String("runtime", runtimeName), zap.Error(err))
+			} else {
+				addPath(filepath.Join(dataPath, "python"), "Python runtime "+runtimeName)
+			}
+		}
 	}
 
 	for _, runtimeName := range neededRuntimes {
@@ -127,33 +131,13 @@ func expectedSubtrees(cfg *config.Config, storeRoot string, needed, neededRuntim
 			continue
 		}
 
-		// The Go SDK is build-only and never bundled (storepaths model); all
-		// other managed runtimes ship as their own subtree.
-		if kind != config.RuntimeKindGo {
-			if runtimePath, managed, err := mgrs.rm.ComputeRuntimeStorePath(runtimeName); err != nil {
-				log.Debug("cannot compute runtime store path",
-					zap.String("runtime", runtimeName), zap.Error(err))
-			} else if managed {
-				addPath(runtimePath, "runtime "+runtimeName)
-			}
-		}
-
-		// pnpm deliberately does NOT join the expected set: the bundle never
-		// carries it (the final image stage copies only declared runtimes) and
-		// executing a seeded node app needs node + the app subtree, not pnpm —
-		// pnpm is an install-time tool. Listing it would defeat the zero-network
-		// fast path: one permanently-missing subtree forces a manifest fetch on
-		// every run.
-		if kind == config.RuntimeKindUV {
-			expected[uvPythonSubtree] = "shared CPython (uv)"
-		}
+		addRuntime(runtimeName)
 	}
-
 	// WASM output-parser modules referenced by any tool. They are small and shared
 	// across tools, so a demand-driven seed includes every referenced module rather
 	// than mapping each tool→app→parser precisely — keeping the airgapped parser
 	// path working with a negligible over-pull. The full seed covers them anyway
-	// (subtreeRoots allows .parsers/); this is only for `seed --apps`.
+	// (exact target validation accepts .parsers/<module>/<identity>); this is only for `seed --apps`.
 	for module := range referencedParserModules(cfg) {
 		p, ok := cfg.Parsers[module]
 		if !ok {

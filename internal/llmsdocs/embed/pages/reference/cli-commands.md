@@ -1541,6 +1541,8 @@ special config-load path that permits the selected app's initially missing
 `lockFile`; every normal config load requires lock files for Bun, Node, UV, and Go
 apps.
 
+Lock generation stages package-manager work in a private temporary app workspace; it does not delete or replace the installed app environment.
+
 Transitive dependencies are subject to the minimum release age: pnpm resolves
 Bun and Node apps with `minimumReleaseAge`, uv resolves UV apps with
 `--exclude-newer P7D` and records the window in the lock, and a Go app fails
@@ -2270,6 +2272,38 @@ Print the absolute path to the current project's cache directory.
 ```bash
 datamitsu cache path project
 ```
+
+## runtime
+
+Inspect configured runtimes or run a configured interpreter. Runtime names are exact configuration keys; there is no default runtime or kind alias. `runtime list` is read-only and never provisions runtime files.
+
+### runtime list
+
+```bash
+datamitsu runtime list [--json]
+```
+
+Lists every configured runtime in name order, including Bun and pnpm entries that cannot be launched directly. Human output has `NAME`, `KIND`, `MODE`, `VERSION`, and `STATUS` columns. Status is `installed`, `missing`, or `unavailable`; unavailable host/configuration entries remain visible with a reason rather than failing the entire inventory. A missing executable is reported as missing without installation.
+
+`--json` writes a `datamitsu.runtimes/1` document. Each runtime entry has `name`, `kind`, `configuredMode`, `effectiveMode`, `version`, `runnable`, and `status`; `executable` and `reason` are included when available. An empty configuration produces an empty `runtimes` array.
+
+### runtime run
+
+```bash
+datamitsu runtime run [--dry-run] <name> -- <interpreter-args...>
+```
+
+Runs the selected runtime's interpreter with exactly the arguments after `--`. At least one argument is required. The runnable kinds are `node`, `uv`, `go`, and `jvm`; `uv` runs its pinned CPython interpreter, not uv itself. Bun and pnpm remain visible in `runtime list` but cannot be run directly. Unknown names, unsupported kinds, malformed argument shapes, or `--log-format jsonl` exit with usage status 2. Acquisition or process-start failures exit 1.
+
+If a configured managed runtime is missing, `runtime run` provisions it automatically and verifies it before launch. For uv, this provisions the configured SHA-256-pinned CPython interpreter; it does not run uv against the script or install script/project dependencies. Node, Go, and JVM system-mode interpreters are resolved from `PATH` without provisioning. Provisioning uses the normal install timeout; the user program itself has no install deadline. Existing runtime-owned cache paths take precedence over inherited cache settings, while `HOME` and the caller's working directory are preserved.
+
+`--dry-run` resolves without creating directories, installing, or executing, and prints a `datamitsu.runtime-run/1` JSON object with `name`, `kind`, nullable `executable`, exact `args`, `status`, and `wouldInstall`. It does not include inherited environment values.
+
+```bash
+datamitsu runtime run node -- --version
+```
+
+The child inherits stdin, stdout, stderr, and the caller's cwd. On Unix, datamitsu replaces itself with the interpreter, preserving normal signal, terminal job-control, stream, and exit-status behavior. On Windows, datamitsu waits for the child and preserves its exit code; the child is placed in a Job Object, so surviving descendants are terminated when the job closes after completion. Forced cancellation terminates the job and exits 130. JSONL logging is refused because arbitrary child stderr is not a JSON-L stream.
 
 ## store
 

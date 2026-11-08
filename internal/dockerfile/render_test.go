@@ -57,7 +57,16 @@ func TestRender_PinnedStructure(t *testing.T) {
 	mustContain(t, out, "COPY --link --from=rt-node /dm/store/.runtimes/node /dm/store/.runtimes/node")
 	mustContain(t, out, "COPY --link --from=app-prettier /dm/store/.apps/node/prettier /dm/store/.apps/node/prettier")
 	mustContain(t, out, "COPY --link --from=app-ruff /dm/store/.apps/uv/ruff /dm/store/.apps/uv/ruff")
-	mustContain(t, out, "COPY --link --from=app-ruff /dm/store/.uv/python /dm/store/.uv/python")
+	mustContain(t, out, "COPY --link --from=python-export-uv /dm/python-export/.runtime-data/uv /dm/store/.runtime-data/uv")
+	if strings.Contains(out, ".uv/python") {
+		t.Fatal("legacy shared Python path must not be emitted")
+	}
+	mustContain(t, out, `export_root="/dm/python-export"`)
+	mustContain(t, out, `for identity_dir in "/dm/store/.runtime-data/uv"/*; do`)
+	mustContain(t, out, `cp -a "$identity_dir/python"`)
+	if strings.Contains(out, ".runtime-data/uv/0123456789abcdef0123456789abcdef") {
+		t.Fatal("Dockerfile must discover the target identity inside the builder, not embed a host hash")
+	}
 	mustContain(t, out, "COPY --link --from=app-shellcheck /dm/store/.bin/shellcheck /dm/store/.bin/shellcheck")
 
 	// Go SDK is build-only: a runtime stage exists, but no runtime COPY into final.

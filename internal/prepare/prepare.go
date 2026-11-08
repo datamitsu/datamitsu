@@ -32,7 +32,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/installprocess"
+	"github.com/datamitsu/datamitsu/internal/installstate"
+	"github.com/datamitsu/datamitsu/internal/storelock"
 )
 
 // MarkerName is the readiness marker, written last inside the state
@@ -92,6 +96,9 @@ func StateDir(preparedRoot, app, key string) string {
 // the contract in internal/config/app_prepare.go and the lifecycle plan;
 // nothing here may consult the project.
 func Run(ctx context.Context, req Request) error {
+	if err := env.RejectInstallChild("datamitsu prepare"); err != nil {
+		return err
+	}
 	stateDir := StateDir(req.PreparedRoot, req.App, req.Key)
 	if Ready(stateDir) {
 		return nil
@@ -103,16 +110,31 @@ func Run(ctx context.Context, req Request) error {
 		}
 	}
 
-	// Singleflight within the process is the caller's concern (binmanager);
-	// this lock serializes concurrent datamitsu processes placing the same
-	// subtree, and a future store gc takes it before removing anything.
-	release, err := lockState(ctx, stateDir)
+	storeCtx, releaseStore, err := storelock.WithStore(ctx, req.Store)
 	if err != nil {
 		return err
 	}
-	defer release()
+	defer releaseStore()
 
-	if Ready(stateDir) {
+	stateTarget, err := storelock.ValidateTarget(req.Store, filepath.Join(".prepared", req.App, req.Key))
+	if err != nil {
+		return fmt.Errorf("resolve prepared state target: %w", err)
+	}
+	if Ready(stateTarget) {
+		return nil
+	}
+
+	storeTarget, err := filepath.Rel(req.Store, stateTarget)
+	if err != nil {
+		return fmt.Errorf("resolve prepared state target: %w", err)
+	}
+	_, releaseTarget, err := installstate.Acquire(storeCtx, req.Store, storeTarget, "prepared state "+req.App)
+	if err != nil {
+		return fmt.Errorf("lock prepared state target: %w", err)
+	}
+	defer releaseTarget()
+
+	if Ready(stateTarget) {
 		return nil // a concurrent process won the placement
 	}
 
@@ -122,7 +144,7 @@ func Run(ctx context.Context, req Request) error {
 	}
 	defer lay.remove()
 
-	if err := lay.runStep(ctx, req); err != nil {
+	if err := lay.runStep(storeCtx, req); err != nil {
 		return err
 	}
 	if err := validateOutput(lay.out); err != nil {
@@ -131,7 +153,7 @@ func Run(ctx context.Context, req Request) error {
 	if err := writeMarker(lay.result, req.Protocol, req.App, req.Key); err != nil {
 		return err
 	}
-	return placeState(lay.result, stateDir, req.Store)
+	return placeState(lay.result, stateTarget, req.Store)
 }
 
 // Request is everything the engine needs about one step. BinManager builds
@@ -160,14 +182,6 @@ type Request struct {
 	// Timeout bounds the step; zero means no limit. It is the effective
 	// install timeout, separate from the installation of the app itself.
 	Timeout time.Duration
-}
-
-// lockState serializes placement of one state directory across processes.
-func lockState(ctx context.Context, stateDir string) (func(), error) {
-	// The lock package keys by (storeRoot, subtree); stateDir is under the
-	// store, so the store root is its prefix.
-	storeRoot := filepath.Dir(filepath.Dir(filepath.Dir(stateDir)))
-	return storeLock(ctx, storeRoot, stateDir)
 }
 
 func newLayout(store string) (*layout, error) {
@@ -250,11 +264,11 @@ func (l *layout) runStep(ctx context.Context, req Request) error {
 	// ${STEP_TMPDIR} symbolically: the engine binds them to the staging
 	// layout, so the caller never learns staging paths and the produced
 	// output lands in the layout whatever the temp directory name is.
-	env := make([]string, len(req.Env))
+	stepEnv := make([]string, len(req.Env))
 	for i, kv := range req.Env {
-		env[i] = bindLayoutVars(kv, l.out, l.work, l.tmp)
+		stepEnv[i] = bindLayoutVars(kv, l.out, l.work, l.tmp)
 	}
-	cmd := exec.CommandContext(stepCtx, req.Command[0], req.Command[1:]...) //nolint:gosec // G204: the executable is the app's own managed install, resolved by binmanager from the validated config
+	cmd := exec.CommandContext(context.WithoutCancel(stepCtx), req.Command[0], req.Command[1:]...) //nolint:gosec // G204: the executable is the app's own managed install, resolved by binmanager from the validated config
 	// The argv carries the layout tokens symbolically too
 	// (--output=${APP_PREPARED}/... is a declared-args form): bind them
 	// exactly like the environment entries.
@@ -262,11 +276,7 @@ func (l *layout) runStep(ctx context.Context, req Request) error {
 		cmd.Args[i] = bindLayoutVars(arg, l.out, l.work, l.tmp)
 	}
 	cmd.Dir = l.work
-	cmd.Env = env
-	// A raw file for stdout, not io.Discard: a writer wrapper makes the
-	// child inherit a pipe whose copy goroutine can outlive the immediate
-	// process, and CommandContext alone kills only that process. WaitDelay
-	// bounds the wait for such stragglers; killTree cancels the whole tree.
+	cmd.Env = env.WithInstallChild(stepEnv)
 	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
 		return fmt.Errorf("prepare of %q: open null output: %w", req.App, err)
@@ -274,35 +284,14 @@ func (l *layout) runStep(ctx context.Context, req Request) error {
 	defer func() { _ = devNull.Close() }()
 	cmd.Stdout = devNull
 	cmd.Stderr = req.Stderr
-	cmd.WaitDelay = 5 * time.Second
-	cmd.Cancel = func() error {
-		killTree(cmd.Process.Pid)
-		return cmd.Process.Kill()
-	}
-	setProcessGroup(cmd)
-	// Start and wait separately: the process must join its tree-cancellation
-	// container (a process group on Unix, a job object on Windows) right
-	// after Start, before the step can spawn descendants.
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("prepare of %q: %w", req.App, err)
-	}
-	if err := trackProcessTree(cmd.Process.Pid); err != nil {
-		// The process is already running: cancel it outright rather than
-		// let an untracked tree escape the timeout contract.
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		return fmt.Errorf("prepare of %q: %w", req.App, err)
-	}
-	waitErr := cmd.Wait()
-	untrackProcessTree(cmd.Process.Pid)
-	if waitErr != nil {
+	if err := installprocess.Run(stepCtx, cmd); err != nil {
 		if ctx.Err() != nil {
 			return fmt.Errorf("prepare of %q: %w", req.App, ctx.Err())
 		}
 		if stepCtx.Err() != nil {
 			return fmt.Errorf("prepare of %q: timed out after %s", req.App, req.Timeout)
 		}
-		return fmt.Errorf("prepare of %q: %w", req.App, waitErr)
+		return fmt.Errorf("prepare of %q: %w", req.App, err)
 	}
 	return nil
 }

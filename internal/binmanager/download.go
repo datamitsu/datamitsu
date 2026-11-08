@@ -15,6 +15,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/httpretry"
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/installstate"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
@@ -25,6 +26,28 @@ import (
 // zero — a non-zero count on a run that should have hit the store is the signal
 // that something is re-downloading.
 var cntDownloads = trace.NewCounter("install.artifacts_downloaded")
+
+type installProgressReader struct {
+	reader    io.Reader
+	progress  func(int64, int64)
+	completed int64
+	total     int64
+}
+
+func (r *installProgressReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	r.completed += int64(n)
+	if r.progress != nil {
+		r.progress(r.completed, r.total)
+	}
+	if err == io.EOF {
+		return n, io.EOF
+	}
+	if err != nil {
+		return n, fmt.Errorf("read installation download progress stream: %w", err)
+	}
+	return n, nil
+}
 
 // MaxBinarySize is the maximum allowed download size (500 MiB).
 const MaxBinarySize = 500 * 1024 * 1024
@@ -213,6 +236,7 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 			return "", permanent(err)
 		}
 	}
+	installstate.Progress(ctx, installstate.PhaseDownload, -1, -1, "bytes")
 	resp, err := client.Do(req)
 	if err != nil {
 		if removeErr := os.Remove(tmpPath); removeErr != nil {
@@ -248,12 +272,19 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 	// exactly MaxBinarySize (written == MaxBinarySize, allowed) from one that
 	// exceeds it (written > MaxBinarySize, rejected).
 	limitedReader := guard.Reader(io.LimitReader(resp.Body, MaxBinarySize+1))
+	progress := func(completed, total int64) {
+		if total <= 0 {
+			total = -1
+		}
+		installstate.Progress(ctx, installstate.PhaseDownload, completed, total, "bytes")
+	}
+	counted := &installProgressReader{reader: limitedReader, progress: progress, total: resp.ContentLength}
 
 	// Route the transfer through the process-wide display: in an interactive
 	// terminal this renders a progress bar in the shared container, in CI/pipe
 	// it emits throttled percentage lines, and when no display is active it is
 	// a transparent passthrough.
-	reader := ui.Current().Download(displayName(name, url), resp.ContentLength, limitedReader)
+	reader := ui.Current().Download(displayName(name, url), resp.ContentLength, counted)
 	defer func() {
 		if err := reader.Close(); err != nil {
 			log.Warn("failed to close progress reader", zap.Error(err))
@@ -314,6 +345,7 @@ func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash str
 		if err == nil {
 			cntDownloads.Add(1)
 			verifySpan := trace.Start(trace.CatInstall, "artifact.verify")
+			installstate.Progress(ctx, "verify", -1, -1, "")
 			vErr := pin.VerifyFile(tmpPath)
 			verifySpan.EndWith(trace.A("name", name))
 			if vErr != nil {

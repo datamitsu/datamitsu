@@ -11,53 +11,50 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// lockFile acquires an exclusive LockFileEx range lock on name, waiting only
-// while ctx is alive. Unlike the Unix flock, LockFileEx supports
-// LOCKFILE_FAIL_IMMEDIATELY, so the wait loop can poll with cancellation
-// instead of a watcher goroutine. Placement is atomic either way; the lock
-// only prevents duplicate work, so a poll interval of 50ms is fine.
-func lockFile(ctx context.Context, name string) (release func(), err error) {
-	f, err := os.OpenFile(name, os.O_CREATE|os.O_RDWR, 0o644)
+// lockFile acquires an exclusive range lock with cancellation polling.
+func lockFile(ctx context.Context, name string) (func(), error) {
+	return lockFileWithWait(ctx, name, nil)
+}
+
+func lockFileWithWait(ctx context.Context, name string, onWait func()) (func(), error) {
+	return lockMode(ctx, name, true, onWait)
+}
+
+func sharedLockFile(ctx context.Context, name string) (func(), error) {
+	return lockMode(ctx, name, false, nil)
+}
+
+func lockMode(ctx context.Context, name string, exclusive bool, onWait func()) (func(), error) {
+	f, err := os.OpenFile(name, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open store lock %s: %w", name, err)
 	}
-
-	// Lock the first byte of the file. A zero-length range is a no-op, and
-	// every lock file is created empty.
+	waiting := false
 	for {
-		overlapped := new(windows.Overlapped)
-		err := windows.LockFileEx(windows.Handle(f.Fd()),
-			windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY,
-			0, 1, 0, overlapped)
+		ov := new(windows.Overlapped)
+		flags := uint32(windows.LOCKFILE_FAIL_IMMEDIATELY)
+		if exclusive {
+			flags |= windows.LOCKFILE_EXCLUSIVE_LOCK
+		}
+		err = windows.LockFileEx(windows.Handle(f.Fd()), flags, 0, 1, 0, ov)
 		if err == nil {
-			var once releaseOnce
-			return once.do(func() {
-				_ = windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, overlapped)
-				_ = f.Close()
-			}), nil
+			return once(func() { _ = windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, ov); _ = f.Close() }), nil
 		}
 		if err != windows.ERROR_LOCK_VIOLATION {
 			_ = f.Close()
 			return nil, fmt.Errorf("lock %s: %w", name, err)
 		}
+		if !waiting {
+			waiting = true
+			if onWait != nil {
+				onWait()
+			}
+		}
 		select {
 		case <-ctx.Done():
 			_ = f.Close()
 			return nil, fmt.Errorf("waiting for store lock %s: %w", name, ctx.Err())
-		case <-time.After(50 * time.Millisecond):
+		case <-time.After(25 * time.Millisecond):
 		}
-	}
-}
-
-// releaseOnce runs fn exactly once, so a double release is harmless.
-type releaseOnce struct{ done bool }
-
-func (o *releaseOnce) do(fn func()) func() {
-	return func() {
-		if o.done {
-			return
-		}
-		o.done = true
-		fn()
 	}
 }

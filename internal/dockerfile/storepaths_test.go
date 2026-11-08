@@ -22,8 +22,8 @@ func TestStoreSubtrees(t *testing.T) {
 	if got := appEnvSubtree(config.RuntimeKindUV, "ruff"); got != ".apps/uv/ruff" {
 		t.Errorf("appEnvSubtree(uv) = %q", got)
 	}
-	if uvPythonSubtree != ".uv/python" {
-		t.Errorf("uvPythonSubtree = %q", uvPythonSubtree)
+	if got := runtimeDataSubtree("uv"); got != ".runtime-data/uv" {
+		t.Errorf("runtimeDataSubtree = %q", got)
 	}
 }
 

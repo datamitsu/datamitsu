@@ -91,7 +91,7 @@ func appendKindVersionFields(parts [][]byte, rc config.RuntimeConfig) [][]byte {
 	return parts
 }
 
-func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
+func calculateSystemRuntimeHash(rc config.RuntimeConfig, osType syslist.OsType, archType syslist.ArchType, libc string) string {
 	command := ""
 	systemVersion := ""
 	if rc.System != nil {
@@ -103,6 +103,9 @@ func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
 		[]byte("system"),
 		[]byte(command),
 		[]byte(systemVersion),
+		[]byte(osType),
+		[]byte(archType),
+		[]byte(libc),
 	}
 
 	parts = appendKindVersionFields(parts, rc)
@@ -110,15 +113,24 @@ func calculateSystemRuntimeHash(rc config.RuntimeConfig) string {
 	return digest.XXH3Multi(parts...).Hex()
 }
 
-func calculateAppHash(appName string, version string, deps map[string]string, runtimeHash string, lockHash string, filesHash string) string {
+const runtimeAppLayoutVersion = "runtime-data-v1"
+
+func calculateAppHash(appName string, version string, deps map[string]string, runtimeHash string, lockHash string, filesHash string, runtimeNames ...string) string {
 	parts := [][]byte{
 		[]byte(appName),
 		[]byte(version),
+		[]byte(runtimeAppLayoutVersion),
 		[]byte(runtimeHash),
 		[]byte(lockHash),
 		[]byte(filesHash),
 	}
+	if len(runtimeNames) > 0 {
+		parts = append(parts, []byte(runtimeNames[0]))
+	}
+	return hashAppParts(parts, deps)
+}
 
+func hashAppParts(parts [][]byte, deps map[string]string) string {
 	if len(deps) > 0 {
 		keys := make([]string, 0, len(deps))
 		for k := range deps {
@@ -129,38 +141,26 @@ func calculateAppHash(appName string, version string, deps map[string]string, ru
 			parts = append(parts, []byte(k), []byte(deps[k]))
 		}
 	}
-
 	return digest.XXH3Multi(parts...).Hex()
 }
 
-// calculatePackageAppHash hashes a Node- or Bun-kind package app's identity.
-// The cache key folds in the package name, version, binPath, dependencies,
-// lockfile, files, the runtime hash (which already includes the runtime's
-// archive and kind-specific version fields) and the hash of the pnpm runtime
-// that installs the app. The app-env path is additionally prefixed by its
-// runtime kind ("node" or "bun").
-func calculatePackageAppHash(appName string, packageName string, pkgVersion string, binPath string, deps map[string]string, runtimeHash string, pnpmHash string, lockHash string, filesHash string) string {
+func calculatePackageAppHash(appName string, packageName string, pkgVersion string, binPath string, deps map[string]string, runtimeHash string, pnpmHash string, lockHash string, filesHash string, runtimeNames ...string) string {
 	parts := [][]byte{
 		[]byte(appName),
 		[]byte(packageName),
 		[]byte(pkgVersion),
 		[]byte(binPath),
+		[]byte(runtimeAppLayoutVersion),
 		[]byte(runtimeHash),
 		[]byte(pnpmHash),
 		[]byte(lockHash),
 		[]byte(filesHash),
 	}
-
-	if len(deps) > 0 {
-		keys := make([]string, 0, len(deps))
-		for k := range deps {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			parts = append(parts, []byte(k), []byte(deps[k]))
-		}
+	if len(runtimeNames) > 0 {
+		parts = append(parts, []byte(runtimeNames[0]))
 	}
-
-	return digest.XXH3Multi(parts...).Hex()
+	if len(runtimeNames) > 1 {
+		parts = append(parts, []byte(runtimeNames[1]))
+	}
+	return hashAppParts(parts, deps)
 }

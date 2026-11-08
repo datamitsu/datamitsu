@@ -16,11 +16,12 @@ import (
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/installstate"
 	"github.com/datamitsu/datamitsu/internal/ocidigest"
 	"github.com/datamitsu/datamitsu/internal/ociref"
 	"github.com/datamitsu/datamitsu/internal/prepare"
+	"github.com/datamitsu/datamitsu/internal/storelock"
 	"github.com/datamitsu/datamitsu/internal/target"
-
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -57,16 +58,16 @@ type Options struct {
 	// transitive store dependencies (demand-driven). nil (together with a nil
 	// NeededRuntimes) pulls the whole bundle (explicit `store seed` / airgap
 	// seeding).
-	Needed []string
+	Needed []string `json:"needed"`
 	// NeededRuntimes adds standalone runtime targets (install --runtime) to
 	// the demand-driven set.
-	NeededRuntimes []string
+	NeededRuntimes []string `json:"neededRuntimes"`
 	// RequireRequested turns an unsatisfied request into an error instead of a
 	// quietly partial seed. Set it for an explicit `store seed --apps`, where
 	// the caller named the tools and a store that still cannot run them is a
 	// failed command. AutoSeed leaves it off: there the bundle is an
 	// accelerator, and whatever it does not cover the network path installs.
-	RequireRequested bool
+	RequireRequested bool `json:"requireRequested"`
 }
 
 // demandDriven reports whether the run is limited to a needed set.
@@ -127,6 +128,9 @@ func SeedBundle(ctx context.Context, cfg *config.Config, ref *config.OCIRef, opt
 }
 
 func seedBundleChanged(ctx context.Context, cfg *config.Config, ref *config.OCIRef, opts Options) (bool, error) {
+	if changed, handled, err := remoteSeed(ctx, SeedRequest{Config: cfg, Ref: ref, Options: opts}); handled {
+		return changed, err
+	}
 	if err := config.ValidateOCI(ref); err != nil {
 		return false, err
 	}
@@ -151,6 +155,9 @@ func SeedFromLayout(ctx context.Context, cfg *config.Config, dir, digest string,
 }
 
 func seedFromLayout(ctx context.Context, cfg *config.Config, dir, digest string, signer *config.OCISigner, opts Options) (bool, error) {
+	if changed, handled, err := remoteSeed(ctx, SeedRequest{Config: cfg, Layout: dir, Digest: digest, Signer: signer, Options: opts}); handled {
+		return changed, err
+	}
 	info, err := os.Stat(dir)
 	if err != nil {
 		return false, fmt.Errorf("OCI layout directory: %w", err)
@@ -279,6 +286,7 @@ type layerJob struct {
 // covered/unneeded subtrees are skipped. Returns the download queue and the
 // full list of annotated subtrees (for the seed marker).
 func classifyLayers(manifest *ocispec.Manifest, storeRoot string, expected map[string]string) ([]layerJob, []string, error) {
+	seen := make(map[string]struct{}, len(manifest.Layers))
 	var jobs []layerJob
 	var allSubtrees []string
 	for _, desc := range manifest.Layers {
@@ -291,6 +299,10 @@ func classifyLayers(manifest *ocispec.Manifest, storeRoot string, expected map[s
 		if err := validateSubtree(subtree); err != nil {
 			return nil, nil, fmt.Errorf("%w: layer %s: %w", errIntegrity, desc.Digest, err)
 		}
+		if _, duplicate := seen[subtree]; duplicate {
+			return nil, nil, fmt.Errorf("%w: duplicate layer target %q", errIntegrity, subtree)
+		}
+		seen[subtree] = struct{}{}
 		comp, err := layerCompressionFor(desc.MediaType)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%w: layer %s (subtree %s): %w", errIntegrity, desc.Digest, subtree, err)
@@ -307,6 +319,14 @@ func classifyLayers(manifest *ocispec.Manifest, storeRoot string, expected map[s
 			continue
 		}
 		jobs = append(jobs, layerJob{desc: desc, subtree: subtree, comp: comp})
+	}
+	for i, subtree := range allSubtrees {
+		for _, other := range allSubtrees[i+1:] {
+			a, b := strings.ToLower(subtree), strings.ToLower(other)
+			if a == b || strings.HasPrefix(b, a+"/") || strings.HasPrefix(a, b+"/") {
+				return nil, nil, fmt.Errorf("%w: overlapping layer targets %q and %q", errIntegrity, subtree, other)
+			}
+		}
 	}
 	sort.Strings(allSubtrees)
 	return jobs, allSubtrees, nil
@@ -331,7 +351,15 @@ func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, s
 		return false, nil
 	}
 
-	release, err := lockSubtree(ctx, storeRoot, job.subtree)
+	if _, err := storelock.ValidateTarget(storeRoot, filepath.FromSlash(job.subtree)); err != nil {
+		return false, fmt.Errorf("validate store subtree %q: %w", job.subtree, err)
+	}
+	storeAbs, err := filepath.Abs(storeRoot)
+	if err != nil {
+		return false, fmt.Errorf("absolutize store root: %w", err)
+	}
+	storeTarget := filepath.FromSlash(job.subtree)
+	_, release, err := installstate.Acquire(ctx, storeAbs, storeTarget, "OCI layer "+job.subtree)
 	if err != nil {
 		return false, err
 	}
@@ -361,6 +389,15 @@ func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, s
 	if err != nil {
 		return false, fmt.Errorf("%w: layer %s (subtree %s): %w", errIntegrity, job.desc.Digest, job.subtree, err)
 	}
+	if strings.HasPrefix(job.subtree, ".apps/") && !appTreeReady(staged) {
+		return false, fmt.Errorf("%w: staged app target %q has no valid readiness marker", errIntegrity, job.subtree)
+	}
+	if strings.HasPrefix(job.subtree, ".runtime-data/") && !pythonTreeReady(job.subtree, staged) {
+		return false, fmt.Errorf("%w: staged Python target %q has no valid readiness record", errIntegrity, job.subtree)
+	}
+	if strings.HasPrefix(job.subtree, preparedSubtreeRoot) && !prepare.Ready(staged) {
+		return false, fmt.Errorf("%w: staged prepared target %q is not ready", errIntegrity, job.subtree)
+	}
 	if spec, ok := reVerify[job.subtree]; ok {
 		file := staged
 		if spec.relPath != "" {
@@ -373,73 +410,34 @@ func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, s
 			zap.String("subtree", job.subtree), zap.String("owner", spec.owner))
 	}
 	dest := filepath.Join(storeRoot, filepath.FromSlash(job.subtree))
-	if err := placeSubtree(staged, dest, job.subtree); err != nil {
+	if err := placeSubtree(staged, dest, job.subtree, storeRoot); err != nil {
 		return false, fmt.Errorf("place subtree %q: %w", job.subtree, err)
 	}
 	log.Info("seeded store subtree from oci bundle", zap.String("subtree", job.subtree))
 	return true, nil
 }
 
-// placeSubtree atomically renames the staged subtree (file or directory) into
-// the store. The staging area lives under {store}/tmp — same filesystem — so
-// os.Rename is atomic; a concurrently appeared destination wins (content-
-// addressed paths hold identical content).
-//
-// A PREPARED state directory (subtree under .prepared/) that exists WITHOUT
-// its marker is an interrupted placement, not content: it cannot win the
-// race. It is moved aside under {store}/tmp/stale-prepared-* (never deleted
-// in place — a concurrent reader may hold a descriptor) so the staged,
-// complete state takes its name; the prepare sweeper collects the asides
-// after 24h. The root is decided by the DECLARED subtree, never by probing
-// the destination: an install tree (or anything else) that lacks
-// prepared.json is ordinary content and follows the destination-wins rule.
-func placeSubtree(staged, dest, subtree string) error {
+func placeSubtree(staged, dest, subtree, storeRoot string) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return fmt.Errorf("create destination parent: %w", err)
 	}
-	if _, err := os.Stat(dest); err == nil {
-		if !strings.HasPrefix(subtree, preparedSubtreeRoot) || !isDirWithoutMarker(dest) {
+	if _, err := os.Lstat(dest); err == nil {
+		if subtreeReady(storeRoot, subtree) {
 			return removeStaged(staged)
 		}
-		if _, aerr := moveMarkerlessAside(dest); aerr != nil {
-			return fmt.Errorf("defer markerless prepared state: %w", aerr)
+		if err := os.RemoveAll(dest); err != nil {
+			return fmt.Errorf("remove incomplete destination: %w", err)
 		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect destination: %w", err)
 	}
 	if err := os.Rename(staged, dest); err != nil {
-		if _, statErr := os.Stat(dest); statErr == nil {
+		if subtreeReady(storeRoot, subtree) {
 			return removeStaged(staged)
 		}
 		return fmt.Errorf("rename staged subtree: %w", err)
 	}
 	return nil
-}
-
-// isDirWithoutMarker reports whether dest is a directory without
-// prepare.MarkerName in it. Callers gate it on the .prepared/ root first.
-func isDirWithoutMarker(dest string) bool {
-	info, err := os.Stat(dest)
-	if err != nil || !info.IsDir() {
-		return false
-	}
-	return !prepare.Ready(dest)
-}
-
-// moveMarkerlessAside relocates an interrupted prepared state under
-// {store}/tmp/stale-prepared-* so a complete placement can take its name.
-func moveMarkerlessAside(dest string) (string, error) {
-	tmpRoot := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(dest))), "tmp")
-	if err := os.MkdirAll(tmpRoot, 0o755); err != nil {
-		return "", fmt.Errorf("create tmp root: %w", err)
-	}
-	aside, err := os.MkdirTemp(tmpRoot, "stale-prepared-")
-	if err != nil {
-		return "", fmt.Errorf("create aside directory: %w", err)
-	}
-	if err := os.Rename(dest, filepath.Join(aside, "state")); err != nil {
-		_ = os.RemoveAll(aside)
-		return "", fmt.Errorf("move markerless state aside: %w", err)
-	}
-	return aside, nil
 }
 
 // removeStaged drops a staged copy that lost the placement race (the

@@ -348,8 +348,8 @@ func TestRuntimeHashFoldsSameFieldsForEveryKind(t *testing.T) {
 				sB := systemBase(kc.kind)
 				fc.set(&sA, "version-a")
 				fc.set(&sB, "version-b")
-				sHashA := calculateSystemRuntimeHash(sA)
-				sHashB := calculateSystemRuntimeHash(sB)
+				sHashA := calculateSystemRuntimeHash(sA, osType, archType, testLibc)
+				sHashB := calculateSystemRuntimeHash(sB, osType, archType, testLibc)
 				if sHashA == sHashB {
 					t.Errorf("system hash does not fold %s for kind %s", fc.field, kc.kind)
 				}
@@ -402,6 +402,13 @@ func TestCalculateAppHash(t *testing.T) {
 
 		if hash1 == hash2 {
 			t.Error("different runtime hashes produced same hash")
+		}
+	})
+	t.Run("selected runtime name affects hash", func(t *testing.T) {
+		hash1 := calculateAppHash("yamllint", "1.37.0", nil, "rt1", "", "", "uv")
+		hash2 := calculateAppHash("yamllint", "1.37.0", nil, "rt1", "", "", "uv-alt")
+		if hash1 == hash2 {
+			t.Error("different selected runtime names produced the same hash")
 		}
 	})
 
@@ -508,6 +515,15 @@ func TestCalculatePackageAppHash(t *testing.T) {
 		hash2 := calculatePackageAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "rthash", "", "x", "")
 		if hash1 == hash2 {
 			t.Error("moving a value from the pnpm hash to the lock hash produced the same hash")
+		}
+	})
+	t.Run("selected runtime names affect package app hash", func(t *testing.T) {
+		base := calculatePackageAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "node-hash", "pnpm-hash", "", "", "node", "pnpm")
+		if base == calculatePackageAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "node-hash", "pnpm-hash", "", "", "node-alt", "pnpm") {
+			t.Error("different selected runtime names produced the same package app hash")
+		}
+		if base == calculatePackageAppHash("eslint", "eslint", "9.0.0", "node_modules/.bin/eslint", nil, "node-hash", "pnpm-hash", "", "", "node", "pnpm-alt") {
+			t.Error("different selected pnpm names produced the same package app hash")
 		}
 	})
 
@@ -622,8 +638,8 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 			System: &config.RuntimeConfigSystem{Command: "/usr/local/bin/uv"},
 		}
 
-		hash1 := calculateSystemRuntimeHash(rc1)
-		hash2 := calculateSystemRuntimeHash(rc2)
+		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
+		hash2 := calculateSystemRuntimeHash(rc2, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
 
 		if hash1 == hash2 {
 			t.Error("different system commands should produce different hashes")
@@ -637,8 +653,8 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv"},
 		}
 
-		hash1 := calculateSystemRuntimeHash(rc)
-		hash2 := calculateSystemRuntimeHash(rc)
+		hash1 := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
+		hash2 := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
 
 		if hash1 != hash2 {
 			t.Errorf("same command should produce same hash: %q != %q", hash1, hash2)
@@ -651,12 +667,25 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 			Mode: config.RuntimeModeSystem,
 		}
 
-		hash := calculateSystemRuntimeHash(rc)
+		hash := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
 		if hash == "" {
 			t.Error("hash should not be empty")
 		}
 		if len(hash) != 32 {
 			t.Errorf("hash length = %d, want 32 (xxh3-128)", len(hash))
+		}
+	})
+	t.Run("platform inputs affect system hash", func(t *testing.T) {
+		rc := config.RuntimeConfig{Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem}
+		base := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
+		if base == calculateSystemRuntimeHash(rc, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "glibc") {
+			t.Error("different OS produced the same system hash")
+		}
+		if base == calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeArm64, "glibc") {
+			t.Error("different architecture produced the same system hash")
+		}
+		if base == calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "musl") {
+			t.Error("different libc produced the same system hash")
 		}
 	})
 
@@ -674,8 +703,8 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 			Node:   &config.RuntimeConfigNode{NodeVersion: "22.0.0", PNPMRuntime: testPNPMRuntimeName},
 		}
 
-		hash1 := calculateSystemRuntimeHash(rc1)
-		hash2 := calculateSystemRuntimeHash(rc2)
+		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
+		hash2 := calculateSystemRuntimeHash(rc2, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
 		if hash1 == hash2 {
 			t.Error("different nodeVersion should produce different hashes")
 		}
@@ -695,7 +724,7 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 			Node:   &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMRuntime: "pnpm-next"},
 		}
 
-		if calculateSystemRuntimeHash(rc1) != calculateSystemRuntimeHash(rc2) {
+		if calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc) != calculateSystemRuntimeHash(rc2, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc) {
 			t.Error("the pnpmRuntime reference must not change the node runtime hash")
 		}
 	})
@@ -714,8 +743,8 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 			UV:     &config.RuntimeConfigUV{PythonVersion: "3.13"},
 		}
 
-		hash1 := calculateSystemRuntimeHash(rc1)
-		hash2 := calculateSystemRuntimeHash(rc2)
+		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
+		hash2 := calculateSystemRuntimeHash(rc2, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
 		if hash1 == hash2 {
 			t.Error("different pythonVersion should produce different hashes")
 		}
@@ -774,8 +803,8 @@ func TestCalculateSystemRuntimeHash_JVM(t *testing.T) {
 			JVM:    &config.RuntimeConfigJVM{JavaVersion: "17"},
 		}
 
-		hash1 := calculateSystemRuntimeHash(rc1)
-		hash2 := calculateSystemRuntimeHash(rc2)
+		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
+		hash2 := calculateSystemRuntimeHash(rc2, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
 		if hash1 == hash2 {
 			t.Error("different javaVersion should produce different hashes")
 		}
@@ -834,8 +863,8 @@ func TestCalculateSystemRuntimeHash_Go(t *testing.T) {
 			Go:     &config.RuntimeConfigGo{GoVersion: "1.21.0"},
 		}
 
-		hash1 := calculateSystemRuntimeHash(rc1)
-		hash2 := calculateSystemRuntimeHash(rc2)
+		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
+		hash2 := calculateSystemRuntimeHash(rc2, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
 		if hash1 == hash2 {
 			t.Error("different goVersion should produce different hashes")
 		}
@@ -849,8 +878,8 @@ func TestCalculateSystemRuntimeHash_Go(t *testing.T) {
 			Go:     &config.RuntimeConfigGo{GoVersion: "1.22.0"},
 		}
 
-		hash1 := calculateSystemRuntimeHash(rc)
-		hash2 := calculateSystemRuntimeHash(rc)
+		hash1 := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
+		hash2 := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
 		if hash1 != hash2 {
 			t.Errorf("same goVersion should produce same hash: %q != %q", hash1, hash2)
 		}
@@ -898,8 +927,8 @@ func TestCalculateSystemRuntimeHash_SystemVersion(t *testing.T) {
 			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv", SystemVersion: "2.0"},
 		}
 
-		hash1 := calculateSystemRuntimeHash(rc1)
-		hash2 := calculateSystemRuntimeHash(rc2)
+		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
+		hash2 := calculateSystemRuntimeHash(rc2, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
 		if hash1 == hash2 {
 			t.Error("different systemVersion should produce different hashes")
 		}
@@ -912,8 +941,8 @@ func TestCalculateSystemRuntimeHash_SystemVersion(t *testing.T) {
 			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv", SystemVersion: "1.0"},
 		}
 
-		hash1 := calculateSystemRuntimeHash(rc)
-		hash2 := calculateSystemRuntimeHash(rc)
+		hash1 := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
+		hash2 := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
 		if hash1 != hash2 {
 			t.Errorf("same systemVersion should produce same hash: %q != %q", hash1, hash2)
 		}
@@ -931,8 +960,8 @@ func TestCalculateSystemRuntimeHash_SystemVersion(t *testing.T) {
 			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv", SystemVersion: "3.12.0"},
 		}
 
-		hash1 := calculateSystemRuntimeHash(rc1)
-		hash2 := calculateSystemRuntimeHash(rc2)
+		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
+		hash2 := calculateSystemRuntimeHash(rc2, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
 		if hash1 == hash2 {
 			t.Error("empty vs non-empty systemVersion should produce different hashes")
 		}

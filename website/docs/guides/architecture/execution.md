@@ -24,6 +24,20 @@ while another task is resolving the same app. Distinct apps may still install in
 parallel because they use separate content-addressed paths. Explain mode skips
 installation. A failure here aborts before any task runs.
 
+## Store Provisioning
+
+Store mutations run under a shared provisioning lease, with an operating-system lock for each exact installation target. Concurrent processes wait for ownership and recheck readiness before repairing or publishing content; a partial app directory is not considered installed without its completion marker. `datamitsu store clear` takes exclusive ownership and waits for provisioning to finish. It coordinates store writers only: it does not wait for, or stop, user programs already using store content.
+
+Installation and prepare commands run in a private provisioning worker that owns their store mutations and installer subprocesses. A shared process runner owns subprocess pipes and process-tree lifetime; it stops and reaps descendants before accepting captured output, validating completion, publishing results, or releasing ownership. In particular, pipe EOF is not treated as proof that installer descendants have stopped, and cleanup does not wait for inherited output pipes to close before stopping the tree. If the invoking CLI is cancelled or exits, the worker cleans up installer descendants before a replacement operation can write. Installer and prepare subprocesses are marked against recursive provisioning; attempts to start another provisioning operation or clear the store from one fail before acquiring a lease. Ordinary user programs are not given this restriction.
+
+The runner retains output only when its caller requests streaming capture. Ordinary installer and prepare runs drain to their configured writers without keeping an additional in-memory copy. Streaming progress callbacks skip stderr lines larger than 4 MiB and resume at the next newline; this limit does not truncate the captured stderr stream.
+
+On Windows, runtime and installer children start suspended. Their process handles require `PROCESS_SET_QUOTA` and `PROCESS_TERMINATE` for Job Object assignment, plus `PROCESS_SUSPEND_RESUME` to resume the child after assignment.
+
+If Job Object assignment fails, startup cleanup terminates the child directly before waiting for it. Terminating the still-empty job cannot stop an unassigned suspended child.
+
+While waiting for a target lock, datamitsu may display the current owner's phase and available real counters. Status is observational only: it is written by the lock holder outside the store under the cache-side `store-locks/status` area, carries no URLs, arguments, environment values or credentials, and does not affect lock ownership. A missing, malformed or stale status falls back to a generic wait; status is never grounds to steal a lock. Download and package counters are shown only when the installer supplies them, not inferred percentages.
+
 ## Skipped Tools
 
 A tool can end up **skipped** — neither run nor failed — for one of three

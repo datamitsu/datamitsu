@@ -7,65 +7,49 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+	"time"
 )
 
-// lockFile acquires an exclusive flock on name, waiting only while ctx is
-// alive. The goroutine-based wait makes the acquisition cancelable: a plain
-// blocking LOCK_EX cannot be interrupted, so the lock is attempted in a
-// watcher goroutine and the caller unblocks on whichever comes first.
-func lockFile(ctx context.Context, name string) (release func(), err error) {
-	f, err := os.OpenFile(name, os.O_CREATE|os.O_RDWR, 0o644)
+// lockFile acquires an exclusive flock. The retry loop permits cancellation
+// without leaving a goroutine holding a lock after its caller has returned.
+func lockFile(ctx context.Context, name string) (func(), error) {
+	return lockFileWithWait(ctx, name, nil)
+}
+
+func lockFileWithWait(ctx context.Context, name string, onWait func()) (func(), error) {
+	return lockMode(ctx, name, syscall.LOCK_EX, onWait)
+}
+
+func sharedLockFile(ctx context.Context, name string) (func(), error) {
+	return lockMode(ctx, name, syscall.LOCK_SH, nil)
+}
+
+func lockMode(ctx context.Context, name string, mode int, onWait func()) (func(), error) {
+	f, err := os.OpenFile(name, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open store lock %s: %w", name, err)
 	}
-
-	type result struct {
-		release func()
-		err     error
-	}
-	acquired := make(chan result, 1)
-	go func() {
-		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-			acquired <- result{nil, fmt.Errorf("lock %s: %w", name, err)}
-			_ = f.Close()
-			return
+	waiting := false
+	for {
+		err := syscall.Flock(int(f.Fd()), mode|syscall.LOCK_NB)
+		if err == nil {
+			return once(func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); _ = f.Close() }), nil
 		}
-		var once releaseOnce
-		acquired <- result{once.do(func() {
-			_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		if err != syscall.EWOULDBLOCK && err != syscall.EAGAIN {
 			_ = f.Close()
-		}), nil}
-	}()
-
-	select {
-	case r := <-acquired:
-		return r.release, r.err
-	case <-ctx.Done():
-		// The watcher goroutine still holds the channel's buffer; when its
-		// flock eventually succeeds (or fails) it releases the file itself
-		// through the buffered send being dropped and the once running only
-		// in the goroutine. Drain is impossible without leaking the goroutine
-		// until the holder finishes, so instead the goroutine's release is
-		// invoked by receiving from the buffered channel in a detached
-		// goroutine: the lock is dropped the moment it is acquired.
-		go func() {
-			if r := <-acquired; r.err == nil {
-				r.release()
+			return nil, fmt.Errorf("lock %s: %w", name, err)
+		}
+		if !waiting {
+			waiting = true
+			if onWait != nil {
+				onWait()
 			}
-		}()
-		return nil, fmt.Errorf("waiting for store lock %s: %w", name, ctx.Err())
-	}
-}
-
-// releaseOnce runs fn exactly once, so a double release is harmless.
-type releaseOnce struct{ done bool }
-
-func (o *releaseOnce) do(fn func()) func() {
-	return func() {
-		if o.done {
-			return
 		}
-		o.done = true
-		fn()
+		select {
+		case <-ctx.Done():
+			_ = f.Close()
+			return nil, fmt.Errorf("waiting for store lock %s: %w", name, ctx.Err())
+		case <-time.After(25 * time.Millisecond):
+		}
 	}
 }

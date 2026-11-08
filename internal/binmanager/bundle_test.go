@@ -8,6 +8,38 @@ import (
 	"testing"
 )
 
+func TestBundleInstallPublishesReadinessMarker(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	bundles := MapOfBundles{"probe": {Version: "v1", Files: map[string]string{"payload": "complete"}}}
+	bm := New(MapOfApps{}, bundles, nil)
+	path, err := bm.ComputeBundlePath("probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "payload"), []byte("partial"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if bundleReady(path, bundles["probe"]) {
+		t.Fatal("markerless partial bundle reported ready")
+	}
+	if err := bm.installBundle(context.Background(), "probe"); err != nil {
+		t.Fatal(err)
+	}
+	if !bundleReady(path, bundles["probe"]) {
+		t.Fatal("published bundle has no valid readiness marker")
+	}
+	got, err := os.ReadFile(filepath.Join(path, "payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "complete" {
+		t.Fatalf("payload = %q, want complete", got)
+	}
+}
+
 func TestBundleDeserialize(t *testing.T) {
 	jsonData := `{
 		"version": "1.0",

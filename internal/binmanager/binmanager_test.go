@@ -31,6 +31,7 @@ type mockRuntimeAppManager struct {
 	computeAppPathFunc     func(appName string, app App) (string, error)
 }
 
+func (m *mockRuntimeAppManager) RuntimeDefinitions() json.RawMessage { return nil }
 func (m *mockRuntimeAppManager) GetCommandInfo(ctx context.Context, appName string, app App) (*CommandInfo, error) {
 	if m.getCommandInfoFunc != nil {
 		return m.getCommandInfoFunc(ctx, appName, app)

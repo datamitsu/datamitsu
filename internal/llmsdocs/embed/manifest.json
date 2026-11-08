@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "1c6dfe2d14c9c31fae57a20fa5a5e325",
+  "pageSetHash": "a1aefc250c624855fdafa0264373c1f7",
   "pages": [
     {
       "slug": "about",
@@ -78,8 +78,8 @@
       "url": "https://datamitsu.com/docs/examples/uv-isolation.md",
       "title": "UV Isolation",
       "description": "Managing Python tools with UV runtime isolation for conflict-free environments",
-      "bytes": 3672,
-      "contentHash": "214c2ec4a07a80459ddf357aec75d020"
+      "bytes": 4146,
+      "contentHash": "6b075ed2c34b5109d45e8cc09fb6e89d"
     },
     {
       "slug": "getting-started/core-concepts",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 19148,
-      "contentHash": "2e1dfd8e71531e693467ff1583cbbc5c"
+      "bytes": 21863,
+      "contentHash": "aeb945474dd91316ab61d8dca43c7c79"
     },
     {
       "slug": "guides/architecture",
@@ -271,8 +271,8 @@
       "url": "https://datamitsu.com/docs/guides/binary-management.md",
       "title": "Binary Management",
       "description": "How datamitsu downloads, verifies, and stores binary apps",
-      "bytes": 9423,
-      "contentHash": "ffa87a77674947f6f81ea4f1e8f67fff"
+      "bytes": 10794,
+      "contentHash": "87507314b03dfa9ea99973b781d612fb"
     },
     {
       "slug": "guides/config-inspector",
@@ -307,8 +307,8 @@
       "url": "https://datamitsu.com/docs/guides/managed-content.md",
       "title": "Managed Content (Bundles)",
       "description": "Using content-addressed bundles to distribute managed files through symlinks",
-      "bytes": 8149,
-      "contentHash": "fda0de4f6ab473408e2958f14d586baf"
+      "bytes": 8586,
+      "contentHash": "097203b0ec77382a044c187a1b907a88"
     },
     {
       "slug": "guides/oci-bundles",
@@ -316,8 +316,8 @@
       "url": "https://datamitsu.com/docs/guides/oci-bundles.md",
       "title": "OCI Bundles",
       "description": "An OCI bundle packages the datamitsu tool store as a standard OCI image: one layer per store subtree (a binary, a runtime, a runtime-managed app, or a WASM output-parser module), annotated so datamitsu can pull exactly the pieces it needs — **without docker or podman**. The bundle is a cache accelerator and an airgap seed, not a replacement for resolution: whatever is in the bundle is taken from it, whatever is not gets downloaded the usual way.",
-      "bytes": 13276,
-      "contentHash": "ab78e6ba0876317ca1cb0a6fc30b4730"
+      "bytes": 14397,
+      "contentHash": "51d8c672ac71962a0aa25180931150ba"
     },
     {
       "slug": "guides/reports",
@@ -334,8 +334,8 @@
       "url": "https://datamitsu.com/docs/guides/runtime-management.md",
       "title": "Runtime Management",
       "description": "Managing Bun, UV (Python), Node.js, JVM, and Go runtimes with datamitsu",
-      "bytes": 19506,
-      "contentHash": "2171e331167b78546f39242b74c2a339"
+      "bytes": 23151,
+      "contentHash": "56d3f2673cc4a018fdc48c7d82db148e"
     },
     {
       "slug": "guides/source-mode",
@@ -415,8 +415,8 @@
       "url": "https://datamitsu.com/docs/how-to/manage-cache.md",
       "title": "Manage Cache",
       "description": "How to manage datamitsu's cache, store, and per-project data",
-      "bytes": 7333,
-      "contentHash": "7dec5a090c42c580238e687f42545267"
+      "bytes": 8406,
+      "contentHash": "a8d67aa44f587f74de94caea908da095"
     },
     {
       "slug": "how-to/use-in-alpine",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 194176,
-      "contentHash": "d0a7c53bc431ca890ac110ebafb8fb50"
+      "bytes": 197297,
+      "contentHash": "ffe2ec914ce2cb19412bf95043404803"
     },
     {
       "slug": "reference/comparison",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 90328,
-      "contentHash": "73a6d61373b575f5c24235dd954e2447"
+      "bytes": 92593,
+      "contentHash": "e6eee0776e6dd3451989173505ae7669"
     },
     {
       "slug": "reference/ignore-rules",

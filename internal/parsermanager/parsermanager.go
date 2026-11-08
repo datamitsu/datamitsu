@@ -13,17 +13,20 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/installstate"
 	"github.com/datamitsu/datamitsu/internal/logger"
-	"github.com/datamitsu/datamitsu/internal/ociartifact"
 	"github.com/datamitsu/datamitsu/internal/parsermanager/embedded"
+	"github.com/datamitsu/datamitsu/internal/storelock"
 	"github.com/datamitsu/datamitsu/internal/trace"
 
+	"github.com/datamitsu/datamitsu/internal/ociartifact"
 	"github.com/tetratelabs/wazero"
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
@@ -635,6 +638,14 @@ func ParseLocal(ctx context.Context, wasm []byte, toolName string, stdout, stder
 // collapse to one download via singleflight; a module already on disk whose
 // bytes still verify against the declared SHA-256 skips the network entirely.
 func (m *Manager) ensureModule(ctx context.Context, name string) (string, error) {
+	if path, handled, err := m.remoteModule(ctx, name); handled {
+		return path, err
+	}
+	ctx, releaseStore, err := storelock.WithStore(ctx, env.GetStorePath())
+	if err != nil {
+		return "", err
+	}
+	defer releaseStore()
 	p, ok := m.parsers[name]
 	if !ok {
 		return "", fmt.Errorf("parser %q is not declared", name)
@@ -653,16 +664,43 @@ func (m *Manager) ensureModule(ctx context.Context, name string) (string, error)
 
 	dir := moduleDir(name, p)
 	wasmPath := filepath.Join(dir, wasmFileName)
-	if storedModuleIsValid(wasmPath, p) {
-		return wasmPath, nil
-	}
 
 	// Key the singleflight on the content-addressed dir so two tools that share a
 	// parser name (same module) coalesce, while a re-pinned version is fetched
 	// fresh.
-	_, err, _ := m.downloadGroup.Do(dir, func() (any, error) {
-		// Re-check inside the critical section: a racing caller may have finished
-		// the download between our Stat and acquiring the singleflight slot.
+	_, err, _ = m.downloadGroup.Do(dir, func() (any, error) {
+		storeRoot, rootErr := filepath.Abs(env.GetStorePath())
+		if rootErr != nil {
+			return nil, fmt.Errorf("resolve parser store root: %w", rootErr)
+		}
+		targetPath, targetErr := filepath.Abs(dir)
+		if targetErr != nil {
+			return nil, fmt.Errorf("resolve parser target path: %w", targetErr)
+		}
+		subtree, err := filepath.Rel(storeRoot, targetPath)
+		if err != nil {
+			return nil, fmt.Errorf("relativize parser target: %w", err)
+		}
+		if subtree == ".." || filepath.IsAbs(subtree) || strings.HasPrefix(subtree, ".."+string(filepath.Separator)) {
+			storeRoot, err = filepath.Abs(env.GetParsersPath())
+			if err != nil {
+				return nil, fmt.Errorf("resolve parser store root: %w", err)
+			}
+			subtree, err = filepath.Rel(storeRoot, targetPath)
+			if err != nil {
+				return nil, fmt.Errorf("relativize parser target: %w", err)
+			}
+		}
+		if _, err := storelock.ValidateTarget(storeRoot, subtree); err != nil {
+			return nil, err
+		}
+		targetCtx, release, err := installstate.Acquire(ctx, storeRoot, subtree, "parser "+name)
+		if err != nil {
+			return nil, fmt.Errorf("lock parser store target: %w", err)
+		}
+		defer release()
+		ctx := targetCtx
+
 		if storedModuleIsValid(wasmPath, p) {
 			return struct{}{}, nil
 		}
@@ -673,8 +711,6 @@ func (m *Manager) ensureModule(ctx context.Context, name string) (string, error)
 		if err != nil {
 			return nil, fmt.Errorf("download+verify: %w", err)
 		}
-		// Atomic publish: rename the verified temp file (same dir, so same
-		// filesystem) onto its content-addressed name.
 		if err := os.Rename(tmpPath, wasmPath); err != nil {
 			_ = os.Remove(tmpPath)
 			return nil, fmt.Errorf("publish module: %w", err)

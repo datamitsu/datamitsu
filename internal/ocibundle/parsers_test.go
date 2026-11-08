@@ -14,8 +14,8 @@ import (
 )
 
 func TestValidateSubtree_AcceptsParsers(t *testing.T) {
-	if err := validateSubtree(".parsers/core/abc123"); err != nil {
-		t.Errorf("validateSubtree(.parsers/core/abc123) = %v, want nil", err)
+	if err := validateSubtree(".parsers/core/0123456789abcdef0123456789abcdef"); err != nil {
+		t.Errorf("validateSubtree(parser target) = %v, want nil", err)
 	}
 	// Escapes and foreign roots still rejected.
 	if err := validateSubtree(".parsers/../etc"); err == nil {

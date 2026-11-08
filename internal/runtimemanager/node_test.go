@@ -299,7 +299,9 @@ func TestCollectRequiredRuntimesNode(t *testing.T) {
 
 func TestGetPNPMEnvVars(t *testing.T) {
 	appEnvPath := "/cache/.apps/node/eslint/abc123"
-	vars := getPNPMEnvVars(appEnvPath)
+	runtimeDataPath := "/runtime-data/node/identity"
+	storePath := "/runtime-data/node/identity/pnpm/pnpm/pnpm-identity/store"
+	vars := getNodeEnvVars(appEnvPath, storePath, runtimeDataPath)
 
 	if vars["npm_config_virtual_store_dir"] != filepath.Join(appEnvPath, "node_modules", ".pnpm") {
 		t.Errorf("npm_config_virtual_store_dir = %q", vars["npm_config_virtual_store_dir"])
@@ -307,8 +309,14 @@ func TestGetPNPMEnvVars(t *testing.T) {
 	if vars["npm_config_global_dir"] != filepath.Join(appEnvPath, "global") {
 		t.Errorf("npm_config_global_dir = %q", vars["npm_config_global_dir"])
 	}
-	if vars["npm_config_store_dir"] == "" {
-		t.Error("npm_config_store_dir should be set")
+	if vars["npm_config_store_dir"] != storePath {
+		t.Errorf("npm_config_store_dir = %q, want %q", vars["npm_config_store_dir"], storePath)
+	}
+	if vars["npm_config_cache"] != filepath.Join(runtimeDataPath, "npm-cache") {
+		t.Errorf("npm_config_cache = %q", vars["npm_config_cache"])
+	}
+	if vars["NODE_COMPILE_CACHE"] != filepath.Join(runtimeDataPath, "node-compile") {
+		t.Errorf("NODE_COMPILE_CACHE = %q", vars["NODE_COMPILE_CACHE"])
 	}
 }
 
@@ -596,6 +604,9 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 	if err := os.WriteFile(modulePkg, []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write module package.json: %v", err)
 	}
+	if err := markAppReady(appEnvPath); err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	if err := rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, nil, nil); err != nil {
@@ -655,7 +666,8 @@ func seedStaleNodeApp(t *testing.T, appEnvPath, binPath string) string {
 func TestInstallNodeApp_RemoveAllFailureAborts(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
-	rm := New(nodeReinstallRuntimes(t, "https://example.com/node.tar.xz", "abc"))
+	rm := New(nodeReinstallRuntimes(t, "https://example.com/node.tar.xz", strings.Repeat("a", 64)))
+	seedRuntimeTargets(t, rm, "node", testPNPMRuntimeName)
 	appConfig := &binmanager.AppConfigNode{
 		PackageName: "eslint",
 		Version:     "9.0.0",
@@ -694,21 +706,12 @@ func TestInstallNodeApp_RemoveAllFailureAborts(t *testing.T) {
 	}
 }
 
-// TestInstallNodeApp_RemoveAllSuccessProceeds is the success-path counterpart:
-// when the stale-tree removal succeeds, the reinstall proceeds past it (into the
-// runtime download, which then fails on the unreachable archive). The point is
-// that removal ran exactly once and the install moved on rather than aborting.
+// TestInstallNodeApp_RemoveAllSuccessProceeds verifies that package installation
+// begins after a stale app tree is successfully removed.
 func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
-
-	// A localhost server that 404s every request: the reinstall proceeds into
-	// installNode, which fails fast on the missing archive — no flaky external
-	// network and no real pnpm run required.
-	var hits int32
-	server := nodeArchiveServer(t, []byte("unused"), "/never-matches", &hits)
-	defer server.Close()
-
-	rm := New(nodeReinstallRuntimes(t, server.URL+"/node.tar.xz", strings.Repeat("a", 64)))
+	rm := New(nodeReinstallRuntimes(t, "https://example.com/node.tar.xz", strings.Repeat("a", 64)))
+	seedRuntimeTargets(t, rm, "node", testPNPMRuntimeName)
 	appConfig := &binmanager.AppConfigNode{
 		PackageName: "eslint",
 		Version:     "9.0.0",
@@ -733,11 +736,10 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a download error after the (successful) stale-tree removal, got nil")
 	}
-	// The error is from the runtime download, NOT the removal: we proceeded past
-	// the (successful) removal into installNode, which wraps the failed archive
-	// fetch from the 404ing server as "failed to acquire node runtime".
-	if !strings.Contains(err.Error(), "node runtime") {
-		t.Errorf("expected the post-removal error to come from the node runtime download, got: %v", err)
+	// The prerequisite runtimes are already seeded, so reinstall reaches the
+	// pnpm invocation after successfully removing the stale app target.
+	if !strings.Contains(err.Error(), "failed to install node app") {
+		t.Errorf("expected the post-removal error to come from the app installer, got: %v", err)
 	}
 	if got := calls.Load(); got != 1 {
 		t.Errorf("removeAll called %d times, want 1", got)
@@ -767,6 +769,9 @@ func seedInstalledNodeApp(t *testing.T, appEnvPath, packageName, binPath string)
 	if err := os.WriteFile(modulePkg, []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write module package.json: %v", err)
 	}
+	if err := markAppReady(appEnvPath); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit pins Task 9 (review #8): a
@@ -787,6 +792,7 @@ func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
 		},
 	}
 	rm := New(runtimes)
+	seedRuntimeTargets(t, rm, testPNPMRuntimeName)
 
 	appConfig := &binmanager.AppConfigNode{
 		PackageName: "eslint",
@@ -806,9 +812,9 @@ func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	// Count merge invocations across the whole GetCommandInfo exec.
 	var merges atomic.Int32
 	orig := buildPNPMWorkspace
-	buildPNPMWorkspace = func(files map[string]string) (string, error) {
+	buildPNPMWorkspace = func(files map[string]string, storePath string) (string, error) {
 		merges.Add(1)
-		return orig(files)
+		return orig(files, storePath)
 	}
 	defer func() { buildPNPMWorkspace = orig }()
 

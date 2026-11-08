@@ -12,7 +12,6 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
 )
 
 func bunSystemRuntime(command string) config.MapOfRuntimes {
@@ -75,8 +74,27 @@ func TestResolveBunCommandInfo(t *testing.T) {
 	if len(info.Args) != 6 || info.Args[0] != "--config="+os.DevNull || !slices.Equal(info.Args[1:5], []string{"--no-env-file", "run", "--bun", "--no-install"}) || !strings.HasSuffix(info.Args[5], filepath.FromSlash(app.BinPath)) {
 		t.Errorf("Args = %v, want ambient-config guards plus run --bun --no-install and the app entrypoint", info.Args)
 	}
-	if got := info.Env["npm_config_store_dir"]; got != env.GetPNPMStorePath() {
-		t.Errorf("npm_config_store_dir = %q, want %q", got, env.GetPNPMStorePath())
+	runtimeName, rc, err := rm.ResolveRuntime(app.Runtime, config.RuntimeKindBun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storePath, err := rm.pnpmDataPath(runtimeName, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeDataPath, err := rm.runtimeDataPath(runtimeName, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Env["npm_config_store_dir"]; got != storePath {
+		t.Errorf("npm_config_store_dir = %q, want %q", got, storePath)
+	}
+	for key, want := range map[string]string{
+		"BUN_RUNTIME_TRANSPILER_CACHE_PATH": filepath.Join(runtimeDataPath, "bun-cache"),
+	} {
+		if got := info.Env[key]; got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
 	}
 	if got := info.Env["BUN_OPTIONS"]; got != bunGuardOptions {
 		t.Errorf("BUN_OPTIONS = %q, want the ambient-input guards %q inherited by every Bun child", got, bunGuardOptions)
@@ -320,6 +338,7 @@ func TestGetCommandInfoBunMergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
 	rm := New(bunSystemRuntime("bun"))
+	seedRuntimeTargets(t, rm, testPNPMRuntimeName)
 	appConfig := &binmanager.AppConfigBun{
 		PackageName: "eslint",
 		Version:     "10.9.0",
@@ -346,12 +365,15 @@ func TestGetCommandInfoBunMergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	if err := writeBunNodeAlias(appEnvPath, writeFakeBun(t)); err != nil {
 		t.Fatalf("write Bun node alias: %v", err)
 	}
+	if err := markAppReady(appEnvPath); err != nil {
+		t.Fatal(err)
+	}
 
 	var merges atomic.Int32
 	original := buildPNPMWorkspace
-	buildPNPMWorkspace = func(files map[string]string) (string, error) {
+	buildPNPMWorkspace = func(files map[string]string, storePath string) (string, error) {
 		merges.Add(1)
-		return original(files)
+		return original(files, storePath)
 	}
 	defer func() { buildPNPMWorkspace = original }()
 

@@ -28,11 +28,3 @@ func processProbe(pid int) error {
 }
 
 var errNoProcess = errors.New("no such process")
-
-// trackProcessTree is Unix's share of the tree-cancellation contract: the
-// process group was set before Start (setProcessGroup), so nothing remains
-// to register.
-func trackProcessTree(pid int) error { return nil }
-
-// untrackProcessTree drops the registration made by trackProcessTree.
-func untrackProcessTree(pid int) {}
