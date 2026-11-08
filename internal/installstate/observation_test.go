@@ -100,13 +100,9 @@ func TestStatusReleasePreservesReplacementOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := &statusWriter{path: "probe.json", owner: "first", label: "probe", target: "apps/probe"}
-	if !owner.write("install", nil, nil, "", true) {
-		t.Fatal("could not publish owner status")
-	}
+	owner.write("install", nil, nil, "", true)
 	replacement := &statusWriter{path: "probe.json", owner: "second", label: "probe", target: "apps/probe"}
-	if !replacement.write("verify", nil, nil, "", true) {
-		t.Fatal("could not publish replacement status")
-	}
+	replacement.write("verify", nil, nil, "", true)
 	if err := owner.remove(); err != nil {
 		t.Fatal(err)
 	}

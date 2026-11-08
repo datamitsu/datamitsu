@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "a1aefc250c624855fdafa0264373c1f7",
+  "pageSetHash": "1f34b848724a85a485ac11c508a7583b",
   "pages": [
     {
       "slug": "about",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 21863,
-      "contentHash": "aeb945474dd91316ab61d8dca43c7c79"
+      "bytes": 22605,
+      "contentHash": "68af9e89b0afc38c73d3876bc4cf6d51"
     },
     {
       "slug": "guides/architecture",

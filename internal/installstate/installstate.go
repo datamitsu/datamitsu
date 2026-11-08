@@ -54,6 +54,8 @@ type (
 		path, owner, target, label, opID string
 		mu                               sync.Mutex
 		last                             time.Time
+		lastEvent                        time.Time
+		closed                           bool
 		phase                            string
 		completed, total                 *int64
 		unit                             string
@@ -124,12 +126,22 @@ func Acquire(ctx context.Context, storeRoot, target, label string) (context.Cont
 			case <-heartbeatCtx.Done():
 				return
 			case <-ticker.C:
-				writer.write(writer.currentPhase(), nil, nil, "", false)
+				writer.write("", nil, nil, "", false)
 			}
 		}
 	}()
 	var once sync.Once
-	wrappedRelease := func() { once.Do(func() { stopHeartbeat(); <-heartbeatDone; _ = writer.remove(); release() }) }
+	wrappedRelease := func() {
+		once.Do(func() {
+			writer.mu.Lock()
+			writer.closed = true
+			writer.mu.Unlock()
+			stopHeartbeat()
+			<-heartbeatDone
+			_ = writer.remove()
+			release()
+		})
+	}
 	chain, _ := ctx.Value(statusKey{}).([]*statusWriter)
 	chain = append(append([]*statusWriter(nil), chain...), writer)
 	return context.WithValue(ctx, statusKey{}, chain), wrappedRelease, nil
@@ -197,25 +209,36 @@ func Progress(ctx context.Context, phase Phase, completed, total int64, unit str
 		return
 	}
 	chain, ok := ctx.Value(statusKey{}).([]*statusWriter)
-	if !ok {
-		return
-	}
-	phaseName := string(phase)
-	updated := false
-	for _, writer := range chain {
-		c, t := completed, total
-		writer.mu.Lock()
-		transition := writer.phase != phaseName
-		writer.mu.Unlock()
-		if writer.write(phaseName, &c, &t, unit, transition) {
-			updated = true
-		}
-	}
-	if !updated || len(chain) == 0 {
+	if !ok || len(chain) == 0 {
 		return
 	}
 	writer := chain[len(chain)-1]
-	event := uievent.Event{Type: uievent.TypeInstall, OpID: writer.opID, TS: time.Now().UnixMilli(), Status: uievent.StatusProgress, Name: writer.label, Msg: phaseName}
+	writer.mu.Lock()
+	closed := writer.closed
+	writer.mu.Unlock()
+	if closed {
+		return
+	}
+	phaseName := string(phase)
+	var transition bool
+	for _, writer := range chain {
+		c, t := completed, total
+		writer.mu.Lock()
+		transition = writer.phase != phaseName
+		writer.mu.Unlock()
+		writer.write(phaseName, &c, &t, unit, transition)
+	}
+	writer.mu.Lock()
+	now := time.Now()
+	emit := !writer.closed && (transition || now.Sub(writer.lastEvent) >= time.Second)
+	if emit {
+		writer.lastEvent = now
+	}
+	writer.mu.Unlock()
+	if !emit {
+		return
+	}
+	event := uievent.Event{Type: uievent.TypeInstall, OpID: writer.opID, TS: now.UnixMilli(), Status: uievent.StatusProgress, Name: writer.label, Msg: phaseName}
 	if phase == PhaseDownload {
 		event.Type = uievent.TypeDownload
 		if completed >= 0 {
@@ -238,44 +261,41 @@ func Progress(ctx context.Context, phase Phase, completed, total int64, unit str
 	_ = provision.Progress(ctx, event)
 }
 
-func (w *statusWriter) currentPhase() string { w.mu.Lock(); defer w.mu.Unlock(); return w.phase }
-
-func (w *statusWriter) write(phase string, completed, total *int64, unit string, transition bool) (ok bool) {
+func (w *statusWriter) write(phase string, completed, total *int64, unit string, transition bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	now := time.Now()
-	if !transition && now.Sub(w.last) < time.Second {
-		return false
+	if w.closed {
+		return
 	}
+	now := time.Now()
 	if phase != "" {
 		w.phase = phase
 	}
 	if completed != nil {
 		w.completed, w.total, w.unit = completed, total, unit
 	}
+	if !transition && now.Sub(w.last) < time.Second {
+		return
+	}
 	data, err := json.Marshal(status{Schema: schema, Owner: w.owner, PID: os.Getpid(), Target: w.target, Label: w.label, Phase: w.phase, UpdatedAt: now, Completed: w.completed, Total: w.total, Unit: w.unit})
 	if err != nil {
-		return false
+		return
 	}
 	root, err := openStatusRoot(true)
 	if err != nil {
-		return false
+		return
 	}
-	defer func() {
-		if root.Close() != nil {
-			ok = false
-		}
-	}()
+	defer func() { _ = root.Close() }()
 	tmp := w.path + ".tmp-" + w.owner
 	if err := root.WriteFile(tmp, data, 0o600); err != nil {
-		return false
+		_ = root.Remove(tmp)
+		return
 	}
 	if err := root.Rename(tmp, w.path); err != nil {
 		_ = root.Remove(tmp)
-		return false
+		return
 	}
 	w.last = now
-	return true
 }
 
 func (w *statusWriter) remove() (err error) {

@@ -38,6 +38,10 @@ If Job Object assignment fails, startup cleanup terminates the child directly be
 
 While waiting for a target lock, datamitsu may display the current owner's phase and available real counters. Status is observational only: it is written by the lock holder outside the store under the cache-side `store-locks/status` area, carries no URLs, arguments, environment values or credentials, and does not affect lock ownership. A missing, malformed or stale status falls back to a generic wait; status is never grounds to steal a lock. Download and package counters are shown only when the installer supplies them, not inferred percentages.
 
+Status writes are throttled, but counter updates are retained immediately. The next heartbeat publishes the latest snapshot even when no phase changes, so a long-running package installation cannot keep refreshing a status record with obsolete counters. Live progress events have a separate throttle: the first update is reported immediately, and heartbeat writes never suppress later event updates.
+
+A failed status write preserves the previously published record and removes its temporary file. Status I/O failures do not release installation ownership or fail the installation itself. Releasing a target closes its progress reporter before unlocking; late callbacks cannot recreate its status or overwrite a replacement owner's progress.
+
 ## Skipped Tools
 
 A tool can end up **skipped** — neither run nor failed — for one of three
