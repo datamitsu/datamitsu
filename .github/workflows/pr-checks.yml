@@ -52,7 +52,7 @@ jobs:
         with:
           args: release --snapshot --clean --skip=sign
           distribution: goreleaser
-          version: "v2.18.1"
+          version: "v2.20.0"
       - name: Normalize binaries
         run: .github/scripts/normalize-binaries.sh "true"
       - name: Prepare npm packages
@@ -122,7 +122,7 @@ jobs:
         with:
           args: release --snapshot --clean --skip=sign
           distribution: goreleaser
-          version: "v2.18.1"
+          version: "v2.20.0"
       - name: Prepare binaries for Docker
         run: |
           # GoReleaser in snapshot mode creates binaries in dist/datamitsu_{OS}_{ARCH}_{MICROARCH}/
@@ -213,7 +213,7 @@ jobs:
           fetch-depth: 2
       - uses: ./.github/actions/setup-environment
       - name: Install uv
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Install Python packaging development dependencies
         run: uv sync --project packaging/python --locked --only-group dev --no-install-project
       - name: Check Go modules are tidy
@@ -235,17 +235,17 @@ jobs:
       # writes nothing, and a pull request from a fork gets a read-only token.
       - if: always() && hashFiles('lint-sarif/datamitsu-1.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
         name: Upload SARIF to code scanning (tools 1-20)
-        uses: github/codeql-action/upload-sarif@8498dc4c2b27cdd99baf0f87955b29ebbf30c78d # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: lint-sarif/datamitsu-1.sarif
       - if: always() && hashFiles('lint-sarif/datamitsu-2.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
         name: Upload SARIF to code scanning (tools 21-40)
-        uses: github/codeql-action/upload-sarif@8498dc4c2b27cdd99baf0f87955b29ebbf30c78d # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: lint-sarif/datamitsu-2.sarif
       - if: always() && hashFiles('lint-sarif/datamitsu-3.sarif') != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
         name: Upload SARIF to code scanning (tools 41-60)
-        uses: github/codeql-action/upload-sarif@8498dc4c2b27cdd99baf0f87955b29ebbf30c78d # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: lint-sarif/datamitsu-3.sarif
       # A fourth file would go unread: fail rather than leave tools out.
@@ -285,7 +285,7 @@ jobs:
     steps:
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
         with:
           requireScope: false
           types: |
@@ -336,7 +336,7 @@ jobs:
       - name: Fuzz .datamitsuignore (smoke)
         run: pnpm dm exec task -- test:fuzz
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}

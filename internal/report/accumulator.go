@@ -70,6 +70,11 @@ type OperationRecord struct {
 	steps   map[string]int
 	changes changeLog
 
+	// coreToolRuns holds the tool runs of core-built-in checks
+	// (AddCoreFindings): no process ran, so they are built once, complete,
+	// and appended to the operation's tools at build time.
+	coreToolRuns []*ToolRun
+
 	success  bool
 	duration int64
 }
@@ -180,6 +185,63 @@ func (o *OperationRecord) Stopped(c Cancel) {
 	o.acc.mu.Lock()
 	defer o.acc.mu.Unlock()
 	o.stopped = append(o.stopped, c)
+}
+
+// AddCoreFindings records the findings of a core-built-in check under a
+// pseudo tool run named tool — a check that ran no process and reports
+// through the same report surface as a tool. The diagnostics must already
+// carry their Reported/Gates marks and their Anchor. It returns the findings
+// as the event stream carries them (fingerprints included, computed exactly
+// as the report will hold them), once per call.
+func (o *OperationRecord) AddCoreFindings(tool string, diags []diagnostic.Diagnostic) []ToolFinding {
+	if o == nil || len(diags) == 0 {
+		return nil
+	}
+	o.acc.mu.Lock()
+	defer o.acc.mu.Unlock()
+
+	tr := o.acc.newToolRun(o.name, tool)
+	gated := false
+	inv := Invocation{
+		ID:         tool + "#0",
+		TaskID:     "builtin",
+		Coverage:   string(tooling.CoverageComplete),
+		State:      string(tooling.ProcessRan),
+		Extraction: string(tooling.ExtractionParsedFindings),
+		Files:      []FileResult{},
+		Findings:   []Finding{},
+		Provenance: provenanceCore,
+	}
+	for _, d := range diags {
+		if d.Gates {
+			gated = true
+		}
+		f := o.acc.finding(tool, d, tr)
+		f.Provenance = provenanceCore
+		// What the check printed is what the report shows: a baselined
+		// finding is neither printed nor shown.
+		f.Shown = d.Reported
+		inv.Findings = append(inv.Findings, f)
+	}
+	// A core check fails exactly where a tool that exited 0 under a gating
+	// finding fails: on its threshold.
+	inv.ExitCode = new(int)
+	*inv.ExitCode = 0
+	inv.Success = !gated
+	if gated {
+		*inv.ExitCode = 1
+		inv.FailureKind = FailureThreshold
+	}
+	tr.Invocations = append(tr.Invocations, inv)
+	tr.GateActive = true // the core gate is always active; failOn cannot soften it
+	settleFindings(tr)
+	o.coreToolRuns = append(o.coreToolRuns, tr)
+
+	var out []ToolFinding
+	for _, f := range inv.Findings {
+		out = append(out, ToolFinding{TaskID: inv.TaskID, Dir: inv.Dir, Finding: f})
+	}
+	return out
 }
 
 // Step records that the tasks named by taskIDs ran together as step of the
@@ -324,6 +386,12 @@ func (a *Accumulator) buildOperation(o *OperationRecord) Operation {
 		Tools:     []ToolRun{},
 	}
 	if o.plan == nil {
+		// A core check's tool run survives an operation that never planned
+		// anything: the check ran no process, so it does not depend on the
+		// plan.
+		for _, tr := range o.coreToolRuns {
+			op.Tools = append(op.Tools, *tr)
+		}
 		recordChanges(o, &op)
 		return op
 	}
@@ -359,6 +427,9 @@ func (a *Accumulator) buildOperation(o *OperationRecord) Operation {
 		tr := a.newToolRun(o.name, s.ToolName)
 		tr.Incomplete = []Reason{ReasonPlatformSkip}
 		tools[s.ToolName] = tr
+	}
+	for _, tr := range o.coreToolRuns {
+		op.Tools = append(op.Tools, *tr)
 	}
 	for _, tr := range tools {
 		op.Tools = append(op.Tools, *tr)
@@ -849,6 +920,7 @@ const (
 	kindSynthetic = "synthetic"
 
 	provenanceParser    = "parser"
+	provenanceCore      = "core"
 	provenanceNone      = "none"
 	provenanceSynthetic = "synthetic"
 

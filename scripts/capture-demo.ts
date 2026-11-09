@@ -21,11 +21,7 @@ interface Recording {
   title: string;
 }
 
-// The recorded terminal size. Wide enough that no line in any of the three runs
-// wraps — the longest is the 81-column "skipped (opt-in: …)" row — with a few
-// columns to spare, and narrow enough that the player still sets readable type
-// inside the homepage card.
-const terminalSize = { cols: 88, rows: 24 };
+const terminalSize = { cols: 112, rows: 24 };
 
 function argumentValue(rawArguments: string[], flag: string): string | undefined {
   const index = rawArguments.indexOf(flag);
@@ -77,7 +73,7 @@ async function main() {
     npm_config_loglevel: "silent",
   };
   const target = narrowedTarget(repo);
-  const narrowed = `pnpm datamitsu lint ${target.file} --tools prettier,syncpack --widen-to=target --explain`;
+  const narrowed = `pnpm datamitsu lint ${target.file} --tools eslint,syncpack --widen-to=target --explain`;
   const recordings: Recording[] = [
     {
       command: "pnpm datamitsu check",

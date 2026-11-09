@@ -202,6 +202,7 @@ func TestDispatchExplicitConfigFarmRebakesOnConfigChange(t *testing.T) {
 	})
 	// The config file changed, so the recorded watch tuples no longer match.
 	ch.d.Validate = func(sourcefarm.Manifest) bool { return false }
+	ch.d.QuietFarm = func(string) bool { return true }
 	ch.invokeThroughConfigFarm("tofu")
 
 	code, handled := ch.d.Dispatch()
@@ -213,7 +214,7 @@ func TestDispatchExplicitConfigFarmRebakesOnConfigChange(t *testing.T) {
 		t.Fatalf("Dispatch() spawned %v, want one refresh", ch.spawns)
 	}
 	req := ch.spawnReqs[0]
-	wantArgs := []string{"--config", ch.configPath, noAutoConfigFlag, "source", "refresh"}
+	wantArgs := []string{"--config", ch.configPath, noAutoConfigFlag, "source", "refresh", "--quiet"}
 	if !slices.Equal(req.Args, wantArgs) {
 		t.Errorf("rebake args = %v, want %v", req.Args, wantArgs)
 	}
@@ -233,6 +234,7 @@ func TestDispatchExplicitConfigFarmReplaysRecordedFlags(t *testing.T) {
 		Entries:    []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
 	})
 	ch.d.Validate = func(sourcefarm.Manifest) bool { return false }
+	ch.d.QuietFarm = func(string) bool { return true }
 	ch.invokeThroughConfigFarm("tofu")
 
 	if _, handled := ch.d.Dispatch(); !handled {
@@ -245,7 +247,7 @@ func TestDispatchExplicitConfigFarmReplaysRecordedFlags(t *testing.T) {
 		"--before-config", filepath.Join(ch.configDir, "shared.js"),
 		"--config", ch.configPath,
 		noAutoConfigFlag,
-		"source", "refresh",
+		"source", "refresh", "--quiet",
 	}
 	if !slices.Equal(ch.spawnReqs[0].Args, want) {
 		t.Errorf("rebake args = %v, want %v", ch.spawnReqs[0].Args, want)

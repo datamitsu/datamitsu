@@ -17,6 +17,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/gitenv"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
+	"github.com/datamitsu/datamitsu/internal/managedconfig"
 	"github.com/datamitsu/datamitsu/internal/target"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 
@@ -97,15 +98,6 @@ func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts 
 	}
 	facts.BinaryPath = ex
 
-	// Set binary command (override or default)
-	if binaryCommandOverride != "" {
-		facts.BinaryCommand = binaryCommandOverride
-	} else if envOverride := env.GetBinaryCommandOverride(); envOverride != "" {
-		facts.BinaryCommand = envOverride
-	} else {
-		facts.BinaryCommand = ex
-	}
-
 	// Get current working directory (needed for monorepo detection)
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -137,6 +129,10 @@ func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts 
 		facts.IsInGitRepo = false
 		gitRoot = ""
 	}
+
+	// Set binary command (override, env, the launcher marker init wrote, or
+	// the executable itself)
+	facts.BinaryCommand, facts.BinaryPath = ResolveBinaryCommand(binaryCommandOverride, gitRoot)
 
 	// Collect all environment variables
 	facts.Env = collectAllEnv()
@@ -172,6 +168,52 @@ func collectAllEnv() map[string]string {
 	}
 
 	return envMap
+}
+
+// ResolveBinaryCommandForInit returns the command init records into the
+// launcher marker: the --binary-command flag, then DATAMITSU_BINARY_COMMAND,
+// then the running executable itself. Deliberately WITHOUT the marker
+// fallback: init records how THIS invocation was launched, so switching
+// install channels (say, wrapper to a global binary) takes effect on the
+// next init instead of re-recording a stale command forever.
+func ResolveBinaryCommandForInit(override string) (command, binaryPath string) {
+	ex, err := os.Executable()
+	if err != nil {
+		return override, ""
+	}
+	binaryPath = resolveSymlinks(ex)
+	if override != "" {
+		return override, binaryPath
+	}
+	if envOverride := env.GetBinaryCommandOverride(); envOverride != "" {
+		return envOverride, binaryPath
+	}
+	return binaryPath, binaryPath
+}
+
+// ResolveBinaryCommand returns the command that should invoke this binary and
+// the absolute path of the running executable: the --binary-command flag
+// (wrappers inject it), then DATAMITSU_BINARY_COMMAND, then the launcher
+// marker init wrote to <gitRoot>/.datamitsu/launcher.json, then the
+// executable path itself.
+func ResolveBinaryCommand(override, gitRoot string) (command, binaryPath string) {
+	ex, err := os.Executable()
+	if err != nil {
+		return override, ""
+	}
+	binaryPath = resolveSymlinks(ex)
+	if override != "" {
+		return override, binaryPath
+	}
+	if envOverride := env.GetBinaryCommandOverride(); envOverride != "" {
+		return envOverride, binaryPath
+	}
+	if gitRoot != "" {
+		if marker, ok := managedconfig.ReadLauncherMarker(gitRoot); ok {
+			return marker.Command, binaryPath
+		}
+	}
+	return binaryPath, binaryPath
 }
 
 // resolveSymlinks returns path with every symlink resolved, or path unchanged

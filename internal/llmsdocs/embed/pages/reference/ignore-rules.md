@@ -6,16 +6,36 @@ datamitsu supports `.datamitsuignore` files to disable specific tools for matchi
 
 ## File Location
 
-Place `.datamitsuignore` files anywhere in your repository. Rules apply to files in the same directory and all subdirectories. Multiple files at different levels of the directory tree are combined, with deeper rules taking precedence.
+`.datamitsuignore` lives at the repository git root — the only file whose rules apply. Datamitsu reads its configuration only at the root, and the same is true for the ignore file: a `.datamitsuignore` in any subdirectory is a dead artifact.
 
 ```
 repo/
-├── .datamitsuignore          # Rules for entire repo
-├── src/
-│   └── .datamitsuignore      # Additional rules for src/
-└── vendor/
-    └── .datamitsuignore      # Rules for vendor/
+└── .datamitsuignore          # The one file whose rules apply
 ```
+
+A `.datamitsuignore` below the git root does not change what runs. The core
+[config-placement check](../guides/configuration.md#config-placement) reports
+every such file as an error in `lint` and `check` — move its rules into the
+root file (see [Migrating nested rules](#migrating-nested-rules)) and delete it.
+
+### Migrating nested rules
+
+Formerly, `.datamitsuignore` files cascaded: a subdirectory file's rules applied
+to its own subtree, with deeper rules overriding shallower ones. To carry a
+nested file's rules into the root file, prefix each relative glob with the
+directory the file lived in:
+
+| Nested file            | Nested rule     | Root-file rule      |
+| ---------------------- | --------------- | ------------------- |
+| `src/.datamitsuignore` | `*.go: tool`    | `src/*.go: tool`    |
+| `src/.datamitsuignore` | `**/*.md: tool` | `src/**/*.md: tool` |
+
+One caveat: a nested rule that itself starts with `**/` matched from its own
+directory's ancestors too. The nested `src/.datamitsuignore` rule
+`**/src/*.go: tool` matched `src/a.go`; after moving to the root file, keep both
+`src/*.go: tool` and `src/**/src/*.go: tool` to preserve that. There is no
+mechanical translation for every accepted glob — check each rule against the
+[glob reference](#glob-pattern-reference) after moving it.
 
 ## Syntax
 
@@ -92,30 +112,29 @@ vendor/**/*: *
 
 ## Rule Application Order
 
-Rules are applied from the root directory toward the file's directory:
+All rules apply from the repository root, in the order they were added:
 
-1. Root-level `.datamitsuignore` rules apply first
-2. Subdirectory rules apply on top, in depth order
-3. Within the same directory, rules apply in file order (top to bottom)
+1. The built-in rule `.datamitsu/**: *` applies first — tools never run on the managed symlinks directory
+2. Config-defined `ignoreRules` apply next
+3. The root `.datamitsuignore`'s rules apply last
 4. Positive rules add tools to the disabled set
 5. Negative (`!`) rules remove tools from the disabled set
 
-This means deeper rules override shallower ones, and later rules in the same file override earlier ones.
+A later rule wins over an earlier one, so the root file can re-enable what the
+configuration disabled and the other way around.
 
 ### Example
 
 ```
-repo/.datamitsuignore:
+.datamitsuignore:
   **/*.md: eslint, prettier
-
-repo/docs/.datamitsuignore:
-  !**/*.md: eslint
+  !docs/**/*.md: eslint
 ```
 
 Results:
 
-- `README.md` — eslint disabled, prettier disabled (root rule applies)
-- `docs/guide.md` — eslint enabled (docs rule re-enables), prettier disabled (root rule still applies)
+- `README.md` — eslint disabled, prettier disabled (first rule applies)
+- `docs/guide.md` — eslint enabled (second rule re-enables), prettier disabled (first rule still applies)
 - `src/main.js` — no tools disabled (pattern doesn't match)
 
 ## Config-Defined Ignore Rules

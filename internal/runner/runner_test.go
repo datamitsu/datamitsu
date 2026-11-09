@@ -901,7 +901,7 @@ func TestPrintOverallSummary(t *testing.T) {
 	oldStdout := os.Stdout
 	os.Stdout = w
 
-	printOperationFooter(toolGroups, 5000, 0, 0, 0, 0, "")
+	printOperationFooter(toolGroups, 5000, 0, 0, 0, 0, "", 0, 0)
 
 	_ = w.Close()
 	os.Stdout = oldStdout

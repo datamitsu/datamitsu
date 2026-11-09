@@ -18,7 +18,7 @@ import (
 // declared names were refused.
 func TestSummarizeRefreshCounts(t *testing.T) {
 	var buf bytes.Buffer
-	summarizeRefresh(&buf, bakeResult{Plan: statusPlan(t)}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"})
+	summarizeRefresh(&buf, bakeResult{Plan: statusPlan(t)}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, false)
 
 	line := buf.String()
 	if strings.Count(line, "\n") != 1 {
@@ -35,7 +35,7 @@ func TestSummarizeRefreshCounts(t *testing.T) {
 // summary. Silence would be indistinguishable from the command not running.
 func TestSummarizeRefreshEmptyFarm(t *testing.T) {
 	var buf bytes.Buffer
-	summarizeRefresh(&buf, bakeResult{Plan: sourcefarm.Plan{Root: "/repo"}}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"})
+	summarizeRefresh(&buf, bakeResult{Plan: sourcefarm.Plan{Root: "/repo"}}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, false)
 
 	if !strings.Contains(buf.String(), "baked 0 tool(s)") {
 		t.Errorf("empty farm produced no usable summary:\n%s", buf.String())
@@ -51,7 +51,7 @@ func TestSummarizeRefreshReportsFailedBake(t *testing.T) {
 	summarizeRefresh(&buf, bakeResult{
 		Plan:           statusPlan(t),
 		MaterializeErr: errors.New("no space left on device"),
-	}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"})
+	}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, false)
 
 	out := buf.String()
 	if strings.Contains(out, "tool(s)") {
@@ -67,6 +67,14 @@ func TestSummarizeRefreshReportsFailedBake(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("failure summary is missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestSummarizeRefreshQuietSuppressesSuccess(t *testing.T) {
+	var buf bytes.Buffer
+	summarizeRefresh(&buf, bakeResult{Plan: statusPlan(t)}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, true)
+	if buf.Len() != 0 {
+		t.Fatalf("quiet successful refresh printed %q", buf.String())
 	}
 }
 

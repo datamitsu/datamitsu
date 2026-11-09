@@ -173,7 +173,8 @@ Use ignore rules to skip tools for specific files or directories.
 
 ### Using .datamitsuignore files
 
-Create a `.datamitsuignore` file in any directory:
+Create a `.datamitsuignore` file at your repository's git root (the only file
+whose rules apply — see the [Ignore Rules reference](/docs/reference/ignore-rules#file-location)):
 
 ```bash
 # Disable all tools for vendor code

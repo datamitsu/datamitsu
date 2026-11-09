@@ -53,23 +53,6 @@ func TestInstallNoTargets(t *testing.T) {
 	}
 }
 
-// TestInstallHelpGolden freezes `install --help`: a static, offline help block
-// with no version or path tokens, so the normalized output equals the raw
-// output. The --runtime and --no-verify flags appearing here is itself part of
-// the frozen contract.
-func TestInstallHelpGolden(t *testing.T) {
-	norm := clitest.NewNormalizer()
-
-	res := clitest.Run(t, clitest.RunOptions{}, "install", "--help")
-	if res.ExitCode != 0 {
-		t.Fatalf("`install --help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
-	}
-	if res.Stderr != "" {
-		t.Errorf("`install --help` wrote to stderr:\n%s", res.Stderr)
-	}
-	clitest.AssertGolden(t, "install_help", norm.Apply(res.Stdout))
-}
-
 // TestInstallUnknownApp locks the offline error for an app not in the registry:
 // exit 1, "not found in registry" naming the app, no usage block.
 func TestInstallUnknownApp(t *testing.T) {

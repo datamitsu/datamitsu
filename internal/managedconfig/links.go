@@ -242,6 +242,9 @@ func CreateDatamitsuLinks(gitRoot string, apps binmanager.MapOfApps, resolver In
 	if err := copyInternalConfigs(datamitsuDir, tmpDir); err != nil {
 		return nil, err
 	}
+	if err := copyLauncherMarker(datamitsuDir, tmpDir); err != nil {
+		return nil, err
+	}
 
 	backupDir := datamitsuDir + ".bak"
 
@@ -324,6 +327,9 @@ func CreateDatamitsuTypeDefinitions(gitRoot string, dryRun bool) error {
 	if err := copyInternalConfigs(datamitsuDir, tmpDir); err != nil {
 		return err
 	}
+	if err := copyLauncherMarker(datamitsuDir, tmpDir); err != nil {
+		return err
+	}
 
 	// Atomically swap using backup-and-restore pattern (same as CreateDatamitsuLinks)
 	backupDir := datamitsuDir + ".bak"
@@ -377,7 +383,7 @@ func writeTypeDefinitions(dir string) error {
 // rebuilt tree would then write through it into an app's install root.
 func isReservedLinkName(cleaned string) bool {
 	name := strings.ToLower(filepath.ToSlash(cleaned))
-	if name == ".gitignore" || name == "datamitsu.config.d.ts" {
+	if name == ".gitignore" || name == "datamitsu.config.d.ts" || name == LauncherMarkerName {
 		return true
 	}
 	return name == config.InternalConfigsDir || strings.HasPrefix(name, config.InternalConfigsDir+"/")

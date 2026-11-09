@@ -16,14 +16,14 @@ import (
 // the build until it is given a blackbox test and registered here, and a removed
 // command fails until its stale entry is deleted — neither can drift silently.
 //
-// Group commands (e.g. `config`, `devtools apps`) are intentionally absent: they
-// run no work of their own and are covered by their `--help` goldens and
-// command-set drift guards.
+// Group command registries are covered by TestHelpSemanticContracts using the
+// independent expectations in testdata/help-contracts.json.
 var testedLeafCommands = map[string]string{
-	"inspect":                      "TestInspectHelp / TestInspectExport / TestInspectInvalidFlags",
+	"inspect":                      "TestInspectExport / TestInspectInvalidFlags",
 	"cache clear":                  "TestCacheClearDryRun",
+	"cache copy":                   "TestCacheCopyWarmsNewWorktree / TestCacheCopyNoSourceCache",
 	"cache path project":           "TestCachePathProject",
-	"check":                        "TestExplainPlanGolden / TestCheckFixLintHelpGolden / TestExecutionCheckStopsAfterFix / TestExecutionFixCache / TestAgentOutput",
+	"check":                        "TestExplainPlanGolden / TestExecutionCheckStopsAfterFix / TestExecutionFixCache / TestAgentOutput",
 	"config chain-hash":            "TestConfigChainHashTable",
 	"config lockfile":              "TestConfigLockfile",
 	"config reconcile":             "TestConfigReconcileRequiresApplyToWrite",
@@ -36,7 +36,7 @@ var testedLeafCommands = map[string]string{
 	"devtools bundles inspect":     "TestDevtoolsBundlesInspectPath",
 	"devtools bundles list":        "TestDevtoolsBundlesList",
 	"devtools bundles path":        "TestDevtoolsBundlesInspectPath",
-	"devtools dockerfile":          "TestDevtoolsHelpGolden / TestDevtoolsArgValidation",
+	"devtools dockerfile":          "TestDevtoolsArgValidation",
 	"devtools pack-inline-archive": "TestDevtoolsArgValidation",
 	"devtools parsers inspect":     "TestDevtoolsParsersInspect",
 	"devtools parsers list":        "TestDevtoolsParsersList / TestDevtoolsParsersListJSONEmpty / TestDevtoolsParsersEmbedded",
@@ -47,10 +47,10 @@ var testedLeafCommands = map[string]string{
 	"devtools pull-node":           "TestDevtoolsArgValidation",
 	"devtools pull-runtimes":       "TestDevtoolsArgValidation",
 	"devtools pull-uv":             "TestDevtoolsArgValidation",
-	"devtools split-config":        "TestDevtoolsHelpGolden / TestDevtoolsArgValidation",
+	"devtools split-config":        "TestDevtoolsArgValidation",
 	"devtools tools inspect":       "TestDevtoolsToolsInspect",
 	"devtools tools list":          "TestDevtoolsToolsList",
-	"devtools verify-all":          "TestDevtoolsHelpGolden",
+	"devtools verify-all":          "TestDevtoolsArgValidation",
 	"exec":                         "TestExecListEmpty / TestExecListGrouped",
 	"fix":                          "TestExplainPlanGolden / TestExecutionFixCache",
 	"init":                         "TestInitNoopSuccess / TestInitDryRunGolden",
@@ -59,7 +59,7 @@ var testedLeafCommands = map[string]string{
 	"report render":                "TestReportRender",
 	"report baseline":              "TestReportBaseline",
 	"report diff":                  "TestReportDiff / TestReportDiffCancelled",
-	"llms":                         "TestLlmsHelpGolden / TestLlmsRootIndex / TestLlmsUnknownPageGolden",
+	"llms":                         "TestLlmsRootIndex / TestLlmsUnknownPageGolden",
 	"lsp":                          "TestLspFormattingSession",
 	"source bash":                  "TestSourceBashActivation",
 	"source fish":                  "TestSourceFishActivation",
@@ -172,9 +172,8 @@ const (
 // (durations, timings, machine-dependent paths) and therefore the meaningful
 // targets of a determinism check. produceDet renders each into normalized output
 // from a fresh, isolated setup; TestGoldenSuiteDeterministic runs each twice and
-// asserts the two are byte-identical. (Static help/JSON-shape goldens are stable
-// by construction; the exhaustive form of this check is `go test ./test/cli/
-// -count=2`, which the repo runs per task.)
+// asserts the two are byte-identical. The exhaustive form of this check is
+// `go test ./test/cli/ -count=2`, which the repo runs per task.
 var detCases = []struct {
 	name   string
 	kind   detKind

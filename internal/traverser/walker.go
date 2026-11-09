@@ -24,6 +24,12 @@ type Walker struct {
 	rootPath string
 	path     string
 	git      *GitIgnore
+	// onDir, when non-nil, is called with the absolute path of every directory
+	// the walker descends into — after .git, symlink and gitignore filtering,
+	// so only directories that would be walked are reported. It is called from
+	// multiple goroutines (walk fans out over subdirectories): the callback
+	// must be safe for concurrent use.
+	onDir func(path string)
 }
 
 // Walk returns all non-ignored file paths discovered under the walker's path.
@@ -37,7 +43,14 @@ func (w *Walker) Walk(ctx context.Context) ([]string, error) {
 
 func (w *Walker) walk(ctx context.Context, results *[]string, mu *sync.Mutex) error {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("walk %q: %w", w.path, err)
+		return fmt.Errorf("walk %q: %w", w.path, ctx.Err())
+	}
+
+	// This directory survived the parent's filtering (and the scan root starts
+	// its own walk here), so every descended-into directory is reported exactly
+	// once.
+	if w.onDir != nil {
+		w.onDir(w.path)
 	}
 
 	git := w.git
@@ -113,6 +126,7 @@ func (w *Walker) walk(ctx context.Context, results *[]string, mu *sync.Mutex) er
 				rootPath: w.rootPath,
 				path:     dir,
 				git:      git,
+				onDir:    w.onDir,
 			}
 			return childWalker.walk(gCtx, results, mu)
 		})
@@ -131,6 +145,15 @@ func FindFiles(ctx context.Context, rootPath string) ([]string, error) {
 
 // FindFilesFromPath finds all files starting from scanPath, respecting .gitignore from rootPath
 func FindFilesFromPath(ctx context.Context, rootPath string, scanPath string) ([]string, error) {
+	return FindFilesFromPathVisit(ctx, rootPath, scanPath, nil)
+}
+
+// FindFilesFromPathVisit is FindFilesFromPath that also reports directories:
+// onDir is called with the absolute path of every directory the walk descends
+// into, scanPath itself included — after .git, symlink and gitignore filtering,
+// so only directories that would be walked are reported. The walk fans out
+// across goroutines, so onDir must be safe for concurrent use.
+func FindFilesFromPathVisit(ctx context.Context, rootPath string, scanPath string, onDir func(absPath string)) ([]string, error) {
 	// Instrumented here, at the one entry point every caller goes through, so a
 	// trace shows how many full repository walks one invocation actually
 	// performs — the planner runs two concurrently, and the bundled lint/fix
@@ -148,6 +171,7 @@ func FindFilesFromPath(ctx context.Context, rootPath string, scanPath string) ([
 		rootPath: rootPath,
 		path:     scanPath,
 		git:      git,
+		onDir:    onDir,
 	}
 
 	files, err := w.Walk(ctx)

@@ -10,37 +10,6 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 )
 
-// expectedCacheSubcommands is the exact set of `cache` leaf commands (drift
-// guard): a new cache subcommand must be added here deliberately, with its own
-// blackbox test. `path project` is nested under `path`, so it does not appear in
-// the top-level `cache` listing.
-var expectedCacheSubcommands = []string{
-	"clear",
-	"path",
-}
-
-// TestCacheHelpGolden freezes `cache --help`: a static, offline help block with
-// no version or path tokens, so the normalized output equals the raw output. The
-// subcommand set is additionally compared as a set to decouple the drift guard
-// from help formatting.
-func TestCacheHelpGolden(t *testing.T) {
-	norm := clitest.NewNormalizer()
-
-	res := clitest.Run(t, clitest.RunOptions{}, "cache", "--help")
-	if res.ExitCode != 0 {
-		t.Fatalf("`cache --help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
-	}
-	if res.Stderr != "" {
-		t.Errorf("`cache --help` wrote to stderr:\n%s", res.Stderr)
-	}
-	clitest.AssertGolden(t, "cache_help", norm.Apply(res.Stdout))
-
-	got := parseAvailableCommands(res.Stdout)
-	if strings.Join(sortedCopy(got), ",") != strings.Join(sortedCopy(expectedCacheSubcommands), ",") {
-		t.Errorf("cache subcommand set drift:\n got: %v\nwant: %v", got, expectedCacheSubcommands)
-	}
-}
-
 // TestCachePath freezes `cache path`: the printed path is the cache subdir
 // ({base}/cache) of DATAMITSU_CACHE_DIR. We pin the cache base to a known temp
 // dir, mask it to <CACHE>, and golden the masked line; an exact equality check

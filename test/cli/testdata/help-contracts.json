@@ -1,0 +1,1073 @@
+[
+  {
+    "commands": [
+      "clear",
+      "copy",
+      "path"
+    ],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "cache"
+    ],
+    "usage": "datamitsu cache [command]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--allow-partial bool (default false)",
+      "--annotations string (default \"auto\")",
+      "--baseline string",
+      "--events string",
+      "--explain string[=\"summary\"]",
+      "--fail-fast bool (default true)",
+      "--fail-on string",
+      "--fail-on-skip bool (default false)",
+      "--file-scoped bool (default false)",
+      "-h, --help bool (default false)",
+      "--output string (default \"human\")",
+      "--report stringArray",
+      "--require-coverage string",
+      "--tools string",
+      "--widen-to string"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "check"
+    ],
+    "usage": "datamitsu check [files...] [flags]"
+  },
+  {
+    "commands": [
+      "chain-hash",
+      "lockfile",
+      "reconcile",
+      "runtime",
+      "show",
+      "types"
+    ],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "config"
+    ],
+    "usage": "datamitsu config [command]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--create-missing bool (default false)",
+      "--dry-run bool (default false)",
+      "--force bool (default false)",
+      "-h, --help bool (default false)",
+      "--json bool (default false)",
+      "--no-verify-hash bool (default false)",
+      "--opt-in-tools bool (default false)",
+      "--skip-fix bool (default false)",
+      "--tools string"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "config",
+      "reconcile"
+    ],
+    "usage": "datamitsu config reconcile [flags]"
+  },
+  {
+    "commands": [
+      "inspect",
+      "list",
+      "path"
+    ],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "apps"
+    ],
+    "usage": "datamitsu devtools apps [command]"
+  },
+  {
+    "commands": [
+      "inspect",
+      "list",
+      "path"
+    ],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "bundles"
+    ],
+    "usage": "datamitsu devtools bundles [command]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--alpine bool (default false)",
+      "--arg stringArray",
+      "--build-arg stringArray",
+      "--config-js string (default \"datamitsu.config.js\")",
+      "--emit-oci-map string",
+      "--env stringArray",
+      "--force-include strings",
+      "-h, --help bool (default false)",
+      "--label stringArray",
+      "--no-verify bool (default false)",
+      "--offline bool (default false)",
+      "-o, --output string",
+      "--repo string"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "dockerfile"
+    ],
+    "usage": "datamitsu devtools dockerfile [flags]"
+  },
+  {
+    "commands": [
+      "apps",
+      "bundles",
+      "dockerfile",
+      "pack-inline-archive",
+      "parsers",
+      "pull-node",
+      "pull-releases",
+      "pull-runtimes",
+      "pull-uv",
+      "split-config",
+      "tools",
+      "verify-all"
+    ],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools"
+    ],
+    "usage": "datamitsu devtools [command]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "pack-inline-archive"
+    ],
+    "usage": "datamitsu devtools pack-inline-archive <directory> [flags]"
+  },
+  {
+    "commands": [
+      "inspect",
+      "list",
+      "prefetch",
+      "run",
+      "sniff"
+    ],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "parsers"
+    ],
+    "usage": "datamitsu devtools parsers [command]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--embedded bool (default false)",
+      "-h, --help bool (default false)",
+      "--json bool (default false)",
+      "--wasm string"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "parsers",
+      "inspect"
+    ],
+    "usage": "datamitsu devtools parsers inspect <tool> [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--embedded bool (default false)",
+      "-h, --help bool (default false)",
+      "--json bool (default false)",
+      "--wasm string"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "parsers",
+      "list"
+    ],
+    "usage": "datamitsu devtools parsers list [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "parsers",
+      "prefetch"
+    ],
+    "usage": "datamitsu devtools parsers prefetch [module...] [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--embedded bool (default false)",
+      "--exit-code int",
+      "-h, --help bool (default false)",
+      "--module string",
+      "--stderr-file string",
+      "--wasm string"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "parsers",
+      "run"
+    ],
+    "usage": "datamitsu devtools parsers run <tool> [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--exit-code int",
+      "-h, --help bool (default false)",
+      "--json bool (default false)",
+      "--stderr-file string"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "parsers",
+      "sniff"
+    ],
+    "usage": "datamitsu devtools parsers sniff [<file>|-] [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--dry-run bool (default false)",
+      "-h, --help bool (default false)",
+      "--min-age int (default -1)",
+      "--update bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "pull-node"
+    ],
+    "usage": "datamitsu devtools pull-node <file> [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "--min-age int (default -1)",
+      "--update bool (default false)",
+      "--verify-extraction bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "pull-releases"
+    ],
+    "usage": "datamitsu devtools pull-releases <file> [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--dry-run bool (default false)",
+      "-h, --help bool (default false)",
+      "--min-age int (default -1)",
+      "--runtime string",
+      "--update bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "pull-runtimes"
+    ],
+    "usage": "datamitsu devtools pull-runtimes <file> [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--dry-run bool (default false)",
+      "-h, --help bool (default false)",
+      "--min-age int (default -1)",
+      "--update bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "pull-uv"
+    ],
+    "usage": "datamitsu devtools pull-uv <file> [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "-o, --output string"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "split-config"
+    ],
+    "usage": "datamitsu devtools split-config [flags]"
+  },
+  {
+    "commands": [
+      "inspect",
+      "list"
+    ],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "tools"
+    ],
+    "usage": "datamitsu devtools tools [command]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "--json bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "tools",
+      "inspect"
+    ],
+    "usage": "datamitsu devtools tools inspect <name> [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "--json bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "tools",
+      "list"
+    ],
+    "usage": "datamitsu devtools tools list [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--concurrency int",
+      "-h, --help bool (default false)",
+      "--json bool (default false)",
+      "--no-remote bool (default false)",
+      "--no-version-check bool (default false)",
+      "--skip-passed bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "devtools",
+      "verify-all"
+    ],
+    "usage": "datamitsu devtools verify-all [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--allow-partial bool (default false)",
+      "--annotations string (default \"auto\")",
+      "--events string",
+      "--explain string[=\"summary\"]",
+      "--fail-fast bool (default true)",
+      "--fail-on string",
+      "--fail-on-skip bool (default false)",
+      "--file-scoped bool (default false)",
+      "-h, --help bool (default false)",
+      "--output string (default \"human\")",
+      "--report stringArray",
+      "--require-coverage string",
+      "--tools string",
+      "--widen-to string"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "fix"
+    ],
+    "usage": "datamitsu fix [files...] [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "version"
+    ],
+    "usage": "datamitsu version [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--all bool (default false)",
+      "--dry-run bool (default false)",
+      "--fail-on-download-error bool (default false)",
+      "-h, --help bool (default false)",
+      "--quiet bool (default false)",
+      "--skip-download bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "init"
+    ],
+    "usage": "datamitsu init [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "-o, --output string",
+      "--port int (default 7744)",
+      "--print-theme bool (default false)",
+      "--theme string"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "inspect"
+    ],
+    "usage": "datamitsu inspect [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "--no-verify bool (default false)",
+      "--quiet bool (default false)",
+      "--runtime strings"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "install"
+    ],
+    "usage": "datamitsu install [app...] [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--allow-partial bool (default false)",
+      "--annotations string (default \"auto\")",
+      "--baseline string",
+      "--events string",
+      "--explain string[=\"summary\"]",
+      "--fail-fast bool (default true)",
+      "--fail-on string",
+      "--fail-on-skip bool (default false)",
+      "--file-scoped bool (default false)",
+      "-h, --help bool (default false)",
+      "--output string (default \"human\")",
+      "--report stringArray",
+      "--require-coverage string",
+      "--tools string",
+      "--widen-to string"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "lint"
+    ],
+    "usage": "datamitsu lint [files...] [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "--json bool (default false)",
+      "--list bool (default false)",
+      "--web bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "llms"
+    ],
+    "usage": "datamitsu llms [page] [flags]"
+  },
+  {
+    "commands": [
+      "baseline",
+      "diff",
+      "render"
+    ],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "report"
+    ],
+    "usage": "datamitsu report [command]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--allow-partial bool (default false)",
+      "--format string",
+      "-h, --help bool (default false)",
+      "--input string",
+      "--output string (default \"-\")"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "report",
+      "render"
+    ],
+    "usage": "datamitsu report render [flags]"
+  },
+  {
+    "commands": [
+      "cache",
+      "check",
+      "completion",
+      "config",
+      "devtools",
+      "exec",
+      "fix",
+      "help",
+      "init",
+      "inspect",
+      "install",
+      "lint",
+      "llms",
+      "lsp",
+      "report",
+      "source",
+      "store",
+      "version"
+    ],
+    "flags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "-h, --help bool (default false)",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "globalFlags": [],
+    "path": [],
+    "usage": "datamitsu [command]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "--quiet bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "source",
+      "bash"
+    ],
+    "usage": "datamitsu source bash [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "--quiet bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "source",
+      "fish"
+    ],
+    "usage": "datamitsu source fish [flags]"
+  },
+  {
+    "commands": [
+      "bash",
+      "fish",
+      "refresh",
+      "status",
+      "zsh"
+    ],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "source"
+    ],
+    "usage": "datamitsu source [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--force bool (default false)",
+      "-h, --help bool (default false)",
+      "--quiet bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "source",
+      "refresh"
+    ],
+    "usage": "datamitsu source refresh [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "--json bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "source",
+      "status"
+    ],
+    "usage": "datamitsu source status [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "--quiet bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "source",
+      "zsh"
+    ],
+    "usage": "datamitsu source zsh [flags]"
+  },
+  {
+    "commands": [
+      "clear",
+      "import",
+      "path",
+      "refs",
+      "seed",
+      "status"
+    ],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "store"
+    ],
+    "usage": "datamitsu store [command]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "--json bool (default false)",
+      "--oci-only bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "store",
+      "refs"
+    ],
+    "usage": "datamitsu store refs [flags]"
+  }
+]

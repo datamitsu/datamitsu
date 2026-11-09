@@ -29,7 +29,7 @@ const CAPTIONS: Record<RunKind, ReactNode> = {
   cold: "A first run against an empty store: every pinned tool is downloaded and verified before anything runs.",
   scope: (
     <>
-      From a subdirectory, ask about one file. The plan includes prettier and skips syncpack: its
+      From a subdirectory, ask about one file. The plan includes eslint and skips syncpack: its
       verdict needs the whole repository.{" "}
       <Link to="/docs/reference/cli-commands#narrowed-runs">How narrowing works ↗</Link>
     </>

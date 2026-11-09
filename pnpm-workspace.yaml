@@ -10,7 +10,7 @@ audit:
 autoInstallPeers: true
 blockExoticSubdeps: true
 catalog:
-  "@shibanet0/datamitsu-config": 0.0.0-unstable.20261025.08ce66e
+  "@shibanet0/datamitsu-config": 0.6.3
 dangerouslyAllowAllBuilds: false
 dedupeDirectDeps: true
 dedupePeerDependents: true
@@ -27,16 +27,6 @@ minimumReleaseAgeExclude:
 optimisticRepeatInstall: true
 overrides:
   "@docusaurus/plugin-ideal-image": 3.10.2
-  vscode-jsonrpc: 9.0.1
-  vscode-languageserver-protocol: 3.18.2
-  vscode-languageserver-types: 3.18.0
-packageExtensions:
-  langium:
-    dependencies:
-      "@chevrotain/regexp-to-ast": "*"
-      vscode-jsonrpc: "*"
-      vscode-languageserver-protocol: "*"
-      vscode-languageserver-types: "*"
 packages:
   - inspector
   - packaging/action

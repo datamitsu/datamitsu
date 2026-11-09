@@ -73,10 +73,11 @@ func (s Symbol) render() string {
 // Display owns the terminal for a render scope. It is safe for concurrent use
 // from multiple goroutines (parallel downloads, parallel tool execution).
 type Display struct {
-	mode term.Mode
+	mode  term.Mode
+	quiet bool // suppress routine human output without changing typed event delivery
 
 	mu   sync.Mutex
-	prog *mpb.Progress // lazily created; Interactive mode only, nil otherwise
+	prog *mpb.Progress // lazily created; Interactive mode only
 	bars int           // number of active bars; lines route through mpb only while > 0
 	out  io.Writer
 	err  io.Writer
@@ -89,6 +90,12 @@ func New(mode term.Mode) *Display {
 
 // Mode reports the Display's render mode.
 func (d *Display) Mode() term.Mode { return d.mode }
+
+// SetQuiet suppresses routine progress and display lines for this display only.
+func (d *Display) SetQuiet(quiet bool) { d.quiet = quiet }
+
+// IsQuiet identifies command-local suppression, independently of JSONL and agent modes.
+func (d *Display) IsQuiet() bool { return d.quiet }
 
 // Println prints a line to stdout (safe above active bars).
 func (d *Display) Println(a ...any) { d.writeLine(d.out, fmt.Sprint(a...)) }
@@ -156,8 +163,8 @@ func bannerLines(name, version, configName, configVersion string, width int) []s
 	return append(cli, config...)
 }
 
-// Errorln prints a line to stderr (safe above active bars).
-func (d *Display) Errorln(a ...any) { d.writeLine(d.err, fmt.Sprint(a...)) }
+// Errorln keeps captured failure details visible when routine status is quiet.
+func (d *Display) Errorln(a ...any) { d.Diagnosticf("%s\n", fmt.Sprint(a...)) }
 
 // Close waits for the progress container (if any) to finish and tears it down.
 // It is safe to call multiple times; after Close the Display falls back to
@@ -172,11 +179,27 @@ func (d *Display) Close() {
 	}
 }
 
+// Diagnosticf preserves diagnostics unless a typed event stream or agent mode is active.
+func (d *Display) Diagnosticf(format string, a ...any) {
+	if Quiet() || Muted() {
+		return
+	}
+	d.mu.Lock()
+	p := d.prog
+	active := d.bars > 0
+	d.mu.Unlock()
+	if p != nil && active {
+		_, _ = fmt.Fprintf(p, format, a...)
+		return
+	}
+	_, _ = fmt.Fprintf(d.err, format, a...)
+}
+
 // ensureProg lazily creates the single mpb container. Returns nil in Plain
 // mode, and in JSON-L (quiet) mode so no animated bars compete with the typed
 // stream even when stdout is a TTY. Caller must hold d.mu.
 func (d *Display) ensureProg() *mpb.Progress {
-	if d.mode != term.Interactive || Muted() {
+	if d.mode != term.Interactive || d.quiet || Muted() {
 		return nil
 	}
 	if d.prog == nil {
@@ -200,9 +223,8 @@ func (d *Display) barEnded() {
 // avoids the mpb-pending-write race that would otherwise drop a line when
 // non-ui code writes directly to the same stream between bars.
 func (d *Display) writeLine(w io.Writer, s string) {
-	// JSON-L (quiet) mode and agent output: human lines are dropped, so the
-	// typed event stream or the agent's records are the sole output.
-	if Muted() {
+	// JSON-L mode, agent output, and command-local quiet mode suppress human lines.
+	if d.quiet || Muted() {
 		return
 	}
 	d.mu.Lock()

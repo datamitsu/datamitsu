@@ -111,7 +111,7 @@ func frameOf(t *testing.T, result tooling.ExecutionResult) string {
 	}
 	return captureStdout(t, func() {
 		printGroupedResults([]toolExecutionGroup{group}, 10, false)
-		printOperationFooter([]toolExecutionGroup{group}, 0, 0, 0, 0, 0, "")
+		printOperationFooter([]toolExecutionGroup{group}, 0, 0, 0, 0, 0, "", 0, 0)
 	})
 }
 

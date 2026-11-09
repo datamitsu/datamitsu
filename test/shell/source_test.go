@@ -127,6 +127,53 @@ func TestDeletedStoreEntryIsRepaired(t *testing.T) {
 	assertRan(t, f.run("bash", toolName+"\n"), branchV1)
 }
 
+func TestQuietActivationScopesAutomaticRefreshToItsFarm(t *testing.T) {
+	for _, shell := range shells {
+		t.Run(shell, func(t *testing.T) {
+			f := newFixture(t)
+			activation := f.datamitsu("source", shell, "--quiet")
+			if activation.ExitCode != 0 {
+				t.Fatalf("quiet activation exit = %d: %s", activation.ExitCode, activation.Stderr)
+			}
+			if strings.Contains(activation.Stderr, "not downloaded yet") || strings.Contains(activation.Stderr, "shadowing") {
+				t.Fatalf("quiet activation showed routine notices: %s", activation.Stderr)
+			}
+			script := activation.Stdout + "git checkout -q " + branchV2 + "\n" + toolName + "\n"
+			result := f.runRaw(shell, script)
+			assertRan(t, result, branchV2)
+			if strings.Contains(result.Stderr, "baked ") || strings.Contains(result.Stderr, "already up to date") {
+				t.Fatalf("automatic quiet refresh printed routine status: %s", result.Stderr)
+			}
+			manual := f.datamitsu("source", "refresh")
+			if manual.ExitCode != 0 || (!strings.Contains(manual.Stderr, "already up to date") && !strings.Contains(manual.Stderr, "baked ")) {
+				t.Fatalf("manual refresh did not retain status output: exit=%d stderr=%s", manual.ExitCode, manual.Stderr)
+			}
+		})
+	}
+}
+
+func TestActivationResetsQuietPreference(t *testing.T) {
+	for _, shell := range shells {
+		t.Run(shell, func(t *testing.T) {
+			f := newFixture(t)
+			quiet := f.datamitsu("source", shell, "--quiet")
+			if quiet.ExitCode != 0 {
+				t.Fatalf("quiet activation exit = %d: %s", quiet.ExitCode, quiet.Stderr)
+			}
+			normal := f.datamitsu("source", shell)
+			if normal.ExitCode != 0 {
+				t.Fatalf("normal activation exit = %d: %s", normal.ExitCode, normal.Stderr)
+			}
+			script := quiet.Stdout + "\n" + normal.Stdout + "git checkout -q " + branchV2 + "\n" + toolName + "\n"
+			result := f.runRaw(shell, script)
+			assertRan(t, result, branchV2)
+			if !strings.Contains(result.Stderr, "baked ") {
+				t.Fatalf("normal activation did not restore automatic refresh status: %s", result.Stderr)
+			}
+		})
+	}
+}
+
 // TestUndeclaredNameExits127 is D4, the decision that keeps the feature's worst
 // failure mode off the table. A branch that stops declaring a tool must not
 // hand the name back to PATH, where a stale system binary is waiting: it exits

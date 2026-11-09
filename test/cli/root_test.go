@@ -33,43 +33,6 @@ var expectedTopLevelCommands = []string{
 	"version",
 }
 
-// TestRootHelpGolden freezes the root help text. `--help` and the no-args
-// invocation both print the same help block (cobra prints usage when no
-// subcommand runs), so we golden one and assert the other is byte-identical.
-func TestRootHelpGolden(t *testing.T) {
-	norm := clitest.NewNormalizer()
-
-	help := clitest.Run(t, clitest.RunOptions{}, "--help")
-	if help.ExitCode != 0 {
-		t.Fatalf("`--help` exit = %d, want 0\nstderr:\n%s", help.ExitCode, help.Stderr)
-	}
-	if help.Stderr != "" {
-		t.Errorf("`--help` wrote to stderr:\n%s", help.Stderr)
-	}
-	clitest.AssertGolden(t, "root_help", norm.Apply(help.Stdout))
-
-	noArgs := clitest.Run(t, clitest.RunOptions{})
-	if noArgs.ExitCode != 0 {
-		t.Fatalf("no-args exit = %d, want 0\nstderr:\n%s", noArgs.ExitCode, noArgs.Stderr)
-	}
-	if got, want := norm.Apply(noArgs.Stdout), norm.Apply(help.Stdout); got != want {
-		t.Errorf("no-args help differs from `--help`:\n%s", got)
-	}
-}
-
-// TestHelpSubcommandGolden freezes `help <cmd>` (the explicit help path, which
-// differs from `<cmd> --help` only cosmetically). version is a stable, offline
-// leaf command with no version string in its help text.
-func TestHelpSubcommandGolden(t *testing.T) {
-	norm := clitest.NewNormalizer()
-
-	res := clitest.Run(t, clitest.RunOptions{}, "help", "version")
-	if res.ExitCode != 0 {
-		t.Fatalf("`help version` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
-	}
-	clitest.AssertGolden(t, "help_version", norm.Apply(res.Stdout))
-}
-
 // TestRootCommandListDrift asserts the set of top-level commands shown in
 // `--help` is exactly expectedTopLevelCommands, decoupled from help formatting:
 // it parses the "Available Commands:" block and compares the name set.

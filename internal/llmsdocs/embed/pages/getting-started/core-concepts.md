@@ -140,7 +140,7 @@ Tool arguments support placeholders that resolve at execution time:
 
 ### Ignore Rules
 
-Use `.datamitsuignore` files to disable specific tools for matching file patterns:
+Use the `.datamitsuignore` file at your git root to disable specific tools for matching file patterns:
 
 ```
 vendor/**/*: golangci-lint, gofmt

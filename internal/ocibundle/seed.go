@@ -80,20 +80,20 @@ func (o Options) demandDriven() bool {
 // auto-pulls — the store must be seeded explicitly while online). Degradable
 // failures (no platform entry, network trouble) warn and fall through to the
 // regular network path; integrity violations abort.
-func AutoSeed(ctx context.Context, cfg *config.Config, neededApps, neededRuntimes []string) error {
+func AutoSeed(ctx context.Context, cfg *config.Config, neededApps, neededRuntimes []string) (bool, error) {
 	if cfg == nil || cfg.OCI == nil {
-		return nil
+		return false, nil
 	}
 	if disabledByFlag.Load() || env.NoOCI() {
 		log.Debug("oci bundle seeding disabled", zap.Bool("flag", disabledByFlag.Load()))
-		return nil
+		return false, nil
 	}
 	if env.Offline() {
 		log.Debug("offline mode: skipping oci bundle auto-seed (store must be pre-seeded)")
-		return nil
+		return false, nil
 	}
 	if len(neededApps) == 0 && len(neededRuntimes) == 0 {
-		return nil
+		return false, nil
 	}
 
 	// Auto-seed is always demand-driven; empty non-nil slices keep it so even
@@ -105,56 +105,63 @@ func AutoSeed(ctx context.Context, cfg *config.Config, neededApps, neededRuntime
 	if opts.NeededRuntimes == nil {
 		opts.NeededRuntimes = []string{}
 	}
-
-	err := SeedBundle(ctx, cfg, cfg.OCI, opts)
+	changed, err := seedBundleChanged(ctx, cfg, cfg.OCI, opts)
 	switch {
 	case err == nil:
-		return nil
+		return changed, nil
 	case IsFatalSeedError(err):
-		return err
+		return changed, err
 	case errors.Is(err, ErrNoPlatformMatch):
 		log.Warn("oci bundle has no entry for this platform; falling back to direct downloads", zap.Error(err))
-		return nil
+		return changed, nil
 	default:
 		log.Warn("oci bundle seed failed; falling back to direct downloads", zap.Error(err))
-		return nil
+		return changed, nil
 	}
 }
 
-// SeedBundle pulls (parts of) the declared bundle from its registry into the
-// store. Explicit callers surface every error; AutoSeed downgrades the
-// degradable ones.
+// SeedBundle materializes the requested bundle layers and surfaces all seed errors.
 func SeedBundle(ctx context.Context, cfg *config.Config, ref *config.OCIRef, opts Options) error {
+	_, err := seedBundleChanged(ctx, cfg, ref, opts)
+	return err
+}
+
+func seedBundleChanged(ctx context.Context, cfg *config.Config, ref *config.OCIRef, opts Options) (bool, error) {
 	if err := config.ValidateOCI(ref); err != nil {
-		return err
+		return false, err
 	}
 	if ref == nil {
-		return errors.New("no oci bundle declared in the effective config")
+		return false, errors.New("no oci bundle declared in the effective config")
 	}
 	if err := httpx.GuardOffline("oci bundle seed of " + ref.Ref); err != nil {
-		return err
+		return false, err
 	}
 	host, repo, err := ociref.Parse(ref.Ref)
 	if err != nil {
-		return fmt.Errorf("oci ref %q %w", ref.Ref, err)
+		return false, fmt.Errorf("oci ref %q %w", ref.Ref, err)
 	}
-	return seedFrom(ctx, cfg, newRegistrySource(host, repo), ref.Ref, ref.Digest, ref.Signer, opts)
+	return seedFromChanged(ctx, cfg, newRegistrySource(host, repo), ref.Ref, ref.Digest, ref.Signer, opts)
 }
 
 // SeedFromLayout seeds the store from a local OCI image layout directory
 // (`store import`) — fully offline transfer of a bundle.
 func SeedFromLayout(ctx context.Context, cfg *config.Config, dir, digest string, signer *config.OCISigner, opts Options) error {
-	info, err := os.Stat(dir)
-	if err != nil {
-		return fmt.Errorf("OCI layout directory: %w", err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("OCI layout path %q is not a directory", dir)
-	}
-	return seedFrom(ctx, cfg, newLayoutSource(dir), "oci-layout:"+dir, digest, signer, opts)
+	_, err := seedFromLayout(ctx, cfg, dir, digest, signer, opts)
+	return err
 }
 
-func seedFrom(ctx context.Context, cfg *config.Config, src blobSource, refLabel, digest string, signer *config.OCISigner, opts Options) error {
+func seedFromLayout(ctx context.Context, cfg *config.Config, dir, digest string, signer *config.OCISigner, opts Options) (bool, error) {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return false, fmt.Errorf("OCI layout directory: %w", err)
+	}
+	if !info.IsDir() {
+		return false, fmt.Errorf("OCI layout path %q is not a directory", dir)
+	}
+	return seedFromChanged(ctx, cfg, newLayoutSource(dir), "oci-layout:"+dir, digest, signer, opts)
+}
+
+func seedFromChanged(ctx context.Context, cfg *config.Config, src blobSource, refLabel, digest string, signer *config.OCISigner, opts Options) (changed bool, retErr error) {
 	storeRoot := env.GetStorePath()
 
 	// Fast no-op without touching the network: demand-driven runs are
@@ -163,65 +170,62 @@ func seedFrom(ctx context.Context, cfg *config.Config, src blobSource, refLabel,
 	var expected map[string]string
 	if opts.demandDriven() {
 		expected = expectedSubtrees(cfg, storeRoot, opts.Needed, opts.NeededRuntimes)
-		if len(expected) == 0 {
-			return nil
-		}
-		if allSubtreesPresent(storeRoot, expected) {
-			return nil
+		if len(expected) == 0 || allSubtreesPresent(storeRoot, expected) {
+			return false, nil
 		}
 	} else if markerSatisfied(storeRoot, digest) {
 		log.Debug("bundle already fully seeded", zap.String("digest", digest))
-		return nil
+		return false, nil
 	}
 
 	if signer != nil {
-		return fmt.Errorf("%w: oci.signer is set but signature verification is not implemented yet (planned phase 1b); remove signer or build with a datamitsu version that supports it", errIntegrity)
+		return false, fmt.Errorf("%w: oci.signer is set but signature verification is not implemented yet (planned phase 1b); remove signer or build with a datamitsu version that supports it", errIntegrity)
 	}
-
 	manifest, err := resolvePlatformManifest(ctx, src, digest)
 	if err != nil {
-		return err
+		return false, err
 	}
-
 	builderRoot := manifest.Annotations[AnnotationStoreRoot]
 	if builderRoot == "" || !path.IsAbs(builderRoot) {
-		return fmt.Errorf("%w: bundle manifest is missing a valid %s annotation (got %q)", errIntegrity, AnnotationStoreRoot, builderRoot)
+		return false, fmt.Errorf("%w: bundle manifest is missing a valid %s annotation (got %q)", errIntegrity, AnnotationStoreRoot, builderRoot)
 	}
-
 	jobs, allSubtrees, err := classifyLayers(manifest, storeRoot, expected)
 	if err != nil {
-		return err
+		return false, err
 	}
-
 	if len(jobs) > 0 {
 		reVerify := buildReVerifyIndex(cfg, storeRoot)
-
 		group, groupCtx := errgroup.WithContext(ctx)
 		group.SetLimit(env.GetConcurrency())
+		var completed atomic.Int64
 		for _, job := range jobs {
 			group.Go(func() error {
-				return seedLayer(groupCtx, src, job, builderRoot, storeRoot, reVerify)
+				placed, err := seedLayer(groupCtx, src, job, builderRoot, storeRoot, reVerify)
+				if err != nil {
+					return err
+				}
+				if placed {
+					completed.Add(1)
+				}
+				return nil
 			})
 		}
 		if err := group.Wait(); err != nil {
-			// No marker on partial failure; subtrees already laid out remain
-			// a valid partial seed.
-			return fmt.Errorf("seed layers: %w", err)
+			return completed.Load() > 0, fmt.Errorf("seed layers: %w", err)
 		}
+		changed = completed.Load() > 0
 	}
-
 	if opts.RequireRequested {
 		if err := verifyRequested(storeRoot, expected, manifest); err != nil {
-			return err
+			return changed, err
 		}
 	}
-
 	if !opts.demandDriven() {
 		if err := writeMarker(storeRoot, refLabel, digest, allSubtrees); err != nil {
 			log.Warn("failed to write seed marker (pull succeeded; the next full pull re-checks layers)", zap.Error(err))
 		}
 	}
-	return nil
+	return changed, nil
 }
 
 // resolvePlatformManifest fetches the pinned manifest; when it is an index,
@@ -308,7 +312,7 @@ func classifyLayers(manifest *ocispec.Manifest, storeRoot string, expected map[s
 	return jobs, allSubtrees, nil
 }
 
-func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, storeRoot string, reVerify map[string]reVerifySpec) error {
+func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, storeRoot string, reVerify map[string]reVerifySpec) (bool, error) {
 	// A parser module the consumer's config does not declare has no hash to be
 	// checked against, and a full seed (`store seed <ref>@<digest>` with no
 	// --apps) queues every annotated layer the bundle carries. Placing it would
@@ -324,30 +328,28 @@ func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, s
 		log.Warn("skipping bundle parser layer that the config does not declare (nothing could verify it)",
 			zap.String("subtree", job.subtree),
 			zap.String("digest", job.desc.Digest.String()))
-		return nil
+		return false, nil
 	}
 
 	release, err := lockSubtree(ctx, storeRoot, job.subtree)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer release()
 
-	dest := filepath.Join(storeRoot, filepath.FromSlash(job.subtree))
 	if subtreeReady(storeRoot, job.subtree) {
-		return nil // another process seeded it while we waited for the lock
+		return false, nil // another process seeded it while we waited for the lock
 	}
 
 	tmpRoot := filepath.Join(storeRoot, "tmp")
 	blobPath, err := src.blob(ctx, job.desc, tmpRoot, "bundle "+path.Base(path.Dir(job.subtree)))
 	if err != nil {
-		return err
+		return false, err
 	}
-	defer func() { _ = os.Remove(blobPath) }()
 
 	stagingDir, err := os.MkdirTemp(tmpRoot, "oci-seed-*")
 	if err != nil {
-		return fmt.Errorf("create staging directory: %w", err)
+		return false, fmt.Errorf("create staging directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(stagingDir) }()
 
@@ -357,26 +359,25 @@ func seedLayer(ctx context.Context, src blobSource, job layerJob, builderRoot, s
 		ConsumerStoreRoot: storeRoot,
 	}, stagingDir)
 	if err != nil {
-		return fmt.Errorf("%w: layer %s (subtree %s): %w", errIntegrity, job.desc.Digest, job.subtree, err)
+		return false, fmt.Errorf("%w: layer %s (subtree %s): %w", errIntegrity, job.desc.Digest, job.subtree, err)
 	}
-
 	if spec, ok := reVerify[job.subtree]; ok {
 		file := staged
 		if spec.relPath != "" {
 			file = filepath.Join(staged, filepath.FromSlash(spec.relPath))
 		}
 		if err := binmanager.VerifyFileHashPublic(file, spec.sha256); err != nil {
-			return fmt.Errorf("%w: seeded content for %q does not match the published SHA-256 from the config: %w", errIntegrity, spec.owner, err)
+			return false, fmt.Errorf("%w: seeded content for %q does not match the published SHA-256 from the config: %w", errIntegrity, spec.owner, err)
 		}
 		log.Debug("re-verified seeded artifact against published hash",
 			zap.String("subtree", job.subtree), zap.String("owner", spec.owner))
 	}
-
+	dest := filepath.Join(storeRoot, filepath.FromSlash(job.subtree))
 	if err := placeSubtree(staged, dest, job.subtree); err != nil {
-		return fmt.Errorf("place subtree %q: %w", job.subtree, err)
+		return false, fmt.Errorf("place subtree %q: %w", job.subtree, err)
 	}
 	log.Info("seeded store subtree from oci bundle", zap.String("subtree", job.subtree))
-	return nil
+	return true, nil
 }
 
 // placeSubtree atomically renames the staged subtree (file or directory) into

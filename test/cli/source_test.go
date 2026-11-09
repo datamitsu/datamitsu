@@ -95,33 +95,6 @@ func TestSourceActivationGolden(t *testing.T) {
 	}
 }
 
-// TestSourceHelpGolden freezes the help text of the group command and every
-// leaf, which is the documented surface users read before piping the output
-// into eval.
-func TestSourceHelpGolden(t *testing.T) {
-	cases := []struct {
-		golden string
-		args   []string
-	}{
-		{"source_help", []string{"source", "--help"}},
-		{"source_bash_help", []string{"source", "bash", "--help"}},
-		{"source_zsh_help", []string{"source", "zsh", "--help"}},
-		{"source_fish_help", []string{"source", "fish", "--help"}},
-		{"source_status_help", []string{"source", "status", "--help"}},
-		{"source_refresh_help", []string{"source", "refresh", "--help"}},
-	}
-	norm := clitest.NewNormalizer()
-	for _, tc := range cases {
-		t.Run(tc.golden, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{Env: sourceEnv()}, tc.args...)
-			if res.ExitCode != 0 {
-				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s", strings.Join(tc.args, " "), res.ExitCode, res.Stderr)
-			}
-			clitest.AssertGolden(t, tc.golden, norm.Apply(res.Stdout))
-		})
-	}
-}
-
 // TestSourceConfigCannotInjectIntoStdout is the config-injection guard. A repo's
 // datamitsu.config.js runs arbitrary JavaScript, its console.log writes straight
 // to stdout, and stdout here is piped into `eval` — so a config that prints
@@ -239,12 +212,6 @@ func TestSourceBashActivation(t *testing.T) {
 	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "source", "bash")
 	if res.ExitCode != 0 {
 		t.Fatalf("`source bash` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
-	}
-	// The clear comes first: a shell re-activated here from a machine-level farm
-	// still carries that farm's DATAMITSU_FARM_CONFIG, and a stale one reads as
-	// current everywhere a human looks at it.
-	if !strings.HasPrefix(res.Stdout, "unset DATAMITSU_FARM_CONFIG\nexport DATAMITSU_ROOT=") {
-		t.Errorf("activation does not clear the config chain and export the root:\n%s", res.Stdout)
 	}
 	if !strings.Contains(res.Stdout, "hash -r\n") {
 		t.Errorf("activation does not flush the shell's command hash:\n%s", res.Stdout)

@@ -12,36 +12,6 @@ import (
 // expectedParsersSubcommands is the drift guard for the `devtools parsers` group.
 var expectedParsersSubcommands = []string{"inspect", "list", "prefetch", "run", "sniff"}
 
-// devtoolsParsersHelpCases freezes the static help surfaces for the parsers group.
-var devtoolsParsersHelpCases = []struct {
-	name   string
-	args   []string
-	golden string
-}{
-	{"parsers", []string{"devtools", "parsers", "--help"}, "devtools_parsers_help"},
-	{"list", []string{"devtools", "parsers", "list", "--help"}, "devtools_parsers_list_help"},
-	{"inspect", []string{"devtools", "parsers", "inspect", "--help"}, "devtools_parsers_inspect_help"},
-	{"run", []string{"devtools", "parsers", "run", "--help"}, "devtools_parsers_run_help"},
-	{"prefetch", []string{"devtools", "parsers", "prefetch", "--help"}, "devtools_parsers_prefetch_help"},
-	{"sniff", []string{"devtools", "parsers", "sniff", "--help"}, "devtools_parsers_sniff_help"},
-}
-
-func TestDevtoolsParsersHelpGolden(t *testing.T) {
-	for _, tc := range devtoolsParsersHelpCases {
-		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{}, tc.args...)
-			if res.ExitCode != 0 {
-				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s",
-					strings.Join(tc.args, " "), res.ExitCode, res.Stderr)
-			}
-			if res.Stderr != "" {
-				t.Errorf("`%s` wrote to stderr:\n%s", strings.Join(tc.args, " "), res.Stderr)
-			}
-			clitest.AssertGolden(t, tc.golden, res.Stdout)
-		})
-	}
-}
-
 // TestDevtoolsParsersCommandSetDrift asserts the parsers subcommand set is exactly
 // {inspect, list, prefetch, run, sniff}.
 func TestDevtoolsParsersCommandSetDrift(t *testing.T) {

@@ -401,3 +401,55 @@ func TestExecutionSuccessful(t *testing.T) {
 		}
 	}
 }
+
+// The core config-placement check reports through a pseudo tool run whose
+// findings carry a path and no line: SARIF lists them as results of the
+// datamitsu tool, with the rule's own code.
+func TestCorePlacementToolRun(t *testing.T) {
+	one := 1
+	fp := report.Fingerprint("datamitsu", "config-placement", "pkg/datamitsu.config.js", "row:1", 0)
+	run := &report.Run{
+		Schema:    report.SchemaVersion,
+		Selection: report.Selection{Mode: "all"},
+		Operations: []report.Operation{
+			{Name: "lint", Ran: true, Tools: []report.ToolRun{{
+				Name: "datamitsu", Complete: true, GateActive: true,
+				Invocations: []report.Invocation{{
+					ID: "datamitsu#0", TaskID: "builtin", State: "ran", ExitCode: &one,
+					Success: false, FailureKind: "threshold", Extraction: "parsed-findings",
+					Findings: []report.Finding{{
+						Fingerprint: fp, FingerprintBasis: report.BasisRow,
+						Tool: "datamitsu", Source: "datamitsu", Code: "config-placement",
+						Severity: "error", Reported: true, Gates: true, Kind: "issue",
+						Message:    "Datamitsu config must be located at the repository git root",
+						Provenance: "core",
+						Location:   report.Location{Path: "pkg/datamitsu.config.js", Row: 1, Col: 1, Precision: "unknown"},
+					}},
+				}},
+			}}},
+		},
+	}
+
+	log, _ := render(t, run, nil)
+	if len(log.Runs) != 1 || log.Runs[0].Tool.Driver.Name != "datamitsu" {
+		t.Fatalf("runs = %+v, want one datamitsu run", log.Runs)
+	}
+	toolRun := log.Runs[0]
+	if len(toolRun.Tool.Driver.Rules) != 1 || toolRun.Tool.Driver.Rules[0].ID != "config-placement" {
+		t.Errorf("rules = %+v, want config-placement", toolRun.Tool.Driver.Rules)
+	}
+	if len(toolRun.Results) != 1 {
+		t.Fatalf("results = %+v, want one", toolRun.Results)
+	}
+	res := toolRun.Results[0]
+	if res.RuleID != "config-placement" || res.Level != "error" || !res.Properties.Gates || res.Properties.Provenance != "core" {
+		t.Errorf("result = %+v", res)
+	}
+	if got := res.Locations[0].PhysicalLocation; got.ArtifactLocation != (ArtifactLocation{URI: "pkg/datamitsu.config.js", URIBaseID: "%SRCROOT%"}) ||
+		*got.Region != (Region{StartLine: 1, EndLine: 1}) {
+		t.Errorf("location = %+v", got)
+	}
+	if res.PartialFingerprints["datamitsu/v1"] != fp {
+		t.Errorf("partialFingerprints = %+v, want %s", res.PartialFingerprints, fp)
+	}
+}

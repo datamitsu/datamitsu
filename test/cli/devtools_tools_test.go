@@ -10,31 +10,6 @@ import (
 // expectedToolsSubcommands is the drift guard for the `devtools tools` group.
 var expectedToolsSubcommands = []string{"inspect", "list"}
 
-var devtoolsToolsHelpCases = []struct {
-	name   string
-	args   []string
-	golden string
-}{
-	{"tools", []string{"devtools", "tools", "--help"}, "devtools_tools_help"},
-	{"list", []string{"devtools", "tools", "list", "--help"}, "devtools_tools_list_help"},
-	{"inspect", []string{"devtools", "tools", "inspect", "--help"}, "devtools_tools_inspect_help"},
-}
-
-func TestDevtoolsToolsHelpGolden(t *testing.T) {
-	for _, tc := range devtoolsToolsHelpCases {
-		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{}, tc.args...)
-			if res.ExitCode != 0 {
-				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s", strings.Join(tc.args, " "), res.ExitCode, res.Stderr)
-			}
-			if res.Stderr != "" {
-				t.Errorf("`%s` wrote to stderr:\n%s", strings.Join(tc.args, " "), res.Stderr)
-			}
-			clitest.AssertGolden(t, tc.golden, res.Stdout)
-		})
-	}
-}
-
 func TestDevtoolsToolsCommandSetDrift(t *testing.T) {
 	res := clitest.Run(t, clitest.RunOptions{}, "devtools", "tools", "--help")
 	if res.ExitCode != 0 {

@@ -17,33 +17,33 @@ import (
 	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
-// FindIgnoreFiles walks the tree and returns the paths of every .datamitsuignore
-// file the planner would actually apply, so the set linted and fixed here is the
-// set that takes effect at runtime — no "green lint on a file that never
-// applies" divergence.
-//
-// The runner does not use this: it already walks for the planner and calls
-// IgnoreFilesIn on that list instead. This is for callers holding no list.
+// FindIgnoreFiles walks the tree and returns the path of the .datamitsuignore
+// file at the git root — the only one the planner applies, so the file linted
+// and fixed here is the file that takes effect at runtime. It returns nil when
+// the repository has no root file.
 func FindIgnoreFiles(ctx context.Context, rootPath string) ([]string, error) {
 	all, err := traverser.FindFilesFromPath(ctx, rootPath, rootPath)
 	if err != nil {
 		return nil, fmt.Errorf("scanning %s: %w", rootPath, err)
 	}
-	return IgnoreFilesIn(all), nil
+	if f, ok := RootIgnoreFile(all, rootPath); ok {
+		return []string{f}, nil
+	}
+	return nil, nil
 }
 
-// IgnoreFilesIn selects the .datamitsuignore files out of a repository file
-// list the caller has already walked for. Callers that need both this set and
-// the full list — the runner, which also hands the list to the planner — take
-// this form so the tree is walked once.
-func IgnoreFilesIn(all []string) []string {
-	var files []string
+// RootIgnoreFile selects the .datamitsuignore at the git root out of a
+// repository file list the caller has already walked for. A .datamitsuignore
+// anywhere below the root is a dead artifact — the core config-placement check
+// reports it; it is never linted, fixed, or applied.
+func RootIgnoreFile(all []string, rootPath string) (string, bool) {
+	want := filepath.Join(rootPath, ".datamitsuignore")
 	for _, f := range all {
-		if filepath.Base(f) == ".datamitsuignore" {
-			files = append(files, f)
+		if f == want {
+			return f, true
 		}
 	}
-	return files
+	return "", false
 }
 
 // normalizeRule formats a parsed rule into canonical form: "{!}{glob}: {tool1}, {tool2}"

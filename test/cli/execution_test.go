@@ -1392,13 +1392,35 @@ func TestExecutionUsageErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
 				clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
-			res := e.run("", tc.env, tc.args...)
+			args := tc.args
+			var reportPath string
+			if strings.HasPrefix(tc.name, "fail_fast_") {
+				reportPath = filepath.Join(t.TempDir(), "report.json")
+				args = append(args, "--report=json="+reportPath)
+			}
+			res := e.run("", tc.env, args...)
 			e.wantExit(res, 2)
 			e.wantMarker("alpha", "")
 			if !strings.Contains(res.Stderr, "error:") {
 				t.Errorf("stderr should carry an error line:\n%s", res.Stderr)
 			}
-			e.golden("s13_"+tc.name, res)
+			if strings.Contains(strings.Join(tc.env, " "), "DATAMITSU_FAIL_FAST") && !strings.Contains(res.Stderr, "DATAMITSU_FAIL_FAST") {
+				t.Errorf("stderr should identify DATAMITSU_FAIL_FAST:\n%s", res.Stderr)
+			}
+			if tc.name == "fail_fast_flag_invalid" && !strings.Contains(res.Stderr, "--fail-fast") {
+				t.Errorf("stderr should identify --fail-fast:\n%s", res.Stderr)
+			}
+			if res.Stdout != "" {
+				t.Errorf("usage error wrote to stdout: %q", res.Stdout)
+			}
+			if reportPath != "" {
+				if _, err := os.Stat(reportPath); !os.IsNotExist(err) {
+					t.Errorf("usage error report stat = %v, want no report artifact", err)
+				}
+			}
+			if tc.name != "fail_fast_env_invalid" && tc.name != "fail_fast_env_invalid_with_flag" && tc.name != "fail_fast_flag_invalid" {
+				e.golden("s13_"+tc.name, res)
+			}
 		})
 	}
 }

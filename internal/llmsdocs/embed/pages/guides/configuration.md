@@ -188,6 +188,31 @@ Teams use this via `--before-config`:
 datamitsu check --before-config ./node_modules/@myorg/datamitsu-config/index.js
 ```
 
+## Config Placement
+
+Datamitsu reads its configuration only at the repository git root — the topmost
+repository, even when the command runs from a subdirectory or inside a nested
+one. The same names below the root are dead artifacts: an agent or tool that
+created a config inside a subproject did not change how your repository runs,
+but the file looks plausible and misleads.
+
+`lint` and `check` therefore carry a built-in **config-placement** check. It
+reports, one finding each:
+
+- `datamitsu.config.js`, `datamitsu.config.mjs`, `datamitsu.config.ts` below the git root;
+- a `.datamitsu/` directory below the git root;
+- a `.datamitsuignore` below the git root.
+
+The same names directly at the git root are legal. The check rides the run's
+normal repository discovery, so what is invisible to a run is invisible to it
+too: gitignored paths, `.git` trees and symlinked paths are never scanned, and
+a `.datamitsuignore` cannot hide a placement violation.
+
+Each finding is an `error` (rule code `datamitsu/config-placement`) and fails
+the run; `--fail-on` cannot soften it. The only opt-out is a
+[baseline](./reports) that holds the finding. The check never moves or deletes
+anything, and it is silent in `fix` runs and under `--explain`.
+
 ## Ignore Rules
 
 Ignore rules can be defined both in `.datamitsuignore` files and in the configuration:
@@ -259,8 +284,8 @@ for the complete list and effective defaults.
 ## Inspect a resolved tool
 
 This reference snapshot selects ESLint from the wrapper `@shibanet0/datamitsu-config`,
-`0.0.0-unstable.20260912.f201136`, captured on 2026-09-22. It is enabled,
-runs per project, and declares fix priority 6 and lint priority 9. These are
+`0.6.3`, captured on 2026-10-26. It is enabled,
+runs per project, and declares fix priority 6 and lint priority 12. These are
 the wrapper's choices, not core defaults. The inspector shows the merged result,
 not layer provenance.
 

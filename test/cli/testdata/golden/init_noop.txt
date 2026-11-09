@@ -4,4 +4,6 @@
 
 ┏━ init <RULE>
 ┃ no project types detected
+┃
+┃ launcher <BINARY> → .datamitsu/launcher.json
 ┗━ ready · <DUR> <RULE>

@@ -459,9 +459,9 @@ Binary apps (type `binary`) are not affected by this limitation. They use target
 
 ## See the runtime distribution
 
-The reference wrapper `@shibanet0/datamitsu-config`, `0.0.0-unstable.20260912.f201136`,
-captured on 2026-09-22, contains 111 apps: native binary 75, Node.js 20,
-Python 11, JVM 3, Go 1 and Shell 1. This is a real configuration, not a default.
+The reference wrapper `@shibanet0/datamitsu-config`, `0.6.3`,
+captured on 2026-10-26, contains 117 apps: native binary 78, Node.js 15,
+Python 10, Bun 6, Go 4, JVM 3 and Shell 1. This is a real configuration, not a default.
 
 <ConfigEmbed view="blueprints" />
 

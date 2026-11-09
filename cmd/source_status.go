@@ -151,7 +151,7 @@ func runSourceStatus(cmd *cobra.Command) error {
 		// Warnings are still a human's business and still belong on stderr;
 		// stdout in this mode is a document a program parses, so not one byte of
 		// prose may reach it.
-		warnSourceFarm(cmd.ErrOrStderr(), plan)
+		warnSourceFarm(cmd.ErrOrStderr(), plan, false)
 		return writeJSONIndent(cmd.OutOrStdout(), status)
 	}
 

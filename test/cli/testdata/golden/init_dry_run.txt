@@ -6,4 +6,6 @@
 ┃ no project types detected
 ┃
 ┃ dry-run — no changes will be made
+┃
+┃ launcher would record <BINARY>
 ┗━ dry-run · <DUR> <RULE>

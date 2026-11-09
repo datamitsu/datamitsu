@@ -518,7 +518,9 @@ The execution cache is stored as a single file per project:
 ~/.cache/datamitsu/cache/projects/{xxh3_128(gitRoot)}/toolstate.msgpack
 ```
 
-All projects within the same git repository share a single cache file, keyed by the XXH3-128 hash of the git root path. Per-project isolation is achieved through per-file tracking within this file. The msgpack binary format keeps the file compact and fast to read/write.
+All projects within the same git repository share a single cache file, keyed by the XXH3-128 hash of the git root path. The root participates only in that directory name: the entries and verdicts inside are keyed by repository-relative paths, content hashes and the invalidation key, never by the absolute location. Per-project isolation is achieved through per-file tracking within this file. The msgpack binary format keeps the file compact and fast to read/write.
+
+A new git worktree is a new root path, so it starts with its own cold namespace. `datamitsu cache copy --source <root>` deep-copies another root's `toolstate.msgpack` into the current one: per-file passes and verdicts travel, while a hit still demands the same bytes and the same invalidation key — entries for content the destination does not have simply miss and re-run.
 
 Tool-specific caches (e.g., TypeScript's `tsbuildinfo`, ESLint's `.eslintcache`) are stored in a separate directory tree:
 

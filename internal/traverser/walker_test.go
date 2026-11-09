@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -458,5 +459,39 @@ func TestFindFilesFromPathReturnsSortedPaths(t *testing.T) {
 	}
 	if !slices.Equal(first, second) {
 		t.Error("two walks of the same tree returned different orders")
+	}
+}
+
+func TestFindFilesFromPathVisitReportsWalkedDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	for _, d := range []string{"sub", filepath.Join("sub", "nested"), "excluded", ".git", filepath.Join(".git", "refs")} {
+		_ = os.MkdirAll(filepath.Join(tmpDir, d), 0o755)
+	}
+	_ = os.WriteFile(filepath.Join(tmpDir, "root.txt"), []byte("x"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "sub", "inner.txt"), []byte("x"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "sub", "nested", "deep.txt"), []byte("x"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "excluded", "hidden.txt"), []byte("x"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".gitignore"), []byte("excluded/\n"), 0o644)
+
+	var mu sync.Mutex
+	var dirs []string
+	_, err := FindFilesFromPathVisit(context.Background(), tmpDir, tmpDir, func(d string) {
+		mu.Lock()
+		dirs = append(dirs, d)
+		mu.Unlock()
+	})
+	if err != nil {
+		t.Fatalf("FindFilesFromPathVisit() error = %v", err)
+	}
+
+	sort.Strings(dirs)
+	want := []string{
+		tmpDir,
+		filepath.Join(tmpDir, "sub"),
+		filepath.Join(tmpDir, "sub", "nested"),
+	}
+	if !slices.Equal(dirs, want) {
+		t.Errorf("visited dirs = %v, want %v (gitignored and .git trees must not be reported)", dirs, want)
 	}
 }

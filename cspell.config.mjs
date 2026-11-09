@@ -45,6 +45,7 @@ export default defineConfig((config) => ({
     "darkk",
   ],
   words: [
+    "Diagnosticf",
     "releaseasset",
     // The prepare step's vocabulary: the init set over-approximates, and a
     // killed process tree leaves neither its unzippers nor downloaders.

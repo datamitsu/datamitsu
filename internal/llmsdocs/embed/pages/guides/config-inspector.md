@@ -100,9 +100,9 @@ to the list. The Auto theme follows the browser's color preference; Light and Da
 Reduced motion stops automatic rotation. The Auto rotation control can also pause it.
 
 This example is the reference wrapper `@shibanet0/datamitsu-config`, version
-`0.0.0-unstable.20260912.f201136`, captured on 2026-09-22: 111 apps, 61 tool definitions,
-14 project types and 59 managed-file definitions. Native binary: 75; Node.js: 20;
-Python: 11; JVM: 3; Go: 1; Shell: 1. These are one maintainer's choices, not defaults.
+`0.6.3`, captured on 2026-10-26: 117 apps, 69 tool definitions,
+17 project types and 66 managed-file definitions. Native binary: 78; Node.js: 15;
+Python: 10; Bun: 6; Go: 4; JVM: 3; Shell: 1. These are one maintainer's choices, not defaults.
 
 <ConfigEmbed view="universe" />
 
