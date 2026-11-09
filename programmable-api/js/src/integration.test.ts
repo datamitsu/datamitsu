@@ -48,6 +48,18 @@ const projectDirectory = mkdtempSync(join(tmpdir(), "datamitsu-api-"));
 execFileSync("git", ["init", "-q"], { cwd: projectDirectory });
 writeFileSync(join(projectDirectory, "datamitsu.config.js"), MINIMAL_CONFIG);
 writeFileSync(join(projectDirectory, "a.txt"), "hi\n");
+writeFileSync(
+  join(projectDirectory, "argv.cjs"),
+  "console.log(JSON.stringify(process.argv.slice(2)));",
+);
+writeFileSync(
+  join(projectDirectory, "argv.config.js"),
+  [
+    'globalThis.getMinVersion = () => "0.0.0";',
+    "globalThis.getBeforeConfigs = () => [];",
+    `globalThis.getConfig = () => ({ version: "argv", apps: { probe: { shell: { name: ${JSON.stringify(process.execPath)} } } }, tools: {}, runtimes: {}, managedConfigs: {} });`,
+  ].join("\n"),
+);
 
 after(() => {
   rmSync(projectDirectory, { force: true, recursive: true });
@@ -130,5 +142,33 @@ describe("integration: version", () => {
       /^(datamitsu version )?\S+/.test(result.version),
       `unexpected version format: ${result.version}`,
     );
+  });
+});
+
+describe("integration: exec argument boundary", () => {
+  it("passes option-like and literal arguments to the app without CLI interpretation", async () => {
+    const args = ["--help", "--config", "missing.js", "--no-auto-config", "--", "two words", ""];
+    const result = await exec("probe", {
+      args: [join(projectDirectory, "argv.cjs"), ...args],
+      config: [join(projectDirectory, "argv.config.js")],
+      cwd: projectDirectory,
+      noAutoConfig: true,
+    });
+    assert.equal(result.success, true, JSON.stringify(result));
+    assert.ok("stdout" in result);
+    assert.deepEqual(JSON.parse(result.stdout), args);
+  });
+
+  it("preserves a leading tool separator instead of treating it as SDK syntax", async () => {
+    const result = await exec("probe", {
+      args: ["--", "--version"],
+      config: [join(projectDirectory, "argv.config.js")],
+      cwd: projectDirectory,
+      noAutoConfig: true,
+    });
+    assert.equal(result.success, false);
+    assert.ok("error" in result);
+    assert.match(result.error, /MODULE_NOT_FOUND/);
+    assert.match(result.error, /--version/);
   });
 });
