@@ -4,19 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
-
-	"github.com/datamitsu/datamitsu/internal/config"
 )
 
-// OCIMapEntry describes one final-stage COPY --link layer. Subtree is the
-// COPY root (e.g. ".bin/golangci-lint"); the com.datamitsu.subtree annotation
-// the post-process writes is hash-level (".bin/golangci-lint/<hash>"), so the
-// script appends the hash directory it discovers by listing the layer tar —
-// and must verify that directory is the layer's single top-level entry under
-// Subtree. ".uv/python" is already exact (no hash segment).
+// OCIMapEntry describes one final-stage COPY --link layer. Hashless store parents
+// are resolved by the producer from each layer's exact identity child. Python
+// export parents resolve to identity-level `.runtime-data/<name>/<identity>/python` targets.
 type OCIMapEntry struct {
 	Subtree string `json:"subtree"`
-	Kind    string `json:"kind"` // binary|runtime|app|uv-python|parser|prepared
+	Kind    string `json:"kind"` // binary|runtime|app|python-data|parser|prepared
 	App     string `json:"app,omitempty"`
 }
 
@@ -58,12 +53,13 @@ func BuildOCIMap(plan Plan, opts RenderOptions) OCIMap {
 			Kind:    "app",
 			App:     ts.App,
 		})
-		if ts.Kind == config.RuntimeKindUV {
-			m.Layers = append(m.Layers, OCIMapEntry{
-				Subtree: uvPythonSubtree,
-				Kind:    "uv-python",
-			})
-		}
+	}
+	for _, source := range pythonExportSources(plan) {
+		m.Layers = append(m.Layers, OCIMapEntry{
+			Subtree: runtimeDataSubtree(source.Runtime),
+			Kind:    "python-data",
+			App:     source.App,
+		})
 	}
 
 	for _, bs := range plan.BinaryStages {
@@ -74,9 +70,8 @@ func BuildOCIMap(plan Plan, opts RenderOptions) OCIMap {
 		})
 	}
 
-	// Parser modules: hash-segment-resolved by the post-process like binaries (the
-	// xxh3 child is the layer's single top-level entry under Subtree), NOT exact
-	// like uv-python. App carries the module name (parsers have no owning app).
+	// Parser module parents resolve to the module's content-addressed identity.
+	// App carries the module name (parsers have no owning app).
 	for _, ps := range plan.ParserStages {
 		m.Layers = append(m.Layers, OCIMapEntry{
 			Subtree: parserSubtree(ps.Module),

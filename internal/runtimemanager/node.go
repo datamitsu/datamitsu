@@ -29,8 +29,8 @@ import (
 // managed-runtime path (GetRuntimePath), which selects binaries[os][arch][libc]
 // with glibc fallback via resolveLibcKey, streams + verifies the pinned hash,
 // extracts the full directory tree (extractDir), and resolves the binary via the
-// entry's binaryPath. Concurrent callers are deduplicated by GetRuntimePath's
-// singleflight, and an already-installed runtime is a cache hit with no refetch.
+// entry's binaryPath; target locks serialize cross-process acquisitions, and an
+// installed runtime is a cache hit with no refetch.
 //
 // Unlike jvm/uv/go — which wrap GetRuntimePath inline at their single call site —
 // node acquires its binary from two paths (installNodeAppOnce and
@@ -97,7 +97,7 @@ func (rm *RuntimeManager) resolveNodeAppEnvPathWith(appName string, appConfig *b
 // If files is non-empty, writes them to the app directory before running pnpm.
 // Safe for concurrent use from multiple goroutines.
 func (rm *RuntimeManager) InstallNodeApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
-	mergedWorkspaceYAML, err := buildPNPMWorkspace(files)
+	mergedWorkspaceYAML, err := rm.pnpmWorkspace(appConfig.Runtime, config.RuntimeKindNode, files)
 	if err != nil {
 		return fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
 	}
@@ -109,11 +109,13 @@ func (rm *RuntimeManager) InstallNodeApp(ctx context.Context, appName string, ap
 func (rm *RuntimeManager) installNodeApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	key := "node/" + appName
-	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installNodeAppOnce(ctx, appName, appConfig, customEnv, files, archives, mergedWorkspaceYAML)
-	})
-	return wrapInstallTimeout(err, timeoutSec)
+	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Node: appConfig, Env: customEnv, Files: files, Archives: archives})
+	if handled || dispatchErr != nil {
+		return wrapInstallTimeout(dispatchErr, timeoutSec)
+	}
+	return wrapInstallTimeout(withRuntimeStoreLease(ctx, "Node app "+appName, func(storeCtx context.Context) error {
+		return rm.installNodeAppOnce(storeCtx, appName, appConfig, customEnv, files, archives, mergedWorkspaceYAML)
+	}), timeoutSec)
 }
 
 func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
@@ -137,6 +139,7 @@ func (rm *RuntimeManager) installNodeAppOnce(ctx context.Context, appName string
 		runtimeName:    runtimeName,
 		runtimeVersion: rc.Node.NodeVersion,
 		pnpmRuntime:    rc.Node.PNPMRuntime,
+		runtimeConfig:  rc,
 		appEnvPath:     appEnvPath,
 	}, customEnv, files, archives, mergedWorkspaceYAML)
 }
@@ -262,7 +265,10 @@ func (rm *RuntimeManager) nodeCommandInfo(appName string, appConfig *binmanager.
 			zap.String("dir", appDepBinDir))
 	}
 
-	envVars := getPNPMEnvVars(appEnvPath)
+	_, envVars, err := rm.RuntimeOwnedEnvironment(runtimeName, rc, appEnvPath)
+	if err != nil {
+		return nil, "", err
+	}
 	//nolint:forbidigo // standard PATH for child process env, not a datamitsu env var
 	inheritedPath := os.Getenv("PATH")
 	if pathPrefix == "" {
@@ -295,7 +301,7 @@ func (rm *RuntimeManager) nodeCommandInfo(appName string, appConfig *binmanager.
 // A system-mode runtime contributes nothing here. Its interpreter is the user's
 // to provide, and reinstalling the app would not conjure it.
 func nodeRequiredPaths(appEnvPath, packageName, nodeBinPath string, rc config.RuntimeConfig) []string {
-	paths := []string{filepath.Join(appEnvPath, "node_modules", packageName, "package.json")}
+	paths := []string{filepath.Join(appEnvPath, "node_modules", packageName, "package.json"), filepath.Join(appEnvPath, appReadyMarker)}
 	if rc.Mode != config.RuntimeModeSystem && filepath.IsAbs(nodeBinPath) {
 		paths = append(paths, nodeBinPath)
 	}

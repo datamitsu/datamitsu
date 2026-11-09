@@ -5,9 +5,11 @@ package binmanager
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"net/http"
 	"os"
@@ -23,14 +25,15 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
+	"github.com/datamitsu/datamitsu/internal/installstate"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/prepare"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
+	"github.com/datamitsu/datamitsu/internal/storelock"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
 	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
-
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 )
@@ -202,6 +205,7 @@ func (a *ArchiveSpec) IsExternal() bool {
 // RuntimeAppManager handles runtime-managed applications (uv, node, jvm, go).
 // Implemented by runtimemanager.RuntimeManager to avoid circular imports.
 type RuntimeAppManager interface {
+	RuntimeDefinitions() json.RawMessage
 	GetCommandInfo(ctx context.Context, appName string, app App) (*CommandInfo, error)
 	// ResolveCommandInfo returns the same CommandInfo without installing
 	// anything: no download, no subprocess. Takes no context because it cannot
@@ -319,9 +323,10 @@ func wrapInstallTimeout(err error, timeoutSec int) error {
 }
 
 // DownloadResult records the outcome of downloading a single named binary.
+// Its JSON representation is used by the provisioning worker transport.
 type DownloadResult struct {
-	Name  string
-	Error error
+	Name  string `json:"name"`
+	Error error  `json:"-"`
 }
 
 // SkippedBinary records a binary that was not installed, with the reason
@@ -340,13 +345,62 @@ type InstallStats struct {
 	Failed        []DownloadResult
 }
 
-// InstallWithConcurrency installs binaries with specified concurrency level
-// Returns installation statistics
-// The selected binaries' dependsOn closure is installed too.
+// WithInstalledBinarySource holds the binary target lock while a caller reads its installed payload.
+func (bm *BinManager) WithInstalledBinarySource(ctx context.Context, name string, use func(string) error) error {
+	if use == nil {
+		return errors.New("binary source callback is required")
+	}
+	if err := env.RejectInstallChild("binary installation"); err != nil {
+		return err
+	}
+	installPath, info, err := bm.binaryInstall(name)
+	if err != nil {
+		return err
+	}
+	storeRoot := env.GetStorePath()
+	leaseCtx, releaseLease, err := bm.withStoreLease(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire store lease: %w", err)
+	}
+	defer releaseLease()
+	relative, err := filepath.Rel(storeRoot, installPath)
+	if err != nil {
+		return fmt.Errorf("resolve binary source target: %w", err)
+	}
+	if _, err := storelock.ValidateTarget(storeRoot, relative); err != nil {
+		return fmt.Errorf("resolve binary source target: %w", err)
+	}
+	_, releaseTarget, err := installstate.Acquire(leaseCtx, storeRoot, relative, "binary source "+name)
+	if err != nil {
+		return fmt.Errorf("lock binary source target: %w", err)
+	}
+	defer releaseTarget()
+	if !pathExists(installPath) {
+		return fmt.Errorf("binary source %q is not installed", name)
+	}
+	if err := checkInstalledCommand(installPath, info); err != nil {
+		return err
+	}
+	return use(installPath)
+}
+
+// InstallWithConcurrency installs binaries with the requested concurrency.
+// The selected binaries' dependency closure is installed as well.
 func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptional bool, concurrency int, failOnError bool) (InstallStats, error) {
+	var stats InstallStats
+	handled, err := bm.callProvision(ctx, "install-concurrency", nil, "", includeOptional, concurrency, failOnError, &stats)
+	if handled || err != nil {
+		return stats, err
+	}
+	leaseCtx, releaseLease, err := bm.withStoreLease(ctx)
+	if err != nil {
+		return stats, err
+	}
+	defer releaseLease()
+	ctx = leaseCtx
 	defer trace.Start(trace.CatInstall, "binmanager.installAll").EndWith(trace.A("concurrency", concurrency))
 
-	stats := InstallStats{
+	stats = InstallStats{
 		Skipped:       []SkippedBinary{},
 		AlreadyCached: []string{},
 		Downloaded:    []string{},
@@ -391,7 +445,7 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 		// Everything was already cached: still materialize the dependency
 		// links of the whole selection — a cached root with a newly added,
 		// already-cached dependency needs its directory too.
-		if err := bm.materializeDependencyPaths(names, nil); err != nil {
+		if err := bm.materializeDependencyPaths(ctx, names, nil); err != nil {
 			return stats, err
 		}
 		return stats, nil
@@ -441,7 +495,7 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 	// dependency needs its directory as much as a downloaded one) — against
 	// fully installed targets (the workers resolved them read-only).
 	if len(stats.Failed) == 0 || !failOnError {
-		if err := bm.materializeDependencyPaths(names, nil); err != nil {
+		if err := bm.materializeDependencyPaths(ctx, names, nil); err != nil {
 			return stats, err
 		}
 	}
@@ -452,6 +506,15 @@ func (bm *BinManager) InstallWithConcurrency(ctx context.Context, includeOptiona
 // Install downloads and caches only required binaries (Required: true)
 // The required binaries' dependsOn closure is installed too.
 func (bm *BinManager) Install(ctx context.Context) error {
+	if handled, err := bm.callProvision(ctx, "install", nil, "", false, 0, true, nil); handled || err != nil {
+		return err
+	}
+	leaseCtx, releaseLease, err := bm.withStoreLease(ctx)
+	if err != nil {
+		return err
+	}
+	defer releaseLease()
+	ctx = leaseCtx
 	return bm.installInternal(ctx, false)
 }
 
@@ -484,6 +547,15 @@ const ensureToolsConcurrency = 4
 // list is a no-op.
 // The selected tools' dependsOn closure is included too.
 func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
+	if handled, err := bm.callProvision(ctx, "ensure-tools", names, "", false, 0, true, nil); handled || err != nil {
+		return err
+	}
+	leaseCtx, releaseLease, err := bm.withStoreLease(ctx)
+	if err != nil {
+		return err
+	}
+	defer releaseLease()
+	ctx = leaseCtx
 	// Expand dependencies and deduplicate while preserving determinism.
 	distinct, closureErr := AppDependencyClosure(bm.mapOfApps, names)
 
@@ -530,7 +602,7 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 	// Every install in the set finished: materialize the dependency links
 	// now, against fully installed targets (the workers resolved them
 	// read-only).
-	if err := bm.materializeDependencyPaths(distinct, nil); err != nil {
+	if err := bm.materializeDependencyPaths(ctx, distinct, nil); err != nil {
 		return err
 	}
 	// Prepare the closure's steps, dependencies first. The closure order is
@@ -552,7 +624,17 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 // declared prepare step has run it (dependencies first). Works with all
 // application types: binary, shell, bun, uv, node, jvm, go.
 func (bm *BinManager) GetCommandInfo(ctx context.Context, appName string) (*CommandInfo, error) {
-	info, err := bm.getCommandInfoInstallOnly(ctx, appName)
+	var info *CommandInfo
+	if handled, err := bm.callProvision(ctx, "get-command-info", nil, appName, false, 0, true, &info); handled || err != nil {
+		return info, err
+	}
+	leaseCtx, releaseLease, err := bm.withStoreLease(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseLease()
+	ctx = leaseCtx
+	info, err = bm.getCommandInfoInstallOnly(ctx, appName)
 	if err != nil {
 		return nil, err
 	}
@@ -568,6 +650,16 @@ func (bm *BinManager) GetCommandInfo(ctx context.Context, appName string) (*Comm
 // state, and skipping it keeps a version sweep from re-downloading a schema
 // catalog just to print a version.
 func (bm *BinManager) GetCommandInfoInstallOnly(ctx context.Context, appName string) (*CommandInfo, error) {
+	var info CommandInfo
+	if handled, err := bm.callProvision(ctx, "get-command-info-install-only", nil, appName, false, 0, true, &info); handled || err != nil {
+		return &info, err
+	}
+	leaseCtx, releaseLease, err := bm.withStoreLease(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseLease()
+	ctx = leaseCtx
 	return bm.getCommandInfoInstallOnly(ctx, appName)
 }
 
@@ -604,7 +696,7 @@ func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, er
 		if name == appName {
 			// Only the root's dependency PATH directory is a health path: the dependencies are
 			// reached through it and never run with directories of their own.
-			pathEntries, err := bm.addDependencyPath(appName, &CommandInfo{}, bm.resolveBindingPath, false)
+			pathEntries, _, _, err := bm.dependencyPathInfo(appName, &CommandInfo{}, bm.resolveBindingPath, "")
 			if err != nil {
 				return nil, false, fmt.Errorf("app %q: %w", appName, err)
 			}
@@ -1120,6 +1212,13 @@ func (bm *BinManager) AppInstalled(appName string) bool {
 	return allPathsExist(info.HealthPaths())
 }
 
+func (bm *BinManager) withStoreLease(ctx context.Context) (context.Context, func(), error) {
+	if err := env.RejectInstallChild("store provisioning"); err != nil {
+		return nil, nil, err
+	}
+	return storelock.WithStore(ctx, env.GetStorePath())
+}
+
 // getCommandInfoInstallOnly is the historical GetCommandInfo body: install
 // the closure serially (dependencies first), no preparation.
 func (bm *BinManager) getCommandInfoInstallOnly(ctx context.Context, appName string) (*CommandInfo, error) {
@@ -1140,7 +1239,7 @@ func (bm *BinManager) getCommandInfoInstallOnly(ctx context.Context, appName str
 	// The whole closure is installed (this loop is serial and
 	// dependencies-first): materialize each member's dependency links now,
 	// so they never point at a half-written install.
-	if err := bm.materializeDependencyPaths(names, info); err != nil {
+	if err := bm.materializeDependencyPaths(ctx, names, info); err != nil {
 		return nil, err
 	}
 	return info, nil
@@ -1209,7 +1308,7 @@ func (bm *BinManager) resolveRawCommandInfo(appName string) (*CommandInfo, error
 	default:
 		return nil, fmt.Errorf("app '%s' has no valid configuration", appName)
 	}
-	if _, err := bm.addDependencyPath(appName, cmdInfo, bm.resolveBindingPath, false); err != nil {
+	if _, _, _, err := bm.dependencyPathInfo(appName, cmdInfo, bm.resolveBindingPath, ""); err != nil {
 		return nil, fmt.Errorf("app %q: %w", appName, err)
 	}
 	return cmdInfo, nil
@@ -1271,7 +1370,7 @@ func (bm *BinManager) resolveCommandInfo(appName string) (*CommandInfo, bool, er
 	if err := bm.mergeAppEnv(appName, app, cmdInfo); err != nil {
 		return nil, false, err
 	}
-	if _, err := bm.addDependencyPath(appName, cmdInfo, bm.resolveBindingPath, false); err != nil {
+	if _, _, _, err := bm.dependencyPathInfo(appName, cmdInfo, bm.resolveBindingPath, ""); err != nil {
 		return nil, false, fmt.Errorf("app %q: %w", appName, err)
 	}
 
@@ -1388,7 +1487,7 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 	// throwaway so the returned cmdInfo keeps the runtime-owned PATH alone.
 	// The barrier caller (materializeDependencyPaths) composes the final
 	// PATH — dependency dir plus inherited tail — exactly once.
-	if _, err := bm.addDependencyPath(appName, &CommandInfo{}, installDependency, false); err != nil {
+	if _, _, _, err := bm.dependencyPathInfo(appName, &CommandInfo{}, installDependency, ""); err != nil {
 		return nil, fmt.Errorf("app %q: %w", appName, err)
 	}
 
@@ -1401,13 +1500,13 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 // half-written venv or go bin. root, when non-nil, receives the root app's
 // composed PATH — the caller hands the same CommandInfo it returns, whose
 // dependency directory was resolved read-only during the concurrent phase.
-func (bm *BinManager) materializeDependencyPaths(names []string, root *CommandInfo) error {
+func (bm *BinManager) materializeDependencyPaths(ctx context.Context, names []string, root *CommandInfo) error {
 	for _, name := range names {
 		info := root
 		if info == nil || name != names[len(names)-1] {
 			info = &CommandInfo{}
 		}
-		if _, err := bm.addDependencyPath(name, info, bm.resolveBindingPath, true); err != nil {
+		if _, err := bm.addDependencyPath(ctx, name, info, bm.resolveBindingPath, true); err != nil {
 			return fmt.Errorf("app %q: %w", name, err)
 		}
 	}
@@ -1530,6 +1629,61 @@ func checkExtractedCommand(extractedDir string, info BinaryOsArchInfo) error {
 	return nil
 }
 
+func removeStorePath(path string) (err error) {
+	parent, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return fmt.Errorf("open store parent for removal: %w", err)
+	}
+	defer func() { err = errors.Join(err, parent.Close()) }()
+	name := filepath.Base(path)
+	target, err := parent.OpenRoot(name)
+	if err != nil {
+		if removeErr := parent.RemoveAll(name); removeErr != nil {
+			return fmt.Errorf("remove store path: %w", errors.Join(err, removeErr))
+		}
+		return nil
+	}
+	defer func() { err = errors.Join(err, target.Close()) }()
+	if err := fs.WalkDir(target.FS(), ".", func(relative string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("walk store path %q: %w", relative, walkErr)
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		return repairStorePathPermissions(target, relative, entry)
+	}); err != nil {
+		return fmt.Errorf("walk store path %q: %w", path, err)
+	}
+	if err := parent.RemoveAll(name); err != nil {
+		return fmt.Errorf("remove store path: %w", err)
+	}
+	return nil
+}
+
+func repairStorePathPermissions(root *os.Root, relative string, entry fs.DirEntry) error {
+	info, err := entry.Info()
+	if err != nil {
+		return fmt.Errorf("inspect store path %q: %w", relative, err)
+	}
+	file, err := root.Open(relative)
+	if err != nil {
+		return fmt.Errorf("open store path %q for permission repair: %w", relative, err)
+	}
+	mode := info.Mode().Perm() | 0o600
+	if info.IsDir() {
+		mode = info.Mode().Perm() | 0o700
+	}
+	if err := file.Chmod(mode); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("make store path writable %q: %w", relative, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close store path %q after permission repair: %w", relative, err)
+	}
+	return nil
+}
+
 // checkInstalledCommand confirms that an installed directory holds the command its entry names.
 // moveDir keeps whatever it finds at the destination, so a directory left without its command —
 // files moved out by hand, or by a runtime move that was interrupted — would otherwise be
@@ -1551,27 +1705,54 @@ func checkInstalledCommand(installPath string, info BinaryOsArchInfo) error {
 func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
 	defer trace.Start(trace.CatInstall, "binmanager.install").EndWith(trace.A("app", name))
 
-	networkDownloads.Add(1)
-
+	if err := env.RejectInstallChild("binary installation"); err != nil {
+		return err
+	}
 	resolved, binaryInfo, err := bm.getBinaryInfo(name)
 	if err != nil {
 		return err
 	}
+	configHash := calculateConfigHash(binaryInfo, *resolved)
+	binPath := binaryStorePath(name, configHash, binaryInfo.ExtractDir, runtime.GOOS)
+	storeRoot := env.GetStorePath()
+	leaseCtx, releaseLease, err := storelock.WithStore(ctx, storeRoot)
+	if err != nil {
+		return fmt.Errorf("acquire store lease: %w", err)
+	}
+	defer releaseLease()
+	storeTarget, err := filepath.Rel(storeRoot, binPath)
+	if err == nil {
+		_, err = storelock.ValidateTarget(storeRoot, storeTarget)
+	}
+	if err != nil {
+		return fmt.Errorf("resolve binary store target: %w", err)
+	}
+	leaseCtx, releaseTarget, err := installstate.Acquire(leaseCtx, storeRoot, storeTarget, "binary "+name)
+	if err != nil {
+		return fmt.Errorf("lock binary store target: %w", err)
+	}
+	defer releaseTarget()
+	if _, statErr := os.Lstat(binPath); statErr == nil {
+		if _, statErr := os.Stat(binPath); statErr == nil && checkInstalledCommand(binPath, binaryInfo) == nil {
+			return nil
+		}
+		if err := removeStorePath(binPath); err != nil {
+			return fmt.Errorf("remove incomplete binary target %q: %w", binPath, err)
+		}
+	}
+	networkDownloads.Add(1)
 
 	log.Debug("downloading binary",
 		zap.String("name", name),
 		zap.String("url", binaryInfo.URL),
 	)
 
-	configHash := calculateConfigHash(binaryInfo, *resolved)
-	binPath := binaryStorePath(name, configHash, binaryInfo.ExtractDir, runtime.GOOS)
-
-	tmpDir := filepath.Join(env.GetStorePath(), "tmp")
+	tmpDir := filepath.Join(storeRoot, "tmp")
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	downloadedPath, err := downloadAndVerifyWithName(ctx, binaryInfo.URL, binaryInfo.Hash, tmpDir, name, binaryInfo.Auth)
+	downloadedPath, err := downloadAndVerifyWithName(leaseCtx, binaryInfo.URL, binaryInfo.Hash, tmpDir, name, binaryInfo.Auth)
 	if err != nil {
 		return fmt.Errorf("failed to download and verify: %w", err)
 	}
@@ -1581,6 +1762,7 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
 		}
 	}()
 
+	installstate.Progress(leaseCtx, "extract", -1, -1, "")
 	if binaryInfo.ExtractDir {
 		// Directory archives (runtimes like node) are large and slow to unpack —
 		// xz/gzip decompression plus thousands of files — and this happens AFTER
@@ -1629,6 +1811,7 @@ func (bm *BinManager) downloadInternal(ctx context.Context, name string) error {
 		}
 	}
 
+	installstate.Progress(leaseCtx, "publish", -1, -1, "")
 	log.Debug("binary installed successfully",
 		zap.String("name", name),
 		zap.String("path", binPath),
@@ -1659,7 +1842,7 @@ func (bm *BinManager) installInternal(ctx context.Context, includeOptional bool)
 	}
 	// The serial loop finished (dependencies-first): materialize the
 	// dependency links against fully installed targets.
-	if err := bm.materializeDependencyPaths(names, nil); err != nil {
+	if err := bm.materializeDependencyPaths(ctx, names, nil); err != nil {
 		return err
 	}
 

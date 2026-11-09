@@ -295,14 +295,13 @@ func TestGetAppPath_PNPMRuntimeIdentity(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetAppPath() error = %v", err)
 		}
-		// The runtime's name is not part of its identity: the same pnpm under a
-		// different name is the same install.
+		// Runtime names are part of app identity even when configurations match.
 		want, err := appPath(bumped)
 		if err != nil {
 			t.Fatalf("GetAppPath() error = %v", err)
 		}
-		if got != want {
-			t.Errorf("GetAppPath() = %q, want the path of the referenced pnpm runtime %q", got, want)
+		if got == want {
+			t.Errorf("GetAppPath() = %q, want a distinct path for the selected pnpm runtime name", got)
 		}
 	})
 
@@ -479,57 +478,6 @@ func TestBuildPackageJSON(t *testing.T) {
 	})
 }
 
-// TestFilesWithMergedWorkspaceYAML_HashIncludesDefaults pins the invariant
-// that the node app cache key incorporates the merged pnpm-workspace.yaml
-// content (defaults + user override), not just the user override. Without
-// this, tightening pnpmdefaults.Defaults in a future release would not
-// invalidate existing installs.
-func TestFilesWithMergedWorkspaceYAML_HashIncludesDefaults(t *testing.T) {
-	t.Run("nil files map gets injected workspace yaml", func(t *testing.T) {
-		out, err := filesWithMergedWorkspaceYAML(nil)
-		if err != nil {
-			t.Fatalf("filesWithMergedWorkspaceYAML() error = %v", err)
-		}
-		got, ok := out["pnpm-workspace.yaml"]
-		if !ok {
-			t.Fatal("output missing pnpm-workspace.yaml entry")
-		}
-		if !strings.Contains(got, "strictDepBuilds") {
-			t.Errorf("injected yaml missing security defaults; got: %q", got)
-		}
-	})
-
-	t.Run("input files map is not mutated", func(t *testing.T) {
-		files := map[string]string{
-			".npmrc": "registry=https://registry.npmjs.org/\n",
-		}
-		_, err := filesWithMergedWorkspaceYAML(files)
-		if err != nil {
-			t.Fatalf("filesWithMergedWorkspaceYAML() error = %v", err)
-		}
-		if _, has := files["pnpm-workspace.yaml"]; has {
-			t.Error("caller's files map was mutated with workspace entry")
-		}
-	})
-
-	t.Run("user override is merged into injected entry", func(t *testing.T) {
-		files := map[string]string{
-			"pnpm-workspace.yaml": "allowBuilds:\n  puppeteer: true\n",
-		}
-		out, err := filesWithMergedWorkspaceYAML(files)
-		if err != nil {
-			t.Fatalf("filesWithMergedWorkspaceYAML() error = %v", err)
-		}
-		got := out["pnpm-workspace.yaml"]
-		if !strings.Contains(got, "strictDepBuilds") {
-			t.Errorf("merged yaml missing security defaults; got: %q", got)
-		}
-		if !strings.Contains(got, "puppeteer") {
-			t.Errorf("merged yaml missing user override; got: %q", got)
-		}
-	})
-}
-
 func TestDefaultPNPMWorkspaceConfig(t *testing.T) {
 	cfg := pnpmdefaults.Defaults()
 
@@ -668,7 +616,7 @@ func TestMergePNPMWorkspaceConfig(t *testing.T) {
 
 func TestBuildPNPMWorkspaceForApp(t *testing.T) {
 	t.Run("no user override returns defaults", func(t *testing.T) {
-		yamlOut, err := buildPNPMWorkspaceForApp(nil)
+		yamlOut, err := buildPNPMWorkspaceForApp(nil, "/runtime-data/pnpm/store")
 		if err != nil {
 			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
 		}
@@ -696,7 +644,7 @@ func TestBuildPNPMWorkspaceForApp(t *testing.T) {
 	})
 
 	t.Run("empty files map returns defaults", func(t *testing.T) {
-		yamlOut, err := buildPNPMWorkspaceForApp(map[string]string{})
+		yamlOut, err := buildPNPMWorkspaceForApp(map[string]string{}, "/runtime-data/pnpm/store")
 		if err != nil {
 			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
 		}
@@ -714,7 +662,7 @@ func TestBuildPNPMWorkspaceForApp(t *testing.T) {
 		files := map[string]string{
 			".npmrc": "registry=https://registry.npmjs.org/\n",
 		}
-		yamlOut, err := buildPNPMWorkspaceForApp(files)
+		yamlOut, err := buildPNPMWorkspaceForApp(files, "/runtime-data/pnpm/store")
 		if err != nil {
 			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
 		}
@@ -735,7 +683,7 @@ func TestBuildPNPMWorkspaceForApp(t *testing.T) {
 		files := map[string]string{
 			"pnpm-workspace.yaml": "allowBuilds:\n  puppeteer: true\n",
 		}
-		yamlOut, err := buildPNPMWorkspaceForApp(files)
+		yamlOut, err := buildPNPMWorkspaceForApp(files, "/runtime-data/pnpm/store")
 		if err != nil {
 			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
 		}
@@ -774,7 +722,7 @@ func TestBuildPNPMWorkspaceForApp(t *testing.T) {
 		files := map[string]string{
 			"pnpm-workspace.yaml": "strictDepBuilds: false\n",
 		}
-		yamlOut, err := buildPNPMWorkspaceForApp(files)
+		yamlOut, err := buildPNPMWorkspaceForApp(files, "/runtime-data/pnpm/store")
 		if err != nil {
 			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
 		}
@@ -801,7 +749,7 @@ func TestBuildPNPMWorkspaceForApp(t *testing.T) {
 		files := map[string]string{
 			"pnpm-workspace.yaml": "storeDir: /tmp/attacker-controlled-store\n",
 		}
-		yamlOut, err := buildPNPMWorkspaceForApp(files)
+		yamlOut, err := buildPNPMWorkspaceForApp(files, "/runtime-data/pnpm/store")
 		if err != nil {
 			t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
 		}
@@ -810,15 +758,15 @@ func TestBuildPNPMWorkspaceForApp(t *testing.T) {
 		if err := yaml.Unmarshal([]byte(yamlOut), &parsed); err != nil {
 			t.Fatalf("failed to parse output YAML: %v", err)
 		}
-		if !pnpmWorkspaceValueEqual(parsed["storeDir"], env.GetPNPMStorePath()) {
-			t.Errorf("storeDir = %v, want %q (user override must not win)", parsed["storeDir"], env.GetPNPMStorePath())
+		if !pnpmWorkspaceValueEqual(parsed["storeDir"], "/runtime-data/pnpm/store") {
+			t.Errorf("storeDir = %v, want %q (user override must not win)", parsed["storeDir"], "/runtime-data/pnpm/store")
 		}
 	})
 }
 
 func prepareAndWriteWorkspace(t *testing.T, appEnvPath string, files map[string]string) map[string]string {
 	t.Helper()
-	mergedYAML, err := buildPNPMWorkspaceForApp(files)
+	mergedYAML, err := buildPNPMWorkspaceForApp(files, "/runtime-data/pnpm/store")
 	if err != nil {
 		t.Fatalf("buildPNPMWorkspaceForApp() error = %v", err)
 	}
@@ -956,7 +904,7 @@ func TestWriteAppWorkspaceFile(t *testing.T) {
 			"pnpm-workspace.yaml": "not: valid: yaml: at: all: [",
 		}
 
-		if _, err := buildPNPMWorkspaceForApp(files); err == nil {
+		if _, err := buildPNPMWorkspaceForApp(files, "/runtime-data/pnpm/store"); err == nil {
 			t.Error("expected error for invalid user YAML, got nil")
 		}
 	})
@@ -1028,19 +976,24 @@ func TestWriteAppWorkspaceFile(t *testing.T) {
 	})
 }
 
-// TestFilesWithMergedWorkspaceYAML_InvalidUserYAML pins the error path of
-// filesWithMergedWorkspaceYAML: an invalid user pnpm-workspace.yaml must
-// propagate the merge error (from buildPNPMWorkspaceForApp) rather than
-// returning a partially-built files map.
-func TestFilesWithMergedWorkspaceYAML_InvalidUserYAML(t *testing.T) {
-	files := map[string]string{
-		"pnpm-workspace.yaml": "not: valid: yaml: at: all: [",
+func TestPNPMAppInstallReportsMissingConfiguredPNPMRuntime(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	appPath := filepath.Join(env.GetStorePath(), ".apps", "node", "tool", "identity")
+	runtimeConfig := config.RuntimeConfig{
+		Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem,
+		System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "22.0.0"},
+		Node:   &config.RuntimeConfigNode{NodeVersion: "22.0.0", PNPMRuntime: "missing-pnpm"},
 	}
-	out, err := filesWithMergedWorkspaceYAML(files)
-	if err == nil {
-		t.Fatal("expected error for invalid user pnpm-workspace.yaml, got nil")
+	rm := New(config.MapOfRuntimes{"node": runtimeConfig})
+	err := rm.installPNPMAppOnce(context.Background(), pnpmAppInstallSpec{
+		appName: "tool", packageName: "tool", version: "1.0.0", binPath: "bin/tool",
+		runtimeKind: "node", runtimeName: "node", runtimeVersion: "22.0.0",
+		pnpmRuntime: "missing-pnpm", appEnvPath: appPath, runtimeConfig: runtimeConfig,
+	}, nil, nil, nil, "")
+	if err == nil || !strings.Contains(err.Error(), `runtime "missing-pnpm" referenced by app not found`) {
+		t.Fatalf("installPNPMAppOnce() missing runtime error = %v", err)
 	}
-	if out != nil {
-		t.Errorf("expected nil files map on error, got %v", out)
+	if _, err := os.Stat(appPath); !os.IsNotExist(err) {
+		t.Fatalf("PNPM app target changed before prerequisite error: %v", err)
 	}
 }

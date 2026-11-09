@@ -1,16 +1,15 @@
 package runtimemanager
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"os"
 	"os/exec"
-	"sync"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/installprocess"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 )
 
@@ -19,6 +18,13 @@ import (
 // installs the way binmanager does for binary downloads. The runtime layer
 // additionally spawns subprocesses (uv sync, pnpm install, go build), so it
 // carries both an HTTP-download path and a subprocess path off the same deadline.
+
+func installChildEnv(values []string) []string {
+	if values == nil {
+		values = os.Environ()
+	}
+	return env.WithInstallChild(values)
+}
 
 // newInstallContext derives a context carrying the effective per-app install
 // timeout, mirroring binmanager's helper so runtime-managed installs share the
@@ -63,17 +69,9 @@ func wrapInstallTimeout(err error, timeoutSec int) error {
 	return err
 }
 
-// runInstallCmd runs an install subprocess under ctx and, when the context
-// deadline killed it, surfaces context.DeadlineExceeded. This is necessary
-// because exec.CommandContext kills the process with SIGKILL and cmd.Run then
-// reports a generic "signal: killed" that does NOT wrap the context error — the
-// context state is the reliable timeout signal. Wrapping ctx.Err() lets the
-// install boundary's wrapInstallTimeout recognize the deadline and render the
-// "installation timed out after Ns" message. A non-timeout failure is returned
-// as-is.
 func runInstallCmd(ctx context.Context, cmd *exec.Cmd) error {
-	err := cmd.Run()
-	if err != nil {
+	cmd.Env = installChildEnv(cmd.Env)
+	if err := installprocess.Run(ctx, cmd); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return fmt.Errorf("%w: %w", ctxErr, err)
 		}
@@ -82,56 +80,13 @@ func runInstallCmd(ctx context.Context, cmd *exec.Cmd) error {
 	return nil
 }
 
-// runInstallCmdStreamingStderr runs an install subprocess for tools that write
-// their progress stream to stderr (pnpm's ndjson events, uv's human progress):
-// it fully captures stdout (returned for parsing) while streaming stderr line
-// by line to onLine for live progress. Both pipes are drained concurrently to
-// avoid a full-pipe deadlock. The run error carries the same context-deadline
-// wrapping as runInstallCmd.
 func runInstallCmdStreamingStderr(ctx context.Context, cmd *exec.Cmd, onLine func(string)) (stdout, stderr string, err error) {
-	stdoutPipe, perr := cmd.StdoutPipe()
-	if perr != nil {
-		return "", "", fmt.Errorf("install command stdout pipe: %w", perr)
+	cmd.Env = installChildEnv(cmd.Env)
+	stdout, stderr, err = installprocess.RunStreaming(ctx, cmd, onLine)
+	if err != nil && ctx.Err() != nil {
+		err = fmt.Errorf("%w: %w", ctx.Err(), err)
+	} else if err != nil {
+		err = fmt.Errorf("install command failed: %w", err)
 	}
-	stderrPipe, perr := cmd.StderrPipe()
-	if perr != nil {
-		return "", "", fmt.Errorf("install command stderr pipe: %w", perr)
-	}
-	if perr := cmd.Start(); perr != nil {
-		return "", "", fmt.Errorf("install command failed: %w", perr)
-	}
-
-	var outBuf bytes.Buffer
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		_, _ = io.Copy(&outBuf, stdoutPipe)
-	})
-
-	var errBuf bytes.Buffer
-	scanner := bufio.NewScanner(stderrPipe)
-	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	for scanner.Scan() {
-		line := scanner.Text()
-		errBuf.WriteString(line)
-		errBuf.WriteByte('\n')
-		if onLine != nil {
-			onLine(line)
-		}
-	}
-	// A line past the scanner's limit ends the loop early. Keep draining, or the
-	// child blocks writing into a full pipe and Wait never returns: progress is
-	// lost from that point, the install is not.
-	if scanner.Err() != nil {
-		_, _ = io.Copy(io.Discard, stderrPipe)
-	}
-
-	wg.Wait()
-	runErr := cmd.Wait()
-	if runErr != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return outBuf.String(), errBuf.String(), fmt.Errorf("%w: %w", ctxErr, runErr)
-		}
-		return outBuf.String(), errBuf.String(), fmt.Errorf("install command failed: %w", runErr)
-	}
-	return outBuf.String(), errBuf.String(), nil
+	return stdout, stderr, err
 }

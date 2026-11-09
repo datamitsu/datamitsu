@@ -2,7 +2,11 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
+	"strconv"
+
+	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
 // RuntimeKindInfo captures the per-kind facts that were previously duplicated
@@ -30,8 +34,7 @@ type RuntimeKindInfo struct {
 	// Validate returns kind-specific validation error strings for the runtime
 	// named name (mode-aware via rc.Mode). It validates only the kind's typed
 	// sub-config; the kind-agnostic mode/managed/system checks are handled by the
-	// caller. A nil Validate means the kind has no required sub-config fields
-	// (e.g. uv, whose pythonVersion is optional).
+	// caller. A nil Validate means the kind has no kind-specific checks.
 	Validate func(name string, rc RuntimeConfig) []string
 }
 
@@ -54,11 +57,21 @@ var runtimeKinds = map[RuntimeKind]RuntimeKindInfo{
 			if rc.UV == nil {
 				return nil
 			}
-			return []string{rc.UV.PythonVersion}
+			fields := []string{rc.UV.PythonVersion}
+			keys := make([]string, 0, len(rc.UV.PythonDownloads))
+			for key := range rc.UV.PythonDownloads {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				entry := rc.UV.PythonDownloads[key]
+				fields = append(fields, key, entry.Name, entry.Arch.Family, entry.Arch.Variant, entry.OS, entry.LibC,
+					strconv.Itoa(entry.Major), strconv.Itoa(entry.Minor), strconv.Itoa(entry.Patch), entry.Prerelease,
+					entry.URL, entry.Variant, entry.Build, entry.Hash)
+			}
+			return fields
 		},
-		// pythonVersion is optional and only feeds cache invalidation, so there
-		// are no required uv sub-config fields to validate.
-		Validate: nil,
+		Validate: validateUVRuntimeKind,
 	},
 	RuntimeKindNode: {
 		Name:          string(RuntimeKindNode),
@@ -104,6 +117,56 @@ var runtimeKinds = map[RuntimeKind]RuntimeKindInfo{
 		},
 		Validate: validatePNPMRuntimeKind,
 	},
+}
+
+func validateUVRuntimeKind(name string, rc RuntimeConfig) []string {
+	if rc.UV == nil {
+		return nil
+	}
+	var errs []string
+	if rc.UV.PythonVersion != "" && !isValidVersionString(rc.UV.PythonVersion) {
+		errs = append(errs, fmt.Sprintf("runtime %q: uv.pythonVersion %q contains invalid characters (must be alphanumeric, dots, hyphens, underscores, or plus signs)", name, rc.UV.PythonVersion))
+	}
+	if len(rc.UV.PythonDownloads) > 0 && rc.UV.PythonVersion == "" {
+		errs = append(errs, fmt.Sprintf("runtime %q: uv.pythonVersion is required when uv.pythonDownloads is configured", name))
+	}
+	keys := make([]string, 0, len(rc.UV.PythonDownloads))
+	for key := range rc.UV.PythonDownloads {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		entry := rc.UV.PythonDownloads[key]
+		field := fmt.Sprintf("runtime %q: uv.pythonDownloads[%q]", name, key)
+		if key == "" {
+			errs = append(errs, field+" key must not be empty")
+		}
+		if entry.Name != "cpython" {
+			errs = append(errs, fmt.Sprintf("%s name must be %q", field, "cpython"))
+		}
+		if entry.Arch.Family == "" || entry.OS == "" || entry.LibC == "" {
+			errs = append(errs, field+" requires arch.family, os, and libc")
+		}
+		if entry.Major <= 0 || entry.Minor < 0 || entry.Patch < 0 {
+			errs = append(errs, field+" major/minor/patch must be a valid Python version")
+		}
+		if entry.Prerelease != "" || entry.Variant != "" || entry.Arch.Variant != "" {
+			errs = append(errs, field+" must describe stable default-GIL CPython (empty prerelease and variants)")
+		}
+		if rc.UV.PythonVersion != "" && fmt.Sprintf("%d.%d.%d", entry.Major, entry.Minor, entry.Patch) != rc.UV.PythonVersion {
+			errs = append(errs, fmt.Sprintf("%s version %d.%d.%d does not match uv.pythonVersion %q", field, entry.Major, entry.Minor, entry.Patch, rc.UV.PythonVersion))
+		}
+		parsed, err := url.Parse(entry.URL)
+		if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" {
+			errs = append(errs, field+" url must be an absolute http or https URL")
+		}
+		if entry.Hash == "" {
+			errs = append(errs, field+" hash is required (canonical SHA-256)")
+		} else if _, err := digest.ParseSHA256(entry.Hash); err != nil {
+			errs = append(errs, fmt.Sprintf("%s hash must be a canonical SHA-256 digest (sha256:<64 lowercase hex>): %v", field, err))
+		}
+	}
+	return errs
 }
 
 func validateBunRuntimeKind(name string, rc RuntimeConfig) []string {

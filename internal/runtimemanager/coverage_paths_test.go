@@ -146,7 +146,7 @@ func TestComputeRuntimeStorePath(t *testing.T) {
 func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 	t.Run("unknown runtime", func(t *testing.T) {
 		rm := New(config.MapOfRuntimes{})
-		if _, err := rm.GetRuntimePath("missing"); err == nil {
+		if _, err := rm.GetRuntimePath(context.Background(), "missing"); err == nil {
 			t.Error("expected error for unknown runtime")
 		}
 	})
@@ -154,7 +154,7 @@ func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 	t.Run("system mode without system config", func(t *testing.T) {
 		rc := config.RuntimeConfig{Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: nil}
 		rm := New(config.MapOfRuntimes{"uv": rc})
-		if _, err := rm.GetRuntimePath("uv"); err == nil {
+		if _, err := rm.GetRuntimePath(context.Background(), "uv"); err == nil {
 			t.Error("expected error for system mode without system config")
 		}
 	})
@@ -166,7 +166,7 @@ func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 			System: &config.RuntimeConfigSystem{Command: "/opt/uv"},
 		}
 		rm := New(config.MapOfRuntimes{"uv": rc})
-		got, err := rm.GetRuntimePath("uv")
+		got, err := rm.GetRuntimePath(context.Background(), "uv")
 		if err != nil {
 			t.Fatalf("GetRuntimePath() error = %v", err)
 		}
@@ -178,7 +178,7 @@ func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 	t.Run("managed mode without managed config", func(t *testing.T) {
 		rc := config.RuntimeConfig{Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged, Managed: nil}
 		rm := newTestRMWithTarget(config.MapOfRuntimes{"uv": rc}, hostTargetWithLibc(target.LibcGlibc))
-		if _, err := rm.GetRuntimePath("uv"); err == nil {
+		if _, err := rm.GetRuntimePath(context.Background(), "uv"); err == nil {
 			t.Error("expected error for managed mode without managed config")
 		}
 	})
@@ -200,7 +200,7 @@ func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 			},
 		}
 		rm := newTestRMWithTarget(config.MapOfRuntimes{"uv": rc}, hostTargetWithLibc(target.LibcType(testLibc)))
-		if _, err := rm.GetRuntimePath("uv"); err == nil {
+		if _, err := rm.GetRuntimePath(context.Background(), "uv"); err == nil {
 			t.Error("expected error for runtime unavailable on host OS")
 		}
 	})
@@ -213,7 +213,7 @@ func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 			Managed: &config.RuntimeConfigManaged{Binaries: hostBinaries(t, testLibc, &bad)},
 		}
 		rm := newTestRMWithTarget(config.MapOfRuntimes{"uv": rc}, hostTargetWithLibc(target.LibcType(testLibc)))
-		if _, err := rm.GetRuntimePath("uv"); err == nil {
+		if _, err := rm.GetRuntimePath(context.Background(), "uv"); err == nil {
 			t.Error("expected error for unsafe binaryPath")
 		}
 	})

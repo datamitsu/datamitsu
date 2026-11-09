@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -168,6 +169,7 @@ type statsRuntimeManager struct {
 	installErr error
 }
 
+func (m *statsRuntimeManager) RuntimeDefinitions() json.RawMessage { return nil }
 func (m *statsRuntimeManager) GetCommandInfo(_ context.Context, _ string, _ binmanager.App) (*binmanager.CommandInfo, error) {
 	if m.installErr != nil {
 		return nil, m.installErr

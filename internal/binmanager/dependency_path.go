@@ -1,6 +1,7 @@
 package binmanager
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/installstate"
+	"github.com/datamitsu/datamitsu/internal/storelock"
 )
 
 // dependencyLink is one entry of an app's dependency PATH directory: the command name the app
@@ -174,30 +177,54 @@ func repairDependencyPathDir(dir string, links []dependencyLink) error {
 // The exec path materializes the directory and composes the full PATH, as the runtime managers
 // do. The resolve-only path never writes and records the directory as a PATH prefix, which the
 // source-mode shim prepends to the caller's PATH.
-func (bm *BinManager) addDependencyPath(appName string, cmdInfo *CommandInfo, resolve func(string) (string, error), materialize bool) ([]string, error) {
+func (bm *BinManager) dependencyPathInfo(appName string, cmdInfo *CommandInfo, resolve func(string) (string, error), inherited string) ([]string, string, []dependencyLink, error) {
 	links, err := bm.dependencyLinks(appName, resolve)
 	if err != nil || len(links) == 0 {
-		return nil, err
+		return nil, "", nil, err
 	}
 	dir, err := dependencyPathDir(links)
 	if err != nil {
-		return nil, err
-	}
-	if materialize {
-		if err := ensureDependencyPathDir(dir, links); err != nil {
-			return nil, err
-		}
+		return nil, "", nil, err
 	}
 	if cmdInfo.Env == nil {
 		cmdInfo.Env = make(map[string]string, 1)
 	}
+	runtimePath, set := cmdInfo.Env["PATH"]
+	cmdInfo.Env["PATH"] = composeDependencyPath(runtimePath, set, dir, inherited)
+	return dependencyPathEntries(dir, links), dir, links, nil
+}
+
+func (bm *BinManager) addDependencyPath(ctx context.Context, appName string, cmdInfo *CommandInfo, resolve func(string) (string, error), materialize bool) ([]string, error) {
 	inherited := ""
 	if materialize {
 		inherited = os.Getenv("PATH") //nolint:forbidigo // standard PATH for child process env, not a datamitsu env var
 	}
-	runtimePath, set := cmdInfo.Env["PATH"]
-	cmdInfo.Env["PATH"] = composeDependencyPath(runtimePath, set, dir, inherited)
-	return dependencyPathEntries(dir, links), nil
+	entries, dir, links, err := bm.dependencyPathInfo(appName, cmdInfo, resolve, inherited)
+	if err != nil || !materialize || len(links) == 0 {
+		return entries, err
+	}
+	storeRoot := env.GetStorePath()
+	relative, err := filepath.Rel(storeRoot, dir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve dependency PATH target: %w", err)
+	}
+	leaseCtx, releaseLease, err := storelock.WithStore(ctx, storeRoot)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseLease()
+	if _, err := storelock.ValidateTarget(storeRoot, relative); err != nil {
+		return nil, err
+	}
+	_, releaseTarget, err := installstate.Acquire(leaseCtx, storeRoot, relative, "dependency PATH")
+	if err != nil {
+		return nil, err
+	}
+	defer releaseTarget()
+	if err := ensureDependencyPathDir(dir, links); err != nil {
+		return nil, err
+	}
+	return entries, nil
 }
 
 // composeDependencyPath places dir after the runtime-owned PATH prefix and before the inherited

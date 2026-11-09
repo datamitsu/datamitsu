@@ -336,7 +336,30 @@ type RuntimeConfigPNPM struct {
 
 // RuntimeConfigUV holds uv/Python-specific runtime config.
 type RuntimeConfigUV struct {
-	PythonVersion string `json:"pythonVersion,omitempty"`
+	PythonVersion   string                    `json:"pythonVersion,omitempty"`
+	PythonDownloads map[string]PythonDownload `json:"pythonDownloads,omitempty"`
+}
+
+// PythonDownloadArch identifies an upstream CPython catalog architecture.
+type PythonDownloadArch struct {
+	Family  string `json:"family"`
+	Variant string `json:"variant"`
+}
+
+// PythonDownload is a hash-pinned CPython artifact from uv's download catalog.
+type PythonDownload struct {
+	Name       string             `json:"name"`
+	Arch       PythonDownloadArch `json:"arch"`
+	OS         string             `json:"os"`
+	LibC       string             `json:"libc"`
+	Major      int                `json:"major"`
+	Minor      int                `json:"minor"`
+	Patch      int                `json:"patch"`
+	Prerelease string             `json:"prerelease"`
+	URL        string             `json:"url"`
+	Variant    string             `json:"variant"`
+	Build      string             `json:"build"`
+	Hash       string             `json:"hash"`
 }
 
 // RuntimeConfigJVM holds JVM-specific runtime config.

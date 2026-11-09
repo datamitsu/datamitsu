@@ -26,7 +26,7 @@ func TestPNPMWorkspaceEnvOverride(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	merged, err := buildPNPMWorkspaceForApp(map[string]string{
 		"pnpm-workspace.yaml": "allowBuilds:\n  esbuild: true\n",
-	})
+	}, "/runtime-data/pnpm/store")
 	if err != nil {
 		t.Fatal(err)
 	}

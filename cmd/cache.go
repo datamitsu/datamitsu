@@ -107,7 +107,8 @@ func runCacheClear(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		// Clear all caches (removes entire projects/ directory including lint/fix + tool caches)
+		// ClearAll intentionally removes only project/config caches; the persistent
+		// store-locks namespace is separate and must survive cache clearing.
 		if err := cache.ClearAll(cacheDir); err != nil {
 			return fmt.Errorf("failed to clear all project caches: %w", err)
 		}

@@ -226,7 +226,7 @@ func TestStepCommandExpandsArgsAndKeepsPrefix(t *testing.T) {
 	apps["stepper"] = stepper
 	bm := stepTestManager(t, apps)
 
-	argv, err := bm.stepCommand("stepper", apps["stepper"])
+	argv, err := bm.stepCommand(t.Context(), "stepper", apps["stepper"])
 	if err != nil {
 		t.Fatalf("stepCommand: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestStepEnvironmentRuntimeKeysWin(t *testing.T) {
 	apps["stepper"] = stepper
 	bm := stepTestManager(t, apps)
 
-	envList, err := bm.stepEnvironment("stepper", apps["stepper"])
+	envList, err := bm.stepEnvironment(t.Context(), "stepper", apps["stepper"])
 	if err != nil {
 		t.Fatalf("stepEnvironment: %v", err)
 	}

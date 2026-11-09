@@ -59,6 +59,8 @@ var testedLeafCommands = map[string]string{
 	"report render":                "TestReportRender",
 	"report baseline":              "TestReportBaseline",
 	"report diff":                  "TestReportDiff / TestReportDiffCancelled",
+	"runtime list":                 "TestRuntimeListJSONInventoryAndEmpty",
+	"runtime run":                  "TestRuntimeRunDryRunAndExactExecution / TestRuntimeRunChildExitAndUsageErrors / TestRuntimeSystemExecutablePresentAndMissing",
 	"llms":                         "TestLlmsRootIndex / TestLlmsUnknownPageGolden",
 	"lsp":                          "TestLspFormattingSession",
 	"source bash":                  "TestSourceBashActivation",

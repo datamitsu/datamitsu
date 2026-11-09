@@ -15,7 +15,7 @@ import (
 // guards a nil receiver, so the parser is exercised without producing output.
 func TestPNPMReporterCounters(t *testing.T) {
 	var sp *ui.Spinner
-	rep := newPNPMReporter(sp)
+	rep := newPNPMReporter(sp, nil)
 
 	lines := []string{
 		`{"name":"pnpm:stage","stage":"resolution_started"}`,
@@ -52,7 +52,7 @@ func TestPNPMReporterCounters(t *testing.T) {
 // caller's fallback text.
 func TestPNPMReporterFallback(t *testing.T) {
 	var sp *ui.Spinner
-	rep := newPNPMReporter(sp)
+	rep := newPNPMReporter(sp, nil)
 	rep.line([]byte(`{"name":"pnpm:stage","stage":"resolution_started"}`))
 	rep.line([]byte(`{"name":"pnpm:stats","added":1}`))
 
@@ -65,7 +65,7 @@ func TestPNPMReporterFallback(t *testing.T) {
 // human-readable error output.
 func TestPNPMReporterError(t *testing.T) {
 	var sp *ui.Spinner
-	rep := newPNPMReporter(sp)
+	rep := newPNPMReporter(sp, nil)
 
 	rep.line([]byte(`{"name":"pnpm","level":"error","code":"ERR_PNPM_FETCH_404","hint":"pkg is not in the npm registry","err":{"message":"GET https://registry.npmjs.org/pkg: Not Found - 404"}}`))
 
@@ -97,7 +97,7 @@ var pnpm12OutdatedLockfile = []string{
 
 func TestPNPMReporterPlainTextError(t *testing.T) {
 	var sp *ui.Spinner
-	rep := newPNPMReporter(sp)
+	rep := newPNPMReporter(sp, nil)
 	for _, l := range pnpm12OutdatedLockfile {
 		rep.line([]byte(l))
 	}
@@ -121,7 +121,7 @@ func TestPNPMReporterPlainTextError(t *testing.T) {
 
 func TestPNPMReporterNDJSONErrorWinsOverText(t *testing.T) {
 	var sp *ui.Spinner
-	rep := newPNPMReporter(sp)
+	rep := newPNPMReporter(sp, nil)
 	for _, l := range pnpm12OutdatedLockfile {
 		rep.line([]byte(l))
 	}
@@ -141,7 +141,7 @@ func TestPNPMReporterNDJSONErrorWinsOverText(t *testing.T) {
 // what survives.
 func TestPNPMReporterTextBounded(t *testing.T) {
 	var sp *ui.Spinner
-	rep := newPNPMReporter(sp)
+	rep := newPNPMReporter(sp, nil)
 	const extra = 50
 	for i := range maxPNPMTextLines + extra {
 		rep.line(fmt.Appendf(nil, "line %d", i))
@@ -156,5 +156,26 @@ func TestPNPMReporterTextBounded(t *testing.T) {
 	}
 	if last := lines[len(lines)-1]; last != fmt.Sprintf("line %d", maxPNPMTextLines+extra-1) {
 		t.Errorf("last kept line = %q, want the final line", last)
+	}
+}
+
+func TestPNPMReporterPublishesPackageProgress(t *testing.T) {
+	var reports []struct {
+		phase    string
+		complete int64
+		total    int64
+		unit     string
+	}
+	reporter := newPNPMReporter(nil, func(phase string, complete, total int64, unit string) {
+		reports = append(reports, struct {
+			phase    string
+			complete int64
+			total    int64
+			unit     string
+		}{phase, complete, total, unit})
+	})
+	reporter.line([]byte(`{"name":"pnpm:progress","status":"fetched"}`))
+	if len(reports) != 1 || reports[0].phase != "install" || reports[0].complete != 1 || reports[0].total != -1 || reports[0].unit != "packages" {
+		t.Fatalf("progress reports = %#v, want one package counter update", reports)
 	}
 }

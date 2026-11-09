@@ -32,11 +32,13 @@ func getJVMBinaryPath(appEnvPath string, appName string) string {
 func (rm *RuntimeManager) InstallJVMApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	key := "jvm/" + appName
-	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installJVMAppOnce(ctx, appName, appConfig, files, archives)
-	})
-	return wrapInstallTimeout(err, timeoutSec)
+	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Jvm: appConfig, Files: files, Archives: archives})
+	if handled || dispatchErr != nil {
+		return wrapInstallTimeout(dispatchErr, timeoutSec)
+	}
+	return wrapInstallTimeout(withRuntimeStoreLease(ctx, "JVM app "+appName, func(storeCtx context.Context) error {
+		return rm.installJVMAppOnce(storeCtx, appName, appConfig, files, archives)
+	}), timeoutSec)
 }
 
 func (rm *RuntimeManager) installJVMAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
@@ -52,19 +54,41 @@ func (rm *RuntimeManager) installJVMAppOnce(ctx context.Context, appName string,
 
 	jarPath := getJVMBinaryPath(appEnvPath, appName)
 
-	if _, err := os.Stat(jarPath); err == nil {
-		log.Debug("JVM app already installed",
-			zap.String("app", appName),
-			zap.String("path", jarPath),
-		)
+	_, releaseCheck, err := lockAppTarget(ctx, appEnvPath)
+	if err != nil {
+		return err
+	}
+	ready := appReady(appEnvPath)
+	if ready {
+		_, statErr := os.Stat(jarPath)
+		ready = statErr == nil
+	}
+	releaseCheck()
+	if ready {
+		log.Debug("JVM app already installed", zap.String("app", appName), zap.String("path", jarPath))
 		return nil
 	}
 
-	// Ensure the JVM runtime binary is available
 	if _, err := rm.getRuntimePath(ctx, runtimeName); err != nil {
 		return fmt.Errorf("failed to get JVM runtime path: %w", err)
 	}
+	leaseCtx, releaseApp, err := lockAppTarget(ctx, appEnvPath)
+	if err != nil {
+		return err
+	}
+	defer releaseApp()
+	ctx = leaseCtx
+	if appReady(appEnvPath) {
+		if _, err := os.Stat(jarPath); err == nil {
+			return nil
+		}
+	}
 
+	if _, err := os.Stat(appEnvPath); err == nil {
+		if err := ForceRemoveAll(appEnvPath); err != nil {
+			return fmt.Errorf("remove incomplete JVM app target %q: %w", appEnvPath, err)
+		}
+	}
 	if err := os.MkdirAll(appEnvPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create app directory: %w", err)
 	}
@@ -89,6 +113,9 @@ func (rm *RuntimeManager) installJVMAppOnce(ctx context.Context, appName string,
 	}
 
 	ui.Current().Statusf(ui.SymOK, "Installed %s", appName)
+	if err := markAppReady(appEnvPath); err != nil {
+		return err
+	}
 
 	cleanupOnError = false
 	return nil
@@ -215,7 +242,7 @@ func (rm *RuntimeManager) jvmCommandInfo(appName string, appConfig *binmanager.A
 	// A managed JVM is datamitsu's to provide, so its absence means the app is
 	// not installed and an install repairs it. A system-mode `java` is the
 	// user's, resolved at exec time, and is deliberately not a health path.
-	var requiredPaths []string
+	requiredPaths := []string{filepath.Join(appEnvPath, appReadyMarker)}
 	if rc.Mode == config.RuntimeModeSystem {
 		if rc.System != nil {
 			javaBin = rc.System.Command
@@ -229,7 +256,7 @@ func (rm *RuntimeManager) jvmCommandInfo(appName string, appConfig *binmanager.A
 		}
 		javaBin = javaPath
 		if filepath.IsAbs(javaPath) {
-			requiredPaths = []string{javaPath}
+			requiredPaths = append(requiredPaths, javaPath)
 		}
 	}
 

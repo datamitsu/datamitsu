@@ -1,6 +1,7 @@
 package binmanager
 
 import (
+	"context"
 	"crypto/sha512"
 	"encoding/hex"
 	"os"
@@ -386,7 +387,7 @@ func TestGetBundleRoot(t *testing.T) {
 		}
 	})
 
-	t.Run("returns path when bundle directory exists", func(t *testing.T) {
+	t.Run("returns path for completed bundle", func(t *testing.T) {
 		bundles := MapOfBundles{
 			"test-bundle": {
 				Version: "1.0",
@@ -394,19 +395,35 @@ func TestGetBundleRoot(t *testing.T) {
 			},
 		}
 		bm := New(MapOfApps{}, bundles, nil)
-
-		bundlePath, _ := bm.ComputeBundlePath("test-bundle")
-		if err := os.MkdirAll(bundlePath, 0o755); err != nil {
-			t.Fatalf("failed to create bundle dir: %v", err)
+		if err := bm.InstallBundleByName(context.Background(), "test-bundle"); err != nil {
+			t.Fatalf("InstallBundleByName() error = %v", err)
 		}
-		defer func() { _ = os.RemoveAll(filepath.Dir(filepath.Dir(bundlePath))) }()
-
+		bundlePath, err := bm.ComputeBundlePath("test-bundle")
+		if err != nil {
+			t.Fatal(err)
+		}
 		root, err := bm.GetBundleRoot("test-bundle")
 		if err != nil {
 			t.Fatalf("GetBundleRoot() error = %v", err)
 		}
 		if root != bundlePath {
 			t.Errorf("GetBundleRoot() = %q, want %q", root, bundlePath)
+		}
+	})
+
+	t.Run("rejects markerless directory", func(t *testing.T) {
+		t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+		bundles := MapOfBundles{"test-bundle": {Version: "1.0", Files: map[string]string{"a.txt": "hello"}}}
+		bm := New(MapOfApps{}, bundles, nil)
+		bundlePath, err := bm.ComputeBundlePath("test-bundle")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(bundlePath, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := bm.GetBundleRoot("test-bundle"); err == nil {
+			t.Fatal("GetBundleRoot accepted markerless bundle directory")
 		}
 	})
 }

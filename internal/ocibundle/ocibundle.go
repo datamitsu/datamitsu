@@ -1,6 +1,5 @@
 // Package ocibundle seeds the datamitsu store from an OCI bundle: a (possibly
 // multi-platform) image whose layers carry per-subtree store content,
-// annotated with the com.datamitsu.* layer/manifest annotations. The bundle
 // is a cache accelerator and an airgap seed — never a trust boundary by
 // itself: every blob is verified against its sha256 descriptor at pull time,
 // and re-verifiable artifacts (single-file binaries, JVM jars) are
@@ -13,11 +12,13 @@
 package ocibundle
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -33,7 +34,7 @@ const (
 	// carries (e.g. ".bin/golangci-lint/<hash>"). Layers without it are base
 	// rootfs/config layers of the runnable image and are skipped.
 	AnnotationSubtree = "com.datamitsu.subtree"
-	// AnnotationKind is the optional layer content kind: binary|runtime|app|uv-python|parser|prepared.
+	// AnnotationKind is the optional layer content kind: binary|runtime|app|python-data|parser|prepared.
 	AnnotationKind = "com.datamitsu.kind"
 	// AnnotationApp optionally names the app/runtime a layer belongs to.
 	AnnotationApp = "com.datamitsu.app"
@@ -46,42 +47,114 @@ const (
 
 var log = logger.Logger.With(zap.Namespace("ocibundle"))
 
-// parsersSubtreeRoot is the store subtree carrying WASM output-parser modules
-// (.parsers/<module>/<xxh3>). Named because seeding treats it specially: a
-// parser layer is placed only when the consumer's config declares a hash to
-// verify it against (see seedLayer).
-const parsersSubtreeRoot = ".parsers/"
+const (
+	parsersSubtreeRoot  = ".parsers/"
+	preparedSubtreeRoot = ".prepared/"
+	appReadyName        = ".datamitsu-app-ready"
+	appReadyContent     = "runtime-data-v1\n"
+	pythonReadyName     = ".datamitsu-python-ready.json"
+)
 
-// preparedSubtreeRoot is the store subtree carrying prepared app state
-// (.prepared/<app>/<key>). Named because presence checks treat it
-// specially: a state directory only counts when its readiness marker is
-// there (see subtreeReady), so an interrupted placement never masks a
-// missing layer.
-const preparedSubtreeRoot = ".prepared/"
-
-// subtreeRoots are the only store subtrees a bundle layer may write into.
-var subtreeRoots = []string{".bin/", ".runtimes/", ".apps/", ".uv/python", parsersSubtreeRoot, preparedSubtreeRoot}
-
-// subtreeReady reports whether a store subtree is present AND complete. For
-// every root except .prepared/ a plain stat is the answer (content-addressed
-// trees are placed atomically). A prepared state directory is only ready
-// with its marker file: an interrupted placement or a deleted marker leaves
-// a directory that must not satisfy any seed decision.
-func subtreeReady(storeRoot, subtree string) bool {
-	dest := filepath.Join(storeRoot, filepath.FromSlash(subtree))
-	if _, err := os.Stat(dest); err != nil {
-		return false
-	}
-	if !strings.HasPrefix(subtree, preparedSubtreeRoot) {
-		return true
-	}
-	return prepare.Ready(dest)
+type pythonReadyRecord struct {
+	Schema     int    `json:"schema"`
+	Executable string `json:"executable"`
 }
 
-// validateSubtree rejects malformed subtree annotations: absolute paths,
-// traversal, or anything outside the known store subtree roots. A layer with
-// a malformed annotation is fatal (unlike a missing one, which means "not
-// store content").
+func subtreeReady(storeRoot, subtree string) bool {
+	dest := filepath.Join(storeRoot, filepath.FromSlash(subtree))
+	switch {
+	case strings.HasPrefix(subtree, ".prepared/"):
+		return prepare.Ready(dest)
+	case strings.HasPrefix(subtree, ".apps/"):
+		return appTreeReady(dest)
+	case strings.HasPrefix(subtree, ".runtime-data/"):
+		return pythonTreeReady(subtree, dest)
+	default:
+		_, err := os.Stat(dest)
+		return err == nil
+	}
+}
+
+func appTreeReady(appRoot string) bool {
+	rootInfo, err := os.Lstat(appRoot)
+	if err != nil || !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	markerInfo, err := os.Lstat(filepath.Join(appRoot, appReadyName))
+	if err != nil || !markerInfo.Mode().IsRegular() {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(appRoot, appReadyName))
+	return err == nil && string(data) == appReadyContent
+}
+
+func pythonTreeReady(subtree, pythonRoot string) bool {
+	markerInfo, err := os.Lstat(filepath.Join(pythonRoot, pythonReadyName))
+	if err != nil || !markerInfo.Mode().IsRegular() {
+		return false
+	}
+	rootInfo, err := os.Lstat(pythonRoot)
+	if err != nil || !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(pythonRoot, pythonReadyName))
+	if err != nil {
+		return false
+	}
+	var record pythonReadyRecord
+	if json.Unmarshal(data, &record) != nil || record.Schema != 1 || record.Executable == "" {
+		return false
+	}
+	prefix := subtree + "/"
+	if !strings.HasPrefix(record.Executable, prefix) || path.Clean(record.Executable) != record.Executable {
+		return false
+	}
+	rel := strings.TrimPrefix(record.Executable, prefix)
+	if rel == "" || rel == "." || strings.HasPrefix(rel, "../") || path.IsAbs(rel) {
+		return false
+	}
+	executable := filepath.Join(pythonRoot, filepath.FromSlash(rel))
+	rootResolved, err := filepath.EvalSymlinks(pythonRoot)
+	if err != nil {
+		return false
+	}
+	executableResolved, err := filepath.EvalSymlinks(executable)
+	if err != nil {
+		return false
+	}
+	contained, err := filepath.Rel(rootResolved, executableResolved)
+	if err != nil || contained == ".." || strings.HasPrefix(contained, ".."+string(filepath.Separator)) {
+		return false
+	}
+	info, err := os.Stat(executableResolved)
+	return err == nil && info.Mode().IsRegular() && (runtime.GOOS == "windows" || info.Mode().Perm()&0o111 != 0)
+}
+
+func validTargetName(s string) bool {
+	if len(s) == 0 || len(s) > 64 || !isASCIIAlphaNum(s[0]) {
+		return false
+	}
+	for i := 1; i < len(s); i++ {
+		c := s[i]
+		if !isASCIIAlphaNum(c) && c != '.' && c != '_' && c != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func isASCIIAlphaNum(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+}
+
+func validIdentity(s string) bool {
+	if len(s) != 32 || strings.ToLower(s) != s {
+		return false
+	}
+	_, err := hex.DecodeString(s)
+	return err == nil
+}
+
 func validateSubtree(subtree string) error {
 	if subtree == "" {
 		return fmt.Errorf("empty %s annotation", AnnotationSubtree)
@@ -89,19 +162,25 @@ func validateSubtree(subtree string) error {
 	if strings.HasPrefix(subtree, "/") || filepath.IsAbs(subtree) {
 		return fmt.Errorf("subtree %q must be store-relative", subtree)
 	}
-	cleaned := path.Clean(subtree)
-	if cleaned != subtree {
+	if path.Clean(subtree) != subtree {
 		return fmt.Errorf("subtree %q is not a clean path", subtree)
 	}
-	if cleaned == ".." || strings.HasPrefix(cleaned, "../") || strings.Contains(cleaned, "/../") {
-		return fmt.Errorf("subtree %q escapes the store", subtree)
+	parts := strings.Split(subtree, "/")
+	valid := false
+	switch {
+	case len(parts) == 3 && (parts[0] == ".bin" || parts[0] == ".runtimes"):
+		valid = validTargetName(parts[1]) && validIdentity(parts[2])
+	case len(parts) == 4 && parts[0] == ".apps":
+		valid = (parts[1] == "bun" || parts[1] == "go" || parts[1] == "jvm" || parts[1] == "node" || parts[1] == "uv") && validTargetName(parts[2]) && validIdentity(parts[3])
+	case len(parts) == 3 && (parts[0] == ".parsers" || parts[0] == ".prepared"):
+		valid = validTargetName(parts[1]) && validIdentity(parts[2])
+	case len(parts) == 4 && parts[0] == ".runtime-data":
+		valid = validTargetName(parts[1]) && validIdentity(parts[2]) && parts[3] == "python"
 	}
-	for _, root := range subtreeRoots {
-		if subtree == strings.TrimSuffix(root, "/") || strings.HasPrefix(subtree, root) {
-			return nil
-		}
+	if !valid {
+		return fmt.Errorf("subtree %q is not an exact owned store target", subtree)
 	}
-	return fmt.Errorf("subtree %q is outside the known store roots (%s)", subtree, strings.Join(subtreeRoots, ", "))
+	return nil
 }
 
 // Bundle layer media types accepted by the seeder: the OCI layer types plus

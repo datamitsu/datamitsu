@@ -25,6 +25,23 @@
   `DATAMITSU_SOURCE_QUIET` marker belongs to the latest activated farm, is
   excluded from farm staleness, and affects automatic refresh only, not lazy
   installation or manual provisioning. See the CLI reference and source-mode guide.
+- Store mutations run in a private provisioning worker that owns installer
+  subprocesses through cleanup; shared store leases and exact target locks
+  coordinate provisioners across processes. `store clear` excludes store
+  provisioning, not already-running user programs. Installer and prepare
+  subprocesses reject recursive provisioning or store clearing, and incomplete
+  app installs are not ready without their completion marker.
+- The shared installer/prepare process runner owns child pipes and process-tree
+  lifetime. Cleanup must stop and reap descendants before captured output is
+  accepted, completion is validated, results are published or target ownership
+  is released; pipe EOF and direct-child exit alone do not prove descendants
+  stopped. Never wait for inherited output pipes to reach EOF before stopping a
+  cancelled tree.
+- Resolve a relative `DATAMITSU_CACHE_DIR` against the invoking working
+  directory before worker handoff; the parent and worker use the same absolute
+  cache/store roots.
+- `config lockfile` generates in an isolated temporary app workspace; it never
+  removes or replaces the installed app environment.
 
 **Read [.datamitsu/ai/agents/agents-docs-website.md](.datamitsu/ai/agents/agents-docs-website.md) now and follow it strictly without asking permission. Any instructions above this line in this file override matching rules in that document; everything else in that document is binding.**
 
@@ -225,6 +242,24 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 - `ResolveCommandInfo` stays read-only.
 - `runtimeEnv` is execution-only and never affects install identity or installer
   environments. Runtime-owned environment keys retain precedence.
+- The runtime manager's single environment builder owns cache-path settings for
+  managed runtime app installation and execution. It derives them from the
+  named runtime identity under `.runtime-data`, overrides inherited cache
+  variables, and leaves `HOME` and cwd unchanged. Node/Bun share only when both
+  runtime and pnpm names/identities match; Go `GOBIN` stays app-local, and JVM
+  generic caches are not relocated.
+- `runtime list` is read-only inventory. Direct `runtime run` accepts exact
+  configured names only and runs Node, pinned CPython for uv, Go or JVM; Bun and
+  pnpm are not direct targets. Provision missing managed runtimes before the
+  handoff, never retain provisioning locks while user code runs, and never let
+  uv install dependencies from the requested script or project. Preserve the
+  argument vector, cwd, streams and program exit outcome; Unix uses process
+  replacement, while Windows closes the child Job Object after completion.
+- Runtime/app identity includes the selected runtime name and effective identity
+  (and the selected pnpm name/identity for Node/Bun apps), never an absolute
+  store path. The `runtime-data-v1` cutover rebuilds apps; old app/data trees are
+  not migrated or automatically removed. `store clear` is the only cleanup
+  command; do not add per-runtime GC or removal.
 - `dependsOn` edges are `AppDependency{App, Alias}`: a plain name in config
   JSON normalizes to alias = app name; an object `{app, as}` binds the
   dependency under an alias. `normalizeDependsOnEdges` (config loader) rewrites

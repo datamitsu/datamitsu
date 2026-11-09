@@ -4,13 +4,16 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/datamitsu/datamitsu/internal/cienv"
 	clr "github.com/datamitsu/datamitsu/internal/color"
@@ -20,6 +23,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/ocibundle"
+	"github.com/datamitsu/datamitsu/internal/provision"
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/runner"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
@@ -45,6 +49,59 @@ func commandContext(cmd *cobra.Command) context.Context {
 		}
 	}
 	return context.Background()
+}
+
+var (
+	stopProvisionWorker   context.CancelFunc
+	activeProvisionWorker *provision.Worker
+	stopCommandSignals    func()
+)
+
+func prepareCommandExecution(cmd *cobra.Command, args []string) error {
+	if err := validateFlagConstraints(cmd, args); err != nil {
+		return err
+	}
+	path := cmd.CommandPath()
+	if strings.HasSuffix(path, " fix") || strings.HasSuffix(path, " lint") || strings.HasSuffix(path, " check") || strings.HasSuffix(path, " lsp") || strings.HasSuffix(path, " exec") {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(commandContext(cmd))
+	cmd.SetContext(ctx)
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	done := make(chan struct{})
+	stopCommandSignals = func() {
+		signal.Stop(signals)
+		cancel()
+		close(done)
+	}
+	go func() {
+		count := 0
+		for {
+			select {
+			case <-signals:
+				count++
+				if count == 1 {
+					cancel()
+					if activeProvisionWorker != nil {
+						_ = activeProvisionWorker.Cancel()
+					}
+					if stopProvisionWorker != nil {
+						stopProvisionWorker()
+					}
+					continue
+				}
+				if activeProvisionWorker != nil {
+					_ = activeProvisionWorker.Cancel()
+				}
+				signal.Stop(signals)
+				return
+			case <-done:
+				return
+			}
+		}
+	}()
+	return nil
 }
 
 var (
@@ -86,7 +143,7 @@ var rootCmd = &cobra.Command{
 	Long:              "A tool for managing configuration and binaries\n\n" + agentHelpNotice + "\n\n" + sponsor.StaticLine(),
 	SilenceUsage:      true,
 	SilenceErrors:     true,
-	PersistentPreRunE: validateFlagConstraints,
+	PersistentPreRunE: prepareCommandExecution,
 }
 
 func init() {
@@ -315,7 +372,13 @@ func tracedCwd() string {
 
 // Execute runs the root command and exits the process on error.
 func Execute() {
-	clr.Init()
+	if len(os.Args) > 1 && os.Args[1] == "--internal-provision-worker" {
+		if err := runProvisionWorker(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	// Activate the shared display for the whole process so every command —
 	// including `exec`, which does not own a render scope of its own — renders
@@ -326,18 +389,77 @@ func Execute() {
 	disp := ui.New(term.DetectMode())
 	restore := ui.Activate(disp)
 
-	err := rootCmd.Execute()
-
-	disp.Close()
-	restore()
-
-	// After the display is torn down so the summary is not overwritten by a
-	// progress container repaint, and before any os.Exit below.
+	var worker *provision.Worker
+	activeProvisionWorker = nil
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	stopProvisionWorker = stopWorker
+	var startErr error
+	if !strings.HasSuffix(os.Args[0], ".test") && !env.InstallChild() {
+		worker, startErr = provision.StartWorker(workerCtx)
+		activeProvisionWorker = worker
+		if startErr == nil {
+			provision.Select(worker.Client)
+			worker.Client.SetProgress(func(data json.RawMessage) {
+				var event uievent.Event
+				if json.Unmarshal(data, &event) != nil {
+					return
+				}
+				ui.Emit(event)
+				if !ui.Quiet() && !ui.Muted() && event.Type == uievent.TypeInstall && event.Status == uievent.StatusProgress {
+					if strings.HasPrefix(event.Msg, "Waiting for installation:") {
+						ui.Current().Diagnosticf("%s\n", event.Msg)
+					} else if event.Name != "" {
+						ui.Current().Diagnosticf("Installing %s: %s\n", event.Name, event.Msg)
+					}
+				} else if !ui.Quiet() && !ui.Muted() && event.Type == uievent.TypeDownload && event.Status == uievent.StatusProgress && event.Name != "" {
+					if event.BytesTotal > 0 {
+						ui.Current().Diagnosticf("Downloading %s: %d/%d bytes\n", event.Name, event.BytesDone, event.BytesTotal)
+					}
+				}
+			})
+			rootCmd.SetContext(context.Background())
+		}
+	}
+	var err error
+	var runtimeRequest *runtimeExecRequest
+	if startErr != nil {
+		err = fmt.Errorf("start provisioning worker: %w", startErr)
+	} else {
+		err = rootCmd.Execute()
+		if outcome, ok := errors.AsType[runtimeExecHandoffError](err); ok {
+			runtimeRequest = &outcome.request
+			err = nil
+		}
+	}
+	if worker != nil {
+		provision.Select(nil)
+		if workerErr := worker.Close(); workerErr != nil && err == nil {
+			err = fmt.Errorf("stop provisioning worker: %w", workerErr)
+		}
+	}
+	stopWorker()
+	if stopCommandSignals != nil {
+		stopCommandSignals()
+		stopCommandSignals = nil
+	}
+	activeProvisionWorker = nil
 	flushTrace()
-	// A stream that carried nothing else still says hello.
+	streamWritable := true
 	if stream != nil {
 		stream.open()
+		streamWritable = ui.EventStreamFailed() == nil
 	}
+	if err == nil && runtimeRequest != nil && streamWritable {
+		disp.Close()
+		restore()
+		if stream != nil {
+			stream.open()
+		}
+		executeRuntimeRequest(*runtimeRequest)
+		return
+	}
+	disp.Close()
+	restore()
 
 	// A JSON-L stream its reader could not get is a failure of the command,
 	// whatever the command did: the reader saw less than happened.

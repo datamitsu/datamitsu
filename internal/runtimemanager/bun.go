@@ -134,7 +134,7 @@ func (rm *RuntimeManager) resolveBunAppEnvPathWith(appName string, appConfig *bi
 
 // InstallBunApp installs a Bun-managed npm app if it is not already cached.
 func (rm *RuntimeManager) InstallBunApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigBun, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
-	mergedWorkspaceYAML, err := buildPNPMWorkspace(files)
+	mergedWorkspaceYAML, err := rm.pnpmWorkspace(appConfig.Runtime, config.RuntimeKindBun, files)
 	if err != nil {
 		return fmt.Errorf("failed to compute pnpm-workspace.yaml for %q: %w", appName, err)
 	}
@@ -144,11 +144,13 @@ func (rm *RuntimeManager) InstallBunApp(ctx context.Context, appName string, app
 func (rm *RuntimeManager) installBunApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigBun, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	key := "bun/" + appName
-	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installBunAppOnce(ctx, appName, appConfig, customEnv, files, archives, mergedWorkspaceYAML)
-	})
-	return wrapInstallTimeout(err, timeoutSec)
+	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Bun: appConfig, Env: customEnv, Files: files, Archives: archives})
+	if handled || dispatchErr != nil {
+		return wrapInstallTimeout(dispatchErr, timeoutSec)
+	}
+	return wrapInstallTimeout(withRuntimeStoreLease(ctx, "Bun app "+appName, func(storeCtx context.Context) error {
+		return rm.installBunAppOnce(storeCtx, appName, appConfig, customEnv, files, archives, mergedWorkspaceYAML)
+	}), timeoutSec)
 }
 
 func (rm *RuntimeManager) installBunAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigBun, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
@@ -171,6 +173,7 @@ func (rm *RuntimeManager) installBunAppOnce(ctx context.Context, appName string,
 		runtimeName:    runtimeName,
 		runtimeVersion: rc.Bun.BunVersion,
 		pnpmRuntime:    rc.Bun.PNPMRuntime,
+		runtimeConfig:  rc,
 		appEnvPath:     appEnvPath,
 	}, customEnv, files, archives, mergedWorkspaceYAML)
 }
@@ -239,7 +242,10 @@ func (rm *RuntimeManager) bunCommandInfo(appName string, appConfig *binmanager.A
 	}
 	pathPrefix := strings.Join(pathParts, string(os.PathListSeparator))
 
-	envVars := getPNPMEnvVars(appEnvPath)
+	_, envVars, err := rm.RuntimeOwnedEnvironment(runtimeName, rc, appEnvPath)
+	if err != nil {
+		return nil, "", err
+	}
 	envVars["BUN_OPTIONS"] = bunGuardOptions
 	inheritedPath := os.Getenv("PATH") //nolint:forbidigo // standard PATH for child process env, not a datamitsu env var
 	if pathPrefix == "" {
@@ -251,6 +257,7 @@ func (rm *RuntimeManager) bunCommandInfo(appName string, appConfig *binmanager.A
 	requiredPaths := []string{
 		filepath.Join(appEnvPath, "node_modules", appConfig.PackageName, "package.json"),
 		bunNodeAliasPath(appEnvPath),
+		filepath.Join(appEnvPath, appReadyMarker),
 	}
 	if rc.Mode != config.RuntimeModeSystem && filepath.IsAbs(bunBinPath) {
 		requiredPaths = append(requiredPaths, bunBinPath)

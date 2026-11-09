@@ -53,11 +53,15 @@ func TestSeedAppDependencyClosure(t *testing.T) {
 	layers := make([]ocispec.Descriptor, 0, len(expected))
 	for subtree := range expected {
 		prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
-		entry := fileEntry(prefix+"/payload", []byte("fixture"))
-		if strings.HasPrefix(subtree, ".runtimes/") {
-			entry = fileEntry(prefix, []byte("uv binary"))
+		var layer []byte
+		switch {
+		case strings.HasPrefix(subtree, ".runtimes/"):
+			layer = subtreeLayer(t, subtree, []tarEntry{fileEntry(prefix, []byte("uv binary"))})
+		case strings.HasPrefix(subtree, ".runtime-data/"):
+			layer = pythonRuntimeLayer(t, subtree)
+		default:
+			layer = subtreeLayer(t, subtree, []tarEntry{fileEntry(prefix+"/payload", []byte("fixture"))})
 		}
-		layer := subtreeLayer(t, subtree, []tarEntry{entry})
 		layers = append(layers, src.addLayer(layer, subtree))
 	}
 	digest := src.addManifest(t, layers, nil)

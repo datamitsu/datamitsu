@@ -145,6 +145,32 @@ func TestGetStorePath(t *testing.T) {
 	})
 }
 
+func TestRelativeCacheBaseProducesAbsoluteConsistentPaths(t *testing.T) {
+	working, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(cacheDir.Name, filepath.Join("relative-cache", "base"))
+	base, err := filepath.Abs(filepath.Join("relative-cache", "base"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"base":         GetCacheBaseDir(),
+		"cache":        GetCachePath(),
+		"store":        GetStorePath(),
+		"runtime-data": GetRuntimeDataPath("uv", "identity"),
+	}
+	for name, path := range want {
+		if !filepath.IsAbs(path) {
+			t.Errorf("%s path is not absolute: %q", name, path)
+		}
+	}
+	if want["base"] != base || want["cache"] != filepath.Join(base, "cache") || want["store"] != filepath.Join(base, "store") || want["runtime-data"] != filepath.Join(base, "store", ".runtime-data", "uv", "identity") {
+		t.Fatalf("relative base paths inconsistent: working=%q paths=%v", working, want)
+	}
+}
+
 func TestGetBinPath(t *testing.T) {
 	t.Setenv(cacheDir.Name, "/tmp/test-cache")
 
@@ -318,13 +344,13 @@ func TestGetAppEnvPath(t *testing.T) {
 	}
 }
 
-func TestGetPNPMStorePath(t *testing.T) {
+func TestGetRuntimeDataPath(t *testing.T) {
 	t.Setenv(cacheDir.Name, "/tmp/test-cache")
 
-	got := GetPNPMStorePath()
-	want := filepath.Join("/tmp/test-cache", "store", ".pnpm-store")
+	got := GetRuntimeDataPath("node", "abc123")
+	want := filepath.Join("/tmp/test-cache", "store", ".runtime-data", "node", "abc123")
 	if got != want {
-		t.Errorf("GetPNPMStorePath() = %q, want %q", got, want)
+		t.Errorf("GetRuntimeDataPath() = %q, want %q", got, want)
 	}
 }
 
@@ -600,6 +626,41 @@ func TestNoSponsor(t *testing.T) {
 			t.Error("NoSponsor() = true, want false when env var is empty string")
 		}
 	})
+}
+
+func TestInstallChildAndRecursiveGuard(t *testing.T) {
+	t.Setenv(installChild.Name, "1")
+	if !InstallChild() {
+		t.Fatal("InstallChild() = false, want true")
+	}
+	if err := RejectInstallChild("datamitsu provisioning"); err == nil || !strings.Contains(err.Error(), "not allowed inside an installer or prepare subprocess") {
+		t.Fatalf("RejectInstallChild() = %v", err)
+	}
+}
+
+func TestWithInstallChildReplacesInheritedMarker(t *testing.T) {
+	got := WithInstallChild([]string{"PATH=/bin", installChild.Name + "=0", "KEEP=value", installChild.Name + "=old"})
+	count := 0
+	for _, value := range got {
+		if value == installChild.Name+"=1" {
+			count++
+		}
+		if strings.HasPrefix(value, installChild.Name+"=") && value != installChild.Name+"=1" {
+			t.Fatalf("stale child marker remains: %q", value)
+		}
+	}
+	if count != 1 {
+		t.Fatalf("install-child marker count=%d, want 1", count)
+	}
+	seen := map[string]bool{}
+	for _, value := range got {
+		if value != "" {
+			seen[value] = true
+		}
+	}
+	if !seen["PATH=/bin"] || !seen["KEEP=value"] || len(got) != 3 {
+		t.Fatalf("preserved environment or marker count incorrect: %#v", got)
+	}
 }
 
 func TestIsCI(t *testing.T) {

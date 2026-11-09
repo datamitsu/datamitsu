@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -607,4 +609,33 @@ func TestExtractArchiveToPath_Branches(t *testing.T) {
 			t.Error("absolute symlink was not skipped")
 		}
 	})
+}
+
+func TestDownloadResultJSONPreservesFailure(t *testing.T) {
+	original := DownloadResult{Name: "tool", Error: errors.New("checksum mismatch")}
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded DownloadResult
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Name != original.Name || decoded.Error == nil || decoded.Error.Error() != original.Error.Error() {
+		t.Fatalf("round-trip = %#v, want failure %q", decoded, original.Error)
+	}
+	if err := json.Unmarshal([]byte(`{"name":`), &decoded); err == nil {
+		t.Fatal("malformed result unexpectedly decoded")
+	}
+}
+
+func TestWithInstalledBinarySourceRejectsInvalidRequests(t *testing.T) {
+	bm := &BinManager{}
+	if err := bm.WithInstalledBinarySource(context.Background(), "", nil); err == nil {
+		t.Fatal("nil callback accepted")
+	}
+	t.Setenv("DATAMITSU_INSTALL_CHILD", "1")
+	if err := bm.WithInstalledBinarySource(context.Background(), "tool", func(string) error { return nil }); err == nil || !strings.Contains(err.Error(), "not allowed") {
+		t.Fatalf("recursive source request = %v", err)
+	}
 }

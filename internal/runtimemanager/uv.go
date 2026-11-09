@@ -19,18 +19,27 @@ import (
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
-
 	"go.uber.org/zap"
 )
 
-func getUVEnvVars(appEnvPath string) map[string]string {
+func getUVEnvVars(runtimeDataPath string) map[string]string {
 	return map[string]string{
-		"UV_CACHE_DIR": filepath.Join(appEnvPath, "cache"),
-		// Redirect uv's managed CPython into the cached store (shared per-version,
-		// not per-app) so the store cache is self-contained and venv interpreter
-		// symlinks resolve after a cache restore onto a fresh runner.
-		"UV_PYTHON_INSTALL_DIR": filepath.Join(env.GetStorePath(), ".uv", "python"),
+		"UV_CACHE_DIR":          filepath.Join(runtimeDataPath, "uv-cache"),
+		"UV_PYTHON_INSTALL_DIR": filepath.Join(runtimeDataPath, "python"),
 	}
+}
+
+func ensureUVRuntimeDataDirectories(envVars map[string]string) error {
+	for _, key := range []string{"UV_CACHE_DIR", "UV_PYTHON_INSTALL_DIR"} {
+		dir := envVars[key]
+		if dir == "" {
+			continue
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("failed to create directory %q: %w", dir, err)
+		}
+	}
+	return nil
 }
 
 func getUVBinaryPath(appEnvPath string, packageName string) string {
@@ -55,6 +64,9 @@ func getUVInterpreterPath(appEnvPath string) string {
 // follows symlinks, so a dangling interpreter symlink returns an error here and
 // the app is treated as not installed (triggering a rebuild).
 func uvVenvHealthy(appEnvPath, binPath string) bool {
+	if !appReady(appEnvPath) {
+		return false
+	}
 	if _, err := os.Stat(binPath); err != nil {
 		return false
 	}
@@ -70,11 +82,13 @@ func uvVenvHealthy(appEnvPath, binPath string) bool {
 func (rm *RuntimeManager) InstallUVApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	key := "uv/" + appName
-	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installUVAppOnce(ctx, appName, appConfig, customEnv, files, archives)
-	})
-	return wrapInstallTimeout(err, timeoutSec)
+	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Uv: appConfig, Env: customEnv, Files: files, Archives: archives})
+	if handled || dispatchErr != nil {
+		return wrapInstallTimeout(dispatchErr, timeoutSec)
+	}
+	return wrapInstallTimeout(withRuntimeStoreLease(ctx, "UV app "+appName, func(storeCtx context.Context) error {
+		return rm.installUVAppOnce(storeCtx, appName, appConfig, customEnv, files, archives)
+	}), timeoutSec)
 }
 
 func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
@@ -89,14 +103,18 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 	if err != nil {
 		return fmt.Errorf("failed to get app path: %w", err)
 	}
+	appEnvPath = lockWorkspaceDestination(ctx, appEnvPath)
 
 	binPath := getUVBinaryPath(appEnvPath, appConfig.PackageName)
 
-	if uvVenvHealthy(appEnvPath, binPath) {
-		log.Debug("UV app already installed",
-			zap.String("app", appName),
-			zap.String("path", binPath),
-		)
+	_, releaseCheck, err := lockAppTarget(ctx, appEnvPath)
+	if err != nil {
+		return err
+	}
+	ready := uvVenvHealthy(appEnvPath, binPath)
+	releaseCheck()
+	if ready {
+		log.Debug("UV app already installed", zap.String("app", appName), zap.String("path", binPath))
 		return nil
 	}
 
@@ -106,22 +124,27 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 		return err
 	}
 
-	// The app dir may exist but be broken (e.g. a dangling venv interpreter
-	// symlink after a cache restore). Remove the stale dir so uv rebuilds from
-	// a clean slate instead of syncing on top of a half-installed venv.
-	if _, err := os.Stat(appEnvPath); err == nil {
-		log.Debug("UV app present but venv unresolved, rebuilding",
-			zap.String("app", appName),
-			zap.String("path", appEnvPath),
-		)
-		if err := os.RemoveAll(appEnvPath); err != nil {
-			return fmt.Errorf("failed to remove stale app directory for %q: %w", appName, err)
-		}
-	}
-
 	uvPath, err := rm.getRuntimePath(ctx, runtimeName)
 	if err != nil {
 		return fmt.Errorf("failed to get runtime path: %w", err)
+	}
+	pythonPath, err := rm.EnsurePython(ctx, runtimeName)
+	if err != nil {
+		return fmt.Errorf("ensure pinned Python for %q: %w", appName, err)
+	}
+	leaseCtx, releaseApp, err := lockAppTarget(ctx, appEnvPath)
+	if err != nil {
+		return err
+	}
+	defer releaseApp()
+	ctx = leaseCtx
+	if uvVenvHealthy(appEnvPath, binPath) {
+		return nil
+	}
+	if _, err := os.Stat(appEnvPath); err == nil {
+		if err := ForceRemoveAll(appEnvPath); err != nil {
+			return fmt.Errorf("failed to remove stale app directory for %q: %w", appName, err)
+		}
 	}
 
 	if err := os.MkdirAll(appEnvPath, 0o755); err != nil {
@@ -135,12 +158,20 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 		}
 	}()
 
-	reservedEnv := getUVEnvVars(appEnvPath)
-	envVars := mergeInstallEnv(reservedEnv, customEnv, appEnvPath)
-	for _, dir := range reservedEnv {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("failed to create directory %q: %w", dir, err)
+	_, reservedEnv, err := rm.RuntimeOwnedEnvironment(runtimeName, rc, appEnvPath)
+	if err != nil {
+		return err
+	}
+	envVars := maps.Clone(mergeInstallEnv(reservedEnv, customEnv, appEnvPath))
+	for key := range envVars {
+		upper := strings.ToUpper(key)
+		if strings.HasPrefix(upper, "UV_PYTHON") && key != "UV_PYTHON_INSTALL_DIR" || upper == "UV_CONFIG_FILE" || upper == "VIRTUAL_ENV" || upper == "CONDA_PREFIX" {
+			delete(envVars, key)
 		}
+	}
+	envVars["UV_PYTHON_DOWNLOADS"] = "never"
+	if err := ensureUVRuntimeDataDirectories(reservedEnv); err != nil {
+		return err
 	}
 
 	if len(files) > 0 || len(archives) > 0 {
@@ -178,13 +209,13 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 		return fmt.Errorf("app %q: %w", appName, err)
 	}
 
-	args := buildUVInstallArgs(appConfig.LockFile, configPath, window, rc.UV)
+	args := append(buildUVInstallArgs(appConfig.LockFile, configPath, window), "--python", pythonPath)
 
 	// Capture uv's combined output instead of inheriting the terminal so its
 	// reporter never corrupts an active progress bar; surface it only on failure.
-	cmd := exec.CommandContext(ctx, uvPath, args...) //nolint:gosec // G204: uvPath comes from the trusted managed runtime store and args are built from validated config
+	cmd := exec.CommandContext(context.WithoutCancel(ctx), uvPath, args...) //nolint:gosec // G204: uvPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
-	cmd.Env = buildEnvWithOverrides(withoutEnv(os.Environ(), uvInheritedOverride), envVars)
+	cmd.Env = buildEnvWithOverrides(withoutEnv(os.Environ(), uvAppInheritedOverride), envVars)
 
 	packageSpec := appConfig.PackageName
 	if appConfig.Version != "" {
@@ -224,6 +255,9 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 		sp.Done("Installed " + appName)
 	}
 
+	if err := markAppReady(appEnvPath); err != nil {
+		return err
+	}
 	cleanupOnError = false
 	return nil
 }
@@ -293,7 +327,7 @@ func uvInstalledCount(stdout string) int {
 // Only the app's own uv.toml (configPath) is read, never a user- or
 // system-level one: those could inject resolver settings, such as an index or
 // an exclude-newer, into an install that has to be the same on every machine.
-func buildUVInstallArgs(lockFile, configPath string, window uvWindow, uvRC *config.RuntimeConfigUV) []string {
+func buildUVInstallArgs(lockFile, configPath string, window uvWindow) []string {
 	// --output-format=json emits a final machine-readable summary on stdout
 	// (parsed for the installed-package count). uv's per-phase progress lines
 	// still go to stderr and are streamed for a live spinner label.
@@ -310,10 +344,6 @@ func buildUVInstallArgs(lockFile, configPath string, window uvWindow, uvRC *conf
 	}
 
 	args = append(args, window.args()...)
-
-	if uvRC != nil && uvRC.PythonVersion != "" {
-		args = append(args, "--python", uvRC.PythonVersion)
-	}
 
 	return args
 }
@@ -355,7 +385,7 @@ dependencies = [
 
 // GetUVCommandInfo returns command info for running a uv-managed app.
 func (rm *RuntimeManager) GetUVCommandInfo(appName string, appConfig *binmanager.AppConfigUV, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
-	runtimeName, _, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindUV)
+	runtimeName, rc, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindUV)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
 	}
@@ -366,7 +396,10 @@ func (rm *RuntimeManager) GetUVCommandInfo(appName string, appConfig *binmanager
 	}
 
 	binPath := getUVBinaryPath(appEnvPath, appConfig.PackageName)
-	envVars := getUVEnvVars(appEnvPath)
+	_, envVars, err := rm.RuntimeOwnedEnvironment(runtimeName, rc, appEnvPath)
+	if err != nil {
+		return nil, err
+	}
 
 	return &binmanager.CommandInfo{
 		Type:    "uv",
@@ -375,7 +408,7 @@ func (rm *RuntimeManager) GetUVCommandInfo(appName string, appConfig *binmanager
 		// The same pair uvVenvHealthy checks. The wrapper script alone survives a
 		// store restore that lost the shared Python dir, and running it then fails
 		// on a dangling `#!` line instead of reinstalling.
-		RequiredPaths: []string{getUVInterpreterPath(appEnvPath)},
+		RequiredPaths: []string{getUVInterpreterPath(appEnvPath), filepath.Join(appEnvPath, appReadyMarker)},
 	}, nil
 }
 
@@ -428,4 +461,8 @@ func buildEnvWithOverrides(base []string, overrides map[string]string) []string 
 	}
 
 	return env
+}
+
+func uvAppInheritedOverride(key string) bool {
+	return uvInheritedOverride(key) || strings.HasPrefix(strings.ToUpper(key), "UV_PYTHON")
 }

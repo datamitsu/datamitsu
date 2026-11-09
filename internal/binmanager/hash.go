@@ -2,7 +2,6 @@ package binmanager
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 
@@ -138,8 +137,8 @@ func (bm *BinManager) GetBundleRoot(name string) (string, error) {
 		return "", err
 	}
 
-	if _, err := os.Stat(bundlePath); err != nil {
-		return "", fmt.Errorf("bundle %q is not installed (path %s does not exist)", name, bundlePath)
+	if !bundleReady(bundlePath, bm.mapOfBundles[name]) {
+		return "", fmt.Errorf("bundle %q is not installed (path %s does not exist or is incomplete)", name, bundlePath)
 	}
 
 	return bundlePath, nil

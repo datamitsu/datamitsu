@@ -14,10 +14,9 @@ import (
 // platform. This is what keeps `docker buildx --platform` cross-arch builds
 // correct (Strategy A in the design doc).
 
-// uvPythonSubtree is the shared managed-CPython directory. A uv app's venv
-// interpreter symlinks into here (UV_PYTHON_INSTALL_DIR), so it must be copied
-// into the final image alongside the app, or the symlink dangles.
-const uvPythonSubtree = ".uv/python"
+func runtimeDataSubtree(runtime string) string {
+	return path.Join(".runtime-data", runtime)
+}
 
 // binaryAppSubtree is the store subtree for a downloaded-binary app ({store}/.bin/<app>).
 func binaryAppSubtree(app string) string {

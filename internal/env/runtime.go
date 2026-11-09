@@ -19,6 +19,11 @@ func GetRuntimeBinaryPath(runtimeName string, configHash string) string {
 	return filepath.Join(GetRuntimesPath(), runtimeName, configHash)
 }
 
+// GetRuntimeDataPath returns mutable data owned by one named runtime identity.
+func GetRuntimeDataPath(runtimeName, identity string) string {
+	return filepath.Join(GetStorePath(), ".runtime-data", runtimeName, identity)
+}
+
 // GetAppsPath returns the root directory for managed app environments ({store}/.apps).
 func GetAppsPath() string {
 	return filepath.Join(GetStorePath(), ".apps")
@@ -27,11 +32,6 @@ func GetAppsPath() string {
 // GetAppEnvPath returns the per-app environment directory, keyed by runtime kind and config hash.
 func GetAppEnvPath(runtimeKind string, appName string, configHash string) string {
 	return filepath.Join(GetAppsPath(), runtimeKind, appName, configHash)
-}
-
-// GetPNPMStorePath returns the shared pnpm content-addressable store ({store}/.pnpm-store).
-func GetPNPMStorePath() string {
-	return filepath.Join(GetStorePath(), ".pnpm-store")
 }
 
 // HashProjectPath computes the XXH3-128 hash of a project path.

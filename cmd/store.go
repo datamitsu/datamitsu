@@ -16,6 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/ocidigest"
 	"github.com/datamitsu/datamitsu/internal/ociref"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
+	"github.com/datamitsu/datamitsu/internal/storelock"
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/ui"
 
@@ -333,7 +334,11 @@ func runStoreClear(cmd *cobra.Command, args []string) error {
 		(home != "" && strings.HasPrefix(strings.ToLower(home), strings.ToLower(storePath+sep))) {
 		return fmt.Errorf("refusing to clear dangerous path: %s", storePath)
 	}
-	// Go module cache populates the store with read-only dirs (0555); a plain
+	release, err := storelock.Clear(cmd.Context(), storePath)
+	if err != nil {
+		return fmt.Errorf("failed to acquire store clear lease: %w", err)
+	}
+	defer release()
 	// os.RemoveAll then fails with EACCES. ForceRemoveAll restores write bits first.
 	if err := runtimemanager.ForceRemoveAll(storePath); err != nil {
 		return fmt.Errorf("failed to clear store: %w", err)

@@ -398,6 +398,8 @@ version or a changed argument list prepares a new state, and identical
 configurations share one. The state is project-independent: it is shared by
 every project of the user and ships in OCI bundles.
 
+The step writes into a private staging directory. Datamitsu waits for the prepare process tree to stop and be reaped before accepting its output or atomically publishing the prepared state; an installer descendant that inherited output pipes cannot publish late writes after preparation is reported complete.
+
 **Placeholders.** `args` and `env` accept `${APP_PREPARED}` (the directory the
 step fills), `${APP_DIR}`, and `${APP_BIN:<alias>}` (a direct dependency).
 `${STORE}` and every project-bound tool placeholder (`{root}`, `{cwd}`,
@@ -832,7 +834,8 @@ const runtimes = {
       systemVersion: "1.0", // Bump to invalidate cache
     },
     uv: {
-      pythonVersion: "3.12",
+      pythonVersion: "3.15.2", // exact major.minor.patch
+      pythonDownloads: {/* generated pinned catalog entries */},
     },
   },
 };
@@ -872,9 +875,30 @@ pnpm 12 ships no JavaScript implementation, so pnpm is a runtime of its own: its
 
 ```typescript
 interface RuntimeConfigUV {
-  pythonVersion?: string; // e.g., "3.14.3"
+  pythonVersion?: string; // exact CPython version, e.g. "3.14.3"
+  pythonDownloads?: Record<string, PythonDownload>;
+}
+
+interface PythonDownload {
+  name: "cpython";
+  arch: { family: string; variant: string };
+  os: string;
+  libc: string;
+  major: number;
+  minor: number;
+  patch: number;
+  prerelease: string;
+  url: string;
+  variant: string;
+  build: string;
+  hash: string; // mandatory canonical SHA-256 digest
 }
 ```
+
+`pythonDownloads` is the uv-managed CPython download catalog, keyed by upstream catalog platform keys. Each entry preserves the upstream catalog fields and replaces its `sha256` field with a mandatory canonical `hash` (`sha256:<64 lowercase hex>`). Catalog entries must describe stable, default-GIL CPython builds: `name` is `cpython`, `prerelease`, `variant`, and `arch.variant` are empty, and `major.minor.patch` exactly matches `pythonVersion`. The URL and hash are validated before any download. An empty or omitted map remains valid configuration, but an operation that needs managed CPython then fails with an actionable message to regenerate it using `datamitsu devtools pull-runtimes --runtime uv`; it does not fall back to an unpinned catalog. Generate or update the map with `datamitsu devtools pull-runtimes`, rather than writing upstream hashes by hand.
+When `pythonDownloads` is nonempty, `pythonVersion` must be set and must have an exact `major.minor.patch` form for CPython acquisition.
+
+The selected catalog entry is part of the uv runtime identity, so changing its URL, hash or build selects separate runtime data. uv's managed Python install directory and its readiness record live inside that runtime's `.runtime-data/<runtime-name>/<identity>/python` tree; the record is written only after the interpreter is validated. A private, one-entry catalog is used for installation and lookup, so runtime provisioning does not consult a remote catalog at execution time.
 
 **JVM Runtime:**
 

@@ -849,6 +849,73 @@
   },
   {
     "commands": [
+      "list",
+      "run"
+    ],
+    "flags": [
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "runtime"
+    ],
+    "usage": "datamitsu runtime [command]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "-h, --help bool (default false)",
+      "--json bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "runtime",
+      "list"
+    ],
+    "usage": "datamitsu runtime list [flags]"
+  },
+  {
+    "commands": [],
+    "flags": [
+      "--dry-run bool (default false)",
+      "-h, --help bool (default false)"
+    ],
+    "globalFlags": [
+      "--before-config strings",
+      "--binary-command string",
+      "--config strings",
+      "--log-format string",
+      "--no-auto-config bool (default false)",
+      "--no-oci bool (default false)",
+      "--no-parse bool (default false)",
+      "-v, --verbose bool (default false)"
+    ],
+    "path": [
+      "runtime",
+      "run"
+    ],
+    "usage": "datamitsu runtime run [--dry-run] <name> -- <args...>"
+  },
+  {
+    "commands": [
       "cache",
       "check",
       "completion",
@@ -864,6 +931,7 @@
       "llms",
       "lsp",
       "report",
+      "runtime",
       "source",
       "store",
       "version"

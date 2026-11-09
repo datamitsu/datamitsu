@@ -28,10 +28,16 @@ This creates an isolated UV tool environment at:
 ~/.cache/datamitsu/store/.apps/uv/yamllint/{hash}/
 ```
 
-UV environment variables are set automatically:
+UV apps receive runtime-owned cache paths from their selected uv runtime:
 
-- `UV_CACHE_DIR` - UV's download cache (per-app, under the app dir)
-- `UV_PYTHON_INSTALL_DIR` - the managed CPython location, redirected into the store at `<store>/.uv/python/` (shared per-version) so the cached store is self-contained and each app's `.venv/bin/python` symlink resolves after a cache restore
+- `.runtime-data/<runtime-name>/<identity>/uv-cache` stores uv's cache
+- `.runtime-data/<runtime-name>/<identity>/python` stores the managed, pinned CPython installation and readiness record
+
+Both paths follow the runtime identity, not the app name. Apps using the same
+uv runtime identity share them; changing the runtime name or identity selects a
+separate data root. The runtime manager sets these values for installation and
+execution, overriding inherited cache variables. `HOME` and the caller's
+working directory remain unchanged.
 
 ## Mandatory Lock File
 
@@ -109,12 +115,17 @@ const mapOfRuntimes: BinManager.MapOfRuntimes = {
     system: {
       command: "uv",
     },
+    uv: {
+      pythonVersion: "3.15.2",
+      pythonDownloads: {/* generated pinned catalog entries */},
+    },
   },
 };
 ```
 
-This uses the `uv` command from your PATH. The app isolation still works
-the same way - only the runtime binary source changes.
+This uses the `uv` command from your PATH to acquire and manage apps. Managed
+CPython still comes from the configured `pythonVersion` and SHA-256-pinned
+`pythonDownloads`; system mode selects uv itself, not a host Python interpreter.
 
 ## Using UV Tools in Tool Definitions
 

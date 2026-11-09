@@ -769,6 +769,44 @@ func TestValidateRuntimes_UV_NoPythonVersionOK(t *testing.T) {
 	}
 }
 
+func TestValidateRuntimes_UVPythonDownloadsRequirePinnedStableEntry(t *testing.T) {
+	runtimeConfig := RuntimeConfig{
+		Kind:   RuntimeKindUV,
+		Mode:   RuntimeModeSystem,
+		System: &RuntimeConfigSystem{Command: "uv"},
+		UV: &RuntimeConfigUV{
+			PythonVersion: "3.14.6",
+			PythonDownloads: map[string]PythonDownload{
+				"cpython-3.14.6-x86_64-unknown-linux-gnu": {
+					Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+					Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst",
+					Hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+				},
+			},
+		},
+	}
+	if err := ValidateRuntimes(MapOfRuntimes{"uv": runtimeConfig}); err != nil {
+		t.Fatalf("valid pinned Python metadata rejected: %v", err)
+	}
+
+	runtimeConfig.UV.PythonDownloads["cpython-3.14.6-x86_64-unknown-linux-gnu"] = PythonDownload{
+		Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+		Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst",
+	}
+	if err := ValidateRuntimes(MapOfRuntimes{"uv": runtimeConfig}); err == nil || !strings.Contains(err.Error(), "hash is required") {
+		t.Fatalf("expected missing mandatory hash error, got %v", err)
+	}
+
+	runtimeConfig.UV.PythonDownloads["cpython-3.14.6-x86_64-unknown-linux-gnu"] = PythonDownload{
+		Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+		Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst",
+		Variant: "freethreaded", Hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+	}
+	if err := ValidateRuntimes(MapOfRuntimes{"uv": runtimeConfig}); err == nil || !strings.Contains(err.Error(), "default-GIL") {
+		t.Fatalf("expected non-default-GIL entry error, got %v", err)
+	}
+}
+
 func TestValidateApps_Lockfile_UV_Missing(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {

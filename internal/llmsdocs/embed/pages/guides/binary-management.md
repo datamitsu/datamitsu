@@ -147,8 +147,13 @@ By default, the store is a child of the standard user cache directory:
 - **All platforms**: `~/.cache/datamitsu/store/`
 
 You can override this location by setting the `DATAMITSU_CACHE_DIR` or `XDG_CACHE_HOME` environment variable.
+Relative `DATAMITSU_CACHE_DIR` values are resolved against the invoking working directory before the cache and store roots are used, so worker processes and the parent agree on one absolute store location.
 
 Use `datamitsu store path` to see the exact path, and `datamitsu store clear` to remove all stored binaries.
+
+Concurrent datamitsu processes coordinate store changes with shared provisioning leases and per-target locks. A target is rechecked after lock acquisition, so waiters reuse a completed install rather than publishing over one another. Store clearing waits for provisioners and blocks new ones while it removes content; it does not stop user programs that are already running.
+During a cross-process wait, the CLI may show the current install phase and real byte or package counters when available. This status is informational and is stored outside the store in the cache-side `store-locks/status` area; cache clearing preserves it. Missing, malformed or stale status produces a generic wait and never permits lock stealing. No progress percentage is invented when an installer provides no counters.
+Managed content bundles in `{store}/.bundles/` have their own readiness marker and are staged before atomic publication. Markerless bundle entries left by older runs are treated as incomplete and rebuilt once on the next provisioning attempt; this is separate from the app readiness-marker contract. See [Managed Content](./managed-content.md#how-store-keys-work).
 
 ## Concurrent Downloads
 

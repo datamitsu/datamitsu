@@ -115,6 +115,48 @@ configuration should do about it.
   [Ignore Rules reference](/docs/reference/ignore-rules#migrating-nested-rules)),
   then delete the nested files. A wrapper-generated root file is unaffected.
 
+- **after v0.5.3** - `apps.<name>.prepare` runs in a restricted provisioning
+  subprocess: it cannot invoke datamitsu provisioning commands or clear the
+  store recursively. Declare required tools and runtimes through `dependsOn`
+  before the prepare step instead of trying to provision them from inside it.
+  Datamitsu stops and reaps the whole prepare process tree before accepting its
+  output or publishing prepared state; a child that inherits output pipes cannot
+  write late after preparation is reported complete. App installs without the
+  completion marker are not ready and rebuild on use, including old markerless
+  store entries. Runtime-owned cache variables are reserved by the core: a
+  runtime's apps receive manager-selected cache paths derived from that
+  runtime's name and identity, overriding inherited values. The identity change
+  rebuilds affected apps; old store entries remain until `datamitsu store clear`
+  rather than being migrated or removed per runtime.
+
+- **after v0.5.3** - Managed content bundles are staged and atomically published
+  only after all files and archives are complete and their readiness marker is
+  written. Older markerless `{store}/.bundles/` entries are rebuilt once on the
+  next provisioning attempt; no configuration change is needed. These static
+  bundles are separate from OCI store layers.
+
+- **after v0.5.3** - UV runtimes may declare `pythonDownloads`, a platform-keyed
+  catalog of upstream CPython metadata with a mandatory canonical SHA-256 `hash`
+  replacing upstream `sha256`. Entries must be stable default-GIL CPython and
+  match `pythonVersion` exactly. Generate pins with
+  `datamitsu devtools pull-runtimes --runtime uv`; do not copy unpinned metadata
+  or add an invented fallback. An empty map remains loadable, but provisioning
+  CPython without a matching pinned host entry now fails with an actionable
+  regeneration message. Updating entries changes uv runtime identity, so the
+  affected interpreter data is rebuilt; existing app environments may also
+  rebuild when their runtime identity changes. Old store entries remain until
+  `datamitsu store clear`.
+
+- **after v0.5.3** - `datamitsu runtime list` inventories exact configured runtime
+  names without installing them; `datamitsu runtime run <name> -- <args...>`
+  runs only the configured Node, Bun, uv/CPython, Go, or JVM interpreter. Managed
+  runtimes are provisioned automatically when needed. uv runs pinned CPython
+  directly and does not resolve or install script/project dependencies. There
+  is no default runtime or kind alias; pnpm is inventory-only because it is a
+  package manager, not an interpreter. Bun may be run directly and also supports
+  configured Bun apps. A child process receives the arguments after `--`
+  unchanged.
+
 - **after v0.5.3** - `datamitsu config reconcile --create-missing` creates only
   managed config files that are missing and never touches an existing file, and
   `config reconcile --json` prints a machine-readable summary. `datamitsu init`

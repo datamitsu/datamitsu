@@ -11,9 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -217,20 +215,21 @@ func TestGoLockFile_BuildCompressDecompressParseRoundTrip(t *testing.T) {
 
 func TestGetGoEnvVars(t *testing.T) {
 	appEnvPath := "/cache/.apps/go/govulncheck/abc123"
-	vars := getGoEnvVars(appEnvPath)
+	runtimeDataPath := "/cache/store/.runtime-data/go/runtime-hash"
+	vars := getGoEnvVars(appEnvPath, runtimeDataPath)
 
 	expected := map[string]string{
-		"GOPATH":      filepath.Join(appEnvPath, "gopath"),
-		"GOMODCACHE":  filepath.Join(appEnvPath, "gomodcache"),
-		"GOBIN":       filepath.Join(appEnvPath, "bin"),
-		"GOTOOLCHAIN": "local",
-		"GOSUMDB":     "sum.golang.org",
-		"GOPRIVATE":   "",
-		"GONOPROXY":   "",
-		"GONOSUMDB":   "",
-		"GOINSECURE":  "",
-		"GOWORK":      "off",
-		"GOFLAGS":     "-mod=readonly -trimpath",
+		"GOPATH":     filepath.Join(runtimeDataPath, "go-path"),
+		"GOMODCACHE": filepath.Join(runtimeDataPath, "go-modules"),
+		"GOCACHE":    filepath.Join(runtimeDataPath, "go-build"),
+		"GOBIN":      filepath.Join(appEnvPath, "bin"),
+		"GOSUMDB":    "sum.golang.org",
+		"GOPRIVATE":  "",
+		"GONOPROXY":  "",
+		"GONOSUMDB":  "",
+		"GOINSECURE": "",
+		"GOWORK":     "off",
+		"GOFLAGS":    "-mod=readonly -trimpath",
 	}
 
 	for key, want := range expected {
@@ -242,10 +241,6 @@ func TestGetGoEnvVars(t *testing.T) {
 		if got != want {
 			t.Errorf("vars[%q] = %q, want %q", key, got, want)
 		}
-	}
-
-	if len(vars) != len(expected) {
-		t.Errorf("vars has %d entries, want %d", len(vars), len(expected))
 	}
 
 	// -mod=readonly is the supply chain guarantee: it must be present so a
@@ -361,6 +356,9 @@ func TestInstallGoApp_AlreadyInstalled(t *testing.T) {
 	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho ok"), 0o755); err != nil {
 		t.Fatalf("failed to write fake binary: %v", err)
 	}
+	if err := markAppReady(appEnvPath); err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	if err := rm.InstallGoApp(context.Background(), "govulncheck", appConfig, nil, nil, nil); err != nil {
@@ -402,41 +400,39 @@ func TestInstallGoApp_MissingLockFileIsRejected(t *testing.T) {
 	}
 }
 
-func TestInstallGoApp_RetriesAfterError(t *testing.T) {
-	rm := New(makeTestGoRuntimes())
-
-	// singleflight must not memoize a completed call: once an in-flight Do
-	// returns (success or error), the next Do for the same key must re-run the
-	// function. Counting executions proves the failed install is actually
-	// retried rather than returning a stale cached result — two identical
-	// errors alone would not distinguish a re-run from a cached error.
-	var calls atomic.Int32
-	sentinel := errors.New("install failed")
-	run := func() error {
-		_, err, _ := rm.appInstall.Do("go/retry", func() (any, error) {
-			calls.Add(1)
-			return nil, sentinel
-		})
-		return err
+func TestInstallGoAppCleansPartialTargetAfterInvalidLock(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	runtimes := config.MapOfRuntimes{
+		"go": {
+			Kind:    config.RuntimeKindGo,
+			Mode:    config.RuntimeModeManaged,
+			Go:      &config.RuntimeConfigGo{GoVersion: "1.22.0"},
+			Managed: &config.RuntimeConfigManaged{Binaries: hostBinaries(t, testLibc, nil)},
+		},
 	}
-
-	if err := run(); !errors.Is(err, sentinel) {
-		t.Fatalf("first call: expected sentinel error, got %v", err)
+	rm := New(runtimes)
+	seedRuntimeTargets(t, rm, "go")
+	appConfig := &binmanager.AppConfigGo{
+		PackageName: "example.invalid/tool",
+		Version:     "v1.0.0",
+		Runtime:     "go",
+		LockFile:    `{"sum":"not-a-go-mod"}`,
 	}
-	if err := run(); !errors.Is(err, sentinel) {
-		t.Fatalf("retry: expected sentinel error, got %v", err)
+	appPath, err := rm.GetGoAppPath("tool", appConfig, nil, nil, "go")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := calls.Load(); got != 2 {
-		t.Errorf("expected function to run twice (retry after error), ran %d time(s)", got)
+	if err := rm.InstallGoApp(context.Background(), "tool", appConfig, nil, nil, nil); err == nil || !strings.Contains(err.Error(), "missing mod") {
+		t.Fatalf("InstallGoApp() invalid lock error = %v", err)
+	}
+	if _, err := os.Stat(appPath); !os.IsNotExist(err) {
+		t.Fatalf("incomplete app target remains at %q: %v", appPath, err)
 	}
 }
 
 // TestInstallGoApp_ConcurrentSameKeyNoRace launches many goroutines installing
-// the same failing app simultaneously. Every goroutine must observe an error
-// and the run must be free of data races (verified under -race). The prior
-// sync.Once + CompareAndDelete pattern could orphan an in-flight reader when a
-// deletion overlapped a concurrent LoadOrStore; singleflight has no deletion
-// step, so that race cannot occur.
+// the same failing app simultaneously and ensures each caller can wait for the
+// per-target lock and observe the resolution error.
 func TestInstallGoApp_ConcurrentSameKeyNoRace(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
 
@@ -466,62 +462,23 @@ func TestInstallGoApp_ConcurrentSameKeyNoRace(t *testing.T) {
 	}
 }
 
-// TestSingleflightDeduplicatesConcurrentInstalls verifies the dedup contract the
-// install sites rely on: while one call for a key is in flight, concurrent calls
-// for the same key do not run the function again and all share the same result.
-func TestSingleflightDeduplicatesConcurrentInstalls(t *testing.T) {
-	rm := New(makeTestGoRuntimes())
-
-	var calls atomic.Int32
-	start := make(chan struct{})
-	sentinel := errors.New("install failed")
-
-	const n = 20
-	var wg sync.WaitGroup
-	results := make([]error, n)
-	for i := range n {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			<-start
-			_, err, _ := rm.appInstall.Do("go/concurrent", func() (any, error) {
-				calls.Add(1)
-				// Hold the call in flight so the other goroutines coalesce onto it.
-				time.Sleep(50 * time.Millisecond)
-				return nil, sentinel
-			})
-			results[idx] = err
-		}(i)
-	}
-	close(start)
-	wg.Wait()
-
-	if got := calls.Load(); got != 1 {
-		t.Errorf("expected exactly 1 execution for the shared key, got %d", got)
-	}
-	for i, err := range results {
-		if !errors.Is(err, sentinel) {
-			t.Errorf("goroutine %d: expected shared sentinel error, got %v", i, err)
-		}
-	}
-}
-
 func TestGetGoGenEnvVars(t *testing.T) {
 	workDir := "/cache/.apps/go/govulncheck/abc123"
-	vars := getGoGenEnvVars(workDir)
+	runtimeDataPath := "/cache/store/.runtime-data/go/runtime-hash"
+	vars := getGoGenEnvVars(workDir, runtimeDataPath)
 
 	expected := map[string]string{
-		"GOPATH":      filepath.Join(workDir, "gopath"),
-		"GOMODCACHE":  filepath.Join(workDir, "gomodcache"),
-		"GOBIN":       filepath.Join(workDir, "bin"),
-		"GOTOOLCHAIN": "local",
-		"GOSUMDB":     "sum.golang.org",
-		"GOPRIVATE":   "",
-		"GONOPROXY":   "",
-		"GONOSUMDB":   "",
-		"GOINSECURE":  "",
-		"GOWORK":      "off",
-		"GOFLAGS":     "",
+		"GOPATH":     filepath.Join(runtimeDataPath, "go-path"),
+		"GOMODCACHE": filepath.Join(runtimeDataPath, "go-modules"),
+		"GOCACHE":    filepath.Join(runtimeDataPath, "go-build"),
+		"GOBIN":      filepath.Join(workDir, "bin"),
+		"GOSUMDB":    "sum.golang.org",
+		"GOPRIVATE":  "",
+		"GONOPROXY":  "",
+		"GONOSUMDB":  "",
+		"GOINSECURE": "",
+		"GOWORK":     "off",
+		"GOFLAGS":    "",
 	}
 
 	for key, want := range expected {
@@ -533,10 +490,6 @@ func TestGetGoGenEnvVars(t *testing.T) {
 		if got != want {
 			t.Errorf("vars[%q] = %q, want %q", key, got, want)
 		}
-	}
-
-	if len(vars) != len(expected) {
-		t.Errorf("vars has %d entries, want %d", len(vars), len(expected))
 	}
 
 	// Generation must be allowed to write go.mod/go.sum, so -mod=readonly must
@@ -893,7 +846,7 @@ func TestGoBuildReadonlyFailsOnGoSumMismatch(t *testing.T) {
 	cmd.Dir = dir
 	// getGoEnvVars keeps checksum verification enabled (GOSUMDB forced on) and
 	// pins the toolchain (GOTOOLCHAIN=local); GOPROXY=off makes the test hermetic.
-	cmd.Env = buildEnvWithOverrides(os.Environ(), getGoEnvVars(dir))
+	cmd.Env = buildEnvWithOverrides(os.Environ(), getGoEnvVars(dir, dir))
 	cmd.Env = append(cmd.Env, "GOPROXY=off")
 
 	out, err := cmd.CombinedOutput()

@@ -18,7 +18,14 @@ import (
 
 	godigest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/spf13/cobra"
 )
+
+func storeClearTestCommand() *cobra.Command {
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	return cmd
+}
 
 func TestStorePathPrintsCachePath(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -44,7 +51,7 @@ func TestStoreClearRemovesDirectory(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	err := runStoreClear(nil, nil)
+	err := runStoreClear(storeClearTestCommand(), nil)
 	if err != nil {
 		t.Fatalf("runStoreClear returned error: %v", err)
 	}
@@ -75,7 +82,7 @@ func TestStoreClearRemovesReadOnlyModuleCache(t *testing.T) {
 	// Restore write permission on failure so t.TempDir() cleanup can proceed.
 	t.Cleanup(func() { _ = os.Chmod(modDir, 0o755) })
 
-	if err := runStoreClear(nil, nil); err != nil {
+	if err := runStoreClear(storeClearTestCommand(), nil); err != nil {
 		t.Fatalf("runStoreClear returned error: %v", err)
 	}
 
@@ -88,21 +95,9 @@ func TestStoreClearNonExistentDirectory(t *testing.T) {
 	tmpDir := filepath.Join(t.TempDir(), "nonexistent")
 	t.Setenv("DATAMITSU_CACHE_DIR", tmpDir)
 
-	err := runStoreClear(nil, nil)
+	err := runStoreClear(storeClearTestCommand(), nil)
 	if err != nil {
 		t.Fatalf("runStoreClear should not fail on nonexistent directory: %v", err)
-	}
-}
-
-func TestStoreClearRejectsDangerousPath(t *testing.T) {
-	t.Setenv("DATAMITSU_CACHE_DIR", "/")
-
-	err := runStoreClear(nil, nil)
-	// With store path = /store, this is no longer "/" but still a top-level dir.
-	// The function should succeed since /store is a valid path to clear.
-	// The dangerous path check protects against /, HOME, etc.
-	if err != nil {
-		t.Fatalf("runStoreClear returned unexpected error: %v", err)
 	}
 }
 
@@ -119,18 +114,36 @@ func TestStoreClearRejectsHomePath(t *testing.T) {
 	t.Setenv("HOME", storeDir)
 	t.Setenv("DATAMITSU_CACHE_DIR", filepath.Dir(storeDir))
 
-	err := runStoreClear(nil, nil)
+	err := runStoreClear(storeClearTestCommand(), nil)
 	if err == nil {
 		t.Fatal("expected error when store path equals HOME")
 	}
 }
 
-func TestStoreClearRejectsRelativePath(t *testing.T) {
-	t.Setenv("DATAMITSU_CACHE_DIR", "..")
-
-	err := runStoreClear(nil, nil)
-	if err == nil {
-		t.Fatal("expected error when store path is a relative path")
+func TestStoreClearUsesAbsoluteRelativeCacheBase(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	t.Setenv("DATAMITSU_CACHE_DIR", "relative-base")
+	wantBase, err := filepath.Abs("relative-base")
+	if err != nil {
+		t.Fatal(err)
+	}
+	storeDir := filepath.Join(wantBase, "store")
+	target := filepath.Join(storeDir, ".runtime-data", "uv", "identity")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "payload"), []byte("kept until clear"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !filepath.IsAbs(env.GetStorePath()) || env.GetStorePath() != storeDir || env.GetRuntimeDataPath("uv", "identity") != target {
+		t.Fatalf("derived paths do not share absolute base: store=%q runtime=%q want=%q", env.GetStorePath(), env.GetRuntimeDataPath("uv", "identity"), target)
+	}
+	if err := runStoreClear(storeClearTestCommand(), nil); err != nil {
+		t.Fatalf("runStoreClear: %v", err)
+	}
+	if _, err := os.Stat(storeDir); !os.IsNotExist(err) {
+		t.Fatalf("store still exists at %q: %v", storeDir, err)
 	}
 }
 
@@ -140,7 +153,7 @@ func TestStoreClearRejectsAncestorOfHome(t *testing.T) {
 	t.Setenv("HOME", "/home/store/testuser")
 	t.Setenv("DATAMITSU_CACHE_DIR", "/home")
 
-	err := runStoreClear(nil, nil)
+	err := runStoreClear(storeClearTestCommand(), nil)
 	if err == nil {
 		t.Fatal("expected error when store path is an ancestor of HOME")
 	}

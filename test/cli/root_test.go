@@ -28,6 +28,7 @@ var expectedTopLevelCommands = []string{
 	"llms",
 	"lsp",
 	"report",
+	"runtime",
 	"source",
 	"store",
 	"version",

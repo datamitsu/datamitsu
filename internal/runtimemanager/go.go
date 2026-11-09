@@ -66,10 +66,9 @@ func BuildGoLockFileJSON(goMod, goSum string) (string, error) {
 	return string(data), nil
 }
 
-// goBaseEnvVars returns the per-app isolation and supply-chain hardening shared
-// by the build and generation flows. baseDir is the directory under which the
-// per-app GOPATH/GOMODCACHE/GOBIN live so neither flow ever touches the user's
-// Go environment.
+// goBaseEnvVars returns the shared runtime-data isolation and supply-chain
+// hardening used by build and generation. GOBIN remains under appDir so one
+// app's installed binary does not become shared mutable runtime state.
 //
 // The verification controls are forced to safe values (not merely cleared) so a
 // value inherited from the user's environment cannot weaken the supply chain:
@@ -95,11 +94,11 @@ func BuildGoLockFileJSON(goMod, goSum string) (string, error) {
 //
 // These must stay identical across both flows, which is why they live here
 // rather than being duplicated in the build and generation env builders.
-func goBaseEnvVars(baseDir string) map[string]string {
-	return map[string]string{
-		"GOPATH":      filepath.Join(baseDir, "gopath"),
-		"GOMODCACHE":  filepath.Join(baseDir, "gomodcache"),
-		"GOBIN":       filepath.Join(baseDir, "bin"),
+func goBaseEnvVars(appDir, runtimeDataPath string) map[string]string {
+	vars := map[string]string{
+		"GOPATH":      filepath.Join(runtimeDataPath, "go-path"),
+		"GOMODCACHE":  filepath.Join(runtimeDataPath, "go-modules"),
+		"GOCACHE":     filepath.Join(runtimeDataPath, "go-build"),
 		"GOTOOLCHAIN": "local",
 		"GOSUMDB":     "sum.golang.org",
 		"GOPRIVATE":   "",
@@ -108,24 +107,20 @@ func goBaseEnvVars(baseDir string) map[string]string {
 		"GOINSECURE":  "",
 		"GOWORK":      "off",
 	}
+	if appDir != "" {
+		vars["GOBIN"] = filepath.Join(appDir, "bin")
+	}
+	return vars
 }
 
-// getGoEnvVars returns the isolated build environment for a Go app. It pins
-// GOFLAGS=-mod=readonly so any go.sum mismatch fails the build instead of
-// silently rewriting go.sum, on top of the shared hardening in goBaseEnvVars.
-func getGoEnvVars(appEnvPath string) map[string]string {
-	env := goBaseEnvVars(appEnvPath)
+func getGoEnvVars(appEnvPath, runtimeDataPath string) map[string]string {
+	env := goBaseEnvVars(appEnvPath, runtimeDataPath)
 	env["GOFLAGS"] = "-mod=readonly -trimpath"
 	return env
 }
 
-// getGoGenEnvVars returns the isolated environment for generating a Go app's
-// lockfile (`go mod init` + `go get`). It shares goBaseEnvVars' isolation and
-// verification hardening but, unlike the build env, omits -mod=readonly:
-// generation must be allowed to write go.mod and go.sum, which -mod=readonly
-// would forbid.
-func getGoGenEnvVars(workDir string) map[string]string {
-	env := goBaseEnvVars(workDir)
+func getGoGenEnvVars(workDir, runtimeDataPath string) map[string]string {
+	env := goBaseEnvVars(workDir, runtimeDataPath)
 	env["GOFLAGS"] = ""
 	return env
 }
@@ -167,15 +162,17 @@ func (rm *RuntimeManager) GetGoAppPath(appName string, appConfig *binmanager.App
 func (rm *RuntimeManager) InstallGoApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigGo, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	key := "go/" + appName
-	_, err, _ := rm.appInstall.Do(key, func() (any, error) {
-		return nil, rm.installGoAppOnce(ctx, appName, appConfig, customEnv, files, archives)
-	})
-	return wrapInstallTimeout(err, timeoutSec)
+	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Go: appConfig, Env: customEnv, Files: files, Archives: archives})
+	if handled || dispatchErr != nil {
+		return wrapInstallTimeout(dispatchErr, timeoutSec)
+	}
+	return wrapInstallTimeout(withRuntimeStoreLease(ctx, "Go app "+appName, func(storeCtx context.Context) error {
+		return rm.installGoAppOnce(storeCtx, appName, appConfig, customEnv, files, archives)
+	}), timeoutSec)
 }
 
 func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, appConfig *binmanager.AppConfigGo, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
-	runtimeName, _, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindGo)
+	runtimeName, rc, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindGo)
 	if err != nil {
 		return fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
 	}
@@ -185,13 +182,24 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 		return fmt.Errorf("failed to get app path: %w", err)
 	}
 
+	_, reservedEnv, err := rm.RuntimeOwnedEnvironment(runtimeName, rc, appEnvPath)
+	if err != nil {
+		return err
+	}
 	binPath := getGoBinaryPath(appEnvPath, appConfig.PackageName)
 
-	if _, err := os.Stat(binPath); err == nil {
-		log.Debug("Go app already installed",
-			zap.String("app", appName),
-			zap.String("path", binPath),
-		)
+	_, releaseCheck, err := lockAppTarget(ctx, appEnvPath)
+	if err != nil {
+		return err
+	}
+	ready := appReady(appEnvPath)
+	if ready {
+		_, statErr := os.Stat(binPath)
+		ready = statErr == nil
+	}
+	releaseCheck()
+	if ready {
+		log.Debug("Go app already installed", zap.String("app", appName), zap.String("path", binPath))
 		return nil
 	}
 
@@ -211,6 +219,22 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 		return fmt.Errorf("failed to get Go runtime path: %w", err)
 	}
 
+	leaseCtx, releaseApp, err := lockAppTarget(ctx, appEnvPath)
+	if err != nil {
+		return err
+	}
+	defer releaseApp()
+	ctx = leaseCtx
+	if appReady(appEnvPath) {
+		if _, err := os.Stat(binPath); err == nil {
+			return nil
+		}
+	}
+	if _, err := os.Stat(appEnvPath); err == nil {
+		if err := ForceRemoveAll(appEnvPath); err != nil {
+			return fmt.Errorf("remove incomplete Go app target %q: %w", appEnvPath, err)
+		}
+	}
 	if err := os.MkdirAll(appEnvPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create app directory: %w", err)
 	}
@@ -218,8 +242,7 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 	cleanupOnError := true
 	defer func() {
 		if cleanupOnError {
-			// appEnvPath holds a read-only GOMODCACHE once `go build` runs, so a
-			// plain os.RemoveAll would leak it; ForceRemoveAll restores write bits.
+			// Staged app content can be read-only; restore permissions before removing it.
 			if err := ForceRemoveAll(appEnvPath); err != nil {
 				log.Warn("failed to clean up Go app directory after error",
 					zap.String("app", appName),
@@ -230,9 +253,9 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 		}
 	}()
 
-	reservedEnv := getGoEnvVars(appEnvPath)
+	reservedEnv["GOFLAGS"] = "-mod=readonly -trimpath"
 	envVars := mergeInstallEnv(reservedEnv, customEnv, appEnvPath)
-	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOBIN"} {
+	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOCACHE", "GOBIN"} {
 		if err := os.MkdirAll(reservedEnv[key], 0o755); err != nil {
 			return fmt.Errorf("failed to create directory %q: %w", reservedEnv[key], err)
 		}
@@ -264,7 +287,7 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 	// Capture the build's combined output so it never corrupts an active
 	// progress bar; surface it only on failure.
 	var out bytes.Buffer
-	cmd := exec.CommandContext(ctx, goPath, args...) //nolint:gosec // G204: goPath comes from the trusted managed runtime store and args are built from validated config
+	cmd := exec.CommandContext(context.WithoutCancel(ctx), goPath, args...) //nolint:gosec // G204: goPath comes from the trusted managed runtime store and args are built from validated config
 	cmd.Dir = appEnvPath
 	cmd.Env = buildEnvWithOverrides(os.Environ(), envVars)
 	cmd.Stdout = &out
@@ -287,6 +310,9 @@ func (rm *RuntimeManager) installGoAppOnce(ctx context.Context, appName string, 
 	}
 
 	sp.Done("Installed " + appName)
+	if err := markAppReady(appEnvPath); err != nil {
+		return err
+	}
 
 	cleanupOnError = false
 	return nil
@@ -313,7 +339,12 @@ func ForceRemoveAll(root string) error {
 		if walkErr != nil {
 			return nil //nolint:nilerr // best-effort chmod: skip on walk error, RemoveAll reports real failures
 		}
-		_ = os.Chmod(p, 0o700) //nolint:gosec // G122: best-effort chmod on a datamitsu-owned store path before RemoveAll; failures are ignored and the final RemoveAll reports any real blocker
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if info, err := d.Info(); err == nil && info.Mode()&os.ModeSymlink == 0 {
+			_ = os.Chmod(p, 0o700) //nolint:gosec // G122: chmod only an entry itself inside the store before removal
+		}
 		return nil
 	})
 	if err := os.RemoveAll(root); err != nil {
@@ -375,7 +406,7 @@ func (rm *RuntimeManager) generateGoLockFiles(ctx context.Context, appName strin
 		return fmt.Errorf("app %q has no version; cannot generate lock file", appName)
 	}
 
-	runtimeName, _, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindGo)
+	runtimeName, rc, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindGo)
 	if err != nil {
 		return fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
 	}
@@ -405,8 +436,12 @@ func (rm *RuntimeManager) generateGoLockFiles(ctx context.Context, appName strin
 		return err
 	}
 
-	envVars := getGoGenEnvVars(workDir)
-	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOBIN"} {
+	_, envVars, err := rm.RuntimeOwnedEnvironment(runtimeName, rc, workDir)
+	if err != nil {
+		return err
+	}
+	envVars["GOFLAGS"] = ""
+	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOCACHE", "GOBIN"} {
 		if err := os.MkdirAll(envVars[key], 0o755); err != nil {
 			return fmt.Errorf("failed to create directory %q: %w", key, err)
 		}
@@ -414,12 +449,12 @@ func (rm *RuntimeManager) generateGoLockFiles(ctx context.Context, appName strin
 	fullEnv := buildEnvWithOverrides(os.Environ(), envVars)
 
 	runGo := func(stdout io.Writer, args ...string) error {
-		cmd := exec.CommandContext(ctx, goPath, args...) //nolint:gosec // G204: goPath comes from the trusted managed runtime store and args are built from validated config
+		cmd := exec.CommandContext(context.WithoutCancel(ctx), goPath, args...) //nolint:gosec // G204: goPath comes from the trusted managed runtime store and args are built from validated config
 		cmd.Dir = workDir
 		cmd.Env = fullEnv
 		cmd.Stdout = stdout
 		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		return runInstallCmd(ctx, cmd)
 	}
 
 	log.Debug("generating Go lock file",
@@ -500,10 +535,9 @@ func checkGoModuleAge(appName string, list io.Reader, now time.Time, minAgeMinut
 		appName, minAgeMinutes, strings.Join(young, "\n  "))
 }
 
-// GetGoCommandInfo returns command info for running a Go app. The built binary
-// is self-contained, so no environment overrides are required to run it.
+// GetGoCommandInfo returns command info and the runtime-owned environment for a Go app.
 func (rm *RuntimeManager) GetGoCommandInfo(appName string, appConfig *binmanager.AppConfigGo, files map[string]string, archives map[string]*binmanager.ArchiveSpec) (*binmanager.CommandInfo, error) {
-	runtimeName, _, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindGo)
+	runtimeName, rc, err := rm.ResolveRuntime(appConfig.Runtime, config.RuntimeKindGo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
 	}
@@ -512,11 +546,17 @@ func (rm *RuntimeManager) GetGoCommandInfo(appName string, appConfig *binmanager
 	if err != nil {
 		return nil, fmt.Errorf("failed to get app path: %w", err)
 	}
+	_, runtimeEnv, err := rm.RuntimeOwnedEnvironment(runtimeName, rc, appEnvPath)
+	if err != nil {
+		return nil, err
+	}
 
 	binPath := getGoBinaryPath(appEnvPath, appConfig.PackageName)
 
 	return &binmanager.CommandInfo{
-		Type:    "go",
-		Command: binPath,
+		Type:          "go",
+		Command:       binPath,
+		Env:           runtimeEnv,
+		RequiredPaths: []string{filepath.Join(appEnvPath, appReadyMarker)},
 	}, nil
 }

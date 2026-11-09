@@ -48,7 +48,8 @@ runtimes: {
       },
     },
     uv: {
-      pythonVersion: "3.12",
+      pythonVersion: "3.15.2", // exact major.minor.patch
+      pythonDownloads: { /* generated pinned catalog entries */ },
     },
   },
 }
@@ -68,7 +69,8 @@ runtimes: {
       systemVersion: "1.0",
     },
     uv: {
-      pythonVersion: "3.12",
+      pythonVersion: "3.15.2", // exact major.minor.patch
+      pythonDownloads: { /* generated pinned catalog entries */ },
     },
   },
 }
@@ -108,17 +110,24 @@ The Python version is configured on the runtime, not individual apps:
 
 ```javascript
 uv: {
-  pythonVersion: "3.12",
+  pythonVersion: "3.15.2", // exact major.minor.patch
+  pythonDownloads: { /* generated with datamitsu devtools pull-runtimes --runtime uv */ },
 }
 ```
 
-If using system mode without specifying `pythonVersion`, datamitsu will warn you since the Python version becomes implicit.
+If using system mode without specifying `pythonVersion`, datamitsu warns because the Python version becomes implicit. Managed CPython acquisition requires an exact `major.minor.patch` version and a matching catalog entry. When the catalog is missing or has no matching host entry, provisioning fails before starting a download; regenerate it with `datamitsu devtools pull-runtimes --runtime uv`.
+
+Managed uv runtimes also require `pythonDownloads`: SHA-256-pinned CPython artifacts for supported host targets. Populate this catalog with `datamitsu devtools pull-runtimes --runtime uv`; it preserves uv's upstream platform keys and entry metadata while normalizing hashes to canonical `sha256:` digests. An omitted or empty map is valid for configurations that do not provision CPython, but an operation that needs it fails rather than fetching an unpinned catalog. Entries must describe stable, default-GIL CPython matching the exact `pythonVersion`; `pythonDownloads` is included in runtime identity, so a changed pin selects new runtime data.
+
+For each named uv runtime identity, CPython is installed beneath `.runtime-data/<runtime-name>/<identity>/python`. A validated readiness record inside that tree makes subsequent checks read-only; an absent or invalid record triggers repair under the Python target lock. Provisioning writes a private one-entry catalog from the pinned config and does not consult a remote catalog. A valid interpreter can be reused even when the uv executable is unavailable; if it needs installation, offline mode fails without modifying the existing payload.
 
 ### Store Layout and the Managed Python Interpreter
 
-In managed mode, uv downloads a CPython interpreter and reuses it across uv apps. datamitsu redirects that interpreter into the store at `<store>/.uv/python/` (via `UV_PYTHON_INSTALL_DIR`), one CPython per version shared across apps, alongside uv's per-app cache. This keeps the store **self-contained**: when the store is cached (e.g. in CI) and restored onto a fresh runner, each app's `.venv/bin/python` symlink still resolves, because the interpreter it points at travels with the store rather than living in uv's default data dir (`~/.local/share/uv/python`).
+In managed mode, the uv-managed CPython interpreter remains part of the store so app environments can resolve it after cache restoration. Runtime-owned mutable package/build data is kept separately under `.runtime-data/<runtime-name>/<identity>/`; the identity distinguishes effective runtime configurations and target platforms. Bun/Node npm caches and pnpm's content store, UV's cache and Python install directory, and Go's build/module caches are rooted there. One manager-owned environment builder sets these paths for both app installation and execution; its values override inherited cache variables. The Go app's `GOBIN` remains private to that app. JVM keeps its normal runtime behavior and does not relocate generic caches.
 
 datamitsu also validates the venv interpreter at install time. If `.venv/bin/python` dangles (for example, after restoring a partial or stale cache), the venv is treated as not installed and rebuilt, so a broken interpreter self-heals instead of being trusted forever.
+
+The shared interpreter is considered ready only when its completion marker and executable are valid. An interrupted installation without that marker is rebuilt on the next provisioning attempt; the incomplete payload is not treated as installed.
 
 ## Bun Runtime
 
@@ -132,7 +141,7 @@ Bun apps use [pnpm](https://pnpm.io/) for dependency installation and a managed 
 4. Runs `pnpm install --frozen-lockfile` with datamitsu's `node` → Bun alias first on `PATH`, so lifecycle scripts that call `node` run on Bun
 5. Executes the configured JavaScript entrypoint with `bun run --bun --no-install`
 
-Both Bun and Node apps share pnpm's content-addressable store at `{store}/.pnpm-store/`, while every app keeps its own `node_modules` directory. During execution, `--bun` and the same alias keep Node-shebang commands launched by the tool on the selected runtime.
+Each named Bun or Node runtime owns its mutable caches under `.runtime-data/<runtime-name>/<identity>/`. pnpm's content-addressable store is below the consuming runtime's data root and includes the selected pnpm runtime name and identity, so apps sharing both runtimes share package data while a different runtime selection does not.
 
 The alias at `.datamitsu-runtime-bin/node` is a link to the Bun executable rather than a wrapper script, because Bun emulates the node CLI only when it is invoked under the name `node` — called under its own name it would read `node build` as its bundler and `node install` as its package manager.
 
@@ -236,7 +245,7 @@ runtimes: {
 
 The archives come from the pnpm GitHub release and are extracted whole: besides the binary they carry the `node-gyp` that pnpm uses to build native dependencies. As with any managed runtime, datamitsu downloads only the entry for the host platform and falls back from musl to glibc; a system pnpm works too (`mode: "system", system: { command: "pnpm" }`, where `pnpmVersion` becomes optional). `datamitsu init` downloads the pnpm runtime along with the Node or Bun runtime whenever a required app needs it. pnpm is only needed to install apps, so it is not part of the runtimes a built Docker image or OCI bundle ships for execution.
 
-Runtimes, pnpm included, are stored under `{store}/.runtimes/{name}/{configHash}/`. The pnpm runtime's identity is part of every Node and Bun app's environment hash but not of the Node or Bun runtime's own hash, so a pnpm bump reinstalls the apps without downloading Node or Bun again. A shared pnpm content-addressable store at `{store}/.pnpm-store/` deduplicates packages across Bun and Node apps.
+Runtimes, pnpm included, are stored under `{store}/.runtimes/{name}/{configHash}/`. Each named runtime's mutable data is separate under `{store}/.runtime-data/{runtimeName}/{identity}/`; runtime data identity includes the runtime and effective target identity, not the absolute store location. The selected runtime name and identity also participate in Node/Bun app identity, including the selected pnpm runtime, so changing either rebuilds the affected app without re-downloading an otherwise identical runtime archive. Apps sharing the same runtime identities share those runtime caches; different names or identities do not. Old content-addressed app and runtime-data directories are not migrated or deleted automatically. `datamitsu store clear` is the supported cleanup for superseded store content; there is no per-runtime removal or automatic garbage collection.
 
 :::warning Breaking change: pnpm moved into its own runtime
 
@@ -330,6 +339,8 @@ datamitsu config lockfile eslint
 ```
 
 This outputs brotli-compressed, base64-encoded lock file content that you paste into your configuration:
+
+Lock generation stages package-manager work in a private temporary app workspace. It does not remove or replace the app's installed, content-addressed environment, so generating a lock while another process uses that installation does not disturb it.
 
 ```javascript
 eslint: {
@@ -444,7 +455,7 @@ runtimes: {
     kind: "uv",
     mode: "system",
     system: { command: "uv" },
-    uv: { pythonVersion: "3.12" },
+    uv: { pythonVersion: "3.15.2", pythonDownloads: { /* generated pinned catalog */ } },
   },
   jvm: {
     kind: "jvm",
@@ -456,6 +467,10 @@ runtimes: {
 ```
 
 Binary apps (type `binary`) are not affected by this limitation. They use target-based resolution with automatic libc detection and will select musl-specific builds when available. See [Use in Alpine Linux](../how-to/use-in-alpine) for details.
+
+## Running a Runtime Directly
+
+`datamitsu runtime list` inventories configured runtimes without installing them. Its `RUNNABLE` and `REASON` columns distinguish direct interpreter support from installation status. To run an interpreter, use `datamitsu runtime run <name> -- <args...>` with the exact runtime name from configuration. Managed runtime installation is automatic when needed; uv runs the configured pinned CPython directly and does not install dependencies from a script or project. Bun runs directly with implicit package installation disabled, without requiring pnpm. pnpm is listed but is not a direct-run target because it is a package manager. JSON inventory keeps `notRunnableReason` separate from host or installation `reason`. See the [runtime CLI reference](../reference/cli-commands.md#runtime-run) for schemas, exit behavior, and platform-specific process handling.
 
 ## See the runtime distribution
 

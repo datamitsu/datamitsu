@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
+	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/detector"
 	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
@@ -403,7 +404,8 @@ type RuntimeManagedJSON struct {
 
 // UVConfigJSON holds UV-specific configuration in the JSON output.
 type UVConfigJSON struct {
-	PythonVersion string `json:"pythonVersion"`
+	PythonVersion   string                           `json:"pythonVersion"`
+	PythonDownloads map[string]config.PythonDownload `json:"pythonDownloads,omitempty"`
 }
 
 // JVMConfigJSON holds JVM-specific configuration in the JSON output.
@@ -474,7 +476,8 @@ func buildUVRuntimeJSON(data *UVRuntimeData, binaries binmanager.MapOfBinaries) 
 			Binaries: binaries,
 		},
 		UV: &UVConfigJSON{
-			PythonVersion: data.PythonVersion,
+			PythonVersion:   data.PythonVersion,
+			PythonDownloads: data.PythonDownloads,
 		},
 	}
 }
@@ -723,7 +726,8 @@ func detectPNPMBinaries(release *github.Release) (binmanager.MapOfBinaries, erro
 
 // UVRuntimeData holds the UV-specific runtime configuration data.
 type UVRuntimeData struct {
-	PythonVersion string
+	PythonVersion   string
+	PythonDownloads map[string]config.PythonDownload
 }
 
 // getLatestPythonStableVersion is the injectable seam for resolving the latest
@@ -736,6 +740,67 @@ var getLatestPythonStableVersion = registry.GetLatestPythonStableVersion
 // CPython versions a uv release can install; tests override it to exercise the
 // reconciliation paths without network.
 var getUVSupportedPythonVersions = registry.GetUVSupportedPythonVersions
+
+var getUVPythonDownloads = registry.GetUVPythonDownloads
+
+func selectUVPythonDownloads(entries map[string]registry.UVPythonDownload, version string) (map[string]config.PythonDownload, error) {
+	selected := make(map[string]config.PythonDownload)
+	for key, entry := range entries {
+		if entry.Name != "cpython" || entry.Version() != version || entry.Prerelease != "" || entry.Variant != "" || entry.Arch.Variant != "" || !supportedPythonCatalogPlatform(entry) {
+			continue
+		}
+		if entry.URL == "" || entry.SHA256 == "" {
+			return nil, fmt.Errorf("uv Python catalog entry %q is missing its URL or SHA-256 hash", key)
+		}
+		hash, err := digest.ParseSHA256Loose(entry.SHA256)
+		if err != nil {
+			return nil, fmt.Errorf("uv Python catalog entry %q has invalid SHA-256 hash: %w", key, err)
+		}
+		selected[key] = config.PythonDownload{
+			Name: entry.Name,
+			Arch: config.PythonDownloadArch{Family: entry.Arch.Family, Variant: entry.Arch.Variant},
+			OS:   entry.OS, LibC: entry.Libc, Major: entry.Major, Minor: entry.Minor, Patch: entry.Patch,
+			Prerelease: entry.Prerelease, URL: entry.URL, Variant: entry.Variant, Build: entry.Build, Hash: hash.String(),
+		}
+	}
+	if len(selected) == 0 {
+		return nil, fmt.Errorf("uv Python catalog has no stable default-GIL entries for Python %s", version)
+	}
+	return selected, nil
+}
+
+func supportedPythonCatalogPlatform(entry registry.UVPythonDownload) bool {
+	arch := entry.Arch.Family
+	switch arch {
+	case "amd64":
+		arch = "x86_64"
+	case "arm64":
+		arch = "aarch64"
+	}
+	libc := entry.Libc
+	if libc == "" {
+		libc = "none"
+	}
+	for _, platform := range buildPlatformTuples() {
+		platformLibc := platform.libc
+		if platform.os == syslist.OsTypeLinux && platformLibc == "glibc" {
+			platformLibc = "gnu"
+		} else if platformLibc == "unknown" {
+			platformLibc = "none"
+		}
+		platformArch := string(platform.arch)
+		switch platformArch {
+		case "amd64":
+			platformArch = "x86_64"
+		case "arm64":
+			platformArch = "aarch64"
+		}
+		if string(platform.os) == entry.OS && platformArch == arch && platformLibc == libc {
+			return true
+		}
+	}
+	return false
+}
 
 // reconcilePythonWithUV lowers pythonVersion to something the pinned uv release
 // can actually install.
@@ -801,6 +866,14 @@ func pullUVRuntime(ctx context.Context, minAge int) (*UVRuntimeData, binmanager.
 	// Both versions are resolved by now, so reconcile them before either reaches
 	// the generated config.
 	data.PythonVersion, err = reconcilePythonWithUV(ctx, data.PythonVersion, release.TagName)
+	if err != nil {
+		return nil, nil, err
+	}
+	entries, _, err := getUVPythonDownloads(ctx, release.TagName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch Python downloads for uv %s: %w", release.TagName, err)
+	}
+	data.PythonDownloads, err = selectUVPythonDownloads(entries, data.PythonVersion)
 	if err != nil {
 		return nil, nil, err
 	}

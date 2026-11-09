@@ -6,8 +6,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/datamitsu/datamitsu/internal/config"
 )
 
 // RenderOptions carries the non-plan inputs to rendering: the base image and its
@@ -65,6 +63,7 @@ func Render(plan Plan, opts RenderOptions) string {
 	writeRuntimeStages(&b, plan, opts)
 	writeRuntimeAppStages(&b, plan, opts)
 	writeBinaryStages(&b, plan, opts)
+	writePythonExportStages(&b, plan, opts)
 	writeParserStages(&b, plan, opts)
 	writeFinalStage(&b, plan, opts)
 
@@ -217,6 +216,29 @@ func writeRuntimeAppStages(b *strings.Builder, plan Plan, opts RenderOptions) {
 	}
 }
 
+const pythonExportSubtree = ".runtime-data"
+
+func pythonExportRoot(opts RenderOptions) string {
+	return path.Join(opts.StoreRoot, "python-export")
+}
+
+func writePythonExportStages(b *strings.Builder, plan Plan, opts RenderOptions) {
+	sources := pythonExportSources(plan)
+	if len(sources) == 0 {
+		return
+	}
+	b.WriteString("# --- Python exports (one selected UV app stage per runtime) ---\n")
+	for _, source := range sources {
+		stage := stageName("python-export-", source.Runtime)
+		fmt.Fprintf(b, "FROM %s AS %s\n", stageName("app-", source.App), stage)
+		fmt.Fprintf(b, "RUN set -eu; export_root=%s; mkdir -p \"$export_root/%s/%s\"; for identity_dir in %s/*; do [ -d \"$identity_dir\" ] || continue; identity=${identity_dir##*/}; [ -d \"$identity_dir/python\" ] || continue; mkdir -p \"$export_root/%s/%s/$identity\"; cp -a \"$identity_dir/python\" \"$export_root/%s/%s/$identity/\"; done\n\n",
+			strconv.Quote(pythonExportRoot(opts)), strconv.Quote(pythonExportSubtree), strconv.Quote(source.Runtime),
+			strconv.Quote(opts.storeAbs(path.Join(".runtime-data", source.Runtime))),
+			strconv.Quote(pythonExportSubtree), strconv.Quote(source.Runtime),
+			strconv.Quote(pythonExportSubtree), strconv.Quote(source.Runtime))
+	}
+}
+
 func writeBinaryStages(b *strings.Builder, plan Plan, opts RenderOptions) {
 	if len(plan.BinaryStages) == 0 {
 		return
@@ -285,15 +307,18 @@ func writeFinalStage(b *strings.Builder, plan Plan, opts RenderOptions) {
 		writeCopy(b, stageName("rt-", rt.Name), opts.storeAbs(runtimeSubtree(rt.Name)))
 	}
 
-	// Per-app store subtrees; uv apps also carry the managed CPython they used.
+	// Per-app store subtrees.
 	for _, ts := range plan.RuntimeAppStages {
 		stage := stageName("app-", ts.App)
 		writeCopy(b, stage, opts.storeAbs(appEnvSubtree(ts.Kind, ts.App)))
-		if ts.Kind == config.RuntimeKindUV {
-			writeCopy(b, stage, opts.storeAbs(uvPythonSubtree))
-		}
 	}
 
+	// Runtime-specific Python trees exported by one selected app stage per runtime.
+	for _, source := range pythonExportSources(plan) {
+		fmt.Fprintf(b, "COPY --link --from=%s %s/%s/%s %s\n",
+			stageName("python-export-", source.Runtime), pythonExportRoot(opts),
+			pythonExportSubtree, source.Runtime, opts.storeAbs(runtimeDataSubtree(source.Runtime)))
+	}
 	// Binary store subtrees.
 	for _, bs := range plan.BinaryStages {
 		writeCopy(b, stageName("app-", bs.App), opts.storeAbs(binaryAppSubtree(bs.App)))

@@ -2,15 +2,12 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"os"
-	"path/filepath"
 	"sort"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
-	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/runtimemanager"
 
 	"github.com/spf13/cobra"
@@ -19,16 +16,11 @@ import (
 var configLockfileCmd = &cobra.Command{
 	Use:   "lockfile [appName]",
 	Short: "Generate lock file content for a runtime-managed app",
-	Long: `Reinstalls a runtime-managed app (bun/node/uv/go) and outputs its lock file content
-as a JSON-escaped string ready to paste into configuration.
+	Long: `Generates a runtime-managed app's lock file in an isolated workspace and outputs
+it as a JSON-escaped string ready to paste into configuration.
 
 When called without arguments, lists all apps that support lock files (bun/node/uv/go).
-
-This command:
-1. Deletes the app's existing content-addressed store entry
-2. Reinstalls the app from scratch (for go, resolves deps with go mod init + go get)
-3. Reads the generated lock file (pnpm-lock.yaml, uv.lock, or go.mod + go.sum)
-4. Outputs the content as a JSON string for use in lockFile config field`,
+Existing installed apps are never removed or replaced by lockfile generation.`,
 	Args: usageArgs(cobra.RangeArgs(0, 1)),
 	RunE: runConfigLockfile,
 }
@@ -74,62 +66,10 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 	}
 
 	freshApps := clearAppLockFile(cfg.Apps, appName)
-
-	// Delete old cache (computed from original config with lock fields)
 	rm := runtimemanager.New(cfg.Runtimes)
-	origBinMgr := binmanager.New(cfg.Apps, cfg.Bundles, rm)
-	if origInstallPath, err := origBinMgr.ComputeInstallPath(appName); err == nil {
-		_ = os.RemoveAll(origInstallPath)
-	}
-
-	// Also delete cache for the fresh (lockfile-cleared) config
-	freshRM := runtimemanager.New(cfg.Runtimes)
-	freshBinMgr := binmanager.New(freshApps, cfg.Bundles, freshRM)
-
-	freshInstallPath, err := freshBinMgr.ComputeInstallPath(appName)
+	lockContent, err := rm.GenerateLock(ctx, appName, freshApps[appName])
 	if err != nil {
-		return fmt.Errorf("failed to compute install path for %q: %w", appName, err)
-	}
-
-	fmt.Fprintf(os.Stderr, "Removing store entry at %s...\n", freshInstallPath)
-	if err := os.RemoveAll(freshInstallPath); err != nil {
-		return fmt.Errorf("failed to remove store entry: %w", err)
-	}
-
-	var lockContent string
-	if app.Go != nil {
-		eff, effErr := runtimeconfig.Get()
-		if effErr != nil {
-			return fmt.Errorf("failed to read runtime config: %w", effErr)
-		}
-		// Go apps cannot regenerate a lockfile via reinstall: the build is
-		// mandatory-lockfile and refuses without one. Resolve dependencies in
-		// an isolated temp workdir — generation pulls 100+MiB of module cache
-		// we must not leave behind in the install path — then read go.mod +
-		// go.sum back from there. An app that SHIPS its source (files/
-		// archives) generates from the staged module (`go mod tidy`), so the
-		// lock describes the shipped module and the install build compiles
-		// the blob, never a remote package of the same name. The wrapper
-		// flow (`go mod init` + `go get pkg@ver`) covers the rest.
-		lockContent, err = generateGoLockContent(appName, app, func(workDir string) error {
-			freshApp := freshApps[appName]
-			if len(freshApp.Files) > 0 || len(freshApp.Archives) > 0 {
-				return freshRM.GenerateGoLockFilesFromSource(ctx, appName, freshApp.Go, freshApp.Files, freshApp.Archives, workDir, eff.MinimumReleaseAgeMinutes)
-			}
-			return freshRM.GenerateGoLockFiles(ctx, appName, freshApp.Go, workDir, eff.MinimumReleaseAgeMinutes)
-		})
-		if err != nil {
-			return err
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "Reinstalling %s...\n", appName)
-		if _, err := freshBinMgr.GetCommandInfoInstallOnly(ctx, appName); err != nil {
-			return fmt.Errorf("failed to reinstall %q: %w", appName, err)
-		}
-		lockContent, err = readLockFile(freshInstallPath, app)
-		if err != nil {
-			return err
-		}
+		return fmt.Errorf("failed to generate lock file for %q: %w", appName, err)
 	}
 
 	compressed, err := runtimemanager.CompressLockFile(lockContent)
@@ -146,33 +86,6 @@ func runConfigLockfile(cmd *cobra.Command, args []string) error {
 	fmt.Println(string(jsonBytes))
 
 	return nil
-}
-
-// generateGoLockContent resolves a Go app's dependencies in an isolated temp
-// workdir via the supplied generate function, reads the produced go.mod + go.sum
-// back as a lockfile, and removes the workdir before returning. Generation pulls
-// a large module cache into the workdir, so the cleanup runs on both the success
-// and failure paths (via defer) rather than leaking it into the cache directory.
-func generateGoLockContent(appName string, app binmanager.App, generate func(workDir string) error) (string, error) {
-	workDir, err := os.MkdirTemp("", "datamitsu-go-lockfile-*")
-	if err != nil {
-		return "", fmt.Errorf("failed to allocate temp workdir: %w", err)
-	}
-	// Generation sets GOMODCACHE under workDir, which `go get` fills with
-	// read-only files; a plain os.RemoveAll fails on those, so use
-	// ForceRemoveAll and surface (rather than swallow) any cleanup failure.
-	defer func() {
-		if err := runtimemanager.ForceRemoveAll(workDir); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to remove temp workdir %s: %v\n", workDir, err)
-		}
-	}()
-
-	fmt.Fprintf(os.Stderr, "Generating lock file for %s...\n", appName)
-	if err := generate(workDir); err != nil {
-		return "", fmt.Errorf("failed to generate lock file for %q: %w", appName, err)
-	}
-
-	return readLockFile(workDir, app)
 }
 
 // clearAppLockFile returns a shallow copy of apps where the named app has its
@@ -322,50 +235,4 @@ func listLockfileApps(apps binmanager.MapOfApps) {
 	}
 
 	fmt.Fprintf(os.Stderr, "\nUsage: datamitsu config lockfile <appName>\n")
-}
-
-func readLockFile(installPath string, app binmanager.App) (string, error) {
-	// Go apps have no single lock file: the lockfile is a JSON wrapper carrying
-	// both go.mod and go.sum, so read the two files and assemble the wrapper.
-	if app.Go != nil {
-		goModPath := filepath.Join(installPath, "go.mod")
-		goSumPath := filepath.Join(installPath, "go.sum")
-		fmt.Fprintf(os.Stderr, "Lock files: %s, %s\n", goModPath, goSumPath)
-
-		goMod, err := os.ReadFile(goModPath)
-		if err != nil {
-			return "", fmt.Errorf("failed to read go.mod at %s: %w", goModPath, err)
-		}
-		goSum, err := os.ReadFile(goSumPath)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return "", fmt.Errorf("failed to read go.sum at %s: %w", goSumPath, err)
-		}
-		// An absent go.sum is a stdlib-only module's empty lock (go mod tidy
-		// writes no file at all when there is nothing to checksum); every
-		// other read error stays fatal.
-
-		return runtimemanager.BuildGoLockFileJSON(string(goMod), string(goSum))
-	}
-
-	var lockFilePath string
-
-	switch {
-	case app.Bun != nil:
-		lockFilePath = filepath.Join(installPath, "pnpm-lock.yaml")
-	case app.Node != nil:
-		lockFilePath = filepath.Join(installPath, "pnpm-lock.yaml")
-	case app.Uv != nil:
-		lockFilePath = filepath.Join(installPath, "uv.lock")
-	default:
-		return "", errors.New("unsupported app type for lock file generation")
-	}
-
-	fmt.Fprintf(os.Stderr, "Lock file: %s\n", lockFilePath)
-
-	data, err := os.ReadFile(lockFilePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read lock file at %s: %w", lockFilePath, err)
-	}
-
-	return string(data), nil
 }

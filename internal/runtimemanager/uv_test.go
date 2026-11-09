@@ -11,16 +11,15 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
-	"github.com/datamitsu/datamitsu/internal/env"
 )
 
 func TestGetUVEnvVars(t *testing.T) {
-	appEnvPath := "/cache/.apps/uv/yamllint/abc123"
-	vars := getUVEnvVars(appEnvPath)
+	runtimeDataPath := "/cache/store/.runtime-data/uv/identity"
+	vars := getUVEnvVars(runtimeDataPath)
 
 	expected := map[string]string{
-		"UV_CACHE_DIR":          filepath.Join(appEnvPath, "cache"),
-		"UV_PYTHON_INSTALL_DIR": filepath.Join(env.GetStorePath(), ".uv", "python"),
+		"UV_CACHE_DIR":          filepath.Join(runtimeDataPath, "uv-cache"),
+		"UV_PYTHON_INSTALL_DIR": filepath.Join(runtimeDataPath, "python"),
 	}
 
 	for key, want := range expected {
@@ -37,23 +36,13 @@ func TestGetUVEnvVars(t *testing.T) {
 	if len(vars) != len(expected) {
 		t.Errorf("vars has %d entries, want %d", len(vars), len(expected))
 	}
-
-	// UV_PYTHON_INSTALL_DIR must live under the store (shared), not the per-app dir.
-	pyDir := vars["UV_PYTHON_INSTALL_DIR"]
-	if !strings.HasPrefix(pyDir, env.GetStorePath()) {
-		t.Errorf("UV_PYTHON_INSTALL_DIR = %q, want prefix %q", pyDir, env.GetStorePath())
-	}
-	if strings.HasPrefix(pyDir, appEnvPath) {
-		t.Errorf("UV_PYTHON_INSTALL_DIR = %q should be shared, not under appEnvPath %q", pyDir, appEnvPath)
-	}
 }
 
 func TestInstallTimeEnvIncludesPythonInstallDir(t *testing.T) {
-	appEnvPath := "/cache/.apps/uv/yamllint/abc123"
-	envVars := getUVEnvVars(appEnvPath)
+	envVars := getUVEnvVars("/runtime-data/uv/identity")
 	result := buildEnvWithOverrides(os.Environ(), envVars)
 
-	wantPrefix := "UV_PYTHON_INSTALL_DIR=" + filepath.Join(env.GetStorePath(), ".uv", "python")
+	wantPrefix := "UV_PYTHON_INSTALL_DIR=" + filepath.Join("/runtime-data/uv/identity", "python")
 	found := slices.Contains(result, wantPrefix)
 	if !found {
 		t.Errorf("install-time env missing %q", wantPrefix)
@@ -216,9 +205,9 @@ func TestGetUVCommandInfo(t *testing.T) {
 		}
 
 		appEnvPath := filepath.Dir(filepath.Dir(filepath.Dir(info.Command))) // .venv/bin/<pkg>
-		want := getUVInterpreterPath(appEnvPath)
-		if len(info.RequiredPaths) != 1 || info.RequiredPaths[0] != want {
-			t.Errorf("RequiredPaths = %v, want [%s]", info.RequiredPaths, want)
+		want := []string{getUVInterpreterPath(appEnvPath), filepath.Join(appEnvPath, appReadyMarker)}
+		if !slices.Equal(info.RequiredPaths, want) {
+			t.Errorf("RequiredPaths = %v, want %v", info.RequiredPaths, want)
 		}
 	})
 
@@ -389,6 +378,9 @@ func TestInstallUVAppAlreadyInstalled(t *testing.T) {
 	if err := os.WriteFile(getUVInterpreterPath(appEnvPath), []byte("python"), 0o755); err != nil {
 		t.Fatalf("failed to write fake interpreter: %v", err)
 	}
+	if err := markAppReady(appEnvPath); err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = os.RemoveAll(appEnvPath) }()
 
 	err = rm.InstallUVApp(context.Background(), "yamllint", appConfig, nil, nil, nil)
@@ -408,6 +400,9 @@ func TestUVVenvHealthy(t *testing.T) {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(getUVInterpreterPath(dir), []byte("python"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := markAppReady(dir); err != nil {
 			t.Fatal(err)
 		}
 		if !uvVenvHealthy(dir, binPath) {
@@ -480,6 +475,9 @@ func TestInstallUVAppHealthyVenvSkips(t *testing.T) {
 		t.Fatalf("failed to write fake interpreter: %v", err)
 	}
 
+	if err := markAppReady(appEnvPath); err != nil {
+		t.Fatal(err)
+	}
 	if err := rm.InstallUVApp(context.Background(), "yamllint", appConfig, nil, nil, nil); err != nil {
 		t.Errorf("InstallUVApp() error = %v, expected nil for healthy venv", err)
 	}
@@ -490,7 +488,16 @@ func TestInstallUVAppHealthyVenvSkips(t *testing.T) {
 	}
 }
 
-func TestInstallUVAppDanglingVenvRebuilds(t *testing.T) {
+func TestUVAppInheritedOverrideRemovesPythonSelectors(t *testing.T) {
+	for _, key := range []string{"UV_PYTHON_DOWNLOADS_JSON_URL", "uv_python_preference", "UV_CONFIG_FILE", "VIRTUAL_ENV", "CONDA_PREFIX", "UV_CACHE_DIR", "PATH"} {
+		want := strings.HasPrefix(strings.ToUpper(key), "UV_PYTHON") || uvInheritedOverride(key)
+		if got := uvAppInheritedOverride(key); got != want {
+			t.Errorf("uvAppInheritedOverride(%q)=%v, want %v", key, got, want)
+		}
+	}
+}
+
+func TestInstallUVAppMissingRuntimeLeavesStaleVenvUntouched(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink semantics differ on windows")
 	}
@@ -522,18 +529,41 @@ func TestInstallUVAppDanglingVenvRebuilds(t *testing.T) {
 		t.Fatalf("failed to create dangling symlink: %v", err)
 	}
 
-	// The dangling venv must NOT be trusted: install attempts a rebuild, which
-	// fails here because the test uv runtime is not actually downloaded. The key
-	// assertion is that it did not return nil (i.e. it did not treat the broken
-	// venv as installed).
+	// A broken venv is not trusted; without its pinned uv runtime the operation
+	// fails before mutating the existing app target.
 	err = rm.InstallUVApp(context.Background(), "yamllint", appConfig, nil, nil, nil)
 	if err == nil {
-		t.Error("expected dangling venv to trigger a rebuild attempt, got nil (treated as installed)")
+		t.Fatal("expected missing uv runtime to fail")
 	}
+	if _, statErr := os.Stat(appEnvPath); statErr != nil {
+		t.Errorf("stale app dir should remain, stat error = %v", statErr)
+	}
+	if appReady(appEnvPath) {
+		t.Error("markerless stale app must remain unready")
+	}
+}
 
-	// The stale app directory must have been removed during the rebuild attempt.
-	if _, statErr := os.Stat(appEnvPath); !os.IsNotExist(statErr) {
-		t.Errorf("expected stale app dir to be removed, stat error = %v", statErr)
+func TestInstallUVAppRequiresPinnedPythonBeforeProvisioning(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	runtimes := config.MapOfRuntimes{
+		"uv": {
+			Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "test"},
+			UV:     &config.RuntimeConfigUV{PythonVersion: "3.12.0"},
+		},
+	}
+	rm := New(runtimes)
+	app := &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.37.0", Runtime: "uv"}
+	appPath, err := rm.GetAppPath("yamllint", config.RuntimeKindUV, uvVersionForHash(app.Version, ""), nil, "", nil, nil, "uv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = rm.InstallUVApp(context.Background(), "yamllint", app, nil, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "uv.pythonDownloads with SHA-256 pins is required") {
+		t.Fatalf("InstallUVApp() missing Python pins error = %v", err)
+	}
+	if _, err := os.Stat(appPath); !os.IsNotExist(err) {
+		t.Fatalf("UV app target changed before pinned Python prerequisite failure: %v", err)
 	}
 }
 
@@ -587,89 +617,35 @@ func TestUVVersionForHash(t *testing.T) {
 
 func TestBuildUVInstallArgs(t *testing.T) {
 	base := []string{"sync", "--output-format=json", "--no-install-project", "--no-config"}
-	withBase := func(extra ...string) []string {
-		return append(slices.Clone(base), extra...)
-	}
+	withBase := func(extra ...string) []string { return append(slices.Clone(base), extra...) }
 	noWindow := uvWindow{}
-
-	t.Run("no lockfile: no --locked and no --no-build", func(t *testing.T) {
-		args := buildUVInstallArgs("", "", noWindow, nil)
-		if want := withBase(); !equalStringSlices(args, want) {
-			t.Errorf("args = %v, want %v", args, want)
-		}
-	})
-
-	t.Run("with lockfile: adds --locked and --no-build", func(t *testing.T) {
-		args := buildUVInstallArgs("version = 1\n", "", noWindow, nil)
-		if want := withBase("--locked", "--no-build"); !equalStringSlices(args, want) {
-			t.Errorf("args = %v, want %v", args, want)
-		}
-	})
-
-	t.Run("lockfile + python version: appends --python", func(t *testing.T) {
-		args := buildUVInstallArgs("version = 1\n", "", noWindow, &config.RuntimeConfigUV{PythonVersion: "3.12.1"})
-		if want := withBase("--locked", "--no-build", "--python", "3.12.1"); !equalStringSlices(args, want) {
-			t.Errorf("args = %v, want %v", args, want)
-		}
-	})
-
-	t.Run("no lockfile + python version: --python without --no-build", func(t *testing.T) {
-		args := buildUVInstallArgs("", "", noWindow, &config.RuntimeConfigUV{PythonVersion: "3.12.1"})
-		if want := withBase("--python", "3.12.1"); !equalStringSlices(args, want) {
-			t.Errorf("args = %v, want %v", args, want)
-		}
-	})
-
-	t.Run("empty python version: no --python flag", func(t *testing.T) {
-		args := buildUVInstallArgs("version = 1\n", "", noWindow, &config.RuntimeConfigUV{PythonVersion: ""})
-		if want := withBase("--locked", "--no-build"); !equalStringSlices(args, want) {
-			t.Errorf("args = %v, want %v", args, want)
-		}
-	})
-
-	t.Run("no lockfile: --no-build must NOT be present", func(t *testing.T) {
-		args := buildUVInstallArgs("", "", noWindow, nil)
-		for _, a := range args {
-			if a == "--no-build" {
-				t.Error("--no-build should not be present without a lockfile (would block all sdist builds without security justification)")
-			}
-		}
-	})
-
-	t.Run("with lockfile: --no-build must be present", func(t *testing.T) {
-		args := buildUVInstallArgs("version = 1\n", "", noWindow, nil)
-		found := slices.Contains(args, "--no-build")
-		if !found {
-			t.Error("--no-build must be present when a lockfile is supplied (supply chain hardening)")
-		}
-	})
-
-	t.Run("span window", func(t *testing.T) {
-		args := buildUVInstallArgs("version = 1\n", "", uvWindow{excludeNewer: "P7D"}, nil)
-		if want := withBase("--locked", "--no-build", "--exclude-newer", "P7D"); !equalStringSlices(args, want) {
-			t.Errorf("args = %v, want %v", args, want)
-		}
-	})
-
-	t.Run("absolute window with package cutoffs", func(t *testing.T) {
-		w := uvWindow{excludeNewer: "2026-09-01T00:00:00Z", packages: []string{"certifi=P1D", "idna=false"}}
-		args := buildUVInstallArgs("version = 1\n", "", w, nil)
-		want := withBase("--locked", "--no-build",
-			"--exclude-newer", "2026-09-01T00:00:00Z",
-			"--exclude-newer-package", "certifi=P1D",
-			"--exclude-newer-package", "idna=false")
-		if !equalStringSlices(args, want) {
-			t.Errorf("args = %v, want %v", args, want)
-		}
-	})
-
-	t.Run("app uv.toml replaces --no-config", func(t *testing.T) {
-		args := buildUVInstallArgs("", "/store/app/uv.toml", uvWindow{excludeNewer: "P7D"}, nil)
-		want := []string{"sync", "--output-format=json", "--no-install-project", "--config-file", "/store/app/uv.toml", "--exclude-newer", "P7D"}
-		if !equalStringSlices(args, want) {
-			t.Errorf("args = %v, want %v", args, want)
-		}
-	})
+	if got, want := buildUVInstallArgs("", "", noWindow), withBase(); !equalStringSlices(got, want) {
+		t.Fatalf("no-lock args = %v, want %v", got, want)
+	}
+	if got, want := buildUVInstallArgs("version = 1\n", "", noWindow), withBase("--locked", "--no-build"); !equalStringSlices(got, want) {
+		t.Fatalf("locked args = %v, want %v", got, want)
+	}
+	if got := buildUVInstallArgs("version = 1\n", "", noWindow); slices.Contains(got, "--python") {
+		t.Fatalf("runtime-version selector must not be emitted: %v", got)
+	}
+	if got := buildUVInstallArgs("", "", noWindow); slices.Contains(got, "--no-build") {
+		t.Fatalf("--no-build must not be present without a lockfile: %v", got)
+	}
+	if got := buildUVInstallArgs("version = 1\n", "", noWindow); !slices.Contains(got, "--no-build") {
+		t.Fatalf("--no-build must be present with a lockfile: %v", got)
+	}
+	if got, want := buildUVInstallArgs("version = 1\n", "", uvWindow{excludeNewer: "P7D"}), withBase("--locked", "--no-build", "--exclude-newer", "P7D"); !equalStringSlices(got, want) {
+		t.Fatalf("span window args = %v, want %v", got, want)
+	}
+	w := uvWindow{excludeNewer: "2026-09-01T00:00:00Z", packages: []string{"certifi=P1D", "idna=false"}}
+	want := withBase("--locked", "--no-build", "--exclude-newer", "2026-09-01T00:00:00Z", "--exclude-newer-package", "certifi=P1D", "--exclude-newer-package", "idna=false")
+	if got := buildUVInstallArgs("version = 1\n", "", w); !equalStringSlices(got, want) {
+		t.Fatalf("package cutoff args = %v, want %v", got, want)
+	}
+	configArgs := []string{"sync", "--output-format=json", "--no-install-project", "--config-file", "/store/app/uv.toml", "--exclude-newer", "P7D"}
+	if got := buildUVInstallArgs("", "/store/app/uv.toml", uvWindow{excludeNewer: "P7D"}); !equalStringSlices(got, configArgs) {
+		t.Fatalf("config args = %v, want %v", got, configArgs)
+	}
 }
 
 func equalStringSlices(a, b []string) bool {
