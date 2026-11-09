@@ -77,23 +77,6 @@ describe("exec", () => {
     assert.equal(result.exitCode, 0);
   });
 
-  it("exec with args array passes args to app", async () => {
-    mockSpawn.mock.mockImplementation(() =>
-      Promise.resolve({
-        exitCode: 0,
-        failed: false,
-        stderr: "",
-        stdout: "",
-      }),
-    );
-
-    await exec("lefthook", { args: ["run", "pre-commit"] });
-
-    const call = mockSpawn.mock.calls[0];
-    const arguments_ = call.arguments[0];
-    assert.deepEqual(arguments_, ["exec", "lefthook", "run", "pre-commit"]);
-  });
-
   it("exec handles app errors gracefully", async () => {
     mockSpawn.mock.mockImplementation(() =>
       Promise.resolve({

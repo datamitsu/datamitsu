@@ -115,7 +115,7 @@ function buildArguments(appName: string | undefined, options: ExecOptions = {}):
   }
 
   if (appName) {
-    spawnArguments.push(appName, ...arguments_);
+    spawnArguments.push(appName, "--", ...arguments_);
   }
 
   return spawnArguments;

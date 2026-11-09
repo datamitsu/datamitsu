@@ -287,6 +287,8 @@ await exec("prettier", {
 });
 ```
 
+For `exec(appName, { args })`, the SDK inserts the CLI `--` separator after the app name, so app arguments such as `--help`, `--config`, and `--no-auto-config` are passed literally to the app. Arguments are preserved as supplied, including a leading `--`; do not prepend a CLI separator yourself. The app-less `exec()` tool-list mode is unchanged.
+
 #### ToolInfo
 
 Returned when calling `exec()` without an app name:
