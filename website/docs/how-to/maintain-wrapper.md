@@ -110,8 +110,13 @@ process.exit(await child.exited);
 
 The child receives one exact, version-specific executable path. Avoid scanning
 `${STORE}/.bin/<name>` and probing candidate versions; `required: true` on the
-upstream is unnecessary. The `dm-internal-` prefix is a naming convention, not
-an access-control or shim-exclusion setting.
+upstream is unnecessary. Runtime-app bindings use a native launcher that keeps
+one open executable descriptor and streams identity from that file. It exposes
+only a verified hard link to the same inode or a copy of the captured file, so
+replacement bytes cannot be substituted. Its command record is mode `0640`:
+the store group is trusted because the record may contain sensitive environment
+values. The `dm-internal-` prefix is a naming convention, not an access-control
+or shim-exclusion setting.
 
 When `init` selects `lefthook`, it installs the upstream too. `install lefthook`,
 `exec lefthook`, and tools using it through `check`, `lint`, `fix`, or LSP all
@@ -124,10 +129,12 @@ bundle's existing coverage/failure policy.
 Source-mode activation stays download-free. Its farm records dependency health
 paths even for names excluded from the shim farm. If an upstream file is later
 removed, invoking the root shim delegates repair to `datamitsu install lefthook`
-and restores the dependency before execution. Neither `dependsOn` nor
-`runtimeEnv` changes the proxy's install hash. A binding must target a direct
-native binary dependency; a runtime-managed dependency needs its full command
-and cannot be represented by `${APP_BIN:...}`.
+and restores the dependency before execution. `runtimeEnv` does not change the
+proxy's install hash. `${APP_BIN:...}` accepts direct binary, uv, Go, Node and
+Bun dependencies; for Node and Bun, a native launcher preserves the command,
+arguments and environment. This exact-path binding is separate from PATH
+linking: only binary, uv and Go dependencies are linked on `PATH`. JVM and
+shell apps remain unsupported binding targets.
 
 ## Updating Tool Versions
 

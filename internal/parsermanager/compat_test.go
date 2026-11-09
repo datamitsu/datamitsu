@@ -94,20 +94,20 @@ func TestTheCurrentModuleAnswersWithItsOwnKeys(t *testing.T) {
 	}
 }
 
-func TestAModuleFromALaterReleaseIsReadAsTheNewestKnown(t *testing.T) {
+func TestAModuleFromALaterReleaseRetainsItsDescriptor(t *testing.T) {
 	ctx := context.Background()
 	describe := `{"schemaVersion":99,"module":"datamitsu-parsers","version":"9.0.0","abi":2,"features":["format"],` +
 		`"hologram":{"x":1},"tools":[{"name":"future","description":"d","url":"","operations":{},` +
 		`"severities":["error"],"kind":"format","confidence":"high"}]}`
-	parse := `{"recognized":true,"format":"future","confidence":0.97,"diagnostics":[{"message":"m","row":2,"weight":3}]}`
+	parse := `{"recognized":true,"format":"future","confidence":0.97,"extractionPartial":false,"partial":true,"skipped":[{"file":"input.yaml","reason":"ambiguous schema","category":"catalog-ambiguous"}],"diagnostics":[{"message":"m","row":2,"weight":3}]}`
 	m := servedManager(t, map[string][]byte{"future": synthModule(t, describe, parse)})
 
 	caps, err := m.DescribeParser(ctx, "future")
 	if err != nil {
 		t.Fatalf("describe: %v", err)
 	}
-	if caps.SchemaVersion != SchemaNewest || caps.ABI != 2 || len(caps.Tools) != 1 || caps.Tools[0].Kind != "format" {
-		t.Errorf("describe = %+v, want schema %d with its tool", caps, SchemaNewest)
+	if caps.SchemaVersion != 99 || caps.ABI != 2 || len(caps.Features) != 1 || caps.Features[0] != "format" || !strings.Contains(string(caps.Raw), `"hologram":{"x":1}`) {
+		t.Errorf("describe = %+v, want schema 99 and raw feature descriptor", caps)
 	}
 	if contract, err := m.SeverityContract(ctx, "future"); err != nil || !contract {
 		t.Errorf("SeverityContract(future) = %v, %v; a later schema keeps the contract", contract, err)
@@ -119,6 +119,9 @@ func TestAModuleFromALaterReleaseIsReadAsTheNewestKnown(t *testing.T) {
 	if !resp.Recognized || resp.Format != "future" || len(resp.Diagnostics) != 1 ||
 		resp.Diagnostics[0].Row == nil || *resp.Diagnostics[0].Row != 2 {
 		t.Errorf("parse = %+v, want the one finding with its known fields", resp)
+	}
+	if resp.ExtractionWasPartial() || len(resp.Skipped) != 1 || resp.Skipped[0] != (InputSkip{File: "input.yaml", Reason: "ambiguous schema", Category: "catalog-ambiguous"}) {
+		t.Errorf("parse skips = %+v; want the skip and precise complete extraction", resp)
 	}
 }
 

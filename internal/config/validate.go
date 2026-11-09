@@ -213,6 +213,7 @@ func doValidateApps(apps binmanager.MapOfApps, runtimes MapOfRuntimes, skipLockf
 		}
 
 		errs = append(errs, validateGoApp(appName, app.Go)...)
+		errs = append(errs, validateUVDependencies(appName, app.Uv)...)
 
 		if !skipLockfileCheck && app.Uv != nil && app.Uv.LockFile == "" {
 			errs = append(errs, fmt.Sprintf("app %q: lockFile is required (run: datamitsu config lockfile %s)", appName, appName))
@@ -416,6 +417,52 @@ func validateGoApp(appName string, goApp *binmanager.AppConfigGo) []string {
 	}
 
 	return errs
+}
+
+var (
+	safePythonPackagePattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$`)
+	pythonPackageSeparators  = regexp.MustCompile(`[-_.]+`)
+)
+
+func validateUVDependencies(appName string, uvApp *binmanager.AppConfigUV) []string {
+	if uvApp == nil || len(uvApp.Dependencies) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(uvApp.Dependencies))
+	for name := range uvApp.Dependencies {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	seen := make(map[string]string, len(names))
+	mainPackage := normalizePythonPackageName(uvApp.PackageName)
+	var errs []string
+	for _, name := range names {
+		normalized := normalizePythonPackageName(name)
+		switch {
+		case !safePythonPackagePattern.MatchString(name):
+			errs = append(errs, fmt.Sprintf("app %q: uv.dependencies package name %q contains invalid characters", appName, name))
+		case normalized == mainPackage:
+			errs = append(errs, fmt.Sprintf("app %q: uv.dependencies package %q duplicates the app package", appName, name))
+		case seen[normalized] != "":
+			errs = append(errs, fmt.Sprintf("app %q: uv.dependencies packages %q and %q normalize to the same name", appName, seen[normalized], name))
+		default:
+			seen[normalized] = name
+		}
+		version := uvApp.Dependencies[name]
+		switch {
+		case version == "":
+			errs = append(errs, fmt.Sprintf("app %q: uv.dependencies.%s version is required", appName, name))
+		case strings.EqualFold(version, "latest"):
+			errs = append(errs, fmt.Sprintf("app %q: uv.dependencies.%s must be pinned, not %q", appName, name, version))
+		case !isValidVersionString(version):
+			errs = append(errs, fmt.Sprintf("app %q: uv.dependencies.%s version %q contains invalid characters (must be a pinned version using alphanumeric characters, dots, hyphens, underscores, or plus signs)", appName, name, version))
+		}
+	}
+	return errs
+}
+
+func normalizePythonPackageName(name string) string {
+	return pythonPackageSeparators.ReplaceAllString(strings.ToLower(name), "-")
 }
 
 func validateAppRuntimeRef(ref string, expectedKind RuntimeKind, appName string, runtimes MapOfRuntimes) error {

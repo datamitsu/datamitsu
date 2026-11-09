@@ -25,7 +25,7 @@ import (
 // FormatVersion is the config-evaluation semantics version. Bump it whenever
 // an artifact's encoded shape or the rules that produce its config change, so
 // stale entries miss rather than replaying results with different semantics.
-const FormatVersion = 12
+const FormatVersion = 13
 
 // ChainFile is one on-disk file of the resolved config chain. A file that does
 // not exist is recorded with Exists=false and an empty hash: its appearance is

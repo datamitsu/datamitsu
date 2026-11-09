@@ -115,6 +115,29 @@ func files(paths ...string) []report.FileResult {
 	return out
 }
 
+func TestSkippedInputIsNotAlsoReportedAsPassing(t *testing.T) {
+	run := &report.Run{Operations: []report.Operation{{
+		Name: "lint", Ran: true,
+		Tools: []report.ToolRun{{Name: "validator", Invocations: []report.Invocation{{
+			ID: "validator:1", State: "ran", Success: true, ExitCode: new(0),
+			Files:   files("valid.json", "ambiguous.yaml"),
+			Skipped: []report.InputSkip{{File: "ambiguous.yaml", Category: "catalog-ambiguous", Reason: "multiple candidates"}},
+		}}}},
+	}}}
+	doc, _ := decode(t, run)
+	suite := doc.suite(t, "lint/validator")
+	if suite.Tests != 2 || suite.Skipped != 1 || suite.Failures != 0 || suite.Errors != 0 {
+		t.Fatalf("suite = %+v, want one passed input and one skipped input", suite)
+	}
+	if passed := suite.testCase(t, "valid.json"); passed.Skipped != nil || passed.Failure != nil || passed.Error != nil {
+		t.Fatalf("validated input did not pass: %+v", passed)
+	}
+	skipped := suite.testCase(t, "ambiguous.yaml (input skipped)")
+	if skipped.Skipped == nil || !strings.Contains(skipped.Skipped.Message, "multiple candidates") {
+		t.Fatalf("skip reason was lost: %+v", skipped)
+	}
+}
+
 func sampleRun() *report.Run {
 	one, two := 1, 2
 	return &report.Run{

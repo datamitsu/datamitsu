@@ -121,10 +121,11 @@ type Event struct {
 	Level      string `json:"level,omitempty"` // debug | info | warn | error, for log events
 
 	// done summary.
-	Tools   int `json:"tools,omitempty"`
-	Runs    int `json:"runs,omitempty"`
-	Failed  int `json:"failed,omitempty"`
-	Skipped int `json:"skipped,omitempty"`
+	Tools        int `json:"tools,omitempty"`
+	Runs         int `json:"runs,omitempty"`
+	Failed       int `json:"failed,omitempty"`
+	Skipped      int `json:"skipped,omitempty"`
+	InputSkipped int `json:"inputSkipped,omitempty"`
 	// Cancelled counts the tasks a run stopped before they finished — cancelled
 	// after they started or never started — apart from Skipped, which counts the
 	// tools the planner left out. A pointer, so that zero can be written.

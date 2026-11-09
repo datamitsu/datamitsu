@@ -105,6 +105,7 @@ const (
 	ReasonParseFailed       Reason = "parse-failed"
 	ReasonTruncated         Reason = "truncated"
 	ReasonUnparsedCacheHit  Reason = "unparsed-cache-hit"
+	ReasonInputSkipped      Reason = "input-skipped"
 	// ReasonFailedWithoutFindings: a process exited non-zero and the parser
 	// that recognized its output found nothing in it: the failure is not in
 	// what it printed. (An earlier build also recorded here an empty answer of
@@ -314,6 +315,13 @@ type ParserRef struct {
 	ColumnUnit string `json:"columnUnit,omitempty"`
 }
 
+// InputSkip makes incomplete validation visible without creating a gating diagnostic.
+type InputSkip struct {
+	File     string `json:"file"`
+	Reason   string `json:"reason"`
+	Category string `json:"category"`
+}
+
 // Invocation is one process a task planned, or what stood in for one: the
 // files a cache answered, or a task that spawned nothing.
 type Invocation struct {
@@ -348,6 +356,7 @@ type Invocation struct {
 	// format (a declared format parser), fallback:<format> (the fallback
 	// built into datamitsu, and the format it recognized), or none.
 	Provenance string       `json:"provenance"`
+	Skipped    []InputSkip  `json:"skipped,omitempty"`
 	Files      []FileResult `json:"files"`
 	Findings   []Finding    `json:"findings"`
 	// Step is the step of its operation the invocation ran in, counted from

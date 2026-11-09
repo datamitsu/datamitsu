@@ -45,6 +45,16 @@ func testBinaryApp(url, pin string) *AppConfigBinary {
 
 func TestComputePreparedKeyStableAcrossStoreRoots(t *testing.T) {
 	bm := prepareTestManager(t)
+	dep := bm.mapOfApps["dep"]
+	dep.Binary = nil
+	dep.Node = &AppConfigNode{PackageName: "frontend", Version: "1", BinPath: "entrypoint.mjs"}
+	dep.RuntimeEnv = map[string]string{"DATA_PATH": "${STORE}/frontend"}
+	bm.mapOfApps["dep"] = dep
+	bm.runtimeManager = &mockRuntimeAppManager{
+		computeAppPathFunc: func(string, App) (string, error) {
+			return filepath.Join(env.GetStorePath(), ".apps", "node", "frontend"), nil
+		},
+	}
 	first, err := bm.ComputePreparedKey("root")
 	if err != nil {
 		t.Fatalf("key: %v", err)
@@ -160,6 +170,81 @@ func TestComputePreparedKeyDependencyStep(t *testing.T) {
 	}
 	if key == base {
 		t.Fatal("dependency prepare step did not change the dependent's key")
+	}
+}
+
+func TestComputePreparedKeyIncludesConsumedLauncherEnvironment(t *testing.T) {
+	bm := prepareTestManager(t)
+	dep := bm.mapOfApps["dep"]
+	dep.Binary = nil
+	dep.Node = &AppConfigNode{PackageName: "frontend", Version: "1", BinPath: "entrypoint.mjs"}
+	dep.Env = map[string]string{"FRONTEND_MODE": "base"}
+	dep.RuntimeEnv = map[string]string{"REVIEW_MODE": "strict"}
+	bm.mapOfApps["dep"] = dep
+	bm.runtimeManager = &mockRuntimeAppManager{
+		computeAppPathFunc: func(string, App) (string, error) {
+			return filepath.Join(env.GetStorePath(), ".apps", "node", "frontend"), nil
+		},
+	}
+
+	base, err := bm.ComputePreparedKey("root")
+	if err != nil {
+		t.Fatalf("key: %v", err)
+	}
+
+	dep = bm.mapOfApps["dep"]
+	dep.RuntimeEnv["REVIEW_MODE"] = "permissive"
+	bm.mapOfApps["dep"] = dep
+	changed, err := bm.ComputePreparedKey("root")
+	if err != nil {
+		t.Fatalf("key after dependency runtimeEnv change: %v", err)
+	}
+	if changed == base {
+		t.Fatal("dependency launcher RuntimeEnv change kept prepared key")
+	}
+
+	dep = bm.mapOfApps["dep"]
+	dep.RuntimeEnv = map[string]string{"REVIEW_MODE": "strict"}
+	dep.Env["FRONTEND_MODE"] = "changed"
+	bm.mapOfApps["dep"] = dep
+	changed, err = bm.ComputePreparedKey("root")
+	if err != nil {
+		t.Fatalf("key after dependency env change: %v", err)
+	}
+	if changed == base {
+		t.Fatal("dependency launcher Env change kept prepared key")
+	}
+}
+
+func TestComputePreparedKeyIgnoresOverriddenLauncherEnv(t *testing.T) {
+	bm := prepareTestManager(t)
+	dep := bm.mapOfApps["dep"]
+	dep.Binary = nil
+	dep.Node = &AppConfigNode{PackageName: "frontend", Version: "1", BinPath: "entrypoint.mjs"}
+	dep.RuntimeEnv = map[string]string{"PATH": "config-path"}
+	bm.mapOfApps["dep"] = dep
+	bm.runtimeManager = &mockRuntimeAppManager{
+		resolveCommandInfoFunc: func(string, App) (*CommandInfo, error) {
+			return &CommandInfo{Env: map[string]string{"PATH": "runtime-path"}}, nil
+		},
+		computeAppPathFunc: func(string, App) (string, error) {
+			return filepath.Join(env.GetStorePath(), ".apps", "node", "frontend"), nil
+		},
+	}
+
+	base, err := bm.ComputePreparedKey("root")
+	if err != nil {
+		t.Fatalf("key: %v", err)
+	}
+	dep = bm.mapOfApps["dep"]
+	dep.RuntimeEnv["PATH"] = "another-config-path"
+	bm.mapOfApps["dep"] = dep
+	key, err := bm.ComputePreparedKey("root")
+	if err != nil {
+		t.Fatalf("key after overridden RuntimeEnv change: %v", err)
+	}
+	if key != base {
+		t.Fatalf("overridden launcher RuntimeEnv changed key: %s vs %s", key, base)
 	}
 }
 

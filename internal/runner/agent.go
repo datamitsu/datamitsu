@@ -168,6 +168,13 @@ func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocatio
 		}
 	}
 	label := agentLabel(tr.Name, inv.Dir)
+	for _, skip := range inv.Skipped {
+		note := label + " skipped input " + skip.File + ": " + displaySkipReason(skip.Reason)
+		if skip.Category != "" {
+			note += " (" + skip.Category + ")"
+		}
+		record(b, note)
+	}
 	var failure string
 	synthetic, isSynthetic := report.Synthetic(inv)
 	switch {

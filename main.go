@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/datamitsu/datamitsu/cmd"
+	"github.com/datamitsu/datamitsu/internal/launch"
 	"github.com/datamitsu/datamitsu/internal/shim"
 
 	_ "embed"
@@ -18,6 +19,9 @@ func main() {
 	// for a normal datamitsu invocation and for a datamitsu binary that was
 	// merely renamed.
 	if code, handled := shim.Dispatch(); handled {
+		os.Exit(code)
+	}
+	if code, handled := launch.Dispatch(); handled {
 		os.Exit(code)
 	}
 	cmd.Execute()

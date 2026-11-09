@@ -100,18 +100,21 @@ func (rm *RuntimeManager) RuntimeExecutionEnvironment(runtimeName string, rc con
 	}
 	var vars map[string]string
 	switch rc.Kind {
-	case config.RuntimeKindNode, config.RuntimeKindBun:
+	case config.RuntimeKindNode:
 		storePath, err := rm.pnpmDataPath(runtimeName, rc)
 		if err != nil {
 			return "", nil, err
 		}
-		vars = make(map[string]string, 3)
-		vars["npm_config_cache"] = filepath.Join(dataRoot, "npm-cache")
-		vars["npm_config_store_dir"] = storePath
-		if rc.Kind == config.RuntimeKindNode {
-			vars["NODE_COMPILE_CACHE"] = filepath.Join(dataRoot, "node-compile")
-		} else {
-			vars["BUN_RUNTIME_TRANSPILER_CACHE_PATH"] = filepath.Join(dataRoot, "bun-cache")
+		vars = map[string]string{
+			"npm_config_cache":     filepath.Join(dataRoot, "npm-cache"),
+			"npm_config_store_dir": storePath,
+			"NODE_COMPILE_CACHE":   filepath.Join(dataRoot, "node-compile"),
+		}
+	case config.RuntimeKindBun:
+		vars = map[string]string{
+			"npm_config_cache":                  filepath.Join(dataRoot, "npm-cache"),
+			"BUN_RUNTIME_TRANSPILER_CACHE_PATH": filepath.Join(dataRoot, "bun-cache"),
+			"BUN_OPTIONS":                       "--no-install",
 		}
 	case config.RuntimeKindUV:
 		vars = getUVEnvVars(dataRoot)
@@ -124,5 +127,6 @@ func (rm *RuntimeManager) RuntimeExecutionEnvironment(runtimeName string, rc con
 	default:
 		return "", nil, fmt.Errorf("runtime %q has no runtime-owned environment", runtimeName)
 	}
+
 	return dataRoot, vars, nil
 }

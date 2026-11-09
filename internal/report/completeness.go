@@ -22,6 +22,9 @@ func toolReasons(tr *ToolRun, sel Selection, parsed bool) []Reason {
 		set[ReasonNarrowedSelection] = true
 	}
 	for _, inv := range tr.Invocations {
+		if len(inv.Skipped) > 0 {
+			set[ReasonInputSkipped] = true
+		}
 		if inv.Coverage == string(tooling.CoveragePartial) {
 			set[ReasonPartialUnit] = true
 		}

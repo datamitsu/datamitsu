@@ -8,26 +8,46 @@ import (
 	"github.com/datamitsu/datamitsu/internal/clitest"
 )
 
-func TestRuntimeHumanInventoryIncludesMissingAndInstalledRuntimes(t *testing.T) {
+func TestRuntimeHumanInventoryExplainsDirectRunCapability(t *testing.T) {
 	project, configPath, _ := runtimeProject(t, runtimeProbe(t))
-	result := clitest.Run(t, clitest.RunOptions{Dir: project.Dir}, runtimeArgs(project, configPath, "list")...)
+	result := clitest.Run(t, clitest.RunOptions{Dir: project.Dir, CacheDir: t.TempDir()}, runtimeArgs(project, configPath, "list")...)
 	if result.ExitCode != 0 || result.Stderr != "" {
 		t.Fatalf("human inventory failed: %+v", result)
 	}
 	lines := strings.Split(strings.TrimSpace(result.Stdout), "\n")
-	want := [][]string{
-		{"NAME", "KIND", "MODE", "VERSION", "STATUS"},
-		{"alpha", "node", "system", "22", "installed"},
-		{"pnpm", "pnpm", "system", "12", "missing"},
-		{"zed", "go", "system", "1.23", "installed"},
+	columns := make(map[string]int)
+	for index, name := range strings.Fields(lines[0]) {
+		columns[name] = index
 	}
-	if len(lines) != len(want) {
-		t.Fatalf("inventory rows = %q", result.Stdout)
-	}
-	for index, row := range want {
-		if strings.Join(strings.Fields(lines[index]), " ") != strings.Join(row, " ") {
-			t.Errorf("inventory row %d = %q, want fields %q", index, lines[index], row)
+	for _, required := range []string{"NAME", "STATUS", "RUNNABLE", "REASON"} {
+		if _, ok := columns[required]; !ok {
+			t.Fatalf("inventory hides %s: %s", required, result.Stdout)
 		}
+	}
+	rows := make(map[string][]string)
+	for _, line := range lines[1:] {
+		fields := strings.Fields(line)
+		if len(fields) <= columns["RUNNABLE"] {
+			t.Fatalf("inventory row omits capability: %q", line)
+		}
+		rows[fields[columns["NAME"]]] = fields
+	}
+	for _, name := range []string{"alpha", "zed"} {
+		row, ok := rows[name]
+		if !ok || row[columns["STATUS"]] != "installed" || row[columns["RUNNABLE"]] != "yes" {
+			t.Fatalf("installed interpreter %s is not visibly runnable: %s", name, result.Stdout)
+		}
+	}
+	pnpm, ok := rows["pnpm"]
+	if !ok || pnpm[columns["STATUS"]] != "missing" || pnpm[columns["RUNNABLE"]] != "no" {
+		t.Fatalf("pnpm capability and availability are not distinguished: %s", result.Stdout)
+	}
+	if len(pnpm) <= columns["REASON"] {
+		t.Fatalf("pnpm has no visible explanation: %s", result.Stdout)
+	}
+	reason := strings.Join(pnpm[columns["REASON"]:], " ")
+	if !strings.Contains(reason, "package manager") || !strings.Contains(reason, "datamitsu exec") || !strings.Contains(reason, "missing-pnpm-command") {
+		t.Fatalf("pnpm must explain its restriction, alternative and missing executable: %q", reason)
 	}
 }
 

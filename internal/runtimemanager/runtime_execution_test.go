@@ -162,14 +162,14 @@ func TestEnsureExecutionUsesReadyPythonOfflineWithoutUV(t *testing.T) {
 	}
 }
 
-func TestEnsureExecutionRejectsUnsupportedKindsAndMissingSystemRuntimes(t *testing.T) {
+func TestEnsureExecutionRejectsPackageManagerAndMissingSystemRuntime(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	rm := New(config.MapOfRuntimes{
 		"pnpm":         testPNPMRuntime(),
 		"missing-node": {Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "absent-node-command"}, Node: &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: testPNPMRuntimeName}},
 	})
-	if _, err := rm.EnsureExecution(context.Background(), "pnpm"); err == nil || !strings.Contains(err.Error(), "not directly runnable") {
-		t.Fatalf("EnsureExecution(pnpm) = %v, want non-runnable kind error", err)
+	if _, err := rm.EnsureExecution(context.Background(), "pnpm"); err == nil || !strings.Contains(err.Error(), "package manager, not a directly runnable interpreter") {
+		t.Fatalf("EnsureExecution(pnpm) = %v, want package-manager explanation", err)
 	}
 	if _, err := rm.EnsureExecution(context.Background(), "missing-node"); err == nil || !strings.Contains(err.Error(), "executable file not found") {
 		t.Fatalf("EnsureExecution(missing system runtime) = %v, want missing executable diagnostic", err)
@@ -181,22 +181,23 @@ func TestResolveExecutionRejectsUnknownAndMalformedRuntimeKind(t *testing.T) {
 	if _, err := rm.ResolveExecution("absent"); !errors.Is(err, ErrUnknownRuntime) {
 		t.Fatalf("unknown runtime error = %v", err)
 	}
-	if _, err := rm.ResolveExecution("broken"); err == nil || !strings.Contains(err.Error(), "not directly runnable") {
+	if _, err := rm.ResolveExecution("broken"); err == nil || !strings.Contains(err.Error(), "runtime kind \"unknown\" is not directly runnable") {
 		t.Fatalf("unsupported kind error = %v", err)
 	}
 }
 
-func TestRuntimeInventorySeparatesUnavailableFromMissing(t *testing.T) {
+func TestRuntimeInventorySeparatesAvailabilityAndRunnableReasons(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
 		"bad/name":    {Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "node"}},
 		"no-platform": {Kind: config.RuntimeKindGo, Mode: config.RuntimeModeManaged, Managed: &config.RuntimeConfigManaged{}},
 		"jvm-system":  {Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "java", SystemVersion: "21"}, JVM: &config.RuntimeConfigJVM{JavaVersion: "21"}},
 		"bun":         {Kind: config.RuntimeKindBun, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "bun"}, Bun: &config.RuntimeConfigBun{BunVersion: "1"}},
+		"pnpm":        testPNPMRuntime(),
 	}
 	rm := New(runtimes)
 	rm.lookPathFunc = func(command string) (string, error) {
-		if command == "java" {
-			return "/runtime/java", nil
+		if command == "java" || command == "bun" {
+			return "/runtime/" + command, nil
 		}
 		return "", errors.New("not found")
 	}
@@ -208,17 +209,20 @@ func TestRuntimeInventorySeparatesUnavailableFromMissing(t *testing.T) {
 	for _, entry := range entries {
 		byName[entry.Name] = entry
 	}
-	if got := byName["bad/name"]; got.Status != RuntimeStatusUnavailable || got.Reason == "" {
+	if got := byName["bad/name"]; got.Status != RuntimeStatusUnavailable || got.Reason == "" || got.NotRunnableReason != "" {
 		t.Errorf("unsafe name status = %#v", got)
 	}
-	if got := byName["no-platform"]; got.Status != RuntimeStatusUnavailable || got.Reason == "" {
+	if got := byName["no-platform"]; got.Status != RuntimeStatusUnavailable || got.Reason == "" || got.NotRunnableReason != "" {
 		t.Errorf("unavailable managed target status = %#v", got)
 	}
 	if got := byName["jvm-system"]; got.Status != RuntimeStatusInstalled || got.Version != "21" || got.Executable != "/runtime/java" {
 		t.Errorf("system JVM inventory = %#v", got)
 	}
-	if got := byName["bun"]; got.Status != RuntimeStatusMissing || got.Runnable || got.Version != "1" {
-		t.Errorf("missing Bun inventory = %#v", got)
+	if got := byName["bun"]; got.Status != RuntimeStatusInstalled || !got.Runnable || got.Version != "1" || got.Reason != "" || got.NotRunnableReason != "" {
+		t.Errorf("installed system Bun inventory = %#v", got)
+	}
+	if got := byName["pnpm"]; got.Runnable || got.NotRunnableReason == "" || got.Status != RuntimeStatusMissing || got.Reason == "" {
+		t.Errorf("pnpm availability and runnable metadata = %#v", got)
 	}
 }
 

@@ -152,6 +152,16 @@ func TestValidateAppPrepare(t *testing.T) {
 	}
 }
 
+func TestValidatePrepareAcceptsNodeAppBinding(t *testing.T) {
+	apps := binmanager.MapOfApps{
+		"app": {Binary: binaryApp(), DependsOn: edges("dep"), Prepare: &binmanager.AppPrepare{Args: []string{"${APP_BIN:dep}"}, Network: no()}},
+		"dep": {Node: &binmanager.AppConfigNode{PackageName: "x", Version: "1", BinPath: "x", LockFile: "br:x"}},
+	}
+	if errs := validateAppPrepare(apps, []string{"app"}); len(errs) != 0 {
+		t.Fatalf("unexpected validation errors: %v", errs)
+	}
+}
+
 func TestValidateAppPrepareEnvRules(t *testing.T) {
 	// ${APP_PREPARED} in app env is rejected: env reaches installers.
 	apps := binmanager.MapOfApps{

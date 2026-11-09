@@ -85,13 +85,10 @@ func dependencyAliasOf(app binmanager.App, alias string) (string, bool) {
 	return "", false
 }
 
-// validateAppBINTargetKind admits the app kinds with a single executable
-// entry point that binding resolution can hand out today: native binaries,
-// uv and go apps. Node, bun and jvm apps need a launcher that does not exist
-// yet, so they are a load-time error with a message that says so.
+// validateAppBINTargetKind admits kinds with a command path that can be preserved by a launcher.
 func validateAppBINTargetKind(target binmanager.App, name string) error {
 	switch {
-	case target.Binary != nil:
+	case target.Binary != nil, target.Node != nil, target.Bun != nil:
 		return nil
 	case target.Uv != nil, target.Go != nil:
 		return nil

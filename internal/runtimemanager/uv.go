@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -99,7 +100,7 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 		return fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
 	}
 
-	appEnvPath, err := rm.GetAppPath(appName, config.RuntimeKindUV, uvVersionForHash(appConfig.Version, appConfig.RequiresPython), nil, lockFileHash(appConfig.LockFile), files, archives, runtimeName)
+	appEnvPath, err := rm.GetAppPath(appName, config.RuntimeKindUV, uvVersionForHash(appConfig.Version, appConfig.RequiresPython), appConfig.Dependencies, lockFileHash(appConfig.LockFile), files, archives, runtimeName)
 	if err != nil {
 		return fmt.Errorf("failed to get app path: %w", err)
 	}
@@ -181,7 +182,7 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 	}
 
 	reqPython := resolveRequiresPython(appConfig.RequiresPython)
-	pyprojectTOML := buildPyprojectTOML(appConfig.PackageName, appConfig.Version, reqPython)
+	pyprojectTOML := buildPyprojectTOML(appConfig.PackageName, appConfig.Version, reqPython, appConfig.Dependencies)
 	if err := os.WriteFile(filepath.Join(appEnvPath, "pyproject.toml"), []byte(pyprojectTOML), 0o644); err != nil {
 		return fmt.Errorf("failed to write pyproject.toml for %q: %w", appName, err)
 	}
@@ -367,20 +368,35 @@ func uvVersionForHash(version, requiresPython string) string {
 	return version + "\x00" + resolveRequiresPython(requiresPython)
 }
 
-func buildPyprojectTOML(packageName string, version string, requiresPython string) string {
-	safeName := strings.NewReplacer("@", "", "/", "-").Replace(packageName)
-	dep := packageName
+func buildPyprojectTOML(packageName string, version string, requiresPython string, dependencies map[string]string) string {
+	safeName := strings.ReplaceAll(strings.ReplaceAll(packageName, "@", ""), "/", "-")
+	primary := packageName
 	if version != "" {
-		dep += "==" + version
+		primary += "==" + version
+	}
+	pins := make([]string, 0, len(dependencies)+1)
+	pins = append(pins, primary)
+	for name, pin := range dependencies {
+		pins = append(pins, name+"=="+pin)
+	}
+	slices.Sort(pins)
+	var dependencyLines strings.Builder
+	for i, pin := range pins {
+		if i > 0 {
+			dependencyLines.WriteString(",\n")
+		}
+		dependencyLines.WriteString("    \"")
+		dependencyLines.WriteString(escapeTOMLString(pin))
+		dependencyLines.WriteString("\"")
 	}
 	return fmt.Sprintf(`[project]
 name = "datamitsu-%s"
 version = "0.0.0"
 requires-python = "%s"
 dependencies = [
-    "%s",
+%s
 ]
-`, escapeTOMLString(safeName), escapeTOMLString(requiresPython), escapeTOMLString(dep))
+`, escapeTOMLString(safeName), escapeTOMLString(requiresPython), dependencyLines.String())
 }
 
 // GetUVCommandInfo returns command info for running a uv-managed app.
@@ -390,7 +406,7 @@ func (rm *RuntimeManager) GetUVCommandInfo(appName string, appConfig *binmanager
 		return nil, fmt.Errorf("failed to resolve runtime for %q: %w", appName, err)
 	}
 
-	appEnvPath, err := rm.GetAppPath(appName, config.RuntimeKindUV, uvVersionForHash(appConfig.Version, appConfig.RequiresPython), nil, lockFileHash(appConfig.LockFile), files, archives, runtimeName)
+	appEnvPath, err := rm.GetAppPath(appName, config.RuntimeKindUV, uvVersionForHash(appConfig.Version, appConfig.RequiresPython), appConfig.Dependencies, lockFileHash(appConfig.LockFile), files, archives, runtimeName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get app path: %w", err)
 	}

@@ -79,12 +79,12 @@ func TestValidateRuntimeEnv(t *testing.T) {
 }
 
 func TestRuntimeEnvBindingTargetKinds(t *testing.T) {
-	// uv and go apps have a single executable entry point, so bindings can
-	// hand out their paths today. Node, bun, jvm and shell need a launcher
-	// that does not exist yet.
 	supported := map[string]binmanager.App{
-		"uv": {Uv: &binmanager.AppConfigUV{PackageName: "dep", Version: "1", LockFile: "br:x"}},
-		"go": {Go: &binmanager.AppConfigGo{PackageName: "example.com/dep", Version: "v1.0.0", LockFile: "br:x"}},
+		"binary": {Binary: &binmanager.AppConfigBinary{}},
+		"uv":     {Uv: &binmanager.AppConfigUV{PackageName: "dep", Version: "1", LockFile: "br:x"}},
+		"go":     {Go: &binmanager.AppConfigGo{PackageName: "example.com/dep", Version: "v1.0.0", LockFile: "br:x"}},
+		"bun":    {Bun: &binmanager.AppConfigBun{PackageName: "dep", Version: "1", BinPath: "bin/dep.js", LockFile: "br:x"}},
+		"node":   {Node: &binmanager.AppConfigNode{PackageName: "dep", Version: "1", BinPath: "bin/dep.js", LockFile: "br:x"}},
 	}
 	for name, app := range supported {
 		t.Run(name, func(t *testing.T) {
@@ -96,8 +96,7 @@ func TestRuntimeEnvBindingTargetKinds(t *testing.T) {
 	}
 	for name, app := range map[string]binmanager.App{
 		"shell": {Shell: &binmanager.AppConfigShell{Name: "echo"}},
-		"bun":   {Bun: &binmanager.AppConfigBun{}}, "node": {Node: &binmanager.AppConfigNode{}},
-		"jvm": {Jvm: &binmanager.AppConfigJVM{}},
+		"jvm":   {Jvm: &binmanager.AppConfigJVM{}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{"root": {Binary: &binmanager.AppConfigBinary{}, DependsOn: edges("dep"), RuntimeEnv: map[string]string{"BIN": "${APP_BIN:dep}"}}, "dep": app}

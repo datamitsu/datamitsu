@@ -172,6 +172,13 @@ run warns once, after its last operation, however many invocations hit the same 
 Both an unavailable module and a missing parser disable caching of fix and lint
 results for the affected tools.
 
+### Parser-declared skipped inputs
+
+A parser may return input-level skip metadata when it meaningfully recognizes a
+selection but cannot analyze every input. Those skips remain non-gating: they do
+not fail the operation by themselves. They are still reported as skipped, make
+the affected result incomplete, and prevent the skipped inputs from receiving a
+cached pass. A partial parser result must not be treated as a complete clean run.
 Whether a tool passed is decided by its exit code and, when a module at
 descriptor schema 2 parsed its output, by its operation's
 [`failOn`](../../reference/configuration-api.md#failing-on-findings-failon): a

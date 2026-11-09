@@ -108,15 +108,16 @@ type RuntimeExecution struct {
 
 // RuntimeInventoryEntry describes one configured runtime without materializing it.
 type RuntimeInventoryEntry struct {
-	Name           string             `json:"name"`
-	Kind           config.RuntimeKind `json:"kind"`
-	ConfiguredMode config.RuntimeMode `json:"configuredMode"`
-	EffectiveMode  config.RuntimeMode `json:"effectiveMode"`
-	Version        string             `json:"version"`
-	Runnable       bool               `json:"runnable"`
-	Status         RuntimeStatus      `json:"status"`
-	Executable     string             `json:"executable,omitempty"`
-	Reason         string             `json:"reason,omitempty"`
+	Name              string             `json:"name"`
+	Kind              config.RuntimeKind `json:"kind"`
+	ConfiguredMode    config.RuntimeMode `json:"configuredMode"`
+	EffectiveMode     config.RuntimeMode `json:"effectiveMode"`
+	Version           string             `json:"version"`
+	Runnable          bool               `json:"runnable"`
+	Status            RuntimeStatus      `json:"status"`
+	Executable        string             `json:"executable,omitempty"`
+	Reason            string             `json:"reason,omitempty"`
+	NotRunnableReason string             `json:"notRunnableReason,omitempty"`
 }
 
 // EnsureExecutionRequest is sent to the provisioning worker before runtime mutation.
@@ -149,11 +150,11 @@ func (rm *RuntimeManager) ResolveExecution(runtimeName string) (RuntimeExecution
 	if !ok {
 		return RuntimeExecution{}, fmt.Errorf("%w: %q", ErrUnknownRuntime, runtimeName)
 	}
+	if reason := runtimeNotRunnableReason(rc.Kind); reason != "" {
+		return RuntimeExecution{}, fmt.Errorf("runtime %q: %s", runtimeName, reason)
+	}
 	if !validRuntimePathName(runtimeName) {
 		return RuntimeExecution{}, fmt.Errorf("runtime %q is not a safe store path component", runtimeName)
-	}
-	if !runnableRuntimeKind(rc.Kind) {
-		return RuntimeExecution{}, fmt.Errorf("runtime %q kind %q is not directly runnable", runtimeName, rc.Kind)
 	}
 	resolved, err := rm.computeRuntimeBinPath(runtimeName)
 	if err != nil {
@@ -171,11 +172,11 @@ func (rm *RuntimeManager) EnsureExecution(ctx context.Context, runtimeName strin
 	if !ok {
 		return RuntimeExecution{}, fmt.Errorf("%w: %q", ErrUnknownRuntime, runtimeName)
 	}
+	if reason := runtimeNotRunnableReason(configured.Kind); reason != "" {
+		return RuntimeExecution{}, fmt.Errorf("runtime %q: %s", runtimeName, reason)
+	}
 	if !validRuntimePathName(runtimeName) {
 		return RuntimeExecution{}, fmt.Errorf("runtime %q is not a safe store path component", runtimeName)
-	}
-	if !runnableRuntimeKind(configured.Kind) {
-		return RuntimeExecution{}, fmt.Errorf("runtime %q kind %q is not directly runnable", runtimeName, configured.Kind)
 	}
 	request := EnsureExecutionRequest{StoreRoot: env.GetStorePath(), CacheRoot: env.GetCachePath(), Runtimes: rm.mapOfRuntimes, Name: runtimeName}
 	var result RuntimeExecution
@@ -202,10 +203,10 @@ func (rm *RuntimeManager) EnsureExecution(ctx context.Context, runtimeName strin
 	switch resolved.Kind {
 	case config.RuntimeKindUV:
 		executable, err = rm.EnsurePython(installCtx, runtimeName)
-	case config.RuntimeKindNode, config.RuntimeKindGo, config.RuntimeKindJVM:
+	case config.RuntimeKindNode, config.RuntimeKindBun, config.RuntimeKindGo, config.RuntimeKindJVM:
 		executable, err = rm.GetRuntimePath(installCtx, runtimeName)
-	case config.RuntimeKindBun, config.RuntimeKindPNPM:
-		return RuntimeExecution{}, fmt.Errorf("runtime %q kind %q is not directly runnable", runtimeName, resolved.Kind)
+	case config.RuntimeKindPNPM:
+		return RuntimeExecution{}, fmt.Errorf("runtime %q cannot be run directly: %s", runtimeName, runtimeNotRunnableReason(resolved.Kind))
 	default:
 		return RuntimeExecution{}, fmt.Errorf("runtime %q has unsupported kind %q", runtimeName, resolved.Kind)
 	}
@@ -216,11 +217,21 @@ func (rm *RuntimeManager) EnsureExecution(ctx context.Context, runtimeName strin
 	return resolved, nil
 }
 
+func runtimeNotRunnableReason(kind config.RuntimeKind) string {
+	if kind == config.RuntimeKindPNPM {
+		return "pnpm is a package manager, not a directly runnable interpreter; configure an app and use datamitsu exec to run pnpm-managed tools"
+	}
+	if runnableRuntimeKind(kind) {
+		return ""
+	}
+	return fmt.Sprintf("runtime kind %q is not directly runnable", kind)
+}
+
 func runnableRuntimeKind(kind config.RuntimeKind) bool {
 	switch kind {
-	case config.RuntimeKindNode, config.RuntimeKindUV, config.RuntimeKindGo, config.RuntimeKindJVM:
+	case config.RuntimeKindNode, config.RuntimeKindBun, config.RuntimeKindUV, config.RuntimeKindGo, config.RuntimeKindJVM:
 		return true
-	case config.RuntimeKindBun, config.RuntimeKindPNPM:
+	case config.RuntimeKindPNPM:
 		return false
 	default:
 		return false
@@ -238,6 +249,7 @@ func (rm *RuntimeManager) RuntimeInventory() ([]RuntimeInventoryEntry, error) {
 	for _, name := range names {
 		configured := rm.mapOfRuntimes[name]
 		entry := RuntimeInventoryEntry{Name: name, Kind: configured.Kind, ConfiguredMode: configured.Mode, EffectiveMode: configured.Mode, Runnable: runnableRuntimeKind(configured.Kind), Status: RuntimeStatusUnavailable}
+		entry.NotRunnableReason = runtimeNotRunnableReason(configured.Kind)
 		entry.Version = runtimeConfiguredVersion(configured)
 		if !validRuntimePathName(name) {
 			entry.Reason = "runtime name is not a safe store path component"
@@ -253,9 +265,6 @@ func (rm *RuntimeManager) RuntimeInventory() ([]RuntimeInventoryEntry, error) {
 		entry.EffectiveMode = resolved.rc.Mode
 		if configured.Kind == config.RuntimeKindUV && configured.UV != nil {
 			entry.Version = configured.UV.PythonVersion
-		}
-		if configured.Kind == config.RuntimeKindPNPM {
-			entry.Runnable = false
 		}
 		execPath := resolved.binPath
 		if configured.Kind == config.RuntimeKindUV {
@@ -499,7 +508,7 @@ func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (st
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve UV runtime for %q: %w", appName, err)
 		}
-		return rm.GetAppPath(appName, config.RuntimeKindUV, uvVersionForHash(app.Uv.Version, app.Uv.RequiresPython), nil, lockFileHash(app.Uv.LockFile), app.Files, app.Archives, runtimeName)
+		return rm.GetAppPath(appName, config.RuntimeKindUV, uvVersionForHash(app.Uv.Version, app.Uv.RequiresPython), app.Uv.Dependencies, lockFileHash(app.Uv.LockFile), app.Files, app.Archives, runtimeName)
 	case app.Node != nil:
 		appEnvPath, err := rm.resolveNodeAppEnvPath(appName, app.Node, app.Files, app.Archives)
 		if err != nil {

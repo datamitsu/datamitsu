@@ -110,12 +110,19 @@ func (p diagnosticParser) Unrecognized(toolName string, declared config.OutputPa
 
 func answerOf(resp parsermanager.Response, toolName string, exitCode int32, format bool) tooling.ParseAnswer {
 	return tooling.ParseAnswer{
-		Diagnostics:  diagnostic.ResolveAll(resp.Diagnostics, toolName, exitCode != 0),
-		Recognized:   resp.Recognized,
-		Format:       resp.Format,
-		FormatParser: format,
-		Partial:      resp.Partial,
+		Diagnostics: diagnostic.ResolveAll(resp.Diagnostics, toolName, exitCode != 0),
+		Recognized:  resp.Recognized, Format: resp.Format, FormatParser: format,
+		Partial: resp.Partial, ExtractionPartial: resp.ExtractionPartial,
+		Skipped: inputSkips(resp.Skipped),
 	}
+}
+
+func inputSkips(skips []parsermanager.InputSkip) []tooling.InputSkip {
+	out := make([]tooling.InputSkip, len(skips))
+	for i, skip := range skips {
+		out[i] = tooling.InputSkip{File: skip.File, Reason: skip.Reason, Category: skip.Category}
+	}
+	return out
 }
 
 // parseProblems gathers, across the parses of a run, what could not be parsed:

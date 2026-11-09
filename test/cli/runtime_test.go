@@ -64,14 +64,16 @@ func TestRuntimeListJSONInventoryAndEmpty(t *testing.T) {
 		t.Fatalf("runtime list: %d\n%s", res.ExitCode, res.Stderr)
 	}
 	type runtimeInventory struct {
-		Name           string  `json:"name"`
-		Kind           string  `json:"kind"`
-		ConfiguredMode string  `json:"configuredMode"`
-		EffectiveMode  string  `json:"effectiveMode"`
-		Version        string  `json:"version"`
-		Runnable       bool    `json:"runnable"`
-		Status         string  `json:"status"`
-		Executable     *string `json:"executable"`
+		Name              string  `json:"name"`
+		Kind              string  `json:"kind"`
+		ConfiguredMode    string  `json:"configuredMode"`
+		EffectiveMode     string  `json:"effectiveMode"`
+		Version           string  `json:"version"`
+		Runnable          bool    `json:"runnable"`
+		Status            string  `json:"status"`
+		Executable        *string `json:"executable"`
+		NotRunnableReason string  `json:"notRunnableReason"`
+		Reason            string  `json:"reason"`
 	}
 	var doc struct {
 		Schema   string             `json:"schema"`
@@ -91,6 +93,12 @@ func TestRuntimeListJSONInventoryAndEmpty(t *testing.T) {
 	}
 	if doc.Runtimes[1].Kind != "pnpm" || doc.Runtimes[1].ConfiguredMode != "system" || doc.Runtimes[1].EffectiveMode != "system" || doc.Runtimes[1].Version != "12" || doc.Runtimes[1].Runnable || doc.Runtimes[1].Status != "missing" {
 		t.Fatalf("pnpm inventory: %+v", doc.Runtimes[1])
+	}
+	if !strings.Contains(doc.Runtimes[1].NotRunnableReason, "package manager") || strings.Contains(doc.Runtimes[1].NotRunnableReason, "missing-pnpm-command") {
+		t.Fatalf("pnpm capability explanation includes the wrong cause: %+v", doc.Runtimes[1])
+	}
+	if !strings.Contains(doc.Runtimes[1].Reason, "missing-pnpm-command") || strings.Contains(doc.Runtimes[1].Reason, "package manager") {
+		t.Fatalf("pnpm availability explanation includes the wrong cause: %+v", doc.Runtimes[1])
 	}
 	if doc.Runtimes[2].Kind != "go" || doc.Runtimes[2].ConfiguredMode != "system" || doc.Runtimes[2].EffectiveMode != "system" || doc.Runtimes[2].Version != "1.23" || !doc.Runtimes[2].Runnable || doc.Runtimes[2].Status != "installed" || doc.Runtimes[2].Executable == nil || *doc.Runtimes[2].Executable != probe {
 		t.Fatalf("go inventory: %+v", doc.Runtimes[2])

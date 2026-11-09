@@ -28,6 +28,8 @@ type fakeParser struct {
 	unrecognized                  bool
 	format                        bool
 	partial                       bool
+	skipped                       []InputSkip
+	extractionPartial             *bool
 
 	fallback                    *ParseAnswer
 	fallbackFails               error
@@ -46,6 +48,7 @@ func (f *fakeParser) Parse(_ context.Context, module, parser, toolName string, s
 	f.gotModule, f.gotParser, f.gotTool, f.gotStdout, f.gotStderr, f.gotExit = module, parser, toolName, stdout, stderr, exitCode
 	return ParseAnswer{
 		Diagnostics: f.diags, Recognized: !f.unrecognized, Format: parser, FormatParser: f.format, Partial: f.partial,
+		Skipped: f.skipped, ExtractionPartial: f.extractionPartial,
 	}, f.err
 }
 
@@ -75,6 +78,49 @@ func parseTask(module, parser string) Task {
 	return Task{
 		ToolName: "eslint",
 		Tool:     config.Tool{Name: "eslint", OutputParser: &config.OutputParser{Module: module, Parser: parser}},
+	}
+}
+
+func TestParseFileDiagnosticsSeparatesSkipsFromExtractionLoss(t *testing.T) {
+	root := t.TempDir()
+	skipped := filepath.Join(root, "ambiguous.yaml")
+	fp := &fakeParser{skipped: []InputSkip{
+		{File: "ambiguous.yaml", Reason: "ambiguous schema", Category: "catalog-ambiguous"},
+		{File: "routine.json", Reason: "no schema matched", Category: "unmatched"},
+		{File: "future.toml", Reason: "future rule", Category: "future-category"},
+	}}
+	e := &Executor{parser: fp, rootPath: root}
+	var proc ProcessResult
+	e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "schepherd"), root, []byte("report"), nil, 0, true)
+	if proc.Extraction != ExtractionParsedClean || proc.ExtractionPartial || !proc.InputPartial || len(proc.Skipped) != 2 {
+		t.Fatalf("skip-only result = %+v", proc)
+	}
+	if proc.Skipped[0].File != skipped || proc.Skipped[1].Category != "future-category" {
+		t.Errorf("visible skips = %+v", proc.Skipped)
+	}
+	partial := true
+	fp = &fakeParser{partial: true, extractionPartial: &partial, skipped: []InputSkip{{File: skipped, Reason: "incomplete", Category: "catalog-ambiguous"}}}
+	e.parser = fp
+	e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "schepherd"), root, []byte("report"), nil, 0, true)
+	if proc.Extraction != ExtractionTruncated || !proc.ExtractionPartial || len(proc.Skipped) != 1 {
+		t.Fatalf("skip plus extraction loss = %+v", proc)
+	}
+}
+
+func TestNoncanonicalSkipDoesNotCacheItsInput(t *testing.T) {
+	root := t.TempDir()
+	skipped := filepath.Join(root, "ambiguous.yaml")
+	validated := filepath.Join(root, "valid.yaml")
+	sep := string(os.PathSeparator)
+	fp := &fakeParser{skipped: []InputSkip{{
+		File: root + sep + "." + sep + "ambiguous.yaml", Reason: "multiple candidates", Category: "catalog-ambiguous",
+	}}}
+	e := &Executor{parser: fp, rootPath: root}
+	var proc ProcessResult
+	e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "schepherd"), root, []byte("report"), nil, 0, true)
+	passes := passesOf(proc, []string{skipped, validated})
+	if len(passes) != 1 || passes[0] != validated {
+		t.Fatalf("passes = %v, want only the validated input %q", passes, validated)
 	}
 }
 

@@ -196,6 +196,18 @@ func operation(op report.Operation) []part {
 		add(0, "\n_%s held by the baseline not listed._\n", count(baselined, "finding", "findings"))
 	}
 
+	var inputSkips []report.InputSkip
+	for _, tr := range op.Tools {
+		for _, inv := range tr.Invocations {
+			inputSkips = append(inputSkips, inv.Skipped...)
+		}
+	}
+	if len(inputSkips) > 0 {
+		add(0, "\n#### Inputs skipped by parsers\n\n")
+		for _, skip := range inputSkips {
+			add(0, "- %s: %s (%s)\n", code(skip.File), escape(skip.Reason), escape(skip.Category))
+		}
+	}
 	if len(op.Skipped) > 0 || len(op.Cancelled) > 0 {
 		add(0, "\n#### Skipped and stopped\n\n")
 		for _, s := range op.Skipped {

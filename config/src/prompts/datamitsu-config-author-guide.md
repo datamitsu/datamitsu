@@ -149,11 +149,13 @@ configuration should do about it.
 
 - **after v0.5.3** - `datamitsu runtime list` inventories exact configured runtime
   names without installing them; `datamitsu runtime run <name> -- <args...>`
-  runs only the configured Node, uv/CPython, Go, or JVM interpreter. Managed
+  runs only the configured Node, Bun, uv/CPython, Go, or JVM interpreter. Managed
   runtimes are provisioned automatically when needed. uv runs pinned CPython
   directly and does not resolve or install script/project dependencies. There
-  is no default runtime or kind alias; Bun and pnpm are inventory-only. A child
-  process receives the arguments after `--` unchanged.
+  is no default runtime or kind alias; pnpm is inventory-only because it is a
+  package manager, not an interpreter. Bun may be run directly and also supports
+  configured Bun apps. A child process receives the arguments after `--`
+  unchanged.
 
 - **after v0.5.3** - `datamitsu config reconcile --create-missing` creates only
   managed config files that are missing and never touches an existing file, and

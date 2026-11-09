@@ -47,12 +47,14 @@ func (p fallbackParser) Fallback(ctx context.Context, toolName string, stdout, s
 }
 
 func answer(resp parsermanager.Response, toolName string, exitCode int32) tooling.ParseAnswer {
+	skips := make([]tooling.InputSkip, len(resp.Skipped))
+	for i, skip := range resp.Skipped {
+		skips[i] = tooling.InputSkip{File: skip.File, Reason: skip.Reason, Category: skip.Category}
+	}
 	return tooling.ParseAnswer{
-		Diagnostics:  diagnostic.ResolveAll(resp.Diagnostics, toolName, exitCode != 0),
-		Recognized:   resp.Recognized,
-		Format:       resp.Format,
-		FormatParser: true,
-		Partial:      resp.Partial,
+		Diagnostics: diagnostic.ResolveAll(resp.Diagnostics, toolName, exitCode != 0),
+		Recognized:  resp.Recognized, Format: resp.Format, FormatParser: true,
+		Partial: resp.Partial, ExtractionPartial: resp.ExtractionPartial, Skipped: skips,
 	}
 }
 

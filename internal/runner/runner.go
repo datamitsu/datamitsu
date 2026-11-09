@@ -846,6 +846,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	}
 	if len(toolGroups) > 0 || len(plan.Skipped) > 0 || len(stopped) > 0 || placementHere {
 		printGroupedResults(toolGroups, sc.nameWidth, env.IsTimingsEnabled())
+		printInputSkips(toolGroups, sc.rootPath, sc.secretValues())
 		printStoppedTasks(stopped, sc.nameWidth)
 		printUnrunFiles(results, sc.rootPath, sc.nameWidth, cause)
 		printSkippedTools(plan.Skipped, sc.nameWidth)
@@ -866,17 +867,19 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	}
 	totalTools := len(toolGroups) + placementTools
 	failedTools += placementFailed
+	inputSkips := skippedInputCount(results)
 	ui.Emit(uievent.Event{
-		Type:       uievent.TypeDone,
-		OpID:       runOpID,
-		Status:     doneStatus(!hasFailures),
-		Op:         string(operation),
-		Tools:      totalTools,
-		Runs:       totalRuns,
-		Failed:     failedTools,
-		Skipped:    len(plan.Skipped),
-		Cancelled:  nonZero(len(stopped)),
-		DurationMs: totalWallClockTime,
+		Type:         uievent.TypeDone,
+		OpID:         runOpID,
+		Status:       doneStatus(!hasFailures),
+		Op:           string(operation),
+		Tools:        totalTools,
+		Runs:         totalRuns,
+		Failed:       failedTools,
+		Skipped:      len(plan.Skipped),
+		InputSkipped: inputSkips,
+		Cancelled:    nonZero(len(stopped)),
+		DurationMs:   totalWallClockTime,
 	})
 	opDuration = totalWallClockTime
 	summary := opSummary{
@@ -885,6 +888,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		runs:       totalRuns,
 		failed:     failedTools,
 		skipped:    len(plan.Skipped),
+		inputSkips: inputSkips,
 		cancelled:  len(stopped),
 		partial:    partialTasks(results),
 		durationMs: totalWallClockTime,
@@ -1622,6 +1626,57 @@ func printGroupedResults(toolGroups []toolExecutionGroup, nameWidth int, detaile
 			}
 		}
 	}
+}
+
+func printInputSkips(toolGroups []toolExecutionGroup, root string, secrets []string) {
+	if ui.Muted() {
+		return
+	}
+	for _, group := range toolGroups {
+		for _, execution := range group.executions {
+			for _, process := range execution.result.Processes {
+				for _, raw := range process.Skipped {
+					skip := report.InputSkip{File: raw.File, Reason: raw.Reason, Category: raw.Category}
+					report.MaskAll(&skip, secrets)
+					skip.Reason = displaySkipReason(skip.Reason)
+					file := "input"
+					if skip.File != "" {
+						file = relativeToBase(skip.File, root)
+					}
+					detail := skip.Category
+					if skip.Reason != "" {
+						if detail != "" {
+							detail += ": "
+						}
+						detail += skip.Reason
+					}
+					line := fmt.Sprintf("%s: %s skipped (%s)", group.toolName, file, detail)
+					fmt.Println(clr.Faint("┃   ") + toolText(lineBreaks.Replace(line)))
+				}
+			}
+		}
+	}
+}
+
+func displaySkipReason(reason string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 32 || r == 127 {
+			return ' '
+		}
+		return r
+	}, reason)
+}
+
+func skippedInputCount(results []tooling.GroupExecutionResult) int {
+	total := 0
+	for _, group := range results {
+		for _, result := range group.Results {
+			for _, process := range result.Processes {
+				total += len(process.Skipped)
+			}
+		}
+	}
+	return total
 }
 
 // groupViews is viewOf for every execution of a tool, and the findings they

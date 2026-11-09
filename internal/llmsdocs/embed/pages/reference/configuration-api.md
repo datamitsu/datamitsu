@@ -276,10 +276,10 @@ produces a new directory rather than rewriting one a running process uses.
 - The **whole closure** is linked, not only direct dependencies: a dependency
   invoked by name runs straight from the store, without a directory of its own,
   so it would otherwise miss its own helpers.
-- Only **native binary** apps are linked, the same targets `${APP_BIN:…}`
-  accepts. A runtime-managed app needs a command and arguments that a `PATH`
-  entry cannot carry, and a shell app already resolves through the inherited
-  `PATH`.
+- Only **native binary, uv and Go** apps are linked on `PATH`: each has a single
+  executable entry point a PATH entry can carry. Node and Bun apps need a
+  launcher, so they are not PATH-linked. JVM apps also need a launcher, which
+  is not supported for them; shell apps resolve through the inherited `PATH`.
 - A dependency called by name runs with the calling app's environment; its own
   `env` and `runtimeEnv` apply only when datamitsu runs it directly.
 - A tool operation's own `env` is applied last and can still override `PATH`.
@@ -341,11 +341,16 @@ and `PATH` is rejected. A key present in both `env` and `runtimeEnv` on the same
 app is a validation error.
 
 Values support `${STORE}` and `${APP_DIR}`, plus `${APP_BIN:<alias>}`: the exact
-executable path of a binary, uv or go app — the kinds with a single executable
-entry point. The target must be in this app's **direct** `dependsOn` list
-(by name or alias). A transitive edge alone is insufficient. Runtime apps
-(node, bun, jvm) and shell apps are rejected as binding targets: they need a
-launcher that does not exist yet.
+executable path of a binary, uv, Go, Node or Bun app. Runtime apps use a native
+launcher that preserves their command, arguments and environment. The launcher
+holds one open executable descriptor for its process lifetime and streams
+identity from that exact file. It publishes a verified hard link to the same
+inode, or copies from the captured descriptor, so a replaced source cannot
+silently substitute different bytes. Launcher records are mode `0640`; the
+store group is trusted because their environment may contain sensitive values.
+The target must be in this app's **direct** `dependsOn` list (by name or alias).
+A transitive edge alone is insufficient. JVM and shell apps remain unsupported
+binding targets.
 
 When the app declares a `prepare` step, `runtimeEnv` also supports
 `${APP_PREPARED}`: the app's prepared-state directory
@@ -362,8 +367,14 @@ runtimeEnv: {
 
 Bindings remain symbolic in the evaluated-config cache. Resolution computes
 paths without downloading, installing, or spawning a process; an unresolved
-binary or an unsupported platform is an error. `${APP_DIR}` keeps its existing
-best-effort behavior when an app has no managed install directory.
+target or an unsupported platform is an error. `${APP_DIR}` keeps its existing
+best-effort behavior when an app has no managed install directory. `dependsOn`
+and `runtimeEnv` do not change install identity, but they invalidate execution
+caches as part of the full config. Prepared-state keys additionally include
+the alias-to-app mappings and effective `env` and `runtimeEnv` launcher inputs
+for Node and Bun dependencies in the dependency closure, so changes to those
+inputs trigger preparation; the prepared app's own `runtimeEnv` is not part of
+its prepared-state identity.
 
 Empty or unterminated `${APP_BIN:...}` bindings and unknown colon forms such as
 `${FOO:bar}` are validation errors in `runtimeEnv` values. `${APP_BIN` in app
@@ -517,10 +528,27 @@ interface AppConfigUV {
   packageName: string;
   version: string;
   requiresPython?: string; // Defaults to ">=3.12"
+  dependencies?: Record<string, string>; // Exact additional PyPI requirements
   lockFile: string; // Brotli-compressed with "br:" prefix (required)
   runtime?: string; // Runtime name override
 }
 ```
+
+UV apps may also declare exact package requirements that the generated application
+does not provide itself:
+
+```javascript
+uv: {
+  packageName: "wrapper",
+  version: "1.2.3",
+  dependencies: { jsonschema: "4.26.0" },
+  lockFile: "br:...", // regenerate with `datamitsu config lockfile <app>`
+}
+```
+
+These entries are pinned requirement strings, included when the locked environment
+is resolved. Keep them aligned with the app's `lockFile`; changing a requirement
+requires regenerating that lock file.
 
 ### Bun Apps
 

@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "1f34b848724a85a485ac11c508a7583b",
+  "pageSetHash": "963a45b9a6696bd1dfe0cdab154c0560",
   "pages": [
     {
       "slug": "about",
@@ -244,8 +244,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/parsers.md",
       "title": "WASM Output Parsers",
       "description": "How datamitsu declares, builds, delivers over two channels, verifies, and loads sandboxed Rust→WASM output parsers, and how the line-based diff-in-core powers formatting",
-      "bytes": 55300,
-      "contentHash": "8cc65663c7f4ef46599722af62e03a2d"
+      "bytes": 55738,
+      "contentHash": "27ddb3e1249a4a1aae2afce90fad1932"
     },
     {
       "slug": "guides/architecture/planner",
@@ -334,8 +334,8 @@
       "url": "https://datamitsu.com/docs/guides/runtime-management.md",
       "title": "Runtime Management",
       "description": "Managing Bun, UV (Python), Node.js, JVM, and Go runtimes with datamitsu",
-      "bytes": 23151,
-      "contentHash": "56d3f2673cc4a018fdc48c7d82db148e"
+      "bytes": 23436,
+      "contentHash": "2958f201cde342d905a84e2408180a97"
     },
     {
       "slug": "guides/source-mode",
@@ -406,8 +406,8 @@
       "url": "https://datamitsu.com/docs/how-to/maintain-wrapper.md",
       "title": "Maintaining Wrapper Packages",
       "description": "Workflows for keeping wrapper package tool versions, runtimes, and hashes up to date using devtools commands",
-      "bytes": 40909,
-      "contentHash": "7c476ee5ae7b510c4d457cb08a2f1114"
+      "bytes": 41442,
+      "contentHash": "30728f6c0bf8c60277daa210dc8ba3e7"
     },
     {
       "slug": "how-to/manage-cache",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 197297,
-      "contentHash": "ffe2ec914ce2cb19412bf95043404803"
+      "bytes": 197975,
+      "contentHash": "b2e4e90210bf7a74a97bc11ff17eb728"
     },
     {
       "slug": "reference/comparison",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 92593,
-      "contentHash": "e6eee0776e6dd3451989173505ae7669"
+      "bytes": 94052,
+      "contentHash": "3293891eb8a6ac1c9a7b697f80e0af78"
     },
     {
       "slug": "reference/ignore-rules",
@@ -496,8 +496,8 @@
       "url": "https://datamitsu.com/docs/reference/js-api.md",
       "title": "JavaScript API",
       "description": "Programmatic API reference for the @datamitsu/datamitsu npm package",
-      "bytes": 14289,
-      "contentHash": "52f3b4a2ca6cf67492ee0a272f4d431d"
+      "bytes": 14638,
+      "contentHash": "8997ef88cab09cfbeef272fb6e44c8cc"
     },
     {
       "slug": "reference/parser-catalog",
@@ -514,8 +514,8 @@
       "url": "https://datamitsu.com/docs/reference/template-placeholders.md",
       "title": "Template Placeholders",
       "description": "Reference for template placeholders in tool operation arguments and environment values",
-      "bytes": 10475,
-      "contentHash": "937aa553f243f287817b081998c40107"
+      "bytes": 10292,
+      "contentHash": "730dea2e1c4ca19ead55790d1283dbe7"
     },
     {
       "slug": "reference/tool-environment",
