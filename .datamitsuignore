@@ -39,3 +39,6 @@ test/e2e/testdata/datamitsu.config.oci-ghcr.js: *
 
 # Preserve the bundled font's upstream license verbatim.
 website/static/fonts/ibm-plex-mono-OFL.txt: *
+
+# Rust dependency metadata and binaries are generated, not extension sources.
+editors/zed/target/**/*: *
