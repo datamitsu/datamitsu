@@ -470,7 +470,7 @@ Binary apps (type `binary`) are not affected by this limitation. They use target
 
 ## Running a Runtime Directly
 
-`datamitsu runtime list` inventories configured runtimes without installing them. To run an interpreter, use `datamitsu runtime run <name> -- <args...>` with the exact runtime name from configuration. Managed runtime installation is automatic when needed; uv runs the configured pinned CPython directly and does not install dependencies from a script or project. Bun and pnpm are not direct-run targets. See the [runtime CLI reference](../reference/cli-commands.md#runtime-run) for JSON inventory and dry-run schemas, exit behavior, and platform-specific process handling.
+`datamitsu runtime list` inventories configured runtimes without installing them. Its `RUNNABLE` and `REASON` columns distinguish direct interpreter support from installation status. To run an interpreter, use `datamitsu runtime run <name> -- <args...>` with the exact runtime name from configuration. Managed runtime installation is automatic when needed; uv runs the configured pinned CPython directly and does not install dependencies from a script or project. Bun runs directly with implicit package installation disabled, without requiring pnpm. pnpm is listed but is not a direct-run target because it is a package manager. JSON inventory keeps `notRunnableReason` separate from host or installation `reason`. See the [runtime CLI reference](../reference/cli-commands.md#runtime-run) for schemas, exit behavior, and platform-specific process handling.
 
 ## See the runtime distribution
 

@@ -24,15 +24,16 @@ type runtimeListDocument struct {
 }
 
 type runtimeListEntry struct {
-	Name           string                       `json:"name"`
-	Kind           config.RuntimeKind           `json:"kind"`
-	ConfiguredMode config.RuntimeMode           `json:"configuredMode"`
-	EffectiveMode  config.RuntimeMode           `json:"effectiveMode"`
-	Version        string                       `json:"version"`
-	Runnable       bool                         `json:"runnable"`
-	Status         runtimemanager.RuntimeStatus `json:"status"`
-	Executable     *string                      `json:"executable,omitempty"`
-	Reason         string                       `json:"reason,omitempty"`
+	Name              string                       `json:"name"`
+	Kind              config.RuntimeKind           `json:"kind"`
+	ConfiguredMode    config.RuntimeMode           `json:"configuredMode"`
+	EffectiveMode     config.RuntimeMode           `json:"effectiveMode"`
+	Version           string                       `json:"version"`
+	Runnable          bool                         `json:"runnable"`
+	NotRunnableReason string                       `json:"notRunnableReason,omitempty"`
+	Status            runtimemanager.RuntimeStatus `json:"status"`
+	Executable        *string                      `json:"executable,omitempty"`
+	Reason            string                       `json:"reason,omitempty"`
 }
 
 type runtimeRunDocument struct {
@@ -109,7 +110,8 @@ func runRuntimeList(cmd *cobra.Command, _ []string) error {
 			Name: entry.Name, Kind: entry.Kind, ConfiguredMode: entry.ConfiguredMode,
 			EffectiveMode: entry.EffectiveMode, Version: entry.Version,
 			Runnable: entry.Runnable, Status: entry.Status, Executable: executable,
-			Reason: entry.Reason,
+			NotRunnableReason: entry.NotRunnableReason,
+			Reason:            entry.Reason,
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
@@ -121,9 +123,20 @@ func runRuntimeList(cmd *cobra.Command, _ []string) error {
 		}
 		return nil
 	}
-	fmt.Printf("%-24s %-8s %-9s %-16s %s\n", "NAME", "KIND", "MODE", "VERSION", "STATUS")
+	fmt.Printf("%-24s %-8s %-9s %-16s %-12s %-8s %s\n", "NAME", "KIND", "MODE", "VERSION", "STATUS", "RUNNABLE", "REASON")
 	for _, row := range rows {
-		fmt.Printf("%-24s %-8s %-9s %-16s %s\n", row.Name, row.Kind, row.EffectiveMode, row.Version, row.Status)
+		runnable := "yes"
+		if !row.Runnable {
+			runnable = "no"
+		}
+		reason := row.NotRunnableReason
+		if row.Reason != "" {
+			if reason != "" {
+				reason += "; "
+			}
+			reason += row.Reason
+		}
+		fmt.Printf("%-24s %-8s %-9s %-16s %-12s %-8s %s\n", row.Name, row.Kind, row.EffectiveMode, row.Version, row.Status, runnable, reason)
 	}
 	return nil
 }
@@ -152,7 +165,7 @@ func runRuntimeRun(cmd *cobra.Command, args []string) error {
 		return usageError(fmt.Sprintf("unknown runtime %q", name))
 	}
 	if !entry.Runnable {
-		return usageError(fmt.Sprintf("runtime %q (kind %s) cannot be run directly", name, entry.Kind))
+		return usageError(fmt.Sprintf("runtime %q cannot be run directly: %s", name, entry.NotRunnableReason))
 	}
 	if entry.Status == runtimemanager.RuntimeStatusUnavailable {
 		return fmt.Errorf("runtime %q unavailable: %s", name, entry.Reason)

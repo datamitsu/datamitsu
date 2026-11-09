@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "1f34b848724a85a485ac11c508a7583b",
+  "pageSetHash": "816caaa82a232d15c6b4487ca2ea3fe6",
   "pages": [
     {
       "slug": "about",
@@ -334,8 +334,8 @@
       "url": "https://datamitsu.com/docs/guides/runtime-management.md",
       "title": "Runtime Management",
       "description": "Managing Bun, UV (Python), Node.js, JVM, and Go runtimes with datamitsu",
-      "bytes": 23151,
-      "contentHash": "56d3f2673cc4a018fdc48c7d82db148e"
+      "bytes": 23436,
+      "contentHash": "2958f201cde342d905a84e2408180a97"
     },
     {
       "slug": "guides/source-mode",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 197297,
-      "contentHash": "ffe2ec914ce2cb19412bf95043404803"
+      "bytes": 197975,
+      "contentHash": "b2e4e90210bf7a74a97bc11ff17eb728"
     },
     {
       "slug": "reference/comparison",
