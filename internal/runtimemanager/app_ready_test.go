@@ -2,6 +2,7 @@ package runtimemanager
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,6 +43,24 @@ func TestLockAppTargetReusesStoreLeaseAndValidatesTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer release()
+	statusDir := filepath.Join(env.GetCachePath(), "store-locks", "status")
+	entries, err := os.ReadDir(statusDir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("status entries = %d, error = %v", len(entries), err)
+	}
+	data, err := os.ReadFile(filepath.Join(statusDir, entries[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record struct {
+		Label string `json:"label"`
+	}
+	if err := json.Unmarshal(data, &record); err != nil {
+		t.Fatal(err)
+	}
+	if record.Label != "app tool" {
+		t.Fatalf("app install label = %q, want %q", record.Label, "app tool")
+	}
 	if ctx == nil {
 		t.Fatal("lockAppTarget returned a nil lease context")
 	}
