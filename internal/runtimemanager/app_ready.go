@@ -65,7 +65,7 @@ func lockAppTarget(ctx context.Context, appPath string) (context.Context, func()
 		releaseLease()
 		return nil, nil, fmt.Errorf("resolve app store target: %w", err)
 	}
-	leaseCtx, targetRelease, err := installstate.Acquire(leaseCtx, storeRoot, relative, "app "+filepath.Base(appPath))
+	leaseCtx, targetRelease, err := installstate.Acquire(leaseCtx, storeRoot, relative, "app "+filepath.Base(filepath.Dir(appPath)))
 	if err != nil {
 		releaseLease()
 		return nil, nil, fmt.Errorf("lock app store target: %w", err)

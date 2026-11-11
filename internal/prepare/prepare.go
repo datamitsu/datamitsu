@@ -283,17 +283,45 @@ func (l *layout) runStep(ctx context.Context, req Request) error {
 	}
 	defer func() { _ = devNull.Close() }()
 	cmd.Stdout = devNull
-	cmd.Stderr = req.Stderr
+	diagnostics := &diagnosticTail{}
+	cmd.Stderr = diagnostics
+	if req.Stderr != nil {
+		cmd.Stderr = io.MultiWriter(diagnostics, req.Stderr)
+	}
 	if err := installprocess.Run(stepCtx, cmd); err != nil {
 		if ctx.Err() != nil {
-			return fmt.Errorf("prepare of %q: %w", req.App, ctx.Err())
+			err = ctx.Err()
+		} else if stepCtx.Err() != nil {
+			err = fmt.Errorf("timed out after %s: %w", req.Timeout, stepCtx.Err())
 		}
-		if stepCtx.Err() != nil {
-			return fmt.Errorf("prepare of %q: timed out after %s", req.App, req.Timeout)
+		if message := strings.TrimSpace(string(diagnostics.data)); message != "" {
+			message = strings.ReplaceAll(message, "\r\n", "\n")
+			message = strings.ReplaceAll(message, "\r", "\n")
+			err = fmt.Errorf("%w\n  | %s", err, strings.ReplaceAll(message, "\n", "\n  | "))
 		}
 		return fmt.Errorf("prepare of %q: %w", req.App, err)
 	}
 	return nil
+}
+
+const diagnosticTailBytes = 64 * 1024
+
+type diagnosticTail struct {
+	data []byte
+}
+
+func (w *diagnosticTail) Write(p []byte) (int, error) {
+	n := len(p)
+	if n >= diagnosticTailBytes {
+		w.data = append(w.data[:0], p[n-diagnosticTailBytes:]...)
+		return n, nil
+	}
+	if excess := len(w.data) + n - diagnosticTailBytes; excess > 0 {
+		copy(w.data, w.data[excess:])
+		w.data = w.data[:len(w.data)-excess]
+	}
+	w.data = append(w.data, p...)
+	return n, nil
 }
 
 func writeMarker(resultDir, protocol, app, key string) error {

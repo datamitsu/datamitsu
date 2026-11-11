@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "d077f561e5a8a1d6b179cc5573ff76c3",
+  "pageSetHash": "7dd5c3853545b55373cee61732473f19",
   "pages": [
     {
       "slug": "about",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 22605,
-      "contentHash": "68af9e89b0afc38c73d3876bc4cf6d51"
+      "bytes": 23369,
+      "contentHash": "91d954d1f6bb3200be619a0631915b77"
     },
     {
       "slug": "guides/architecture",
@@ -271,8 +271,8 @@
       "url": "https://datamitsu.com/docs/guides/binary-management.md",
       "title": "Binary Management",
       "description": "How datamitsu downloads, verifies, and stores binary apps",
-      "bytes": 10794,
-      "contentHash": "87507314b03dfa9ea99973b781d612fb"
+      "bytes": 11049,
+      "contentHash": "c3ad543c8cd2496f5da58d4d1e26f108"
     },
     {
       "slug": "guides/config-inspector",
