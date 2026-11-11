@@ -31,6 +31,9 @@ func TestPackageProgressEmissionIsIndependentOfStatusWriteThrottle(t *testing.T)
 				return nil, err
 			}
 			defer release()
+			Progress(owner, PhaseInstall, -1, -1, "")
+			Progress(owner, PhaseInstall, -1, -1, "")
+			Progress(owner, PhaseInstall, 3, 10, "packages")
 			Progress(owner, PhaseInstall, 3, 10, "packages")
 			Progress(owner, PhaseInstall, 7, 10, "packages")
 			Progress(owner, PhaseVerify, -1, -1, "")
@@ -41,33 +44,35 @@ func TestPackageProgressEmissionIsIndependentOfStatusWriteThrottle(t *testing.T)
 	if err := client.Call(ctx, "progress-probe", struct{}{}, &response); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case data := <-events:
-		var event uievent.Event
-		if err := json.Unmarshal(data, &event); err != nil {
-			t.Fatal(err)
+	readEvent := func() uievent.Event {
+		t.Helper()
+		select {
+		case data := <-events:
+			var event uievent.Event
+			if err := json.Unmarshal(data, &event); err != nil {
+				t.Fatal(err)
+			}
+			return event
+		default:
+			t.Fatal("expected progress event was not emitted")
+			return uievent.Event{}
 		}
-		if event.Type != uievent.TypeInstall || event.Name != "probe" || event.Index != 3 || event.Total != 10 {
-			t.Fatalf("first package update was not emitted: %+v", event)
-		}
-	default:
-		t.Fatal("the initial status write suppressed live package progress")
+	}
+	initial := readEvent()
+	if initial.Name != "probe" || initial.Msg != string(PhaseInstall) {
+		t.Fatalf("initial installation phase was not emitted: %+v", initial)
+	}
+	first := readEvent()
+	if first.Type != uievent.TypeInstall || first.Name != "probe" || first.Index != 3 || first.Total != 10 {
+		t.Fatalf("first package update was not emitted: %+v", first)
+	}
+	second := readEvent()
+	if second.Msg != string(PhaseVerify) || second.Index != 0 || second.Total != 0 {
+		t.Fatalf("phase transition lost its event or retained obsolete package counters: %+v", second)
 	}
 	select {
 	case data := <-events:
-		var event uievent.Event
-		if err := json.Unmarshal(data, &event); err != nil {
-			t.Fatal(err)
-		}
-		if event.Msg != string(PhaseVerify) || event.Index != 0 || event.Total != 0 {
-			t.Fatalf("phase transition lost its event or retained obsolete package counters: %+v", event)
-		}
-	default:
-		t.Fatal("same-phase throttling suppressed the next phase transition")
-	}
-	select {
-	case data := <-events:
-		t.Fatalf("same-phase progress ignored event throttling: %s", data)
+		t.Fatalf("duplicate or throttled progress was emitted: %s", data)
 	default:
 	}
 	_ = client.Close()

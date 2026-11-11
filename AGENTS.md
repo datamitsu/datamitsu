@@ -37,6 +37,10 @@
   is released; pipe EOF and direct-child exit alone do not prove descendants
   stopped. Never wait for inherited output pipes to reach EOF before stopping a
   cancelled tree.
+- Prepare failures carry a bounded stderr tail in their operation error, after
+  process-tree cleanup. Keep diagnostics on the existing RPC error path: raw
+  worker stderr is not an inherited human stream and must not contaminate
+  JSON-L or agent output. Installer stdout is never protocol traffic.
 - Resolve a relative `DATAMITSU_CACHE_DIR` against the invoking working
   directory before worker handoff; the parent and worker use the same absolute
   cache/store roots.

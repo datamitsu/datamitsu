@@ -51,14 +51,17 @@ type status struct {
 type (
 	statusKey    struct{}
 	statusWriter struct {
-		path, owner, target, label, opID string
-		mu                               sync.Mutex
-		last                             time.Time
-		lastEvent                        time.Time
-		closed                           bool
-		phase                            string
-		completed, total                 *int64
-		unit                             string
+		path, owner, target, label, opID   string
+		mu                                 sync.Mutex
+		last                               time.Time
+		lastEvent                          time.Time
+		lastEventPhase, lastEventUnit      string
+		lastEventCompleted, lastEventTotal int64
+		hasEventCounters                   bool
+		closed                             bool
+		phase                              string
+		completed, total                   *int64
+		unit                               string
 	}
 )
 
@@ -220,19 +223,27 @@ func Progress(ctx context.Context, phase Phase, completed, total int64, unit str
 		return
 	}
 	phaseName := string(phase)
-	var transition bool
+	var phaseTransition bool
 	for _, writer := range chain {
 		c, t := completed, total
 		writer.mu.Lock()
-		transition = writer.phase != phaseName
+		transition := writer.phase != phaseName
+		phaseTransition = phaseTransition || transition
 		writer.mu.Unlock()
 		writer.write(phaseName, &c, &t, unit, transition)
 	}
 	writer.mu.Lock()
 	now := time.Now()
-	emit := !writer.closed && (transition || now.Sub(writer.lastEvent) >= time.Second)
+	hasCounters := unit == "bytes" || unit == "packages"
+	changedCounters := hasCounters && (!writer.hasEventCounters || writer.lastEventPhase != phaseName || writer.lastEventCompleted != completed || writer.lastEventTotal != total || writer.lastEventUnit != unit)
+	emit := !writer.closed && (writer.lastEvent.IsZero() || phaseTransition || changedCounters && (!writer.hasEventCounters || now.Sub(writer.lastEvent) >= time.Second))
 	if emit {
 		writer.lastEvent = now
+		writer.lastEventPhase = phaseName
+		writer.lastEventUnit = unit
+		writer.lastEventCompleted = completed
+		writer.lastEventTotal = total
+		writer.hasEventCounters = hasCounters
 	}
 	writer.mu.Unlock()
 	if !emit {
