@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,5 +63,67 @@ func buildLauncherFixture(t *testing.T, binary, marker string) {
 	build.Env = append(os.Environ(), "GOWORK=off")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build %s: %v\n%s", marker, err, output)
+	}
+}
+
+func TestDispatchWithRejectsInvalidRecordsBeforeCallback(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", cache)
+	store := filepath.Join(cache, "store")
+	if err := os.MkdirAll(filepath.Join(store, ".app-launchers"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := command{Executable: executable, Identity: strings.Repeat("a", 32)}
+	validData, err := json.Marshal(valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrong := valid
+	wrong.Executable = filepath.Join(t.TempDir(), "unexpected")
+	wrongData, err := json.Marshal(wrong)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validKey := commandKey(validData)
+	cases := []struct {
+		name, key string
+		data      []byte
+	}{
+		{name: "missing record", key: validKey},
+		{name: "malformed record", key: strings.Repeat("b", 32), data: []byte("{")},
+		{name: "tampered record", key: validKey, data: wrongData},
+	}
+	for _, tc := range cases {
+		if tc.data != nil {
+			dir := filepath.Join(store, ".app-launchers", tc.key)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, configName), tc.data, 0o640); err != nil {
+				t.Fatal(err)
+			}
+		}
+		launcher := filepath.Join(store, ".app-launchers", tc.key, launcherName)
+		code, handled := DispatchWith([]string{launcher}, nil, launcher, func(string, []string, []string) int { t.Fatalf("%s record executed", tc.name); return 0 })
+		if !handled || code != 126 {
+			t.Fatalf("%s: handled=%v code=%d", tc.name, handled, code)
+		}
+	}
+	outside := filepath.Join(t.TempDir(), launcherName)
+	code, handled := DispatchWith([]string{outside}, nil, outside, func(string, []string, []string) int { t.Fatal("outside record executed"); return 0 })
+	if !handled || code != 126 {
+		t.Fatalf("outside store: handled=%v code=%d", handled, code)
+	}
+}
+
+func TestDispatchWithLeavesOrdinaryCommandsAlone(t *testing.T) {
+	called := false
+	code, handled := DispatchWith([]string{"tool"}, nil, "/usr/bin/tool", func(string, []string, []string) int { called = true; return 0 })
+	if handled || called || code != 0 {
+		t.Fatalf("handled=%v called=%v code=%d", handled, called, code)
 	}
 }
