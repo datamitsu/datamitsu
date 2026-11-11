@@ -16,6 +16,7 @@ func TestValidateUVDependencies(t *testing.T) {
 	}{
 		{name: "pinned dependencies", deps: map[string]string{"json5": "0.17.3", "ruamel-yaml": "0.19.1"}},
 		{name: "invalid package name", deps: map[string]string{"json5;bad": "0.17.3"}, want: "package name"},
+		{name: "missing version", deps: map[string]string{"json5": ""}, want: "version is required"},
 		{name: "floating version", deps: map[string]string{"json5": "latest"}, want: "must be pinned"},
 		{name: "invalid version", deps: map[string]string{"json5": "0.17.3;bad"}, want: "invalid characters"},
 		{name: "duplicate normalized names", deps: map[string]string{"foo_bar": "1.0.0", "foo-bar": "1.0.1"}, want: "normalize to the same name"},
