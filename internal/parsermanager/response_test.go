@@ -71,6 +71,31 @@ func TestDecodeResponseRejects(t *testing.T) {
 	}
 }
 
+func TestDecodeResponseInputSkipsAndExtractionPrecision(t *testing.T) {
+	cases := []struct {
+		name                  string
+		data                  string
+		wantPartial           bool
+		wantExtractionPartial bool
+		wantSkips             int
+	}{
+		{"legacy partial", `{"recognized":true,"partial":true}`, true, true, 0},
+		{"skip-only", `{"recognized":true,"partial":true,"extractionPartial":false,"skipped":[{"file":"a.yaml","reason":"ambiguous schema","category":"catalog-ambiguous"}]}`, true, false, 1},
+		{"extraction plus skips", `{"recognized":true,"partial":true,"extractionPartial":true,"skipped":[{"file":"a.yaml","reason":"bad input","category":"unknown"}]}`, true, true, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := DecodeResponse([]byte(tc.data), 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Partial != tc.wantPartial || got.ExtractionWasPartial() != tc.wantExtractionPartial || len(got.Skipped) != tc.wantSkips {
+				t.Fatalf("decoded response = %+v", got)
+			}
+		})
+	}
+}
+
 // TestDecodeResponseHandWrittenV2 reads the object form a module of ABI 2
 // answers with, written by hand before any such module existed.
 func TestDecodeResponseHandWrittenV2(t *testing.T) {
@@ -101,7 +126,7 @@ func TestNormalizeSchema(t *testing.T) {
 		{"schema 1 answers arrays", Capabilities{SchemaVersion: 1}, 1, 1},
 		{"schema 2 answers arrays", Capabilities{SchemaVersion: 2}, 2, 1},
 		{"schema 3 declares its abi", Capabilities{SchemaVersion: 3, ABI: 2}, 3, 2},
-		{"a newer schema is read as the newest known", Capabilities{SchemaVersion: 99, ABI: 2}, SchemaNewest, 2},
+		{"a newer schema retains its declared version", Capabilities{SchemaVersion: 99, ABI: 2}, 99, 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

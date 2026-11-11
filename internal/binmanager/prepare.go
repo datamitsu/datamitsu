@@ -2,6 +2,7 @@ package binmanager
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -14,7 +15,7 @@ import (
 // semantics of how a prepare step runs (what it may see, what feeds the key)
 // changes every key, which is the intended coarse invalidation: a state
 // prepared under another protocol is a different state.
-const PrepareProtocolVersion = "datamitsu-prepare/v1"
+const PrepareProtocolVersion = "datamitsu-prepare/v2"
 
 // AppPrepare is the declared one-time step that fills an app's prepared state
 // ({store}/.prepared/<app>/<key>/out) after the app and its whole dependsOn
@@ -73,13 +74,15 @@ func PreparePath() string {
 // Inputs, in order: the protocol version, the app name, the app's
 // store-relative install path, every dependency of the closure (name,
 // store-relative install path, and its own prepared key when it declares a
-// step), the alias map of direct edges, binPath, the symbolic (unexpanded)
-// args, prepare.env and app.env (symbolic), and the PATH mode.
+// step), runtime-managed dependency launcher environment and alias mappings,
+// the alias map of direct edges, binPath, the symbolic (unexpanded) args,
+// prepare.env and app.env (symbolic), and the PATH mode.
 //
 // Never hashed: the store root and any absolute path, expanded binding values
 // (the prepared path contains the key itself), HOME and the inherited
-// environment, time, the datamitsu version, runtimeEnv, the network flag and
-// timeouts — those are policy or run-time concerns, not state identity.
+// environment, time, the datamitsu version, the app's own runtimeEnv, the
+// network flag and timeouts — those are policy or run-time concerns, not
+// state identity.
 func (bm *BinManager) ComputePreparedKey(appName string) (string, error) {
 	app, ok := bm.mapOfApps[appName]
 	if !ok {
@@ -123,6 +126,41 @@ func (bm *BinManager) ComputePreparedKey(appName string) (string, error) {
 			parts = append(parts, []byte(depKey))
 		} else {
 			parts = append(parts, nil)
+		}
+	}
+
+	// Runtime-managed dependencies are exposed through launchers whose
+	// environment and nested aliases are part of the executable binding.
+	for _, dep := range closure {
+		if dep == appName {
+			continue
+		}
+		dependency := bm.mapOfApps[dep]
+		if dependency.Node == nil && dependency.Bun == nil {
+			continue
+		}
+		launcherEnv := maps.Clone(dependency.Env)
+		launcherRuntimeEnv := maps.Clone(dependency.RuntimeEnv)
+		if bm.runtimeManager != nil {
+			info, err := bm.runtimeManager.ResolveCommandInfo(dep, dependency)
+			if err != nil {
+				return "", fmt.Errorf("resolve launcher identity for %q: %w", dep, err)
+			}
+			for key := range info.Env {
+				delete(launcherEnv, key)
+				delete(launcherRuntimeEnv, key)
+			}
+		}
+		parts = append(parts, []byte("launcher:"+dep), []byte("appEnv"))
+		parts = append(parts, sortedEnvParts(launcherEnv)...)
+		parts = append(parts, []byte("runtimeEnv"))
+		parts = append(parts, sortedEnvParts(launcherRuntimeEnv)...)
+
+		edges := cloneEdges(dependency.DependsOn)
+		sort.Slice(edges, func(i, j int) bool { return edges[i].Alias < edges[j].Alias })
+		parts = append(parts, []byte(fmt.Sprintf("launcherEdges:%d", len(edges))))
+		for _, edge := range edges {
+			parts = append(parts, []byte(edge.Alias), []byte(edge.App))
 		}
 	}
 

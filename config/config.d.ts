@@ -1388,9 +1388,10 @@ declare global {
       required?: boolean;
       /**
        * Execution-only env, outside install identity; keys must not overlap `env`. Supports
-       * `${STORE}`, `${APP_DIR}`, and `${APP_BIN:<name>}` for the exact executable of a dependency
-       * in direct `dependsOn` (binary, uv and go apps), and `${APP_PREPARED}` when `prepare` is
-       * set. Datamitsu/runtime-owned keys win.
+       * `${STORE}`, `${APP_DIR}`, and `${APP_BIN:<alias>}` for the exact executable of a dependency
+       * in direct `dependsOn` (binary, uv, go, Node and Bun apps), and `${APP_PREPARED}` when
+       * `prepare` is set. Native Node/Bun launchers preserve the managed runtime arguments and
+       * environment. Datamitsu/runtime-owned keys win.
        */
       runtimeEnv?: Record<string, string>;
       shell?: AppConfigShell;
@@ -1492,6 +1493,12 @@ declare global {
     }
 
     interface AppConfigUV {
+      /**
+       * Additional pinned Python requirements installed with the primary package. Names must be
+       * distinct after Python package-name normalization. Regenerate lockFile after any change; the
+       * requirements participate in the app installation identity.
+       */
+      dependencies?: Record<string, string>;
       /**
        * Lock file content for reproducible installs. Required for all UV apps. Validation fails if
        * omitted. When prefixed with "br:", the content is brotli-compressed and base64-encoded.

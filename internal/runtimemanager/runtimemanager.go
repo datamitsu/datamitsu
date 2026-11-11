@@ -508,7 +508,7 @@ func (rm *RuntimeManager) ComputeAppPath(appName string, app binmanager.App) (st
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve UV runtime for %q: %w", appName, err)
 		}
-		return rm.GetAppPath(appName, config.RuntimeKindUV, uvVersionForHash(app.Uv.Version, app.Uv.RequiresPython), nil, lockFileHash(app.Uv.LockFile), app.Files, app.Archives, runtimeName)
+		return rm.GetAppPath(appName, config.RuntimeKindUV, uvVersionForHash(app.Uv.Version, app.Uv.RequiresPython), app.Uv.Dependencies, lockFileHash(app.Uv.LockFile), app.Files, app.Archives, runtimeName)
 	case app.Node != nil:
 		appEnvPath, err := rm.resolveNodeAppEnvPath(appName, app.Node, app.Files, app.Archives)
 		if err != nil {

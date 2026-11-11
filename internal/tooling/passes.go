@@ -1,5 +1,7 @@
 package tooling
 
+import "path/filepath"
+
 // A cached pass is replayed as "nothing to report" — by the terminal, by an
 // editor, by a report — so it may only be recorded where that is what the tool
 // said (rule C1). The exit code alone cannot say it: a tool may exit 0 on
@@ -11,11 +13,10 @@ package tooling
 
 // passesOf returns the files of covered that a successful process lets a pass
 // be recorded for. A process whose output was parsed passes each file no
-// finding names, provided every finding names one of covered: a finding that
-// names no file of the process — no file at all, another spelling, a path
-// outside it — could be about any of them, and blocks them all. A process with
-// no parser declared keeps the exit-status rule. One whose output could not be
-// parsed passes nothing.
+// finding or skip names, provided every finding and skip names one of covered.
+// An unattributable skip could concern any file, so it blocks them all. A
+// process with no parser declared keeps the exit-status rule. One whose output
+// could not be parsed passes nothing.
 func passesOf(proc ProcessResult, covered []string) []string {
 	switch proc.Extraction {
 	case ExtractionNone:
@@ -24,6 +25,12 @@ func passesOf(proc ProcessResult, covered []string) []string {
 	case ExtractionParserUnavailable, ExtractionParseFailed, ExtractionTruncated:
 		return nil
 	default:
+		return nil
+	}
+	if proc.ExtractionPartial {
+		return nil
+	}
+	if proc.InputPartial && len(proc.Skipped) == 0 {
 		return nil
 	}
 	inProcess := make(map[string]bool, len(covered))
@@ -37,9 +44,18 @@ func passesOf(proc ProcessResult, covered []string) []string {
 		}
 		flagged[d.File] = true
 	}
+	// Every skip must be attributable to one of this process's canonical paths.
+	// Unknown skip records cannot safely exempt a single file from a clean pass.
+	skipped := make(map[string]bool, len(proc.Skipped))
+	for _, skip := range proc.Skipped {
+		if skip.File == "" || !filepath.IsAbs(skip.File) || filepath.Clean(skip.File) != skip.File || !inProcess[skip.File] {
+			return nil
+		}
+		skipped[skip.File] = true
+	}
 	passes := make([]string, 0, len(covered))
 	for _, file := range covered {
-		if !flagged[file] {
+		if !flagged[file] && !skipped[file] {
 			passes = append(passes, file)
 		}
 	}
@@ -60,6 +76,9 @@ func verdictEligible(result ExecutionResult) bool {
 		return false
 	}
 	for _, proc := range result.Processes {
+		if proc.InputPartial || proc.ExtractionPartial {
+			return false
+		}
 		if proc.Extraction != ExtractionParsedClean && proc.Extraction != ExtractionNone {
 			return false
 		}

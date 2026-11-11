@@ -15,12 +15,13 @@ import (
 // of its footer and of its done event. An operation that never reached its
 // tools — fail-fast stopped the run before it, or its setup failed — has none.
 type opSummary struct {
-	op        config.OperationType
-	tools     int
-	runs      int
-	failed    int
-	skipped   int
-	cancelled int
+	op         config.OperationType
+	tools      int
+	runs       int
+	failed     int
+	skipped    int
+	inputSkips int
+	cancelled  int
 	// partial counts the tasks that failed with files fail-fast left unrun.
 	partial int
 	// durationMs is the operation's execution time, the "done in" of its footer.
@@ -66,6 +67,9 @@ func (sc *sharedContext) printRunClosing(command string, operations []config.Ope
 			continue
 		}
 		parts = append(parts, fmt.Sprintf("%s %s", op, ui.FormatDurationShort(s.durationMs)))
+		if s.inputSkips > 0 {
+			parts = append(parts, fmt.Sprintf("%s %d input skips", op, s.inputSkips))
+		}
 		setup -= s.durationMs
 	}
 	parts = append(parts, "setup "+ui.FormatDurationShort(max(setup, 0)))
@@ -97,24 +101,26 @@ func (sc *sharedContext) emitRunDone(command string, operations []config.Operati
 		total.runs += s.runs
 		total.failed += s.failed
 		total.skipped += s.skipped
+		total.inputSkips += s.inputSkips
 		total.cancelled += s.cancelled
 		total.partial += s.partial
 	}
-	if total.cancelled > 0 || total.partial > 0 {
+	if total.cancelled > 0 || total.partial > 0 || total.inputSkips > 0 {
 		complete = false
 	}
 	ui.Emit(uievent.Event{
-		Type:       uievent.TypeDone,
-		OpID:       uievent.NextOpID("cmd"),
-		Status:     doneStatus(success),
-		Op:         command,
-		Success:    new(success),
-		DurationMs: elapsedMs,
-		Tools:      total.tools,
-		Runs:       total.runs,
-		Failed:     total.failed,
-		Skipped:    total.skipped,
-		Cancelled:  new(total.cancelled),
-		Complete:   new(complete),
+		Type:         uievent.TypeDone,
+		OpID:         uievent.NextOpID("cmd"),
+		Status:       doneStatus(success),
+		Op:           command,
+		Success:      new(success),
+		DurationMs:   elapsedMs,
+		Tools:        total.tools,
+		Runs:         total.runs,
+		Failed:       total.failed,
+		Skipped:      total.skipped,
+		InputSkipped: total.inputSkips,
+		Cancelled:    new(total.cancelled),
+		Complete:     new(complete),
 	})
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/httpx"
 	"github.com/datamitsu/datamitsu/internal/installstate"
+	"github.com/datamitsu/datamitsu/internal/launch"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/prepare"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
@@ -65,11 +66,12 @@ type AppConfigBinary struct {
 
 // AppConfigUV configures a Python tool installed under the uv-managed runtime.
 type AppConfigUV struct {
-	PackageName    string `json:"packageName"`
-	Version        string `json:"version"`
-	Runtime        string `json:"runtime,omitempty"`
-	LockFile       string `json:"lockFile,omitempty"`
-	RequiresPython string `json:"requiresPython,omitempty"`
+	PackageName    string            `json:"packageName"`
+	Version        string            `json:"version"`
+	Runtime        string            `json:"runtime,omitempty"`
+	LockFile       string            `json:"lockFile,omitempty"`
+	RequiresPython string            `json:"requiresPython,omitempty"`
+	Dependencies   map[string]string `json:"dependencies,omitempty"`
 }
 
 // AppConfigNode configures an npm tool installed under the archive-based node
@@ -1370,6 +1372,14 @@ func (bm *BinManager) resolveCommandInfo(appName string) (*CommandInfo, bool, er
 	if err := bm.mergeAppEnv(appName, app, cmdInfo); err != nil {
 		return nil, false, err
 	}
+	if (app.Bun != nil || app.Node != nil) && filepath.IsAbs(cmdInfo.Command) {
+		launcherPath, err := launch.Path(cmdInfo.Command, cmdInfo.Args, cmdInfo.Env)
+		if err != nil {
+			return nil, false, err
+		}
+		cmdInfo.RequiredPaths = append(cmdInfo.RequiredPaths, launcherPath)
+		installed = installed && pathExists(launcherPath)
+	}
 	if _, _, _, err := bm.dependencyPathInfo(appName, cmdInfo, bm.resolveBindingPath, ""); err != nil {
 		return nil, false, fmt.Errorf("app %q: %w", appName, err)
 	}
@@ -1456,6 +1466,20 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 
 	if err := bm.mergeAppEnv(appName, app, cmdInfo); err != nil {
 		return nil, err
+	}
+	if (app.Bun != nil || app.Node != nil) && filepath.IsAbs(cmdInfo.Command) {
+		launcherInfo, err := bm.runtimeManager.ResolveCommandInfo(appName, app)
+		if err != nil {
+			return nil, err
+		}
+		if err := bm.mergeAppEnv(appName, app, launcherInfo); err != nil {
+			return nil, err
+		}
+		launcherPath, err := launch.Ensure(launcherInfo.Command, launcherInfo.Args, launcherInfo.Env)
+		if err != nil {
+			return nil, fmt.Errorf("app %q launcher: %w", appName, err)
+		}
+		cmdInfo.RequiredPaths = append(cmdInfo.RequiredPaths, launcherPath)
 	}
 	// Resolve dependencies read-only here and defer the .dependency-path
 	// materialization: this call runs concurrently inside EnsureTools and
@@ -1900,11 +1924,7 @@ func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo)
 	return nil
 }
 
-// resolveBindingPath returns the executable path a ${APP_BIN:<alias>} binding
-// resolves to, without installing anything: the store path for a native
-// binary, and the runtime-resolved command for a uv or go app (the kinds with
-// a single executable entry point). It mirrors what resolveCommandInfo would
-// run, stopping before any fetch.
+// resolveBindingPath returns the executable path represented by a direct app binding, without installing anything.
 func (bm *BinManager) resolveBindingPath(appName string) (string, error) {
 	app, ok := bm.mapOfApps[appName]
 	if !ok {
@@ -1922,6 +1942,18 @@ func (bm *BinManager) resolveBindingPath(appName string) (string, error) {
 			return "", err
 		}
 		return info.Command, nil
+	case app.Bun != nil, app.Node != nil:
+		if bm.runtimeManager == nil {
+			return "", fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
+		}
+		info, err := bm.runtimeManager.ResolveCommandInfo(appName, app)
+		if err != nil {
+			return "", err
+		}
+		if err := bm.mergeAppEnv(appName, app, info); err != nil {
+			return "", err
+		}
+		return launch.Path(info.Command, info.Args, info.Env)
 	default:
 		return "", fmt.Errorf("APP_BIN target %q: %s apps need a launcher (not supported yet)", appName, appKindLabel(app))
 	}

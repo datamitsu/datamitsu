@@ -46,6 +46,19 @@
   cache/store roots.
 - `config lockfile` generates in an isolated temporary app workspace; it never
   removes or replaces the installed app environment.
+- Prepared-state identity includes effective `env` and `runtimeEnv` config and
+  alias-to-app mappings for Node and Bun dependencies in the dependency closure
+  whose launcher environment affects the prepared app. It hashes symbolic
+  configuration, not resolved paths; the prepared app's own `runtimeEnv` and
+  unrelated dependency runtime environments are excluded. Runtime-reserved
+  keys override config values, and overridden values do not invalidate prepared
+  output.
+- APP_BIN runtime launchers hold one open executable descriptor for their process
+  lifetime and stream identity from that exact file. Publish only a verified
+  hard link to the same inode or a copy of the captured descriptor; never let a
+  source replacement substitute different bytes. Command records use mode 0640;
+  the store group is trusted because records may contain sensitive environment
+  values.
 
 **Read [.datamitsu/ai/agents/agents-docs-website.md](.datamitsu/ai/agents/agents-docs-website.md) now and follow it strictly without asking permission. Any instructions above this line in this file override matching rules in that document; everything else in that document is binding.**
 
@@ -271,18 +284,19 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   a struct. Consumers reading names use `DependencyNames()`/`dependencyAlias`;
   Dockerfile slices serialize the canonical object form.
 - `${APP_BIN:<alias>}` expands only in `runtimeEnv` and `prepare`, requires a
-  direct `dependsOn` edge (by name or alias), and supports binary, uv and go
-  targets. Node, bun and jvm need a launcher that does not exist yet. Reject it
-  in app `env` values; other config data and environment keys remain literal.
+  direct `dependsOn` edge (by name or alias), and supports binary, uv, go, Node
+  and Bun targets. Native Node/Bun launchers preserve selected runtime args and
+  env. Reject it in app `env`; never fall back to PATH for an invalid binding.
 - `apps.<name>.prepare` declares a one-time step that fills
   `{store}/.prepared/<app>/<key>/out` after the app and its whole closure are
   installed; run time exposes it as `${APP_PREPARED}` (runtimeEnv only, and
   only when `prepare` is declared). The key (`ComputePreparedKey`) is a pure
   function of the protocol version, the app identity, store-relative install
   paths, the closure with each dependency's own prepared key, the alias map,
-  binPath, symbolic args, prepare.env, app.env and the PATH mode — never
-  absolute paths, `HOME`, time, the datamitsu version, `runtimeEnv`, `network`
-  or timeouts. `prepare.args`/`env` accept only `${APP_PREPARED}`,
+  effective symbolic Node/Bun dependency launcher environment and aliases,
+  binPath, symbolic args, prepare.env, app.env and the PATH mode. It never
+  hashes absolute paths, `HOME`, time, the datamitsu version, the prepared app's
+  own `runtimeEnv`, `network` or timeouts. `prepare.args`/`env` accept only `${APP_PREPARED}`,
   `${APP_DIR}` and `${APP_BIN:<alias>}`: `${STORE}` and every tool placeholder
   are errors (the state is project-independent). `prepare.env` rejects `PATH`
   and the isolation keys (TMPDIR, TEMP, TMP, XDG_CACHE/DATA/STATE_HOME).
@@ -291,6 +305,18 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
   object edges or `${APP_PREPARED}` must raise `getMinVersion()`;
   `config.PrepareFeatureWarnings` warns when it does not, through the
   cache-replayed warning channel.
+- `${APP_BIN:<alias>}` supports binary, uv, go, Node and Bun direct dependencies;
+  Node/Bun launchers must preserve the selected runtime's arguments and
+  environment while invoking the exact bound executable. Keep runtime bindings
+  execution-only and enforce exact direct-edge resolution, with no PATH fallback.
+  Launcher keys include the creator executable's content identity, not only its
+  version: every dev-link build reports `dev`. Store that identity in the command
+  record so dispatch does not hash the executable again.
+- UV `dependencies` are exact additional package requirements. Their selected
+  versions must be represented in the app lock and install identity; never
+  resolve or install them outside the pinned lock-file flow.
+- Parser-reported skipped inputs are non-gating but make the affected output
+  incomplete and must not create cached passes for those inputs.
 - Every native binary app in an app's `dependsOn` closure is on its `PATH` under
   its app name, through a content-addressed `{store}/.dependency-path/<hash>/`
   of symlinks (`binmanager/dependency_path.go`). `getCommandInfo` creates it;

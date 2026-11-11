@@ -224,21 +224,24 @@ Multiple placeholders can appear in a single argument. All are resolved in the o
 
 App `env` and `runtimeEnv` use a separate syntax from tool operation templates:
 
-| Placeholder          | App `env` |  App `runtimeEnv`   | `prepare` args/env | Resolves to                                              |
-| -------------------- | :-------: | :-----------------: | :----------------: | -------------------------------------------------------- |
-| `${STORE}`           |    Yes    |         Yes         |         No         | Shared store directory                                   |
-| `${APP_DIR}`         |    Yes    |         Yes         |        Yes         | This app's install directory, when resolvable            |
-| `${APP_BIN:<alias>}` |    No     |         Yes         |        Yes         | Exact executable of a direct dependency (binary, uv, go) |
-| `${APP_PREPARED}`    |    No     | Yes, with `prepare` |        Yes         | The app's prepared-state directory                       |
+| `${STORE}` | Yes | Yes | No | Shared store directory |
+| `${APP_DIR}` | Yes | Yes | Yes | This app's install directory, when resolvable |
+| `${APP_BIN:<alias>}` | No | Yes | Yes | Exact executable of a direct dependency (binary, uv, go, node, bun) |
+| `${APP_PREPARED}` | No | Yes, with `prepare` | Yes | The app's prepared-state directory |
 
 `runtimeEnv` applies only to execution and never enters installer environments
 or install hashes. The `${APP_BIN}` target must be listed in the same app's
 direct `dependsOn` — by name or by the edge's alias (`{ app: "jsonschema",
-as: "validator" }` binds as `${APP_BIN:validator}`); binary, uv and go apps
-resolve today, node/bun/jvm need a launcher that does not exist yet, and
-shell apps are not installable targets. Missing or platform-unsupported
-targets produce an error without fetching them. Malformed bindings and
-unknown colon forms in `runtimeEnv` values are errors.
+as: "validator" }` binds as `${APP_BIN:validator}`). Binary, uv, go, node and
+bun apps resolve to the exact executable; native Node and Bun launchers preserve
+the selected managed runtime's arguments and environment. Shell apps are not
+installable targets. Missing or platform-unsupported targets produce an error
+without fetching them. Malformed bindings and unknown colon forms in
+`runtimeEnv` values are errors.
+
+Launcher paths include the creating core executable's content identity. Rebuilding
+the core selects a new launcher even when its version remains `dev` and the bound
+command is unchanged; existing launchers keep their original executable.
 
 `${APP_PREPARED}` names the directory a declared `prepare` step fills
 (`{store}/.prepared/<app>/<key>/out`); subpaths are allowed. It is rejected

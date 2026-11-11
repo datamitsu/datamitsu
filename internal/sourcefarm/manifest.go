@@ -88,7 +88,8 @@ import (
 // as its command; the command is now the binaryPath inside it.
 // Version 9 adds runtime app completion markers to farm health paths.
 // Version 10 retires entries that do not record runtime-scoped cache paths.
-const ManifestFormatVersion = 10
+// Version 11 retires entries without native Node/Bun launcher health paths and UV dependency identity.
+const ManifestFormatVersion = 11
 
 // Origin records how the farm's root was established.
 type Origin string

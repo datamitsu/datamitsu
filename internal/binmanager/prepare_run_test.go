@@ -1,6 +1,7 @@
 package binmanager
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -279,5 +280,93 @@ func TestStepEnvironmentRuntimeKeysWin(t *testing.T) {
 	}
 	if got["TMPDIR"] != "${STEP_TMPDIR}" {
 		t.Fatalf("TMPDIR = %q, want symbolic", got["TMPDIR"])
+	}
+}
+
+func TestDependencyLauncherEnvChangeRebuildsPreparedOutput(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	stepDir := t.TempDir()
+	source := `package main
+
+import ("fmt"; "os"; "os/exec"; "path/filepath")
+
+func main() {
+	if len(os.Args) < 2 { return }
+	switch os.Args[1] {
+	case "FRONTEND":
+		fmt.Print(os.Getenv("REVIEW_MODE"))
+	case "PREPARE":
+		out, err := exec.Command(os.Getenv("FRONTEND_BIN")).CombinedOutput()
+		if err != nil { fmt.Fprintf(os.Stderr, "frontend: %v: %s", err, out); os.Exit(1) }
+		if err := os.MkdirAll(os.Getenv("STEP_OUT"), 0o755); err != nil { panic(err) }
+		if err := os.WriteFile(filepath.Join(os.Getenv("STEP_OUT"), "mode"), out, 0o644); err != nil { panic(err) }
+	}
+}
+`
+	src := filepath.Join(stepDir, "stepmain.go")
+	if err := os.WriteFile(src, []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stepBinary := filepath.Join(stepDir, "stepper.bin")
+	if out, err := exec.Command("go", "build", "-o", stepBinary, src).CombinedOutput(); err != nil {
+		t.Fatalf("build step binary: %v: %s", err, out)
+	}
+	apps := MapOfApps{
+		"stepper": {
+			Binary: &AppConfigBinary{Binaries: MapOfBinaries{
+				"linux": {"amd64": {"glibc": {URL: "https://example.invalid/stepper", Hash: "sha256:" + strings.Repeat("0", 64), ContentType: BinContentTypeBinary}}},
+			}},
+			DependsOn: edges("frontend"),
+			Prepare: &AppPrepare{
+				Args: []string{"PREPARE"},
+				Env:  map[string]string{"STEP_OUT": "${APP_PREPARED}", "FRONTEND_BIN": "${APP_BIN:frontend}"},
+			},
+		},
+		"frontend": {
+			Node:       &AppConfigNode{PackageName: "frontend", Version: "1", BinPath: "entrypoint.mjs"},
+			RuntimeEnv: map[string]string{"REVIEW_MODE": "strict"},
+		},
+	}
+	bm := stepTestManager(t, apps)
+	bm.runtimeManager = &mockRuntimeAppManager{
+		getCommandInfoFunc: func(context.Context, string, App) (*CommandInfo, error) {
+			return &CommandInfo{Command: stepBinary, Args: []string{"FRONTEND"}}, nil
+		},
+		resolveCommandInfoFunc: func(string, App) (*CommandInfo, error) {
+			return &CommandInfo{Command: stepBinary, Args: []string{"FRONTEND"}}, nil
+		},
+		computeAppPathFunc: func(string, App) (string, error) {
+			return filepath.Join(env.GetStorePath(), ".apps", "node", "frontend"), nil
+		},
+	}
+	seedStepBinary(t, bm, stepBinary)
+
+	readPreparedMode := func() string {
+		t.Helper()
+		key, err := bm.ComputePreparedKey("stepper")
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(filepath.Join(PreparePath(), "stepper", key, "out", "mode"))
+		if err != nil {
+			t.Fatalf("read prepared mode: %v", err)
+		}
+		return string(data)
+	}
+	if _, err := bm.GetCommandInfo(t.Context(), "stepper"); err != nil {
+		t.Fatalf("initial prepare: %v", err)
+	}
+	if got := readPreparedMode(); got != "strict" {
+		t.Fatalf("initial prepared mode = %q, want strict", got)
+	}
+
+	frontend := bm.mapOfApps["frontend"]
+	frontend.RuntimeEnv["REVIEW_MODE"] = "permissive"
+	bm.mapOfApps["frontend"] = frontend
+	if _, err := bm.GetCommandInfo(t.Context(), "stepper"); err != nil {
+		t.Fatalf("prepare after dependency launcher change: %v", err)
+	}
+	if got := readPreparedMode(); got != "permissive" {
+		t.Fatalf("prepared mode after launcher change = %q, want permissive", got)
 	}
 }

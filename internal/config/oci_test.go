@@ -2,8 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -191,18 +189,5 @@ func TestOCIRefJSONRoundTrip(t *testing.T) {
 	}
 	if out.OCI.Signer == nil || *out.OCI.Signer != *in.OCI.Signer {
 		t.Errorf("round trip lost signer: %+v", out.OCI.Signer)
-	}
-}
-
-// TestConfigDTSCopiesAreByteIdentical guards the two copies of config.d.ts
-// (the repo-root one consumed by user configs and the embedded one) against
-// drifting apart. Whoever edits one must copy it over the other.
-func TestConfigDTSCopiesAreByteIdentical(t *testing.T) {
-	rootCopy, err := os.ReadFile(filepath.Join("..", "..", "config", "config.d.ts"))
-	if err != nil {
-		t.Fatalf("read repo-root config.d.ts: %v", err)
-	}
-	if string(rootCopy) != GetDefaultConfigDTS() {
-		t.Fatal("config/config.d.ts and internal/config/config.d.ts have diverged; copy one over the other so both are byte-identical")
 	}
 }

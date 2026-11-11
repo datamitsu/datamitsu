@@ -267,9 +267,35 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		return byID[inv.ID]
 	}
 	var onFindings []exitFailure
+	var skippedInputs []*testCase
 	withhold := common.Security(tr)
 
 	for _, inv := range tr.Invocations {
+		var skippedFiles map[string]bool
+		if len(inv.Skipped) > 0 {
+			skippedFiles = make(map[string]bool, len(inv.Skipped))
+		}
+		for _, skip := range inv.Skipped {
+			name := skip.File
+			if name == "" {
+				name = inv.TaskID
+			} else {
+				skippedFiles[name] = true
+			}
+			detail := skip.Category
+			if skip.Reason != "" {
+				if detail != "" {
+					detail += ": "
+				}
+				detail += skip.Reason
+			}
+			if detail == "" {
+				detail = "input was not validated"
+			}
+			skippedInputs = append(skippedInputs, &testCase{
+				className: tr.Name, name: name + " (input skipped)", skipped: detail,
+			})
+		}
 		if inv.State == string(tooling.ProcessSetupFailed) {
 			tc := caseOf(inv)
 			tc.time += inv.Duration
@@ -282,12 +308,12 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		}
 		count := 0
 		for _, fr := range inv.Files {
-			if answered(fr.State) {
+			if answered(fr.State) && !skippedFiles[fr.Path] {
 				count++
 			}
 		}
 		for _, fr := range inv.Files {
-			if !answered(fr.State) {
+			if !answered(fr.State) || skippedFiles[fr.Path] {
 				continue
 			}
 			tc := fileCase(fr.Path)
@@ -380,9 +406,11 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 	}
 	sort.SliceStable(own, func(i, j int) bool { return own[i].name < own[j].name })
 
-	out := make([]*testCase, 0, len(files)+len(own))
+	out := make([]*testCase, 0, len(files)+len(own)+len(skippedInputs))
 	out = append(out, sortedCases(files)...)
 	out = append(out, own...)
+	sort.SliceStable(skippedInputs, func(i, j int) bool { return skippedInputs[i].name < skippedInputs[j].name })
+	out = append(out, skippedInputs...)
 	var stopped []*testCase
 	listed := map[string]bool{}
 	for _, c := range cancelled {

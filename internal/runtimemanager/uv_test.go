@@ -662,7 +662,7 @@ func equalStringSlices(a, b []string) bool {
 
 func TestBuildPyprojectTOML(t *testing.T) {
 	t.Run("with version", func(t *testing.T) {
-		result := buildPyprojectTOML("yamllint", "1.38.0", ">=3.12")
+		result := buildPyprojectTOML("yamllint", "1.38.0", ">=3.12", nil)
 		if !strings.Contains(result, `name = "datamitsu-yamllint"`) {
 			t.Error("missing project name")
 		}
@@ -675,7 +675,7 @@ func TestBuildPyprojectTOML(t *testing.T) {
 	})
 
 	t.Run("without version", func(t *testing.T) {
-		result := buildPyprojectTOML("ruff", "", ">=3.12")
+		result := buildPyprojectTOML("ruff", "", ">=3.12", nil)
 		if !strings.Contains(result, `"ruff"`) {
 			t.Error("missing unversioned dependency")
 		}
@@ -685,7 +685,7 @@ func TestBuildPyprojectTOML(t *testing.T) {
 	})
 
 	t.Run("scoped package name", func(t *testing.T) {
-		result := buildPyprojectTOML("@scope/pkg", "1.0.0", ">=3.12")
+		result := buildPyprojectTOML("@scope/pkg", "1.0.0", ">=3.12", nil)
 		if !strings.Contains(result, `name = "datamitsu-scope-pkg"`) {
 			t.Errorf("@ should be removed, / replaced with -: got %s", result)
 		}
@@ -695,14 +695,14 @@ func TestBuildPyprojectTOML(t *testing.T) {
 	})
 
 	t.Run("newlines in values are escaped", func(t *testing.T) {
-		result := buildPyprojectTOML("pkg\ninjected", "1.0\r\nevil", ">=3.12")
+		result := buildPyprojectTOML("pkg\ninjected", "1.0\r\nevil", ">=3.12", nil)
 		if strings.Contains(result, "\ninjected") || strings.Contains(result, "\r\nevil") {
 			t.Errorf("newlines should be escaped in TOML output: got %s", result)
 		}
 	})
 
 	t.Run("custom requires-python", func(t *testing.T) {
-		result := buildPyprojectTOML("yamllint", "1.38.0", ">=3.10")
+		result := buildPyprojectTOML("yamllint", "1.38.0", ">=3.10", nil)
 		if !strings.Contains(result, `requires-python = ">=3.10"`) {
 			t.Errorf("expected requires-python = \">=3.10\", got %s", result)
 		}

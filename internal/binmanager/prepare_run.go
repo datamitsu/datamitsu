@@ -81,10 +81,7 @@ func (bm *BinManager) PreparedStateReady(appName string) (bool, error) {
 	return prepare.Ready(prepare.StateDir(PreparePath(), appName, key)), nil
 }
 
-// ResolveBindingPath resolves a {bin:<alias>} placeholder of the operation's
-// app: the alias must name a direct dependsOn edge, and its target must be a
-// binary, uv or go app (the kinds with a single executable entry point).
-// Read-only: no install, no prepare step.
+// ResolveBindingPath resolves APP_BIN in a prepare step without installing a target.
 func (bm *BinManager) ResolveBindingPath(ctx context.Context, appName, alias string) (string, error) {
 	app, ok := bm.mapOfApps[appName]
 	if !ok {

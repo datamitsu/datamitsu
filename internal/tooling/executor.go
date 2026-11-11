@@ -130,20 +130,22 @@ type DiagnosticParser interface {
 	Unrecognized(toolName string, declared config.OutputParser)
 }
 
-// ParseAnswer is a parser's answer to one output, resolved.
+// InputSkip is a non-gating input that a parser could not validate.
+type InputSkip struct {
+	File     string `json:"file"`
+	Reason   string `json:"reason"`
+	Category string `json:"category,omitempty"`
+}
+
+// ParseAnswer separates incomplete diagnostic extraction from inputs the tool deliberately skipped.
 type ParseAnswer struct {
-	Diagnostics []diagnostic.Diagnostic
-	// Recognized is false when the parser found nothing of its format in the
-	// output, which is not the same answer as finding nothing in it.
-	Recognized bool
-	// Format is the key the parser read: a format key, or a tool name.
-	Format string
-	// FormatParser reports that the key read a standard format any tool may
-	// print, not one tool's own output.
-	FormatParser bool
-	// Partial is true when the output holds a document the parser could not
-	// read whole, so the findings may not be all there were.
-	Partial bool
+	Diagnostics       []diagnostic.Diagnostic
+	Skipped           []InputSkip
+	Recognized        bool
+	Format            string
+	FormatParser      bool
+	Partial           bool
+	ExtractionPartial *bool `json:"extractionPartial,omitempty"`
 }
 
 // ResultCallback is called when a task completes
@@ -992,6 +994,12 @@ func (e *Executor) parseFileDiagnostics(ctx context.Context, proc *ProcessResult
 	)
 	proc.Extraction, proc.ParseError = x.outcome, x.parseError
 	proc.Provenance, proc.ParserModule = x.provenance, x.module
+	proc.Skipped = visibleSkips(x.skipped, workingDir)
+	proc.InputPartial = len(proc.Skipped) > 0 || x.legacyPartial
+	if x.extractionPartial != nil {
+		proc.InputPartial = len(proc.Skipped) > 0
+	}
+	proc.ExtractionPartial = x.partial
 	diags := x.diags
 	dropped := len(diags) > limits.Findings
 	if dropped {
@@ -1018,7 +1026,35 @@ type extracted struct {
 	provenance string
 	module     string
 	// partial: the output held a document the parser could not read whole.
-	partial bool
+	partial           bool
+	skipped           []InputSkip
+	legacyPartial     bool
+	extractionPartial *bool
+}
+
+func extractionWasPartial(answer ParseAnswer) bool {
+	if answer.ExtractionPartial != nil {
+		return *answer.ExtractionPartial
+	}
+	return answer.Partial
+}
+
+func visibleSkips(skips []InputSkip, workingDir string) []InputSkip {
+	out := make([]InputSkip, 0, len(skips))
+	for _, skip := range skips {
+		if skip.Category == "unmatched" || skip.Category == "outside-workspace" {
+			continue
+		}
+		if skip.File != "" {
+			if !filepath.IsAbs(skip.File) {
+				skip.File = filepath.Join(workingDir, skip.File)
+			} else {
+				skip.File = filepath.Clean(skip.File)
+			}
+		}
+		out = append(out, skip)
+	}
+	return out
 }
 
 // Provenances of findings.
@@ -1076,11 +1112,9 @@ func (e *Executor) extract(ctx context.Context, task Task, files []string, worki
 				provenance = ProvenanceFormat
 			}
 			return extracted{
-				diags:      located(answer.Diagnostics, files, workingDir),
-				outcome:    ExtractionParsedClean,
-				provenance: provenance,
-				module:     op.Module,
-				partial:    answer.Partial,
+				diags: located(answer.Diagnostics, files, workingDir), outcome: ExtractionParsedClean,
+				provenance: provenance, module: op.Module, partial: extractionWasPartial(answer),
+				skipped: answer.Skipped, legacyPartial: answer.Partial, extractionPartial: answer.ExtractionPartial,
 			}
 		default:
 			unrecognized = true

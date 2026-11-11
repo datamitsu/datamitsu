@@ -51,32 +51,43 @@ type RawDiagnostic struct {
 type Response struct {
 	// ABI is the form the module answered in: 1 for an array, 2 for an object.
 	ABI int `json:"abi"`
-	// Recognized is false when the parser found nothing it understands — no
-	// document of its format, no matching line — which is not the same answer
-	// as understanding the output and finding nothing in it.
+	// Recognized is false when the parser found nothing it understands.
 	Recognized bool `json:"recognized"`
-	// Format is the format key a format parser or the fallback read, or the
-	// tool name for a tool parser; empty in an ABI 1 answer.
+	// Format is the format key read, or the tool name for a tool parser.
 	Format      string          `json:"format,omitempty"`
 	Diagnostics []RawDiagnostic `json:"diagnostics"`
-	// Partial is true when the output holds a document the parser could not
-	// read whole — cut off, or malformed — so findings may be missing whatever
-	// it recognized. An ABI 1 answer never says so.
+	// Partial retains the ABI 2 compatibility signal, including skipped inputs.
 	Partial bool `json:"partial,omitempty"`
+	// ExtractionPartial distinguishes extraction loss; nil means legacy ABI 2.
+	ExtractionPartial *bool       `json:"extractionPartial,omitempty"`
+	Skipped           []InputSkip `json:"skipped,omitempty"`
 }
 
-// responseV2 is the object form of a parse answer; a pointer tells an absent
-// recognized from false.
+// ExtractionWasPartial reports whether parser extraction itself was incomplete.
+func (r Response) ExtractionWasPartial() bool {
+	if r.ExtractionPartial != nil {
+		return *r.ExtractionPartial
+	}
+	return r.Partial
+}
+
+// InputSkip is a non-gating input that a parser could not validate.
+type InputSkip struct {
+	File     string `json:"file"`
+	Reason   string `json:"reason"`
+	Category string `json:"category,omitempty"`
+}
+
 type responseV2 struct {
-	Recognized  *bool           `json:"recognized"`
-	Format      string          `json:"format"`
-	Diagnostics []RawDiagnostic `json:"diagnostics"`
-	Partial     bool            `json:"partial"`
+	Recognized        *bool           `json:"recognized"`
+	Format            string          `json:"format"`
+	Diagnostics       []RawDiagnostic `json:"diagnostics"`
+	Partial           bool            `json:"partial"`
+	ExtractionPartial *bool           `json:"extractionPartial"`
+	Skipped           []InputSkip     `json:"skipped"`
 }
 
-// DecodeResponse reads a module's parse answer in either form. exitCode is
-// the tool's, which an ABI 1 answer needs to say whether it recognized the
-// output.
+// DecodeResponse reads either response ABI. exitCode is used to infer recognition for ABI 1.
 func DecodeResponse(data []byte, exitCode int32) (Response, error) {
 	trimmed := bytes.TrimLeft(data, " \t\r\n")
 	if len(trimmed) > 0 && trimmed[0] == '{' {
@@ -91,7 +102,14 @@ func DecodeResponse(data []byte, exitCode int32) (Response, error) {
 		if diags == nil {
 			diags = []RawDiagnostic{}
 		}
-		return Response{ABI: 2, Recognized: *v2.Recognized, Format: v2.Format, Diagnostics: diags, Partial: v2.Partial}, nil
+		skips := v2.Skipped
+		if skips == nil {
+			skips = []InputSkip{}
+		}
+		return Response{
+			ABI: 2, Recognized: *v2.Recognized, Format: v2.Format, Diagnostics: diags,
+			Partial: v2.Partial, ExtractionPartial: v2.ExtractionPartial, Skipped: skips,
+		}, nil
 	}
 	var diags []RawDiagnostic
 	if err := json.Unmarshal(data, &diags); err != nil {
@@ -200,18 +218,20 @@ func (p *ParserRuntime) Describe(ctx context.Context) (Capabilities, error) {
 	if err := json.Unmarshal(out, &caps); err != nil {
 		return Capabilities{}, fmt.Errorf("decode describe output: %w", err)
 	}
-	normalizeSchema(&caps)
+	caps.Raw = out
+	if caps.SchemaVersion == 0 {
+		return Capabilities{}, errors.New("decode describe output: missing schemaVersion")
+	}
+	if caps.ABI == 0 {
+		caps.ABI = 1
+	}
 	normalizeSeverities(&caps)
 	return caps, nil
 }
 
-// normalizeSchema reads a descriptor from a newer module as the newest schema
-// this core knows, whose fields it can read and whose unknown ones it ignores,
-// and gives a module that predates the abi field the array answers it sends.
+// normalizeSchema supplies the legacy ABI without rewriting the module's declared schema.
+// Newer descriptor fields remain optional, and introspection retains the reported version.
 func normalizeSchema(caps *Capabilities) {
-	if caps.SchemaVersion > SchemaNewest {
-		caps.SchemaVersion = SchemaNewest
-	}
 	if caps.ABI == 0 {
 		caps.ABI = 1
 	}

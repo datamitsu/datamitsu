@@ -262,10 +262,13 @@ type ProcessResult struct {
 	Provenance string
 	// ParserModule is the module whose answer the findings are: the declared
 	// one, or the embedded fallback's; empty when nothing was read.
-	ParserModule string
-	OutputTail   []byte // the last 4 KiB of the output the frame would show
-	Diagnostics  []diagnostic.Diagnostic
-	DurationMs   int64
+	ParserModule      string
+	OutputTail        []byte // the last 4 KiB of the output the frame would show
+	Diagnostics       []diagnostic.Diagnostic
+	Skipped           []InputSkip
+	InputPartial      bool
+	ExtractionPartial bool
+	DurationMs        int64
 	// FailOn is the effective threshold the gate applied to the process's
 	// findings; empty when no gate ran.
 	FailOn config.Severity

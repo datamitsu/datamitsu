@@ -634,7 +634,9 @@ func (c *Cache) Clear() error {
 //     any others do.
 //   - d9v1: config hash pins are canonical "sha256:<hex>" strings and the
 //     hashType field is gone; every key that folds a pin moved.
-const cacheSemantics = "d9v1"
+//
+// d11v1 blocks passes when a parser skip cannot be attributed to a covered canonical path.
+const cacheSemantics = "d11v1"
 
 // withoutThresholds returns cfg with no operation's failOn. A pass is recorded
 // only for output with no finding of any level, which holds at every

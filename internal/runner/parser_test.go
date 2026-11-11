@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,8 +19,9 @@ import (
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
+	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/tooling"
-
+	"github.com/datamitsu/datamitsu/internal/ui"
 	"go.uber.org/zap"
 )
 
@@ -208,6 +210,70 @@ func (a shellApps) GetCommandInfo(_ context.Context, app string) (*binmanager.Co
 
 func (shellApps) ResolveBindingPath(context.Context, string, string) (string, error) {
 	return "", os.ErrNotExist
+}
+
+type decodingModules struct{}
+
+func (decodingModules) HasParser(context.Context, string, string) (bool, error) { return true, nil }
+
+func (decodingModules) ParseOutput(_ context.Context, _, _ string, stdout, _ []byte, exit int32) (parsermanager.Response, error) {
+	return parsermanager.DecodeResponse(stdout, exit)
+}
+
+func (decodingModules) Fallback(context.Context, []byte, []byte, int32) (parsermanager.Response, error) {
+	return parsermanager.Response{}, nil
+}
+
+func (decodingModules) DescribedParser(string, string) (parsermanager.ParserFacts, bool) {
+	return parsermanager.ParserFacts{Tool: parsermanager.ToolCapability{Kind: "tool"}}, true
+}
+
+func TestDecodedMultilineSkipIsMaskedBeforeRendering(t *testing.T) {
+	ui.SetMuted(false)
+	t.Cleanup(func() { ui.SetMuted(false) })
+	root := t.TempDir()
+	file := filepath.Join(root, "input")
+	if err := os.WriteFile(file, []byte("input"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	secret := "first-review-half\nsecond-review-half"
+	parserJSON := `{"recognized":true,"format":"schepherd","diagnostics":[],"skipped":[{"file":"input","reason":"first-review-half\nsecond-review-half","category":"catalog-ambiguous"}]}`
+	executor := tooling.NewExecutor(root, false, false, shellApps{
+		"tool": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "printf '%s' '" + parserJSON + "'"}},
+	}, nil)
+	executor.SetParser(newDiagnosticParser(decodingModules{}, newParseProblems()))
+	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{{
+		ToolName: "schepherd", Tool: config.Tool{Name: "schepherd", OutputParser: &config.OutputParser{Module: "core", Parser: "schepherd"}},
+		Operation: config.OpLint, OpConfig: config.ToolOperation{App: "tool", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
+		Files: []string{file}, ProjectPath: root,
+	}}}}}
+	groups, err := executor.Execute(context.Background(), plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := groups[0].Results[0]
+	if len(result.Processes) != 1 || len(result.Processes[0].Skipped) != 1 || result.Processes[0].Skipped[0].Reason != secret {
+		t.Fatalf("executor skips = %+v, want decoded raw multiline reason", result.Processes)
+	}
+	group := toolExecutionGroup{toolName: "schepherd", executions: []executionInstance{{result: result}}}
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	defer func() { os.Stdout = oldStdout }()
+	printInputSkips([]toolExecutionGroup{group}, root, []string{secret})
+	_ = w.Close()
+	os.Stdout = oldStdout
+	rendered, err := io.ReadAll(r)
+	_ = r.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(rendered), "first-review-half") || strings.Contains(string(rendered), "second-review-half") || !strings.Contains(string(rendered), report.Masked) {
+		t.Fatalf("rendered skip leaked or was not masked: %q", rendered)
+	}
 }
 
 // TestParseFailureThroughTheExecutor follows a parse that fails in a loaded

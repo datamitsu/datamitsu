@@ -2,6 +2,7 @@ package parsermanager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,14 +18,13 @@ import (
 // none of this is declared in datamitsu config, which carries only a source
 // and a hash.
 type Capabilities struct {
-	SchemaVersion int    `json:"schemaVersion"`
-	Module        string `json:"module"`
-	Version       string `json:"version"`
-	// ABI is the form of the module's parse answers: 1 for a bare array of
-	// diagnostics, 2 for an object that also says whether the output was
-	// recognized. A module that predates the field answers in form 1.
-	ABI   int              `json:"abi"`
-	Tools []ToolCapability `json:"tools"`
+	SchemaVersion int              `json:"schemaVersion"`
+	Module        string           `json:"module"`
+	Version       string           `json:"version"`
+	ABI           int              `json:"abi"`
+	Features      []string         `json:"features,omitempty"`
+	Tools         []ToolCapability `json:"tools"`
+	Raw           json.RawMessage  `json:"-"`
 }
 
 // Descriptor schemas this core reads.
@@ -38,9 +38,8 @@ const (
 	// SchemaABI2 is the first descriptor schema of a module whose parse
 	// answers say whether they recognized the output (ABI 2).
 	SchemaABI2 = 3
-	// SchemaNewest is the newest schema this core knows. A module that
-	// declares a later one is read as this one, its unknown fields ignored.
-	SchemaNewest = SchemaABI2
+	// SchemaNewest is the latest descriptor schema this core understands.
+	SchemaNewest = 4
 )
 
 // SeverityContract reports whether the module's levels come only from what its
@@ -99,21 +98,17 @@ type CatalogModule struct {
 	SchemaVersion int    `json:"schemaVersion"`
 }
 
-// Outdated reports a module older than the newest descriptor schema this core
-// reads: it still parses its tools, and cannot say whether it recognized an
-// output.
+// Outdated reports whether a module predates output recognition and format parsers.
 func (m CatalogModule) Outdated() bool {
-	return m.SchemaVersion < SchemaNewest
+	return m.SchemaVersion < SchemaABI2
 }
 
-// OutdatedNote says what a module older than the newest descriptor schema
-// leaves out, for the surfaces that report it: config show, devtools parsers
-// list, and a verbose run.
+// OutdatedNote explains the missing ABI-2 capabilities without treating optional newer features as required.
 func (m CatalogModule) OutdatedNote() string {
 	return fmt.Sprintf("parser module %q (%s %s) is descriptor schema %d, older than %d: it still parses its tools, "+
 		"but cannot say whether it recognized an output and has no format parsers; the fallback built into "+
 		"datamitsu reads what it answers with nothing on a failure. A newer module release carries both",
-		m.Parser, m.Module, m.Version, m.SchemaVersion, SchemaNewest)
+		m.Parser, m.Module, m.Version, m.SchemaVersion, SchemaABI2)
 }
 
 func moduleOf(parser string, caps Capabilities) CatalogModule {

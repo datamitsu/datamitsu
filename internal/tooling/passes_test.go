@@ -34,6 +34,13 @@ func TestPassesOf(t *testing.T) {
 		{"a parse failure passes nothing", ProcessResult{Extraction: ExtractionParseFailed}, nil},
 		{"an unavailable parser passes nothing", ProcessResult{Extraction: ExtractionParserUnavailable}, nil},
 		{"a truncated output passes nothing", ProcessResult{Extraction: ExtractionTruncated}, nil},
+		{"empty skip blocks every file", ProcessResult{Extraction: ExtractionParsedClean, InputPartial: true, Skipped: []InputSkip{{}}}, nil},
+		{"unmapped skip blocks every file", ProcessResult{Extraction: ExtractionParsedClean, InputPartial: true, Skipped: []InputSkip{{File: "/elsewhere/c.txt"}}}, nil},
+		{"noncanonical absolute skip blocks every file", ProcessResult{Extraction: ExtractionParsedClean, InputPartial: true, Skipped: []InputSkip{{File: "/w/../w/a.txt"}}}, nil},
+		{"a skipped input blocks only its file", ProcessResult{Extraction: ExtractionParsedClean, Skipped: []InputSkip{{File: a}}}, []string{b}},
+		{"extraction loss blocks passes even with skips", ProcessResult{Extraction: ExtractionParsedClean, Skipped: []InputSkip{{File: a}}, ExtractionPartial: true}, nil},
+		{"partial input with per-file skips keeps unaffected files", ProcessResult{Extraction: ExtractionParsedClean, InputPartial: true, Skipped: []InputSkip{{File: a}}}, []string{b}},
+		{"legacy partial blocks all passes", ProcessResult{Extraction: ExtractionParsedClean, InputPartial: true}, nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -62,6 +69,7 @@ func TestVerdictEligible(t *testing.T) {
 		}}, false},
 		{"an unavailable parser", ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionParserUnavailable}}}, false},
 		{"a dry run", ExecutionResult{Processes: []ProcessResult{{State: ProcessNotStarted, Extraction: ExtractionNone}}}, false},
+		{"input skip", ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionParsedClean, InputPartial: true}}}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -72,14 +80,20 @@ func TestVerdictEligible(t *testing.T) {
 	}
 }
 
-// fileParser answers every parse with the findings its function gives for the
-// command's stdout, which the scripts below set to the file they were handed.
+// fileParser answers every parse with the findings and skips its functions
+// produce from the command's stdout, which the scripts set to the input path.
 type fileParser struct {
 	findings func(stdout string) []diagnostic.Diagnostic
+	skips    func(stdout string) []InputSkip
 }
 
 func (p fileParser) Parse(_ context.Context, _, parser, _ string, stdout, _ []byte, _ int32) (ParseAnswer, error) {
-	return ParseAnswer{Diagnostics: p.findings(strings.TrimSpace(string(stdout))), Recognized: true, Format: parser}, nil
+	input := strings.TrimSpace(string(stdout))
+	var skips []InputSkip
+	if p.skips != nil {
+		skips = p.skips(input)
+	}
+	return ParseAnswer{Diagnostics: p.findings(input), Skipped: skips, Recognized: true, Format: parser}, nil
 }
 
 func (fileParser) Fallback(context.Context, string, []byte, []byte, int32) (ParseAnswer, error) {
@@ -178,6 +192,38 @@ func TestBatchLintPassAttribution(t *testing.T) {
 			}
 			if got := cachedFiles(t, c, cache.OperationLint, files); !slices.Equal(got, tc.want) {
 				t.Errorf("cached = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSkippedInputsOnlyCacheValidatedFiles(t *testing.T) {
+	cases := []struct {
+		name string
+		skip func(root string) InputSkip
+		want []string
+	}{
+		{"empty path", func(string) InputSkip { return InputSkip{Reason: "unknown"} }, nil},
+		{"foreign path", func(string) InputSkip { return InputSkip{File: "/elsewhere/c.txt", Reason: "unknown"} }, nil},
+		{"noncanonical absolute path", func(root string) InputSkip {
+			return InputSkip{File: root + string(os.PathSeparator) + "." + string(os.PathSeparator) + "a.txt", Reason: "unknown"}
+		}, []string{"b.txt"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var root string
+			parser := fileParser{
+				findings: func(string) []diagnostic.Diagnostic { return nil },
+				skips:    func(string) []InputSkip { return []InputSkip{tc.skip(root)} },
+			}
+			e, c, r, files := c1Project(t, parser)
+			root = r
+			task := c1Task(config.OpLint, config.ToolScopeRepository, []string{"{files}"}, files, root)
+			if result := e.executeTask(context.Background(), task); !result.Success {
+				t.Fatalf("an exit-0 tool failed: %v", result.Error)
+			}
+			if got := cachedFiles(t, c, cache.OperationLint, files); !slices.Equal(got, tc.want) {
+				t.Errorf("cached = %v, want only validated files %v", got, tc.want)
 			}
 		})
 	}

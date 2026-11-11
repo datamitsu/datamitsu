@@ -617,6 +617,9 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 		inv.Duration = Millis(proc.DurationMs)
 		inv.Extraction = string(proc.Extraction)
 		inv.Provenance = provenanceOf(proc)
+		for _, skip := range proc.Skipped {
+			inv.Skipped = append(inv.Skipped, InputSkip{File: a.rel(skip.File), Reason: skip.Reason, Category: skip.Category})
+		}
 		for _, file := range proc.Files {
 			if fr, ok := byFile[file]; ok && !claimed[file] {
 				claimed[file] = true
