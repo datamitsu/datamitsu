@@ -215,3 +215,37 @@ y = 2
 		assertOrder(t, s, "[apples]", "[ravens]")
 	}
 }
+
+func TestTOMLStringifyRoundTripsArraysOfTables(t *testing.T) {
+	engine, err := New(context.Background(), "")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	script := `(() => {
+		const value = {
+			allowlists: [{ title: "nested", paths: ["one", "two"], empty: [] }],
+			"quoted.key": "quoted",
+			title: "root",
+			primitive: [1, "two", true],
+			empty: [],
+			nested: { items: [{ name: "child", values: [[], ["x"]] }] },
+			mixed: [{ name: "inline" }, "scalar"],
+			mixedArrays: [{ name: "inline" }, ["scalar"]],
+		};
+		const encoded = TOML.stringify(value);
+		const decoded = TOML.parse(encoded);
+		const canonical = value => Array.isArray(value)
+			? value.map(canonical)
+			: value && typeof value === "object"
+				? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]))
+				: value;
+		if (JSON.stringify(canonical(decoded)) !== JSON.stringify(canonical(value))) {
+			throw new Error("TOML round-trip changed structure: " + encoded);
+		}
+		return encoded;
+	})()`
+	_, err = engine.vm.RunString(script)
+	if err != nil {
+		t.Fatalf("TOML round-trip: %v", err)
+	}
+}

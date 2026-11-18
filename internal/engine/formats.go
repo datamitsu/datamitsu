@@ -38,8 +38,23 @@ func convertMapSliceToMap(val any) any {
 	}
 }
 
-// tomlStringifyOrdered encodes a yaml.MapSlice to TOML preserving key order
-// It manually writes primitives first, then tables, to maintain proper TOML structure
+// isTOMLTable identifies values that start a TOML table or array of tables.
+func isTOMLTable(value any) bool {
+	switch v := value.(type) {
+	case map[string]any:
+		return true
+	case []any:
+		for _, item := range v {
+			if _, ok := item.(map[string]any); !ok {
+				return false
+			}
+		}
+		return len(v) > 0
+	}
+	return false
+}
+
+// tomlStringifyOrdered writes root primitives before tables to preserve TOML scope.
 func tomlStringifyOrdered(slice yaml.MapSlice) (string, error) {
 	var buf bytes.Buffer
 	var tables []yaml.MapItem
@@ -53,9 +68,7 @@ func tomlStringifyOrdered(slice yaml.MapSlice) (string, error) {
 
 		value := convertMapSliceToMap(item.Value)
 
-		// Check if this is a table (map) or a primitive value
-		if _, isMap := value.(map[string]any); isMap {
-			// Defer tables to second pass
+		if isTOMLTable(value) {
 			tables = append(tables, item)
 			continue
 		}
