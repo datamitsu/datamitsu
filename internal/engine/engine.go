@@ -19,9 +19,10 @@ import (
 // Engine wraps a goja runtime together with the collected project facts and
 // the resolved root path used when evaluating config scripts.
 type Engine struct {
-	vm       *goja.Runtime
-	facts    *facts.Facts
-	rootPath string
+	vm           *goja.Runtime
+	facts        *facts.Facts
+	rootPath     string
+	timeoutDepth int
 	// nonDeterminism names the first clock or entropy source config JS read in
 	// this VM, or "" if it read none. Written only from the goroutine driving
 	// the VM (goja is single-threaded by construction), so it needs no lock.
@@ -117,9 +118,8 @@ func (e *Engine) Facts() *facts.Facts {
 // RunWithTimeout executes a JS script string with a watchdog timeout.
 func (e *Engine) RunWithTimeout(script string, timeout time.Duration) (goja.Value, error) {
 	done := e.withTimeout(timeout)
+	defer done()
 	val, err := e.vm.RunString(script)
-	done()
-	e.vm.ClearInterrupt()
 	if err != nil {
 		return val, fmt.Errorf("run script: %w", err)
 	}
@@ -132,9 +132,8 @@ func (e *Engine) RunWithTimeout(script string, timeout time.Duration) (goja.Valu
 // a compiled program reusable across VMs within one process.
 func (e *Engine) RunProgramWithTimeout(program *goja.Program, timeout time.Duration) (goja.Value, error) {
 	done := e.withTimeout(timeout)
+	defer done()
 	val, err := e.vm.RunProgram(program)
-	done()
-	e.vm.ClearInterrupt()
 	if err != nil {
 		return val, fmt.Errorf("run program: %w", err)
 	}
@@ -143,11 +142,14 @@ func (e *Engine) RunProgramWithTimeout(program *goja.Program, timeout time.Durat
 
 // CallWithTimeout invokes a goja.Callable with a watchdog timeout.
 func (e *Engine) CallWithTimeout(fn goja.Callable, timeout time.Duration, args ...goja.Value) (goja.Value, error) {
+	return e.CallWithTimeoutThis(fn, goja.Undefined(), timeout, args...)
+}
+
+// CallWithTimeoutThis invokes fn with an explicit receiver and watchdog.
+func (e *Engine) CallWithTimeoutThis(fn goja.Callable, this goja.Value, timeout time.Duration, args ...goja.Value) (goja.Value, error) {
 	done := e.withTimeout(timeout)
-	val, err := fn(goja.Undefined(), args...)
-	done()
-	e.vm.ClearInterrupt()
-	return val, err
+	defer done()
+	return fn(this, args...)
 }
 
 // initFacts exposes the facts() function to JavaScript.
@@ -173,12 +175,12 @@ func computeRootPath(gitRoot string) (string, error) {
 }
 
 // withTimeout arms a watchdog goroutine that interrupts the VM after timeout.
-// The returned done() function signals the watchdog to stop and blocks until it
-// has exited, so callers can safely call e.vm.ClearInterrupt() after done()
-// returns without a race against a late-firing interrupt.
+// The returned function stops and joins this watchdog. Only the outermost call
+// clears the interrupt, so a nested invocation cannot erase its caller's timeout.
 // Only vm.Interrupt is called from the goroutine, which goja guarantees is safe
 // to call from a different goroutine.
 func (e *Engine) withTimeout(timeout time.Duration) (done func()) {
+	e.timeoutDepth++
 	doneCh := make(chan struct{})
 	exitCh := make(chan struct{})
 	go func() {
@@ -194,5 +196,9 @@ func (e *Engine) withTimeout(timeout time.Duration) (done func()) {
 	return func() {
 		close(doneCh)
 		<-exitCh
+		e.timeoutDepth--
+		if e.timeoutDepth == 0 {
+			e.vm.ClearInterrupt()
+		}
 	}
 }

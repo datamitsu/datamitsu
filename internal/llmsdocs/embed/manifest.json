@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "7dd5c3853545b55373cee61732473f19",
+  "pageSetHash": "e66409f87ff65fa9f935488808374c50",
   "pages": [
     {
       "slug": "about",
@@ -298,8 +298,8 @@
       "url": "https://datamitsu.com/docs/guides/managed-configs.md",
       "title": "Managed Configs",
       "description": "Using managed configuration files, symlinks, and the .datamitsu/ directory",
-      "bytes": 16088,
-      "contentHash": "3a5fc593c18938bbc1187876fb209a9f"
+      "bytes": 16357,
+      "contentHash": "a878b1ea19f353be52469133b94fd409"
     },
     {
       "slug": "guides/managed-content",

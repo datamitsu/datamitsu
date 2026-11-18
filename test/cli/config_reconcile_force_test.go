@@ -1,14 +1,227 @@
 package cli_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/clitest"
 )
+
+func TestConfigReconcileInheritedContent(t *testing.T) {
+	cases := []struct {
+		name  string
+		layer string
+	}{
+		{name: "deep merge", layer: `return merge(input, { version: "project" });`},
+		{name: "entry spread", layer: `return { ...input, managedConfigs: { ...input.managedConfigs, "child.json": { ...input.managedConfigs["child.json"] } } };`},
+		{name: "outer spread control", layer: `return { ...input };`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := clitest.NewProject(t)
+			base := p.WriteFile("base.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+const baseValue = "base";
+globalThis.getConfig = () => ({
+  version: "1.0.0", apps: {}, runtimes: {}, tools: {},
+  projectTypes: { sample: { markers: ["**/fixture.marker"] } },
+  managedConfigs: {
+    "child.json": { scope: "project", projectTypes: ["sample"], content: ctx => JSON.stringify({ value: baseValue, cwd: ctx.cwdPath, keep: JSON.parse(ctx.originalContent || "{}").keep }) },
+    "root.json": { scope: "git-root", content: ctx => JSON.stringify({ value: baseValue, cwd: ctx.cwdPath }) }
+  }
+});`)
+			project := p.WriteFile("project.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = input => { `+tc.layer+` };`)
+			for _, dir := range []string{"", "nested", "other"} {
+				p.WriteFile(filepath.Join(dir, "fixture.marker"), "")
+				keep := strings.ReplaceAll(dir, "/", "-")
+				if keep == "" {
+					keep = "root"
+				}
+				p.WriteFile(filepath.Join(dir, "child.json"), `{"keep":"`+keep+`"}`)
+			}
+			p.WriteFile("root.json", `{"keep":"root"}`)
+			args := []string{"--no-auto-config", "--before-config", base, "--config", project}
+			reconcileArgs := append(append([]string{}, args...), "config", "reconcile", "--skip-fix")
+			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, reconcileArgs...)
+			if res.ExitCode != 0 {
+				t.Fatalf("reconcile: %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
+			}
+			show := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, append(append([]string{}, args...), "config", "show")...)
+			if show.ExitCode != 0 {
+				t.Fatalf("config show: %d\n%s", show.ExitCode, show.Stderr)
+			}
+			var shown map[string]any
+			if err := json.Unmarshal([]byte(show.Stdout), &shown); err != nil {
+				t.Fatalf("config show JSON: %v", err)
+			}
+			managed, ok := shown["managedConfigs"].(map[string]any)
+			if !ok {
+				t.Fatalf("managedConfigs missing from config show: %#v", shown)
+			}
+			for name, raw := range managed {
+				entry, ok := raw.(map[string]any)
+				if !ok {
+					t.Fatalf("managed config %s: %#v", name, raw)
+				}
+				if _, ok := entry["content"]; ok {
+					t.Errorf("config show exposed %s content", name)
+				}
+				if _, ok := entry["render"]; ok {
+					t.Errorf("config show exposed %s render", name)
+				}
+			}
+			for _, name := range []string{"nested/root.json", "other/root.json"} {
+				if _, err := os.Stat(filepath.Join(p.Dir, name)); !os.IsNotExist(err) {
+					t.Errorf("unexpected root-scoped output %s (stat error %v)", name, err)
+				}
+			}
+			for _, dir := range []string{"", "nested", "other"} {
+				name := filepath.Join(dir, "child.json")
+				b, err := os.ReadFile(filepath.Join(p.Dir, name))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var got map[string]string
+				if err := json.Unmarshal(b, &got); err != nil {
+					t.Fatalf("%s: %v", name, err)
+				}
+				wantKeep := strings.ReplaceAll(dir, "/", "-")
+				if wantKeep == "" {
+					wantKeep = "root"
+				}
+				if got["value"] != "base" || got["keep"] != wantKeep || got["cwd"] != filepath.Join(p.Dir, dir) {
+					t.Fatalf("%s: %#v", name, got)
+				}
+			}
+			rootData, err := os.ReadFile(filepath.Join(p.Dir, "root.json"))
+			if err != nil {
+				t.Fatalf("root output missing: %v", err)
+			}
+			var rootGot map[string]string
+			if err := json.Unmarshal(rootData, &rootGot); err != nil {
+				t.Fatalf("root output JSON: %v", err)
+			}
+			if rootGot["value"] != "base" || rootGot["cwd"] != p.Dir {
+				t.Fatalf("root output: %#v", rootGot)
+			}
+		})
+	}
+}
+
+func TestConfigReconcileInheritedContentDeadline(t *testing.T) {
+	p := clitest.NewProject(t)
+	base := p.WriteFile("base.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = () => ({
+  version: "1.0.0", apps: {}, runtimes: {}, tools: {},
+  managedConfigs: {
+    "child.json": { scope: "project", content: () => { while (true) {} } }
+  }
+});`)
+	first := p.WriteFile("first.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = input => merge(input, { version: "first" });`)
+	second := p.WriteFile("second.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = input => merge(input, { version: "second" });`)
+	consumer := p.WriteFile("consumer.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = input => { input.managedConfigs["child.json"].content({}); return input; };`)
+	args := []string{"--no-auto-config", "--before-config", base, "--before-config", first, "--before-config", second, "--config", consumer, "config", "show"}
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Timeout: 25 * time.Second}, args...)
+	if res.ExitCode == 0 {
+		t.Fatalf("config show unexpectedly succeeded with non-terminating inherited callback")
+	}
+	if !strings.Contains(res.Stderr+res.Stdout, "execution timeout") {
+		t.Fatalf("config show did not report callback deadline: exit %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+}
+
+func TestConfigReconcileConsumingLayerContentException(t *testing.T) {
+	p := clitest.NewProject(t)
+	base := p.WriteFile("base.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = () => ({
+  version: "1.0.0", apps: {}, runtimes: {}, tools: {},
+  projectTypes: { sample: { markers: ["**/fixture.marker"] } },
+  managedConfigs: {
+    "child.json": { scope: "project", projectTypes: ["sample"], content: () => { throw new Error("inherited-content-failure"); } }
+  }
+});`)
+	project := p.WriteFile("project.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = input => merge(input, { version: "project" });`)
+	p.WriteFile("fixture.marker", "")
+	p.WriteFile("child.json", `{"keep":"original"}`)
+	args := []string{"--no-auto-config", "--before-config", base, "--config", project, "config", "reconcile", "--skip-fix"}
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Timeout: 20 * time.Second}, args...)
+	if res.ExitCode == 0 || !strings.Contains(res.Stderr+res.Stdout, "inherited-content-failure") {
+		t.Fatalf("reconcile did not surface callback exception: exit %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+}
+
+func TestConfigReconcileInheritedContentOverrides(t *testing.T) {
+	p := clitest.NewProject(t)
+	base := p.WriteFile("base.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = () => ({
+  version: "1.0.0", apps: {}, runtimes: {}, tools: {},
+  projectTypes: { sample: { markers: ["**/fixture.marker"] } },
+  managedConfigs: {
+    "override.json": { scope: "project", projectTypes: ["sample"], content: ctx => JSON.stringify({ value: "base", cwd: ctx.cwdPath }) },
+    "undefined-opt-out.json": { scope: "project", projectTypes: ["sample"], content: () => undefined },
+    "null-opt-out.json": { scope: "project", projectTypes: ["sample"], content: () => null }
+  }
+});`)
+	project := p.WriteFile("project.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = input => merge(input, { managedConfigs: {
+  "override.json": { content: ctx => JSON.stringify({ value: "project", cwd: ctx.cwdPath }) }
+} });`)
+	for _, dir := range []string{"", "nested"} {
+		p.WriteFile(filepath.Join(dir, "fixture.marker"), "")
+		p.WriteFile(filepath.Join(dir, "override.json"), `{"value":"custom"}`)
+		p.WriteFile(filepath.Join(dir, "undefined-opt-out.json"), `{"keep":"undefined-original"}`)
+		p.WriteFile(filepath.Join(dir, "null-opt-out.json"), `{"keep":"null-original"}`)
+	}
+	args := []string{"--no-auto-config", "--before-config", base, "--config", project, "config", "reconcile", "--skip-fix"}
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
+	if res.ExitCode != 0 {
+		t.Fatalf("reconcile: %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+	for _, dir := range []string{"", "nested"} {
+		override, err := os.ReadFile(filepath.Join(p.Dir, dir, "override.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got map[string]string
+		if err := json.Unmarshal(override, &got); err != nil {
+			t.Fatalf("override JSON: %v", err)
+		}
+		if got["value"] != "project" || got["cwd"] != filepath.Join(p.Dir, dir) {
+			t.Errorf("override in %q: %#v", dir, got)
+		}
+		for name, original := range map[string]string{
+			"undefined-opt-out.json": `{"keep":"undefined-original"}`,
+			"null-opt-out.json":      `{"keep":"null-original"}`,
+		} {
+			optOut, err := os.ReadFile(filepath.Join(p.Dir, dir, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(optOut) != original {
+				t.Errorf("opt-out %s in %q changed to %s", name, dir, optOut)
+			}
+		}
+	}
+}
 
 func TestConfigReconcileForce(t *testing.T) {
 	p := clitest.NewProject(t)

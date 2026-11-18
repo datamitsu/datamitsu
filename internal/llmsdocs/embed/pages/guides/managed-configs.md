@@ -263,6 +263,11 @@ The `content()` function receives a context object with:
 - `outputPath`, `outputDir` - where the returned content is written
 - `datamitsuDirFromOutput` - relative path from `outputDir` to `{rootPath}/.datamitsu/`, for references the file resolves against its own location
 
+When a later configuration layer passes a managed-config entry through with
+`merge()` or object spread, its `content` callback remains executable in that
+layer chain. The callback and internal render are runtime data, so `config show`
+does not serialize either field.
+
 ### Keeping tool configs out of the repository
 
 Most tools need their config only to run. An entry marked `ejectable` lives in

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -124,19 +125,95 @@ func countLogsWith(observed *observer.ObservedLogs, substr string) int {
 	return n
 }
 
-// A later layer receives earlier layers' entries through the Go-to-JS
-// conversion that hides `content`, the same way a parent receives a
-// getRemoteConfigs() result. Spreading them must keep the function, or every
-// internal render of an inherited entry would fail the load.
+// A later layer receives earlier layers' entries through the Go-to-JS conversion
+// that hides `content`. Cloning the entry must preserve its executable callback.
 func TestLoaderRendersAnEntryALaterLayerOnlyPassesThrough(t *testing.T) {
-	isolateCacheTree(t)
-	base := writeStandaloneConfig(t, ejectableBaseLayer)
-	project := writeStandaloneConfig(t, `return { ...input, managedConfigs: { ...input.managedConfigs } };`)
+	cases := []struct {
+		name  string
+		layer string
+	}{
+		{name: "outer and map spread", layer: `return { ...input, managedConfigs: { ...input.managedConfigs } };`},
+		{name: "deep merge", layer: `return merge(input, {});`},
+		{name: "entry spread", layer: `return { ...input, managedConfigs: { ...input.managedConfigs, ".gitleaks.toml": { ...input.managedConfigs[".gitleaks.toml"] } } };`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			isolateCacheTree(t)
+			base := writeStandaloneConfig(t, ejectableBaseLayer)
+			project := writeStandaloneConfig(t, tc.layer)
+			cfg, _, _ := loadCached(t, base, project)
+			mc := cfg.ManagedConfigs[".gitleaks.toml"]
+			if mc.Placement != config.PlacementInternal || mc.Render == nil || !strings.HasPrefix(mc.Render.Content, "placement=internal") {
+				t.Fatalf("inherited entry: placement %q, render %+v", mc.Placement, mc.Render)
+			}
+		})
+	}
+}
 
-	cfg, _, _ := loadCached(t, base, project)
-	mc := cfg.ManagedConfigs[".gitleaks.toml"]
-	if mc.Placement != config.PlacementInternal || mc.Render == nil || !strings.HasPrefix(mc.Render.Content, "placement=internal") {
-		t.Fatalf("inherited entry: placement %q, render %+v", mc.Placement, mc.Render)
+func TestLoaderInheritedContentSemantics(t *testing.T) {
+	cases := []struct {
+		name         string
+		layers       []string
+		baseResult   string
+		want         string
+		wantError    string
+		absent       bool
+		renderAbsent bool
+	}{
+		{name: "project replacement", layers: []string{`return { ...input, managedConfigs: { ...input.managedConfigs, ".gitleaks.toml": { ...input.managedConfigs[".gitleaks.toml"], content: () => "project" } } };`}, want: "project"},
+		{name: "removed entry", layers: []string{`return { ...input, tools: {}, managedConfigs: {} };`}, absent: true},
+		{name: "undefined opt out", layers: []string{`return merge(input, {});`}, baseResult: "undefined", renderAbsent: true},
+		{name: "null opt out", layers: []string{`return merge(input, {});`}, baseResult: "null", renderAbsent: true},
+		{name: "throwing callback", layers: []string{`return merge(input, {});`}, baseResult: `(() => { throw new Error("inherited-content-failure"); })()`, wantError: "inherited-content-failure"},
+		{name: "nested callback bridge", layers: []string{`return merge(input, {});`, `return merge(input, {});`}, want: "base:placement=internal from=..\n"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			isolateCacheTree(t)
+			baseBody := strings.Replace(ejectableBaseLayer, `return {`, `const inheritedValue = "base"; return {`, 1)
+			baseBody = strings.Replace(baseBody, `"placement="`, `inheritedValue + ":placement="`, 1)
+			if tc.renderAbsent {
+				baseBody = strings.Replace(baseBody, `ejectable: true`, `ejectable: false`, 1)
+			}
+			if tc.baseResult != "" {
+				baseBody = strings.Replace(baseBody, `content: (ctx) => inheritedValue + ":placement=" + ctx.placement + " from=" + ctx.datamitsuDirFromOutput + "\n",`, `content: (ctx) => `+tc.baseResult+`,`, 1)
+			}
+			base := writeStandaloneConfig(t, baseBody)
+			paths := []string{base}
+			for _, layer := range tc.layers {
+				paths = append(paths, writeStandaloneConfig(t, layer))
+			}
+			cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, paths)
+			if tc.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("error = %v, want %q", err, tc.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			mc, ok := cfg.ManagedConfigs[".gitleaks.toml"]
+			if tc.absent {
+				if ok {
+					t.Fatalf("removed entry remained: %+v", mc)
+				}
+				return
+			}
+			if !ok {
+				t.Fatal("managed entry disappeared")
+			}
+			if tc.renderAbsent {
+				if mc.Render != nil {
+					t.Fatalf("opt-out rendered content: %+v", mc.Render)
+				}
+				return
+			}
+			if mc.Render == nil || mc.Render.Content != tc.want {
+				t.Fatalf("render = %+v, want %q", mc.Render, tc.want)
+			}
+		})
 	}
 }
 
