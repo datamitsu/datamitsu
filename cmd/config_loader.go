@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -826,20 +827,9 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 		return nil, nil, fmt.Errorf("getConfig is not a function in %s", source.name)
 	}
 
-	var inputVal goja.Value
-	if chainedInput == nil {
-		inputVal = vm.NewObject()
-	} else {
-		// Strip IgnoreRules from input passed to JS so that only Go handles
-		// the append-merge. Without this, JS spread syntax ({...input}) would
-		// include old rules, and the Go merge below would duplicate them.
-		inputCopy := *chainedInput
-		inputCopy.IgnoreRules = nil
-		// Through DeterministicValue, not ToValue: every collection in a config
-		// is a Go map, and a layer that enumerates one (Object.keys, a spread,
-		// JSON.stringify) would otherwise observe Go's randomized iteration
-		// order — a config input no cache key can represent.
-		inputVal = engine.DeterministicValue(vm, &inputCopy)
+	inputVal, err := configInputValue(vm, chainedInput)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to prepare config input in %s: %w", source.name, err)
 	}
 	endGetConfig := timing.StartStartupPhase(timing.PhaseGetConfig)
 	getConfigSpan := trace.Start(trace.CatConfig, "callGetConfig")
@@ -852,6 +842,29 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 
 	exportSpan := trace.Start(trace.CatConfig, "exportConfigResult")
 	parsedConfig, parseErr := parseConfigResult(vm, resultVal)
+	if parseErr == nil {
+		for name, managed := range parsedConfig.ManagedConfigs {
+			content, ok := managed.Content.(goja.Value)
+			if !ok || content == nil {
+				continue
+			}
+			fn, callable := goja.AssertFunction(content)
+			if !callable {
+				continue
+			}
+			managed.Content = e.VM().ToValue(func(call goja.FunctionCall) goja.Value {
+				result, callErr := e.CallWithTimeoutThis(fn, call.This, 10*time.Second, call.Arguments...)
+				if callErr != nil {
+					if interrupted, ok := errors.AsType[*goja.InterruptedError](callErr); ok {
+						panic(interrupted)
+					}
+					panic(vm.NewGoError(callErr))
+				}
+				return result
+			})
+			parsedConfig.ManagedConfigs[name] = managed
+		}
+	}
 	exportSpan.EndWith(trace.A("source", source.name))
 	if parseErr != nil {
 		return nil, nil, fmt.Errorf("failed to parse config from %s: %w", source.name, parseErr)
@@ -884,6 +897,62 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 	obs.record(e)
 
 	return parsedConfig, e, nil
+}
+
+func configInputValue(vm *goja.Runtime, input *config.Config) (goja.Value, error) {
+	if input == nil {
+		return vm.NewObject(), nil
+	}
+	inputCopy := *input
+	inputCopy.IgnoreRules = nil
+	value := engine.DeterministicValue(vm, &inputCopy)
+	managedConfigs := value.ToObject(vm).Get("managedConfigs")
+	if managedConfigs == nil || goja.IsUndefined(managedConfigs) || goja.IsNull(managedConfigs) {
+		return value, nil
+	}
+	managedConfigsObj := managedConfigs.ToObject(vm)
+	names := make([]string, 0, len(input.ManagedConfigs))
+	for name := range input.ManagedConfigs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		content, ok := input.ManagedConfigs[name].Content.(goja.Value)
+		if !ok || content == nil {
+			continue
+		}
+		fn, callable := goja.AssertFunction(content)
+		if !callable {
+			continue
+		}
+		entryVal := managedConfigsObj.Get(name)
+		if entryVal == nil || goja.IsUndefined(entryVal) || goja.IsNull(entryVal) {
+			continue
+		}
+		entryObj := entryVal.ToObject(vm)
+		entry := vm.NewObject()
+		for _, key := range entryObj.Keys() {
+			if err := entry.Set(key, entryObj.Get(key)); err != nil {
+				return nil, fmt.Errorf("managed config %q property %q: %w", name, key, err)
+			}
+		}
+		if err := entry.Set("content", func(call goja.FunctionCall) goja.Value {
+			result, callErr := fn(call.This, call.Arguments...)
+			if callErr != nil {
+				if interrupted, ok := errors.AsType[*goja.InterruptedError](callErr); ok {
+					panic(interrupted)
+				}
+				panic(vm.NewGoError(callErr))
+			}
+			return result
+		}); err != nil {
+			return nil, fmt.Errorf("managed config %q content: %w", name, err)
+		}
+		if err := managedConfigsObj.Set(name, entry); err != nil {
+			return nil, fmt.Errorf("managed config %q: %w", name, err)
+		}
+	}
+	return value, nil
 }
 
 // parseConfigResult converts getConfig result to config.Config struct
