@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -60,5 +62,28 @@ globalThis.getConfig = input => merge(input, {
 	}
 	if shown.Version != "receiver-preserved" {
 		t.Fatalf("callback receiver result = %q", shown.Version)
+	}
+}
+
+func TestConfigContentBridgeRejectsNonCallableContent(t *testing.T) {
+	p := clitest.NewProject(t)
+	base := p.WriteFile("base.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = () => ({
+  version: "base", apps: {}, runtimes: {}, tools: {},
+  managedConfigs: { "child.json": { content: 42 } }
+});`)
+	consumer := p.WriteFile("consumer.config.js", `
+globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = input => ({ ...input });`)
+	p.WriteFile("child.json", `{"keep":"original"}`)
+	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--before-config", base,
+		"--config", consumer, "config", "reconcile", "--skip-fix")
+	if res.ExitCode == 0 || !strings.Contains(res.Stdout+res.Stderr, "content is not a callable function") {
+		t.Fatalf("invalid callback accepted: exit %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+	data, err := os.ReadFile(filepath.Join(p.Dir, "child.json"))
+	if err != nil || string(data) != `{"keep":"original"}` {
+		t.Fatalf("invalid callback changed file: %q, %v", data, err)
 	}
 }
