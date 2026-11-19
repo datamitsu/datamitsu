@@ -278,3 +278,46 @@ func TestConfigReconcileChainHashDrift(t *testing.T) {
 		t.Fatalf("--no-verify-hash should allow reconciliation to write drift.txt: %v", err)
 	}
 }
+
+func TestConfigReconcileGitleaksArrayTables(t *testing.T) {
+	p := clitest.NewProject(t)
+	cfg := p.WriteFile("reconcile.config.js", `globalThis.getMinVersion = () => "0.0.0";
+globalThis.getConfig = () => ({
+  version: "1.0.0", apps: {}, runtimes: {}, tools: {},
+  managedConfigs: {
+    ".gitleaks.toml": {
+      scope: "git-root",
+      content: ctx => TOML.stringify({
+        allowlists: [{ title: "Synthetic allowlist", paths: ["fixture.txt"] }],
+        title: "Synthetic root title",
+      }),
+    },
+  },
+});`)
+	args := []string{"--no-auto-config", "--config", cfg, "config", "reconcile", "--skip-fix"}
+	var first string
+	for run := range 2 {
+		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
+		if res.ExitCode != 0 {
+			t.Fatalf("reconcile: %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
+		}
+		got, err := os.ReadFile(filepath.Join(p.Dir, ".gitleaks.toml"))
+		if err != nil {
+			t.Fatalf("read generated TOML: %v", err)
+		}
+		text := string(got)
+		rootTitle := strings.Index(text, "title = 'Synthetic root title'")
+		allowlist := strings.Index(text, "[[allowlists]]")
+		if rootTitle < 0 || allowlist < 0 || rootTitle > allowlist {
+			t.Fatalf("root title missing or appears after a table:\n%s", text)
+		}
+		if !strings.Contains(text, "title = 'Synthetic allowlist'") || !strings.Contains(text, "paths = ['fixture.txt']") {
+			t.Fatalf("allowlist changed or missing:\n%s", text)
+		}
+		if run == 0 {
+			first = text
+		} else if text != first {
+			t.Fatalf("second reconciliation changed TOML:\nfirst:\n%s\nsecond:\n%s", first, text)
+		}
+	}
+}

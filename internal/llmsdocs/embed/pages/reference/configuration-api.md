@@ -2011,6 +2011,10 @@ INI.stringify(sections);
 INI.toRecord(sections);
 ```
 
+`TOML.stringify()` writes root values before tables and arrays of tables,
+regardless of JavaScript property order, so they retain their original scope.
+Primitive arrays and empty arrays remain root values.
+
 ### Path Utilities
 
 ```javascript
