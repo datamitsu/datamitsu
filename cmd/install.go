@@ -74,6 +74,13 @@ func runInstall(ctx context.Context, apps, runtimes []string, verify bool) error
 
 	rm := runtimemanager.New(cfg.Runtimes)
 	binMgr := binmanager.New(cfg.Apps, cfg.Bundles, rm)
+	if appsUseToolCache(cfg.Apps, apps) {
+		cacheRoot, rootErr := appToolCacheRoot(ctx)
+		if rootErr != nil {
+			return rootErr
+		}
+		binMgr.SetToolCacheRoot(cacheRoot)
+	}
 
 	// Seed the requested targets from the declared OCI bundle first so the
 	// installs below hit seeded store content instead of the network.

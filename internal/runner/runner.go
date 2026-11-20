@@ -332,6 +332,7 @@ func initSharedContext(
 	// Create executor
 	rm := runtimemanager.New(sc.cfg.Runtimes)
 	binMgr := binmanager.New(sc.cfg.Apps, sc.cfg.Bundles, rm)
+	binMgr.SetToolCacheRoot(sc.rootPath)
 	sc.binMgr = binMgr
 	// Let the planner mark tools whose binary is unavailable for this host as
 	// skipped (reported, not fatal) rather than letting EnsureTools hard-fail —

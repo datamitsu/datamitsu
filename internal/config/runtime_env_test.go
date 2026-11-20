@@ -11,8 +11,80 @@ func TestValidateRuntimeEnv(t *testing.T) {
 	for _, tt := range []struct {
 		name, value, want string
 		mutate            func(binmanager.MapOfApps)
+		extra             string
 	}{
 		{name: "valid", value: "${STORE}/${APP_DIR}:${APP_BIN:dep}"},
+		{name: "valid named cache token", value: "{toolCache:providers}/data", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Caches = []string{"providers"}
+			a["root"] = app
+		}},
+		{name: "unknown named cache", value: "{toolCache:unknown}", want: `unknown tool cache "unknown"`},
+		{name: "malformed named cache", value: "{toolCache:}", want: "malformed tool cache placeholder"},
+		{name: "valid default cache", value: "{toolCache}/data"},
+		{name: "valid adjacent path and cache", value: "${STORE}{toolCache}/data"},
+		{name: "dollar-prefixed cache", value: "${toolCache}/data", want: "malformed nested"},
+		{name: "cache inside unknown placeholder", value: "${prefix{toolCache}}", want: "malformed nested"},
+		{name: "unterminated nested cache", value: "${prefix{toolCache", want: "malformed nested"},
+		{name: "bare lookalike", value: "{toolCacheEnabled}"},
+		{name: "dollar lookalike", value: "${toolCacheEnabled}"},
+		{name: "nested lookalike without cache", value: "${prefix{toolCacheEnabled}}"},
+		{name: "escaped literal brace", value: `${value#\{}`},
+		{name: "escaped brace before real cache", value: `${value#\{}{toolCache}`},
+		{name: "escaped cache-like text before real cache", value: `${value#\{toolCache}{toolCache}`},
+		{name: "quoted opening brace before cache", value: `${value#'{'}{toolCache}`},
+		{name: "quoted named cache is literal", value: `${value#'{toolCache:providers}'}{toolCache}`},
+		{name: "quoted dollar opener is literal", value: `${value#'${'}{toolCache}`},
+		{name: "quoted closing brace before nested cache", value: `${prefix"}"{toolCache}}`, want: "malformed nested"},
+		{name: "independent binding and cache errors", value: "${APP_BIN:missing}|{toolCache:unknown}", want: "unknown tool cache", extra: `APP_BIN target "missing"`},
+		{name: "real cache after nested lookalike", value: "${prefix{toolCacheEnabled}{toolCache:providers}}", want: "malformed nested", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Caches = []string{"providers"}
+			a["root"] = app
+		}},
+		{name: "oversized cache", value: "ok", want: "cache name exceeds 255 bytes", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Caches = []string{strings.Repeat("a", 256)}
+			a["root"] = app
+		}},
+		{name: "invalid cache declaration", value: "ok", want: "invalid cache name", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Caches = []string{"Providers"}
+			a["root"] = app
+		}},
+		{name: "reserved cache declaration", value: "ok", want: "reserved", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Caches = []string{"default"}
+			a["root"] = app
+		}},
+		{name: "duplicate cache declaration", value: "ok", want: "duplicate cache name", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Caches = []string{"providers", "providers"}
+			a["root"] = app
+		}},
+		{name: "shell cache declaration", value: "ok", want: "cache slots require a managed app", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Binary = nil
+			app.Shell = &binmanager.AppConfigShell{Name: "echo"}
+			app.Caches = []string{"providers"}
+			a["root"] = app
+		}},
+		{name: "shell runtime tool cache token", value: "{toolCache}/data", want: "allowed only for managed apps", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Binary = nil
+			app.Shell = &binmanager.AppConfigShell{Name: "echo"}
+			a["root"] = app
+		}},
+		{name: "env tool cache token", value: "ok", want: "only in runtimeEnv", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Env = map[string]string{"CACHE": "{toolCache}/data"}
+			a["root"] = app
+		}},
+		{name: "unmanaged runtime tool cache token", value: "{toolCache}/data", want: "allowed only for managed apps", mutate: func(a binmanager.MapOfApps) {
+			app := a["root"]
+			app.Binary = nil
+			a["root"] = app
+		}},
 		{name: "multiple", value: "${APP_BIN:dep} ${APP_BIN:dep}"},
 		{name: "missing edge", value: "${APP_BIN:other}", want: "direct dependsOn"},
 		{name: "transitive edge", value: "${APP_BIN:leaf}", want: "direct dependsOn", mutate: func(a binmanager.MapOfApps) {
@@ -68,6 +140,9 @@ func TestValidateRuntimeEnv(t *testing.T) {
 				}
 				if err == nil || !strings.Contains(err.Error(), tt.want) {
 					t.Fatalf("error = %v, want %q", err, tt.want)
+				}
+				if strings.Count(err.Error(), tt.want) != 1 || !strings.Contains(err.Error(), tt.extra) {
+					t.Fatalf("unexpected diagnostics: %v", err)
 				}
 				if previous != "" && previous != err.Error() {
 					t.Fatal("nondeterministic errors")

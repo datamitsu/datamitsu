@@ -125,10 +125,10 @@ func TestComputePreparedKeyIgnores(t *testing.T) {
 		t.Fatalf("key: %v", err)
 	}
 
-	// runtimeEnv, the network declaration and the inherited environment are
-	// policy, not identity: changing them must not re-prepare anything.
+	// Execution caches, network policy and inherited environment must not re-prepare state.
 	app := bm.mapOfApps["root"]
 	app.RuntimeEnv = map[string]string{"CACHE": "${APP_PREPARED}"}
+	app.Caches = []string{"providers"}
 	app.Prepare.Network = new(false)
 	bm.mapOfApps["root"] = app
 
@@ -137,7 +137,7 @@ func TestComputePreparedKeyIgnores(t *testing.T) {
 		t.Fatalf("key: %v", err)
 	}
 	if key != base {
-		t.Fatalf("key moved by runtimeEnv/network: %s vs %s", key, base)
+		t.Fatalf("execution policy changed prepared identity: %s vs %s", key, base)
 	}
 }
 

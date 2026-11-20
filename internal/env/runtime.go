@@ -226,3 +226,28 @@ func GetProjectCachePath(gitRoot string, relativeProjectPath string, toolName st
 		toolName,
 	)), nil
 }
+
+// GetAppToolCachePath returns a cache isolated by checkout, app, and install identity.
+func GetAppToolCachePath(root, appName, installIdentity string) (string, error) {
+	if !filepath.IsAbs(root) {
+		return "", fmt.Errorf("app cache root must be absolute: %q", root)
+	}
+	for _, component := range [...]struct{ label, value string }{
+		{"app name", appName},
+		{"install identity", installIdentity},
+	} {
+		label, value := component.label, component.value
+		if value == "" || value == "." || value == ".." || strings.ContainsAny(value, `/\\`) {
+			return "", fmt.Errorf("invalid %s for app cache: %q", label, value)
+		}
+	}
+	path, err := GetProjectCachePath(filepath.Clean(root), filepath.Join("apps", appName), installIdentity)
+	if err != nil {
+		return "", err
+	}
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve app cache path: %w", err)
+	}
+	return absolutePath, nil
+}

@@ -245,6 +245,62 @@ func TestDispatchExcludedNameReportsReason(t *testing.T) {
 	}
 }
 
+func TestDispatchRecreatesToolCacheWithoutInstalling(t *testing.T) {
+	h := newHarness(t)
+	cacheDir := filepath.Join(h.d.CacheRoot(), "tools", "tofu")
+	tool := h.tool("tofu")
+	h.writeManifest(sourcefarm.Manifest{Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, ToolCacheDir: cacheDir, ToolCacheSlots: []string{"default", "providers"}, Installed: true}}})
+	h.invokeThroughFarm("tofu")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != 0 {
+		t.Fatalf("Dispatch() = (%d, %v), want (0, true)", code, handled)
+	}
+	for _, slot := range []string{"default", "providers"} {
+		if info, err := os.Stat(filepath.Join(cacheDir, slot)); err != nil || !info.IsDir() {
+			t.Fatalf("tool cache slot %q missing or not a directory: info=%v err=%v", slot, info, err)
+		}
+	}
+	if filepath.Dir(filepath.Join(cacheDir, "default")) != filepath.Dir(filepath.Join(cacheDir, "providers")) {
+		t.Fatal("default and named cache slots are not siblings")
+	}
+	if len(h.spawns) != 0 {
+		t.Errorf("Dispatch() spawned install despite healthy tool: %v", h.spawns)
+	}
+	if len(h.execs) != 1 {
+		t.Errorf("exec calls = %d, want 1", len(h.execs))
+	}
+}
+
+func TestDispatchDoesNotExecWhenToolCacheCreationFails(t *testing.T) {
+	h := newHarness(t)
+	tool := h.tool("tofu")
+	// A regular file inside the managed cache prevents MkdirAll from creating
+	// the entry's cache directory.
+	blocker := filepath.Join(h.d.CacheRoot(), "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.writeManifest(sourcefarm.Manifest{Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, ToolCacheDir: filepath.Join(blocker, "tofu"), ToolCacheSlots: []string{"providers"}, Installed: true}}})
+	h.invokeThroughFarm("tofu")
+
+	code, handled := h.d.Dispatch()
+
+	if !handled || code != ExitNotFound {
+		t.Fatalf("Dispatch() = (%d, %v), want (%d, true)", code, handled, ExitNotFound)
+	}
+	if len(h.execs) != 0 {
+		t.Errorf("exec calls = %d, want 0", len(h.execs))
+	}
+	if len(h.spawns) != 0 {
+		t.Errorf("spawn calls = %v, want no install", h.spawns)
+	}
+	if !strings.Contains(h.stderr.String(), "cannot create tool cache slot") {
+		t.Errorf("stderr = %q, want cache creation error", h.stderr.String())
+	}
+}
+
 func TestDispatchNoManifestThroughFarmExits127(t *testing.T) {
 	h := newHarness(t)
 	// No manifest written: an activated shell that cd'ed into a repository that

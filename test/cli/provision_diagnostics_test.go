@@ -139,7 +139,18 @@ func TestRuntimeAppNamedProgressWaitsForSharedDependencyAndReusesReadyApps(t *te
 	if runtime.GOOS == "windows" {
 		t.Skip("fixture runtime uses POSIX shell utilities")
 	}
-	payload := []byte("#!/bin/sh\nif [ \"$1\" = build ]; then\n  echo \"$6\" >> \"$BUILD_LOG\"\n  if [ \"$6\" = example.invalid/shared ]; then\n    : > \"$STARTED_FILE\"\n    while [ ! -e \"$RELEASE_FILE\" ]; do sleep 0.01; done\n  fi\n  /bin/mkdir -p \"${5%/*}\"\n  /bin/cp /bin/true \"$5\"\nfi\n")
+	payload := []byte(`#!/bin/sh
+if [ "$1" = build ]; then
+  echo "$6" >> "$BUILD_LOG"
+  if [ "$6" = example.invalid/shared ]; then
+    : > "$STARTED_FILE"
+    while [ ! -e "$RELEASE_FILE" ]; do sleep 0.01; done
+  fi
+  /bin/mkdir -p "${5%/*}" || exit 1
+  printf '%s\n' '#!/bin/sh' 'exit 0' > "$5" || exit 1
+  /bin/chmod +x "$5"
+fi
+`)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(payload) }))
 	defer server.Close()
 	project := clitest.NewProject(t)

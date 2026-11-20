@@ -126,11 +126,12 @@ func TestMemoDoesNotSurviveExecute(t *testing.T) {
 // another task's command line — the memo hands out copies.
 func TestMemoHandsOutIsolatedCopies(t *testing.T) {
 	source := &binmanager.CommandInfo{
-		Type:          "shell",
-		Command:       "sh",
-		Args:          []string{"-c"},
-		Env:           map[string]string{"K": "v"},
-		RequiredPaths: []string{"/opt/a"},
+		Type:           "shell",
+		Command:        "sh",
+		Args:           []string{"-c"},
+		Env:            map[string]string{"K": "v"},
+		RequiredPaths:  []string{"/opt/a"},
+		ToolCacheSlots: []string{"default", "providers"},
 	}
 	mgr := &countingAppManager{
 		calls:    map[string]int{},
@@ -147,6 +148,7 @@ func TestMemoHandsOutIsolatedCopies(t *testing.T) {
 	first.Env["ADDED"] = "1"
 	first.Args[0] = "-poisoned"
 	first.RequiredPaths[0] = "/poisoned"
+	first.ToolCacheSlots[1] = "poisoned"
 	first.Command = "poisoned"
 
 	second, err := memo.get(ctx, "alpha", mgr.GetCommandInfo)
@@ -161,6 +163,9 @@ func TestMemoHandsOutIsolatedCopies(t *testing.T) {
 	}
 	if second.RequiredPaths[0] != "/opt/a" {
 		t.Errorf("second RequiredPaths = %v, want [/opt/a]", second.RequiredPaths)
+	}
+	if second.ToolCacheSlots[1] != "providers" {
+		t.Errorf("second ToolCacheSlots = %v, want [default providers]", second.ToolCacheSlots)
 	}
 	if second.Command != "sh" {
 		t.Errorf("second Command = %q, want %q", second.Command, "sh")

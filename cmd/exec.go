@@ -127,6 +127,19 @@ func execApp(ctx context.Context, appName string, args []string) error {
 
 	rm := runtimemanager.New(c.Runtimes)
 	b := binmanager.New(c.Apps, c.Bundles, rm)
+	if _, exists := c.Apps[appName]; exists {
+		apps, err := binmanager.AppDependencyClosure(c.Apps, []string{appName})
+		if err != nil {
+			return err
+		}
+		if appsUseToolCache(c.Apps, apps) {
+			cacheRoot, rootErr := appToolCacheRoot(ctx)
+			if rootErr != nil {
+				return rootErr
+			}
+			b.SetToolCacheRoot(cacheRoot)
+		}
+	}
 
 	// Seed from the declared OCI bundle first, like init/install/the runner:
 	// an online exec on a clean machine should take a bundle's ready-made
@@ -176,4 +189,34 @@ func execApp(ctx context.Context, appName string, args []string) error {
 		return fmt.Errorf("failed to execute %s: %w", appName, err)
 	}
 	return nil
+}
+
+func appUsesToolCache(app binmanager.App) bool {
+	if len(app.Caches) > 0 {
+		return true
+	}
+	for _, value := range app.RuntimeEnv {
+		used, _ := binmanager.ValidateToolCacheTokens(value, app.Caches)
+		if used {
+			return true
+		}
+	}
+	return false
+}
+
+func appsUseToolCache(apps binmanager.MapOfApps, names []string) bool {
+	for _, name := range names {
+		if app, ok := apps[name]; ok && appUsesToolCache(app) {
+			return true
+		}
+	}
+	return false
+}
+
+func appToolCacheRoot(ctx context.Context) (string, error) {
+	cwdPath, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get cwd: %w", err)
+	}
+	return resolveProjectRootContext(ctx, cwdPath)
 }

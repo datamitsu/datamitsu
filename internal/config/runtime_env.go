@@ -13,8 +13,22 @@ func validateAppRuntimeEnv(apps binmanager.MapOfApps, names []string) []string {
 	var errs []string
 	for _, name := range names {
 		app := apps[name]
+		managed := app.Binary != nil || app.Bun != nil || app.Node != nil || app.Uv != nil || app.Go != nil || app.Jvm != nil
+		if err := binmanager.ValidateCacheNames(app.Caches); err != nil {
+			errs = append(errs, fmt.Sprintf("apps.%s.caches: %v", name, err))
+		}
+		if len(app.Caches) > 0 && !managed {
+			errs = append(errs, fmt.Sprintf("apps.%s.caches: cache slots require a managed app", name))
+		}
 		for _, key := range slices.Sorted(maps.Keys(app.RuntimeEnv)) {
 			field := fmt.Sprintf("apps.%s.runtimeEnv.%s", name, key)
+			cacheUsed, cacheErr := binmanager.ValidateToolCacheTokens(app.RuntimeEnv[key], app.Caches)
+			if cacheErr != nil {
+				errs = append(errs, field+": "+cacheErr.Error())
+			}
+			if cacheUsed && !managed {
+				errs = append(errs, field+": {toolCache} is allowed only for managed apps (binary, bun, node, uv, go, or jvm)")
+			}
 			if _, exists := app.Env[key]; exists {
 				errs = append(errs, field+": key is also defined in env")
 			}
@@ -32,7 +46,7 @@ func validateAppRuntimeEnv(apps binmanager.MapOfApps, names []string) []string {
 				}
 				return targetName, nil
 			})
-			if err != nil {
+			if err != nil && (cacheErr == nil || err.Error() != cacheErr.Error()) {
 				errs = append(errs, field+": "+err.Error())
 			}
 		}
@@ -40,6 +54,12 @@ func validateAppRuntimeEnv(apps binmanager.MapOfApps, names []string) []string {
 			value := app.Env[key]
 			if strings.Contains(value, "${APP_BIN") {
 				errs = append(errs, fmt.Sprintf("apps.%s.env.%s: APP_BIN placeholders are allowed only in runtimeEnv", name, key))
+			}
+			cacheUsed, cacheErr := binmanager.ValidateToolCacheTokens(value, app.Caches)
+			if cacheErr != nil {
+				errs = append(errs, fmt.Sprintf("apps.%s.env.%s: %v", name, key, cacheErr))
+			} else if cacheUsed {
+				errs = append(errs, fmt.Sprintf("apps.%s.env.%s: {toolCache} is allowed only in runtimeEnv for managed apps", name, key))
 			}
 			if strings.Contains(value, "${APP_PREPARED") {
 				errs = append(errs, fmt.Sprintf("apps.%s.env.%s: ${APP_PREPARED} is not allowed in env (env reaches installers, and the prepared state does not exist yet); use runtimeEnv", name, key))

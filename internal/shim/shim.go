@@ -44,6 +44,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/ldflags"
 	"github.com/datamitsu/datamitsu/internal/shellquote"
@@ -978,6 +979,16 @@ func (d *Dispatcher) execEntry(entry sourcefarm.Entry, manifest sourcefarm.Manif
 	argv = append(argv, entry.Args...)
 	argv = append(argv, d.Args[1:]...)
 
+	if entry.ToolCacheDir != "" {
+		cacheDir := filepath.Clean(entry.ToolCacheDir)
+		cacheRoot, err := filepath.Abs(d.CacheRoot())
+		if err != nil {
+			return d.fail(fmt.Sprintf("datamitsu: %s: cannot resolve managed cache: %v", entry.Name, err)), true
+		}
+		if err := binmanager.EnsureToolCacheSlots(cacheRoot, cacheDir, entry.ToolCacheSlots); err != nil {
+			return d.fail(fmt.Sprintf("datamitsu: %s: cannot create tool cache slot under %q: %v", entry.Name, cacheDir, err)), true
+		}
+	}
 	if err := d.Exec(command, argv, mergeEnv(d.Environ(), entry.Env)); err != nil {
 		d.warn(fmt.Sprintf("datamitsu: %s: cannot execute %s: %v", entry.Name, command, err))
 		return ExitNotExecutable, true

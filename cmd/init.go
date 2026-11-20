@@ -116,6 +116,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 	rm := runtimemanager.New(cfg.Runtimes)
 	binMgr := binmanager.New(cfg.Apps, cfg.Bundles, rm)
+	binMgr.SetToolCacheRoot(rootPath)
 
 	var runtimeCount, toolCount, bundleCount, linkCount, preparedCount, failed int
 	stateChanged := false
