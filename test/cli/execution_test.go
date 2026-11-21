@@ -783,10 +783,8 @@ c.tools[%q] = { name: %q, operations: { %s: { app: "unreachable", args: [], scop
 `, runtime.GOOS, runtime.GOARCH, build, build, build, tool, tool, operation)
 }
 
-// TestExecutionKeepGoingKeepsLaterErrors: under keep-going, lint can fail to
-// install its tools after fix failed on a tool. Both reasons are reported, the
-// lint block is closed, and the exit code is still 1.
-func TestExecutionKeepGoingKeepsLaterErrors(t *testing.T) {
+// A failed preparation stops every operation even when execution uses keep-going.
+func TestExecutionPreparationFailurePreventsAllOperations(t *testing.T) {
 	spec := clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")}
 	fixer := clitest.ShellTool("fixer", failScript, clitest.ToolOpSpec{Operation: "fix"})
 
@@ -794,12 +792,12 @@ func TestExecutionKeepGoingKeepsLaterErrors(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec, fixer)
 		res := e.run("", nil, "check", keepGoing)
 		e.wantExit(res, 1)
-		failed, install := strings.Index(res.Stderr, "operation failed"), strings.Index(res.Stderr, "failed to pre-install tools")
-		if failed < 0 || install < failed {
-			t.Errorf("stderr should report fix's failure, then lint's install error:\n%s", res.Stderr)
+		e.wantMarker("fixer", "")
+		if !strings.Contains(res.Stderr, "failed to pre-install tools") {
+			t.Errorf("preparation failure was not reported: %s", res.Stderr)
 		}
-		if !strings.Contains(res.Stdout, "┗━ setup failed") || !strings.Contains(res.Stdout, "· lint not run ·") {
-			t.Errorf("the lint block should close as a failed setup, and check's line say lint did not run:\n%s", res.Stdout)
+		if strings.Contains(res.Stdout, "┏━ fix") || strings.Contains(res.Stdout, "┏━ lint") {
+			t.Errorf("an operation frame opened before tools were ready: %s", res.Stdout)
 		}
 	})
 
@@ -809,11 +807,10 @@ func TestExecutionKeepGoingKeepsLaterErrors(t *testing.T) {
 		e.wantExit(res, 1)
 		events := clitest.MustParseJSONL(t, res.Stderr)
 		clitest.AssertChains(t, events)
-		lint := eventsOf(events, func(e clitest.Event) bool { return operationDone(e) && e.Op == "lint" })
-		if len(lint) != 1 || lint[0].Status != "fail" {
-			t.Errorf("lint's done events = %+v, want one fail", lint)
+		if runs := eventsOf(events, func(e clitest.Event) bool { return e.Type == "tool_run" }); len(runs) != 0 {
+			t.Errorf("tools started after preparation failed: %+v", runs)
 		}
-		wantRunDone(t, events, "check", false, 1, 0, false)
+		wantRunDone(t, events, "check", false, 0, 0, false)
 	})
 }
 

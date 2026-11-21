@@ -1,9 +1,13 @@
 ╭<RULE>╮ ╭<RULE>╮
 │ datamitsu  <VERSION> │ │ datamitsu.config  1.0.0 │
 ╰<RULE>╯ ╰<RULE>╯
-⚠️  No project types detected
+
+┏━ lint <RULE>
 ┃
-┃ ✗ datamitsu  <DUR>  (config placement)
+┃
+┃ ✗ datamitsu  <DUR>  4 finding(s)
+┃     .datamitsuignore:1:1 warning unknown tool "eslint" [datamitsuignore-tool]
 ┃     deep/nest/.datamitsuignore:1:1 error Datamitsu config must be located at the repository git root [config-placement]
 ┃     pkg/datamitsu.config.js:1:1 error Datamitsu config must be located at the repository git root [config-placement]
 ┃     sub/.datamitsu:1:1 error Datamitsu config must be located at the repository git root [config-placement]
+┗━ 1 tools · 0 runs · done in <DUR> · 1 failed <RULE>

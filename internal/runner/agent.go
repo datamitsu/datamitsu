@@ -270,9 +270,3 @@ func (sc *sharedContext) describedParser() report.ParserFacts {
 	}
 	return sc.parserMgr.DescribedParser
 }
-
-// printAgentLine prints a line of agent output, masked.
-func (sc *sharedContext) printAgentLine(line string) {
-	report.MaskAll(&line, sc.secretValues())
-	fmt.Println(line)
-}

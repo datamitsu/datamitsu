@@ -109,23 +109,27 @@ type planExecutor interface {
 // check-then-download race that surfaces under per-file parallelism.
 type toolEnsurer interface {
 	EnsureTools(ctx context.Context, names []string) error
+	AppInstalled(appName string) bool
+	PreparedStateReady(appName string) (bool, error)
 }
 
 // sharedContext holds state shared across multiple sequential operations
 type sharedContext struct {
-	cfg           *config.Config
-	rootPath      string
-	cwdPath       string
-	selection     tooling.Selection
-	opts          Options
-	files         []string
-	selectedTools []string
-	explainLevel  string
-	planner       toolPlanner
-	projectCache  *cache.Cache
-	executor      planExecutor
-	binMgr        toolEnsurer
-	timings       *timing.Timings
+	cfg             *config.Config
+	rootPath        string
+	cwdPath         string
+	selection       tooling.Selection
+	opts            Options
+	files           []string
+	selectedTools   []string
+	explainLevel    string
+	planner         toolPlanner
+	projectCache    *cache.Cache
+	executor        planExecutor
+	binMgr          toolEnsurer
+	preparedTools   bool
+	parserPrewarmed bool
+	timings         *timing.Timings
 	// parserMgr owns the WASM output-parser runtime (compile-once, instantiate
 	// per parse). nil when no parsers are declared; Closed in shutdown to
 	// release the shared runtime.
@@ -171,12 +175,11 @@ type sharedContext struct {
 	// baselineMatcher marks the findings a baseline holds, in the gate hook
 	// and for the core placement check; nil when no baseline was given.
 	baselineMatcher *report.BaselineMatcher
-	// placement holds the config-placement diagnostics the walk below the git
-	// root produced (empty when none or under --explain); placementGated says
-	// whether any of them reaches the threshold, which fails the lint
-	// operation.
-	placement      []diagnostic.Diagnostic
-	placementGated bool
+	// placement and bundled findings are the core check results shown first
+	// under their corresponding operations.
+	placement           []diagnostic.Diagnostic
+	bundledFixFindings  []diagnostic.Diagnostic
+	bundledLintFindings []diagnostic.Diagnostic
 	// startedAt stamps the report: SOURCE_DATE_EPOCH or the clock at the
 	// start of the run.
 	startedAt time.Time
@@ -408,6 +411,114 @@ func plannedParserModules(plan *tooling.ExecutionPlan) []string {
 	return mods
 }
 
+func (sc *sharedContext) prewarmParserModules(ctx context.Context, plans []*tooling.ExecutionPlan) error {
+	if sc.parserMgr == nil || sc.parserPrewarmed {
+		return nil
+	}
+	seen := make(map[string]bool)
+	var modules []string
+	for _, plan := range plans {
+		for _, module := range plannedParserModules(plan) {
+			if !seen[module] {
+				seen[module] = true
+				modules = append(modules, module)
+			}
+		}
+	}
+	if len(modules) == 0 {
+		return nil
+	}
+	if err := sc.parserMgr.Prewarm(ctx, modules); err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("preparing parsers: %w", ctx.Err())
+		}
+		log.Debug("parser prewarm failed; compiling lazily", zap.Error(err))
+	}
+	sc.parserPrewarmed = true
+	return nil
+}
+
+// prepareTools provisions every app needed by the supplied plans before an
+// operation frame opens. runSingleOperation retains its fallback for direct
+// callers that do not pass through runOperations.
+func (sc *sharedContext) prepareTools(ctx context.Context, plans []*tooling.ExecutionPlan) (retErr error) {
+	if sc.binMgr == nil || sc.preparedTools || sc.explainLevel != "" {
+		return nil
+	}
+	var roots []string
+	for _, plan := range plans {
+		if plan != nil {
+			roots = append(roots, plan.GetAppNames()...)
+		}
+	}
+	slices.Sort(roots)
+	roots = slices.Compact(roots)
+	if len(roots) == 0 {
+		return nil
+	}
+	names := roots
+	if sc.cfg != nil {
+		var err error
+		names, err = binmanager.AppDependencyClosure(sc.cfg.Apps, roots)
+		if err != nil {
+			return err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("preparing tools: %w", err)
+	}
+	cold := false
+	for _, name := range names {
+		if !sc.binMgr.AppInstalled(name) {
+			cold = true
+			break
+		}
+		ready, err := sc.binMgr.PreparedStateReady(name)
+		if err != nil {
+			return err
+		}
+		if !ready {
+			cold = true
+			break
+		}
+	}
+	if cold {
+		phaseID := uievent.NextOpID("phase")
+		started := time.Now()
+		ui.Emit(uievent.Event{Type: uievent.TypePhase, OpID: phaseID, Status: uievent.StatusStart, Op: "prepare"})
+		defer func() {
+			status := uievent.StatusDone
+			if retErr != nil {
+				status = uievent.StatusFail
+			}
+			ui.Emit(uievent.Event{Type: uievent.TypeDone, OpID: phaseID, Status: status, Op: "prepare"})
+		}()
+		display := ui.New(term.DetectMode())
+		restore := ui.Activate(display)
+		defer func() {
+			display.Close()
+			if retErr != nil {
+				display.PhaseClose("preparation failed", clr.Red("preparation failed"))
+			} else {
+				summary := fmt.Sprintf("ready · %d apps · %s", len(names), ui.FormatDurationShort(time.Since(started).Milliseconds()))
+				display.PhaseClose(summary, clr.Green(summary))
+			}
+			restore()
+		}()
+		if !ui.Muted() && !ui.Quiet() {
+			display.PhaseOpen("prepare tools")
+		}
+	}
+	if _, err := ocibundle.AutoSeed(ctx, sc.cfg, roots, nil); err != nil {
+		return fmt.Errorf("failed to seed store from oci bundle: %w", err)
+	}
+	if err := sc.binMgr.EnsureTools(ctx, roots); err != nil {
+		return fmt.Errorf("failed to pre-install tools: %w", err)
+	}
+	sc.preparedTools = true
+	return nil
+}
+
 // runSingleOperation executes one operation (fix, lint, etc.) using a pre-initialized shared context
 func runSingleOperation(ctx context.Context, sc *sharedContext, operation config.OperationType) (retErr error) {
 	defer trace.Start(trace.CatCLI, "runSingleOperation").EndWith(trace.A("operation", string(operation)))
@@ -452,14 +563,22 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	if operation == config.OpFix && len(plan.Groups) > 0 {
 		opRecord.ChangesNotObserved(report.ChangesNotExecuted, "")
 	}
-	// The core config-placement check reports through the lint operation: its
-	// findings were computed from the run's walk before any operation ran. The
-	// report may hold no accumulator (nothing reads this run), but the check's
-	// printing and failure must not depend on that — only its event stream does.
-	placementHere := operation == config.OpLint && len(sc.placement) > 0
-	var placementEvents []report.ToolFinding
-	if placementHere {
-		placementEvents = opRecord.AddCoreFindings(placementTool, sc.placement)
+	coreFindings := make([]diagnostic.Diagnostic, 0, len(sc.placement)+len(sc.bundledFixFindings)+len(sc.bundledLintFindings))
+	switch operation {
+	case config.OpFix:
+		coreFindings = append(coreFindings, sc.bundledFixFindings...)
+	case config.OpLint:
+		coreFindings = append(coreFindings, sc.bundledLintFindings...)
+		coreFindings = append(coreFindings, sc.placement...)
+	}
+	coreHere := len(coreFindings) > 0
+	coreFailed := false
+	var coreEvents []report.ToolFinding
+	if coreHere {
+		coreEvents = opRecord.AddCoreFindings(placementTool, coreFindings)
+		for _, finding := range coreFindings {
+			coreFailed = coreFailed || finding.Gates
+		}
 	}
 	opDuration := int64(0)
 	defer func() { opRecord.End(retErr == nil, opDuration) }()
@@ -468,10 +587,51 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// any explicit skips — recording unsupported-platform ones for --fail-on-skip
 	// — instead of leaving them invisible.
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
+		if coreHere {
+			runOpID := uievent.NextOpID("run")
+			ui.Emit(uievent.Event{Type: uievent.TypePhase, OpID: runOpID, Status: uievent.StatusStart, Op: string(operation)})
+			sc.emitDiagnostics(runOpID, coreEvents)
+			if !ui.Muted() {
+				fmt.Println()
+				fmt.Println(phaseTop(string(operation)))
+				if line := sc.targetLine(); line != "" {
+					fmt.Println(line)
+				}
+				types := make([]string, len(projectTypes))
+				for i, projectType := range projectTypes {
+					types[i] = shortProjectType(projectType)
+				}
+				if len(types) == 0 {
+					fmt.Println(clr.Faint("┃"))
+				} else {
+					fmt.Println(clr.Faint("┃ " + strings.Join(types, " · ")))
+				}
+				sc.openCommandRegion()
+				printCoreFindings(coreFindings, sc.nameWidth, sc.cwdPath)
+				printSkippedTools(plan.Skipped, sc.nameWidth)
+				printOperationFooter(nil, 0, 0, 0, len(plan.Skipped), 0, sc.footerNote(operation), 1, boolCount(coreFailed))
+			}
+			ui.Emit(uievent.Event{Type: uievent.TypeDone, OpID: runOpID, Status: doneStatus(!coreFailed), Op: string(operation), Tools: 1, Failed: boolCount(coreFailed), Skipped: len(plan.Skipped)})
+			summary := opSummary{op: operation, tools: 1, failed: boolCount(coreFailed), skipped: len(plan.Skipped)}
+			sc.recordOp(summary)
+			if sc.agentOutput() {
+				sc.printAgentOperation(agentOperation{op: operation, record: opRecord, summary: summary, note: sc.footerNote(operation)})
+			}
+			if coreFailed {
+				return coreFindingFailure(coreFindings)
+			}
+			return nil
+		}
+		var runOpID string
+		if coreHere {
+			runOpID = uievent.NextOpID("run")
+			ui.Emit(uievent.Event{Type: uievent.TypePhase, OpID: runOpID, Status: uievent.StatusStart, Op: string(operation)})
+			sc.emitDiagnostics(runOpID, coreEvents)
+		}
 		summary := opSummary{op: operation, skipped: len(plan.Skipped)}
-		if placementHere {
+		if coreHere {
 			summary.tools = 1
-			if sc.placementGated {
+			if coreFailed {
 				summary.failed = 1
 			}
 		}
@@ -493,10 +653,18 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			}
 			fmt.Println(msg)
 		}
-		if placementHere {
-			printPlacementFindings(sc.placement, sc.nameWidth, sc.cwdPath)
-			if sc.placementGated {
-				return fmt.Errorf("datamitsu: %d config placement violation(s) below the git root", len(sc.placement))
+		if coreHere {
+			totalTools, failed := 1, 0
+			status := doneStatus(!coreFailed)
+			if coreFailed {
+				failed = 1
+			}
+			ui.Emit(uievent.Event{Type: uievent.TypeDone, OpID: runOpID, Status: status, Op: string(operation), Tools: totalTools, Failed: failed})
+		}
+		if coreHere {
+			printCoreFindings(coreFindings, sc.nameWidth, sc.cwdPath)
+			if coreFailed {
+				return coreFindingFailure(coreFindings)
 			}
 		}
 		return nil
@@ -507,46 +675,11 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			return err
 		}
 	}
-
-	// Seed the store from the declared OCI bundle before anything reads it
-	// (demand-driven: only the layers of the planned tools), so both the parser
-	// prewarm below and EnsureTools later hit seeded content instead of the
-	// network. Seeding after the prewarm meant a bundled parser module was
-	// fetched from its URL on every cold store — and under DATAMITSU_OFFLINE
-	// that fetch is refused, so the airgapped run silently lost its parsers and
-	// fell back to raw tool output.
-	if sc.binMgr != nil {
-		seedSpan := trace.Start(trace.CatInstall, "ocibundle.AutoSeed")
-		_, err := ocibundle.AutoSeed(ctx, sc.cfg, plan.GetAppNames(), nil)
-		seedSpan.EndWith(trace.A("apps", len(plan.GetAppNames())))
-		if err != nil {
-			return fmt.Errorf("failed to seed store from oci bundle: %w", err)
-		}
+	if err := sc.prepareTools(ctx, []*tooling.ExecutionPlan{plan}); err != nil {
+		return err
 	}
-
-	// Compile the WASM parser modules this plan will use now, once, off the
-	// per-file execution path. Best-effort: a failure falls back to lazy
-	// compile-on-first-parse inside the executor.
-	//
-	// Started in the background rather than awaited. Compiling the module takes
-	// ~80 ms, and nothing can parse output before a tool has produced any, so
-	// blocking here put that entirely on the critical path — every run paid it
-	// before the first tool started. Manager.compiledFor collapses concurrent callers onto one compilation, so a
-	// parse that arrives before this finishes joins the in-flight compilation
-	// instead of starting a second one, and one that arrives after finds it
-	// cached; either way the prewarm remains what it always was, an
-	// optimisation with a lazy fallback.
-	if sc.parserMgr != nil {
-		if mods := plannedParserModules(plan); len(mods) > 0 {
-			prewarmDone := make(chan struct{})
-			defer func() { <-prewarmDone }()
-			go func() {
-				defer close(prewarmDone)
-				if err := sc.parserMgr.Prewarm(ctx, mods); err != nil {
-					log.Debug("parser prewarm failed; compiling lazily", zap.Error(err))
-				}
-			}()
-		}
+	if err := sc.prewarmParserModules(ctx, []*tooling.ExecutionPlan{plan}); err != nil {
+		return err
 	}
 
 	// Correlation id for every typed event of THIS operation (phase start/done,
@@ -559,7 +692,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		Status: uievent.StatusStart,
 		Op:     string(operation),
 	})
-	sc.emitDiagnostics(runOpID, placementEvents)
+	sc.emitDiagnostics(runOpID, coreEvents)
 
 	// Open the operation block: bold bracket header + dimmed project types. The
 	// matched-tool list is omitted — the per-tool results below cover it.
@@ -759,35 +892,6 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		sc.emitDiagnostics(runOpID, finished)
 	})
 
-	// Pre-install every tool the plan needs once, before parallel per-file
-	// execution. This closes the check-then-download install race (multiple
-	// per-file tasks installing the same binary concurrently). Explain/dry-run
-	// modes return earlier and never reach this point, so no installs happen
-	// during planning-only runs.
-	if sc.binMgr != nil {
-		// The store was already seeded from the bundle before the parser
-		// prewarm above, so these stat checks hit seeded content.
-		ensureSpan := trace.Start(trace.CatInstall, "EnsureTools")
-		err := sc.binMgr.EnsureTools(ctx, plan.GetAppNames())
-		ensureSpan.EndWith(trace.A("apps", len(plan.GetAppNames())))
-		if err != nil {
-			finalizeProgress()
-			if !ui.Muted() {
-				fmt.Println(ui.RuleLine("┗", "setup failed", clr.Red("setup failed")))
-			}
-			if sc.agentOutput() {
-				sc.printAgentLine(string(operation) + ": setup failed")
-			}
-			ui.Emit(uievent.Event{
-				Type:   uievent.TypeDone,
-				OpID:   runOpID,
-				Status: uievent.StatusFail,
-				Op:     string(operation),
-			})
-			return fmt.Errorf("failed to pre-install tools: %w", err)
-		}
-	}
-
 	sc.executor.SetStepCallback(sc.stepCallback(ctx, operation, opRecord))
 	execSpan := trace.Start(trace.CatExec, "executePlan")
 	results, execErr := sc.executor.Execute(ctx, plan)
@@ -821,7 +925,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// finding that reaches the threshold fails the lint operation like a
 	// gating tool finding does — the lint operation owns these findings, a
 	// fix-only operation never does.
-	hasFailures := execErr != nil || incomplete || (placementHere && sc.placementGated)
+	hasFailures := execErr != nil || incomplete || coreFailed
 	var totalWallClockTime int64
 	for _, groupResult := range results {
 		totalWallClockTime += groupResult.WallClockDuration
@@ -834,25 +938,25 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// summary footer (the footer doubles as the "complete" marker, so no separate
 	// line is printed). The print helpers self-suppress in JSON-L mode.
 	toolGroups := groupResultsByTool(results)
-	placementTools, placementFailed := 0, 0
-	if placementHere {
-		placementTools = 1
-		if sc.placementGated {
-			placementFailed = 1
+	coreTools, coreFailures := 0, 0
+	if coreHere {
+		coreTools = 1
+		if coreFailed {
+			coreFailures = 1
 		}
 	}
-	if placementHere || len(toolGroups) > 0 {
+	if coreHere || len(toolGroups) > 0 {
 		sc.openCommandRegion()
 	}
-	if len(toolGroups) > 0 || len(plan.Skipped) > 0 || len(stopped) > 0 || placementHere {
+	if len(toolGroups) > 0 || len(plan.Skipped) > 0 || len(stopped) > 0 || coreHere {
+		if coreHere {
+			printCoreFindings(coreFindings, sc.nameWidth, sc.cwdPath)
+		}
 		printGroupedResults(toolGroups, sc.nameWidth, env.IsTimingsEnabled())
 		printStoppedTasks(stopped, sc.nameWidth)
 		printUnrunFiles(results, sc.rootPath, sc.nameWidth, cause)
 		printSkippedTools(plan.Skipped, sc.nameWidth)
-		if placementHere {
-			printPlacementFindings(sc.placement, sc.nameWidth, sc.cwdPath)
-		}
-		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped), len(stopped), sc.footerNote(operation), placementTools, placementFailed)
+		printOperationFooter(toolGroups, totalWallClockTime, cacheHits, cacheMisses, len(plan.Skipped), len(stopped), sc.footerNote(operation), coreTools, coreFailures)
 	}
 
 	// Typed completion event for this operation (the JSON-L twin of the footer).
@@ -864,8 +968,8 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			failedTools++
 		}
 	}
-	totalTools := len(toolGroups) + placementTools
-	failedTools += placementFailed
+	totalTools := len(toolGroups) + coreTools
+	failedTools += coreFailures
 	ui.Emit(uievent.Event{
 		Type:       uievent.TypeDone,
 		OpID:       runOpID,
@@ -1263,6 +1367,9 @@ func (sc *sharedContext) runOperations(ctx context.Context, operations []config.
 	if hasRootIgnore {
 		ignoreFiles = []string{rootIgnoreFile}
 	}
+	if err := bundled.RunLint(sc.rootPath, sc.cfg.Tools, ignoreFiles); err != nil {
+		return err
+	}
 	sc.planner.SeedFiles(allFiles)
 	if sc.explainLevel == "" {
 		if err := sc.refuseCrowdedReports(ctx, operations); err != nil {
@@ -1271,16 +1378,68 @@ func (sc *sharedContext) runOperations(ctx context.Context, operations []config.
 		sc.checkConfigPlacement(bundled.FindPlacementViolations(sc.rootPath, allFiles, reservedDirs()))
 	}
 
-	if hasFix && sc.explainLevel == "" {
-		if err := bundled.RunFix(sc.rootPath, ignoreFiles); err != nil {
+	if sc.explainLevel == "" {
+		plans := make([]*tooling.ExecutionPlan, 0, len(operations))
+		recordUnstarted := func(planned []*tooling.ExecutionPlan) {
+			for i, plan := range planned {
+				sc.executor.AssignTaskIDs(plan)
+				opRecord := sc.beginReportOperation(operations[i], plan)
+				if operations[i] == config.OpFix && len(plan.Groups) > 0 {
+					opRecord.ChangesNotObserved(report.ChangesNotExecuted, "")
+				}
+				opRecord.End(false, 0)
+			}
+		}
+		for _, op := range operations {
+			plan, err := sc.planner.Plan(ctx, op, sc.selection, sc.selectedTools)
+			if err != nil {
+				recordUnstarted(plans)
+				return fmt.Errorf("failed to create execution plan: %w", err)
+			}
+			plans = append(plans, plan)
+		}
+		if err := sc.prepareTools(ctx, plans); err != nil {
+			recordUnstarted(plans)
+			return err
+		}
+		if err := sc.prewarmParserModules(ctx, plans); err != nil {
+			recordUnstarted(plans)
 			return err
 		}
 	}
-	if lintErr := bundled.RunLint(sc.rootPath, sc.cfg.Tools, ignoreFiles); lintErr != nil {
-		if slices.Contains(operations, config.OpLint) {
+
+	sc.bundledFixFindings = nil
+	if hasFix && sc.explainLevel == "" {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("before bundled fix: %w", err)
+		}
+		if err := bundled.RunFix(sc.rootPath, ignoreFiles, func(path string) {
+			sc.bundledFixFindings = append(sc.bundledFixFindings, coreFixFinding(sc.rootPath, path))
+		}); err != nil {
+			return err
+		}
+	}
+	sc.bundledLintFindings = nil
+	if slices.Contains(operations, config.OpLint) {
+		lintErr := bundled.RunLint(sc.rootPath, sc.cfg.Tools, ignoreFiles, func(d diagnostic.Diagnostic) {
+			sc.bundledLintFindings = append(sc.bundledLintFindings, d)
+		})
+		if lintErr != nil {
 			return lintErr
 		}
-		log.Warn("bundled lint error (non-lint mode, continuing)", zap.Error(lintErr))
+		if len(sc.bundledLintFindings) > 0 {
+			if err := anchorCoreFindings(sc.bundledLintFindings); err != nil {
+				return fmt.Errorf("anchoring bundled lint findings: %w", err)
+			}
+			if sc.baselineMatcher != nil {
+				sc.baselineMatcher.Mark(tooling.Task{ToolName: placementTool, Operation: config.OpLint}, &tooling.ProcessResult{Diagnostics: sc.bundledLintFindings})
+			}
+			for i := range sc.bundledLintFindings {
+				d := &sc.bundledLintFindings[i]
+				d.Reported = !d.Baselined
+				d.Gates = false
+			}
+		}
 	}
 
 	// Under keep-going a later operation can fail for a different reason than

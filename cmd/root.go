@@ -405,27 +405,8 @@ func Execute() {
 					return
 				}
 				ui.Emit(event)
-				if ui.Current().IsQuiet() {
-					return
-				}
-				if !ui.Quiet() && !ui.Muted() && event.Type == uievent.TypeInstall && event.Status == uievent.StatusProgress {
-					if strings.HasPrefix(event.Msg, "Waiting for installation:") {
-						ui.Current().Diagnosticf("%s\n", event.Msg)
-					} else if event.Name != "" {
-						switch {
-						case event.Total > 0:
-							ui.Current().Diagnosticf("Installing %s: %s (%d/%d packages)\n", event.Name, event.Msg, event.Index, event.Total)
-						case event.Index > 0:
-							ui.Current().Diagnosticf("Installing %s: %s (%d packages)\n", event.Name, event.Msg, event.Index)
-						default:
-							ui.Current().Diagnosticf("Installing %s: %s\n", event.Name, event.Msg)
-						}
-					}
-				} else if !ui.Quiet() && !ui.Muted() && event.Type == uievent.TypeDownload && event.Status == uievent.StatusProgress && event.Name != "" {
-					if event.BytesTotal > 0 {
-						ui.Current().Diagnosticf("Downloading %s: %d/%d bytes\n", event.Name, event.BytesDone, event.BytesTotal)
-					}
-				}
+				report.RewriteAll(&event, ciText)
+				ui.Current().RenderProvisionEvent(event)
 			})
 			rootCmd.SetContext(context.Background())
 		}

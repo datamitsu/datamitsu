@@ -76,11 +76,13 @@ type Display struct {
 	mode  term.Mode
 	quiet bool // suppress routine human output without changing typed event delivery
 
-	mu   sync.Mutex
-	prog *mpb.Progress // lazily created; Interactive mode only
-	bars int           // number of active bars; lines route through mpb only while > 0
-	out  io.Writer
-	err  io.Writer
+	mu        sync.Mutex
+	prog      *mpb.Progress // lazily created; Interactive mode only
+	bars      int           // number of active bars; lines route through mpb only while > 0
+	closing   bool
+	provision map[string]*provisionRow
+	out       io.Writer
+	err       io.Writer
 }
 
 // New creates a Display for the given mode writing to stdout/stderr.
@@ -171,6 +173,14 @@ func (d *Display) Errorln(a ...any) { d.Diagnosticf("%s\n", fmt.Sprint(a...)) }
 // direct line output.
 func (d *Display) Close() {
 	d.mu.Lock()
+	d.closing = true
+	for id, row := range d.provision {
+		if row.bar != nil {
+			row.bar.Abort(true)
+			d.bars--
+		}
+		delete(d.provision, id)
+	}
 	p := d.prog
 	d.prog = nil
 	d.mu.Unlock()

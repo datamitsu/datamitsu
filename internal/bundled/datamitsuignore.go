@@ -9,11 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/datamitsuignore"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/traverser"
-	"github.com/datamitsu/datamitsu/internal/ui"
 	"github.com/datamitsu/datamitsu/internal/utils"
 )
 
@@ -128,16 +127,16 @@ func toRelPath(rootPath, absPath string) string {
 // this runs and its result is used after, so the file set the other consumers
 // hold must survive a fix. Creating or deleting a .datamitsuignore here would
 // break that.
-func RunFix(rootPath string, files []string) error {
+func RunFix(rootPath string, files []string, changed ...func(string)) error {
 	for _, path := range files {
-		if err := fixFile(path, rootPath); err != nil {
+		if err := fixFile(path, rootPath, changed); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func fixFile(path, rootPath string) error {
+func fixFile(path, rootPath string, changed []func(string)) error {
 	relPath := toRelPath(rootPath, path)
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -193,22 +192,26 @@ func fixFile(path, rootPath string) error {
 		return fmt.Errorf("renaming temp file to %s: %w", path, err)
 	}
 
+	for _, notify := range changed {
+		notify(relPath)
+	}
 	return nil
 }
 
 // RunLint validates the given .datamitsuignore files (as returned by
 // FindIgnoreFiles). Parse errors cause an immediate error return.
-// Formatting issues and unknown tool names produce yellow warnings on stderr.
-func RunLint(rootPath string, tools config.MapOfTools, files []string) error {
+// Formatting and unknown-tool findings are advisory and emitted only when a
+// callback is provided.
+func RunLint(rootPath string, tools config.MapOfTools, files []string, emitters ...func(diagnostic.Diagnostic)) error {
 	for _, path := range files {
-		if err := lintFile(path, tools, rootPath); err != nil {
+		if err := lintFile(path, tools, rootPath, emitters); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func lintFile(path string, tools config.MapOfTools, rootPath string) error {
+func lintFile(path string, tools config.MapOfTools, rootPath string, findings []func(diagnostic.Diagnostic)) error {
 	relPath := toRelPath(rootPath, path)
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -222,13 +225,10 @@ func lintFile(path string, tools config.MapOfTools, rootPath string) error {
 		lines = lines[:len(lines)-1]
 	}
 
-	// warn emits a human lint warning to stderr, suppressed in JSON-L (quiet)
-	// mode so it never injects a non-JSON line into the typed event stream.
-	warn := func(format string, a ...any) {
-		if ui.Quiet() {
-			return
+	warn := func(row int, code, message string) {
+		for _, emit := range findings {
+			emit(diagnostic.Diagnostic{File: path, Row: row, Col: 1, Severity: diagnostic.SeverityWarning, Source: "datamitsu", Code: "datamitsuignore-" + code, Message: message, Reported: true, Gates: false})
 		}
-		fmt.Fprintf(os.Stderr, format, a...)
 	}
 
 	prevEmpty := false
@@ -237,13 +237,13 @@ func lintFile(path string, tools config.MapOfTools, rootPath string) error {
 		isEmpty := trimmed == ""
 
 		if isEmpty && line != "" {
-			warn("%s\n", color.Yellow(fmt.Sprintf("warning: datamitsuignore: %s:%d: whitespace-only line", relPath, i+1)))
+			warn(i+1, "format", "whitespace-only line")
 		}
 		if isEmpty && i == 0 {
-			warn("%s\n", color.Yellow(fmt.Sprintf("warning: datamitsuignore: %s:%d: leading empty line", relPath, i+1)))
+			warn(i+1, "format", "leading empty line")
 		}
 		if isEmpty && prevEmpty {
-			warn("%s\n", color.Yellow(fmt.Sprintf("warning: datamitsuignore: %s:%d: consecutive empty line", relPath, i+1)))
+			warn(i+1, "format", "consecutive empty line")
 		}
 		prevEmpty = isEmpty
 
@@ -267,9 +267,7 @@ func lintFile(path string, tools config.MapOfTools, rootPath string) error {
 		rule := rules[0]
 		canonical := normalizeRule(rule)
 		if line != canonical {
-			warn("%s\n", color.Yellow(fmt.Sprintf("warning: datamitsuignore: %s:%d: formatting differs from canonical form", relPath, i+1)))
-			warn("  have: %s\n", line)
-			warn("  want: %s\n", canonical)
+			warn(i+1, "format", fmt.Sprintf("formatting differs from canonical form; have %q, want %q", line, canonical))
 		}
 
 		for _, toolName := range rule.Tools {
@@ -277,7 +275,7 @@ func lintFile(path string, tools config.MapOfTools, rootPath string) error {
 				continue
 			}
 			if _, ok := tools[toolName]; !ok {
-				warn("%s\n", color.Yellow(fmt.Sprintf("warning: datamitsuignore: %s:%d: unknown tool %q", relPath, i+1, toolName)))
+				warn(i+1, "tool", fmt.Sprintf("unknown tool %q", toolName))
 			}
 		}
 	}

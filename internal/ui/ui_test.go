@@ -2,12 +2,15 @@ package ui
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/term"
+	"github.com/datamitsu/datamitsu/internal/uievent"
 )
 
 // newPlainDisplay builds a Plain-mode Display writing to the given buffers.
@@ -143,5 +146,94 @@ func TestActivateRestoresPrevious(t *testing.T) {
 	restore()
 	if Current() != prev {
 		t.Fatal("restore did not reinstate previous display")
+	}
+}
+
+func TestProvisionRowsTerminalAndClose(t *testing.T) {
+	var out, errOut bytes.Buffer
+	d := newPlainDisplay(&out, &errOut)
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "install-1", Status: uievent.StatusStart, Name: "eslint"})
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "install-1", Status: uievent.StatusProgress, Name: "eslint", Msg: "packages", Index: 2, Total: 4})
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "install-1", Status: uievent.StatusDone, Name: "eslint"})
+	if strings.Count(errOut.String(), "Installing eslint") != 1 || out.Len() != 0 {
+		t.Fatalf("plain progress should be sparse on stderr only, stdout=%q stderr=%q", out.String(), errOut.String())
+	}
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypePrepare, OpID: "prepare-1", Status: uievent.StatusStart, Name: "tool"})
+	d.Close() // incomplete correlated rows must not hold mpb.Wait open
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypePrepare, OpID: "prepare-1", Status: uievent.StatusDone, Name: "tool"})
+	if strings.Count(errOut.String(), "Preparing tool") != 1 || out.Len() != 0 {
+		t.Fatalf("closed renderer accepted a late event or polluted stdout: stdout=%q stderr=%q", out.String(), errOut.String())
+	}
+}
+
+func TestProvisionInteractivePhaseTransitions(t *testing.T) {
+	var out, errOut bytes.Buffer
+	d := &Display{mode: term.Interactive, out: &out, err: &errOut}
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeDownload, OpID: "app-1", Status: uievent.StatusStart, Name: "shared-app"})
+	assertActive := func(wantDeterminate bool, wantPhase uievent.Type) {
+		t.Helper()
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		row := d.provision["app-1"]
+		if row == nil || row.bar == nil || d.bars != 1 || row.determinate != wantDeterminate || row.phase != wantPhase {
+			t.Fatalf("row=%+v bars=%d, want active phase %s determinate=%v", row, d.bars, wantPhase, wantDeterminate)
+		}
+	}
+	assertActive(false, uievent.TypeDownload) // unknown size starts as a spinner
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeDownload, OpID: "app-1", Status: uievent.StatusProgress, Name: "shared-app", BytesDone: 12, BytesTotal: 100})
+	assertActive(true, uievent.TypeDownload) // known size upgrades to a byte bar
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "app-1", Status: uievent.StatusProgress, Name: "shared-app", Msg: "verify"})
+	assertActive(false, uievent.TypeInstall) // verification is not download completion
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "app-1", Status: uievent.StatusDone, Name: "shared-app"})
+	d.mu.Lock()
+	remaining, bars := len(d.provision), d.bars
+	d.mu.Unlock()
+	if remaining != 0 || bars != 0 {
+		t.Fatalf("terminal event left provision state: rows=%d bars=%d", remaining, bars)
+	}
+	d.Close()
+}
+
+func TestProvisionEventsCorrelateConcurrently(t *testing.T) {
+	var out, errOut bytes.Buffer
+	d := newPlainDisplay(&out, &errOut)
+	var wg sync.WaitGroup
+	for i := range 32 {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			id := fmt.Sprintf("op-%d", i)
+			d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: id, Status: uievent.StatusStart, Name: id})
+			d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: id, Status: uievent.StatusFail, Name: id, Msg: "failed"})
+		}(i)
+	}
+	wg.Wait()
+	if got := strings.Count(errOut.String(), "Installing op-"); got != 32 {
+		t.Fatalf("got %d starts, want 32", got)
+	}
+	if strings.Contains(errOut.String(), "failed") || out.Len() != 0 {
+		t.Fatalf("progress duplicated diagnostic text or polluted stdout: stdout=%q stderr=%q", out.String(), errOut.String())
+	}
+
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "wait", Status: uievent.StatusStart, Name: "shared-tool"})
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "wait", Status: uievent.StatusProgress, Name: "shared-tool", Msg: "Waiting for installation: another process"})
+	if !strings.Contains(errOut.String(), "Installing shared-tool") || !strings.Contains(errOut.String(), "Waiting for installation: shared-tool") {
+		t.Fatalf("waiting row omitted its owning app: %q", errOut.String())
+	}
+}
+
+func TestProvisionRendererSuppressedInMachineAndMutedModes(t *testing.T) {
+	var out, errOut bytes.Buffer
+	d := newPlainDisplay(&out, &errOut)
+	SetMuted(true)
+	t.Cleanup(func() { SetMuted(false) })
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "muted", Status: uievent.StatusStart, Name: "hidden"})
+	SetMuted(false)
+	SetEventSink(&captureSink{}, true)
+	t.Cleanup(func() { SetEventSink(nil, false) })
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "machine", Status: uievent.StatusStart, Name: "hidden"})
+	SetEventSink(nil, false)
+	if out.Len() != 0 || errOut.Len() != 0 {
+		t.Fatalf("suppressed event rendered output: stdout=%q stderr=%q", out.String(), errOut.String())
 	}
 }

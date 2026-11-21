@@ -454,13 +454,18 @@ stderr as typed events, one JSON object per line:
 | `type`       | When                                                                                                                                                                           |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `hello`      | Opens the stream: `op_id` `stream`, `schema` (`datamitsu.report/1`), `events`, the comma-separated types the stream may carry, and for `fix`, `lint` and `check` `annotations` |
-| `phase`      | An operation (`op`: `fix` or `lint`) starts: `status: "start"`                                                                                                                 |
+| `phase`      | Preparation (`op: prepare`) or an operation (`op: fix` or `lint`) starts: `status: "start"`                                                                                    |
 | `tool_run`   | A tool starts in a directory (`status: "start"`) and ends: `done` or `fail` with its findings per level, or `skip` for a stopped tool                                          |
 | `chunk`      | A tool finished a unit of its work: `index` of `total`                                                                                                                         |
 | `error`      | A tool failed: `tool`, `dir`, `msg`                                                                                                                                            |
 | `done`       | The operation ended, with its summary                                                                                                                                          |
 | `report`     | A report was written or not: `format`, `path`, `status` and, when it was not, `msg` (see [Reports](#reports)); `github-annotations` for the [annotations](#github-annotations) |
 | `diagnostic` | One finding of a tool, once the tool finished: by default those at or above the operation's `failOn`                                                                           |
+
+A cold run can begin with a `prepare` phase before either operation. Its `done`
+event closes the same `op_id`, with status `done` or `fail`. A failed preparation
+starts no tools; the command's final event still reports an incomplete failed run.
+Already-ready tools do not add a preparation phase.
 
 Every task — one tool in one directory, or one file of a tool that runs once
 per file — has an `op_id` of its own: the operation's `op_id` followed by

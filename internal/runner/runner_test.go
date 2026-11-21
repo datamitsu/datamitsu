@@ -11,8 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 )
@@ -1455,10 +1457,16 @@ func TestRunDelegatesToRunSequential(t *testing.T) {
 
 // fakePlanner returns a fixed plan and detected project types.
 type fakePlanner struct {
-	plan *tooling.ExecutionPlan
+	plan   *tooling.ExecutionPlan
+	planFn func(call int, operation config.OperationType) *tooling.ExecutionPlan
+	calls  int
 }
 
-func (f *fakePlanner) Plan(_ context.Context, _ config.OperationType, _ tooling.Selection, _ []string) (*tooling.ExecutionPlan, error) {
+func (f *fakePlanner) Plan(_ context.Context, operation config.OperationType, _ tooling.Selection, _ []string) (*tooling.ExecutionPlan, error) {
+	f.calls++
+	if f.planFn != nil {
+		return f.planFn(f.calls, operation), nil
+	}
 	return f.plan, nil
 }
 
@@ -1526,6 +1534,8 @@ func (f *fakeEnsurer) EnsureTools(_ context.Context, names []string) error {
 	*f.order = append(*f.order, "ensure")
 	return f.err
 }
+func (*fakeEnsurer) AppInstalled(string) bool                { return true }
+func (*fakeEnsurer) PreparedStateReady(string) (bool, error) { return true, nil }
 
 func planWithTools(tools ...string) *tooling.ExecutionPlan {
 	tasks := make([]tooling.Task, 0, len(tools))
@@ -1537,6 +1547,139 @@ func planWithTools(tools ...string) *tooling.ExecutionPlan {
 	}
 	return &tooling.ExecutionPlan{
 		Groups: []tooling.TaskGroup{{Tasks: tasks}},
+	}
+}
+
+func TestPrepareToolsUnionsPlansAndRunsOnce(t *testing.T) {
+	t.Setenv("CI", "true")
+	var order []string
+	ensurer := &fakeEnsurer{order: &order}
+	sc := &sharedContext{binMgr: ensurer}
+	plans := []*tooling.ExecutionPlan{planWithTools("yq", "lefthook"), planWithTools("yq", "prettier")}
+	if err := sc.prepareTools(context.Background(), plans); err != nil {
+		t.Fatalf("prepareTools: %v", err)
+	}
+	if !ensurer.called || strings.Join(ensurer.names, ",") != "lefthook,prettier,yq" {
+		t.Fatalf("EnsureTools called=%v names=%v", ensurer.called, ensurer.names)
+	}
+	ensurer.called = false
+	if err := sc.prepareTools(context.Background(), plans); err != nil {
+		t.Fatalf("second prepareTools: %v", err)
+	}
+	if ensurer.called {
+		t.Fatal("prepared tools were provisioned twice")
+	}
+}
+
+func TestPrepareToolsFailureDoesNotMarkPrepared(t *testing.T) {
+	var order []string
+	ensurer := &fakeEnsurer{order: &order, err: errors.New("download boom")}
+	sc := &sharedContext{binMgr: ensurer}
+	if err := sc.prepareTools(context.Background(), []*tooling.ExecutionPlan{planWithTools("yq")}); err == nil {
+		t.Fatal("prepareTools succeeded after EnsureTools failed")
+	}
+	if sc.preparedTools {
+		t.Fatal("failed preparation marked tools prepared")
+	}
+}
+
+func TestPrepareToolsCancelledDoesNotEnsure(t *testing.T) {
+	var order []string
+	ensurer := &fakeEnsurer{order: &order}
+	sc := &sharedContext{binMgr: ensurer}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := sc.prepareTools(ctx, []*tooling.ExecutionPlan{planWithTools("yq")}); err == nil {
+		t.Fatal("prepareTools succeeded with a cancelled context")
+	}
+	if ensurer.called || sc.preparedTools {
+		t.Fatal("cancelled preparation reached EnsureTools or marked tools prepared")
+	}
+}
+
+func TestRunOperationsReplansLintAfterBundledFix(t *testing.T) {
+	t.Setenv("CI", "true")
+	root := t.TempDir()
+	ignorePath := filepath.Join(root, ".datamitsuignore")
+	if err := os.WriteFile(ignorePath, []byte("*.ts:  eslint , prettier\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var observed []string
+	planner := &fakePlanner{planFn: func(call int, _ config.OperationType) *tooling.ExecutionPlan {
+		content, err := os.ReadFile(ignorePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		observed = append(observed, string(content))
+		if call <= 2 {
+			return planWithTools("app")
+		}
+		return &tooling.ExecutionPlan{}
+	}}
+	order := []string{}
+	sc := &sharedContext{
+		cfg: &config.Config{
+			Apps:  binmanager.MapOfApps{"app": {Shell: &binmanager.AppConfigShell{Name: "app"}}},
+			Tools: config.MapOfTools{"eslint": {Name: "eslint"}, "prettier": {Name: "prettier"}},
+		},
+		rootPath:        root,
+		cwdPath:         root,
+		selection:       tooling.Selection{Mode: tooling.SelectionAll},
+		planner:         planner,
+		executor:        &fakeExecutor{order: &order},
+		binMgr:          &fakeEnsurer{order: &order},
+		timings:         timing.New(),
+		report:          report.NewAccumulator(report.Options{}),
+		platformSkipped: map[string]struct{}{},
+		narrowed:        map[string]struct{}{},
+	}
+	if err := sc.runOperations(context.Background(), []config.OperationType{config.OpFix, config.OpLint}); err != nil {
+		t.Fatalf("runOperations: %v", err)
+	}
+	if planner.calls != 4 {
+		t.Fatalf("Plan called %d times, want two preflight plans and fresh fix/lint plans", planner.calls)
+	}
+	if observed[0] == observed[2] || observed[1] == observed[3] {
+		t.Fatalf("post-fix plans saw unchanged ignore contents: %q", observed)
+	}
+	if observed[2] != "*.ts: eslint, prettier\n" || observed[3] != observed[2] {
+		t.Fatalf("post-fix plan inputs = %q, want normalized ignore contents", observed[2:])
+	}
+}
+
+func TestRunOperationsPreflightFailureStopsBundledFix(t *testing.T) {
+	t.Setenv("CI", "true")
+	root := t.TempDir()
+	ignorePath := filepath.Join(root, ".datamitsuignore")
+	const nonCanonical = "*.go: golangci-lint  \n"
+	if err := os.WriteFile(ignorePath, []byte(nonCanonical), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	planner := &fakePlanner{plan: planWithTools("app")}
+	order := []string{}
+	sc := &sharedContext{
+		cfg:             &config.Config{Apps: binmanager.MapOfApps{"app": {Shell: &binmanager.AppConfigShell{Name: "app"}}}},
+		rootPath:        root,
+		cwdPath:         root,
+		selection:       tooling.Selection{Mode: tooling.SelectionAll},
+		planner:         planner,
+		executor:        &fakeExecutor{order: &order},
+		binMgr:          &fakeEnsurer{order: &order, err: errors.New("download boom")},
+		timings:         timing.New(),
+		report:          report.NewAccumulator(report.Options{}),
+		platformSkipped: map[string]struct{}{},
+		narrowed:        map[string]struct{}{},
+	}
+	err := sc.runOperations(context.Background(), []config.OperationType{config.OpFix, config.OpLint})
+	if err == nil || !strings.Contains(err.Error(), "download boom") {
+		t.Fatalf("runOperations error = %v, want preflight failure", err)
+	}
+	content, readErr := os.ReadFile(ignorePath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(content) != nonCanonical {
+		t.Fatalf("bundled fix changed file after preflight failure: %q", content)
 	}
 }
 

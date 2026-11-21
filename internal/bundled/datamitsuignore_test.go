@@ -4,10 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 )
 
 // discoverForTest is the discovery step RunFix/RunLint no longer do themselves:
@@ -249,15 +251,63 @@ func TestRunLintFormattingWarning(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, ".datamitsuignore")
 	writeTestFile(t, path, "*.go:  golangci-lint ,  gofmt\n")
-
 	tools := config.MapOfTools{
 		"golangci-lint": config.Tool{Name: "golangci-lint"},
 		"gofmt":         config.Tool{Name: "gofmt"},
 	}
-
-	err := RunLint(root, tools, discoverForTest(t, root))
-	if err != nil {
+	if err := RunLint(root, tools, discoverForTest(t, root)); err != nil {
 		t.Fatalf("expected no error for formatting warning, got: %v", err)
+	}
+}
+
+func TestRunLintStructuredAdvisories(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, ".datamitsuignore")
+	writeTestFile(t, path, "*.go:  known-tool , unknown-tool\n")
+
+	var got []diagnostic.Diagnostic
+	err := RunLint(root, config.MapOfTools{"known-tool": config.Tool{Name: "known-tool"}}, []string{path}, func(d diagnostic.Diagnostic) {
+		got = append(got, d)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []diagnostic.Diagnostic{
+		{File: path, Row: 1, Col: 1, Severity: diagnostic.SeverityWarning, Source: "datamitsu", Code: "datamitsuignore-format", Message: `formatting differs from canonical form; have "*.go:  known-tool , unknown-tool", want "*.go: known-tool, unknown-tool"`, Reported: true},
+		{File: path, Row: 1, Col: 1, Severity: diagnostic.SeverityWarning, Source: "datamitsu", Code: "datamitsuignore-tool", Message: `unknown tool "unknown-tool"`, Reported: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("advisories differ:\n got: %#v\nwant: %#v", got, want)
+	}
+}
+
+func TestRunLintAdvisoriesWithoutCallbackAreQuiet(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, ".datamitsuignore")
+	writeTestFile(t, path, "*.go: unknown-tool\n")
+	if err := RunLint(root, config.MapOfTools{}, []string{path}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunFixReportsOnlyChangedFiles(t *testing.T) {
+	root := t.TempDir()
+	changedPath := filepath.Join(root, ".datamitsuignore")
+	unchangedPath := filepath.Join(root, "sub", ".datamitsuignore")
+	writeTestFile(t, changedPath, "*.go:  tool\n")
+	if err := os.MkdirAll(filepath.Dir(unchangedPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, unchangedPath, "*.go: tool\n")
+	var changed []string
+	err := RunFix(root, []string{changedPath, unchangedPath}, func(path string) {
+		changed = append(changed, path)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(changed, []string{".datamitsuignore"}) {
+		t.Fatalf("changed paths = %#v, want only changed relative path", changed)
 	}
 }
 

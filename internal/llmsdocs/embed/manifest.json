@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "808777e482524435f02ab481a7ed35f2",
+  "pageSetHash": "7ca11f7cbc4db1e5b113042f43f0f4b1",
   "pages": [
     {
       "slug": "about",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 23369,
-      "contentHash": "91d954d1f6bb3200be619a0631915b77"
+      "bytes": 23695,
+      "contentHash": "591d2595cdfba67a33f0c35e5cbdeb03"
     },
     {
       "slug": "guides/architecture",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 14900,
-      "contentHash": "9c3c7279af9a6c6eeac067785ff47055"
+      "bytes": 15251,
+      "contentHash": "e8b5e3a22fa33e581aa84809163c74db"
     },
     {
       "slug": "guides/managed-configs",
@@ -361,8 +361,8 @@
       "url": "https://datamitsu.com/docs/guides/tooling-system.md",
       "title": "Tooling System",
       "description": "Understanding the fix, lint, and check operations in datamitsu",
-      "bytes": 11046,
-      "contentHash": "551b5ad56a3caa9b1047d00a078ff1a4"
+      "bytes": 11191,
+      "contentHash": "351780cdd1c4ca30e35341036de704fc"
     },
     {
       "slug": "guides/using-wrappers",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 197975,
-      "contentHash": "b2e4e90210bf7a74a97bc11ff17eb728"
+      "bytes": 198273,
+      "contentHash": "508048be23d9c4c29a68a45e31ea8349"
     },
     {
       "slug": "reference/comparison",

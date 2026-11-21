@@ -151,9 +151,18 @@ func isHex(s string) bool {
 // dropped either would make a command's output depend on whether a cache
 // happened to be warm.
 type Entry struct {
-	Config     *config.Config
-	Warnings   []string
-	RemoteURLs []string
+	Config         *config.Config
+	Warnings       []string
+	VersionNotices []VersionNotice
+	RemoteURLs     []string
+}
+
+// VersionNotice records a skipped minimum-version check without coupling the
+// user-facing summary to a source's absolute path.
+type VersionNotice struct {
+	Source   string
+	Required string
+	Path     string
 }
 
 // artifact is the stored envelope. FormatVersion is repeated inside the file
@@ -176,9 +185,10 @@ type artifact struct {
 
 // payload is the hashed body of an artifact.
 type payload struct {
-	Config     *config.Config `msgpack:"config"`
-	Warnings   []string       `msgpack:"warnings"`
-	RemoteURLs []string       `msgpack:"remoteUrls"`
+	Config         *config.Config  `msgpack:"config"`
+	Warnings       []string        `msgpack:"warnings"`
+	VersionNotices []VersionNotice `msgpack:"versionNotices"`
+	RemoteURLs     []string        `msgpack:"remoteUrls"`
 }
 
 // decode reads data into v, converting a decoder panic into an error. The
@@ -230,7 +240,7 @@ func (s *Store) Load(key string) (*Entry, bool) {
 	}
 
 	s.touch(p)
-	return &Entry{Config: body.Config, Warnings: body.Warnings, RemoteURLs: body.RemoteURLs}, true
+	return &Entry{Config: body.Config, Warnings: body.Warnings, VersionNotices: body.VersionNotices, RemoteURLs: body.RemoteURLs}, true
 }
 
 // Save writes entry under key.
@@ -254,9 +264,10 @@ func (s *Store) Save(key string, entry *Entry) error {
 	}
 
 	body, err := msgpack.Marshal(payload{
-		Config:     withoutManagedConfigContent(entry.Config),
-		Warnings:   entry.Warnings,
-		RemoteURLs: entry.RemoteURLs,
+		Config:         withoutManagedConfigContent(entry.Config),
+		Warnings:       entry.Warnings,
+		VersionNotices: entry.VersionNotices,
+		RemoteURLs:     entry.RemoteURLs,
 	})
 	if err != nil {
 		return fmt.Errorf("encode config artifact: %w", err)

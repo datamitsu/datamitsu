@@ -79,50 +79,57 @@ func (sc *sharedContext) checkConfigPlacement(violations []string) {
 	for i := range diags {
 		diags[i].Reported = !diags[i].Baselined
 		diags[i].Gates = diags[i].Reported
-		if diags[i].Gates {
-			sc.placementGated = true
-		}
 	}
 	sc.placement = diags
 }
 
-// printPlacementFindings prints the check's block in the operation's results,
-// styled like a tool's line with one finding line each. Paths print relative
-// to the working directory like every other finding line. What it prints is
-// what the report shows: baselined findings stay hidden, and the line fails
-// (red ✗) only where a finding actually gates.
-func printPlacementFindings(diags []diagnostic.Diagnostic, nameWidth int, baseDir string) {
+// printCoreFindings renders core-bundled diagnostics as the first result in
+// the operation block, through the same finding formatter used by tools.
+func printCoreFindings(diags []diagnostic.Diagnostic, nameWidth int, baseDir string) {
 	if ui.Muted() {
 		return
 	}
 	shown := make([]diagnostic.Diagnostic, 0, len(diags))
-	baselined := 0
-	gated := false
+	baselined, warnings, changes := 0, 0, 0
+	gated, placementOnly := false, true
 	for _, d := range diags {
 		if d.Baselined {
 			baselined++
 			continue
 		}
-		if d.Gates {
-			gated = true
+		if !d.Reported {
+			continue
 		}
+		gated = gated || d.Gates
+		warnings += boolInt(d.Severity == diagnostic.SeverityWarning)
+		changes += boolInt(d.Severity == diagnostic.SeverityInfo)
+		placementOnly = placementOnly && d.Code == placementCode
 		shown = append(shown, d)
 	}
 	if len(shown) == 0 {
 		return
 	}
 	fmt.Println(clr.Faint("┃"))
-	status, nameDisplay := clr.Red("✗"), clr.Red(placementTool)
-	if !gated {
-		status, nameDisplay = clr.Green("✓"), clr.Bold(placementTool)
+	status, nameDisplay := clr.Green("✓"), clr.Bold(placementTool)
+	if gated {
+		status, nameDisplay = clr.Red("✗"), clr.Red(placementTool)
+	} else if warnings > 0 {
+		status = clr.Yellow("!")
 	}
 	pad := max(nameWidth-utf8.RuneCountInString(placementTool), 0) + 2
 	line := clr.Faint("┃ ") + status + " " + nameDisplay + strings.Repeat(" ", pad) + ui.FormatDurationShort(0)
-	if gated {
-		line += "  " + clr.Red("(config placement)")
-	} else {
-		line += "  " + clr.Faint("(config placement)")
+	coloredLabel := clr.Faint("built-in checks")
+	switch {
+	case placementOnly:
+		coloredLabel = clr.Faint("config placement")
+	case gated:
+		coloredLabel = clr.Red(fmt.Sprintf("%d finding(s)", len(shown)))
+	case warnings > 0:
+		coloredLabel = clr.Yellow(fmt.Sprintf("%d warning(s)", warnings))
+	case changes > 0:
+		coloredLabel = clr.Cyan(fmt.Sprintf("%d change(s)", changes))
 	}
+	line += "  " + coloredLabel
 	if baselined > 0 {
 		line += "  " + clr.Faint(fmt.Sprintf("· %d baselined", baselined))
 	}
@@ -130,4 +137,11 @@ func printPlacementFindings(diags []diagnostic.Diagnostic, nameWidth int, baseDi
 	for _, d := range shown {
 		fmt.Println(toolText(clr.Faint("┃ ") + "    " + formatDiagnosticRelativeTo(d, baseDir)))
 	}
+}
+
+func boolInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }

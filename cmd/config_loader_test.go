@@ -2664,67 +2664,80 @@ function getConfig(input) {
 // Tests for unstable version bypass in config loader (Task 3)
 
 func TestLoadConfigUnstableVersionBypassesHighMinVersion(t *testing.T) {
-	// When the binary is built as an unstable release, the version check
-	// must be skipped rather than blocking config loading. The bypass is
-	// advisory, so the loader is expected to emit a warning identifying
-	// the bypassed source.
+	isolateCacheTree(t)
 	unstableVersion := "0.0.0-unstable.20260523.abcdef0"
 	original := ldflags.Version
 	ldflags.Version = unstableVersion
 	t.Cleanup(func() { ldflags.Version = original })
 
-	observed := swapLoggerWithObserver(t, zapcore.WarnLevel)
-
+	observed := swapLoggerWithObserver(t, zapcore.DebugLevel)
 	configDir := t.TempDir()
-	configPath := filepath.Join(configDir, "high-version.js")
-	if err := os.WriteFile(configPath, []byte(
-		`function getMinVersion() { return "99.0.0"; }
-function getConfig(input) { return { version: "1.0.0", ignoreRules: ["unstable-bypass: eslint"] }; }`,
-	), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	cfg, _, _, err := loadConfigWithPaths(context.Background(), nil, true, []string{configPath})
-	if err != nil {
-		t.Fatalf("expected unstable bypass to succeed against high minVersion, got: %v", err)
-	}
-	if cfg == nil {
-		t.Fatal("config should not be nil after unstable bypass")
-	}
-
-	hasRule := false
-	for _, r := range cfg.IgnoreRules {
-		if r == "unstable-bypass: eslint" {
-			hasRule = true
+	projectPath := filepath.Join(configDir, "datamitsu.config.js")
+	packagePath := filepath.Join(configDir, "node_modules", "@scope", "wrapper", "datamitsu.config.js")
+	for _, item := range []struct{ path, minimum string }{
+		{projectPath, "98.0.0"},
+		{packagePath, "99.0.0"},
+	} {
+		if err := os.MkdirAll(filepath.Dir(item.path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		content := fmt.Sprintf(`function getMinVersion() { return %q; }
+function getConfig(input) { return { version: "1.0.0" }; }`, item.minimum)
+		if err := os.WriteFile(item.path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if !hasRule {
-		t.Errorf("expected ignoreRule from config to load after bypass, got %v", cfg.IgnoreRules)
+	if _, _, _, err := loadConfigWithPaths(context.Background(), []string{projectPath}, true, []string{packagePath}); err != nil {
+		t.Fatalf("unstable bypass load: %v", err)
 	}
-
-	entries := observed.FilterMessageSnippet("version check skipped").All()
+	entries := observed.FilterLevelExact(zapcore.WarnLevel).All()
 	if len(entries) != 1 {
-		t.Fatalf("expected exactly 1 'version check skipped' warning, got %d (all=%v)", len(entries), observed.All())
+		t.Fatalf("got %d grouped notices, want one: %v", len(entries), observed.All())
 	}
-	// The message carries what used to be structured fields: the warning is
-	// stored in the cache artifact and replayed verbatim on a hit, so everything
-	// it says has to survive as text.
-	msg := entries[0].Message
-	for _, want := range []string{configPath, unstableVersion, "99.0.0"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("warning %q does not name %q", msg, want)
+	message := entries[0].Message
+	if !strings.Contains(message, unstableVersion) {
+		t.Errorf("notice omits current version: %s", message)
+	}
+	for _, requirement := range []struct{ source, minimum string }{{"project config datamitsu.config.js", "98.0.0"}, {"@scope/wrapper", "99.0.0"}} {
+		found := false
+		for line := range strings.SplitSeq(message, "\n") {
+			found = found || (strings.Contains(line, requirement.source) && strings.Contains(line, requirement.minimum))
+		}
+		if !found {
+			t.Errorf("notice loses source/minimum association for %s: %s", requirement.source, message)
 		}
 	}
-
-	// A hit must print it too, or the safety warning appears exactly once.
-	warm := swapLoggerWithObserver(t, zapcore.WarnLevel)
-	if _, _, vm, warmErr := loadConfigWithPaths(context.Background(), nil, true, []string{configPath}); warmErr != nil {
-		t.Fatalf("second load: %v", warmErr)
-	} else if vm != nil {
-		t.Skip("the second load evaluated instead of hitting the cache; the replay path is covered by TestConfigCacheReplaysWarningsOnAHit")
+	for _, path := range []string{projectPath, packagePath} {
+		if strings.Contains(message, path) {
+			t.Errorf("default notice exposes full source path %q: %s", path, message)
+		}
 	}
-	if replayed := warm.FilterMessageSnippet("version check skipped").All(); len(replayed) != 1 {
-		t.Errorf("a cache hit printed %d 'version check skipped' warnings, want 1", len(replayed))
+	debugEntries := observed.FilterField(zap.String("currentVersion", unstableVersion)).All()
+	if len(debugEntries) != 2 {
+		t.Fatalf("got %d verbose source records, want two", len(debugEntries))
+	}
+	for _, entry := range debugEntries {
+		path, ok := entry.ContextMap()["path"].(string)
+		if !ok || (path != projectPath && path != packagePath) {
+			t.Errorf("verbose record has no complete source path: %v", entry.Context)
+		}
+	}
+	if got := configVersionSourceLabel(filepath.Join(configDir, "node_modules", ".pnpm", "wrapper@1.0.0", "node_modules", "wrapper", "datamitsu.config.js")); !strings.Contains(got, "wrapper") || strings.Contains(got, configDir) {
+		t.Errorf("pnpm source label loses package identity or includes store prefix: %q", got)
+	}
+
+	warm := swapLoggerWithObserver(t, zapcore.DebugLevel)
+	if _, _, vm, err := loadConfigWithPaths(context.Background(), []string{projectPath}, true, []string{packagePath}); err != nil {
+		t.Fatalf("cached load: %v", err)
+	} else if vm != nil {
+		t.Fatal("second load evaluated instead of hitting cache")
+	}
+	replayed := warm.FilterLevelExact(zapcore.WarnLevel).All()
+	if len(replayed) != 1 || replayed[0].Message != message {
+		t.Fatalf("cache replay differs: %v", replayed)
+	}
+	if got := warm.FilterField(zap.String("currentVersion", unstableVersion)).Len(); got != 2 {
+		t.Errorf("cache replay emitted %d verbose path records, want two", got)
 	}
 }
 
@@ -2753,7 +2766,7 @@ function getConfig(input) { return {}; }`,
 	if !strings.Contains(err.Error(), "upgrade") {
 		t.Errorf("error should retain upgrade instructions for stable builds, got: %v", err)
 	}
-	if n := observed.FilterMessageSnippet("version check skipped").Len(); n != 0 {
+	if n := observed.FilterLevelExact(zapcore.WarnLevel).Len(); n != 0 {
 		t.Errorf("stable failure path emitted %d unexpected unstable-bypass warnings", n)
 	}
 }

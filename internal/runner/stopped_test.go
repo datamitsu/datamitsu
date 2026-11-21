@@ -228,6 +228,17 @@ func TestOutcomePrecedence(t *testing.T) {
 	}
 }
 
+type interruptingExecutor struct {
+	*fakeExecutor
+
+	cancel context.CancelCauseFunc
+}
+
+func (e *interruptingExecutor) Execute(ctx context.Context, plan *tooling.ExecutionPlan) ([]tooling.GroupExecutionResult, error) {
+	e.cancel(interruptedError{sig: syscall.SIGINT})
+	return e.fakeExecutor.Execute(ctx, plan)
+}
+
 // An interruption between two groups that passed leaves no failed result, yet
 // the operation did not complete: its done event fails.
 func TestInterruptedOperationFails(t *testing.T) {
@@ -244,16 +255,15 @@ func TestInterruptedOperationFails(t *testing.T) {
 	executor := &fakeExecutor{order: &order, results: []tooling.GroupExecutionResult{
 		{Priority: 10, Success: true, Results: []tooling.ExecutionResult{{ToolName: "alpha", TaskID: "alpha::1", Success: true}}},
 	}}
+	ctx, cancel := context.WithCancelCause(context.Background())
 	sc := &sharedContext{
 		planner:         &fakePlanner{plan: plan},
-		executor:        executor,
+		executor:        &interruptingExecutor{fakeExecutor: executor, cancel: cancel},
 		binMgr:          &fakeEnsurer{order: &order},
 		timings:         timing.New(),
 		platformSkipped: map[string]struct{}{},
 		narrowed:        map[string]struct{}{},
 	}
-	ctx, cancel := context.WithCancelCause(context.Background())
-	cancel(interruptedError{sig: syscall.SIGINT})
 
 	if err := runSingleOperation(ctx, sc, config.OpLint); err == nil {
 		t.Error("runSingleOperation() = nil, want the interrupted operation to fail")

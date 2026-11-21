@@ -304,15 +304,6 @@ globalThis.getMinVersion = () => "0.5.0";`, server.URL, digest.SHA256Of(payload)
 	if first.ExitCode != 0 {
 		t.Fatalf("pnpm runtime app install failed: %+v", first)
 	}
-	progressLines := 0
-	for line := range strings.SplitSeq(first.Stderr, "\n") {
-		if strings.HasPrefix(line, "Installing app readable-tool: ") {
-			progressLines++
-		}
-	}
-	if progressLines != 2 || strings.Count(first.Stderr, "Installing app readable-tool: install (1 packages)") != 1 {
-		t.Fatalf("pnpm progress lines = %d; want exactly two including the 1-package counter:\n%s", progressLines, first.Stderr)
-	}
 	if strings.Contains(first.Stderr, "Installing app readable-tool: hash") || strings.Contains(first.Stderr, "hash install") {
 		t.Fatalf("pnpm exposed an internal hash as a progress label:\n%s", first.Stderr)
 	}

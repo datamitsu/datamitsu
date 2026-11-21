@@ -9,20 +9,26 @@ The executor is the third stage of datamitsu's execution pipeline. It takes the 
 
 ## Pre-Install Phase
 
-Before any task runs, the runner installs **every app the plan needs** up front.
-Immediately after planning and before the executor starts, it calls `EnsureTools`
-with the plan's sorted, deduplicated app names. An operation's tool key and
-`app` can differ, so installation follows the app reference carried by the task.
-Planner names remain roots. Both OCI auto-seeding and installation expand those
-roots to their transitive `dependsOn` closure, including dependencies that are
-lazy or not required. A missing or unsupported dependency aborts provisioning
-before the dependent tool executes.
+Before bundled fixes or tool operations begin, the runner prepares the apps
+needed by every requested operation. For `check`, this is the sorted union of
+the initial fix and lint plans, not just the tools fix happens to use. Selection,
+tool filters, disabled tools and platform skips still decide what enters those
+plans. App references come from planned tasks, not tool registry keys.
 
-This is a hard invariant: **all plan apps are installed before parallel execution
-begins.** Installing ahead of time means no task triggers an on-demand install
-while another task is resolving the same app. Distinct apps may still install in
-parallel because they use separate content-addressed paths. Explain mode skips
-installation. A failure here aborts before any task runs.
+Both OCI auto-seeding and installation expand those roots to their transitive
+`dependsOn` closure, including dependencies that are lazy or not required.
+Required runtimes and one-time app preparation complete before execution starts.
+A preparation failure or cancellation stops the run before a fixer changes files,
+even under `--fail-fast=false`. Reports retain the planned tasks as not started.
+Explain mode never provisions tools.
+
+A cold run shows a separate **prepare tools** phase before the fix or lint
+frame. Terminals show byte progress when a total is known and activity spinners
+otherwise; transient rows disappear when preparation ends. Pipes and CI receive
+sparse progress on stderr. Ready apps do not produce a warm-run preparation frame.
+
+The early lint plan discovers provisioning roots only. Lint is planned again
+after fix, so file changes and execution-cache decisions use the updated inputs.
 
 ## Store Provisioning
 
