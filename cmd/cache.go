@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -60,7 +61,11 @@ func init() {
 // (e.g. git binary missing, permission error), the error is surfaced rather
 // than silently falling back to CWD with a wrong cache key.
 func resolveProjectRoot(cmd *cobra.Command, cwdPath string) (string, error) {
-	rootPath, err := traverser.GetGitRoot(cmd.Context(), cwdPath)
+	return resolveProjectRootContext(cmd.Context(), cwdPath)
+}
+
+func resolveProjectRootContext(ctx context.Context, cwdPath string) (string, error) {
+	rootPath, err := traverser.GetGitRoot(ctx, cwdPath)
 	if err == nil {
 		return rootPath, nil
 	}

@@ -92,6 +92,9 @@ func cloneCommandInfo(src *binmanager.CommandInfo) *binmanager.CommandInfo {
 	if src.RequiredPaths != nil {
 		dst.RequiredPaths = append([]string(nil), src.RequiredPaths...)
 	}
+	if src.ToolCacheSlots != nil {
+		dst.ToolCacheSlots = append([]string(nil), src.ToolCacheSlots...)
+	}
 	if src.Env != nil {
 		dst.Env = make(map[string]string, len(src.Env))
 		maps.Copy(dst.Env, src.Env)

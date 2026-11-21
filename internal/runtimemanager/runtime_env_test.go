@@ -31,12 +31,13 @@ func TestRuntimeEnvPreservesAppIdentity(t *testing.T) {
 				t.Fatal(err)
 			}
 			tt.app.RuntimeEnv = map[string]string{"BIN": "${APP_BIN:dep}"}
+			tt.app.Caches = []string{"providers"}
 			after, err := rm.ComputeAppPath("tool", tt.app)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if before != after {
-				t.Fatalf("runtimeEnv changed install identity: %s -> %s", before, after)
+				t.Fatalf("execution cache settings changed install identity: %s -> %s", before, after)
 			}
 		})
 	}

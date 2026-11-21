@@ -12,6 +12,7 @@ import (
 type ProvisionRequest struct {
 	StoreRoot          string          `json:"storeRoot"`
 	CacheRoot          string          `json:"cacheRoot"`
+	ToolCacheRoot      string          `json:"toolCacheRoot,omitempty"`
 	Apps               MapOfApps       `json:"apps"`
 	Bundles            MapOfBundles    `json:"bundles,omitempty"`
 	RuntimeDefinitions json.RawMessage `json:"runtimeDefinitions,omitempty"`
@@ -27,6 +28,7 @@ type ProvisionRequest struct {
 type PrepareAppsRequest struct {
 	StoreRoot          string          `json:"storeRoot"`
 	CacheRoot          string          `json:"cacheRoot"`
+	ToolCacheRoot      string          `json:"toolCacheRoot,omitempty"`
 	Apps               MapOfApps       `json:"apps"`
 	Bundles            MapOfBundles    `json:"bundles,omitempty"`
 	RuntimeDefinitions json.RawMessage `json:"runtimeDefinitions,omitempty"`
@@ -46,6 +48,7 @@ func (bm *BinManager) callProvision(ctx context.Context, action string, names []
 	}
 	request := ProvisionRequest{
 		StoreRoot: env.GetStorePath(), CacheRoot: env.GetCachePath(), Apps: bm.mapOfApps, Bundles: bm.mapOfBundles,
+		ToolCacheRoot:      bm.toolCacheRoot,
 		RuntimeDefinitions: runtimes, Action: action, Names: names, AppName: appName,
 		IncludeOptional: includeOptional, Concurrency: concurrency, FailOnError: failOnError,
 	}
@@ -65,7 +68,8 @@ func (bm *BinManager) callPrepareApps(ctx context.Context, names []string) (bool
 	}
 	request := PrepareAppsRequest{
 		StoreRoot: env.GetStorePath(), CacheRoot: env.GetCachePath(), Apps: bm.mapOfApps,
-		Bundles: bm.mapOfBundles, RuntimeDefinitions: runtimes, Names: names,
+		ToolCacheRoot: bm.toolCacheRoot,
+		Bundles:       bm.mapOfBundles, RuntimeDefinitions: runtimes, Names: names,
 	}
 	return provision.Call(ctx, "prepare-apps", request, nil)
 }

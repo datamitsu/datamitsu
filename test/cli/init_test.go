@@ -9,6 +9,16 @@ import (
 	"github.com/datamitsu/datamitsu/internal/clitest"
 )
 
+func initGoldenNormalizer(t *testing.T) *clitest.Normalizer {
+	t.Helper()
+	binary := clitest.BuildOnce(t)
+	norm := clitest.NewNormalizer().MaskPath(binary, "<BINARY>")
+	if resolved, err := filepath.EvalSymlinks(binary); err == nil && resolved != binary {
+		norm.MaskPath(resolved, "<BINARY>")
+	}
+	return norm
+}
+
 // TestInitDryRunGolden freezes `init --dry-run` against the minimal config: the
 // banner, the single "init" frame with "no project types detected", the dry-run
 // notice, and the "dry-run" footer. The build version and the run duration are
@@ -17,7 +27,7 @@ import (
 func TestInitDryRunGolden(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
-	norm := clitest.NewNormalizer()
+	norm := initGoldenNormalizer(t)
 
 	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "init", "--dry-run")
@@ -40,7 +50,7 @@ func TestInitNoopSuccess(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
 	home := t.TempDir()
-	norm := clitest.NewNormalizer()
+	norm := initGoldenNormalizer(t)
 
 	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: []string{"HOME=" + home}},
 		"--no-auto-config", "--config", cfg, "init")

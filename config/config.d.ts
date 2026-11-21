@@ -1280,6 +1280,20 @@ declare global {
       binary?: AppConfigBinary;
       bun?: AppConfigBun;
       /**
+       * Named isolated execution cache slots. `{toolCache}` selects the implicit `default` slot;
+       * `{toolCache:name}` selects a declared name. The slots are siblings beneath the existing
+       * checkout/app/install-identity cache parent. Names match `[a-z_]{1,255}`. Windows device
+       * names and `default` are reserved; duplicates and unknown references are errors. Slots are
+       * execution-only and do not affect installation or prepared identity. Declared named slots
+       * are created before execution, including through source-mode shims; read-only resolution
+       * never creates them.
+       *
+       * @example
+       *   caches: ["providers"],
+       *   runtimeEnv: { TF_PLUGIN_CACHE_DIR: "{toolCache:providers}" },
+       */
+      caches?: string[];
+      /**
        * Managed apps required at run time, installed transitively even when lazy or optional. Each
        * entry is an app name, or an object that also names the role under which this app refers to
        * the dependency in `${APP_BIN:<alias>}` bindings. The alias defaults to the app name and
@@ -1390,7 +1404,9 @@ declare global {
        * Execution-only env, outside install identity; keys must not overlap `env`. Supports
        * `${STORE}`, `${APP_DIR}`, and `${APP_BIN:<name>}` for the exact executable of a dependency
        * in direct `dependsOn` (binary, uv and go apps), and `${APP_PREPARED}` when `prepare` is
-       * set. Datamitsu/runtime-owned keys win.
+       * set. `{toolCache}` selects a writable cache scoped to the checkout, managed app name and
+       * install identity. Created on execution, not read-only resolution; removed by `cache clear`.
+       * Shell apps cannot use `{toolCache}`. Datamitsu/runtime-owned keys win.
        */
       runtimeEnv?: Record<string, string>;
       shell?: AppConfigShell;

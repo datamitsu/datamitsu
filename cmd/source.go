@@ -698,6 +698,7 @@ func resolveSourcePlanFor(ctx context.Context, target sourceTarget) (sourcefarm.
 	}
 
 	b := binmanager.New(cfg.Apps, cfg.Bundles, runtimemanager.New(cfg.Runtimes))
+	b.SetToolCacheRoot(pin)
 	return sourcefarm.BuildPlan(target.Root, target.FarmDir, cfg.Apps, b, sourcefarm.SystemLookPath(target.FarmDir)), nil
 }
 

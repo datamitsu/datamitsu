@@ -171,6 +171,9 @@ type App struct {
 
 	RuntimeEnv map[string]string `json:"runtimeEnv,omitempty"`
 
+	// Caches lists named, isolated execution cache slots; default is implicit.
+	Caches []string `json:"caches,omitempty"`
+
 	Files    map[string]string       `json:"files,omitempty"`
 	Links    map[string]string       `json:"links,omitempty"`
 	Archives map[string]*ArchiveSpec `json:"archives,omitempty"`
@@ -232,6 +235,7 @@ type BinManager struct {
 	mapOfBundles   MapOfBundles
 	runtimeManager RuntimeAppManager
 	resolver       *target.Resolver
+	toolCacheRoot  string
 
 	// downloadGroup coalesces concurrent downloads of the same binary so that
 	// N parallel GetBinaryPath calls for one uninstalled binary trigger exactly
@@ -257,6 +261,12 @@ func NewWithResolver(mapOfApps MapOfApps, mapOfBundles MapOfBundles, runtimeMana
 		runtimeManager: runtimeManager,
 		resolver:       resolver,
 	}
+}
+
+// SetToolCacheRoot supplies the caller's checkout root without coupling app resolution to discovery.
+// Configure it before concurrent use. Unset managers use the current directory.
+func (bm *BinManager) SetToolCacheRoot(root string) {
+	bm.toolCacheRoot = root
 }
 
 // parseBinaryCandidates converts the nested storage map (os -> arch -> libc -> BinaryOsArchInfo)
@@ -1002,6 +1012,10 @@ type CommandInfo struct {
 	// the artifact.
 	Artifact string
 
+	// ToolCacheDir is the writable execution cache parent, outside installation health.
+	ToolCacheDir   string
+	ToolCacheSlots []string
+
 	// RequiredPaths are the other absolute paths that must exist for the app to
 	// run correctly, beyond InstalledPath.
 	//
@@ -1490,6 +1504,11 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 	if _, _, _, err := bm.dependencyPathInfo(appName, &CommandInfo{}, installDependency, ""); err != nil {
 		return nil, fmt.Errorf("app %q: %w", appName, err)
 	}
+	if cmdInfo.ToolCacheDir != "" {
+		if err := EnsureToolCacheSlots(env.GetCachePath(), cmdInfo.ToolCacheDir, cmdInfo.ToolCacheSlots); err != nil {
+			return nil, fmt.Errorf("create cache for app %q: %w", appName, err)
+		}
+	}
 
 	return cmdInfo, nil
 }
@@ -1854,36 +1873,77 @@ func (bm *BinManager) installInternal(ctx context.Context, includeOptional bool)
 // take precedence — a user config can never override a reserved runtime key.
 // RuntimeEnv is merged here so installers receive only Env.
 func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo) error {
-	if len(app.Env) == 0 && len(app.RuntimeEnv) == 0 {
+	if len(app.Env) == 0 && len(app.RuntimeEnv) == 0 && len(app.Caches) == 0 {
 		return nil
 	}
-
-	// ${APP_DIR} is best-effort: if the install path can't be computed, appDir
-	// is empty and ${APP_DIR} expands to "" rather than failing the command.
+	if err := ValidateCacheNames(app.Caches); err != nil {
+		return fmt.Errorf("app %q caches: %w", appName, err)
+	}
+	cacheUsed := len(app.Caches) > 0
+	for _, value := range app.RuntimeEnv {
+		used, err := ValidateToolCacheTokens(value, app.Caches)
+		if err != nil {
+			return fmt.Errorf("app %q runtimeEnv: %w", appName, err)
+		}
+		cacheUsed = cacheUsed || used
+	}
 	appDir, _ := bm.ComputeInstallPath(appName)
-
-	if cmdInfo.Env == nil {
+	if cmdInfo.Env == nil && len(app.Env)+len(app.RuntimeEnv) > 0 {
 		cmdInfo.Env = make(map[string]string, len(app.Env)+len(app.RuntimeEnv))
 	}
-
-	for k, v := range app.Env {
-		if _, exists := cmdInfo.Env[k]; exists {
-			continue
+	for key, value := range app.Env {
+		used, err := ValidateToolCacheTokens(value, app.Caches)
+		if err != nil {
+			return fmt.Errorf("app %q env.%s: %w", appName, key, err)
 		}
-		cmdInfo.Env[k] = env.ExpandPlaceholders(v, appDir)
+		if used {
+			return fmt.Errorf("app %q env.%s: {toolCache} is allowed only in runtimeEnv", appName, key)
+		}
+	}
+	for k, v := range app.Env {
+		if _, exists := cmdInfo.Env[k]; !exists {
+			cmdInfo.Env[k] = env.ExpandPlaceholders(v, appDir)
+		}
+	}
+	toolCacheParent := ""
+	if cacheUsed {
+		if app.Shell != nil {
+			return fmt.Errorf("app %q runtimeEnv: {toolCache} requires a managed app install identity; shell apps are unsupported", appName)
+		}
+		root := bm.toolCacheRoot
+		if root == "" {
+			var err error
+			root, err = os.Getwd()
+			if err != nil {
+				return fmt.Errorf("resolve app cache for %q: get working directory: %w", appName, err)
+			}
+		}
+		if appDir == "" {
+			return fmt.Errorf("resolve app cache for %q: could not compute install identity", appName)
+		}
+		installIdentity, err := filepath.Rel(env.GetStorePath(), appDir)
+		if err != nil {
+			return fmt.Errorf("resolve app cache for %q: compute install identity: %w", appName, err)
+		}
+		toolCacheParent, err = env.GetAppToolCachePath(root, appName, env.HashProjectPath(installIdentity))
+		if err != nil {
+			return fmt.Errorf("resolve app cache for %q: %w", appName, err)
+		}
+		cmdInfo.ToolCacheDir = toolCacheParent
+		cmdInfo.ToolCacheSlots = slices.Clone(app.Caches)
+	}
+	if len(app.RuntimeEnv) == 0 {
+		return nil
 	}
 	paths := strings.NewReplacer("${STORE}", env.GetStorePath(), "${APP_DIR}", appDir)
 	if app.Prepare != nil {
-		// ${APP_PREPARED} names the placed state directory (marker's parent,
-		// out/ child): the step already ran by the time an app runs, so the
-		// run-time value points at the placed tree.
 		if key, keyErr := bm.ComputePreparedKey(appName); keyErr == nil {
 			stateOut := filepath.Join(PreparePath(), appName, key, "out")
 			paths = strings.NewReplacer("${STORE}", env.GetStorePath(), "${APP_DIR}", appDir, "${APP_PREPARED}", stateOut)
 		}
 	}
 	for _, key := range slices.Sorted(maps.Keys(app.RuntimeEnv)) {
-		value, err := expandAppBindings(app.RuntimeEnv[key], func(alias string) (string, error) {
+		value, slots, err := expandRuntimeEnvPlaceholders(app.RuntimeEnv[key], toolCacheParent, app.Caches, func(alias string) (string, error) {
 			target, ok := aliasToApp(app.DependsOn, alias)
 			if !ok {
 				return "", fmt.Errorf("APP_BIN target %q must be listed in direct dependsOn", alias)
@@ -1893,11 +1953,19 @@ func (bm *BinManager) mergeAppEnv(appName string, app App, cmdInfo *CommandInfo)
 		if err != nil {
 			return fmt.Errorf("app %q runtimeEnv.%s: %w", appName, key, err)
 		}
+		cmdInfo.ToolCacheSlots = appendCacheSlots(cmdInfo.ToolCacheSlots, slots...)
 		if _, exists := cmdInfo.Env[key]; !exists {
 			cmdInfo.Env[key] = value
 		}
 	}
 	return nil
+}
+
+func appendCacheSlots(slots []string, additions ...string) []string {
+	for _, slot := range additions {
+		slots = appendCacheSlot(slots, slot)
+	}
+	return slots
 }
 
 // resolveBindingPath returns the executable path a ${APP_BIN:<alias>} binding

@@ -219,7 +219,8 @@ Multiple placeholders can appear in a single argument. All are resolved in the o
 
 ## App environment placeholders
 
-App `env` and `runtimeEnv` use a separate syntax from tool operation templates:
+App `env` and `runtimeEnv` support the store placeholders below. Only app
+`runtimeEnv` also supports `{toolCache}` for a managed app's writable cache.
 
 | Placeholder          | App `env` |  App `runtimeEnv`   | `prepare` args/env | Resolves to                                              |
 | -------------------- | :-------: | :-----------------: | :----------------: | -------------------------------------------------------- |
@@ -227,6 +228,8 @@ App `env` and `runtimeEnv` use a separate syntax from tool operation templates:
 | `${APP_DIR}`         |    Yes    |         Yes         |        Yes         | This app's install directory, when resolvable            |
 | `${APP_BIN:<alias>}` |    No     |         Yes         |        Yes         | Exact executable of a direct dependency (binary, uv, go) |
 | `${APP_PREPARED}`    |    No     | Yes, with `prepare` |        Yes         | The app's prepared-state directory                       |
+| `{toolCache}`        |    No     |         Yes         |         No         | Checkout- and install-identity-scoped app cache          |
+| `{toolCache:name}`   |    No     |         Yes         |         No         | Declared named slot beneath the same app-cache parent    |
 
 `runtimeEnv` applies only to execution and never enters installer environments
 or install hashes. The `${APP_BIN}` target must be listed in the same app's
@@ -236,6 +239,10 @@ resolve today, node/bun/jvm need a launcher that does not exist yet, and
 shell apps are not installable targets. Missing or platform-unsupported
 targets produce an error without fetching them. Malformed bindings and
 unknown colon forms in `runtimeEnv` values are errors.
+
+Resolved filesystem and binary paths are inserted literally, without interpreting them as placeholders.
+Cache placeholders cannot be nested inside dollar placeholders: `${toolCache}` and
+`${prefix{toolCache}}` are errors, not alternative spellings of `{toolCache}`.
 
 `${APP_PREPARED}` names the directory a declared `prepare` step fills
 (`{store}/.prepared/<app>/<key>/out`); subpaths are allowed. It is rejected
@@ -249,6 +256,33 @@ enter it.
 
 App `env` rejects `${APP_BIN` and `${APP_PREPARED` values; other config data
 and environment keys remain literal for these purposes.
+
+In app `runtimeEnv`, `{toolCache}` selects the implicit `default` slot and
+`{toolCache:name}` selects a declared named slot. Both are sibling directories
+under the existing cache parent, scoped by checkout root, managed app name and
+install identity. Declare named slots with `caches`; names match `[a-z_]{1,255}`.
+Windows device names and `default` are reserved, and duplicate declarations
+or unknown references fail configuration loading. Shell apps have no managed install
+identity and cannot use app cache placeholders. Named slots are created before
+execution, including through source-mode shims; default is created only when
+referenced. Read-only resolution computes paths without creating slots. Cache
+selection does not affect app install identity. Normal `cache clear` removes the
+parent recursively without changing the store.
+
+Outside a checkout, direct execution uses the invocation directory as its cache
+scope. An explicit-config source farm without a checkout uses the directory
+containing the first config file; clear that scope there, or use
+`cache clear --all`.
+
+```javascript
+runtimeEnv: {
+  CACHE_DIR: "{toolCache}/data",
+}
+```
+
+`{toolCache}` is rejected in app install-time `env`: installer state must not
+depend on a checkout-specific execution cache. This path is not a filesystem
+sandbox; it does not constrain arbitrary app or `initCommands` writes.
 
 See [App environments](./configuration-api.md#execution-only-environment-runtimeenv)
 and [Wrapping a private binary](../how-to/maintain-wrapper.md#wrapping-a-private-binary).
