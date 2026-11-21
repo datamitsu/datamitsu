@@ -85,7 +85,7 @@ func Select(candidates []github.Annotation, touched map[string]bool) Selection {
 	for _, a := range candidates {
 		buckets[a.Level] = append(buckets[a.Level], a)
 	}
-	sel := Selection{Candidates: len(candidates)}
+	sel := Selection{Issues: nil, Omitted: 0, Candidates: len(candidates)}
 	for _, level := range []string{github.LevelError, github.LevelWarning} {
 		list := github.Order(buckets[level], touched)
 		kept := list[:min(len(list), Budget)]

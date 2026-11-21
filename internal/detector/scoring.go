@@ -50,7 +50,7 @@ func ScoreAsset(asset releaseasset.Asset, osType syslist.OsType, archType syslis
 // scoreAssetFor scores an asset for appName: one whose name carries the app's
 // name earns scoreNameMatch on top of the platform criteria.
 func scoreAssetFor(appName string, asset releaseasset.Asset, osType syslist.OsType, archType syslist.ArchType, libcType string) AssetScore {
-	s := AssetScore{Asset: asset}
+	s := AssetScore{Total: 0, OSMatch: false, ArchMatch: false, IsExplicit: false, LibcMatch: 0, NameMatch: false, HasPriority: false, ArchiveBonus: 0, Asset: asset}
 
 	osMatch := MatchOS(asset.Name, osType)
 	archMatch := MatchArch(asset.Name, archType)

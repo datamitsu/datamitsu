@@ -19,7 +19,7 @@ func observe(path string) cache.Seen {
 	at := time.Now()
 	st, _ := contentHash(path, contentMemo, memoShared)
 	if !st.read {
-		return cache.Seen{At: at}
+		return cache.Seen{Hash: "", Size: 0, ModTime: time.Time{}, Identity: cache.FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, At: at}
 	}
 	return cache.Seen{Hash: st.hash, Size: st.size, ModTime: st.mod, Identity: st.ident, At: at}
 }
@@ -34,7 +34,7 @@ func unchangedSince(path string, seen cache.Seen) bool {
 	if seen.Hash == "" {
 		return false
 	}
-	st := pathState{path: path, hash: seen.Hash, size: seen.Size, mod: seen.ModTime, ident: seen.Identity, read: true}
+	st := pathState{entry: "", path: path, hash: seen.Hash, size: seen.Size, mod: seen.ModTime, ident: seen.Identity, read: true}
 	if statSettled(st, seen.At) {
 		return true
 	}

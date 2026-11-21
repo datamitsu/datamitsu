@@ -16,17 +16,30 @@ var testLibc = string(target.DetectHost(context.Background()).Libc)
 
 func makeTestManagedRuntime(url, hash string) config.RuntimeConfig {
 	return config.RuntimeConfig{
-		Kind: config.RuntimeKindUV,
-		Mode: config.RuntimeModeManaged,
+		System: nil,
+		Bun:    nil,
+		Node:   nil,
+		UV:     nil,
+		JVM:    nil,
+		Go:     nil,
+		PNPM:   nil,
+		Kind:   config.RuntimeKindUV,
+		Mode:   config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{
 			Binaries: binmanager.MapOfBinaries{
 				syslist.OsTypeDarwin: {
 					syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{
+						Auth:        nil,
+						BinaryPath:  nil,
+						ExtractDir:  false,
 						URL:         url,
 						Hash:        hash,
 						ContentType: binmanager.BinContentTypeTarGz,
 					}},
 					syslist.ArchTypeArm64: {"unknown": binmanager.BinaryOsArchInfo{
+						Auth:        nil,
+						BinaryPath:  nil,
+						ExtractDir:  false,
 						URL:         url + "-arm64",
 						Hash:        hash,
 						ContentType: binmanager.BinContentTypeTarGz,
@@ -34,6 +47,9 @@ func makeTestManagedRuntime(url, hash string) config.RuntimeConfig {
 				},
 				syslist.OsTypeLinux: {
 					syslist.ArchTypeAmd64: {testLibc: binmanager.BinaryOsArchInfo{
+						Auth:        nil,
+						BinaryPath:  nil,
+						ExtractDir:  false,
 						URL:         url + "-linux",
 						Hash:        hash,
 						ContentType: binmanager.BinContentTypeTarGz,
@@ -98,10 +114,18 @@ func TestCalculateRuntimeHash(t *testing.T) {
 
 	t.Run("non-managed runtime returns error", func(t *testing.T) {
 		rc := config.RuntimeConfig{
-			Kind: config.RuntimeKindUV,
-			Mode: config.RuntimeModeSystem,
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
 			System: &config.RuntimeConfigSystem{
-				Command: "uv",
+				SystemVersion: "",
+				Command:       "uv",
 			},
 		}
 		_, err := calculateRuntimeHash(rc, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
@@ -129,12 +153,21 @@ func TestCalculateRuntimeHash(t *testing.T) {
 	t.Run("with binary path", func(t *testing.T) {
 		binaryPath := "uv"
 		rc := config.RuntimeConfig{
-			Kind: config.RuntimeKindUV,
-			Mode: config.RuntimeModeManaged,
+			System: nil,
+			Bun:    nil,
+			Node:   nil,
+			UV:     nil,
+			JVM:    nil,
+			Go:     nil,
+			PNPM:   nil,
+			Kind:   config.RuntimeKindUV,
+			Mode:   config.RuntimeModeManaged,
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{
 					syslist.OsTypeDarwin: {
 						syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{
+							Auth:        nil,
+							ExtractDir:  false,
 							URL:         "https://example.com/uv.tar.gz",
 							Hash:        "abc123",
 							ContentType: binmanager.BinContentTypeTarGz,
@@ -199,11 +232,11 @@ func TestCalculateRuntimeHash(t *testing.T) {
 	t.Run("UV python version affects runtime hash", func(t *testing.T) {
 		rc1 := makeTestManagedRuntime("https://example.com/uv.tar.gz", "abc123")
 		rc1.Kind = config.RuntimeKindUV
-		rc1.UV = &config.RuntimeConfigUV{PythonVersion: "3.12"}
+		rc1.UV = &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.12"}
 
 		rc2 := makeTestManagedRuntime("https://example.com/uv.tar.gz", "abc123")
 		rc2.Kind = config.RuntimeKindUV
-		rc2.UV = &config.RuntimeConfigUV{PythonVersion: "3.11"}
+		rc2.UV = &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.11"}
 
 		hash1, _ := calculateRuntimeHash(rc1, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
 		hash2, _ := calculateRuntimeHash(rc2, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "unknown")
@@ -234,14 +267,24 @@ func TestRuntimeHashFoldsSameFieldsForEveryKind(t *testing.T) {
 	// platform the suite runs on (makeTestManagedRuntime is hard-keyed to
 	// darwin/linux-amd64 and would miss e.g. linux/arm64).
 	sharedBin := binmanager.BinaryOsArchInfo{
+		Auth:        nil,
+		BinaryPath:  nil,
+		ExtractDir:  false,
 		URL:         "https://example.com/runtime.tar.gz",
 		Hash:        "rt123",
 		ContentType: binmanager.BinContentTypeTarGz,
 	}
 	managedBase := func(kind config.RuntimeKind) config.RuntimeConfig {
 		return config.RuntimeConfig{
-			Kind: kind,
-			Mode: config.RuntimeModeManaged,
+			System: nil,
+			Bun:    nil,
+			Node:   nil,
+			UV:     nil,
+			JVM:    nil,
+			Go:     nil,
+			PNPM:   nil,
+			Kind:   kind,
+			Mode:   config.RuntimeModeManaged,
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{osType: {archType: {testLibc: sharedBin}}},
 			},
@@ -249,9 +292,16 @@ func TestRuntimeHashFoldsSameFieldsForEveryKind(t *testing.T) {
 	}
 	systemBase := func(kind config.RuntimeKind) config.RuntimeConfig {
 		return config.RuntimeConfig{
-			Kind:   kind,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/" + string(kind)},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    kind,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/" + string(kind)},
 		}
 	}
 
@@ -277,7 +327,9 @@ func TestRuntimeHashFoldsSameFieldsForEveryKind(t *testing.T) {
 		{
 			kind: config.RuntimeKindUV,
 			fields: []fieldCase{
-				{"pythonVersion", func(rc *config.RuntimeConfig, v string) { rc.UV = &config.RuntimeConfigUV{PythonVersion: v} }},
+				{"pythonVersion", func(rc *config.RuntimeConfig, v string) {
+					rc.UV = &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: v}
+				}},
 			},
 		},
 		{
@@ -550,14 +602,24 @@ func TestCalculateRuntimeHashNodeDistinct(t *testing.T) {
 	}
 
 	sharedBin := binmanager.BinaryOsArchInfo{
+		Auth:        nil,
+		BinaryPath:  nil,
+		ExtractDir:  false,
 		URL:         "https://example.com/runtime.tar.xz",
 		Hash:        "abc123",
 		ContentType: binmanager.BinContentTypeTarXz,
 	}
 	managed := func(kind config.RuntimeKind, mutate func(*config.RuntimeConfig)) config.RuntimeConfig {
 		rc := config.RuntimeConfig{
-			Kind: kind,
-			Mode: config.RuntimeModeManaged,
+			System: nil,
+			Bun:    nil,
+			Node:   nil,
+			UV:     nil,
+			JVM:    nil,
+			Go:     nil,
+			PNPM:   nil,
+			Kind:   kind,
+			Mode:   config.RuntimeModeManaged,
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{osType: {archType: {testLibc: sharedBin}}},
 			},
@@ -573,7 +635,7 @@ func TestCalculateRuntimeHashNodeDistinct(t *testing.T) {
 		rc.JVM = &config.RuntimeConfigJVM{JavaVersion: "21"}
 	})
 	uvRC := managed(config.RuntimeKindUV, func(rc *config.RuntimeConfig) {
-		rc.UV = &config.RuntimeConfigUV{PythonVersion: "3.12"}
+		rc.UV = &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.12"}
 	})
 
 	nodeHash, err := calculateRuntimeHash(nodeRC, osType, archType, testLibc)
@@ -628,14 +690,28 @@ func TestCalculateRuntimeHashNodeDistinct(t *testing.T) {
 func TestCalculateSystemRuntimeHash(t *testing.T) {
 	t.Run("different commands produce different hashes", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/uv"},
 		}
 		rc2 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/local/bin/uv"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/local/bin/uv"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
@@ -648,9 +724,16 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 
 	t.Run("same command produces same hash", func(t *testing.T) {
 		rc := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/uv"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
@@ -663,8 +746,16 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 
 	t.Run("nil system config produces valid hash", func(t *testing.T) {
 		rc := config.RuntimeConfig{
-			Kind: config.RuntimeKindUV,
-			Mode: config.RuntimeModeSystem,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
 		}
 
 		hash := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
@@ -676,7 +767,7 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 		}
 	})
 	t.Run("platform inputs affect system hash", func(t *testing.T) {
-		rc := config.RuntimeConfig{Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem}
+		rc := config.RuntimeConfig{Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem}
 		base := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, "glibc")
 		if base == calculateSystemRuntimeHash(rc, syslist.OsTypeDarwin, syslist.ArchTypeAmd64, "glibc") {
 			t.Error("different OS produced the same system hash")
@@ -691,16 +782,28 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 
 	t.Run("different Node nodeVersion produces different hash", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindNode,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/node"},
-			Node:   &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMRuntime: testPNPMRuntimeName},
+			Managed: nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindNode,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/node"},
+			Node:    &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMRuntime: testPNPMRuntimeName},
 		}
 		rc2 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindNode,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/node"},
-			Node:   &config.RuntimeConfigNode{NodeVersion: "22.0.0", PNPMRuntime: testPNPMRuntimeName},
+			Managed: nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindNode,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/node"},
+			Node:    &config.RuntimeConfigNode{NodeVersion: "22.0.0", PNPMRuntime: testPNPMRuntimeName},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
@@ -712,16 +815,28 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 
 	t.Run("Node pnpmRuntime does not affect system hash", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindNode,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/node"},
-			Node:   &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMRuntime: testPNPMRuntimeName},
+			Managed: nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindNode,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/node"},
+			Node:    &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMRuntime: testPNPMRuntimeName},
 		}
 		rc2 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindNode,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/node"},
-			Node:   &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMRuntime: "pnpm-next"},
+			Managed: nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindNode,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/node"},
+			Node:    &config.RuntimeConfigNode{NodeVersion: "20.11.1", PNPMRuntime: "pnpm-next"},
 		}
 
 		if calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc) != calculateSystemRuntimeHash(rc2, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc) {
@@ -731,16 +846,28 @@ func TestCalculateSystemRuntimeHash(t *testing.T) {
 
 	t.Run("different UV pythonVersion produces different hash", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv"},
-			UV:     &config.RuntimeConfigUV{PythonVersion: "3.12"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/uv"},
+			UV:      &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.12"},
 		}
 		rc2 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv"},
-			UV:     &config.RuntimeConfigUV{PythonVersion: "3.13"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/uv"},
+			UV:      &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.13"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
@@ -791,16 +918,28 @@ func TestCalculateRuntimeHash_JVM(t *testing.T) {
 func TestCalculateSystemRuntimeHash_JVM(t *testing.T) {
 	t.Run("different JVM javaVersion produces different hash", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindJVM,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/java"},
-			JVM:    &config.RuntimeConfigJVM{JavaVersion: "21"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindJVM,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/java"},
+			JVM:     &config.RuntimeConfigJVM{JavaVersion: "21"},
 		}
 		rc2 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindJVM,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/java"},
-			JVM:    &config.RuntimeConfigJVM{JavaVersion: "17"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindJVM,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/java"},
+			JVM:     &config.RuntimeConfigJVM{JavaVersion: "17"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
@@ -851,16 +990,28 @@ func TestCalculateRuntimeHash_Go(t *testing.T) {
 func TestCalculateSystemRuntimeHash_Go(t *testing.T) {
 	t.Run("different Go goVersion produces different hash", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindGo,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/go"},
-			Go:     &config.RuntimeConfigGo{GoVersion: "1.22.0"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindGo,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/go"},
+			Go:      &config.RuntimeConfigGo{GoVersion: "1.22.0"},
 		}
 		rc2 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindGo,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/go"},
-			Go:     &config.RuntimeConfigGo{GoVersion: "1.21.0"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindGo,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/go"},
+			Go:      &config.RuntimeConfigGo{GoVersion: "1.21.0"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
@@ -872,10 +1023,16 @@ func TestCalculateSystemRuntimeHash_Go(t *testing.T) {
 
 	t.Run("same Go goVersion produces same hash", func(t *testing.T) {
 		rc := config.RuntimeConfig{
-			Kind:   config.RuntimeKindGo,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/go"},
-			Go:     &config.RuntimeConfigGo{GoVersion: "1.22.0"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindGo,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/go"},
+			Go:      &config.RuntimeConfigGo{GoVersion: "1.22.0"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
@@ -917,14 +1074,28 @@ func TestCalculateAppHash_Go(t *testing.T) {
 func TestCalculateSystemRuntimeHash_SystemVersion(t *testing.T) {
 	t.Run("different systemVersion produces different hash", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv", SystemVersion: "1.0"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{Command: "/usr/bin/uv", SystemVersion: "1.0"},
 		}
 		rc2 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv", SystemVersion: "2.0"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{Command: "/usr/bin/uv", SystemVersion: "2.0"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
@@ -936,9 +1107,16 @@ func TestCalculateSystemRuntimeHash_SystemVersion(t *testing.T) {
 
 	t.Run("same systemVersion produces same hash", func(t *testing.T) {
 		rc := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv", SystemVersion: "1.0"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{Command: "/usr/bin/uv", SystemVersion: "1.0"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
@@ -950,14 +1128,28 @@ func TestCalculateSystemRuntimeHash_SystemVersion(t *testing.T) {
 
 	t.Run("empty vs non-empty systemVersion produces different hash", func(t *testing.T) {
 		rc1 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/uv"},
 		}
 		rc2 := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv", SystemVersion: "3.12.0"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{Command: "/usr/bin/uv", SystemVersion: "3.12.0"},
 		}
 
 		hash1 := calculateSystemRuntimeHash(rc1, syslist.OsTypeLinux, syslist.ArchTypeAmd64, testLibc)
@@ -989,7 +1181,7 @@ func TestHashFilesAndArchives(t *testing.T) {
 
 	t.Run("archives only - inline", func(t *testing.T) {
 		archives := map[string]*binmanager.ArchiveSpec{
-			"dist": {Inline: "tar.br:somedata"},
+			"dist": {URL: "", Hash: "", Format: "", Inline: "tar.br:somedata"},
 		}
 		result := binmanager.HashFilesAndArchives(nil, archives)
 		if result == "" {
@@ -1000,6 +1192,7 @@ func TestHashFilesAndArchives(t *testing.T) {
 	t.Run("archives only - external", func(t *testing.T) {
 		archives := map[string]*binmanager.ArchiveSpec{
 			"dist": {
+				Inline: "",
 				URL:    "https://example.com/archive.tar.gz",
 				Hash:   "abc123",
 				Format: binmanager.BinContentTypeTarGz,
@@ -1013,10 +1206,10 @@ func TestHashFilesAndArchives(t *testing.T) {
 
 	t.Run("different inline content produces different hash", func(t *testing.T) {
 		archives1 := map[string]*binmanager.ArchiveSpec{
-			"dist": {Inline: "tar.br:version1"},
+			"dist": {URL: "", Hash: "", Format: "", Inline: "tar.br:version1"},
 		}
 		archives2 := map[string]*binmanager.ArchiveSpec{
-			"dist": {Inline: "tar.br:version2"},
+			"dist": {URL: "", Hash: "", Format: "", Inline: "tar.br:version2"},
 		}
 		hash1 := binmanager.HashFilesAndArchives(nil, archives1)
 		hash2 := binmanager.HashFilesAndArchives(nil, archives2)
@@ -1027,10 +1220,10 @@ func TestHashFilesAndArchives(t *testing.T) {
 
 	t.Run("different external hash produces different hash", func(t *testing.T) {
 		archives1 := map[string]*binmanager.ArchiveSpec{
-			"dist": {URL: "https://example.com/a.tar.gz", Hash: "hash1", Format: binmanager.BinContentTypeTarGz},
+			"dist": {Inline: "", URL: "https://example.com/a.tar.gz", Hash: "hash1", Format: binmanager.BinContentTypeTarGz},
 		}
 		archives2 := map[string]*binmanager.ArchiveSpec{
-			"dist": {URL: "https://example.com/a.tar.gz", Hash: "hash2", Format: binmanager.BinContentTypeTarGz},
+			"dist": {Inline: "", URL: "https://example.com/a.tar.gz", Hash: "hash2", Format: binmanager.BinContentTypeTarGz},
 		}
 		hash1 := binmanager.HashFilesAndArchives(nil, archives1)
 		hash2 := binmanager.HashFilesAndArchives(nil, archives2)
@@ -1042,7 +1235,7 @@ func TestHashFilesAndArchives(t *testing.T) {
 	t.Run("files plus archives differs from files alone", func(t *testing.T) {
 		files := map[string]string{"config.js": "content"}
 		archives := map[string]*binmanager.ArchiveSpec{
-			"dist": {Inline: "tar.br:somedata"},
+			"dist": {URL: "", Hash: "", Format: "", Inline: "tar.br:somedata"},
 		}
 		hashFilesOnly := binmanager.HashFilesAndArchives(files, nil)
 		hashBoth := binmanager.HashFilesAndArchives(files, archives)
@@ -1053,9 +1246,9 @@ func TestHashFilesAndArchives(t *testing.T) {
 
 	t.Run("deterministic - archive order does not matter", func(t *testing.T) {
 		archives := map[string]*binmanager.ArchiveSpec{
-			"alpha": {Inline: "tar.br:aaa"},
-			"beta":  {Inline: "tar.br:bbb"},
-			"gamma": {Inline: "tar.br:ccc"},
+			"alpha": {URL: "", Hash: "", Format: "", Inline: "tar.br:aaa"},
+			"beta":  {URL: "", Hash: "", Format: "", Inline: "tar.br:bbb"},
+			"gamma": {URL: "", Hash: "", Format: "", Inline: "tar.br:ccc"},
 		}
 		hash1 := binmanager.HashFilesAndArchives(nil, archives)
 		hash2 := binmanager.HashFilesAndArchives(nil, archives)
@@ -1066,10 +1259,10 @@ func TestHashFilesAndArchives(t *testing.T) {
 
 	t.Run("different archive names produce different hash", func(t *testing.T) {
 		archives1 := map[string]*binmanager.ArchiveSpec{
-			"config": {Inline: "tar.br:data"},
+			"config": {URL: "", Hash: "", Format: "", Inline: "tar.br:data"},
 		}
 		archives2 := map[string]*binmanager.ArchiveSpec{
-			"dist": {Inline: "tar.br:data"},
+			"dist": {URL: "", Hash: "", Format: "", Inline: "tar.br:data"},
 		}
 		hash1 := binmanager.HashFilesAndArchives(nil, archives1)
 		hash2 := binmanager.HashFilesAndArchives(nil, archives2)

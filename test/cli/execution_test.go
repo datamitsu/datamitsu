@@ -37,7 +37,7 @@ const (
 // repository root through fixture.marker.
 var fixtureTypes = map[string][]string{"fixture": {"fixture.marker"}}
 
-var fixtureSpec = clitest.ShellConfigSpec{ProjectTypes: fixtureTypes}
+var fixtureSpec = clitest.ShellConfigSpec{Parsers: "", Extra: "", ProjectTypes: fixtureTypes}
 
 // execProject is one scenario's repository, config and isolated cache. Runs of
 // one execProject share the cache, which is what a cache scenario needs.
@@ -68,6 +68,8 @@ func (e *execProject) run(dir string, env []string, args ...string) clitest.Resu
 	e.t.Helper()
 	full := append([]string{"--no-auto-config", "--config", e.cfg}, args...)
 	return clitest.Run(e.t, clitest.RunOptions{
+		Stdin:    "",
+		Timeout:  0,
 		Dir:      filepath.Join(e.p.Dir, dir),
 		CacheDir: e.cache,
 		Env:      env,
@@ -245,8 +247,8 @@ func wantDone(t *testing.T, events []clitest.Event, op string, runs, cancelled i
 func TestExecutionTwoToolsPass(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
-		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}),
-		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{}),
+		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
+		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 	}
 
 	t.Run("console", func(t *testing.T) {
@@ -294,8 +296,8 @@ func TestExecutionTwoToolsPass(t *testing.T) {
 func TestExecutionFailFastBetweenPriorities(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
-		clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Priority: 10}),
-		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Priority: 20}),
+		clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Priority: 10}),
+		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Priority: 20}),
 	}
 
 	t.Run("console", func(t *testing.T) {
@@ -375,8 +377,8 @@ func TestExecutionFailFastBetweenPriorities(t *testing.T) {
 func TestExecutionFailFastBetweenSubGroups(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
-		clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{}),
-		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{}),
+		clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
+		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 	}
 
 	t.Run("fail_fast", func(t *testing.T) {
@@ -405,7 +407,7 @@ func TestExecutionFailFastBetweenSubGroups(t *testing.T) {
 //
 // One type, not one per package: the header lists the detected types in map
 // order, so a golden of a run that detects two would not be stable.
-var packagesSpec = clitest.ShellConfigSpec{ProjectTypes: map[string][]string{"pkg": {"**/pkg.marker"}}}
+var packagesSpec = clitest.ShellConfigSpec{Parsers: "", Extra: "", ProjectTypes: map[string][]string{"pkg": {"**/pkg.marker"}}}
 
 var packagesFiles = map[string]string{
 	"pkg/a/pkg.marker": "",
@@ -441,9 +443,9 @@ const killWindow = 3500 * time.Millisecond
 func TestExecutionFailFastKillsSiblings(t *testing.T) {
 	tools := []string{
 		clitest.ShellTool("alpha", alphaFailsOnceBetaStarted,
-			clitest.ToolOpSpec{Scope: "per-project", Globs: []string{"**/a.src"}}),
+			clitest.ToolOpSpec{Operation: "", Args: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-project", Globs: []string{"**/a.src"}}),
 		clitest.ShellTool("beta", betaSleeps,
-			clitest.ToolOpSpec{Scope: "per-project", Globs: []string{"**/b.src"}}),
+			clitest.ToolOpSpec{Operation: "", Args: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-project", Globs: []string{"**/b.src"}}),
 	}
 	workers := []string{"DATAMITSU_MAX_PARALLEL_WORKERS=2"}
 
@@ -523,7 +525,7 @@ func maskPkgDir(s string) string { return pkgDirRE.ReplaceAllString(s, "pkg/<FIR
 // single skip event. With --fail-fast=false it runs.
 func TestExecutionFailFastBeforeWorker(t *testing.T) {
 	files, spec := packagesFiles, packagesSpec
-	tool := clitest.ShellTool("claim", claimFirst, clitest.ToolOpSpec{Scope: "per-project"})
+	tool := clitest.ShellTool("claim", claimFirst, clitest.ToolOpSpec{Operation: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-project"})
 	workers := []string{"DATAMITSU_MAX_PARALLEL_WORKERS=1"}
 
 	onlyFirst := func(e *execProject) (first, other string) {
@@ -584,7 +586,7 @@ func TestExecutionFailFastBeforeWorker(t *testing.T) {
 // the executor runs a process per file; it fails on the files named bad*.
 var perFileLoopTool = clitest.ShellTool("alpha",
 	settle+clitest.RecordRun+`; case "${1##*/}" in bad*) echo "$0: ${1##*/} failed"; exit 1;; esac`,
-	clitest.ToolOpSpec{Scope: "per-project", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}})
+	clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-project", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}})
 
 var perFileLoopFiles = map[string]string{
 	"fixture.marker": "",
@@ -662,8 +664,8 @@ func TestExecutionFailFastBetweenFiles(t *testing.T) {
 func TestExecutionCheckStopsAfterFix(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
-		clitest.ShellTool("fixer", failScript, clitest.ToolOpSpec{Operation: "fix"}),
-		clitest.ShellTool("linter", passScript, clitest.ToolOpSpec{}),
+		clitest.ShellTool("fixer", failScript, clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix"}),
+		clitest.ShellTool("linter", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 	}
 
 	t.Run("console", func(t *testing.T) {
@@ -707,7 +709,7 @@ func TestExecutionCheckStopsAfterFix(t *testing.T) {
 	})
 
 	t.Run("keep_going_lint_skipped", func(t *testing.T) {
-		spec := clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: nativeSkipped()}
+		spec := clitest.ShellConfigSpec{Parsers: "", ProjectTypes: fixtureTypes, Extra: nativeSkipped()}
 		e := newExecProject(t, files, spec, tools[0])
 		res := e.run("", nil, "check", keepGoing)
 		e.wantExit(res, 1)
@@ -747,8 +749,8 @@ func TestExecutionCheckStopsAfterFix(t *testing.T) {
 func TestExecutionSetupErrorIsReported(t *testing.T) {
 	files := map[string]string{"fixture.marker": "", ".datamitsuignore": "no separator here\n"}
 	tools := []string{
-		clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{Operation: "fix"}),
-		clitest.ShellTool("linter", passScript, clitest.ToolOpSpec{}),
+		clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix"}),
+		clitest.ShellTool("linter", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 	}
 
 	t.Run("console", func(t *testing.T) {
@@ -787,8 +789,8 @@ c.tools[%q] = { name: %q, operations: { %s: { app: "unreachable", args: [], scop
 // install its tools after fix failed on a tool. Both reasons are reported, the
 // lint block is closed, and the exit code is still 1.
 func TestExecutionKeepGoingKeepsLaterErrors(t *testing.T) {
-	spec := clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")}
-	fixer := clitest.ShellTool("fixer", failScript, clitest.ToolOpSpec{Operation: "fix"})
+	spec := clitest.ShellConfigSpec{Parsers: "", ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")}
+	fixer := clitest.ShellTool("fixer", failScript, clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix"})
 
 	t.Run("console", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec, fixer)
@@ -844,7 +846,7 @@ func TestExecutionRunThatCannotStart(t *testing.T) {
 
 	t.Run("usage_error", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		res := e.run("", nil, jsonl("lint", "--widen-to=Repo")...)
 		e.wantExit(res, 2)
 		if done := eventsOf(clitest.MustParseJSONL(t, res.Stderr), func(e clitest.Event) bool { return e.Type == "done" }); len(done) != 0 {
@@ -856,7 +858,7 @@ func TestExecutionRunThatCannotStart(t *testing.T) {
 	// are looked at, so it is a usage error even where neither exists.
 	t.Run("usage_error_outside_a_repository", func(t *testing.T) {
 		for _, args := range [][]string{{"lint", "--widen-to=Repo"}, {"check", "--explain=bogus"}, {"fix", "--require-coverage=unit", "--tools", "alpha"}} {
-			res := clitest.Run(t, clitest.RunOptions{Dir: t.TempDir()}, args...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: t.TempDir()}, args...)
 			if res.ExitCode != 2 {
 				t.Errorf("%v outside a repository exit = %d, want 2\nstderr:\n%s", args, res.ExitCode, res.Stderr)
 			}
@@ -873,8 +875,8 @@ var checkClosingRE = regexp.MustCompile(`(?m)^┗━ check · done in \S+ · fix
 func TestExecutionCheckTotalTime(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
-		clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{Operation: "fix"}),
-		clitest.ShellTool("linter", passScript, clitest.ToolOpSpec{}),
+		clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix"}),
+		clitest.ShellTool("linter", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 	}
 
 	t.Run("console", func(t *testing.T) {
@@ -953,7 +955,7 @@ func TestExecutionPerFileCache(t *testing.T) {
 		map[string]string{"fixture.marker": "", "a.txt": "a\n", "b.txt": "b\n", "c.txt": "c\n"},
 		fixtureSpec,
 		clitest.ShellTool("alpha", passScript,
-			clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}}),
+			clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}}),
 	)
 
 	cold := e.run("", nil, "lint")
@@ -993,10 +995,19 @@ func parsedTool(output string, exitCode int) string {
 	return clitest.ShellTool("hadolint",
 		fmt.Sprintf("%s%s; echo '%s'; exit %d", settle, clitest.RecordRun, output, exitCode),
 		clitest.ToolOpSpec{
-			Scope:  "per-file",
-			Globs:  []string{"**/Dockerfile"},
-			Args:   []string{"{file}"},
-			Parser: "hadolint",
+			Operation:    "",
+			Priority:     0,
+			ProjectTypes: nil,
+			ParserModule: "",
+			Env:          nil,
+			InheritEnv:   nil,
+			FailOn:       "",
+			Input:        "",
+			Output:       "",
+			Scope:        "per-file",
+			Globs:        []string{"**/Dockerfile"},
+			Args:         []string{"{file}"},
+			Parser:       "hadolint",
 		})
 }
 
@@ -1045,7 +1056,7 @@ func TestExecutionParsedFailure(t *testing.T) {
 		spec.Parsers = clitest.SeedParserModule(t, e.cache, module)
 		e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("checkmake",
 			settle+clitest.RecordRun+`; echo '1:minphony:Required target "all" is missing from the Makefile.'; exit 1`,
-			clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/Makefile"}, Args: []string{"{file}"}, Parser: "checkmake"})))
+			clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/Makefile"}, Args: []string{"{file}"}, Parser: "checkmake"})))
 		res := e.run("", nil, "lint")
 		e.wantExit(res, 1)
 		if !strings.Contains(res.Stdout, `Makefile:1:1 error Required target "all" is missing from the Makefile. [minphony]`) {
@@ -1143,7 +1154,15 @@ func newGatedProject(t *testing.T, module, output string, exitCode int, failOn s
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("hadolint",
 		fmt.Sprintf("%s%s; echo '%s'; exit %d", settle, clitest.RecordRun, output, exitCode),
 		clitest.ToolOpSpec{
-			Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
+			Operation:    "",
+			Priority:     0,
+			ProjectTypes: nil,
+			ParserModule: "",
+			Env:          nil,
+			InheritEnv:   nil,
+			Input:        "",
+			Output:       "",
+			Scope:        "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
 			Parser: "hadolint", FailOn: failOn,
 		})))
 	return e
@@ -1166,17 +1185,17 @@ func TestExecutionFailOn(t *testing.T) {
 		exit        int
 		warnIgnored bool
 	}{
-		{name: "error_at_exit_zero", module: currentParserModule, output: hadolintError, args: []string{"lint"}, exit: 1},
-		{name: "warning_at_the_default", module: currentParserModule, output: hadolintFinding, args: []string{"lint"}, exit: 0},
-		{name: "warning_fail_on_warning", module: currentParserModule, output: hadolintFinding, failOn: "warning", args: []string{"lint"}, exit: 1},
-		{name: "warning_flag", module: currentParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on", "warning"}, exit: 1},
-		{name: "warning_env", module: currentParserModule, output: hadolintFinding, env: []string{"DATAMITSU_FAIL_ON=warning"}, args: []string{"lint"}, exit: 1},
-		{name: "old_module_fail_on", module: releasedParserModule, output: hadolintFinding, failOn: "warning", args: []string{"check"}, exit: 0, warnIgnored: true},
-		{name: "old_module_flag", module: releasedParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on=warning"}, exit: 0, warnIgnored: true},
-		{name: "old_module_flag_no_parse", module: releasedParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on=warning", "--no-parse"}, exit: 0, warnIgnored: true},
-		{name: "old_module_default", module: releasedParserModule, output: hadolintError, args: []string{"lint"}, exit: 0},
-		{name: "hint_env", module: currentParserModule, output: hadolintInfoAndStyle, env: []string{"DATAMITSU_FAIL_ON=hint"}, args: []string{"lint"}, exit: 1},
-		{name: "info_and_style_at_the_default", module: currentParserModule, output: hadolintInfoAndStyle, args: []string{"lint"}, exit: 0},
+		{failOn: "", env: nil, warnIgnored: false, name: "error_at_exit_zero", module: currentParserModule, output: hadolintError, args: []string{"lint"}, exit: 1},
+		{failOn: "", env: nil, warnIgnored: false, name: "warning_at_the_default", module: currentParserModule, output: hadolintFinding, args: []string{"lint"}, exit: 0},
+		{env: nil, warnIgnored: false, name: "warning_fail_on_warning", module: currentParserModule, output: hadolintFinding, failOn: "warning", args: []string{"lint"}, exit: 1},
+		{failOn: "", env: nil, warnIgnored: false, name: "warning_flag", module: currentParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on", "warning"}, exit: 1},
+		{failOn: "", warnIgnored: false, name: "warning_env", module: currentParserModule, output: hadolintFinding, env: []string{"DATAMITSU_FAIL_ON=warning"}, args: []string{"lint"}, exit: 1},
+		{env: nil, name: "old_module_fail_on", module: releasedParserModule, output: hadolintFinding, failOn: "warning", args: []string{"check"}, exit: 0, warnIgnored: true},
+		{failOn: "", env: nil, name: "old_module_flag", module: releasedParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on=warning"}, exit: 0, warnIgnored: true},
+		{failOn: "", env: nil, name: "old_module_flag_no_parse", module: releasedParserModule, output: hadolintFinding, args: []string{"lint", "--fail-on=warning", "--no-parse"}, exit: 0, warnIgnored: true},
+		{failOn: "", env: nil, warnIgnored: false, name: "old_module_default", module: releasedParserModule, output: hadolintError, args: []string{"lint"}, exit: 0},
+		{failOn: "", warnIgnored: false, name: "hint_env", module: currentParserModule, output: hadolintInfoAndStyle, env: []string{"DATAMITSU_FAIL_ON=hint"}, args: []string{"lint"}, exit: 1},
+		{failOn: "", env: nil, warnIgnored: false, name: "info_and_style_at_the_default", module: currentParserModule, output: hadolintInfoAndStyle, args: []string{"lint"}, exit: 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1202,7 +1221,7 @@ func TestExecutionParsedPositions(t *testing.T) {
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, module)
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("yamllint",
 		settle+clitest.RecordRun+"; echo 'stdin:3:0: [error] too many blank lines (3 > 0) (empty-lines)'; exit 1",
-		clitest.ToolOpSpec{Globs: []string{"**/*.yaml"}, Args: []string{"{files}"}, Parser: "yamllint"})))
+		clitest.ToolOpSpec{Operation: "", Scope: "", Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Globs: []string{"**/*.yaml"}, Args: []string{"{files}"}, Parser: "yamllint"})))
 
 	res := e.run("", nil, "lint")
 	e.wantExit(res, 1)
@@ -1221,7 +1240,7 @@ func TestExecutionParsedANSI(t *testing.T) {
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, module)
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("yamllint",
 		settle+clitest.RecordRun+`; printf 'stdin:3:0: [\033[31merror\033[0m] too many blank lines (3 > 0) (empty-lines)\n'; exit 1`,
-		clitest.ToolOpSpec{Globs: []string{"**/*.yaml"}, Args: []string{"{files}"}, Parser: "yamllint"})))
+		clitest.ToolOpSpec{Operation: "", Scope: "", Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Globs: []string{"**/*.yaml"}, Args: []string{"{files}"}, Parser: "yamllint"})))
 
 	res := e.run("", nil, "lint")
 	e.wantExit(res, 1)
@@ -1245,7 +1264,15 @@ func TestExecutionParserProblems(t *testing.T) {
 		`{"missing":{"url":"https://parsers.example.invalid/missing.wasm","hash":"sha256:`+strings.Repeat("1", 64)+`"},`, 1)
 	perFile := func(name, parser, parserModule string) string {
 		return clitest.ShellTool(name, passScript+"; echo finding", clitest.ToolOpSpec{
-			Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
+			Operation:    "",
+			Priority:     0,
+			ProjectTypes: nil,
+			Env:          nil,
+			InheritEnv:   nil,
+			FailOn:       "",
+			Input:        "",
+			Output:       "",
+			Scope:        "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
 			Parser: parser, ParserModule: parserModule,
 		})
 	}
@@ -1277,7 +1304,14 @@ func TestExecutionParserProblems(t *testing.T) {
 	// check reports once, after both operations, naming every tool the
 	// module failed: the fixer and the linter alike.
 	fixer := clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{
-		Operation: "fix", Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
+		Priority:     0,
+		ProjectTypes: nil,
+		Env:          nil,
+		InheritEnv:   nil,
+		FailOn:       "",
+		Input:        "",
+		Output:       "",
+		Operation:    "fix", Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"},
 		Parser: "hadolint", ParserModule: "missing",
 	})
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, fixer, perFile("beta", "hadolint", "missing")))
@@ -1312,11 +1346,11 @@ c.tools["native"] = { name: "native", operations: { lint: { app: "native", args:
 // everything. A tool failure still exits 1, and a run that fails both
 // --fail-on-skip and --require-coverage prints both and exits 4 once.
 func TestExecutionFailOnSkip(t *testing.T) {
-	spec := clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: nativeSkipped()}
+	spec := clitest.ShellConfigSpec{Parsers: "", ProjectTypes: fixtureTypes, Extra: nativeSkipped()}
 
 	t.Run("skip", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec,
-			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		res := e.run("", nil, "lint", "--fail-on-skip")
 		e.wantExit(res, 4)
 		e.wantMarker("alpha", "alpha \n")
@@ -1328,7 +1362,7 @@ func TestExecutionFailOnSkip(t *testing.T) {
 
 	t.Run("tool_failure_wins", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec,
-			clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{}))
+			clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		res := e.run("", nil, "lint", "--fail-on-skip")
 		e.wantExit(res, 1)
 		failed, skipped := strings.Index(res.Stderr, "operation failed"), strings.Index(res.Stderr, "--fail-on-skip:")
@@ -1339,7 +1373,7 @@ func TestExecutionFailOnSkip(t *testing.T) {
 
 	t.Run("with_require_coverage", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": "", "sub/file.txt": "x\n"}, spec,
-			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Scope: "per-project"}))
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-project"}))
 		res := e.run("sub", nil, "lint", "--fail-on-skip", "--require-coverage=repo")
 		e.wantExit(res, 4)
 		skip, cov := strings.Index(res.Stderr, "--fail-on-skip:"), strings.Index(res.Stderr, "--require-coverage=repo:")
@@ -1354,7 +1388,7 @@ func TestExecutionFailOnSkip(t *testing.T) {
 // subdirectory runs the narrowed plan and then exits 4.
 func TestExecutionRequireCoverage(t *testing.T) {
 	e := newExecProject(t, packagesFiles, packagesSpec,
-		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Scope: "per-project"}),
+		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-project"}),
 	)
 	res := e.run("pkg/a", nil, "lint", "--require-coverage=repo")
 	e.wantExit(res, 4)
@@ -1391,7 +1425,7 @@ func TestExecutionUsageErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-				clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+				clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 			args := tc.args
 			var reportPath string
 			if strings.HasPrefix(tc.name, "fail_fast_") {
@@ -1431,9 +1465,9 @@ func TestExecutionUsageErrors(t *testing.T) {
 func TestExecutionFixCache(t *testing.T) {
 	e := newExecProject(t, map[string]string{"fixture.marker": "", "a.txt": "original\n"}, fixtureSpec,
 		clitest.ShellTool("appender", settle+clitest.RecordRun+`; echo appended >> "$1"`,
-			clitest.ToolOpSpec{Operation: "fix", Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}}),
+			clitest.ToolOpSpec{Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix", Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}}),
 		clitest.ShellTool("linter", passScript,
-			clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}}),
+			clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}}),
 	)
 	const fixed = "original\nappended\n"
 
@@ -1474,15 +1508,15 @@ func TestExecutionInterrupted(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
 		clitest.ShellTool("sleeper", `echo "$0 started" >> "$MARKERS/$0"; sleep 3; echo "$0 done" >> "$MARKERS/$0"`,
-			clitest.ToolOpSpec{Priority: 10}),
-		clitest.ShellTool("later", passScript, clitest.ToolOpSpec{Priority: 20}),
+			clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Priority: 10}),
+		clitest.ShellTool("later", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Priority: 20}),
 	}
 
 	interrupt := func(t *testing.T, sig syscall.Signal, wantExit int, args ...string) (*execProject, clitest.Result) {
 		t.Helper()
 		e := newExecProject(t, files, fixtureSpec, tools...)
 		start := time.Now()
-		proc := clitest.Start(t, clitest.RunOptions{Dir: e.p.Dir, CacheDir: e.cache},
+		proc := clitest.Start(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: e.p.Dir, CacheDir: e.cache},
 			append([]string{"--no-auto-config", "--config", e.cfg}, args...)...)
 		for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 			if ran, _ := e.p.Marker("sleeper"); ran {

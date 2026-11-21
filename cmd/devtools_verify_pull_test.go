@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	zerovalue_sync "sync"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/releaseprovider"
@@ -96,14 +97,16 @@ func TestRunPullGithub_VerifiesEachAssetOnce(t *testing.T) {
 	}))
 	defer assets.Close()
 
-	api := &fakeGitHub{attempts: map[string]int{}, handle: func(repo string, _ int, w http.ResponseWriter) {
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"tag_name": "v1", "published_at": "2020-01-01T00:00:00Z",
-			"assets": []any{map[string]any{
-				"name": repo + "-linux-amd64.tar.gz", "browser_download_url": assets.URL + "/" + repo + "-linux-amd64.tar.gz", "digest": "sha256:" + vcSHA256Hex(archive),
-			}},
-		})
-	}}
+	api := &fakeGitHub{
+		mu: zerovalue_sync.Mutex{}, attempts: map[string]int{}, handle: func(repo string, _ int, w http.ResponseWriter) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"tag_name": "v1", "published_at": "2020-01-01T00:00:00Z",
+				"assets": []any{map[string]any{
+					"name": repo + "-linux-amd64.tar.gz", "browser_download_url": assets.URL + "/" + repo + "-linux-amd64.tar.gz", "digest": "sha256:" + vcSHA256Hex(archive),
+				}},
+			})
+		},
+	}
 	srv := httptest.NewServer(api)
 	defer srv.Close()
 	githubBaseURL = srv.URL
@@ -114,9 +117,10 @@ func TestRunPullGithub_VerifiesEachAssetOnce(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "binaryApps.json")
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{"once": {Source: "github", Repository: "o/once", Tag: "v1"}},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{"once": {Hashes: nil, Checksums: nil, Source: "github", Repository: "o/once", Tag: "v1"}},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 	if err := appstate.Save(path, state); err != nil {
 		t.Fatal(err)
@@ -159,16 +163,18 @@ func TestRunPullGithub_VerifyDownloadFailureFailsTheApp(t *testing.T) {
 	}))
 	defer assets.Close()
 
-	api := &fakeGitHub{attempts: map[string]int{}, handle: func(repo string, _ int, w http.ResponseWriter) {
-		digest := "sha256:" + vcSHA256Hex(fine)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"tag_name": "v1", "published_at": "2020-01-01T00:00:00Z",
-			"assets": []any{
-				map[string]any{"name": repo + "-linux-amd64.tar.gz", "browser_download_url": assets.URL + "/" + repo + "/" + repo + "-linux-amd64.tar.gz", "digest": digest},
-				map[string]any{"name": repo + "-linux-amd64.tar.gz.proof", "browser_download_url": assets.URL + "/" + repo + "/" + repo + "-linux-amd64.tar.gz.proof", "digest": digest},
-			},
-		})
-	}}
+	api := &fakeGitHub{
+		mu: zerovalue_sync.Mutex{}, attempts: map[string]int{}, handle: func(repo string, _ int, w http.ResponseWriter) {
+			digest := "sha256:" + vcSHA256Hex(fine)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"tag_name": "v1", "published_at": "2020-01-01T00:00:00Z",
+				"assets": []any{
+					map[string]any{"name": repo + "-linux-amd64.tar.gz", "browser_download_url": assets.URL + "/" + repo + "/" + repo + "-linux-amd64.tar.gz", "digest": digest},
+					map[string]any{"name": repo + "-linux-amd64.tar.gz.proof", "browser_download_url": assets.URL + "/" + repo + "/" + repo + "-linux-amd64.tar.gz.proof", "digest": digest},
+				},
+			})
+		},
+	}
 	srv := httptest.NewServer(api)
 	defer srv.Close()
 	githubBaseURL = srv.URL
@@ -178,15 +184,18 @@ func TestRunPullGithub_VerifyDownloadFailureFailsTheApp(t *testing.T) {
 	withRetryNotices(t)
 
 	previous := &appstate.BinariesEntry{
-		ConfigHash: "old",
-		Binaries:   binmanager.MapOfBinaries{"darwin": {"amd64": {"unknown": binmanager.BinaryOsArchInfo{URL: "https://example.test/v0/flaky", Hash: strings.Repeat("cd", 32), ContentType: binmanager.BinContentTypeTarGz}}}},
+		Source:      nil,
+		Description: "",
+		ConfigHash:  "old",
+		Binaries:    binmanager.MapOfBinaries{"darwin": {"amd64": {"unknown": binmanager.BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.test/v0/flaky", Hash: strings.Repeat("cd", 32), ContentType: binmanager.BinContentTypeTarGz}}}},
 	}
 	path := filepath.Join(t.TempDir(), "binaryApps.json")
 	state := &appstate.State{
-		Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
 		Apps: map[string]*appstate.AppMetadata{
-			"fine":  {Source: "github", Repository: "o/fine", Tag: "v1"},
-			"flaky": {Source: "github", Repository: "o/flaky", Tag: "v1"},
+			"fine":  {Hashes: nil, Checksums: nil, Source: "github", Repository: "o/fine", Tag: "v1"},
+			"flaky": {Hashes: nil, Checksums: nil, Source: "github", Repository: "o/flaky", Tag: "v1"},
 		},
 		Binaries: map[string]*appstate.BinariesEntry{"flaky": previous},
 	}

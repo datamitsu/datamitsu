@@ -71,7 +71,7 @@ func ThresholdGate(global config.Severity, contract func(module string) bool, ig
 			ignored(task.ToolName)
 		}
 		if len(gating) == 0 {
-			return GateDecision{}
+			return GateDecision{Failed: false, Reason: "", Gating: nil}
 		}
 		noun := "findings"
 		if len(gating) == 1 {

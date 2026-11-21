@@ -17,12 +17,12 @@ func TestValidateToolsRejectsUnknownGranularityAndArity(t *testing.T) {
 	}{
 		{
 			"unknown granularity",
-			ToolOperation{App: "x", Granularity: "package", Scope: ToolScopePerProject},
+			ToolOperation{Args: nil, Arity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Granularity: "package", Scope: ToolScopePerProject},
 			"unknown granularity",
 		},
 		{
 			"unknown arity",
-			ToolOperation{App: "x", Arity: "several", Scope: ToolScopePerProject, Args: []string{"{files}"}},
+			ToolOperation{Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Arity: "several", Scope: ToolScopePerProject, Args: []string{"{files}"}},
 			"unknown arity",
 		},
 		{
@@ -31,7 +31,7 @@ func TestValidateToolsRejectsUnknownGranularityAndArity(t *testing.T) {
 			// never receives the file list restores the defect the granularity
 			// model exists to remove.
 			"file granularity without the file list",
-			ToolOperation{App: "x", Granularity: GranularityFile, Scope: ToolScopePerProject, Args: []string{"run"}},
+			ToolOperation{Arity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Granularity: GranularityFile, Scope: ToolScopePerProject, Args: []string{"run"}},
 			"needs the file list to reach the tool",
 		},
 		{
@@ -40,7 +40,7 @@ func TestValidateToolsRejectsUnknownGranularityAndArity(t *testing.T) {
 			// deliver — the planner would report it as not narrowable from a
 			// subdirectory and stamp a whole-repo pass from the root.
 			"repository scope claiming a unit verdict",
-			ToolOperation{App: "x", Granularity: GranularityUnit, Scope: ToolScopeRepository, Args: []string{"run"}},
+			ToolOperation{Arity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Granularity: GranularityUnit, Scope: ToolScopeRepository, Args: []string{"run"}},
 			"use scope \"per-project\"",
 		},
 	}
@@ -48,7 +48,7 @@ func TestValidateToolsRejectsUnknownGranularityAndArity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateTools(MapOfTools{
-				"tool": {Operations: map[OperationType]ToolOperation{OpLint: tt.op}},
+				"tool": {Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Operations: map[OperationType]ToolOperation{OpLint: tt.op}},
 			}, nil, nil)
 
 			if err == nil {
@@ -66,31 +66,31 @@ func TestValidateToolsAcceptsDeclaredGranularityAndArity(t *testing.T) {
 		name string
 		op   ToolOperation
 	}{
-		{"nothing declared", ToolOperation{App: "x", Scope: ToolScopePerProject}},
+		{"nothing declared", ToolOperation{Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Scope: ToolScopePerProject}},
 		{
 			"file granularity with the file list",
-			ToolOperation{App: "x", Granularity: GranularityFile, Scope: ToolScopePerProject, Args: []string{"{files}"}},
+			ToolOperation{Arity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Granularity: GranularityFile, Scope: ToolScopePerProject, Args: []string{"{files}"}},
 		},
 		{
 			"file granularity via per-file scope",
-			ToolOperation{App: "x", Granularity: GranularityFile, Scope: ToolScopePerFile, Args: []string{"{file}"}},
+			ToolOperation{Arity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Granularity: GranularityFile, Scope: ToolScopePerFile, Args: []string{"{file}"}},
 		},
-		{"unit granularity", ToolOperation{App: "x", Granularity: GranularityUnit, Scope: ToolScopePerProject}},
-		{"repo granularity", ToolOperation{App: "x", Granularity: GranularityRepo, Scope: ToolScopeRepository}},
+		{"unit granularity", ToolOperation{Args: nil, Arity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Granularity: GranularityUnit, Scope: ToolScopePerProject}},
+		{"repo granularity", ToolOperation{Args: nil, Arity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Granularity: GranularityRepo, Scope: ToolScopeRepository}},
 		{
 			// Declaring the arity is an assertion, so it has to match what the
 			// placeholders already imply.
 			"arity matching the inferred value",
-			ToolOperation{App: "x", Arity: ArityMany, Scope: ToolScopePerProject, Args: []string{"{files}"}},
+			ToolOperation{Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Arity: ArityMany, Scope: ToolScopePerProject, Args: []string{"{files}"}},
 		},
-		{"arity none with no placeholders", ToolOperation{App: "x", Arity: ArityNone, Scope: ToolScopePerProject, Args: []string{"run"}}},
-		{"arity dir with a target", ToolOperation{App: "x", Arity: ArityDir, Scope: ToolScopeRepository, Args: []string{"{target}"}}},
+		{"arity none with no placeholders", ToolOperation{Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Arity: ArityNone, Scope: ToolScopePerProject, Args: []string{"run"}}},
+		{"arity dir with a target", ToolOperation{Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Arity: ArityDir, Scope: ToolScopeRepository, Args: []string{"{target}"}}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := ValidateTools(MapOfTools{
-				"tool": {Operations: map[OperationType]ToolOperation{OpLint: tt.op}},
+				"tool": {Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Operations: map[OperationType]ToolOperation{OpLint: tt.op}},
 			}, nil, nil); err != nil {
 				t.Errorf("ValidateTools rejected %+v: %v", tt.op, err)
 			}
@@ -108,7 +108,7 @@ func TestValidateExecution(t *testing.T) {
 		wantErr string
 	}{
 		{"nil block", nil, ""},
-		{"empty block", &Execution{}, ""},
+		{"empty block", &Execution{WidenTo: nil}, ""},
 		{
 			"both operations set",
 			&Execution{WidenTo: map[OperationType]WidenTo{OpFix: WidenToTarget, OpLint: WidenToRepo}},
@@ -161,9 +161,15 @@ func TestValidateExecution(t *testing.T) {
 // told about rather than silently resolved either way.
 func TestValidateToolsRejectsAnArityThatContradictsTheArgs(t *testing.T) {
 	err := ValidateTools(MapOfTools{
-		"tool": {Operations: map[OperationType]ToolOperation{
-			OpLint: {App: "x", Arity: ArityOne, Scope: ToolScopePerProject, Args: []string{"{files}"}},
-		}},
+		"tool": {
+			Name:         "",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil, Operations: map[OperationType]ToolOperation{
+				OpLint: {Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "x", Arity: ArityOne, Scope: ToolScopePerProject, Args: []string{"{files}"}},
+			},
+		},
 	}, nil, nil)
 
 	if err == nil {

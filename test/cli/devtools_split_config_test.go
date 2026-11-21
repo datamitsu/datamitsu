@@ -18,7 +18,7 @@ func TestDevtoolsSplitConfig(t *testing.T) {
 	cfg := p.WriteFile("bin.config.js", installBinaryConfigJS)
 	outDir := filepath.Join(p.Dir, "slices")
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "devtools", "split-config", "--output", outDir)
 	if res.ExitCode != 0 {
 		t.Fatalf("split-config exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -51,7 +51,7 @@ func TestDevtoolsSplitConfig(t *testing.T) {
 func TestDevtoolsSplitConfigMissingOutput(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "devtools", "split-config")
 	if res.ExitCode == 0 {
 		t.Fatalf("split-config without --output should fail, got exit 0\nstdout:\n%s", res.Stdout)

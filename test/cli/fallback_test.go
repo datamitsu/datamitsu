@@ -31,7 +31,7 @@ func fallbackProject(t *testing.T, files map[string]string, tools ...string) *ex
 // shown in its frame and reported with the fallback:sarif provenance; with
 // --no-parse the frame shows what it printed.
 func TestFallbackReadsAToolWithoutAParser(t *testing.T) {
-	ruff := clitest.ShellTool("ruff", settle+clitest.RecordRun+"; printf '%s\\n' '"+sarifLog+"'; exit 1", clitest.ToolOpSpec{})
+	ruff := clitest.ShellTool("ruff", settle+clitest.RecordRun+"; printf '%s\\n' '"+sarifLog+"'; exit 1", clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""})
 	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, ruff)
 
 	res := e.run("", nil, "lint", "--report", "json=run.json")
@@ -60,7 +60,7 @@ func TestFallbackReadsTheStreamsApart(t *testing.T) {
 	half := len(sarifLog) / 2
 	script := settle + clitest.RecordRun + "; echo 'scanning' >&2; printf '%s' '" + sarifLog[:half] +
 		"'; echo 'still scanning' >&2; printf '%s\\n' '" + sarifLog[half:] + "'; exit 1"
-	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, clitest.ShellTool("ruff", script, clitest.ToolOpSpec{}))
+	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, clitest.ShellTool("ruff", script, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 
 	res := e.run("", nil, "lint", "--report", "json=run.json")
 	e.wantExit(res, 1)
@@ -74,7 +74,7 @@ func TestFallbackReadsTheStreamsApart(t *testing.T) {
 // report marks it incomplete, and the next run runs it again.
 func TestACutOffDocumentIsNotACleanRun(t *testing.T) {
 	cut := sarifLog[:len(sarifLog)/2]
-	ruff := clitest.ShellTool("ruff", settle+clitest.RecordRun+"; printf '%s' '"+cut+"'", clitest.ToolOpSpec{})
+	ruff := clitest.ShellTool("ruff", settle+clitest.RecordRun+"; printf '%s' '"+cut+"'", clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""})
 	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, ruff)
 
 	res := e.run("", nil, "lint", "--report", "json=run.json")
@@ -97,7 +97,7 @@ func TestACutOffDocumentIsNotACleanRun(t *testing.T) {
 func TestALineFormatNamingNoFileLeavesTheNextItsTurn(t *testing.T) {
 	script := settle + clitest.RecordRun + "; echo '::warning file=/no/such/source.xyz,line=1::noise'; " +
 		"echo 'a.py:1:1: error: real finding'"
-	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, clitest.ShellTool("mixed", script, clitest.ToolOpSpec{}))
+	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, clitest.ShellTool("mixed", script, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 
 	res := e.run("", nil, "lint", "--report", "json=run.json")
 	e.wantExit(res, 1)
@@ -111,7 +111,7 @@ func TestALineFormatNamingNoFileLeavesTheNextItsTurn(t *testing.T) {
 // format, has not been read: parse-failed and incomplete, not clean.
 func TestAStructuredParserThatFindsNoDocumentDidNotRead(t *testing.T) {
 	tool := clitest.ShellTool("reformatted", settle+clitest.RecordRun+"; echo 'new-format: finding on a.py'",
-		clitest.ToolOpSpec{Parser: "sarif"})
+		clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Parser: "sarif"})
 	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, tool)
 
 	res := e.run("", nil, "lint", "--report", "json=run.json")
@@ -126,7 +126,7 @@ func TestAStructuredParserThatFindsNoDocumentDidNotRead(t *testing.T) {
 // TestABracketInAMessageIsNoDocument: a compiler line whose message ends with
 // an opening brace is a whole finding, not a JSON document cut off.
 func TestABracketInAMessageIsNoDocument(t *testing.T) {
-	cc := clitest.ShellTool("cc", settle+clitest.RecordRun+"; echo 'a.py:1:1: error: expected {'; exit 1", clitest.ToolOpSpec{})
+	cc := clitest.ShellTool("cc", settle+clitest.RecordRun+"; echo 'a.py:1:1: error: expected {'; exit 1", clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""})
 	e := fallbackProject(t, map[string]string{"a.py": "import os\n"}, cc)
 
 	res := e.run("", nil, "lint", "--report", "json=run.json")
@@ -140,7 +140,7 @@ func TestABracketInAMessageIsNoDocument(t *testing.T) {
 // recognize the output hands it to the fallback, and the run says so once.
 func TestFallbackStandsInForADeclaredParser(t *testing.T) {
 	cc := clitest.ShellTool("cc", settle+clitest.RecordRun+"; echo 'a.c:1:2: error: y undeclared'; exit 1",
-		clitest.ToolOpSpec{Parser: "hadolint"})
+		clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Parser: "hadolint"})
 	e := fallbackProject(t, map[string]string{"a.c": "int x;\n"}, cc)
 
 	res := e.run("", nil, "lint", "--report", "json=run.json")
@@ -160,7 +160,7 @@ func TestFallbackStandsInForADeclaredParser(t *testing.T) {
 // output is parse-failed: the tool is incomplete, and the run says why.
 func TestADeclaredParserThatRecognizesNothingFailsTheParse(t *testing.T) {
 	crasher := clitest.ShellTool("crasher", settle+clitest.RecordRun+"; echo 'panic: not a finding'; exit 2",
-		clitest.ToolOpSpec{Parser: "hadolint"})
+		clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Parser: "hadolint"})
 	e := fallbackProject(t, nil, crasher)
 
 	res := e.run("", nil, "lint", "--report", "json=run.json")
@@ -182,7 +182,7 @@ func TestADeclaredParserThatRecognizesNothingFailsTheParse(t *testing.T) {
 // synthetic finding in the report — and a compiler line naming a file that
 // does not exist is prose, not a finding.
 func TestOutputNothingRecognizesStandsForItself(t *testing.T) {
-	prose := clitest.ShellTool("prose", settle+clitest.RecordRun+"; echo 'nowhere.c:1:2: error: y'; exit 1", clitest.ToolOpSpec{})
+	prose := clitest.ShellTool("prose", settle+clitest.RecordRun+"; echo 'nowhere.c:1:2: error: y'; exit 1", clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""})
 	e := fallbackProject(t, nil, prose)
 
 	res := e.run("", nil, "lint", "--report", "json=run.json")
@@ -206,7 +206,14 @@ func TestOutputNothingRecognizesStandsForItself(t *testing.T) {
 func TestAFormattersOutputIsNeverAFinding(t *testing.T) {
 	formatter := clitest.ShellTool("formatter", settle+clitest.RecordRun+`; printf 'package x\n// x.go:1:2: error: y\n'`,
 		clitest.ToolOpSpec{
-			Operation: "fix", Scope: "per-file", Globs: []string{"**/*.go"}, Args: []string{"{file}"},
+			Priority:     0,
+			ProjectTypes: nil,
+			Parser:       "",
+			ParserModule: "",
+			Env:          nil,
+			InheritEnv:   nil,
+			FailOn:       "",
+			Operation:    "fix", Scope: "per-file", Globs: []string{"**/*.go"}, Args: []string{"{file}"},
 			Input: "stdin", Output: "stdout",
 		})
 	e := fallbackProject(t, map[string]string{"x.go": "package x\n"}, formatter)

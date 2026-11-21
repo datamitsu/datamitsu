@@ -73,11 +73,11 @@ func TestGoArchiveSpecs_FilenamesAndPaths(t *testing.T) {
 }
 
 func TestGoBinaryPath(t *testing.T) {
-	gz := goArchiveSpec{filename: "go1.26.3.linux-amd64.tar.gz", contentType: binmanager.BinContentTypeTarGz}
+	gz := goArchiveSpec{os: "", arch: "", libc: "", filename: "go1.26.3.linux-amd64.tar.gz", contentType: binmanager.BinContentTypeTarGz}
 	if got := goBinaryPath(gz); got != "go/bin/go" {
 		t.Errorf("tar.gz binaryPath = %q", got)
 	}
-	zip := goArchiveSpec{filename: "go1.26.3.windows-amd64.zip", contentType: binmanager.BinContentTypeZip}
+	zip := goArchiveSpec{os: "", arch: "", libc: "", filename: "go1.26.3.windows-amd64.zip", contentType: binmanager.BinContentTypeZip}
 	if got := goBinaryPath(zip); got != "go/bin/go.exe" {
 		t.Errorf("zip binaryPath = %q", got)
 	}
@@ -179,6 +179,12 @@ func TestBuildGoBinaries_UppercaseHashNormalizedAndValid(t *testing.T) {
 	}
 
 	rt := config.RuntimeConfig{
+		System:  nil,
+		Bun:     nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		PNPM:    nil,
 		Kind:    config.RuntimeKindGo,
 		Mode:    config.RuntimeModeManaged,
 		Go:      &config.RuntimeConfigGo{GoVersion: goTestVersion},

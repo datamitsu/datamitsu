@@ -34,9 +34,9 @@ func TestCanonicalSlug(t *testing.T) {
 // manifest cannot masquerade as a content change.
 func TestComputePageSetHashIsOrderIndependent(t *testing.T) {
 	a := []Page{
-		{Slug: "about", ContentHash: "aaaa"},
-		{Slug: "intro", ContentHash: "bbbb"},
-		{Slug: "guides/caching", ContentHash: "cccc"},
+		{Aliases: nil, URL: "", Title: "", Description: "", Bytes: 0, Slug: "about", ContentHash: "aaaa"},
+		{Aliases: nil, URL: "", Title: "", Description: "", Bytes: 0, Slug: "intro", ContentHash: "bbbb"},
+		{Aliases: nil, URL: "", Title: "", Description: "", Bytes: 0, Slug: "guides/caching", ContentHash: "cccc"},
 	}
 	reversed := []Page{a[2], a[1], a[0]}
 
@@ -44,19 +44,19 @@ func TestComputePageSetHashIsOrderIndependent(t *testing.T) {
 		t.Errorf("hash changed with page order: %q vs %q", got, want)
 	}
 
-	changed := []Page{a[0], a[1], {Slug: "guides/caching", ContentHash: "dddd"}}
+	changed := []Page{a[0], a[1], {Aliases: nil, URL: "", Title: "", Description: "", Bytes: 0, Slug: "guides/caching", ContentHash: "dddd"}}
 	if ComputePageSetHash(changed) == ComputePageSetHash(a) {
 		t.Error("hash did not change when a page's content hash changed")
 	}
 
-	renamed := []Page{a[0], a[1], {Slug: "guides/cache", ContentHash: "cccc"}}
+	renamed := []Page{a[0], a[1], {Aliases: nil, URL: "", Title: "", Description: "", Bytes: 0, Slug: "guides/cache", ContentHash: "cccc"}}
 	if ComputePageSetHash(renamed) == ComputePageSetHash(a) {
 		t.Error("hash did not change when a page was renamed")
 	}
 }
 
 func TestFind(t *testing.T) {
-	m := Manifest{Pages: []Page{{Slug: "about", Title: "About"}, {Slug: "intro", Title: "Intro"}}}
+	m := Manifest{SchemaVersion: 0, Generator: "", License: "", SiteTitle: "", SiteTagline: "", PageCount: 0, PageSetHash: "", Pages: []Page{{Aliases: nil, URL: "", Description: "", Bytes: 0, ContentHash: "", Slug: "about", Title: "About"}, {Aliases: nil, URL: "", Description: "", Bytes: 0, ContentHash: "", Slug: "intro", Title: "Intro"}}}
 
 	if p, ok := m.Find("intro"); !ok || p.Title != "Intro" {
 		t.Errorf("Find(\"intro\") = %+v, %v; want the Intro page", p, ok)
@@ -70,10 +70,12 @@ func TestValidate(t *testing.T) {
 	// valid returns a well-formed manifest that each case then breaks in one way.
 	valid := func() Manifest {
 		pages := []Page{
-			{Slug: "about", Aliases: []string{}, ContentHash: "aaaa"},
-			{Slug: "contributing", Aliases: []string{"contributing/index"}, ContentHash: "bbbb"},
+			{URL: "", Title: "", Description: "", Bytes: 0, Slug: "about", Aliases: []string{}, ContentHash: "aaaa"},
+			{URL: "", Title: "", Description: "", Bytes: 0, Slug: "contributing", Aliases: []string{"contributing/index"}, ContentHash: "bbbb"},
 		}
 		return Manifest{
+			SiteTitle:     "",
+			SiteTagline:   "",
 			SchemaVersion: SchemaVersion,
 			Generator:     Generator,
 			License:       "MIT",

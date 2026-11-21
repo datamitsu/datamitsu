@@ -131,7 +131,7 @@ func discoverLeafCommands(t *testing.T) []string {
 	var walk func(path []string)
 	walk = func(path []string) {
 		args := append(append([]string(nil), path...), "--help")
-		res := clitest.Run(t, clitest.RunOptions{}, args...)
+		res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, args...)
 		if res.ExitCode != 0 {
 			t.Fatalf("`%s --help` exit = %d, want 0\nstderr:\n%s",
 				strings.Join(path, " "), res.ExitCode, res.Stderr)
@@ -182,12 +182,12 @@ var detCases = []struct {
 	config string // inline config content, for detConfig cases
 	args   []string
 }{
-	{name: "version", kind: detRaw, args: []string{"version"}},
-	{name: "cache-path", kind: detCache, args: []string{"cache", "path"}},
-	{name: "config-show", kind: detMinimal, args: []string{"config", "show"}},
-	{name: "config-runtime", kind: detMinimal, args: []string{"config", "runtime"}},
-	{name: "init-dry-run", kind: detMinimal, args: []string{"init", "--dry-run"}},
-	{name: "config-reconcile-preview", kind: detMinimal, args: []string{"config", "reconcile"}},
+	{config: "", name: "version", kind: detRaw, args: []string{"version"}},
+	{config: "", name: "cache-path", kind: detCache, args: []string{"cache", "path"}},
+	{config: "", name: "config-show", kind: detMinimal, args: []string{"config", "show"}},
+	{config: "", name: "config-runtime", kind: detMinimal, args: []string{"config", "runtime"}},
+	{config: "", name: "init-dry-run", kind: detMinimal, args: []string{"init", "--dry-run"}},
+	{config: "", name: "config-reconcile-preview", kind: detMinimal, args: []string{"config", "reconcile"}},
 	{name: "check-explain-json", kind: detConfig, config: explainToolsConfigJS, args: []string{"check", "--explain=json"}},
 	{name: "fix-explain-json", kind: detConfig, config: explainToolsConfigJS, args: []string{"fix", "--explain=json"}},
 	{name: "lint-explain-json", kind: detConfig, config: explainToolsConfigJS, args: []string{"lint", "--explain=json"}},
@@ -236,11 +236,11 @@ func produceDet(t *testing.T, kind detKind, config string, args ...string) strin
 
 	switch kind {
 	case detRaw:
-		res := clitest.Run(t, clitest.RunOptions{}, args...)
+		res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, args...)
 		return clitest.NewNormalizer().Apply(res.Stdout)
 	case detCache:
 		norm := clitest.NewNormalizer().MaskPath(cacheBase, "<CACHE>")
-		res := clitest.Run(t, clitest.RunOptions{CacheDir: cacheBase}, args...)
+		res := clitest.Run(t, clitest.RunOptions{Dir: "", Env: nil, Stdin: "", Timeout: 0, CacheDir: cacheBase}, args...)
 		return norm.Apply(res.Stdout)
 	case detMinimal, detConfig:
 		p := clitest.NewProject(t)
@@ -252,20 +252,20 @@ func produceDet(t *testing.T, kind detKind, config string, args ...string) strin
 		}
 		norm := clitest.NewNormalizer().MaskPath(p.Dir, "<TMP>").MaskPath(cacheBase, "<CACHE>")
 		full := append([]string{"--no-auto-config", "--config", cfg}, args...)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheBase}, full...)
+		res := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheBase}, full...)
 		return norm.Apply(res.Stdout) + "\n===STDERR===\n" + norm.Apply(res.Stderr)
 	case detSource:
 		p := clitest.NewProject(t)
 		p.WriteFile("datamitsu.config.js", config)
 		mask := sourceNormalizer(p, cacheBase)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheBase, Env: sourceEnv()}, args...)
+		res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheBase, Env: sourceEnv()}, args...)
 		return mask(res.Stdout) + "\n===STDERR===\n" + mask(res.Stderr)
 	case detSourceConfig:
 		d := clitest.NewBareDir(t)
 		cfg := d.WriteFile("machine.config.js", config)
 		mask := sourceConfigNormalizer(d.Dir, cacheBase)
 		full := append(append([]string(nil), args...), "--config", cfg)
-		res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir, CacheDir: cacheBase, Env: sourceEnv()}, full...)
+		res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: d.Dir, CacheDir: cacheBase, Env: sourceEnv()}, full...)
 		return mask(res.Stdout) + "\n===STDERR===\n" + mask(res.Stderr)
 	default:
 		t.Fatalf("produceDet: unknown detKind %d", kind)

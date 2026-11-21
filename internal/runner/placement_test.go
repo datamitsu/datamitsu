@@ -50,8 +50,22 @@ func runOnFixture(t *testing.T, ops []config.OperationType, opts Options) error 
 	return RunSequential(ops, nil, "", false, "", false, opts,
 		func() (*config.Config, string, error) {
 			return &config.Config{
-				Tools:        config.MapOfTools{"golangci-lint": {Name: "golangci-lint"}},
-				ProjectTypes: config.MapOfProjectTypes{},
+				Name:           "",
+				Version:        "",
+				Apps:           nil,
+				Bundles:        nil,
+				Runtimes:       nil,
+				ManagedConfigs: nil,
+				EjectConfigs:   nil,
+				Execution:      nil,
+				InitCommands:   nil,
+				IgnoreRules:    nil,
+				SharedStorage:  nil,
+				OCI:            nil,
+				Parsers:        nil,
+				Lsp:            nil,
+				Tools:          config.MapOfTools{"golangci-lint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"}},
+				ProjectTypes:   config.MapOfProjectTypes{},
 			}, "", nil
 		},
 	)
@@ -65,7 +79,16 @@ func TestConfigPlacementBelowGitRootFailsLint(t *testing.T) {
 
 	reportPath := filepath.Join(t.TempDir(), "run.json")
 	err := runOnFixture(t, []config.OperationType{config.OpLint}, Options{
-		Reports: []render.Spec{{Format: "json", Path: reportPath}},
+		WidenTo:         "",
+		RequireCoverage: "",
+		FailFast:        nil,
+		FailOn:          "",
+		AllowPartial:    false,
+		AllDiagnostics:  false,
+		Annotations:     "",
+		Output:          "",
+		Baseline:        nil,
+		Reports:         []render.Spec{{Options: nil, Format: "json", Path: reportPath}},
 	})
 	if err == nil {
 		t.Fatal("lint with misplaced configs must fail")
@@ -129,7 +152,7 @@ func TestConfigPlacementBelowGitRootFailsLint(t *testing.T) {
 	}
 
 	// The check is silent in a fix-only run: it never moves or deletes.
-	if err := runOnFixture(t, []config.OperationType{config.OpFix}, Options{}); err != nil {
+	if err := runOnFixture(t, []config.OperationType{config.OpFix}, Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}); err != nil {
 		t.Errorf("fix-only run must not fail on placement: %v", err)
 	}
 }
@@ -143,25 +166,42 @@ func TestConfigPlacementSilentInFixWithTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Apps: binmanager.MapOfApps{
-			"echo": {Shell: &binmanager.AppConfigShell{Name: "echo"}},
+			"echo": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "echo"}},
 		},
 		Tools: config.MapOfTools{
 			"echo": {
-				Name: "echo",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil,
+				Name:         "echo",
 				Operations: map[config.OperationType]config.ToolOperation{
-					config.OpFix:  {App: "echo", Args: []string{"fix"}, Scope: config.ToolScopeRepository},
-					config.OpLint: {App: "echo", Args: []string{"lint"}, Scope: config.ToolScopeRepository},
+					config.OpFix:  {Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "echo", Args: []string{"fix"}, Scope: config.ToolScopeRepository},
+					config.OpLint: {Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "echo", Args: []string{"lint"}, Scope: config.ToolScopeRepository},
 				},
 			},
 		},
 		ProjectTypes: config.MapOfProjectTypes{
-			"go": {Markers: []string{"go.mod"}},
+			"go": {Description: "", Markers: []string{"go.mod"}},
 		},
 	}
 	run := func(ops []config.OperationType) error {
 		t.Helper()
-		return RunSequential(ops, nil, "", false, "", false, Options{}, func() (*config.Config, string, error) {
+		return RunSequential(ops, nil, "", false, "", false, Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, func() (*config.Config, string, error) {
 			return cfg, "", nil
 		})
 	}
@@ -182,11 +222,25 @@ func TestConfigPlacementAgentOutputCountsCoreTool(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		if err := RunSequential([]config.OperationType{config.OpLint}, nil, "", false, "", false,
-			Options{Output: OutputAgent},
+			Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Baseline: nil, Output: OutputAgent},
 			func() (*config.Config, string, error) {
 				return &config.Config{
-					Tools:        config.MapOfTools{"golangci-lint": {Name: "golangci-lint"}},
-					ProjectTypes: config.MapOfProjectTypes{},
+					Name:           "",
+					Version:        "",
+					Apps:           nil,
+					Bundles:        nil,
+					Runtimes:       nil,
+					ManagedConfigs: nil,
+					EjectConfigs:   nil,
+					Execution:      nil,
+					InitCommands:   nil,
+					IgnoreRules:    nil,
+					SharedStorage:  nil,
+					OCI:            nil,
+					Parsers:        nil,
+					Lsp:            nil,
+					Tools:          config.MapOfTools{"golangci-lint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"}},
+					ProjectTypes:   config.MapOfProjectTypes{},
 				}, "", nil
 			},
 		); err == nil {
@@ -221,7 +275,7 @@ func TestConfigPlacementCleanRootPasses(t *testing.T) {
 	}
 	t.Chdir(root)
 
-	if err := runOnFixture(t, []config.OperationType{config.OpLint}, Options{}); err != nil {
+	if err := runOnFixture(t, []config.OperationType{config.OpLint}, Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}); err != nil {
 		t.Errorf("clean root must pass: %v", err)
 	}
 }

@@ -96,22 +96,40 @@ func TestRuntimeOwnedEnvironmentBuildsPerKindPaths(t *testing.T) {
 	appEnvPath := "/store/.apps/tool/identity"
 	runtimes := bunSystemRuntime("bun")
 	runtimes["node"] = config.RuntimeConfig{
-		Kind:   config.RuntimeKindNode,
-		Mode:   config.RuntimeModeSystem,
-		System: &config.RuntimeConfigSystem{Command: "node", SystemVersion: "22"},
-		Node:   &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: testPNPMRuntimeName},
+		Managed: nil,
+		Bun:     nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
+		PNPM:    nil,
+		Kind:    config.RuntimeKindNode,
+		Mode:    config.RuntimeModeSystem,
+		System:  &config.RuntimeConfigSystem{Command: "node", SystemVersion: "22"},
+		Node:    &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: testPNPMRuntimeName},
 	}
 	runtimes["uv"] = config.RuntimeConfig{
-		Kind:   config.RuntimeKindUV,
-		Mode:   config.RuntimeModeSystem,
-		System: &config.RuntimeConfigSystem{Command: "uv", SystemVersion: "1"},
-		UV:     &config.RuntimeConfigUV{PythonVersion: "3.12"},
+		Managed: nil,
+		Bun:     nil,
+		Node:    nil,
+		JVM:     nil,
+		Go:      nil,
+		PNPM:    nil,
+		Kind:    config.RuntimeKindUV,
+		Mode:    config.RuntimeModeSystem,
+		System:  &config.RuntimeConfigSystem{Command: "uv", SystemVersion: "1"},
+		UV:      &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.12"},
 	}
 	runtimes["go"] = config.RuntimeConfig{
-		Kind:   config.RuntimeKindGo,
-		Mode:   config.RuntimeModeSystem,
-		System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "1.23"},
-		Go:     &config.RuntimeConfigGo{GoVersion: "1.23"},
+		Managed: nil,
+		Bun:     nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		PNPM:    nil,
+		Kind:    config.RuntimeKindGo,
+		Mode:    config.RuntimeModeSystem,
+		System:  &config.RuntimeConfigSystem{Command: "go", SystemVersion: "1.23"},
+		Go:      &config.RuntimeConfigGo{GoVersion: "1.23"},
 	}
 	rm := New(runtimes)
 
@@ -153,7 +171,7 @@ func TestRuntimeOwnedEnvironmentBuildsPerKindPaths(t *testing.T) {
 		t.Fatalf("runtime-only Go environment unexpectedly sets GOBIN: %q", runtimeOnlyGoEnv["GOBIN"])
 	}
 
-	if root, vars, err := rm.RuntimeOwnedEnvironment("jvm", config.RuntimeConfig{Kind: config.RuntimeKindJVM}, appEnvPath); err != nil || root != "" || vars != nil {
+	if root, vars, err := rm.RuntimeOwnedEnvironment("jvm", config.RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM}, appEnvPath); err != nil || root != "" || vars != nil {
 		t.Fatalf("JVM runtime-owned env = (%q, %v, %v), want no env or data path", root, vars, err)
 	}
 }
@@ -175,7 +193,7 @@ func TestRuntimeDefinitionsReturnsTypedConfigSnapshot(t *testing.T) {
 }
 
 func TestSystemRuntimeDataIdentityIncludesTargetPlatform(t *testing.T) {
-	rc := config.RuntimeConfig{Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "uv", SystemVersion: "0.13.6"}, UV: &config.RuntimeConfigUV{PythonVersion: "3.14.6"}}
+	rc := config.RuntimeConfig{Managed: nil, Bun: nil, Node: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "uv", SystemVersion: "0.13.6"}, UV: &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.14.6"}}
 	rm := New(config.MapOfRuntimes{"uv": rc})
 	linux, err := rm.runtimeIdentityHash(rc, "linux", "amd64", "glibc")
 	if err != nil {
@@ -192,7 +210,7 @@ func TestSystemRuntimeDataIdentityIncludesTargetPlatform(t *testing.T) {
 
 func TestRuntimeInstallResultJSONRoundTrip(t *testing.T) {
 	for _, result := range []RuntimeInstallResult{
-		{Name: "node"},
+		{Error: nil, Name: "node"},
 		{Name: "uv", Error: errors.New("python pin missing")},
 	} {
 		data, err := json.Marshal(result)
@@ -226,7 +244,7 @@ func TestComputeRuntimeDataPathRejectsUnknownRuntime(t *testing.T) {
 
 func TestRuntimeDataPathRejectsManagedRuntimeWithoutArtifacts(t *testing.T) {
 	rm := New(nil)
-	if _, err := rm.runtimeDataPath("uv", config.RuntimeConfig{Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged}); err == nil {
+	if _, err := rm.runtimeDataPath("uv", config.RuntimeConfig{Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged}); err == nil {
 		t.Fatal("runtimeDataPath accepted a managed runtime without an artifact map")
 	}
 }
@@ -234,10 +252,16 @@ func TestRuntimeDataPathRejectsManagedRuntimeWithoutArtifacts(t *testing.T) {
 func TestRuntimeOwnedEnvironmentRejectsMissingPNPMRuntime(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
 		"node": {
-			Kind:   config.RuntimeKindNode,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "node", SystemVersion: "22"},
-			Node:   &config.RuntimeConfigNode{PNPMRuntime: "absent"},
+			Managed: nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindNode,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{Command: "node", SystemVersion: "22"},
+			Node:    &config.RuntimeConfigNode{NodeVersion: "", PNPMRuntime: "absent"},
 		},
 	}
 	rm := New(runtimes)
@@ -281,10 +305,10 @@ func TestPNPMRuntimeEnvironmentUsesIdentityScopedCachePaths(t *testing.T) {
 func TestRuntimeOwnedEnvironmentRejectsUnownedRuntimeKinds(t *testing.T) {
 	rm := New(nil)
 	for _, kind := range []config.RuntimeKind{config.RuntimeKindPNPM, config.RuntimeKind("unknown")} {
-		if _, _, err := rm.RuntimeOwnedEnvironment("custom", config.RuntimeConfig{Kind: kind}, ""); err == nil {
+		if _, _, err := rm.RuntimeOwnedEnvironment("custom", config.RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: kind}, ""); err == nil {
 			t.Errorf("RuntimeOwnedEnvironment accepted kind %q", kind)
 		}
-		if _, _, err := rm.RuntimeExecutionEnvironment("custom", config.RuntimeConfig{Kind: kind}); err == nil {
+		if _, _, err := rm.RuntimeExecutionEnvironment("custom", config.RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: kind}); err == nil {
 			t.Errorf("RuntimeExecutionEnvironment accepted kind %q", kind)
 		}
 	}
@@ -293,17 +317,35 @@ func TestRuntimeOwnedEnvironmentRejectsUnownedRuntimeKinds(t *testing.T) {
 func TestRuntimeExecutionEnvironmentOwnsRuntimeCaches(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
 		"node": {
-			Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem,
+			Managed: nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindNode, Mode: config.RuntimeModeSystem,
 			System: &config.RuntimeConfigSystem{Command: "node", SystemVersion: "22"},
 			Node:   &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: testPNPMRuntimeName},
 		},
 		"uv": {
-			Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem,
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV, Mode: config.RuntimeModeSystem,
 			System: &config.RuntimeConfigSystem{Command: "uv", SystemVersion: "1"},
-			UV:     &config.RuntimeConfigUV{PythonVersion: "3.12.0"},
+			UV:     &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.12.0"},
 		},
 		"go": {
-			Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem,
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindGo, Mode: config.RuntimeModeSystem,
 			System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "1.23"},
 			Go:     &config.RuntimeConfigGo{GoVersion: "1.23"},
 		},
@@ -332,7 +374,7 @@ func TestRuntimeExecutionEnvironmentOwnsRuntimeCaches(t *testing.T) {
 			}
 		})
 	}
-	if root, vars, err := New(runtimes).RuntimeExecutionEnvironment("jvm", config.RuntimeConfig{Kind: config.RuntimeKindJVM}); err != nil || root != "" || vars != nil {
+	if root, vars, err := New(runtimes).RuntimeExecutionEnvironment("jvm", config.RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM}); err != nil || root != "" || vars != nil {
 		t.Fatalf("JVM execution env = (%q, %v, %v), want no runtime cache paths", root, vars, err)
 	}
 	if _, _, err := New(runtimes).RuntimeExecutionEnvironment(testPNPMRuntimeName, testPNPMRuntime()); err == nil {

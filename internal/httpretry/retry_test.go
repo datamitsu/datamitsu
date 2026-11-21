@@ -154,12 +154,12 @@ func TestRetryAfterHeader(t *testing.T) {
 	}
 
 	base := errors.New("429")
-	resp := &http.Response{Header: http.Header{"Retry-After": {"5"}}}
+	resp := &http.Response{Status: "", StatusCode: 0, Proto: "", ProtoMajor: 0, ProtoMinor: 0, Body: nil, ContentLength: 0, TransferEncoding: nil, Close: false, Uncompressed: false, Trailer: nil, Request: nil, TLS: nil, Header: http.Header{"Retry-After": {"5"}}}
 	wrapped := WithRetryAfter(base, resp)
 	if asked, ok := errors.AsType[RetryAfterError](wrapped); !ok || asked.RetryAfter() != 5*time.Second || !errors.Is(wrapped, base) {
 		t.Errorf("WithRetryAfter() = %#v, want a 5s wait wrapping the error", wrapped)
 	}
-	if got := WithRetryAfter(base, &http.Response{Header: http.Header{}}); got != base { //nolint:errorlint // identity is the point: nothing may wrap it
+	if got := WithRetryAfter(base, &http.Response{Status: "", StatusCode: 0, Proto: "", ProtoMajor: 0, ProtoMinor: 0, Body: nil, ContentLength: 0, TransferEncoding: nil, Close: false, Uncompressed: false, Trailer: nil, Request: nil, TLS: nil, Header: http.Header{}}); got != base { //nolint:errorlint // identity is the point: nothing may wrap it
 		t.Errorf("WithRetryAfter() without the header = %#v, want the error itself", got)
 	}
 }

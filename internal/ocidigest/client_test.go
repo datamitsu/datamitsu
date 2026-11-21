@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	zerovalue_sync "sync"
 	"testing"
 	"time"
 
@@ -20,10 +21,14 @@ const testDigest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef01234
 func newTestResolver(serverURL, cacheDir string) *Resolver {
 	u, _ := url.Parse(serverURL)
 	return &Resolver{
-		httpClient: httpx.NewHardenedClient(5 * time.Second),
-		registry:   u.Host,
-		scheme:     u.Scheme,
-		cacheDir:   cacheDir,
+		token:        "",
+		blobClient:   nil,
+		bearerMu:     zerovalue_sync.Mutex{},
+		bearerTokens: nil,
+		httpClient:   httpx.NewHardenedClient(5 * time.Second),
+		registry:     u.Host,
+		scheme:       u.Scheme,
+		cacheDir:     cacheDir,
 	}
 }
 
@@ -228,23 +233,23 @@ func TestMayAttachGitHubToken(t *testing.T) {
 		want      bool
 	}{
 		{name: "ghcr to ghcr", registry: "ghcr.io", token: "t", realmHost: "ghcr.io", want: true},
-		{name: "no token", registry: "ghcr.io", realmHost: "ghcr.io"},
+		{token: "", want: false, name: "no token", registry: "ghcr.io", realmHost: "ghcr.io"},
 
 		// The realm is whatever the registry's own WWW-Authenticate header
 		// says, so a host of the attacker's choosing can claim GHCR's realm.
 		// Minting a real GHCR token for it hands that token to the host that
 		// asked, on the retried request.
-		{name: "hostile registry claiming the ghcr realm", registry: "evil.example", token: "t", realmHost: "ghcr.io"},
-		{name: "hostile lookalike realm", registry: "ghcr.io", token: "t", realmHost: "ghcr.io.evil.com"},
+		{want: false, name: "hostile registry claiming the ghcr realm", registry: "evil.example", token: "t", realmHost: "ghcr.io"},
+		{want: false, name: "hostile lookalike realm", registry: "ghcr.io", token: "t", realmHost: "ghcr.io.evil.com"},
 
 		// Not a leak, but a broken handshake: these registries reject a
 		// GitHub token instead of falling back to an anonymous one.
-		{name: "docker hub", registry: "index.docker.io", token: "t", realmHost: "auth.docker.io"},
-		{name: "gitlab", registry: "gitlab.example.com", token: "t", realmHost: "gitlab.example.com"},
+		{want: false, name: "docker hub", registry: "index.docker.io", token: "t", realmHost: "auth.docker.io"},
+		{want: false, name: "gitlab", registry: "gitlab.example.com", token: "t", realmHost: "gitlab.example.com"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := &Resolver{registry: tt.registry, token: tt.token}
+			r := &Resolver{httpClient: nil, scheme: "", cacheDir: "", blobClient: nil, bearerMu: zerovalue_sync.Mutex{}, bearerTokens: nil, registry: tt.registry, token: tt.token}
 			if got := r.mayAttachGitHubToken(tt.realmHost); got != tt.want {
 				t.Errorf("mayAttachGitHubToken(registry=%q, realm=%q) = %v, want %v", tt.registry, tt.realmHost, got, tt.want)
 			}

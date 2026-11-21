@@ -11,12 +11,31 @@ func TestApplyDerivedOfficialURLs(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		// The maintainer points eslint at its own documentation rather than at npm.
 		"eslint": {
-			Node:        &binmanager.AppConfigNode{PackageName: "eslint", Version: "9.0.0"},
-			OfficialURL: "https://eslint.org/",
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Node:               &binmanager.AppConfigNode{BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, PackageName: "eslint", Version: "9.0.0"},
+			OfficialURL:        "https://eslint.org/",
 		},
-		"ruff":  {Uv: &binmanager.AppConfigUV{PackageName: "ruff", Version: "0.6.0"}},
-		"git":   {Shell: &binmanager.AppConfigShell{Name: "git"}},
-		"spacy": {Node: &binmanager.AppConfigNode{PackageName: "  prettier  ", Version: "3"}},
+		"ruff":  {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "ruff", Version: "0.6.0"}},
+		"git":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "git"}},
+		"spacy": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, PackageName: "  prettier  ", Version: "3"}},
 	}
 	ApplyDerivedOfficialURLs(apps)
 
@@ -42,14 +61,14 @@ func TestOfficialURLRemovedInChildLayer(t *testing.T) {
 	// one. An app that can derive one falls back to it; an app that cannot — here
 	// a shell app — is left with no link, which is what the reader sees.
 	inherited := binmanager.MapOfApps{
-		"tool": {Shell: &binmanager.AppConfigShell{Name: "tool"}, OfficialURL: "https://wiki.example.com/tool"},
+		"tool": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "tool"}, OfficialURL: "https://wiki.example.com/tool"},
 	}
 	ApplyDerivedOfficialURLs(inherited)
 	if got := inherited["tool"].OfficialURL; got != "https://wiki.example.com/tool" {
 		t.Fatalf("inherited tool = %q, want the declared URL", got)
 	}
 
-	removed := binmanager.MapOfApps{"tool": {Shell: &binmanager.AppConfigShell{Name: "tool"}}}
+	removed := binmanager.MapOfApps{"tool": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "tool"}}}
 	ApplyDerivedOfficialURLs(removed)
 	if got := removed["tool"]; got.OfficialURL != "" || got.OfficialURLDerived {
 		t.Fatalf("tool after removal = %q (derived %v), want none", got.OfficialURL, got.OfficialURLDerived)
@@ -57,7 +76,7 @@ func TestOfficialURLRemovedInChildLayer(t *testing.T) {
 
 	// The same removal on an app that declares where it comes from falls back to
 	// the derived link rather than to nothing.
-	derivable := binmanager.MapOfApps{"ruff": {Uv: &binmanager.AppConfigUV{PackageName: "ruff", Version: "0.6.0"}}}
+	derivable := binmanager.MapOfApps{"ruff": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "ruff", Version: "0.6.0"}}}
 	ApplyDerivedOfficialURLs(derivable)
 	if got := derivable["ruff"]; got.OfficialURL != "https://pypi.org/project/ruff/" || !got.OfficialURLDerived {
 		t.Fatalf("ruff after removal = %q (derived %v), want the derived page", got.OfficialURL, got.OfficialURLDerived)
@@ -70,9 +89,9 @@ func TestValidateOfficialURLShapeOnly(t *testing.T) {
 		value   string
 		wantErr string
 	}{
-		{name: "unset"},
-		{name: "https", value: "https://eslint.org/docs/latest/"},
-		{name: "http", value: "http://internal.example/wiki/tool"},
+		{value: "", wantErr: "", name: "unset"},
+		{wantErr: "", name: "https", value: "https://eslint.org/docs/latest/"},
+		{wantErr: "", name: "http", value: "http://internal.example/wiki/tool"},
 		{name: "relative", value: "/docs/tool", wantErr: "absolute http or https URL"},
 		{name: "scheme", value: "ftp://example.com/tool", wantErr: "absolute http or https URL"},
 		{name: "javascript", value: "javascript:alert(1)", wantErr: "absolute http or https URL"},

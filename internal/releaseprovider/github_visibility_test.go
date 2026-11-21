@@ -32,7 +32,7 @@ func TestGitHubVisibilityForPinnedLatestAndCachedMetadata(t *testing.T) {
 					_ = json.NewEncoder(w).Encode(map[string]any{"private": private, "description": "fixture"})
 					return
 				}
-				release := releaseasset.Release{TagName: "v1", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{Name: "tool-linux-amd64", APIURL: base + "/repos/o/tool/releases/assets/1", BrowserDownloadURL: "https://github.com/o/tool/releases/download/v1/tool-linux-amd64", Digest: "sha256:" + strings.Repeat("a", 64)}}}
+				release := releaseasset.Release{Prerelease: false, Draft: false, TagName: "v1", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-amd64", APIURL: base + "/repos/o/tool/releases/assets/1", BrowserDownloadURL: "https://github.com/o/tool/releases/download/v1/tool-linux-amd64", Digest: "sha256:" + strings.Repeat("a", 64)}}}
 				if r.URL.Query().Get("page") != "" {
 					rows := []releaseasset.Release{}
 					if r.URL.Query().Get("page") == "1" {
@@ -45,7 +45,7 @@ func TestGitHubVisibilityForPinnedLatestAndCachedMetadata(t *testing.T) {
 			}))
 			defer srv.Close()
 			base = srv.URL
-			c, err := New(Source{Type: "github", URL: base, APIURL: base, TokenEnv: "TEST_GITHUB_TOKEN"})
+			c, err := New(Source{DownloadAuth: "", Type: "github", URL: base, APIURL: base, TokenEnv: "TEST_GITHUB_TOKEN"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -94,7 +94,7 @@ func TestGitHubUnknownVisibilityFailsWithoutCaching(t *testing.T) {
 		_, _ = w.Write([]byte(`{"tag_name":"v1","assets":[]}`))
 	}))
 	defer srv.Close()
-	c, _ := New(Source{Type: "github", URL: srv.URL, APIURL: srv.URL, TokenEnv: "TEST_GITHUB_TOKEN"})
+	c, _ := New(Source{DownloadAuth: "", Type: "github", URL: srv.URL, APIURL: srv.URL, TokenEnv: "TEST_GITHUB_TOKEN"})
 	if _, err := c.GetRelease(context.Background(), "o/tool", "v1"); err == nil || !strings.Contains(err.Error(), "visibility") {
 		t.Fatalf("unknown visibility accepted: %v", err)
 	}

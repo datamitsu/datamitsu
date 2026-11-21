@@ -93,6 +93,10 @@ func Start(tb testing.TB, opts RunOptions, args ...string) *Process {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 
 	p := &Process{
+		cmd:      nil,
+		stdout:   bytes.Buffer{},
+		stderr:   bytes.Buffer{},
+		waited:   false,
 		tb:       tb,
 		timedOut: func() bool { return errors.Is(ctx.Err(), context.DeadlineExceeded) },
 		cancel:   cancel,

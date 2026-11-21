@@ -1059,8 +1059,10 @@ type effectiveSnapshot struct {
 func snapshotEffective(t *testing.T, cfg *config.Config, layerMap *config.ManagedConfigLayerMap) effectiveSnapshot {
 	t.Helper()
 	snap := effectiveSnapshot{
-		ignoreRules: cfg.IgnoreRules,
-		jvmVersions: make(map[string]string),
+		appKeys:      nil,
+		editorconfig: "",
+		ignoreRules:  cfg.IgnoreRules,
+		jvmVersions:  make(map[string]string),
 	}
 	for name, app := range cfg.Apps {
 		snap.appKeys = append(snap.appKeys, name)
@@ -1274,9 +1276,12 @@ function getConfig(input) {
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-local",
-		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-local",
+		content:   localContent,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource error: %v", err)
 	}
@@ -1330,9 +1335,12 @@ function getConfig(input) {
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-local",
-		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-local",
+		content:   localContent,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource error: %v", err)
 	}
@@ -1362,9 +1370,12 @@ function getConfig(input) {
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-missing-hash",
-		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-missing-hash",
+		content:   localContent,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err == nil {
 		t.Fatal("expected error for missing hash")
 	}
@@ -1412,9 +1423,12 @@ function getConfig(input) { return {}; }`, server.URL, remoteAHash)
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-circular",
-		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-circular",
+		content:   localContent,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err == nil {
 		t.Fatal("expected error for circular dependency")
 	}
@@ -1478,9 +1492,12 @@ function getConfig(input) {
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-diamond",
-		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-diamond",
+		content:   localContent,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource error (diamond should succeed): %v", err)
 	}
@@ -1622,9 +1639,12 @@ function getConfig(input) {
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-skip-remote",
-		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-skip-remote",
+		content:   localContent,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource error: %v", err)
 	}
@@ -1890,9 +1910,12 @@ function getConfig(input) {
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-cache-on-disk",
-		content: localContent,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-cache-on-disk",
+		content:   localContent,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource error: %v", err)
 	}
@@ -1953,9 +1976,12 @@ function getConfig(input) {
 	resolved1 := make(map[string]bool)
 	stack1 := make(map[string]bool)
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-repeat-1",
-		content: localContent,
-	}, resolved1, stack1, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-repeat-1",
+		content:   localContent,
+	}, resolved1, stack1, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err != nil {
 		t.Fatalf("first processConfigSource error: %v", err)
 	}
@@ -1967,9 +1993,12 @@ function getConfig(input) {
 	resolved2 := make(map[string]bool)
 	stack2 := make(map[string]bool)
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-repeat-2",
-		content: localContent,
-	}, resolved2, stack2, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-repeat-2",
+		content:   localContent,
+	}, resolved2, stack2, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err != nil {
 		t.Fatalf("second processConfigSource error: %v", err)
 	}
@@ -2023,9 +2052,12 @@ function getConfig(input) {
 	resolved1 := make(map[string]bool)
 	stack1 := make(map[string]bool)
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-cache-1",
-		content: localContent,
-	}, resolved1, stack1, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-cache-1",
+		content:   localContent,
+	}, resolved1, stack1, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err != nil {
 		t.Fatalf("first call error: %v", err)
 	}
@@ -2036,9 +2068,12 @@ function getConfig(input) {
 	resolved2 := make(map[string]bool)
 	stack2 := make(map[string]bool)
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-cache-2",
-		content: localContent,
-	}, resolved2, stack2, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-cache-2",
+		content:   localContent,
+	}, resolved2, stack2, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err != nil {
 		t.Fatalf("expected cache hit, got error: %v", err)
 	}
@@ -2067,9 +2102,12 @@ function getConfig(input) { return { ignoreRules: ["with-version: eslint"] }; }
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	result, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-with-min-version",
-		content: content,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-with-min-version",
+		content:   content,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource should succeed with valid getMinVersion, got error: %v", err)
 	}
@@ -2093,9 +2131,12 @@ function getConfig(input) { return { ignoreRules: ["no-version: eslint"] }; }
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-no-min-version",
-		content: content,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-no-min-version",
+		content:   content,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err == nil {
 		t.Fatal("expected error when getMinVersion is not exported")
 	}
@@ -2113,9 +2154,12 @@ function getConfig(input) { return {}; }
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-non-string-version",
-		content: content,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-non-string-version",
+		content:   content,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err == nil {
 		t.Fatal("expected error when getMinVersion returns non-string value")
 	}
@@ -2133,9 +2177,12 @@ function getConfig(input) { return {}; }
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-empty-version",
-		content: content,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-empty-version",
+		content:   content,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err == nil {
 		t.Fatal("expected error when getMinVersion returns empty string")
 	}
@@ -2153,9 +2200,12 @@ function getConfig(input) { return {}; }
 	resolved := make(map[string]bool)
 	stack := make(map[string]bool)
 	_, _, err := processConfigSource(context.Background(), nil, configSource{
-		name:    "test-invalid-semver",
-		content: content,
-	}, resolved, stack, loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      "test-invalid-semver",
+		content:   content,
+	}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err == nil {
 		t.Fatal("expected error when getMinVersion returns invalid semver")
 	}
@@ -2407,19 +2457,22 @@ func TestResolvedConfigVersionLayers(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:   "inherits core version",
-			layers: []string{"function getConfig(input) { return input; }"},
-			want:   "core",
+			wantErr: false,
+			name:    "inherits core version",
+			layers:  []string{"function getConfig(input) { return input; }"},
+			want:    "core",
 		},
 		{
-			name: "explicit base version",
+			wantErr: false,
+			name:    "explicit base version",
 			layers: []string{`
 function getConfig(input) { return { version: "1.0.0" }; }
 `},
 			want: "1.0.0",
 		},
 		{
-			name: "later override",
+			wantErr: false,
+			name:    "later override",
 			layers: []string{`
 function getConfig(input) { return { version: "1.0.0" }; }
 `, `
@@ -2428,6 +2481,7 @@ function getConfig(input) { return { version: "release" }; }
 			want: "release",
 		},
 		{
+			want: "",
 			name: "final version required",
 			layers: []string{`
 function getConfig(input) { return { version: "1.0.0" }; }
@@ -2484,9 +2538,12 @@ function getConfig(input) { return {}; }
 			resolved := make(map[string]bool)
 			stack := make(map[string]bool)
 			_, _, err := processConfigSource(context.Background(), nil, configSource{
-				name:    "test-extraction-" + tt.name,
-				content: content,
-			}, resolved, stack, loadConfigOptions{}, nil, "")
+				path:      "",
+				isDefault: false,
+				isRemote:  false,
+				name:      "test-extraction-" + tt.name,
+				content:   content,
+			}, resolved, stack, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 			if err != nil {
 				t.Fatalf("expected success for version %q, got error: %v", tt.version, err)
 			}
@@ -2765,7 +2822,7 @@ function getConfig(input) { return {}; }`,
 // do.
 func loadConfigForTestWithManagedConfigContent(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime, error) {
 	return loadConfigImpl(ctx, beforeConfigPaths, noAutoConfig, configPaths,
-		loadConfigOptions{evaluateManagedConfigContent: true})
+		loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, retainManagedConfigLayers: false, requireVM: false, evaluateManagedConfigContent: true})
 }
 
 // A config layer reads its input through Go maps, whose iteration order goja
@@ -2773,9 +2830,9 @@ func loadConfigForTestWithManagedConfigContent(ctx context.Context, beforeConfig
 // from Object.keys() — must produce the same result on every evaluation, or the
 // config-eval cache would freeze whichever order the first run happened to see.
 func TestProcessConfigSourceInputMapOrderIsStable(t *testing.T) {
-	input := &config.Config{Tools: config.MapOfTools{}}
+	input := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}
 	for _, name := range []string{"zeta", "alpha", "mu", "beta", "kappa", "omega", "delta", "iota"} {
-		input.Tools[name] = config.Tool{}
+		input.Tools[name] = config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}
 	}
 
 	const content = `function getMinVersion() { return "0.0.0"; }
@@ -2786,9 +2843,12 @@ function getConfig(input) {
 
 	for range 25 {
 		result, _, err := processConfigSource(context.Background(), input, configSource{
-			name:    "test-order",
-			content: content,
-		}, map[string]bool{}, map[string]bool{}, loadConfigOptions{}, nil, "")
+			path:      "",
+			isDefault: false,
+			isRemote:  false,
+			name:      "test-order",
+			content:   content,
+		}, map[string]bool{}, map[string]bool{}, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 		if err != nil {
 			t.Fatalf("processConfigSource error: %v", err)
 		}

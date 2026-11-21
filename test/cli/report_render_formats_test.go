@@ -15,8 +15,8 @@ var renderFormats = []struct {
 	format, file string
 	companion    bool
 }{
-	{format: "markdown", file: "run.md"},
-	{format: "sarif", file: "results.sarif"},
+	{companion: false, format: "markdown", file: "run.md"},
+	{companion: false, format: "sarif", file: "results.sarif"},
 	{format: "junit", file: "junit.xml", companion: true},
 	{format: "codequality", file: "gl-code-quality.json", companion: true},
 	{format: "checkstyle", file: "checkstyle.xml", companion: true},
@@ -27,7 +27,7 @@ var renderFormats = []struct {
 // own JSON is the file the run wrote, byte for byte, companion included — on
 // another machine, without the checkout, after the sources changed.
 func TestReportRenderFormats(t *testing.T) {
-	e := reportProject(t, outsider, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{}))
+	e := reportProject(t, outsider, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 	args := make([]string, 0, 3+2*len(renderFormats))
 	args = append(args, "lint", "--report", "json=out/run.json")
 	for _, f := range renderFormats {
@@ -45,7 +45,7 @@ func TestReportRenderFormats(t *testing.T) {
 
 	for _, f := range renderFormats {
 		t.Run(f.format, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{Dir: elsewhere, CacheDir: e.cache},
+			res := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: elsewhere, CacheDir: e.cache},
 				"report", "render", "--input", "run.json", "--format", f.format, "--output", "again/"+f.file)
 			e.wantExit(res, 0)
 			again, err := os.ReadFile(filepath.Join(elsewhere, "again", f.file))
@@ -65,7 +65,7 @@ func TestReportRenderFormats(t *testing.T) {
 				t.Errorf("%s has a companion", f.format)
 			}
 
-			stdout := clitest.Run(t, clitest.RunOptions{Dir: elsewhere, CacheDir: e.cache},
+			stdout := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: elsewhere, CacheDir: e.cache},
 				"report", "render", "--input", "run.json", "--format", f.format)
 			e.wantExit(stdout, 0)
 			if stdout.Stdout != e.read("out/"+f.file) {

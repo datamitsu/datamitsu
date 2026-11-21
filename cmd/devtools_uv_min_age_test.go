@@ -90,7 +90,7 @@ func TestRunPullUV_MinAgeSelectsOlderVersion(t *testing.T) {
 
 	dir := t.TempDir()
 	path := writeUVApps(t, dir, uvAppsJSON{
-		"demo": {PackageName: "demo", Version: "1.0.0"},
+		"demo": {Description: "", PackageName: "demo", Version: "1.0.0"},
 	})
 
 	// minAge of one day filters out the one-hour-old 2.0.0, keeping 1.0.0.
@@ -128,7 +128,7 @@ func TestRunPullUV_MinAgeNoVersionOldEnoughSkips(t *testing.T) {
 
 	dir := t.TempDir()
 	path := writeUVApps(t, dir, uvAppsJSON{
-		"fresh": {PackageName: "fresh", Version: "2.0.0"},
+		"fresh": {Description: "", PackageName: "fresh", Version: "2.0.0"},
 	})
 
 	*pullUVMinAge = 24 * 60
@@ -166,7 +166,7 @@ func TestRunPullUV_MinAgeZeroTakesLatest(t *testing.T) {
 
 	dir := t.TempDir()
 	path := writeUVApps(t, dir, uvAppsJSON{
-		"demo": {PackageName: "demo", Version: "1.0.0"},
+		"demo": {Description: "", PackageName: "demo", Version: "1.0.0"},
 	})
 
 	// --min-age 0 disables filtering: the brand-new 2.0.0 should win.

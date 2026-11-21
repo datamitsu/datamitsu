@@ -38,6 +38,8 @@ type JSONLSink struct {
 // NewJSONLSink returns a sink writing JSON-L to w (typically os.Stderr).
 func NewJSONLSink(w io.Writer) *JSONLSink {
 	return &JSONLSink{
+		mu:           sync.Mutex{},
+		err:          nil,
 		enc:          json.NewEncoder(w),
 		nowFn:        time.Now,
 		lastProgress: make(map[string]time.Time),

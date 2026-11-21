@@ -190,7 +190,7 @@ func newFixtureWithCache(t *testing.T, cache string) *fixture {
 		t.Fatalf("eval symlinks for the cache directory: %v", err)
 	}
 
-	f := &fixture{t: t, Dir: dir, Cache: cache}
+	f := &fixture{Plant: "", srv: nil, MachineDir: "", machineCfg: "", t: t, Dir: dir, Cache: cache}
 	f.startReleaseHost()
 	f.plantImpostor()
 	f.initRepository()
@@ -413,6 +413,8 @@ func (f *fixture) datamitsu(args ...string) clitest.Result {
 func (f *fixture) datamitsuIn(dir string, args ...string) clitest.Result {
 	f.t.Helper()
 	return clitest.Run(f.t, clitest.RunOptions{
+		Stdin:    "",
+		Timeout:  0,
 		Dir:      dir,
 		CacheDir: f.Cache,
 		Env: []string{

@@ -18,17 +18,22 @@ func TestLoad(t *testing.T) {
 		path := filepath.Join(tmpDir, "test.json")
 
 		testState := &State{
-			Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
+			Platforms: nil,
+			Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
 			Apps: map[string]*AppMetadata{
 				"testapp": {
-					Source: "github", Repository: "owner/repo",
+					Hashes:    nil,
+					Checksums: nil,
+					Source:    "github", Repository: "owner/repo",
 					Tag: "v1.0.0",
 				},
 			},
 			Binaries: map[string]*BinariesEntry{
 				"testbin": {
-					ConfigHash: "abc123",
-					Binaries:   binmanager.MapOfBinaries{},
+					Source:      nil,
+					Description: "",
+					ConfigHash:  "abc123",
+					Binaries:    binmanager.MapOfBinaries{},
 				},
 			},
 		}
@@ -123,17 +128,22 @@ func TestSave(t *testing.T) {
 		path := filepath.Join(tmpDir, "test.json")
 
 		testState := &State{
-			Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
+			Platforms: nil,
+			Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
 			Apps: map[string]*AppMetadata{
 				"testapp": {
-					Source: "github", Repository: "owner/repo",
+					Hashes:    nil,
+					Checksums: nil,
+					Source:    "github", Repository: "owner/repo",
 					Tag: "v1.0.0",
 				},
 			},
 			Binaries: map[string]*BinariesEntry{
 				"testbin": {
-					ConfigHash: "abc123",
-					Binaries:   binmanager.MapOfBinaries{},
+					Source:      nil,
+					Description: "",
+					ConfigHash:  "abc123",
+					Binaries:    binmanager.MapOfBinaries{},
 				},
 			},
 		}
@@ -171,10 +181,13 @@ func TestSave(t *testing.T) {
 		path := filepath.Join(tmpDir, "formatted.json")
 
 		testState := &State{
-			Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
+			Platforms: nil,
+			Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
 			Apps: map[string]*AppMetadata{
 				"testapp": {
-					Source: "github", Repository: "owner/repo",
+					Hashes:    nil,
+					Checksums: nil,
+					Source:    "github", Repository: "owner/repo",
 					Tag: "v1.0.0",
 				},
 			},
@@ -210,9 +223,10 @@ func TestSave(t *testing.T) {
 		path := filepath.Join(tmpDir, "newline.json")
 
 		testState := &State{
-			Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-			Apps:     map[string]*AppMetadata{},
-			Binaries: map[string]*BinariesEntry{},
+			Platforms: nil,
+			Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+			Apps:      map[string]*AppMetadata{},
+			Binaries:  map[string]*BinariesEntry{},
 		}
 
 		err := Save(path, testState)
@@ -234,9 +248,10 @@ func TestSave(t *testing.T) {
 		path := "/nonexistent/directory/test.json"
 
 		testState := &State{
-			Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-			Apps:     map[string]*AppMetadata{},
-			Binaries: map[string]*BinariesEntry{},
+			Platforms: nil,
+			Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+			Apps:      map[string]*AppMetadata{},
+			Binaries:  map[string]*BinariesEntry{},
 		}
 
 		err := Save(path, testState)
@@ -257,7 +272,9 @@ func TestValidate(t *testing.T) {
 			name:    "valid metadata",
 			appName: "testapp",
 			metadata: &AppMetadata{
-				Source: "github", Repository: "owner/repo",
+				Hashes:    nil,
+				Checksums: nil,
+				Source:    "github", Repository: "owner/repo",
 				Tag: "v1.0.0",
 			},
 			expectError: false,
@@ -272,7 +289,9 @@ func TestValidate(t *testing.T) {
 			name:    "missing owner",
 			appName: "testapp",
 			metadata: &AppMetadata{
-				Source: "github", Repository: "/repo",
+				Hashes:    nil,
+				Checksums: nil,
+				Source:    "github", Repository: "/repo",
 				Tag: "v1.0.0",
 			},
 			expectError: true,
@@ -281,7 +300,9 @@ func TestValidate(t *testing.T) {
 			name:    "missing repo",
 			appName: "testapp",
 			metadata: &AppMetadata{
-				Source: "github", Repository: "owner/",
+				Hashes:    nil,
+				Checksums: nil,
+				Source:    "github", Repository: "owner/",
 				Tag: "v1.0.0",
 			},
 			expectError: true,
@@ -290,7 +311,9 @@ func TestValidate(t *testing.T) {
 			name:    "missing tag",
 			appName: "testapp",
 			metadata: &AppMetadata{
-				Source: "github", Repository: "owner/repo",
+				Hashes:    nil,
+				Checksums: nil,
+				Source:    "github", Repository: "owner/repo",
 				Tag: "",
 			},
 			expectError: true,
@@ -310,6 +333,7 @@ func TestValidate(t *testing.T) {
 func TestBinariesEntryDescription(t *testing.T) {
 	t.Run("marshal with description", func(t *testing.T) {
 		entry := &BinariesEntry{
+			Source:      nil,
 			ConfigHash:  "abc123",
 			Description: "A tool for testing",
 			Binaries:    binmanager.MapOfBinaries{},
@@ -328,8 +352,10 @@ func TestBinariesEntryDescription(t *testing.T) {
 
 	t.Run("marshal without description omits field", func(t *testing.T) {
 		entry := &BinariesEntry{
-			ConfigHash: "abc123",
-			Binaries:   binmanager.MapOfBinaries{},
+			Source:      nil,
+			Description: "",
+			ConfigHash:  "abc123",
+			Binaries:    binmanager.MapOfBinaries{},
 		}
 
 		data, err := json.Marshal(entry)
@@ -380,12 +406,14 @@ func TestBinariesEntryDescription(t *testing.T) {
 		path := filepath.Join(tmpDir, "roundtrip.json")
 
 		original := &State{
-			Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
+			Platforms: nil,
+			Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
 			Apps: map[string]*AppMetadata{
-				"myapp": {Source: "github", Repository: "owner/repo", Tag: "v1.0.0"},
+				"myapp": {Hashes: nil, Checksums: nil, Source: "github", Repository: "owner/repo", Tag: "v1.0.0"},
 			},
 			Binaries: map[string]*BinariesEntry{
 				"myapp": {
+					Source:      nil,
 					ConfigHash:  "hash123",
 					Description: "My awesome tool",
 					Binaries:    binmanager.MapOfBinaries{},
@@ -442,7 +470,9 @@ func TestBinariesEntryDescription(t *testing.T) {
 func TestComputeConfigHash(t *testing.T) {
 	t.Run("consistent hash", func(t *testing.T) {
 		metadata := &AppMetadata{
-			Source: "github", Repository: "owner/repo",
+			Hashes:    nil,
+			Checksums: nil,
+			Source:    "github", Repository: "owner/repo",
 			Tag: "v1.0.0",
 		}
 
@@ -456,12 +486,16 @@ func TestComputeConfigHash(t *testing.T) {
 
 	t.Run("different metadata produces different hash", func(t *testing.T) {
 		metadata1 := &AppMetadata{
-			Source: "github", Repository: "owner1/repo",
+			Hashes:    nil,
+			Checksums: nil,
+			Source:    "github", Repository: "owner1/repo",
 			Tag: "v1.0.0",
 		}
 
 		metadata2 := &AppMetadata{
-			Source: "github", Repository: "owner2/repo",
+			Hashes:    nil,
+			Checksums: nil,
+			Source:    "github", Repository: "owner2/repo",
 			Tag: "v1.0.0",
 		}
 
@@ -475,7 +509,9 @@ func TestComputeConfigHash(t *testing.T) {
 
 	t.Run("hash is hex encoded", func(t *testing.T) {
 		metadata := &AppMetadata{
-			Source: "github", Repository: "owner/repo",
+			Hashes:    nil,
+			Checksums: nil,
+			Source:    "github", Repository: "owner/repo",
 			Tag: "v1.0.0",
 		}
 
@@ -511,9 +547,10 @@ func TestSave_FollowsSymlink(t *testing.T) {
 	}
 
 	state := &State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*AppMetadata{"tool": {Source: "github", Repository: "o/tool", Tag: "v1"}},
-		Binaries: map[string]*BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*AppMetadata{"tool": {Hashes: nil, Checksums: nil, Source: "github", Repository: "o/tool", Tag: "v1"}},
+		Binaries:  map[string]*BinariesEntry{},
 	}
 	if err := Save(link, state); err != nil {
 		t.Fatalf("Save() = %v", err)
@@ -547,13 +584,17 @@ func TestSave_SortedKeys(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "binaryApps.json")
 	bp := "bin/tool"
 	state := &State{
-		Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:    map[string]*AppMetadata{"tool": {Source: "github", Repository: "o/tool", Tag: "v1"}},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*AppMetadata{"tool": {Hashes: nil, Checksums: nil, Source: "github", Repository: "o/tool", Tag: "v1"}},
 		Binaries: map[string]*BinariesEntry{"tool": {
+			Source:      nil,
 			ConfigHash:  "hash",
 			Description: "a tool",
 			Binaries: binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": binmanager.BinaryOsArchInfo{
-				URL: "https://example.test/tool.tar.gz", Hash: strings.Repeat("a", 64), ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &bp,
+				Auth:       nil,
+				ExtractDir: false,
+				URL:        "https://example.test/tool.tar.gz", Hash: strings.Repeat("a", 64), ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &bp,
 			}}}},
 		}},
 	}

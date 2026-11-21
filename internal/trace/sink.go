@@ -176,6 +176,9 @@ func writeChrome(path string, events []event, total int64, meta map[string]strin
 
 	for i, e := range events {
 		ce := chromeEvent{
+			Ph:   "",
+			Dur:  0,
+			S:    "",
 			Name: e.Name,
 			Cat:  e.Cat,
 			Ts:   float64(e.Start) / 1000,
@@ -197,6 +200,7 @@ func writeChrome(path string, events []event, total int64, meta map[string]strin
 	// viewer shows them next to the spans that produced them.
 	if args := countersToMap(); len(args) > 0 {
 		out.TraceEvents = append(out.TraceEvents, chromeEvent{
+			Dur:  0,
 			Name: "counters",
 			Cat:  "counters",
 			Ph:   "i",
@@ -316,7 +320,7 @@ func aggregate(events []event) []agg {
 		key := e.Cat + "\x00" + e.Name
 		i, ok := index[key]
 		if !ok {
-			rows = append(rows, agg{cat: e.Cat, name: e.Name, first: e.Start})
+			rows = append(rows, agg{count: 0, total: 0, max: 0, cat: e.Cat, name: e.Name, first: e.Start})
 			i = len(rows) - 1
 			index[key] = i
 		}

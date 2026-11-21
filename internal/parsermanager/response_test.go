@@ -19,28 +19,32 @@ func TestDecodeResponse(t *testing.T) {
 		messages   []string
 		partial    bool
 	}{
-		{name: "v1 findings", data: `[{"message":"a"}]`, exit: 1, abi: 1, recognized: true, messages: []string{"a"}},
-		{name: "v1 empty on exit 0 is a clean run", data: `[]`, exit: 0, abi: 1, recognized: true},
-		{name: "v1 empty on a failure recognized nothing", data: `[]`, exit: 2, abi: 1},
-		{name: "v1 null reads as empty", data: `null`, exit: 1, abi: 1},
+		{format: "", partial: false, name: "v1 findings", data: `[{"message":"a"}]`, exit: 1, abi: 1, recognized: true, messages: []string{"a"}},
+		{format: "", messages: nil, partial: false, name: "v1 empty on exit 0 is a clean run", data: `[]`, exit: 0, abi: 1, recognized: true},
+		{recognized: false, format: "", messages: nil, partial: false, name: "v1 empty on a failure recognized nothing", data: `[]`, exit: 2, abi: 1},
+		{recognized: false, format: "", messages: nil, partial: false, name: "v1 null reads as empty", data: `null`, exit: 1, abi: 1},
 		{
-			name: "v2 findings", data: `{"recognized":true,"format":"sarif","diagnostics":[{"message":"b","row":3}]}`,
+			partial: false,
+			name:    "v2 findings", data: `{"recognized":true,"format":"sarif","diagnostics":[{"message":"b","row":3}]}`,
 			exit: 1, abi: 2, recognized: true, format: "sarif", messages: []string{"b"},
 		},
 		{
-			name: "v2 recognized and clean under a failure", data: ` {"recognized":true,"format":"eslint","diagnostics":[]}`,
+			messages: nil,
+			partial:  false,
+			name:     "v2 recognized and clean under a failure", data: ` {"recognized":true,"format":"eslint","diagnostics":[]}`,
 			exit: 1, abi: 2, recognized: true, format: "eslint",
 		},
-		{name: "v2 not recognized", data: `{"recognized":false,"format":"gcc","diagnostics":[]}`, exit: 0, abi: 2, format: "gcc"},
-		{name: "v2 diagnostics absent", data: "\n{\"recognized\":false}", exit: 1, abi: 2},
+		{recognized: false, messages: nil, partial: false, name: "v2 not recognized", data: `{"recognized":false,"format":"gcc","diagnostics":[]}`, exit: 0, abi: 2, format: "gcc"},
+		{recognized: false, format: "", messages: nil, partial: false, name: "v2 diagnostics absent", data: "\n{\"recognized\":false}", exit: 1, abi: 2},
 		{
 			name: "v2 partial", data: `{"recognized":true,"format":"sarif","diagnostics":[{"message":"d"}],"partial":true}`,
 			exit: 1, abi: 2, recognized: true, format: "sarif", messages: []string{"d"}, partial: true,
 		},
 		{
-			name: "v2 fields a newer module adds are ignored",
-			data: `{"recognized":true,"format":"sarif","confidence":0.9,"diagnostics":[{"message":"c","extra":{"x":1}}]}`,
-			exit: 0, abi: 2, recognized: true, format: "sarif", messages: []string{"c"},
+			partial: false,
+			name:    "v2 fields a newer module adds are ignored",
+			data:    `{"recognized":true,"format":"sarif","confidence":0.9,"diagnostics":[{"message":"c","extra":{"x":1}}]}`,
+			exit:    0, abi: 2, recognized: true, format: "sarif", messages: []string{"c"},
 		},
 	}
 	for _, tt := range tests {
@@ -98,10 +102,10 @@ func TestNormalizeSchema(t *testing.T) {
 		wantSchema int
 		wantABI    int
 	}{
-		{"schema 1 answers arrays", Capabilities{SchemaVersion: 1}, 1, 1},
-		{"schema 2 answers arrays", Capabilities{SchemaVersion: 2}, 2, 1},
-		{"schema 3 declares its abi", Capabilities{SchemaVersion: 3, ABI: 2}, 3, 2},
-		{"a newer schema is read as the newest known", Capabilities{SchemaVersion: 99, ABI: 2}, SchemaNewest, 2},
+		{"schema 1 answers arrays", Capabilities{Module: "", Version: "", ABI: 0, Tools: nil, SchemaVersion: 1}, 1, 1},
+		{"schema 2 answers arrays", Capabilities{Module: "", Version: "", ABI: 0, Tools: nil, SchemaVersion: 2}, 2, 1},
+		{"schema 3 declares its abi", Capabilities{Module: "", Version: "", Tools: nil, SchemaVersion: 3, ABI: 2}, 3, 2},
+		{"a newer schema is read as the newest known", Capabilities{Module: "", Version: "", Tools: nil, SchemaVersion: 99, ABI: 2}, SchemaNewest, 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

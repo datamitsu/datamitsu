@@ -48,7 +48,7 @@ func TestHandleProvisionOperationRejectsMalformedRequestsBeforeMutation(t *testi
 		contains  string
 	}{
 		{"malformed JSON", "install-runtimes", json.RawMessage(`{"storeRoot":`), "decode install-runtimes"},
-		{"missing store", "install-runtimes", workerPayload(t, runtimemanager.InstallRuntimesRequest{CacheRoot: cache, Runtimes: config.MapOfRuntimes{}, Names: []string{}}), "worker store root is required"},
+		{"missing store", "install-runtimes", workerPayload(t, runtimemanager.InstallRuntimesRequest{StoreRoot: "", Concurrency: 0, CacheRoot: cache, Runtimes: config.MapOfRuntimes{}, Names: []string{}}), "worker store root is required"},
 		{"missing runtime definition", "ensure-execution", workerPayload(t, runtimemanager.EnsureExecutionRequest{StoreRoot: store, CacheRoot: cache, Runtimes: config.MapOfRuntimes{}, Name: "missing"}), "unknown runtime"},
 		{"malformed runtime definitions", "install-apps", workerPayload(t, map[string]any{"storeRoot": store, "cacheRoot": cache, "action": "install", "runtimeDefinitions": "{broken"}), "decode runtime definitions"},
 		{"malformed runtime request", "install-runtimes", workerPayload(t, map[string]any{"storeRoot": store, "cacheRoot": cache, "runtimes": "not-a-runtime-map"}), "decode install-runtimes request"},
@@ -176,7 +176,13 @@ func TestHandleProvisionOperationEnsuresSystemRuntimeExecution(t *testing.T) {
 		CacheRoot: env.GetCachePath(),
 		Runtimes: config.MapOfRuntimes{
 			"host-go": {
-				Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem,
+				Managed: nil,
+				Bun:     nil,
+				Node:    nil,
+				UV:      nil,
+				JVM:     nil,
+				PNPM:    nil,
+				Kind:    config.RuntimeKindGo, Mode: config.RuntimeModeSystem,
 				System: &config.RuntimeConfigSystem{Command: executable, SystemVersion: "test"},
 				Go:     &config.RuntimeConfigGo{GoVersion: "test"},
 			},
@@ -213,8 +219,14 @@ func TestHandleProvisionOperationInstallsNoSystemRuntimeAsSideEffect(t *testing.
 	req := runtimemanager.InstallRuntimesRequest{
 		StoreRoot: env.GetStorePath(), CacheRoot: env.GetCachePath(),
 		Runtimes: config.MapOfRuntimes{"host-go": {
-			Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: executable},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindGo, Mode: config.RuntimeModeSystem,
+			System: &config.RuntimeConfigSystem{SystemVersion: "", Command: executable},
 			Go:     &config.RuntimeConfigGo{GoVersion: "test"},
 		}},
 		Names: []string{"host-go"}, Concurrency: 1,
@@ -251,7 +263,7 @@ func TestHandleProvisionOperationEnsuresPinnedParser(t *testing.T) {
 	defer server.Close()
 	request := parsermanager.EnsureRequest{
 		StoreRoot: env.GetStorePath(), CacheRoot: env.GetCachePath(),
-		Parsers: config.MapOfParsers{"fixture": {URL: server.URL, Hash: hash}}, Names: []string{"fixture"},
+		Parsers: config.MapOfParsers{"fixture": {OCI: nil, URL: server.URL, Hash: hash}}, Names: []string{"fixture"},
 	}
 	result, err := handleProvisionOperation(context.Background(), "ensure-parsers", workerPayload(t, request))
 	if err != nil {
@@ -279,8 +291,9 @@ func TestHandleProvisionOperationPrepareAppsEmptySelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := binmanager.PrepareAppsRequest{
-		StoreRoot: env.GetStorePath(), CacheRoot: env.GetCachePath(),
-		Apps:    binmanager.MapOfApps{"probe": {Shell: &binmanager.AppConfigShell{Name: executable}}},
+		ToolCacheRoot: "",
+		StoreRoot:     env.GetStorePath(), CacheRoot: env.GetCachePath(),
+		Apps:    binmanager.MapOfApps{"probe": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: executable}}},
 		Bundles: binmanager.MapOfBundles{}, RuntimeDefinitions: json.RawMessage(`{}`), Names: []string{"probe"},
 	}
 	result, err := handleProvisionOperation(context.Background(), "prepare-apps", workerPayload(t, request))
@@ -296,8 +309,13 @@ func TestHandleProvisionOperationResolvesConfiguredShellApp(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("DATAMITSU_CACHE_DIR", root)
 	request := binmanager.ProvisionRequest{
-		StoreRoot: env.GetStorePath(), CacheRoot: env.GetCachePath(), Action: "get-command-info",
-		Apps:    binmanager.MapOfApps{"probe": {Shell: &binmanager.AppConfigShell{Name: "sh", Args: []string{"-c", "printf ready"}}}},
+		ToolCacheRoot:   "",
+		Names:           nil,
+		IncludeOptional: false,
+		Concurrency:     0,
+		FailOnError:     false,
+		StoreRoot:       env.GetStorePath(), CacheRoot: env.GetCachePath(), Action: "get-command-info",
+		Apps:    binmanager.MapOfApps{"probe": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Name: "sh", Args: []string{"-c", "printf ready"}}}},
 		Bundles: binmanager.MapOfBundles{}, RuntimeDefinitions: json.RawMessage(`{}`), AppName: "probe",
 	}
 	result, err := handleProvisionOperation(context.Background(), "install-apps", workerPayload(t, request))
@@ -357,11 +375,14 @@ func TestHandleProvisionOperationAcceptsEmptyProvisionPlans(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				apps["probe"] = binmanager.App{Shell: &binmanager.AppConfigShell{Name: executable}}
+				apps["probe"] = binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: executable}}
 				appName = "probe"
 			}
 			request := binmanager.ProvisionRequest{
-				StoreRoot: env.GetStorePath(), CacheRoot: env.GetCachePath(), Action: action,
+				ToolCacheRoot:   "",
+				IncludeOptional: false,
+				FailOnError:     false,
+				StoreRoot:       env.GetStorePath(), CacheRoot: env.GetCachePath(), Action: action,
 				Apps: apps, Bundles: binmanager.MapOfBundles{}, RuntimeDefinitions: json.RawMessage(`{}`),
 				Names: []string{}, AppName: appName, Concurrency: 1,
 			}
@@ -385,12 +406,38 @@ func TestHandleProvisionOperationGeneratesLocalGoLock(t *testing.T) {
 	request := runtimemanager.GenerateLockRequest{
 		StoreRoot: env.GetStorePath(), CacheRoot: env.GetCachePath(),
 		Runtimes: config.MapOfRuntimes{"go": {
-			Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem,
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindGo, Mode: config.RuntimeModeSystem,
 			System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "test"},
 		}},
 		AppName: "local-tool", App: binmanager.App{
-			Go:    &binmanager.AppConfigGo{PackageName: "example.invalid/local/tool", Version: "v1.0.0", Runtime: "go"},
-			Files: map[string]string{"go.mod": "module example.invalid/local\n\ngo 1.20\n"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Go:                 &binmanager.AppConfigGo{LockFile: "", PackageName: "example.invalid/local/tool", Version: "v1.0.0", Runtime: "go"},
+			Files:              map[string]string{"go.mod": "module example.invalid/local\n\ngo 1.20\n"},
 		},
 	}
 	result, err := handleProvisionOperation(context.Background(), "generate-lock", workerPayload(t, request))

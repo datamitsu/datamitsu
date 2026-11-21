@@ -116,7 +116,7 @@ func Acquire(ctx context.Context, storeRoot, target, label string) (context.Cont
 		return nil, nil, err
 	}
 	owner := fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
-	writer := &statusWriter{path: path, owner: owner, target: target, label: label, opID: uievent.NextOpID("install")}
+	writer := &statusWriter{mu: sync.Mutex{}, last: time.Time{}, lastEvent: time.Time{}, lastEventPhase: "", lastEventUnit: "", lastEventCompleted: 0, lastEventTotal: 0, hasEventCounters: false, closed: false, phase: "", completed: nil, total: nil, unit: "", path: path, owner: owner, target: target, label: label, opID: uievent.NextOpID("install")}
 	writer.write("install", nil, nil, "", true)
 	heartbeatDone := make(chan struct{})
 	heartbeatCtx, stopHeartbeat := context.WithCancel(ctx)
@@ -197,7 +197,7 @@ func waitStatus(ctx context.Context, path, label string) {
 				continue
 			}
 			last = message
-			event := uievent.Event{Type: uievent.TypeInstall, OpID: opID, TS: time.Now().UnixMilli(), Status: uievent.StatusProgress, Name: label, Msg: message}
+			event := uievent.Event{Op: "", Tool: "", Dir: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeInstall, OpID: opID, TS: time.Now().UnixMilli(), Status: uievent.StatusProgress, Name: label, Msg: message}
 			_ = provision.Progress(ctx, event)
 			if !provision.HasProgress(ctx) {
 				_, _ = fmt.Fprintln(os.Stderr, message)
@@ -249,7 +249,7 @@ func Progress(ctx context.Context, phase Phase, completed, total int64, unit str
 	if !emit {
 		return
 	}
-	event := uievent.Event{Type: uievent.TypeInstall, OpID: writer.opID, TS: now.UnixMilli(), Status: uievent.StatusProgress, Name: writer.label, Msg: phaseName}
+	event := uievent.Event{Op: "", Tool: "", Dir: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeInstall, OpID: writer.opID, TS: now.UnixMilli(), Status: uievent.StatusProgress, Name: writer.label, Msg: phaseName}
 	if phase == PhaseDownload {
 		event.Type = uievent.TypeDownload
 		if completed >= 0 {

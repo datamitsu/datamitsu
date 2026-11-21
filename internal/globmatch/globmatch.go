@@ -95,19 +95,19 @@ func prepare(glob string) pattern {
 	switch {
 	case strings.HasPrefix(glob, "**/*"):
 		if tail := glob[len("**/*"):]; tail != "" && !strings.ContainsAny(tail, metacharacters) {
-			return pattern{kind: kindSuffix, raw: glob, text: tail}
+			return pattern{extensions: nil, kind: kindSuffix, raw: glob, text: tail}
 		}
 	case strings.HasPrefix(glob, "**/"):
 		// A final-segment literal. It must not contain a separator: `**/a/b`
 		// anchors `a` to a directory boundary the segment test cannot express.
 		if tail := glob[len("**/"):]; tail != "" &&
 			!strings.ContainsAny(tail, metacharacters) && !strings.Contains(tail, "/") {
-			return pattern{kind: kindSegment, raw: glob, text: tail}
+			return pattern{extensions: nil, kind: kindSegment, raw: glob, text: tail}
 		}
 	case !strings.ContainsAny(glob, metacharacters):
-		return pattern{kind: kindLiteral, raw: glob, text: glob}
+		return pattern{extensions: nil, kind: kindLiteral, raw: glob, text: glob}
 	}
-	return pattern{kind: kindDoublestar, raw: glob, extensions: Extensions(glob)}
+	return pattern{text: "", kind: kindDoublestar, raw: glob, extensions: Extensions(glob)}
 }
 
 func (p *pattern) match(rel string) bool {

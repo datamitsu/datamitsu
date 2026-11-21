@@ -60,10 +60,11 @@ func TestSpans(t *testing.T) {
 			chars: Span{1, 1}, bytes: Span{1, 1}, utf16: Span{1, 1}, precision: Exact,
 		},
 		{
+			unit: "",
 			name: "an unknown unit on an ASCII line", line: "var x", col: 5, endCol: 6,
 			chars: Span{5, 6}, bytes: Span{5, 6}, utf16: Span{5, 6}, precision: ASCII,
 		},
-		{name: "an unknown unit on a line that is not ASCII", line: "é x", col: 3, endCol: 4, precision: Unknown},
+		{unit: "", chars: Span{Start: 0, End: 0}, bytes: Span{Start: 0, End: 0}, utf16: Span{Start: 0, End: 0}, name: "an unknown unit on a line that is not ASCII", line: "é x", col: 3, endCol: 4, precision: Unknown},
 		{
 			name: "an invalid byte is one unit", line: string([]byte{0xff, 'x'}), col: 2, endCol: 3, unit: UTF16,
 			chars: Span{2, 3}, bytes: Span{2, 3}, utf16: Span{2, 3}, precision: Exact,

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
@@ -18,15 +19,18 @@ import (
 
 func TestDetectRuntimeBinaries_BasicDetection(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "runtime-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin-amd64", Digest: "sha256:" + testHash1},
-		{Name: "runtime-darwin-arm64.tar.gz", BrowserDownloadURL: "https://example.com/darwin-arm64", Digest: "sha256:" + testHash2},
-		{Name: "runtime-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash3},
-		{Name: "runtime-linux-arm64.tar.gz", BrowserDownloadURL: "https://example.com/linux-arm64", Digest: "sha256:" + testHash4},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "runtime-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "runtime-darwin-arm64.tar.gz", BrowserDownloadURL: "https://example.com/darwin-arm64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "runtime-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "runtime-linux-arm64.tar.gz", BrowserDownloadURL: "https://example.com/linux-arm64", Digest: "sha256:" + testHash4},
 	}
 
 	release := &github.Release{
-		TagName: "v1.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v1.0.0",
+		Assets:      assets,
 	}
 
 	binaries, err := detectRuntimeBinaries("runtime", release)
@@ -53,14 +57,17 @@ func TestDetectRuntimeBinaries_DeduplicatesSingleLinuxBinary(t *testing.T) {
 	// When a single Linux binary exists per arch (no libc indicator),
 	// deduplication should keep only the glibc entry.
 	assets := []github.Asset{
-		{Name: "runtime-linux-amd64.zip", BrowserDownloadURL: "https://example.com/linux-amd64.zip", Digest: "sha256:" + testHash1},
-		{Name: "runtime-linux-arm64.zip", BrowserDownloadURL: "https://example.com/linux-arm64.zip", Digest: "sha256:" + testHash2},
-		{Name: "runtime-darwin-amd64.zip", BrowserDownloadURL: "https://example.com/darwin-amd64.zip", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "runtime-linux-amd64.zip", BrowserDownloadURL: "https://example.com/linux-amd64.zip", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "runtime-linux-arm64.zip", BrowserDownloadURL: "https://example.com/linux-arm64.zip", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "runtime-darwin-amd64.zip", BrowserDownloadURL: "https://example.com/darwin-amd64.zip", Digest: "sha256:" + testHash3},
 	}
 
 	release := &github.Release{
-		TagName: "v1.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v1.0.0",
+		Assets:      assets,
 	}
 
 	binaries, err := detectRuntimeBinaries("runtime", release)
@@ -81,15 +88,18 @@ func TestDetectRuntimeBinaries_DeduplicatesSingleLinuxBinary(t *testing.T) {
 func TestDetectRuntimeBinaries_SeparateMuslBinariesKept(t *testing.T) {
 	// When separate glibc and musl binaries exist, both should be kept.
 	assets := []github.Asset{
-		{Name: "runtime-linux-gnu-amd64.tar.gz", BrowserDownloadURL: "https://example.com/gnu", Digest: "sha256:" + testHash1},
-		{Name: "runtime-linux-musl-amd64.tar.gz", BrowserDownloadURL: "https://example.com/musl", Digest: "sha256:" + testHash2},
-		{Name: "runtime-linux-gnu-arm64.tar.gz", BrowserDownloadURL: "https://example.com/gnu-arm", Digest: "sha256:" + testHash3},
-		{Name: "runtime-linux-musl-arm64.tar.gz", BrowserDownloadURL: "https://example.com/musl-arm", Digest: "sha256:" + testHash4},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "runtime-linux-gnu-amd64.tar.gz", BrowserDownloadURL: "https://example.com/gnu", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "runtime-linux-musl-amd64.tar.gz", BrowserDownloadURL: "https://example.com/musl", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "runtime-linux-gnu-arm64.tar.gz", BrowserDownloadURL: "https://example.com/gnu-arm", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "runtime-linux-musl-arm64.tar.gz", BrowserDownloadURL: "https://example.com/musl-arm", Digest: "sha256:" + testHash4},
 	}
 
 	release := &github.Release{
-		TagName: "v1.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v1.0.0",
+		Assets:      assets,
 	}
 
 	binaries, err := detectRuntimeBinaries("runtime", release)
@@ -115,14 +125,17 @@ func TestDetectRuntimeBinaries_NoDuplicateMuslKeys(t *testing.T) {
 	// When the same binary is detected for both glibc and musl,
 	// only the glibc entry should exist (no duplicate URL+hash pairs).
 	assets := []github.Asset{
-		{Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash1},
-		{Name: "tool-linux-arm64.tar.gz", BrowserDownloadURL: "https://example.com/linux-arm64", Digest: "sha256:" + testHash2},
-		{Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin-amd64", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-arm64.tar.gz", BrowserDownloadURL: "https://example.com/linux-arm64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin-amd64", Digest: "sha256:" + testHash3},
 	}
 
 	release := &github.Release{
-		TagName: "v1.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v1.0.0",
+		Assets:      assets,
 	}
 
 	binaries, err := detectRuntimeBinaries("tool", release)
@@ -158,12 +171,15 @@ func TestDetectRuntimeBinaries_NoDuplicateMuslKeys(t *testing.T) {
 
 func TestDetectRuntimeBinaries_MissingHashReturnsError(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux", Digest: ""},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux", Digest: ""},
 	}
 
 	release := &github.Release{
-		TagName: "v1.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v1.0.0",
+		Assets:      assets,
 	}
 
 	_, err := detectRuntimeBinaries("tool", release)
@@ -174,12 +190,15 @@ func TestDetectRuntimeBinaries_MissingHashReturnsError(t *testing.T) {
 
 func TestDetectRuntimeBinaries_NoMatchingAssetsReturnsError(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "completely-unrelated.txt", BrowserDownloadURL: "https://example.com/txt", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "completely-unrelated.txt", BrowserDownloadURL: "https://example.com/txt", Digest: "sha256:" + testHash1},
 	}
 
 	release := &github.Release{
-		TagName: "v1.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v1.0.0",
+		Assets:      assets,
 	}
 
 	_, err := detectRuntimeBinaries("tool", release)
@@ -190,12 +209,15 @@ func TestDetectRuntimeBinaries_NoMatchingAssetsReturnsError(t *testing.T) {
 
 func TestDetectRuntimeBinaries_HashExtraction(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin", Digest: "sha256:" + testHash1},
 	}
 
 	release := &github.Release{
-		TagName: "v1.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v1.0.0",
+		Assets:      assets,
 	}
 
 	binaries, err := detectRuntimeBinaries("tool", release)
@@ -211,12 +233,15 @@ func TestDetectRuntimeBinaries_HashExtraction(t *testing.T) {
 
 func TestDetectRuntimeBinaries_ContentTypeDetection(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "tool-darwin-arm64.zip", BrowserDownloadURL: "https://example.com/zip", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-arm64.zip", BrowserDownloadURL: "https://example.com/zip", Digest: "sha256:" + testHash1},
 	}
 
 	release := &github.Release{
-		TagName: "v1.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v1.0.0",
+		Assets:      assets,
 	}
 
 	binaries, err := detectRuntimeBinaries("tool", release)
@@ -233,16 +258,19 @@ func TestDetectRuntimeBinaries_ContentTypeDetection(t *testing.T) {
 func TestDetectRuntimeBinaries_UVSeparateMuslBinaries(t *testing.T) {
 	// UV has separate gnu and musl tarballs — both should be kept
 	assets := []github.Asset{
-		{Name: "uv-x86_64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-amd64", Digest: "sha256:" + testHash1},
-		{Name: "uv-aarch64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-arm64", Digest: "sha256:" + testHash2},
-		{Name: "uv-x86_64-unknown-linux-gnu.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-gnu-amd64", Digest: "sha256:" + testHash3},
-		{Name: "uv-x86_64-unknown-linux-musl.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-musl-amd64", Digest: "sha256:" + testHash4},
-		{Name: "uv-aarch64-unknown-linux-gnu.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-gnu-arm64", Digest: "sha256:" + testHash5},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-aarch64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-arm64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-unknown-linux-gnu.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-gnu-amd64", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-unknown-linux-musl.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-musl-amd64", Digest: "sha256:" + testHash4},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-aarch64-unknown-linux-gnu.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-gnu-arm64", Digest: "sha256:" + testHash5},
 	}
 
 	release := &github.Release{
-		TagName: "0.10.9",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "0.10.9",
+		Assets:      assets,
 	}
 
 	binaries, err := detectRuntimeBinaries("uv", release)
@@ -275,13 +303,16 @@ func TestDetectRuntimeBinaries_UVDeduplicationSkipsWhenSameFile(t *testing.T) {
 	// If UV somehow had the same file for both gnu and musl (hypothetical),
 	// deduplication should skip the musl entry
 	assets := []github.Asset{
-		{Name: "uv-x86_64-unknown-linux.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-amd64", Digest: "sha256:" + testHash1},
-		{Name: "uv-aarch64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-arm64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-unknown-linux.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-aarch64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-arm64", Digest: "sha256:" + testHash2},
 	}
 
 	release := &github.Release{
-		TagName: "0.10.9",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "0.10.9",
+		Assets:      assets,
 	}
 
 	binaries, err := detectRuntimeBinaries("uv", release)
@@ -301,13 +332,16 @@ func TestDetectRuntimeBinaries_UVDeduplicationSkipsWhenSameFile(t *testing.T) {
 func TestDetectRuntimeBinaries_UVLibcMismatchRejection(t *testing.T) {
 	// When only musl assets exist for Linux, glibc tuple should NOT get the musl asset
 	assets := []github.Asset{
-		{Name: "uv-x86_64-unknown-linux-musl.tar.gz", BrowserDownloadURL: "https://example.com/uv-musl", Digest: "sha256:" + testHash1},
-		{Name: "uv-x86_64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-unknown-linux-musl.tar.gz", BrowserDownloadURL: "https://example.com/uv-musl", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin", Digest: "sha256:" + testHash2},
 	}
 
 	release := &github.Release{
-		TagName: "0.10.9",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "0.10.9",
+		Assets:      assets,
 	}
 
 	binaries, err := detectRuntimeBinaries("uv", release)
@@ -328,16 +362,19 @@ func TestDetectRuntimeBinaries_UVLibcMismatchRejection(t *testing.T) {
 
 func TestDetectJVMBinaries_AlpineLinuxDetectedAsMusl(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/mac-amd64", Digest: "sha256:" + testHash1},
-		{Name: "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/mac-arm64", Digest: "sha256:" + testHash2},
-		{Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash3},
-		{Name: "OpenJDK25U-jdk_x64_alpine-linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/alpine-amd64", Digest: "sha256:" + testHash4},
-		{Name: "OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/linux-arm64", Digest: "sha256:" + testHash5},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/mac-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/mac-arm64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_alpine-linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/alpine-amd64", Digest: "sha256:" + testHash4},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/linux-arm64", Digest: "sha256:" + testHash5},
 	}
 
 	release := &github.Release{
-		TagName: "jdk-25.0.2+10",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "jdk-25.0.2+10",
+		Assets:      assets,
 	}
 
 	binaries, err := detectJVMBinaries(release)
@@ -365,13 +402,16 @@ func TestDetectJVMBinaries_AlpineLinuxDetectedAsMusl(t *testing.T) {
 func TestDetectJVMBinaries_Deduplication(t *testing.T) {
 	// If only a single linux binary (no alpine variant), musl should be deduplicated
 	assets := []github.Asset{
-		{Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash1},
-		{Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/mac-amd64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/mac-amd64", Digest: "sha256:" + testHash2},
 	}
 
 	release := &github.Release{
-		TagName: "jdk-25.0.2+10",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "jdk-25.0.2+10",
+		Assets:      assets,
 	}
 
 	binaries, err := detectJVMBinaries(release)
@@ -390,14 +430,17 @@ func TestDetectJVMBinaries_Deduplication(t *testing.T) {
 
 func TestDetectJVMBinaries_ExtractDirSetCorrectly(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/mac-amd64", Digest: "sha256:" + testHash1},
-		{Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash2},
-		{Name: "OpenJDK25U-jdk_x64_alpine-linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/alpine-amd64", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/mac-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_alpine-linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/alpine-amd64", Digest: "sha256:" + testHash3},
 	}
 
 	release := &github.Release{
-		TagName: "jdk-25.0.2+10",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "jdk-25.0.2+10",
+		Assets:      assets,
 	}
 
 	binaries, err := detectJVMBinaries(release)
@@ -418,14 +461,17 @@ func TestDetectJVMBinaries_ExtractDirSetCorrectly(t *testing.T) {
 
 func TestDetectJVMBinaries_BinaryPathDetection(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/mac-amd64", Digest: "sha256:" + testHash1},
-		{Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash2},
-		{Name: "OpenJDK25U-jdk_x64_alpine-linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/alpine-amd64", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/mac-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_alpine-linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/alpine-amd64", Digest: "sha256:" + testHash3},
 	}
 
 	release := &github.Release{
-		TagName: "jdk-25.0.2+10",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "jdk-25.0.2+10",
+		Assets:      assets,
 	}
 
 	binaries, err := detectJVMBinaries(release)
@@ -465,12 +511,15 @@ func TestDetectJVMBinaries_BinaryPathDetection(t *testing.T) {
 
 func TestDetectJVMBinaries_NoMatchingAssetsReturnsError(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "unrelated-file.txt", BrowserDownloadURL: "https://example.com/txt", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "unrelated-file.txt", BrowserDownloadURL: "https://example.com/txt", Digest: "sha256:" + testHash1},
 	}
 
 	release := &github.Release{
-		TagName: "jdk-25.0.2+10",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "jdk-25.0.2+10",
+		Assets:      assets,
 	}
 
 	_, err := detectJVMBinaries(release)
@@ -489,28 +538,31 @@ func TestDetectJVMBinaries_OnlyJDKAssetsSelected(t *testing.T) {
 	// since their score ties (both have same OS, arch, content type).
 	assets := []github.Asset{
 		// macOS amd64 variants
-		{Name: "OpenJDK25U-debugimage_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-mac-amd64", Digest: "sha256:" + testHash1},
-		{Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-mac-amd64", Digest: "sha256:" + testHash2},
-		{Name: "OpenJDK25U-jre_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jre-mac-amd64", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-debugimage_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-mac-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-mac-amd64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jre_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jre-mac-amd64", Digest: "sha256:" + testHash3},
 		// macOS arm64 variants
-		{Name: "OpenJDK25U-debugimage_aarch64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-mac-arm64", Digest: "sha256:" + testHash4},
-		{Name: "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-mac-arm64", Digest: "sha256:" + testHash5},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-debugimage_aarch64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-mac-arm64", Digest: "sha256:" + testHash4},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-mac-arm64", Digest: "sha256:" + testHash5},
 		// linux amd64 variants
-		{Name: "OpenJDK25U-debugimage_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-linux-amd64", Digest: "sha256:" + testHash1},
-		{Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-linux-amd64", Digest: "sha256:" + testHash2},
-		{Name: "OpenJDK25U-jre_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jre-linux-amd64", Digest: "sha256:" + testHash3},
-		{Name: "OpenJDK25U-static-libs-glibc_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/static-libs-glibc-linux-amd64", Digest: "sha256:" + testHash4},
-		{Name: "OpenJDK25U-static-libs_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/static-libs-linux-amd64", Digest: "sha256:" + testHash5},
-		{Name: "OpenJDK25U-sbom_x64_linux_hotspot_25.0.2_10.json", BrowserDownloadURL: "https://example.com/sbom-linux-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-debugimage_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-linux-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-linux-amd64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jre_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jre-linux-amd64", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-static-libs-glibc_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/static-libs-glibc-linux-amd64", Digest: "sha256:" + testHash4},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-static-libs_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/static-libs-linux-amd64", Digest: "sha256:" + testHash5},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-sbom_x64_linux_hotspot_25.0.2_10.json", BrowserDownloadURL: "https://example.com/sbom-linux-amd64", Digest: "sha256:" + testHash1},
 		// linux arm64 variants
-		{Name: "OpenJDK25U-debugimage_aarch64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-linux-arm64", Digest: "sha256:" + testHash2},
-		{Name: "OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-linux-arm64", Digest: "sha256:" + testHash3},
-		{Name: "OpenJDK25U-static-libs-glibc_aarch64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/static-libs-glibc-linux-arm64", Digest: "sha256:" + testHash4},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-debugimage_aarch64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/debugimage-linux-arm64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-linux-arm64", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-static-libs-glibc_aarch64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/static-libs-glibc-linux-arm64", Digest: "sha256:" + testHash4},
 	}
 
 	release := &github.Release{
-		TagName: "jdk-25.0.2+10",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "jdk-25.0.2+10",
+		Assets:      assets,
 	}
 
 	binaries, err := detectJVMBinaries(release)
@@ -555,17 +607,17 @@ func TestDetectJVMBinaries_OnlyJDKAssetsSelected(t *testing.T) {
 
 func TestFilterJDKAssets(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz"},
-		{Name: "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz"},
-		{Name: "OpenJDK25U-jdk_x64_windows_hotspot_25.0.2_10.zip"},
-		{Name: "OpenJDK25U-jre_x64_linux_hotspot_25.0.2_10.tar.gz"},
-		{Name: "OpenJDK25U-debugimage_x64_linux_hotspot_25.0.2_10.tar.gz"},
-		{Name: "OpenJDK25U-static-libs_x64_linux_hotspot_25.0.2_10.tar.gz"},
-		{Name: "OpenJDK25U-static-libs-glibc_x64_linux_hotspot_25.0.2_10.tar.gz"},
-		{Name: "OpenJDK25U-jmods_x64_linux_hotspot_25.0.2_10.tar.gz"},
-		{Name: "OpenJDK25U-sbom_x64_linux_hotspot_25.0.2_10.json"},
-		{Name: "OpenJDK25U-sources_x64_linux_hotspot_25.0.2_10.tar.gz"},
-		{Name: "unrelated-file.txt"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-jdk_x64_windows_hotspot_25.0.2_10.zip"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-jre_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-debugimage_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-static-libs_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-static-libs-glibc_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-jmods_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-sbom_x64_linux_hotspot_25.0.2_10.json"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-sources_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "unrelated-file.txt"},
 	}
 
 	filtered := filterJDKAssets(assets)
@@ -590,8 +642,8 @@ func TestFilterJDKAssets_EmptyInput(t *testing.T) {
 
 func TestFilterJDKAssets_NoJDKAssets(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "OpenJDK25U-jre_x64_linux_hotspot_25.0.2_10.tar.gz"},
-		{Name: "OpenJDK25U-debugimage_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-jre_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-debugimage_x64_linux_hotspot_25.0.2_10.tar.gz"},
 	}
 	filtered := filterJDKAssets(assets)
 	if len(filtered) != 0 {
@@ -601,8 +653,8 @@ func TestFilterJDKAssets_NoJDKAssets(t *testing.T) {
 
 func TestFilterJDKAssets_CaseInsensitive(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "OpenJDK25U-JDK_x64_linux_hotspot_25.0.2_10.tar.gz"},
-		{Name: "OpenJDK25U-Jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-JDK_x64_linux_hotspot_25.0.2_10.tar.gz"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, BrowserDownloadURL: "", Size: 0, ContentType: "", Digest: "", Name: "OpenJDK25U-Jdk_aarch64_mac_hotspot_25.0.2_10.tar.gz"},
 	}
 	filtered := filterJDKAssets(assets)
 	if len(filtered) != 2 {
@@ -644,7 +696,9 @@ func buildTestRuntimes() RuntimesJSON {
 				syslist.OsTypeDarwin: {
 					syslist.ArchTypeAmd64: {
 						"unknown": binmanager.BinaryOsArchInfo{
-							URL: "https://example.com/node-macos.zip", Hash: testHash2,
+							Auth:       nil,
+							ExtractDir: false,
+							URL:        "https://example.com/node-macos.zip", Hash: testHash2,
 							ContentType: binmanager.BinContentTypeZip, BinaryPath: &bp,
 						},
 					},
@@ -652,7 +706,9 @@ func buildTestRuntimes() RuntimesJSON {
 				syslist.OsTypeLinux: {
 					syslist.ArchTypeAmd64: {
 						"glibc": binmanager.BinaryOsArchInfo{
-							URL: "https://example.com/node-linux.zip", Hash: testHash3,
+							Auth:       nil,
+							ExtractDir: false,
+							URL:        "https://example.com/node-linux.zip", Hash: testHash3,
 							ContentType: binmanager.BinContentTypeZip, BinaryPath: &bp,
 						},
 					},
@@ -660,12 +716,14 @@ func buildTestRuntimes() RuntimesJSON {
 			},
 		),
 		"uv": buildUVRuntimeJSON(
-			&UVRuntimeData{PythonVersion: "3.14.3"},
+			&UVRuntimeData{PythonDownloads: nil, PythonVersion: "3.14.3"},
 			binmanager.MapOfBinaries{
 				syslist.OsTypeDarwin: {
 					syslist.ArchTypeAmd64: {
 						"unknown": binmanager.BinaryOsArchInfo{
-							URL: "https://example.com/uv-darwin.tar.gz", Hash: testHash1,
+							Auth:       nil,
+							ExtractDir: false,
+							URL:        "https://example.com/uv-darwin.tar.gz", Hash: testHash1,
 							ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &uvBP,
 						},
 					},
@@ -673,11 +731,15 @@ func buildTestRuntimes() RuntimesJSON {
 				syslist.OsTypeLinux: {
 					syslist.ArchTypeAmd64: {
 						"glibc": binmanager.BinaryOsArchInfo{
-							URL: "https://example.com/uv-gnu.tar.gz", Hash: testHash2,
+							Auth:       nil,
+							ExtractDir: false,
+							URL:        "https://example.com/uv-gnu.tar.gz", Hash: testHash2,
 							ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &uvBP,
 						},
 						"musl": binmanager.BinaryOsArchInfo{
-							URL: "https://example.com/uv-musl.tar.gz", Hash: testHash3,
+							Auth:       nil,
+							ExtractDir: false,
+							URL:        "https://example.com/uv-musl.tar.gz", Hash: testHash3,
 							ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &uvBP,
 						},
 					},
@@ -690,7 +752,8 @@ func buildTestRuntimes() RuntimesJSON {
 				syslist.OsTypeDarwin: {
 					syslist.ArchTypeAmd64: {
 						"unknown": binmanager.BinaryOsArchInfo{
-							URL: "https://example.com/jdk-mac.tar.gz", Hash: testHash1,
+							Auth: nil,
+							URL:  "https://example.com/jdk-mac.tar.gz", Hash: testHash1,
 							ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &jdkMacBP,
 							ExtractDir: true,
 						},
@@ -699,12 +762,14 @@ func buildTestRuntimes() RuntimesJSON {
 				syslist.OsTypeLinux: {
 					syslist.ArchTypeAmd64: {
 						"glibc": binmanager.BinaryOsArchInfo{
-							URL: "https://example.com/jdk-linux.tar.gz", Hash: testHash2,
+							Auth: nil,
+							URL:  "https://example.com/jdk-linux.tar.gz", Hash: testHash2,
 							ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &jdkBP,
 							ExtractDir: true,
 						},
 						"musl": binmanager.BinaryOsArchInfo{
-							URL: "https://example.com/jdk-alpine.tar.gz", Hash: testHash3,
+							Auth: nil,
+							URL:  "https://example.com/jdk-alpine.tar.gz", Hash: testHash3,
 							ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &jdkBP,
 							ExtractDir: true,
 						},
@@ -933,7 +998,7 @@ func TestWriteRuntimesJSON_AtomicWrite(t *testing.T) {
 }
 
 func TestBuildUVRuntimeJSON(t *testing.T) {
-	data := &UVRuntimeData{PythonVersion: "3.14.3"}
+	data := &UVRuntimeData{PythonDownloads: nil, PythonVersion: "3.14.3"}
 	binaries := make(binmanager.MapOfBinaries)
 
 	result := buildUVRuntimeJSON(data, binaries)
@@ -1014,7 +1079,15 @@ func TestIsValidRuntime(t *testing.T) {
 
 func TestRuntimeVersion_UV(t *testing.T) {
 	r := &RuntimeJSON{
-		UV: &UVConfigJSON{PythonVersion: "3.14.3"},
+		Kind:    "",
+		Mode:    "",
+		Managed: nil,
+		Bun:     nil,
+		JVM:     nil,
+		Node:    nil,
+		Go:      nil,
+		PNPM:    nil,
+		UV:      &UVConfigJSON{PythonDownloads: nil, PythonVersion: "3.14.3"},
 	}
 	v := runtimeVersion(r)
 	if !strings.Contains(v, "python=3.14.3") {
@@ -1024,7 +1097,15 @@ func TestRuntimeVersion_UV(t *testing.T) {
 
 func TestRuntimeVersion_JVM(t *testing.T) {
 	r := &RuntimeJSON{
-		JVM: &JVMConfigJSON{JavaVersion: "25"},
+		Kind:    "",
+		Mode:    "",
+		Managed: nil,
+		Bun:     nil,
+		UV:      nil,
+		Node:    nil,
+		Go:      nil,
+		PNPM:    nil,
+		JVM:     &JVMConfigJSON{JavaVersion: "25"},
 	}
 	v := runtimeVersion(r)
 	if !strings.Contains(v, "java=25") {
@@ -1041,7 +1122,15 @@ func TestRuntimeVersion_Nil(t *testing.T) {
 
 func TestRuntimeVersion_Go(t *testing.T) {
 	r := &RuntimeJSON{
-		Go: &GoConfigJSON{GoVersion: "1.26.3"},
+		Kind:    "",
+		Mode:    "",
+		Managed: nil,
+		Bun:     nil,
+		UV:      nil,
+		JVM:     nil,
+		Node:    nil,
+		PNPM:    nil,
+		Go:      &GoConfigJSON{GoVersion: "1.26.3"},
 	}
 	v := runtimeVersion(r)
 	if !strings.Contains(v, "go=1.26.3") {
@@ -1228,6 +1317,11 @@ func TestReadWriteRuntimesJSON_RoundtripPreservesCarriedOverKind(t *testing.T) {
 	gbp := "go/bin/go"
 	original := buildTestRuntimes()
 	original["go"] = &RuntimeJSON{
+		Bun:  nil,
+		UV:   nil,
+		JVM:  nil,
+		Node: nil,
+		PNPM: nil,
 		Kind: "go",
 		Mode: "managed",
 		Go:   &GoConfigJSON{GoVersion: "1.26.3"},
@@ -1236,7 +1330,8 @@ func TestReadWriteRuntimesJSON_RoundtripPreservesCarriedOverKind(t *testing.T) {
 				syslist.OsTypeLinux: {
 					syslist.ArchTypeAmd64: {
 						"glibc": binmanager.BinaryOsArchInfo{
-							URL: "https://go.dev/dl/go1.26.3.linux-amd64.tar.gz", Hash: testHash4,
+							Auth: nil,
+							URL:  "https://go.dev/dl/go1.26.3.linux-amd64.tar.gz", Hash: testHash4,
 							ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &gbp,
 							ExtractDir: true,
 						},
@@ -1441,12 +1536,15 @@ func TestIntegration_FullPullFlow(t *testing.T) {
 
 	// Simulate Node release (single Linux binary per arch → only glibc)
 	nodeRelease := &github.Release{
-		TagName: "v24.14.0",
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v24.14.0",
 		Assets: []github.Asset{
-			{Name: "node-darwin-amd64.zip", BrowserDownloadURL: "https://example.com/node-darwin-amd64.zip", Digest: "sha256:" + testHash1},
-			{Name: "node-darwin-arm64.zip", BrowserDownloadURL: "https://example.com/node-darwin-arm64.zip", Digest: "sha256:" + testHash2},
-			{Name: "node-linux-amd64.zip", BrowserDownloadURL: "https://example.com/node-linux-amd64.zip", Digest: "sha256:" + testHash3},
-			{Name: "node-linux-arm64.zip", BrowserDownloadURL: "https://example.com/node-linux-arm64.zip", Digest: "sha256:" + testHash4},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "node-darwin-amd64.zip", BrowserDownloadURL: "https://example.com/node-darwin-amd64.zip", Digest: "sha256:" + testHash1},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "node-darwin-arm64.zip", BrowserDownloadURL: "https://example.com/node-darwin-arm64.zip", Digest: "sha256:" + testHash2},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "node-linux-amd64.zip", BrowserDownloadURL: "https://example.com/node-linux-amd64.zip", Digest: "sha256:" + testHash3},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "node-linux-arm64.zip", BrowserDownloadURL: "https://example.com/node-linux-arm64.zip", Digest: "sha256:" + testHash4},
 		},
 	}
 	nodeBinaries, err := detectRuntimeBinaries("node", nodeRelease)
@@ -1458,27 +1556,33 @@ func TestIntegration_FullPullFlow(t *testing.T) {
 
 	// Simulate UV release (separate gnu + musl → both keys)
 	uvRelease := &github.Release{
-		TagName: "0.10.9",
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "0.10.9",
 		Assets: []github.Asset{
-			{Name: "uv-x86_64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-amd64", Digest: "sha256:" + testHash1},
-			{Name: "uv-x86_64-unknown-linux-gnu.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-gnu", Digest: "sha256:" + testHash2},
-			{Name: "uv-x86_64-unknown-linux-musl.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-musl", Digest: "sha256:" + testHash3},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-amd64", Digest: "sha256:" + testHash1},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-unknown-linux-gnu.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-gnu", Digest: "sha256:" + testHash2},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-unknown-linux-musl.tar.gz", BrowserDownloadURL: "https://example.com/uv-linux-musl", Digest: "sha256:" + testHash3},
 		},
 	}
 	uvBinaries, err := detectRuntimeBinaries("uv", uvRelease)
 	if err != nil {
 		t.Fatalf("detectRuntimeBinaries(uv): %v", err)
 	}
-	uvData := &UVRuntimeData{PythonVersion: "3.14.3"}
+	uvData := &UVRuntimeData{PythonDownloads: nil, PythonVersion: "3.14.3"}
 	uvJSON := buildUVRuntimeJSON(uvData, uvBinaries)
 
 	// Simulate JVM release (linux + alpine-linux → both keys)
 	jvmRelease := &github.Release{
-		TagName: "jdk-25.0.2+10",
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "jdk-25.0.2+10",
 		Assets: []github.Asset{
-			{Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-mac", Digest: "sha256:" + testHash1},
-			{Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-linux", Digest: "sha256:" + testHash2},
-			{Name: "OpenJDK25U-jdk_x64_alpine-linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-alpine", Digest: "sha256:" + testHash3},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_mac_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-mac", Digest: "sha256:" + testHash1},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-linux", Digest: "sha256:" + testHash2},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "OpenJDK25U-jdk_x64_alpine-linux_hotspot_25.0.2_10.tar.gz", BrowserDownloadURL: "https://example.com/jdk-alpine", Digest: "sha256:" + testHash3},
 		},
 	}
 	jvmBinaries, err := detectJVMBinaries(jvmRelease)
@@ -1550,13 +1654,16 @@ func TestIntegration_MuslBinaryAddition(t *testing.T) {
 
 	// UV with separate gnu and musl for both amd64 and arm64
 	uvRelease := &github.Release{
-		TagName: "0.10.9",
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "0.10.9",
 		Assets: []github.Asset{
-			{Name: "uv-x86_64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-amd64", Digest: "sha256:" + testHash1},
-			{Name: "uv-aarch64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-arm64", Digest: "sha256:" + testHash2},
-			{Name: "uv-x86_64-unknown-linux-gnu.tar.gz", BrowserDownloadURL: "https://example.com/uv-gnu-amd64", Digest: "sha256:" + testHash3},
-			{Name: "uv-x86_64-unknown-linux-musl.tar.gz", BrowserDownloadURL: "https://example.com/uv-musl-amd64", Digest: "sha256:" + testHash4},
-			{Name: "uv-aarch64-unknown-linux-gnu.tar.gz", BrowserDownloadURL: "https://example.com/uv-gnu-arm64", Digest: "sha256:" + testHash5},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-amd64", Digest: "sha256:" + testHash1},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-aarch64-apple-darwin.tar.gz", BrowserDownloadURL: "https://example.com/uv-darwin-arm64", Digest: "sha256:" + testHash2},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-unknown-linux-gnu.tar.gz", BrowserDownloadURL: "https://example.com/uv-gnu-amd64", Digest: "sha256:" + testHash3},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-x86_64-unknown-linux-musl.tar.gz", BrowserDownloadURL: "https://example.com/uv-musl-amd64", Digest: "sha256:" + testHash4},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "uv-aarch64-unknown-linux-gnu.tar.gz", BrowserDownloadURL: "https://example.com/uv-gnu-arm64", Digest: "sha256:" + testHash5},
 		},
 	}
 	uvBinaries, err := detectRuntimeBinaries("uv", uvRelease)
@@ -1564,7 +1671,7 @@ func TestIntegration_MuslBinaryAddition(t *testing.T) {
 		t.Fatalf("detectRuntimeBinaries(uv): %v", err)
 	}
 
-	uvJSON := buildUVRuntimeJSON(&UVRuntimeData{PythonVersion: "3.14.3"}, uvBinaries)
+	uvJSON := buildUVRuntimeJSON(&UVRuntimeData{PythonDownloads: nil, PythonVersion: "3.14.3"}, uvBinaries)
 	runtimes := RuntimesJSON{"uv": uvJSON}
 
 	if err := writeRuntimesJSON(outputPath, runtimes); err != nil {
@@ -1607,11 +1714,14 @@ func TestIntegration_GracefulFallbackNoMusl(t *testing.T) {
 
 	// Node: single Linux binary per arch (no musl variant)
 	nodeRelease := &github.Release{
-		TagName: "v24.14.0",
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v24.14.0",
 		Assets: []github.Asset{
-			{Name: "node-darwin-amd64.zip", BrowserDownloadURL: "https://example.com/node-darwin-amd64.zip", Digest: "sha256:" + testHash1},
-			{Name: "node-linux-amd64.zip", BrowserDownloadURL: "https://example.com/node-linux-amd64.zip", Digest: "sha256:" + testHash2},
-			{Name: "node-linux-arm64.zip", BrowserDownloadURL: "https://example.com/node-linux-arm64.zip", Digest: "sha256:" + testHash3},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "node-darwin-amd64.zip", BrowserDownloadURL: "https://example.com/node-darwin-amd64.zip", Digest: "sha256:" + testHash1},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "node-linux-amd64.zip", BrowserDownloadURL: "https://example.com/node-linux-amd64.zip", Digest: "sha256:" + testHash2},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "node-linux-arm64.zip", BrowserDownloadURL: "https://example.com/node-linux-arm64.zip", Digest: "sha256:" + testHash3},
 		},
 	}
 	nodeBinaries, err := detectRuntimeBinaries("node", nodeRelease)
@@ -1656,16 +1766,16 @@ func TestIntegration_VersionDetectionWithFallback(t *testing.T) {
 		&NodeRuntimeData{NodeVersion: "24.14.0"},
 		binmanager.MapOfBinaries{
 			syslist.OsTypeDarwin: {
-				syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{URL: "x", Hash: testHash1}},
+				syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{Auth: nil, ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "x", Hash: testHash1}},
 			},
 		},
 	)
 
 	uvJSON := buildUVRuntimeJSON(
-		&UVRuntimeData{PythonVersion: "3.14.3"},
+		&UVRuntimeData{PythonDownloads: nil, PythonVersion: "3.14.3"},
 		binmanager.MapOfBinaries{
 			syslist.OsTypeDarwin: {
-				syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{URL: "x", Hash: testHash1}},
+				syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{Auth: nil, ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "x", Hash: testHash1}},
 			},
 		},
 	)
@@ -1674,7 +1784,7 @@ func TestIntegration_VersionDetectionWithFallback(t *testing.T) {
 		&JVMRuntimeData{JavaVersion: "25"},
 		binmanager.MapOfBinaries{
 			syslist.OsTypeDarwin: {
-				syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{URL: "x", Hash: testHash1}},
+				syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{Auth: nil, ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "x", Hash: testHash1}},
 			},
 		},
 	)
@@ -1897,8 +2007,8 @@ func TestRuntimesToPull(t *testing.T) {
 func TestWriteRuntimesJSON_SortedKeys(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "runtimes.json")
 	runtimes := RuntimesJSON{
-		"uv":  {Kind: "uv", Mode: "managed"},
-		"bun": {Kind: "bun", Mode: "managed"},
+		"uv":  {Managed: nil, Bun: nil, UV: nil, JVM: nil, Node: nil, Go: nil, PNPM: nil, Kind: "uv", Mode: "managed"},
+		"bun": {Managed: nil, Bun: nil, UV: nil, JVM: nil, Node: nil, Go: nil, PNPM: nil, Kind: "bun", Mode: "managed"},
 	}
 	if err := writeRuntimesJSON(path, runtimes); err != nil {
 		t.Fatal(err)

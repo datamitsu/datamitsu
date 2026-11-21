@@ -56,8 +56,39 @@ func init() {
 }
 
 var pullRuntimesCmd = &cobra.Command{
-	Use:   "pull-runtimes <file>",
-	Short: "Pull runtime configurations from upstream releases",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "pull-runtimes <file>",
+	Short:                      "Pull runtime configurations from upstream releases",
 	Long: `Pull runtime configurations (Bun, UV, JVM, Node, Go, pnpm) with latest versions from upstream.
 
 Fetches latest releases from GitHub, computes SHA-256 hashes, and writes
@@ -141,7 +172,7 @@ func runPullRuntimes(cmd *cobra.Command, args []string) error {
 	for i, name := range runtimesToUpdate {
 		fmt.Printf("\n=== Updating %s [%d/%d] ===\n", name, i+1, len(runtimesToUpdate))
 
-		result := runtimePullResult{name: name}
+		result := runtimePullResult{oldVersion: "", newVersion: "", updated: false, err: nil, name: name}
 		old := runtimes[name]
 		runtimeJSON, err := pullOneRuntime(ctx, name, minAge)
 		if err == nil {
@@ -470,6 +501,11 @@ func writeRuntimesJSON(path string, runtimes RuntimesJSON) error {
 // buildUVRuntimeJSON constructs a RuntimeJSON from UV updater results.
 func buildUVRuntimeJSON(data *UVRuntimeData, binaries binmanager.MapOfBinaries) *RuntimeJSON {
 	return &RuntimeJSON{
+		Bun:  nil,
+		JVM:  nil,
+		Node: nil,
+		Go:   nil,
+		PNPM: nil,
 		Kind: "uv",
 		Mode: "managed",
 		Managed: &RuntimeManagedJSON{
@@ -485,6 +521,11 @@ func buildUVRuntimeJSON(data *UVRuntimeData, binaries binmanager.MapOfBinaries) 
 // buildBunRuntimeJSON constructs a RuntimeJSON from Bun updater results.
 func buildBunRuntimeJSON(data *BunRuntimeData, binaries binmanager.MapOfBinaries) *RuntimeJSON {
 	return &RuntimeJSON{
+		UV:   nil,
+		JVM:  nil,
+		Node: nil,
+		Go:   nil,
+		PNPM: nil,
 		Kind: "bun",
 		Mode: "managed",
 		Managed: &RuntimeManagedJSON{
@@ -500,6 +541,11 @@ func buildBunRuntimeJSON(data *BunRuntimeData, binaries binmanager.MapOfBinaries
 // buildJVMRuntimeJSON constructs a RuntimeJSON from JVM updater results.
 func buildJVMRuntimeJSON(data *JVMRuntimeData, binaries binmanager.MapOfBinaries) *RuntimeJSON {
 	return &RuntimeJSON{
+		Bun:  nil,
+		UV:   nil,
+		Node: nil,
+		Go:   nil,
+		PNPM: nil,
 		Kind: "jvm",
 		Mode: "managed",
 		Managed: &RuntimeManagedJSON{
@@ -514,6 +560,11 @@ func buildJVMRuntimeJSON(data *JVMRuntimeData, binaries binmanager.MapOfBinaries
 // buildNodeRuntimeJSON constructs a RuntimeJSON from Node updater results.
 func buildNodeRuntimeJSON(data *NodeRuntimeData, binaries binmanager.MapOfBinaries) *RuntimeJSON {
 	return &RuntimeJSON{
+		Bun:  nil,
+		UV:   nil,
+		JVM:  nil,
+		Go:   nil,
+		PNPM: nil,
 		Kind: "node",
 		Mode: "managed",
 		Managed: &RuntimeManagedJSON{
@@ -529,6 +580,11 @@ func buildNodeRuntimeJSON(data *NodeRuntimeData, binaries binmanager.MapOfBinari
 // buildPNPMRuntimeJSON constructs a RuntimeJSON from pnpm updater results.
 func buildPNPMRuntimeJSON(data *PNPMRuntimeData, binaries binmanager.MapOfBinaries) *RuntimeJSON {
 	return &RuntimeJSON{
+		Bun:  nil,
+		UV:   nil,
+		JVM:  nil,
+		Node: nil,
+		Go:   nil,
 		Kind: "pnpm",
 		Mode: "managed",
 		Managed: &RuntimeManagedJSON{
@@ -543,6 +599,11 @@ func buildPNPMRuntimeJSON(data *PNPMRuntimeData, binaries binmanager.MapOfBinari
 // buildGoRuntimeJSON constructs a RuntimeJSON from Go updater results.
 func buildGoRuntimeJSON(data *GoRuntimeData, binaries binmanager.MapOfBinaries) *RuntimeJSON {
 	return &RuntimeJSON{
+		Bun:  nil,
+		UV:   nil,
+		JVM:  nil,
+		Node: nil,
+		PNPM: nil,
 		Kind: "go",
 		Mode: "managed",
 		Managed: &RuntimeManagedJSON{
@@ -612,6 +673,7 @@ func detectBunBinaries(release *github.Release) (binmanager.MapOfBinaries, error
 
 		bp := bunBinaryPath(spec)
 		info := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
 			URL:         asset.BrowserDownloadURL,
 			Hash:        hash,
 			ContentType: binmanager.BinContentTypeZip,
@@ -705,6 +767,7 @@ func detectPNPMBinaries(release *github.Release) (binmanager.MapOfBinaries, erro
 			contentType = binmanager.BinContentTypeZip
 		}
 		info := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
 			URL:         asset.BrowserDownloadURL,
 			Hash:        hash,
 			ContentType: contentType,
@@ -838,7 +901,7 @@ func reconcilePythonWithUV(ctx context.Context, pythonVersion, uvVersion string)
 }
 
 func pullUVRuntime(ctx context.Context, minAge int) (*UVRuntimeData, binmanager.MapOfBinaries, error) {
-	data := &UVRuntimeData{}
+	data := &UVRuntimeData{PythonVersion: "", PythonDownloads: nil}
 
 	// The Python version is a major-version-line selection from endoflife.date,
 	// so it is NOT subject to age filtering (see the plan's age-filtering table).
@@ -1014,6 +1077,7 @@ func detectJVMBinaries(release *github.Release) (binmanager.MapOfBinaries, error
 
 		bp := jvmBinaryPath(release.TagName, platform.os)
 		binInfo := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
 			URL:         asset.BrowserDownloadURL,
 			Hash:        hash,
 			ContentType: contentType,
@@ -1228,6 +1292,7 @@ func buildNodeBinaries(cfg nodePullConfig, distShasums, muslShasums map[string]s
 
 		bp := nodeBinaryPath(spec)
 		binInfo := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
 			URL:         fmt.Sprintf("%s/v%s/%s", baseURL, cfg.version, spec.filename),
 			Hash:        hash,
 			ContentType: spec.contentType,
@@ -1306,7 +1371,7 @@ func resolveLatestNodeLTS(ctx context.Context) (string, error) {
 // pullNodeRuntime resolves the latest Node LTS version, then fetches and
 // verifies the Node release manifests to build the archive registry entry.
 func pullNodeRuntime(ctx context.Context) (*NodeRuntimeData, binmanager.MapOfBinaries, error) {
-	data := &NodeRuntimeData{}
+	data := &NodeRuntimeData{NodeVersion: ""}
 
 	// The Node LTS version is a major-version-line selection from endoflife.date,
 	// so it is NOT subject to age filtering (see the plan's age-filtering table).
@@ -1414,6 +1479,7 @@ func buildGoBinaries(cfg goPullConfig) (binmanager.MapOfBinaries, error) {
 
 		bp := goBinaryPath(spec)
 		binInfo := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
 			URL:         fmt.Sprintf("%s/%s", cfg.baseURL, spec.filename),
 			Hash:        hash,
 			ContentType: spec.contentType,
@@ -1530,6 +1596,8 @@ func detectRuntimeBinaries(name string, release *github.Release) (binmanager.Map
 		}
 
 		binInfo := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
+			ExtractDir:  false,
 			URL:         asset.BrowserDownloadURL,
 			Hash:        hash,
 			ContentType: contentType,

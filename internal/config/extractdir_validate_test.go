@@ -14,15 +14,38 @@ func TestValidateApps_ExtractDirRequiresBinaryPathAndArchive(t *testing.T) {
 	entry := func(contentType binmanager.BinContentType, binaryPath *string) binmanager.MapOfApps {
 		return binmanager.MapOfApps{
 			"protoc": {
-				Binary: &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{
-					syslist.OsTypeLinux: {syslist.ArchTypeAmd64: {"glibc": binmanager.BinaryOsArchInfo{
-						URL:         "https://example.com/protoc-36.2-linux-x86_64.zip",
-						Hash:        "sha256:" + strings.Repeat("a", 64),
-						ContentType: contentType,
-						BinaryPath:  binaryPath,
-						ExtractDir:  true,
-					}}},
-				}},
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Links:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Binary: &binmanager.AppConfigBinary{
+					Version: "", Binaries: binmanager.MapOfBinaries{
+						syslist.OsTypeLinux: {syslist.ArchTypeAmd64: {"glibc": binmanager.BinaryOsArchInfo{
+							Auth:        nil,
+							URL:         "https://example.com/protoc-36.2-linux-x86_64.zip",
+							Hash:        "sha256:" + strings.Repeat("a", 64),
+							ContentType: contentType,
+							BinaryPath:  binaryPath,
+							ExtractDir:  true,
+						}}},
+					},
+				},
 			},
 		}
 	}

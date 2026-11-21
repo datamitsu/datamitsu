@@ -3,6 +3,7 @@ package runner
 import (
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 )
@@ -34,11 +35,21 @@ func TestHeatDuration(t *testing.T) {
 func TestToolDetail(t *testing.T) {
 	t.Run("single run shows scope and avg only", func(t *testing.T) {
 		g := toolExecutionGroup{
-			scope:     config.ToolScopeRepository,
-			totalRuns: 1,
-			totalTime: 500,
-			minTime:   500,
-			maxTime:   500,
+			toolName:       "",
+			succeededRuns:  0,
+			failedRuns:     0,
+			wallTime:       0,
+			minDir:         "",
+			maxDir:         "",
+			wallStart:      zerovalue_time.Time{},
+			wallEnd:        zerovalue_time.Time{},
+			firstSeenIndex: 0,
+			executions:     nil,
+			scope:          config.ToolScopeRepository,
+			totalRuns:      1,
+			totalTime:      500,
+			minTime:        500,
+			maxTime:        500,
 		}
 		got := toolDetail(g)
 		if !strings.Contains(got, "[repository]") || !strings.Contains(got, "avg ") {
@@ -51,10 +62,21 @@ func TestToolDetail(t *testing.T) {
 
 	t.Run("multi-run shows min/max/cpu", func(t *testing.T) {
 		g := toolExecutionGroup{
-			totalRuns: 3,
-			totalTime: 900,
-			minTime:   200,
-			maxTime:   400,
+			toolName:       "",
+			scope:          "",
+			succeededRuns:  0,
+			failedRuns:     0,
+			wallTime:       0,
+			minDir:         "",
+			maxDir:         "",
+			wallStart:      zerovalue_time.Time{},
+			wallEnd:        zerovalue_time.Time{},
+			firstSeenIndex: 0,
+			executions:     nil,
+			totalRuns:      3,
+			totalTime:      900,
+			minTime:        200,
+			maxTime:        400,
 		}
 		got := toolDetail(g)
 		for _, want := range []string{"avg ", "min ", "max ", "cpu "} {
@@ -65,7 +87,7 @@ func TestToolDetail(t *testing.T) {
 	})
 
 	t.Run("zero runs avoids divide-by-zero", func(t *testing.T) {
-		got := toolDetail(toolExecutionGroup{totalRuns: 0, totalTime: 0})
+		got := toolDetail(toolExecutionGroup{toolName: "", scope: "", succeededRuns: 0, failedRuns: 0, wallTime: 0, minTime: 0, maxTime: 0, minDir: "", maxDir: "", wallStart: zerovalue_time.Time{}, wallEnd: zerovalue_time.Time{}, firstSeenIndex: 0, executions: nil, totalRuns: 0, totalTime: 0})
 		if !strings.Contains(got, "avg ") {
 			t.Errorf("zero-run detail = %q, want avg", got)
 		}

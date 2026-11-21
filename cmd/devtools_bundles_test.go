@@ -9,8 +9,8 @@ import (
 
 func TestCollectBundleEntries(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
-		"agent-skills": {Version: "1.0", Files: map[string]string{"agents.md": "content"}},
-		"docs":         {Version: "2.0", Files: map[string]string{"readme.md": "content"}},
+		"agent-skills": {Archives: nil, Links: nil, Version: "1.0", Files: map[string]string{"agents.md": "content"}},
+		"docs":         {Archives: nil, Links: nil, Version: "2.0", Files: map[string]string{"readme.md": "content"}},
 	}
 
 	entries := collectBundleEntries(bundles)
@@ -37,8 +37,8 @@ func TestCollectBundleEntriesEmpty(t *testing.T) {
 
 func TestCollectBundleEntriesVersions(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
-		"with-version":    {Version: "3.0", Files: map[string]string{"a.txt": "a"}},
-		"without-version": {Files: map[string]string{"b.txt": "b"}},
+		"with-version":    {Archives: nil, Links: nil, Version: "3.0", Files: map[string]string{"a.txt": "a"}},
+		"without-version": {Version: "", Archives: nil, Links: nil, Files: map[string]string{"b.txt": "b"}},
 	}
 
 	entries := collectBundleEntries(bundles)
@@ -72,9 +72,9 @@ func TestCollectBundleEntriesNilBundle(t *testing.T) {
 
 func TestBundlesListOutput(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
-		"agent-skills": {Version: "1.0", Files: map[string]string{"agents.md": "content"}},
-		"docs":         {Version: "2.0", Files: map[string]string{"readme.md": "content"}},
-		"no-version":   {Files: map[string]string{"a.txt": "a"}},
+		"agent-skills": {Archives: nil, Links: nil, Version: "1.0", Files: map[string]string{"agents.md": "content"}},
+		"docs":         {Archives: nil, Links: nil, Version: "2.0", Files: map[string]string{"readme.md": "content"}},
+		"no-version":   {Version: "", Archives: nil, Links: nil, Files: map[string]string{"a.txt": "a"}},
 	}
 
 	entries := collectBundleEntries(bundles)
@@ -99,9 +99,9 @@ func TestBundlesListOutput(t *testing.T) {
 
 func TestBundlesListSorting(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
-		"zzz-bundle": {Version: "1.0", Files: map[string]string{"a.txt": "a"}},
-		"aaa-bundle": {Version: "2.0", Files: map[string]string{"b.txt": "b"}},
-		"mmm-bundle": {Version: "3.0", Files: map[string]string{"c.txt": "c"}},
+		"zzz-bundle": {Archives: nil, Links: nil, Version: "1.0", Files: map[string]string{"a.txt": "a"}},
+		"aaa-bundle": {Archives: nil, Links: nil, Version: "2.0", Files: map[string]string{"b.txt": "b"}},
+		"mmm-bundle": {Archives: nil, Links: nil, Version: "3.0", Files: map[string]string{"c.txt": "c"}},
 	}
 
 	entries := collectBundleEntries(bundles)

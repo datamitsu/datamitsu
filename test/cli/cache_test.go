@@ -18,7 +18,7 @@ func TestCachePath(t *testing.T) {
 	cacheBase := t.TempDir()
 	norm := clitest.NewNormalizer().MaskPath(cacheBase, "<CACHE>")
 
-	res := clitest.Run(t, clitest.RunOptions{CacheDir: cacheBase}, "cache", "path")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", Env: nil, Stdin: "", Timeout: 0, CacheDir: cacheBase}, "cache", "path")
 	if res.ExitCode != 0 {
 		t.Fatalf("`cache path` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -43,7 +43,7 @@ func TestCachePathProject(t *testing.T) {
 		cacheBase := t.TempDir()
 		p := clitest.NewProject(t)
 
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheBase},
+		res := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheBase},
 			"cache", "path", "project")
 		if res.ExitCode != 0 {
 			t.Fatalf("`cache path project` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -62,7 +62,7 @@ func TestCachePathProject(t *testing.T) {
 		if err != nil {
 			t.Fatalf("eval symlinks: %v", err)
 		}
-		res := clitest.Run(t, clitest.RunOptions{Dir: nonGit, CacheDir: cacheBase},
+		res := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: nonGit, CacheDir: cacheBase},
 			"cache", "path", "project")
 		if res.ExitCode != 0 {
 			t.Fatalf("`cache path project` (no git) exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -97,7 +97,7 @@ func TestCacheClearDryRun(t *testing.T) {
 	norm := clitest.NewNormalizer().MaskPath(cacheBase, "<CACHE>").MaskPath(hash, "<HASH>")
 
 	t.Run("project", func(t *testing.T) {
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheBase},
+		res := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheBase},
 			"cache", "clear", "--dry-run")
 		if res.ExitCode != 0 {
 			t.Fatalf("`cache clear --dry-run` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -106,7 +106,7 @@ func TestCacheClearDryRun(t *testing.T) {
 	})
 
 	t.Run("all", func(t *testing.T) {
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheBase},
+		res := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheBase},
 			"cache", "clear", "--all", "--dry-run")
 		if res.ExitCode != 0 {
 			t.Fatalf("`cache clear --all --dry-run` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -140,7 +140,7 @@ func TestCacheProjectResolutionFailure(t *testing.T) {
 				t.Fatalf("write bogus .git: %v", err)
 			}
 
-			res := clitest.Run(t, clitest.RunOptions{Dir: dir}, args...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: dir}, args...)
 			if res.ExitCode == 0 {
 				t.Fatalf("`%s` exit = 0, want non-zero\nstdout:\n%s", strings.Join(args, " "), res.Stdout)
 			}

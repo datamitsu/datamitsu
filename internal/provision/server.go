@@ -92,10 +92,10 @@ func ServeContext(ctx context.Context, rw io.ReadWriteCloser, handler Handler) e
 				if marshalErr != nil {
 					return fmt.Errorf("encode provisioning progress: %w", marshalErr)
 				}
-				return write(Response{Version: ProtocolVersion, ID: req.ID, Kind: "progress", Event: data})
+				return write(Response{Result: nil, Error: nil, Version: ProtocolVersion, ID: req.ID, Kind: "progress", Event: data})
 			})
 			result, err := handler(handlerCtx, req.Method, req.Params)
-			response := Response{Version: ProtocolVersion, ID: req.ID, Kind: "response"}
+			response := Response{Result: nil, Error: nil, Event: nil, Version: ProtocolVersion, ID: req.ID, Kind: "response"}
 			if err != nil {
 				response.Error = &RemoteError{Code: "operation_failed", Message: err.Error()}
 			} else {

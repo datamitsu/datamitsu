@@ -62,11 +62,11 @@ func TestIdentity(t *testing.T) {
 
 func TestBuild(t *testing.T) {
 	candidates := []github.Annotation{
-		{Level: github.LevelWarning, File: "b.ts", Line: 2, Tool: "eslint", Source: "eslint", Code: "no-var", Severity: "warning", Message: "var", RuleURL: "https://eslint.org/docs/rules/no-var"},
-		{Level: github.LevelError, File: "a.ts", Line: 1, Tool: "eslint", Source: "eslint", Code: "no-var", Severity: "error", Message: "it's [bad]"},
-		{Level: github.LevelNotice, File: "a.ts", Line: 5, Tool: "eslint", Source: "eslint", Severity: "hint", Message: "hint"},
-		{Level: github.LevelNotice, Tool: "eslint", Source: "eslint", Severity: "info", Message: "no file"},
-		{Level: github.LevelError, Tool: "tsc", Source: "tsc", Severity: "error", Message: "tsc exited 2 without parsable findings", Synthetic: true},
+		{EndLine: 0, Col: 0, EndCol: 0, Fingerprint: "", Synthetic: false, Level: github.LevelWarning, File: "b.ts", Line: 2, Tool: "eslint", Source: "eslint", Code: "no-var", Severity: "warning", Message: "var", RuleURL: "https://eslint.org/docs/rules/no-var"},
+		{EndLine: 0, Col: 0, EndCol: 0, Fingerprint: "", RuleURL: "", Synthetic: false, Level: github.LevelError, File: "a.ts", Line: 1, Tool: "eslint", Source: "eslint", Code: "no-var", Severity: "error", Message: "it's [bad]"},
+		{EndLine: 0, Col: 0, EndCol: 0, Code: "", Fingerprint: "", RuleURL: "", Synthetic: false, Level: github.LevelNotice, File: "a.ts", Line: 5, Tool: "eslint", Source: "eslint", Severity: "hint", Message: "hint"},
+		{File: "", Line: 0, EndLine: 0, Col: 0, EndCol: 0, Code: "", Fingerprint: "", RuleURL: "", Synthetic: false, Level: github.LevelNotice, Tool: "eslint", Source: "eslint", Severity: "info", Message: "no file"},
+		{File: "", Line: 0, EndLine: 0, Col: 0, EndCol: 0, Code: "", Fingerprint: "", RuleURL: "", Level: github.LevelError, Tool: "tsc", Source: "tsc", Severity: "error", Message: "tsc exited 2 without parsable findings", Synthetic: true},
 	}
 	var out bytes.Buffer
 	if err := Print(&out, Build(candidates)); err != nil {

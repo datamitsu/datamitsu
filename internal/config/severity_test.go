@@ -53,7 +53,7 @@ func TestEffectiveFailOn(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := EffectiveFailOn(ToolOperation{FailOn: c.own}, c.global); got != c.want {
+			if got := EffectiveFailOn(ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, FailOn: c.own}, c.global); got != c.want {
 				t.Errorf("EffectiveFailOn(%q, %q) = %q, want %q", c.own, c.global, got, c.want)
 			}
 		})
@@ -62,12 +62,12 @@ func TestEffectiveFailOn(t *testing.T) {
 
 func TestValidateToolsFailOn(t *testing.T) {
 	for _, s := range []Severity{"", SeverityError, SeverityWarning, SeverityInfo, SeverityHint} {
-		if err := validateOp(ToolOperation{FailOn: s}); err != nil {
+		if err := validateOp(ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, FailOn: s}); err != nil {
 			t.Errorf("failOn %q: ValidateTools = %v, want it accepted", s, err)
 		}
 	}
 	for _, s := range []Severity{"warnings", "Error", "critical"} {
-		err := validateOp(ToolOperation{FailOn: s})
+		err := validateOp(ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, FailOn: s})
 		if err == nil || !strings.Contains(err.Error(), `operation "lint": failOn "`+string(s)+`" is not a level`) {
 			t.Errorf("failOn %q: ValidateTools = %v, want it refused", s, err)
 		}

@@ -22,7 +22,7 @@ type stopTracker struct {
 // the signal still counts as stopped: nothing tells it from one that handled
 // the signal, and the window is one system call wide.
 func trackStop(cmd *exec.Cmd) *stopTracker {
-	t := &stopTracker{}
+	t := &stopTracker{requested: atomic.Int64{}, stopped: atomic.Bool{}}
 	cancel := cmd.Cancel
 	if cancel == nil {
 		return t

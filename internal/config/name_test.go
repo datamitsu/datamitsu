@@ -11,13 +11,13 @@ func TestDisplayNameFallsBackToDefault(t *testing.T) {
 		name       string
 		want       string
 	}{
-		{name: "unset", want: DefaultName},
+		{configured: "", name: "unset", want: DefaultName},
 		{configured: "   ", name: "blank", want: DefaultName},
 		{configured: " @acme/config ", name: "trimmed", want: "@acme/config"},
 		{configured: "@acme/config", name: "set", want: "@acme/config"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &Config{Name: tc.configured}
+			cfg := &Config{Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Name: tc.configured}
 			if got := cfg.DisplayName(); got != tc.want {
 				t.Fatalf("DisplayName() = %q, want %q", got, tc.want)
 			}
@@ -35,9 +35,9 @@ func TestValidateNameRejectsNamesNoSurfaceCanShow(t *testing.T) {
 		value   string
 		wantErr string
 	}{
-		{name: "unset"},
-		{name: "plain", value: "@acme/datamitsu-config"},
-		{name: "at the limit", value: strings.Repeat("n", MaxNameLength)},
+		{value: "", wantErr: "", name: "unset"},
+		{wantErr: "", name: "plain", value: "@acme/datamitsu-config"},
+		{wantErr: "", name: "at the limit", value: strings.Repeat("n", MaxNameLength)},
 		{name: "blank", value: "  ", wantErr: "remove it to use the default name"},
 		{name: "too long", value: strings.Repeat("n", MaxNameLength+1), wantErr: "exceeds the 80 allowed"},
 		{name: "newline", value: "acme\nconfig", wantErr: "control character"},
@@ -64,17 +64,17 @@ func TestValidateVersionRequiresLabel(t *testing.T) {
 		value   string
 		wantErr bool
 	}{
-		{name: "missing", wantErr: true},
-		{name: "release", value: "1.2.3"},
-		{name: "core", value: "core"},
-		{name: "v prefix", value: "v1.2.3"},
-		{name: "prerelease", value: "1.2.3-rc.1"},
+		{value: "", name: "missing", wantErr: true},
+		{wantErr: false, name: "release", value: "1.2.3"},
+		{wantErr: false, name: "core", value: "core"},
+		{wantErr: false, name: "v prefix", value: "v1.2.3"},
+		{wantErr: false, name: "prerelease", value: "1.2.3-rc.1"},
 		{name: "blank", value: " \t", wantErr: true},
 		{name: "leading whitespace", value: " core", wantErr: true},
 		{name: "trailing whitespace", value: "core ", wantErr: true},
 		{name: "newline", value: "core\nnext", wantErr: true},
 		{name: "nul", value: "core\x00", wantErr: true},
-		{name: "80 runes", value: strings.Repeat("界", MaxNameLength)},
+		{wantErr: false, name: "80 runes", value: strings.Repeat("界", MaxNameLength)},
 		{name: "81 runes", value: strings.Repeat("界", MaxNameLength+1), wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

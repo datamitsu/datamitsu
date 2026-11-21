@@ -56,9 +56,9 @@ func TestSeedParserModuleLayout(t *testing.T) {
 func TestSeedParserModuleOffline(t *testing.T) {
 	p := NewProject(t)
 	cache := t.TempDir()
-	cfg := p.WriteFile("parsers.config.js", ShellConfig(ShellConfigSpec{Parsers: SeedParserModule(t, cache, echoWASM)}))
+	cfg := p.WriteFile("parsers.config.js", ShellConfig(ShellConfigSpec{ProjectTypes: nil, Extra: "", Parsers: SeedParserModule(t, cache, echoWASM)}))
 
-	res := Run(t, RunOptions{Dir: p.Dir, CacheDir: cache},
+	res := Run(t, RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cache},
 		"--no-auto-config", "--config", cfg, "devtools", "parsers", "list", "--json")
 	if res.ExitCode != 0 {
 		t.Fatalf("devtools parsers list exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)

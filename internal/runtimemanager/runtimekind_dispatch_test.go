@@ -23,60 +23,66 @@ func TestRuntimeAppRef(t *testing.T) {
 	}{
 		{
 			name:    "bun",
-			app:     binmanager.App{Bun: &binmanager.AppConfigBun{PackageName: "eslint", Version: "9", BinPath: "b", Runtime: "bun-rt"}},
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{LockFile: "", Dependencies: nil, PackageName: "eslint", Version: "9", BinPath: "b", Runtime: "bun-rt"}},
 			wantK:   config.RuntimeKindBun,
 			wantRef: "bun-rt",
 			wantOk:  true,
 		},
 		{
 			name:    "uv with explicit ref",
-			app:     binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1", Runtime: "uv-rt"}},
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1", Runtime: "uv-rt"}},
 			wantK:   config.RuntimeKindUV,
 			wantRef: "uv-rt",
 			wantOk:  true,
 		},
 		{
 			name:    "uv without ref",
-			app:     binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1"}},
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1"}},
 			wantK:   config.RuntimeKindUV,
 			wantRef: "",
 			wantOk:  true,
 		},
 		{
 			name:    "node",
-			app:     binmanager.App{Node: &binmanager.AppConfigNode{PackageName: "eslint", Version: "9", BinPath: "b", Runtime: "node-rt"}},
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{LockFile: "", Dependencies: nil, PackageName: "eslint", Version: "9", BinPath: "b", Runtime: "node-rt"}},
 			wantK:   config.RuntimeKindNode,
 			wantRef: "node-rt",
 			wantOk:  true,
 		},
 		{
 			name:    "jvm",
-			app:     binmanager.App{Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: "7", Runtime: "jvm-rt"}},
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{MainClass: "", JarURL: "https://x/x.jar", JarHash: "h", Version: "7", Runtime: "jvm-rt"}},
 			wantK:   config.RuntimeKindJVM,
 			wantRef: "jvm-rt",
 			wantOk:  true,
 		},
 		{
 			name:    "go",
-			app:     binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "x", Version: "v1", Runtime: "go-rt"}},
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "x", Version: "v1", Runtime: "go-rt"}},
 			wantK:   config.RuntimeKindGo,
 			wantRef: "go-rt",
 			wantOk:  true,
 		},
 		{
-			name:   "binary app is not runtime-managed",
-			app:    binmanager.App{Binary: &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{}}},
-			wantOk: false,
+			wantK:   "",
+			wantRef: "",
+			name:    "binary app is not runtime-managed",
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Version: "", Binaries: binmanager.MapOfBinaries{}}},
+			wantOk:  false,
 		},
 		{
-			name:   "shell app is not runtime-managed",
-			app:    binmanager.App{Shell: &binmanager.AppConfigShell{Name: "echo"}},
-			wantOk: false,
+			wantK:   "",
+			wantRef: "",
+			name:    "shell app is not runtime-managed",
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "echo"}},
+			wantOk:  false,
 		},
 		{
-			name:   "empty app is not runtime-managed",
-			app:    binmanager.App{},
-			wantOk: false,
+			wantK:   "",
+			wantRef: "",
+			name:    "empty app is not runtime-managed",
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil},
+			wantOk:  false,
 		},
 	}
 
@@ -113,27 +119,27 @@ func runtimeKindRoutingApps() []struct {
 	}{
 		{
 			kind:       "bun",
-			app:        binmanager.App{Bun: &binmanager.AppConfigBun{PackageName: "eslint", Version: "9", BinPath: "b", Runtime: "nonexistent"}},
+			app:        binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{LockFile: "", Dependencies: nil, PackageName: "eslint", Version: "9", BinPath: "b", Runtime: "nonexistent"}},
 			wantErrSub: "resolve Bun runtime",
 		},
 		{
 			kind:       "uv",
-			app:        binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1", Runtime: "nonexistent"}},
+			app:        binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1", Runtime: "nonexistent"}},
 			wantErrSub: "resolve UV runtime",
 		},
 		{
 			kind:       "node",
-			app:        binmanager.App{Node: &binmanager.AppConfigNode{PackageName: "eslint", Version: "9", BinPath: "b", Runtime: "nonexistent"}},
+			app:        binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{LockFile: "", Dependencies: nil, PackageName: "eslint", Version: "9", BinPath: "b", Runtime: "nonexistent"}},
 			wantErrSub: "resolve node runtime",
 		},
 		{
 			kind:       "jvm",
-			app:        binmanager.App{Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: "7", Runtime: "nonexistent"}},
+			app:        binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{MainClass: "", JarURL: "https://x/x.jar", JarHash: "h", Version: "7", Runtime: "nonexistent"}},
 			wantErrSub: "resolve JVM runtime",
 		},
 		{
 			kind:       "go",
-			app:        binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "x", Version: "v1", Runtime: "nonexistent", LockFile: "x"}},
+			app:        binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{PackageName: "x", Version: "v1", Runtime: "nonexistent", LockFile: "x"}},
 			wantErrSub: "resolve Go runtime",
 		},
 	}
@@ -158,14 +164,14 @@ func TestComputeAppPath_RoutesEveryKind(t *testing.T) {
 	}
 
 	t.Run("empty app errors as non-runtime", func(t *testing.T) {
-		_, err := rm.ComputeAppPath("app", binmanager.App{})
+		_, err := rm.ComputeAppPath("app", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil})
 		if err == nil || !strings.Contains(err.Error(), "is not a runtime-managed app") {
 			t.Fatalf("ComputeAppPath(empty) error = %v, want \"is not a runtime-managed app\"", err)
 		}
 	})
 
 	t.Run("binary app errors as non-runtime", func(t *testing.T) {
-		app := binmanager.App{Binary: &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{}}}
+		app := binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Version: "", Binaries: binmanager.MapOfBinaries{}}}
 		_, err := rm.ComputeAppPath("app", app)
 		if err == nil || !strings.Contains(err.Error(), "is not a runtime-managed app") {
 			t.Fatalf("ComputeAppPath(binary) error = %v, want \"is not a runtime-managed app\"", err)
@@ -192,14 +198,14 @@ func TestGetCommandInfo_RoutesEveryKind(t *testing.T) {
 	}
 
 	t.Run("empty app errors as non-runtime", func(t *testing.T) {
-		_, err := rm.GetCommandInfo(context.Background(), "app", binmanager.App{})
+		_, err := rm.GetCommandInfo(context.Background(), "app", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil})
 		if err == nil || !strings.Contains(err.Error(), "is not a runtime-managed app") {
 			t.Fatalf("GetCommandInfo(empty) error = %v, want \"is not a runtime-managed app\"", err)
 		}
 	})
 
 	t.Run("shell app errors as non-runtime", func(t *testing.T) {
-		app := binmanager.App{Shell: &binmanager.AppConfigShell{Name: "echo"}}
+		app := binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "echo"}}
 		_, err := rm.GetCommandInfo(context.Background(), "app", app)
 		if err == nil || !strings.Contains(err.Error(), "is not a runtime-managed app") {
 			t.Fatalf("GetCommandInfo(shell) error = %v, want \"is not a runtime-managed app\"", err)
@@ -213,20 +219,20 @@ func TestGetCommandInfo_RoutesEveryKind(t *testing.T) {
 // dangling explicit reference contributes nothing.
 func TestCollectRequiredRuntimes_EveryKind(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
-		"bun-rt":  {Kind: config.RuntimeKindBun, Mode: config.RuntimeModeManaged},
-		"uv-rt":   {Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged},
-		"node-rt": {Kind: config.RuntimeKindNode, Mode: config.RuntimeModeManaged},
-		"jvm-rt":  {Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeManaged},
-		"go-rt":   {Kind: config.RuntimeKindGo, Mode: config.RuntimeModeManaged},
+		"bun-rt":  {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindBun, Mode: config.RuntimeModeManaged},
+		"uv-rt":   {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged},
+		"node-rt": {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode, Mode: config.RuntimeModeManaged},
+		"jvm-rt":  {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeManaged},
+		"go-rt":   {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindGo, Mode: config.RuntimeModeManaged},
 	}
 
 	t.Run("default-by-kind for every kind", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
-			"a-bun":  {Required: true, Bun: &binmanager.AppConfigBun{PackageName: "x", Version: "1", BinPath: "b"}},
-			"a-uv":   {Required: true, Uv: &binmanager.AppConfigUV{PackageName: "x", Version: "1"}},
-			"b-node": {Required: true, Node: &binmanager.AppConfigNode{PackageName: "x", Version: "1", BinPath: "b"}},
-			"c-jvm":  {Required: true, Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: "1"}},
-			"d-go":   {Required: true, Go: &binmanager.AppConfigGo{PackageName: "x", Version: "1"}},
+			"a-bun":  {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Bun: &binmanager.AppConfigBun{Runtime: "", LockFile: "", Dependencies: nil, PackageName: "x", Version: "1", BinPath: "b"}},
+			"a-uv":   {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Uv: &binmanager.AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "x", Version: "1"}},
+			"b-node": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Node: &binmanager.AppConfigNode{Runtime: "", LockFile: "", Dependencies: nil, PackageName: "x", Version: "1", BinPath: "b"}},
+			"c-jvm":  {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Jvm: &binmanager.AppConfigJVM{Runtime: "", MainClass: "", JarURL: "https://x/x.jar", JarHash: "h", Version: "1"}},
+			"d-go":   {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Go: &binmanager.AppConfigGo{Runtime: "", LockFile: "", PackageName: "x", Version: "1"}},
 		}
 		result, err := CollectRequiredRuntimes(apps, runtimes, false)
 		if err != nil {
@@ -240,11 +246,11 @@ func TestCollectRequiredRuntimes_EveryKind(t *testing.T) {
 
 	t.Run("explicit ref for every kind", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
-			"a-bun":  {Required: true, Bun: &binmanager.AppConfigBun{PackageName: "x", Version: "1", BinPath: "b", Runtime: "bun-rt"}},
-			"a-uv":   {Required: true, Uv: &binmanager.AppConfigUV{PackageName: "x", Version: "1", Runtime: "uv-rt"}},
-			"b-node": {Required: true, Node: &binmanager.AppConfigNode{PackageName: "x", Version: "1", BinPath: "b", Runtime: "node-rt"}},
-			"c-jvm":  {Required: true, Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: "1", Runtime: "jvm-rt"}},
-			"d-go":   {Required: true, Go: &binmanager.AppConfigGo{PackageName: "x", Version: "1", Runtime: "go-rt"}},
+			"a-bun":  {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Bun: &binmanager.AppConfigBun{LockFile: "", Dependencies: nil, PackageName: "x", Version: "1", BinPath: "b", Runtime: "bun-rt"}},
+			"a-uv":   {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "x", Version: "1", Runtime: "uv-rt"}},
+			"b-node": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Node: &binmanager.AppConfigNode{LockFile: "", Dependencies: nil, PackageName: "x", Version: "1", BinPath: "b", Runtime: "node-rt"}},
+			"c-jvm":  {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Jvm: &binmanager.AppConfigJVM{MainClass: "", JarURL: "https://x/x.jar", JarHash: "h", Version: "1", Runtime: "jvm-rt"}},
+			"d-go":   {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "x", Version: "1", Runtime: "go-rt"}},
 		}
 		result, err := CollectRequiredRuntimes(apps, runtimes, false)
 		if err != nil {
@@ -258,7 +264,7 @@ func TestCollectRequiredRuntimes_EveryKind(t *testing.T) {
 
 	t.Run("dangling explicit ref contributes nothing", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
-			"a-uv": {Required: true, Uv: &binmanager.AppConfigUV{PackageName: "x", Version: "1", Runtime: "ghost"}},
+			"a-uv": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "x", Version: "1", Runtime: "ghost"}},
 		}
 		result, err := CollectRequiredRuntimes(apps, runtimes, false)
 		if err != nil {
@@ -271,8 +277,8 @@ func TestCollectRequiredRuntimes_EveryKind(t *testing.T) {
 
 	t.Run("non-runtime apps contribute nothing", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
-			"bin":   {Required: true, Binary: &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{}}},
-			"shell": {Required: true, Shell: &binmanager.AppConfigShell{Name: "echo"}},
+			"bin":   {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Binary: &binmanager.AppConfigBinary{Version: "", Binaries: binmanager.MapOfBinaries{}}},
+			"shell": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Shell: &binmanager.AppConfigShell{Args: nil, Name: "echo"}},
 		}
 		result, err := CollectRequiredRuntimes(apps, runtimes, false)
 		if err != nil {

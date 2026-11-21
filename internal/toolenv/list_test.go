@@ -29,7 +29,7 @@ func TestApply(t *testing.T) {
 	}
 
 	t.Run("strips the listed names and prefixes, and nothing else", func(t *testing.T) {
-		got := envMap(t, Apply(host, Inherited{}))
+		got := envMap(t, Apply(host, Inherited{names: nil, pairs: nil}))
 		for _, name := range []string{"GITHUB_ACTIONS", "AI_AGENT", "AGENT", "CLAUDECODE", "CODEX_SANDBOX", "COPILOT_CLI", "JUNIE_DATA", "FORCE_COLOR", "CLICOLOR_FORCE"} {
 			if v, ok := got[name]; ok {
 				t.Errorf("%s=%s reached the tool", name, v)
@@ -94,7 +94,7 @@ func TestApply(t *testing.T) {
 	})
 
 	t.Run("an env layer can set a stripped name", func(t *testing.T) {
-		got := envMap(t, Apply(host, Inherited{}, nil, map[string]string{"FORCE_COLOR": "0"}))
+		got := envMap(t, Apply(host, Inherited{names: nil, pairs: nil}, nil, map[string]string{"FORCE_COLOR": "0"}))
 		if got["FORCE_COLOR"] != "0" {
 			t.Errorf("FORCE_COLOR = %q, want the operation's 0", got["FORCE_COLOR"])
 		}
@@ -103,7 +103,7 @@ func TestApply(t *testing.T) {
 	t.Run("base is not modified and entries without a name are kept", func(t *testing.T) {
 		base := []string{"GITHUB_ACTIONS=true", "=C:=C:\\dir", "A=1"}
 		raw := slices.Clone(base)
-		got := Apply(base, Inherited{}, map[string]string{"A": "2"})
+		got := Apply(base, Inherited{names: nil, pairs: nil}, map[string]string{"A": "2"})
 		if !slices.Equal(base, raw) {
 			t.Errorf("Apply rewrote base to %q", base)
 		}

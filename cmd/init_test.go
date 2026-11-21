@@ -63,8 +63,8 @@ func TestHasAnyLinks(t *testing.T) {
 
 	t.Run("apps without links", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
-			"eslint":   {Files: map[string]string{"a.js": "content"}},
-			"prettier": {},
+			"eslint":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Links: nil, Archives: nil, Prepare: nil, Files: map[string]string{"a.js": "content"}},
+			"prettier": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil},
 		}
 		if hasAnyLinks(apps, nil) {
 			t.Error("expected false when no apps have links")
@@ -74,8 +74,27 @@ func TestHasAnyLinks(t *testing.T) {
 	t.Run("app with links", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
 			"eslint": {
-				Files: map[string]string{"a.js": "content"},
-				Links: map[string]string{"a.js": "a.js"},
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Binary:             nil,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Files:              map[string]string{"a.js": "content"},
+				Links:              map[string]string{"a.js": "a.js"},
 			},
 		}
 		if !hasAnyLinks(apps, nil) {
@@ -86,9 +105,10 @@ func TestHasAnyLinks(t *testing.T) {
 	t.Run("bundle with links", func(t *testing.T) {
 		bundles := binmanager.MapOfBundles{
 			"my-bundle": {
-				Version: "1.0",
-				Files:   map[string]string{"a.txt": "content"},
-				Links:   map[string]string{"a": "a.txt"},
+				Archives: nil,
+				Version:  "1.0",
+				Files:    map[string]string{"a.txt": "content"},
+				Links:    map[string]string{"a": "a.txt"},
 			},
 		}
 		if !hasAnyLinks(binmanager.MapOfApps{}, bundles) {
@@ -99,8 +119,10 @@ func TestHasAnyLinks(t *testing.T) {
 	t.Run("bundle without links", func(t *testing.T) {
 		bundles := binmanager.MapOfBundles{
 			"my-bundle": {
-				Version: "1.0",
-				Files:   map[string]string{"a.txt": "content"},
+				Archives: nil,
+				Links:    nil,
+				Version:  "1.0",
+				Files:    map[string]string{"a.txt": "content"},
 			},
 		}
 		if hasAnyLinks(binmanager.MapOfApps{}, bundles) {
@@ -135,9 +157,27 @@ func TestReportConfigLinks_CreatesSymlinks(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Binary: &binmanager.AppConfigBinary{},
-			Files:  map[string]string{"eslint-base.js": "module.exports = {};"},
-			Links:  map[string]string{"eslint-base.js": "eslint-base.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Binary:             &binmanager.AppConfigBinary{Binaries: nil, Version: ""},
+			Files:              map[string]string{"eslint-base.js": "module.exports = {};"},
+			Links:              map[string]string{"eslint-base.js": "eslint-base.js"},
 		},
 	}
 
@@ -178,8 +218,23 @@ func TestReportConfigLinks_CreatesSymlinks(t *testing.T) {
 
 func TestReportConfigLinks_NoLinksSkipped(t *testing.T) {
 	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Apps: binmanager.MapOfApps{
-			"eslint": {Binary: &binmanager.AppConfigBinary{}},
+			"eslint": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}},
 		},
 	}
 
@@ -207,15 +262,67 @@ func TestMaterializeInstalledLinks_SkipsDeferredNoError(t *testing.T) {
 	}
 
 	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Apps: binmanager.MapOfApps{
 			"installed-link": {
-				Node:  &binmanager.AppConfigNode{PackageName: "p1"},
-				Links: map[string]string{"installed.config.js": "config.js"},
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Binary:             nil,
+				Bun:                nil,
+				Uv:                 nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Node:               &binmanager.AppConfigNode{Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, PackageName: "p1"},
+				Links:              map[string]string{"installed.config.js": "config.js"},
 			},
-			"deferred-link": { // declares links but is not installed — must be skipped, no error
-				Node:  &binmanager.AppConfigNode{PackageName: "p2"},
-				Lazy:  true,
-				Links: map[string]string{"deferred.config.js": "config.js"},
+			"deferred-link": {
+				Required:           false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Binary:             nil,
+				Bun:                nil,
+				Uv:                 nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Archives:           nil,
+				Prepare:            nil, // declares links but is not installed — must be skipped, no error
+				Node:               &binmanager.AppConfigNode{Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, PackageName: "p2"},
+				Lazy:               true,
+				Links:              map[string]string{"deferred.config.js": "config.js"},
 			},
 		},
 	}
@@ -242,11 +349,44 @@ func TestMaterializeInstalledLinks_SkipsDeferredNoError(t *testing.T) {
 func TestMaterializeInstalledLinks_AllDeferredWritesTypeDefs(t *testing.T) {
 	gitRoot := filepath.Join(t.TempDir(), "repo")
 	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Apps: binmanager.MapOfApps{
 			"slidev": {
-				Node:  &binmanager.AppConfigNode{PackageName: "p"},
-				Lazy:  true,
-				Links: map[string]string{"theme": "t"},
+				Required:           false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Binary:             nil,
+				Bun:                nil,
+				Uv:                 nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Node:               &binmanager.AppConfigNode{Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, PackageName: "p"},
+				Lazy:               true,
+				Links:              map[string]string{"theme": "t"},
 			},
 		},
 	}
@@ -268,7 +408,7 @@ func TestMaterializeInstalledLinks_AllDeferredWritesTypeDefs(t *testing.T) {
 // — only type defs are laid down. Also exercises the nil-resolver fast path.
 func TestMaterializeInstalledLinks_NoLinksWritesTypeDefs(t *testing.T) {
 	gitRoot := filepath.Join(t.TempDir(), "repo")
-	cfg := &config.Config{Apps: binmanager.MapOfApps{"x": {Binary: &binmanager.AppConfigBinary{}}}}
+	cfg := &config.Config{Name: "", Version: "", Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Apps: binmanager.MapOfApps{"x": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}}}}
 
 	created, err := materializeInstalledLinks(gitRoot, cfg, nil, nil, false)
 	if err != nil {
@@ -295,15 +435,67 @@ func TestMaterializeInstalledLinks_DryRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Apps: binmanager.MapOfApps{
 			"installed-link": {
-				Node:  &binmanager.AppConfigNode{PackageName: "p"},
-				Links: map[string]string{"c.js": "config.js"},
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Binary:             nil,
+				Bun:                nil,
+				Uv:                 nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Node:               &binmanager.AppConfigNode{Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, PackageName: "p"},
+				Links:              map[string]string{"c.js": "config.js"},
 			},
 			"deferred-link": {
-				Node:  &binmanager.AppConfigNode{PackageName: "p2"},
-				Lazy:  true,
-				Links: map[string]string{"d.js": "config.js"},
+				Required:           false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Binary:             nil,
+				Bun:                nil,
+				Uv:                 nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Node:               &binmanager.AppConfigNode{Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, PackageName: "p2"},
+				Lazy:               true,
+				Links:              map[string]string{"d.js": "config.js"},
 			},
 		},
 	}
@@ -335,8 +527,23 @@ func TestMaterializeInstalledLinks_LinksInstalledBundle(t *testing.T) {
 	}
 
 	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Apps:           nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Bundles: binmanager.MapOfBundles{
-			"my-bundle": {Links: map[string]string{"schema.json": "schema.json"}},
+			"my-bundle": {Version: "", Files: nil, Archives: nil, Links: map[string]string{"schema.json": "schema.json"}},
 		},
 	}
 	appResolver := &mockInstallRootResolver{paths: map[string]string{}}
@@ -355,12 +562,28 @@ func TestMaterializeInstalledLinks_LinksInstalledBundle(t *testing.T) {
 }
 
 func TestBundleResolverFor(t *testing.T) {
-	if r := bundleResolverFor(&config.Config{}, nil); r != nil {
+	if r := bundleResolverFor(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil); r != nil {
 		t.Errorf("no bundles → want nil resolver, got %v", r)
 	}
-	cfg := &config.Config{Bundles: binmanager.MapOfBundles{
-		"b": {Links: map[string]string{"x": "x"}},
-	}}
+	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Apps:           nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil, Bundles: binmanager.MapOfBundles{
+			"b": {Version: "", Files: nil, Archives: nil, Links: map[string]string{"x": "x"}},
+		},
+	}
 	if r := bundleResolverFor(cfg, nil); r == nil {
 		t.Error("bundles present → want non-nil resolver")
 	}
@@ -393,9 +616,10 @@ func TestReportConfigLinks_BundleLinksAppearInDatamitsu(t *testing.T) {
 
 	bundles := binmanager.MapOfBundles{
 		"skills": {
-			Version: "1.0",
-			Files:   map[string]string{"agents.md": "# Agents"},
-			Links:   map[string]string{"agents": "agents.md"},
+			Archives: nil,
+			Version:  "1.0",
+			Files:    map[string]string{"agents.md": "# Agents"},
+			Links:    map[string]string{"agents": "agents.md"},
 		},
 	}
 
@@ -428,7 +652,8 @@ func TestInstallBundles_InInitFlow(t *testing.T) {
 
 	bundles := binmanager.MapOfBundles{
 		"test-bundle": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"readme.md": "# Hello",
 			},
@@ -466,14 +691,17 @@ func TestInstallBundles_SkipDownloadSkipsExternal(t *testing.T) {
 
 	bundles := binmanager.MapOfBundles{
 		"inline-bundle": {
-			Version: "1.0",
-			Files:   map[string]string{"a.txt": "inline"},
+			Archives: nil,
+			Links:    nil,
+			Version:  "1.0",
+			Files:    map[string]string{"a.txt": "inline"},
 		},
 		"external-bundle": {
+			Links:   nil,
 			Version: "1.0",
 			Files:   map[string]string{"b.txt": "has external"},
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"dist": {URL: "https://example.com/dist.tar.gz", Hash: "abc", Format: "tar.gz"},
+				"dist": {Inline: "", URL: "https://example.com/dist.tar.gz", Hash: "abc", Format: "tar.gz"},
 			},
 		},
 	}
@@ -514,9 +742,27 @@ func TestInitCreatesConfigTypeDefinitions(t *testing.T) {
 
 		apps := binmanager.MapOfApps{
 			"myapp": {
-				Binary: &binmanager.AppConfigBinary{},
-				Files:  map[string]string{"config.js": "// config"},
-				Links:  map[string]string{"config.js": "config.js"},
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Binary:             &binmanager.AppConfigBinary{Binaries: nil, Version: ""},
+				Files:              map[string]string{"config.js": "// config"},
+				Links:              map[string]string{"config.js": "config.js"},
 			},
 		}
 
@@ -554,9 +800,27 @@ func TestInitCreatesConfigTypeDefinitions(t *testing.T) {
 
 		apps := binmanager.MapOfApps{
 			"myapp": {
-				Binary: &binmanager.AppConfigBinary{},
-				Files:  map[string]string{"config.js": "// config"},
-				Links:  map[string]string{"config.js": "config.js"},
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Binary:             &binmanager.AppConfigBinary{Binaries: nil, Version: ""},
+				Files:              map[string]string{"config.js": "// config"},
+				Links:              map[string]string{"config.js": "config.js"},
 			},
 		}
 
@@ -601,8 +865,10 @@ func TestBundleRootResolver(t *testing.T) {
 
 	bundles := binmanager.MapOfBundles{
 		"test-bundle": {
-			Version: "1.0",
-			Files:   map[string]string{"a.txt": "hello"},
+			Archives: nil,
+			Links:    nil,
+			Version:  "1.0",
+			Files:    map[string]string{"a.txt": "hello"},
 		},
 	}
 

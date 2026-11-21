@@ -85,7 +85,7 @@ type Display struct {
 
 // New creates a Display for the given mode writing to stdout/stderr.
 func New(mode term.Mode) *Display {
-	return &Display{mode: mode, out: os.Stdout, err: os.Stderr}
+	return &Display{quiet: false, mu: sync.Mutex{}, prog: nil, bars: 0, mode: mode, out: os.Stdout, err: os.Stderr}
 }
 
 // Mode reports the Display's render mode.

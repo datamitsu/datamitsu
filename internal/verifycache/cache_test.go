@@ -128,6 +128,7 @@ func TestSaveState(t *testing.T) {
 			LastRun: time.Date(2026, 3, 4, 15, 30, 45, 0, time.UTC),
 			Entries: map[string]VerifyEntry{
 				"binary:lefthook:darwin:arm64": {
+					Error:       "",
 					Fingerprint: "abc123",
 					Status:      "ok",
 					Timestamp:   time.Date(2026, 3, 4, 15, 30, 45, 0, time.UTC),
@@ -160,6 +161,8 @@ func TestSaveState(t *testing.T) {
 		path := filepath.Join(tmpDir, "subdir", "nested", "state.json")
 
 		state := &VerifyState{
+			CWD:     "",
+			LastRun: time.Time{},
 			Version: 1,
 			Entries: map[string]VerifyEntry{},
 		}
@@ -178,11 +181,13 @@ func TestSaveState(t *testing.T) {
 		path := filepath.Join(tmpDir, "state.json")
 
 		state := &VerifyState{
+			CWD:     "",
+			LastRun: time.Time{},
 			Version: 1,
 			Entries: map[string]VerifyEntry{
-				"z-entry": {Fingerprint: "z", Status: "ok"},
-				"a-entry": {Fingerprint: "a", Status: "ok"},
-				"m-entry": {Fingerprint: "m", Status: "ok"},
+				"z-entry": {Timestamp: time.Time{}, Error: "", Fingerprint: "z", Status: "ok"},
+				"a-entry": {Timestamp: time.Time{}, Error: "", Fingerprint: "a", Status: "ok"},
+				"m-entry": {Timestamp: time.Time{}, Error: "", Fingerprint: "m", Status: "ok"},
 			},
 		}
 
@@ -213,9 +218,11 @@ func TestSaveState(t *testing.T) {
 		path := filepath.Join(tmpDir, "state.json")
 
 		original := &VerifyState{
+			CWD:     "",
+			LastRun: time.Time{},
 			Version: 1,
 			Entries: map[string]VerifyEntry{
-				"existing": {Fingerprint: "orig", Status: "ok"},
+				"existing": {Timestamp: time.Time{}, Error: "", Fingerprint: "orig", Status: "ok"},
 			},
 		}
 		if err := SaveState(path, original); err != nil {
@@ -303,9 +310,12 @@ func TestSaveStateJSONTags(t *testing.T) {
 		path := filepath.Join(tmpDir, "state.json")
 
 		state := &VerifyState{
+			CWD:     "",
+			LastRun: time.Time{},
 			Version: 1,
 			Entries: map[string]VerifyEntry{
 				"test-key": {
+					Error:       "",
 					Fingerprint: "fp123",
 					Status:      "ok",
 					Timestamp:   time.Now(),
@@ -332,6 +342,8 @@ func TestSaveStateJSONTags(t *testing.T) {
 func TestStateManagerShouldSkip(t *testing.T) {
 	t.Run("returns false when no entries", func(t *testing.T) {
 		sm := NewStateManager(&VerifyState{
+			CWD:     "",
+			LastRun: time.Time{},
 			Version: 1,
 			Entries: map[string]VerifyEntry{},
 		}, "")
@@ -342,9 +354,11 @@ func TestStateManagerShouldSkip(t *testing.T) {
 
 	t.Run("returns false when key missing", func(t *testing.T) {
 		sm := NewStateManager(&VerifyState{
+			CWD:     "",
+			LastRun: time.Time{},
 			Version: 1,
 			Entries: map[string]VerifyEntry{
-				"binary:other:linux:amd64": {Fingerprint: "fp123", Status: "ok"},
+				"binary:other:linux:amd64": {Timestamp: time.Time{}, Error: "", Fingerprint: "fp123", Status: "ok"},
 			},
 		}, "")
 		if sm.ShouldSkip("binary:foo:linux:amd64", "fp123") {
@@ -354,9 +368,11 @@ func TestStateManagerShouldSkip(t *testing.T) {
 
 	t.Run("returns false when fingerprint differs", func(t *testing.T) {
 		sm := NewStateManager(&VerifyState{
+			CWD:     "",
+			LastRun: time.Time{},
 			Version: 1,
 			Entries: map[string]VerifyEntry{
-				"binary:foo:linux:amd64": {Fingerprint: "old-fp", Status: "ok"},
+				"binary:foo:linux:amd64": {Timestamp: time.Time{}, Error: "", Fingerprint: "old-fp", Status: "ok"},
 			},
 		}, "")
 		if sm.ShouldSkip("binary:foo:linux:amd64", "new-fp") {
@@ -366,9 +382,11 @@ func TestStateManagerShouldSkip(t *testing.T) {
 
 	t.Run("returns false when status is failed", func(t *testing.T) {
 		sm := NewStateManager(&VerifyState{
+			CWD:     "",
+			LastRun: time.Time{},
 			Version: 1,
 			Entries: map[string]VerifyEntry{
-				"binary:foo:linux:amd64": {Fingerprint: "fp123", Status: "failed"},
+				"binary:foo:linux:amd64": {Timestamp: time.Time{}, Error: "", Fingerprint: "fp123", Status: "failed"},
 			},
 		}, "")
 		if sm.ShouldSkip("binary:foo:linux:amd64", "fp123") {
@@ -378,9 +396,11 @@ func TestStateManagerShouldSkip(t *testing.T) {
 
 	t.Run("returns true when fingerprint matches and status ok", func(t *testing.T) {
 		sm := NewStateManager(&VerifyState{
+			CWD:     "",
+			LastRun: time.Time{},
 			Version: 1,
 			Entries: map[string]VerifyEntry{
-				"binary:foo:linux:amd64": {Fingerprint: "fp123", Status: "ok"},
+				"binary:foo:linux:amd64": {Timestamp: time.Time{}, Error: "", Fingerprint: "fp123", Status: "ok"},
 			},
 		}, "")
 		if !sm.ShouldSkip("binary:foo:linux:amd64", "fp123") {
@@ -395,6 +415,7 @@ func TestStateManagerRecord(t *testing.T) {
 		path := filepath.Join(tmpDir, "state.json")
 
 		sm := NewStateManager(&VerifyState{
+			LastRun: time.Time{},
 			Version: 1,
 			CWD:     "/test",
 			Entries: map[string]VerifyEntry{},
@@ -415,6 +436,7 @@ func TestStateManagerRecord(t *testing.T) {
 		path := filepath.Join(tmpDir, "state.json")
 
 		sm := NewStateManager(&VerifyState{
+			LastRun: time.Time{},
 			Version: 1,
 			CWD:     "/test",
 			Entries: map[string]VerifyEntry{},
@@ -446,6 +468,7 @@ func TestStateManagerRecord(t *testing.T) {
 		path := filepath.Join(tmpDir, "state.json")
 
 		sm := NewStateManager(&VerifyState{
+			LastRun: time.Time{},
 			Version: 1,
 			CWD:     "/test",
 			Entries: map[string]VerifyEntry{},
@@ -471,10 +494,11 @@ func TestStateManagerRecord(t *testing.T) {
 		path := filepath.Join(tmpDir, "state.json")
 
 		sm := NewStateManager(&VerifyState{
+			LastRun: time.Time{},
 			Version: 1,
 			CWD:     "/test",
 			Entries: map[string]VerifyEntry{
-				"binary:foo:linux:amd64": {Fingerprint: "old-fp", Status: "failed", Error: "old error"},
+				"binary:foo:linux:amd64": {Timestamp: time.Time{}, Fingerprint: "old-fp", Status: "failed", Error: "old error"},
 			},
 		}, path)
 
@@ -505,6 +529,7 @@ func TestStateManagerRecord(t *testing.T) {
 
 		before := time.Now().UTC().Add(-time.Second)
 		sm := NewStateManager(&VerifyState{
+			LastRun: time.Time{},
 			Version: 1,
 			CWD:     "/test",
 			Entries: map[string]VerifyEntry{},
@@ -528,6 +553,7 @@ func TestStateManagerRecord(t *testing.T) {
 		path := filepath.Join(tmpDir, "state.json")
 
 		sm := NewStateManager(&VerifyState{
+			LastRun: time.Time{},
 			Version: 1,
 			CWD:     "/test",
 			Entries: map[string]VerifyEntry{},
@@ -572,11 +598,12 @@ func TestStateManagerReset(t *testing.T) {
 		path := filepath.Join(tmpDir, "state.json")
 
 		sm := NewStateManager(&VerifyState{
+			LastRun: time.Time{},
 			Version: 1,
 			CWD:     "/test",
 			Entries: map[string]VerifyEntry{
-				"binary:foo:linux:amd64": {Fingerprint: "fp123", Status: "ok"},
-				"binary:bar:linux:amd64": {Fingerprint: "fp456", Status: "ok"},
+				"binary:foo:linux:amd64": {Timestamp: time.Time{}, Error: "", Fingerprint: "fp123", Status: "ok"},
+				"binary:bar:linux:amd64": {Timestamp: time.Time{}, Error: "", Fingerprint: "fp456", Status: "ok"},
 			},
 		}, path)
 

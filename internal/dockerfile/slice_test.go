@@ -12,10 +12,16 @@ import (
 func samplePNPMRuntime(version string) config.RuntimeConfig {
 	binaryPath := "pnpm"
 	return config.RuntimeConfig{
-		Kind: config.RuntimeKindPNPM,
-		Mode: config.RuntimeModeManaged,
+		System: nil,
+		Bun:    nil,
+		Node:   nil,
+		UV:     nil,
+		JVM:    nil,
+		Go:     nil,
+		Kind:   config.RuntimeKindPNPM,
+		Mode:   config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{Binaries: binmanager.MapOfBinaries{
-			"linux": {"amd64": {"glibc": {URL: "https://example.com/pnpm-linux-x64.tar.gz", Hash: "sha256:" + strings.Repeat("b", 64), ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &binaryPath, ExtractDir: true}}},
+			"linux": {"amd64": {"glibc": {Auth: nil, URL: "https://example.com/pnpm-linux-x64.tar.gz", Hash: "sha256:" + strings.Repeat("b", 64), ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &binaryPath, ExtractDir: true}}},
 		}},
 		PNPM: &config.RuntimeConfigPNPM{PNPMVersion: version},
 	}
@@ -23,23 +29,23 @@ func samplePNPMRuntime(version string) config.RuntimeConfig {
 
 func sampleConfigForSlicing() (binmanager.MapOfApps, config.MapOfRuntimes, config.MapOfParsers) {
 	apps := binmanager.MapOfApps{
-		"shellcheck": {Binary: &binmanager.AppConfigBinary{Version: "0.11.0"}},
-		"prettier":   {Node: &binmanager.AppConfigNode{PackageName: "prettier", Version: "3.8.3", Runtime: "node", BinPath: "bin/prettier.cjs"}},
-		"eslint":     {Bun: &binmanager.AppConfigBun{PackageName: "eslint", Version: "10.9.0", Runtime: "bun", BinPath: "node_modules/eslint/bin/eslint.js"}},
-		"ruff":       {Uv: &binmanager.AppConfigUV{PackageName: "ruff", Version: "0.15.0", Runtime: "uv"}},
-		"ktlint":     {Jvm: &binmanager.AppConfigJVM{JarURL: "https://example.com/ktlint.jar", JarHash: "sha256:" + strings.Repeat("c", 64), Version: "1.5.0", Runtime: "jvm"}},
-		"go-tool":    {Go: &binmanager.AppConfigGo{PackageName: "example.com/go-tool", Version: "1.0.0", Runtime: "go"}},
+		"shellcheck": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: "0.11.0"}},
+		"prettier":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{LockFile: "", Dependencies: nil, PackageName: "prettier", Version: "3.8.3", Runtime: "node", BinPath: "bin/prettier.cjs"}},
+		"eslint":     {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{LockFile: "", Dependencies: nil, PackageName: "eslint", Version: "10.9.0", Runtime: "bun", BinPath: "node_modules/eslint/bin/eslint.js"}},
+		"ruff":       {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "ruff", Version: "0.15.0", Runtime: "uv"}},
+		"ktlint":     {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{MainClass: "", JarURL: "https://example.com/ktlint.jar", JarHash: "sha256:" + strings.Repeat("c", 64), Version: "1.5.0", Runtime: "jvm"}},
+		"go-tool":    {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "example.com/go-tool", Version: "1.0.0", Runtime: "go"}},
 	}
 	runtimes := config.MapOfRuntimes{
-		"node": {Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "22.12.0", PNPMRuntime: "pnpm"}},
-		"bun":  {Kind: config.RuntimeKindBun, Bun: &config.RuntimeConfigBun{BunVersion: "1.4.1", PNPMRuntime: "pnpm"}},
-		"uv":   {Kind: config.RuntimeKindUV, UV: &config.RuntimeConfigUV{PythonVersion: "3.13"}},
-		"jvm":  {Kind: config.RuntimeKindJVM, JVM: &config.RuntimeConfigJVM{JavaVersion: "21"}},
-		"go":   {Kind: config.RuntimeKindGo, Go: &config.RuntimeConfigGo{GoVersion: "1.26.3"}},
+		"node": {Mode: "", Managed: nil, System: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "22.12.0", PNPMRuntime: "pnpm"}},
+		"bun":  {Mode: "", Managed: nil, System: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindBun, Bun: &config.RuntimeConfigBun{BunVersion: "1.4.1", PNPMRuntime: "pnpm"}},
+		"uv":   {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, UV: &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.13"}},
+		"jvm":  {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM, JVM: &config.RuntimeConfigJVM{JavaVersion: "21"}},
+		"go":   {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, PNPM: nil, Kind: config.RuntimeKindGo, Go: &config.RuntimeConfigGo{GoVersion: "1.26.3"}},
 		"pnpm": samplePNPMRuntime("12.4.1"),
 	}
 	parsers := config.MapOfParsers{
-		"core": {URL: "https://example.com/datamitsu_parsers_0.1.8.wasm", Hash: "sha256:" + strings.Repeat("a", 64)},
+		"core": {OCI: nil, URL: "https://example.com/datamitsu_parsers_0.1.8.wasm", Hash: "sha256:" + strings.Repeat("a", 64)},
 	}
 	return apps, runtimes, parsers
 }
@@ -59,7 +65,7 @@ func findSlice(slices []Slice, file string) *Slice {
 // load and take the whole build down with it.
 func TestBuildSlices_EverySliceLoads(t *testing.T) {
 	apps, runtimes, parsers := sampleConfigForSlicing()
-	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	plan := BuildPlan(apps, runtimes, PlanOptions{TargetLibc: "", ForceInclude: nil, Parsers: parsers})
 
 	for _, s := range mustBuildSlices(t, plan, apps, runtimes, parsers) {
 		if err := config.ValidateRuntimes(s.Config.Runtimes); err != nil {
@@ -70,7 +76,7 @@ func TestBuildSlices_EverySliceLoads(t *testing.T) {
 
 func TestBuildSlices_PreservesSourceIdentity(t *testing.T) {
 	apps, runtimes, parsers := sampleConfigForSlicing()
-	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	plan := BuildPlan(apps, runtimes, PlanOptions{TargetLibc: "", ForceInclude: nil, Parsers: parsers})
 	for _, slice := range mustBuildSlices(t, plan, apps, runtimes, parsers) {
 		js, err := RenderSlice(slice.Config)
 		if err != nil {
@@ -96,7 +102,7 @@ func TestSliceFileName(t *testing.T) {
 
 func TestBuildSlices_OnePerStageMinimal(t *testing.T) {
 	apps, runtimes, parsers := sampleConfigForSlicing()
-	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	plan := BuildPlan(apps, runtimes, PlanOptions{TargetLibc: "", ForceInclude: nil, Parsers: parsers})
 	slices := mustBuildSlices(t, plan, apps, runtimes, parsers)
 
 	// Runtime slice: only the runtime, no apps.
@@ -158,7 +164,7 @@ func TestBuildSlices_OnePerStageMinimal(t *testing.T) {
 
 func TestRenderSlice_LoadableModuleRoundTrips(t *testing.T) {
 	apps, runtimes, parsers := sampleConfigForSlicing()
-	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	plan := BuildPlan(apps, runtimes, PlanOptions{TargetLibc: "", ForceInclude: nil, Parsers: parsers})
 	slices := mustBuildSlices(t, plan, apps, runtimes, parsers)
 	app := findSlice(slices, "app-prettier.js")
 	if app == nil {
@@ -203,7 +209,7 @@ func TestRenderSlice_LoadableModuleRoundTrips(t *testing.T) {
 // every other kind needs none.
 func TestBuildSlices_PNPMRuntimeOnlyForNodeAndBun(t *testing.T) {
 	apps, runtimes, parsers := sampleConfigForSlicing()
-	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	plan := BuildPlan(apps, runtimes, PlanOptions{TargetLibc: "", ForceInclude: nil, Parsers: parsers})
 	slices := mustBuildSlices(t, plan, apps, runtimes, parsers)
 
 	tests := []struct {
@@ -242,7 +248,7 @@ func TestBuildSlices_PNPMRuntimeFollowsReference(t *testing.T) {
 	node.Node = &config.RuntimeConfigNode{NodeVersion: "22.12.0", PNPMRuntime: "pnpm-alt"}
 	runtimes["node"] = node
 
-	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	plan := BuildPlan(apps, runtimes, PlanOptions{TargetLibc: "", ForceInclude: nil, Parsers: parsers})
 	s := findSlice(mustBuildSlices(t, plan, apps, runtimes, parsers), "app-prettier.js")
 	if s == nil {
 		t.Fatal("missing app-prettier.js slice")
@@ -263,14 +269,16 @@ func TestRenderSlice_OCIParserRoundTrips(t *testing.T) {
 	apps, runtimes, _ := sampleConfigForSlicing()
 	parsers := config.MapOfParsers{
 		"core": {
+			URL:  "",
 			Hash: "sha256:" + strings.Repeat("a", 64),
 			OCI: &config.ParserOCI{
+				Signer: nil,
 				Ref:    "ghcr.io/datamitsu/datamitsu-parsers",
 				Digest: "sha256:" + strings.Repeat("b", 64),
 			},
 		},
 	}
-	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	plan := BuildPlan(apps, runtimes, PlanOptions{TargetLibc: "", ForceInclude: nil, Parsers: parsers})
 	if got := plan.RegistrySourcedParsers; len(got) != 1 || got[0] != "core" {
 		t.Errorf("RegistrySourcedParsers = %v, want [core] so the CLI can warn about buildkit egress", got)
 	}
@@ -309,7 +317,7 @@ func TestRenderSlice_OCIParserRoundTrips(t *testing.T) {
 // download and buildkit needs no registry at all.
 func TestBuildPlan_URLParserIsNotFlaggedAsRegistrySourced(t *testing.T) {
 	apps, runtimes, parsers := sampleConfigForSlicing()
-	plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+	plan := BuildPlan(apps, runtimes, PlanOptions{TargetLibc: "", ForceInclude: nil, Parsers: parsers})
 	if got := plan.RegistrySourcedParsers; len(got) != 0 {
 		t.Errorf("RegistrySourcedParsers = %v, want empty for a url-sourced parser", got)
 	}
@@ -317,7 +325,7 @@ func TestBuildPlan_URLParserIsNotFlaggedAsRegistrySourced(t *testing.T) {
 
 func mustBuildSlices(t *testing.T, plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, parsers config.MapOfParsers) []Slice {
 	t.Helper()
-	source := &config.Config{Name: "test.config", Version: "2.4.1"}
+	source := &config.Config{Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Name: "test.config", Version: "2.4.1"}
 	slices, err := BuildSlices(source, plan, apps, runtimes, parsers)
 	if err != nil {
 		t.Fatal(err)

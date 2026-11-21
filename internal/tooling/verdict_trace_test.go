@@ -10,6 +10,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 	"github.com/datamitsu/datamitsu/internal/trace"
 
 	"go.uber.org/zap"
@@ -38,20 +39,42 @@ func tracedVerdictFixture(t *testing.T, n int) (*Executor, Task) {
 		t.Fatal(err)
 	}
 
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{Tools: config.MapOfTools{}}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
-	appMgr := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"tsc": {Command: filepath.Join(root, "does-not-exist")},
-	}}
+	appMgr := &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"tsc": {Type: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Command: filepath.Join(root, "does-not-exist")},
+		},
+	}
 	e := NewExecutor(root, false, false, appMgr, c)
 
 	task := Task{
-		ToolName:  "tsc",
-		Operation: config.OpLint,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Files:        nil,
+		ToolName:     "tsc",
+		Operation:    config.OpLint,
 		OpConfig: config.ToolOperation{
-			App: "tsc", Args: []string{"--noEmit"},
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "tsc", Args: []string{"--noEmit"},
 			Scope: config.ToolScopePerProject,
 		},
 		ProjectPath: unitDir,
@@ -84,7 +107,7 @@ func verdictSpan(t *testing.T) trace.RecordedSpan {
 		}
 	}
 	t.Fatal("no verdictKeys span was recorded")
-	return trace.RecordedSpan{}
+	return trace.RecordedSpan{Cat: "", Name: "", Dur: 0, Attrs: nil, Instant: false}
 }
 
 func counterValue(t *testing.T, name string) int64 {

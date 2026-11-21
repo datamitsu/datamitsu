@@ -19,16 +19,56 @@ func prepareTestManager(t *testing.T) *BinManager {
 	pin := "sha256:" + strings.Repeat("0", 64)
 	apps := MapOfApps{
 		"root": {
-			Binary:    testBinaryApp("https://example.invalid/root", pin),
-			DependsOn: edges("dep"),
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Binary:             testBinaryApp("https://example.invalid/root", pin),
+			DependsOn:          edges("dep"),
 			Prepare: &AppPrepare{
+				BinPath: "",
+				Path:    "",
 				Args:    []string{"--cache-dir", "${APP_PREPARED}", "materialize"},
 				Env:     map[string]string{"CACHE": "${APP_PREPARED}/sub"},
 				Network: new(true),
 			},
 		},
 		"dep": {
-			Binary: testBinaryApp("https://example.invalid/dep", pin),
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Binary:             testBinaryApp("https://example.invalid/dep", pin),
 		},
 	}
 	// The fixtures pin linux/amd64/glibc binaries; resolve against that
@@ -38,9 +78,11 @@ func prepareTestManager(t *testing.T) *BinManager {
 }
 
 func testBinaryApp(url, pin string) *AppConfigBinary {
-	return &AppConfigBinary{Binaries: MapOfBinaries{
-		"linux": {"amd64": {"glibc": {URL: url, Hash: pin, ContentType: BinContentTypeBinary}}},
-	}}
+	return &AppConfigBinary{
+		Version: "", Binaries: MapOfBinaries{
+			"linux": {"amd64": {"glibc": {Auth: nil, BinaryPath: nil, ExtractDir: false, URL: url, Hash: pin, ContentType: BinContentTypeBinary}}},
+		},
+	}
 }
 
 func TestComputePreparedKeyStableAcrossStoreRoots(t *testing.T) {
@@ -151,7 +193,7 @@ func TestComputePreparedKeyDependencyStep(t *testing.T) {
 	// A dependency declaring its own step changes the dependent's key: the
 	// dependency's prepared state is part of what the dependent builds on.
 	dep := bm.mapOfApps["dep"]
-	dep.Prepare = &AppPrepare{Args: []string{"fill"}, Network: new(false)}
+	dep.Prepare = &AppPrepare{Env: nil, BinPath: "", Path: "", Args: []string{"fill"}, Network: new(false)}
 	bm.mapOfApps["dep"] = dep
 
 	key, err := bm.ComputePreparedKey("root")
@@ -230,8 +272,26 @@ func TestResolveBindingPathAliasDirection(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	apps := binaryAppFixture(t, "dep")
 	apps["root"] = App{
-		Shell:     &AppConfigShell{Name: "echo"},
-		DependsOn: []AppDependency{{App: "dep", Alias: "validator"}},
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Env:                nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
+		Shell:              &AppConfigShell{Args: nil, Name: "echo"},
+		DependsOn:          []AppDependency{{App: "dep", Alias: "validator"}},
 		RuntimeEnv: map[string]string{
 			"BIN": "${APP_BIN:validator}",
 		},
@@ -280,12 +340,12 @@ func TestAppDependencyUnmarshal(t *testing.T) {
 		want    AppDependency
 		wantErr string
 	}{
-		{name: "plain name", json: `"shellcheck"`, want: AppDependency{App: "shellcheck", Alias: "shellcheck"}},
-		{name: "object with alias", json: `{"app":"jsonschema","as":"validator"}`, want: AppDependency{App: "jsonschema", Alias: "validator"}},
-		{name: "object without as", json: `{"app":"jsonschema"}`, want: AppDependency{App: "jsonschema", Alias: "jsonschema"}},
-		{name: "empty name", json: `""`, wantErr: "empty dependency name"},
-		{name: "object without app", json: `{"as":"validator"}`, wantErr: "app is required"},
-		{name: "number", json: `5`, wantErr: "must be an app name or {app, as}"},
+		{wantErr: "", name: "plain name", json: `"shellcheck"`, want: AppDependency{App: "shellcheck", Alias: "shellcheck"}},
+		{wantErr: "", name: "object with alias", json: `{"app":"jsonschema","as":"validator"}`, want: AppDependency{App: "jsonschema", Alias: "validator"}},
+		{wantErr: "", name: "object without as", json: `{"app":"jsonschema"}`, want: AppDependency{App: "jsonschema", Alias: "jsonschema"}},
+		{want: AppDependency{App: "", Alias: ""}, name: "empty name", json: `""`, wantErr: "empty dependency name"},
+		{want: AppDependency{App: "", Alias: ""}, name: "object without app", json: `{"as":"validator"}`, wantErr: "app is required"},
+		{want: AppDependency{App: "", Alias: ""}, name: "number", json: `5`, wantErr: "must be an app name or {app, as}"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var got AppDependency
@@ -322,10 +382,31 @@ func TestAppDependencyMarshalRoundTrip(t *testing.T) {
 }
 
 func TestDependencyNames(t *testing.T) {
-	app := App{DependsOn: []AppDependency{
-		{App: "a", Alias: "a"},
-		{App: "b", Alias: "beta"},
-	}}
+	app := App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil, DependsOn: []AppDependency{
+			{App: "a", Alias: "a"},
+			{App: "b", Alias: "beta"},
+		},
+	}
 	names := app.DependencyNames()
 	if len(names) != 2 || names[0] != "a" || names[1] != "b" {
 		t.Fatalf("DependencyNames() = %v", names)

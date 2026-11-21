@@ -22,8 +22,13 @@ func TestVerifyChainHashes(t *testing.T) {
 	t.Run("no pin → no mismatch", func(t *testing.T) {
 		lm := ManagedConfigLayerMap{
 			".golangci.yaml": {
-				FileName: ".golangci.yaml",
-				Layers:   []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "out")},
+				OriginalContent: nil,
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        ".golangci.yaml",
+				Layers:          []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "out")},
 			},
 		}
 		if got := VerifyChainHashes(lm); len(got) != 0 {
@@ -34,8 +39,12 @@ func TestVerifyChainHashes(t *testing.T) {
 	t.Run("matching pin → no mismatch", func(t *testing.T) {
 		lm := ManagedConfigLayerMap{
 			".golangci.yaml": {
-				FileName:    ".golangci.yaml",
-				FinalConfig: ManagedConfig{ExpectChainHash: "xxh3:" + upstreamHash},
+				OriginalContent: nil,
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        ".golangci.yaml",
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", Ejectable: false, Placement: "", Render: nil, Content: nil, ExpectChainHash: "xxh3:" + upstreamHash},
 				// root layer (last) is excluded; its input is the "base" output.
 				Layers: []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "transformed")},
 			},
@@ -50,9 +59,13 @@ func TestVerifyChainHashes(t *testing.T) {
 		// manufacture a match for a value that does not parse.
 		lm := ManagedConfigLayerMap{
 			"x": {
-				FileName:    "x",
-				FinalConfig: ManagedConfig{ExpectChainHash: upstreamHash},
-				Layers:      []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "t")},
+				OriginalContent: nil,
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        "x",
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", Ejectable: false, Placement: "", Render: nil, Content: nil, ExpectChainHash: upstreamHash},
+				Layers:          []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "t")},
 			},
 		}
 		got := VerifyChainHashes(lm)
@@ -67,9 +80,13 @@ func TestVerifyChainHashes(t *testing.T) {
 	t.Run("drifted upstream → mismatch with details", func(t *testing.T) {
 		lm := ManagedConfigLayerMap{
 			".golangci.yaml": {
-				FileName:    ".golangci.yaml",
-				FinalConfig: ManagedConfig{ExpectChainHash: "xxh3:1234567890abcdef1234567890abcdef"},
-				Layers:      []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "t")},
+				OriginalContent: nil,
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        ".golangci.yaml",
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", Ejectable: false, Placement: "", Render: nil, Content: nil, ExpectChainHash: "xxh3:1234567890abcdef1234567890abcdef"},
+				Layers:          []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "t")},
 			},
 		}
 		got := VerifyChainHashes(lm)
@@ -94,8 +111,13 @@ func TestVerifyChainHashes(t *testing.T) {
 		// empty, so despite multiple layers there is no check.
 		lm := ManagedConfigLayerMap{
 			"x": {
-				FileName: "x",
-				Layers:   []ManagedConfigLayerEntry{layer("a", "one"), layer("b", "two"), layer("root", "three")},
+				OriginalContent: nil,
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        "x",
+				Layers:          []ManagedConfigLayerEntry{layer("a", "one"), layer("b", "two"), layer("root", "three")},
 			},
 		}
 		if got := VerifyChainHashes(lm); len(got) != 0 {
@@ -107,9 +129,12 @@ func TestVerifyChainHashes(t *testing.T) {
 		disk := "user file on disk\n"
 		lm := ManagedConfigLayerMap{
 			"x": {
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
 				FileName:        "x",
 				OriginalContent: &disk,
-				FinalConfig:     ManagedConfig{ExpectChainHash: digest.XXH3Of([]byte(disk)).String()},
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", Ejectable: false, Placement: "", Render: nil, Content: nil, ExpectChainHash: digest.XXH3Of([]byte(disk)).String()},
 				Layers:          []ManagedConfigLayerEntry{layer("root", "generated")},
 			},
 		}
@@ -124,8 +149,8 @@ func TestChainHashes(t *testing.T) {
 	want := digest.XXH3Of([]byte(upstream)).String()
 
 	lm := ManagedConfigLayerMap{
-		"b.yaml": {Layers: []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "x")}},
-		"a.yaml": {Layers: []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "y")}},
+		"b.yaml": {FileName: "", OriginalContent: nil, FinalConfig: ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil}, PristineContent: nil, RenderFailed: false, SourceLayers: nil, Layers: []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "x")}},
+		"a.yaml": {FileName: "", OriginalContent: nil, FinalConfig: ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil}, PristineContent: nil, RenderFailed: false, SourceLayers: nil, Layers: []ManagedConfigLayerEntry{layer("base", upstream), layer("root", "y")}},
 		"nil":    nil,
 	}
 	got := ChainHashes(lm)
@@ -167,10 +192,10 @@ func TestVerifyChainHashes_Pipeline(t *testing.T) {
 
 	build := func(rootPin string) ManagedConfigLayerMap {
 		lm := make(ManagedConfigLayerMap)
-		baseCfg := &Config{ManagedConfigs: MapOfManagedConfigs{".golangci.yaml": {Content: baseFn}}}
+		baseCfg := &Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, ManagedConfigs: MapOfManagedConfigs{".golangci.yaml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: baseFn}}}
 		MergeManagedConfigLayers(lm, "base", EvaluateManagedConfigContent(baseCfg, vm, "/root", "/root", lm), baseCfg.ManagedConfigs)
 
-		rootCfg := &Config{ManagedConfigs: MapOfManagedConfigs{".golangci.yaml": {Content: rootFn, ExpectChainHash: rootPin}}}
+		rootCfg := &Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, ManagedConfigs: MapOfManagedConfigs{".golangci.yaml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", Ejectable: false, Placement: "", Render: nil, Content: rootFn, ExpectChainHash: rootPin}}}
 		MergeManagedConfigLayers(lm, "root", EvaluateManagedConfigContent(rootCfg, vm, "/root", "/root", lm), rootCfg.ManagedConfigs)
 		return lm
 	}

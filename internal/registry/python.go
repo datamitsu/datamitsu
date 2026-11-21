@@ -18,7 +18,7 @@ type pythonRelease struct {
 	EOL    any    `json:"eol"`
 }
 
-var pythonHTTPClient = &http.Client{Timeout: 15 * time.Second}
+var pythonHTTPClient = &http.Client{Transport: nil, CheckRedirect: nil, Jar: nil, Timeout: 15 * time.Second}
 
 // GetLatestPythonStableVersion returns the latest non-EOL stable Python version
 // from endoflife.date, falling back to a pinned version on failure.

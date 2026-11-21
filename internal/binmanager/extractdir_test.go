@@ -41,18 +41,21 @@ func extractDirFixture(t *testing.T, archive string, contentType BinContentType,
 	}
 	libc := string(target.DetectHost(context.Background()).Libc)
 
-	binary := &AppConfigBinary{Binaries: MapOfBinaries{
-		osType: {archType: {libc: BinaryOsArchInfo{
-			URL:         server.URL,
-			Hash:        sum.Hex(),
-			ContentType: contentType,
-			BinaryPath:  &binaryPath,
-			ExtractDir:  true,
-		}}},
-	}}
+	binary := &AppConfigBinary{
+		Version: "", Binaries: MapOfBinaries{
+			osType: {archType: {libc: BinaryOsArchInfo{
+				Auth:        nil,
+				URL:         server.URL,
+				Hash:        sum.Hex(),
+				ContentType: contentType,
+				BinaryPath:  &binaryPath,
+				ExtractDir:  true,
+			}}},
+		},
+	}
 	return New(MapOfApps{
-		"tool": {Required: true, Binary: binary},
-		"user": {Shell: &AppConfigShell{Name: "sh"}, DependsOn: edges("tool")},
+		"tool": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Binary: binary},
+		"user": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &AppConfigShell{Args: nil, Name: "sh"}, DependsOn: edges("tool")},
 	}, nil, nil)
 }
 
@@ -227,14 +230,14 @@ func TestBinaryCommandPath(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{"single file", BinaryOsArchInfo{BinaryPath: new("bin/tool")}, install, false},
-		{"extractDir without binaryPath", BinaryOsArchInfo{ExtractDir: true}, install, false},
-		{"extractDir", BinaryOsArchInfo{ExtractDir: true, BinaryPath: new("tool-1.0/bin/tool")}, filepath.Join(install, "tool-1.0", "bin", "tool"), false},
-		{"extractDir dot-prefixed", BinaryOsArchInfo{ExtractDir: true, BinaryPath: new("./tool")}, filepath.Join(install, "tool"), false},
-		{"extractDir escaping", BinaryOsArchInfo{ExtractDir: true, BinaryPath: new("../other/tool")}, "", true},
-		{"extractDir directory itself", BinaryOsArchInfo{ExtractDir: true, BinaryPath: new(".")}, "", true},
-		{"extractDir cleans to directory itself", BinaryOsArchInfo{ExtractDir: true, BinaryPath: new("bin/..")}, "", true},
-		{"extractDir absolute", BinaryOsArchInfo{ExtractDir: true, BinaryPath: new(string(filepath.Separator) + "tool")}, "", true},
+		{"single file", BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", ExtractDir: false, BinaryPath: new("bin/tool")}, install, false},
+		{"extractDir without binaryPath", BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: true}, install, false},
+		{"extractDir", BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", ExtractDir: true, BinaryPath: new("tool-1.0/bin/tool")}, filepath.Join(install, "tool-1.0", "bin", "tool"), false},
+		{"extractDir dot-prefixed", BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", ExtractDir: true, BinaryPath: new("./tool")}, filepath.Join(install, "tool"), false},
+		{"extractDir escaping", BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", ExtractDir: true, BinaryPath: new("../other/tool")}, "", true},
+		{"extractDir directory itself", BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", ExtractDir: true, BinaryPath: new(".")}, "", true},
+		{"extractDir cleans to directory itself", BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", ExtractDir: true, BinaryPath: new("bin/..")}, "", true},
+		{"extractDir absolute", BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", ExtractDir: true, BinaryPath: new(string(filepath.Separator) + "tool")}, "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -258,7 +261,7 @@ func TestCheckExtractedCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := checkExtractedCommand(dir, BinaryOsArchInfo{ExtractDir: true, BinaryPath: new("bin/tool")}); err != nil {
+	if err := checkExtractedCommand(dir, BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", ExtractDir: true, BinaryPath: new("bin/tool")}); err != nil {
 		t.Fatalf("checkExtractedCommand(present) = %v", err)
 	}
 	if runtime.GOOS != "windows" {
@@ -270,16 +273,16 @@ func TestCheckExtractedCommand(t *testing.T) {
 			t.Errorf("command mode = %v, want it executable", stat.Mode())
 		}
 	}
-	if err := checkExtractedCommand(dir, BinaryOsArchInfo{ExtractDir: true, BinaryPath: new("bin/missing")}); err == nil || !strings.Contains(err.Error(), "not found") {
+	if err := checkExtractedCommand(dir, BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", ExtractDir: true, BinaryPath: new("bin/missing")}); err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Errorf("checkExtractedCommand(missing) = %v, want not-found error", err)
 	}
-	if err := checkExtractedCommand(dir, BinaryOsArchInfo{ExtractDir: true, BinaryPath: new("bin/subdir")}); err == nil || !strings.Contains(err.Error(), "is a directory") {
+	if err := checkExtractedCommand(dir, BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", ExtractDir: true, BinaryPath: new("bin/subdir")}); err == nil || !strings.Contains(err.Error(), "is a directory") {
 		t.Errorf("checkExtractedCommand(directory) = %v, want directory error", err)
 	}
-	if err := checkExtractedCommand(dir, BinaryOsArchInfo{ExtractDir: true}); err != nil {
+	if err := checkExtractedCommand(dir, BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: true}); err != nil {
 		t.Errorf("checkExtractedCommand(no binaryPath) = %v, want nil", err)
 	}
-	if err := checkExtractedCommand(dir, BinaryOsArchInfo{ExtractDir: true, BinaryPath: new("bin/..")}); err == nil || !strings.Contains(err.Error(), "directory itself") {
+	if err := checkExtractedCommand(dir, BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", ExtractDir: true, BinaryPath: new("bin/..")}); err == nil || !strings.Contains(err.Error(), "directory itself") {
 		t.Errorf("checkExtractedCommand(directory itself) = %v, want the directory named", err)
 	}
 }

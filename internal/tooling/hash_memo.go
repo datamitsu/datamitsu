@@ -73,7 +73,7 @@ type memoEntry struct {
 // above the working set of a single run so a run never pays that.
 const maxMemoEntries = 200_000
 
-func newHashMemo() *hashMemo { return &hashMemo{m: make(map[string]memoEntry)} }
+func newHashMemo() *hashMemo { return &hashMemo{mu: sync.RWMutex{}, m: make(map[string]memoEntry)} }
 
 // contentMemo is the process-scoped memo the pre-run verdict pass shares across
 // every task of a run.

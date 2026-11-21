@@ -260,7 +260,7 @@ func TestMaybePrint_WritesToStderrNotStdout(t *testing.T) {
 	m, cacheDir := setupTestManager(t, clk)
 
 	// Seed to threshold-1 so the next run activates and prints the message.
-	if err := saveState(statePath(cacheDir), &State{SuccessfulRuns: sponsorActivationThreshold - 1}); err != nil {
+	if err := saveState(statePath(cacheDir), &State{Activated: false, LastShown: time.Time{}, SuccessfulRuns: sponsorActivationThreshold - 1}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -300,7 +300,7 @@ func TestMaybePrint_PanicRecovery(t *testing.T) {
 	// Pre-populate state to 29 runs so the next MaybePrint hits the activation
 	// path which calls printMessage -> selectRandomMessage(m.rnd)
 	path := statePath(cacheDir)
-	preState := &State{SuccessfulRuns: 29}
+	preState := &State{Activated: false, LastShown: time.Time{}, SuccessfulRuns: 29}
 	if err := saveState(path, preState); err != nil {
 		t.Fatal(err)
 	}

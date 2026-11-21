@@ -20,8 +20,8 @@ import (
 func TestExecutionSecondSignal(t *testing.T) {
 	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
 		clitest.ShellTool("stubborn", `trap '' TERM; echo $$ > "$MARKERS/pid"; echo "$0 started" >> "$MARKERS/$0"; sleep 30`,
-			clitest.ToolOpSpec{}))
-	proc := clitest.Start(t, clitest.RunOptions{Dir: e.p.Dir, CacheDir: e.cache},
+			clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
+	proc := clitest.Start(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: e.p.Dir, CacheDir: e.cache},
 		"--no-auto-config", "--config", e.cfg, "lint")
 	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 		if ran, _ := e.p.Marker("stubborn"); ran {

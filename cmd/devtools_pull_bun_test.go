@@ -3,6 +3,7 @@ package cmd
 import (
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/github"
@@ -13,12 +14,18 @@ func bunTestRelease() *github.Release {
 	assets := make([]github.Asset, 0, len(bunArchiveSpecs()))
 	for _, spec := range bunArchiveSpecs() {
 		assets = append(assets, github.Asset{
+			APIURL:             "",
+			UUID:               "",
+			MetadataURL:        "",
+			Auth:               nil,
+			Size:               0,
+			ContentType:        "",
 			Name:               spec.filename,
 			BrowserDownloadURL: "https://example.com/" + spec.filename,
 			Digest:             "sha256:" + strings.Repeat("a", 64),
 		})
 	}
-	return &github.Release{TagName: "bun-v1.4.1", Assets: assets}
+	return &github.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "bun-v1.4.1", Assets: assets}
 }
 
 func TestDetectBunBinaries(t *testing.T) {

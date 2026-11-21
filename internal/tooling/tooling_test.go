@@ -53,8 +53,14 @@ func (m *mockAppManager) GetCommandInfo(_ context.Context, appName string) (*bin
 	}
 	if path, ok := m.binaries[appName]; ok {
 		return &binmanager.CommandInfo{
-			Type:    "binary",
-			Command: path,
+			Args:           nil,
+			Env:            nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "binary",
+			Command:        path,
 		}, nil
 	}
 	return nil, fmt.Errorf("app not found: %s", appName)
@@ -64,7 +70,7 @@ func TestNewExecutor(t *testing.T) {
 	rootPath := "/root"
 	dryRun := true
 	failFast := true
-	appManager := &mockAppManager{}
+	appManager := &mockAppManager{binaries: nil, err: nil, commands: nil}
 
 	executor := NewExecutor(rootPath, dryRun, failFast, appManager, nil)
 
@@ -86,7 +92,7 @@ func TestNewExecutor(t *testing.T) {
 }
 
 func TestSetResultCallback(t *testing.T) {
-	executor := NewExecutor("/root", false, false, &mockAppManager{}, nil)
+	executor := NewExecutor("/root", false, false, &mockAppManager{binaries: nil, err: nil, commands: nil}, nil)
 
 	called := false
 	callback := func(result ExecutionResult) {
@@ -99,7 +105,7 @@ func TestSetResultCallback(t *testing.T) {
 		t.Error("resultCallback should be set")
 	}
 
-	executor.resultCallback(ExecutionResult{})
+	executor.resultCallback(ExecutionResult{ToolName: "", TaskID: "", Success: false, Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: time.Time{}, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", cached: nil})
 
 	if !called {
 		t.Error("callback should have been called")
@@ -107,7 +113,7 @@ func TestSetResultCallback(t *testing.T) {
 }
 
 func TestReplacePlaceholders(t *testing.T) {
-	executor := NewExecutor("/root", false, false, &mockAppManager{}, nil)
+	executor := NewExecutor("/root", false, false, &mockAppManager{binaries: nil, err: nil, commands: nil}, nil)
 
 	rootCachePath, err := env.GetProjectCachePath("/root", "", "mytool")
 	if err != nil {
@@ -240,7 +246,7 @@ func TestReplacePlaceholders(t *testing.T) {
 }
 
 func TestReplaceEnvPlaceholders(t *testing.T) {
-	executor := NewExecutor("/root", false, false, &mockAppManager{}, nil)
+	executor := NewExecutor("/root", false, false, &mockAppManager{binaries: nil, err: nil, commands: nil}, nil)
 
 	rootCachePath, err := env.GetProjectCachePath("/root", "", "golangci-lint")
 	if err != nil {
@@ -297,7 +303,7 @@ func TestReplaceEnvPlaceholders(t *testing.T) {
 // executor actually substitutes: every allowed placeholder must expand, otherwise
 // the validator would pass a token the tool then receives as a broken literal.
 func TestPlaceholderSetsMatchExecutor(t *testing.T) {
-	executor := NewExecutor("/root", false, false, &mockAppManager{}, nil)
+	executor := NewExecutor("/root", false, false, &mockAppManager{binaries: nil, err: nil, commands: nil}, nil)
 
 	for _, name := range config.ToolArgPlaceholders {
 		token := "{" + name + "}"
@@ -319,7 +325,7 @@ func TestPlaceholderSetsMatchExecutor(t *testing.T) {
 }
 
 func TestReplacePlaceholders_ToolCacheComputedPerCall(t *testing.T) {
-	executor := NewExecutor("/root", false, false, &mockAppManager{}, nil)
+	executor := NewExecutor("/root", false, false, &mockAppManager{binaries: nil, err: nil, commands: nil}, nil)
 
 	t.Run("basic per-call computation", func(t *testing.T) {
 		cachePath, err := env.GetProjectCachePath("/root", "", "tsc")
@@ -426,7 +432,7 @@ func TestReplacePlaceholders_ToolCacheComputedPerCall(t *testing.T) {
 
 func TestGetWorkingDir(t *testing.T) {
 	rootPath := "/root"
-	executor := NewExecutor(rootPath, false, false, &mockAppManager{}, nil)
+	executor := NewExecutor(rootPath, false, false, &mockAppManager{binaries: nil, err: nil, commands: nil}, nil)
 
 	tests := []struct {
 		name        string
@@ -448,7 +454,19 @@ func TestGetWorkingDir(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			task := Task{
-				ProjectPath: tt.projectPath,
+				perFileCache: "",
+				inherited:    toolenv.Inherited{},
+				ID:           "",
+				ToolName:     "",
+				Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+				Operation:    "",
+				OpConfig:     config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil},
+				Files:        nil,
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				Coverage:     "",
+				ProjectPath:  tt.projectPath,
 			}
 			result := executor.getWorkingDir(task)
 			if result != tt.expected {
@@ -460,6 +478,8 @@ func TestGetWorkingDir(t *testing.T) {
 
 func TestExecuteDryRun(t *testing.T) {
 	appManager := &mockAppManager{
+		err:      nil,
+		commands: nil,
 		binaries: map[string]string{
 			"eslint": "/bin/eslint",
 		},
@@ -468,17 +488,43 @@ func TestExecuteDryRun(t *testing.T) {
 	executor := NewExecutor("/root", true, false, appManager, nil)
 
 	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil,
 		Groups: []TaskGroup{
 			{
 				Priority: 10,
 				Tasks: []Task{
 					{
-						ToolName:  "eslint",
-						Operation: config.OpFix,
+						perFileCache: "",
+						inherited:    toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "eslint",
+						Operation:    config.OpFix,
 						OpConfig: config.ToolOperation{
-							App:   "eslint",
-							Args:  []string{"--fix", "{file}"},
-							Scope: config.ToolScopePerFile,
+							Arity:             "",
+							Granularity:       "",
+							Globs:             nil,
+							ExcludeGlobs:      nil,
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "eslint",
+							Args:              []string{"--fix", "{file}"},
+							Scope:             config.ToolScopePerFile,
 						},
 						Files: []string{"test.js"},
 					},
@@ -512,22 +558,52 @@ func TestExecuteDryRun(t *testing.T) {
 
 func TestExecuteBinaryNotFound(t *testing.T) {
 	appManager := &mockAppManager{
-		err: errors.New("binary not found"),
+		binaries: nil,
+		commands: nil,
+		err:      errors.New("binary not found"),
 	}
 
 	executor := NewExecutor("/root", false, false, appManager, nil)
 
 	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil,
 		Groups: []TaskGroup{
 			{
 				Priority: 10,
 				Tasks: []Task{
 					{
-						ToolName:  "missing",
-						Operation: config.OpFix,
+						perFileCache: "",
+						inherited:    toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						Files:        nil,
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "missing",
+						Operation:    config.OpFix,
 						OpConfig: config.ToolOperation{
-							App:   "missing",
-							Scope: config.ToolScopeRepository,
+							Args:              nil,
+							Arity:             "",
+							Granularity:       "",
+							Globs:             nil,
+							ExcludeGlobs:      nil,
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "missing",
+							Scope:             config.ToolScopeRepository,
 						},
 					},
 				},
@@ -554,28 +630,106 @@ func TestExecuteBinaryNotFound(t *testing.T) {
 }
 
 func TestDetectParallelGroups(t *testing.T) {
-	executor := NewExecutor("/root", false, false, &mockAppManager{}, nil)
+	executor := NewExecutor("/root", false, false, &mockAppManager{binaries: nil, err: nil, commands: nil}, nil)
 
 	tasks := []Task{
 		{
-			ToolName: "tool1",
+			perFileCache: "",
+			inherited:    toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Operation:    "",
+			Files:        nil,
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "tool1",
 			OpConfig: config.ToolOperation{
-				Scope: config.ToolScopePerFile,
-				Globs: []string{"*.js"},
+				App:               "",
+				Args:              nil,
+				Arity:             "",
+				Granularity:       "",
+				ExcludeGlobs:      nil,
+				Priority:          0,
+				Cache:             nil,
+				InvalidateOn:      nil,
+				Env:               nil,
+				InheritEnv:        nil,
+				FailOn:            "",
+				Input:             "",
+				LSP:               nil,
+				Output:            "",
+				ManagedConfigRefs: nil,
+				Scope:             config.ToolScopePerFile,
+				Globs:             []string{"*.js"},
 			},
 		},
 		{
-			ToolName: "tool2",
+			perFileCache: "",
+			inherited:    toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Operation:    "",
+			Files:        nil,
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "tool2",
 			OpConfig: config.ToolOperation{
-				Scope: config.ToolScopePerFile,
-				Globs: []string{"*.ts"},
+				App:               "",
+				Args:              nil,
+				Arity:             "",
+				Granularity:       "",
+				ExcludeGlobs:      nil,
+				Priority:          0,
+				Cache:             nil,
+				InvalidateOn:      nil,
+				Env:               nil,
+				InheritEnv:        nil,
+				FailOn:            "",
+				Input:             "",
+				LSP:               nil,
+				Output:            "",
+				ManagedConfigRefs: nil,
+				Scope:             config.ToolScopePerFile,
+				Globs:             []string{"*.ts"},
 			},
 		},
 		{
-			ToolName: "tool3",
+			perFileCache: "",
+			inherited:    toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Operation:    "",
+			Files:        nil,
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "tool3",
 			OpConfig: config.ToolOperation{
-				Scope: config.ToolScopePerFile,
-				Globs: []string{"*.js"},
+				App:               "",
+				Args:              nil,
+				Arity:             "",
+				Granularity:       "",
+				ExcludeGlobs:      nil,
+				Priority:          0,
+				Cache:             nil,
+				InvalidateOn:      nil,
+				Env:               nil,
+				InheritEnv:        nil,
+				FailOn:            "",
+				Input:             "",
+				LSP:               nil,
+				Output:            "",
+				ManagedConfigRefs: nil,
+				Scope:             config.ToolScopePerFile,
+				Globs:             []string{"*.js"},
 			},
 		},
 	}
@@ -597,30 +751,102 @@ func TestHasOverlap(t *testing.T) {
 		{
 			name: "whole-project overlaps with everything",
 			task1: Task{
-				OpConfig: config.ToolOperation{Scope: config.ToolScopeRepository},
+				perFileCache: "",
+				inherited:    toolenv.Inherited{},
+				ID:           "",
+				ToolName:     "",
+				Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+				Operation:    "",
+				Files:        nil,
+				ProjectPath:  "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				Coverage:     "",
+				OpConfig:     config.ToolOperation{App: "", Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopeRepository},
 			},
 			task2: Task{
-				OpConfig: config.ToolOperation{Scope: config.ToolScopePerFile, Globs: []string{"*.js"}},
+				perFileCache: "",
+				inherited:    toolenv.Inherited{},
+				ID:           "",
+				ToolName:     "",
+				Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+				Operation:    "",
+				Files:        nil,
+				ProjectPath:  "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				Coverage:     "",
+				OpConfig:     config.ToolOperation{App: "", Args: nil, Arity: "", Granularity: "", ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile, Globs: []string{"*.js"}},
 			},
 			expected: true,
 		},
 		{
 			name: "same globs overlap",
 			task1: Task{
-				OpConfig: config.ToolOperation{Scope: config.ToolScopePerFile, Globs: []string{"*.js"}},
+				perFileCache: "",
+				inherited:    toolenv.Inherited{},
+				ID:           "",
+				ToolName:     "",
+				Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+				Operation:    "",
+				Files:        nil,
+				ProjectPath:  "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				Coverage:     "",
+				OpConfig:     config.ToolOperation{App: "", Args: nil, Arity: "", Granularity: "", ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile, Globs: []string{"*.js"}},
 			},
 			task2: Task{
-				OpConfig: config.ToolOperation{Scope: config.ToolScopePerFile, Globs: []string{"*.js"}},
+				perFileCache: "",
+				inherited:    toolenv.Inherited{},
+				ID:           "",
+				ToolName:     "",
+				Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+				Operation:    "",
+				Files:        nil,
+				ProjectPath:  "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				Coverage:     "",
+				OpConfig:     config.ToolOperation{App: "", Args: nil, Arity: "", Granularity: "", ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile, Globs: []string{"*.js"}},
 			},
 			expected: true,
 		},
 		{
 			name: "different globs no overlap",
 			task1: Task{
-				OpConfig: config.ToolOperation{Scope: config.ToolScopePerFile, Globs: []string{"*.js"}},
+				perFileCache: "",
+				inherited:    toolenv.Inherited{},
+				ID:           "",
+				ToolName:     "",
+				Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+				Operation:    "",
+				Files:        nil,
+				ProjectPath:  "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				Coverage:     "",
+				OpConfig:     config.ToolOperation{App: "", Args: nil, Arity: "", Granularity: "", ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile, Globs: []string{"*.js"}},
 			},
 			task2: Task{
-				OpConfig: config.ToolOperation{Scope: config.ToolScopePerFile, Globs: []string{"*.ts"}},
+				perFileCache: "",
+				inherited:    toolenv.Inherited{},
+				ID:           "",
+				ToolName:     "",
+				Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+				Operation:    "",
+				Files:        nil,
+				ProjectPath:  "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				Coverage:     "",
+				OpConfig:     config.ToolOperation{App: "", Args: nil, Arity: "", Granularity: "", ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile, Globs: []string{"*.ts"}},
 			},
 			expected: false,
 		},
@@ -631,17 +857,69 @@ func TestHasOverlap(t *testing.T) {
 			// patterns can resolve to overlapping concrete file sets.
 			name: "excludeGlobs ignored for overlap (conservative)",
 			task1: Task{
+				perFileCache: "",
+				inherited:    toolenv.Inherited{},
+				ID:           "",
+				ToolName:     "",
+				Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+				Operation:    "",
+				Files:        nil,
+				ProjectPath:  "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				Coverage:     "",
 				OpConfig: config.ToolOperation{
-					Scope:        config.ToolScopePerFile,
-					Globs:        []string{"*.go"},
-					ExcludeGlobs: []string{"vendor/**"},
+					App:               "",
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					Priority:          0,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					Scope:             config.ToolScopePerFile,
+					Globs:             []string{"*.go"},
+					ExcludeGlobs:      []string{"vendor/**"},
 				},
 			},
 			task2: Task{
+				perFileCache: "",
+				inherited:    toolenv.Inherited{},
+				ID:           "",
+				ToolName:     "",
+				Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+				Operation:    "",
+				Files:        nil,
+				ProjectPath:  "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				Coverage:     "",
 				OpConfig: config.ToolOperation{
-					Scope:        config.ToolScopePerFile,
-					Globs:        []string{"*.go"},
-					ExcludeGlobs: []string{"src/**"},
+					App:               "",
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					Priority:          0,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					Scope:             config.ToolScopePerFile,
+					Globs:             []string{"*.go"},
+					ExcludeGlobs:      []string{"src/**"},
 				},
 			},
 			expected: true,
@@ -686,7 +964,27 @@ func TestNewPlanner(t *testing.T) {
 
 func TestIsApplicableTool(t *testing.T) {
 	planner := &Planner{
-		detectedTypes: []string{"node", "go"},
+		rootPath:           "",
+		cwdPath:            "",
+		tools:              nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedFiles:        nil,
+		cachedRel:          nil,
+		cachedProjects:     nil,
+		cacheInitialized:   false,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		detectedTypes:      []string{"node", "go"},
 	}
 
 	tests := []struct {
@@ -696,12 +994,17 @@ func TestIsApplicableTool(t *testing.T) {
 	}{
 		{
 			name:     "no project types",
-			tool:     config.Tool{},
+			tool:     config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
 			expected: true,
 		},
 		{
 			name: "matching project type",
 			tool: config.Tool{
+				Name:         "",
+				Skip:         false,
+				SkipReason:   "",
+				Operations:   nil,
+				OutputParser: nil,
 				ProjectTypes: []string{"node"},
 			},
 			expected: true,
@@ -709,6 +1012,11 @@ func TestIsApplicableTool(t *testing.T) {
 		{
 			name: "non-matching project type",
 			tool: config.Tool{
+				Name:         "",
+				Skip:         false,
+				SkipReason:   "",
+				Operations:   nil,
+				OutputParser: nil,
 				ProjectTypes: []string{"rust"},
 			},
 			expected: false,
@@ -716,6 +1024,11 @@ func TestIsApplicableTool(t *testing.T) {
 		{
 			name: "one matching type",
 			tool: config.Tool{
+				Name:         "",
+				Skip:         false,
+				SkipReason:   "",
+				Operations:   nil,
+				OutputParser: nil,
 				ProjectTypes: []string{"node", "rust"},
 			},
 			expected: true,
@@ -736,7 +1049,27 @@ func TestFilterFilesByGlobs(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	planner := &Planner{
-		rootPath: tmpDir,
+		cwdPath:            "",
+		detectedTypes:      nil,
+		tools:              nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedFiles:        nil,
+		cachedRel:          nil,
+		cachedProjects:     nil,
+		cacheInitialized:   false,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           tmpDir,
 	}
 
 	file1 := filepath.Join(tmpDir, "test.js")
@@ -786,7 +1119,27 @@ func TestExcludeFilesByGlobs(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	planner := &Planner{
-		rootPath: tmpDir,
+		cwdPath:            "",
+		detectedTypes:      nil,
+		tools:              nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedFiles:        nil,
+		cachedRel:          nil,
+		cachedProjects:     nil,
+		cacheInitialized:   false,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           tmpDir,
 	}
 
 	fileJS := filepath.Join(tmpDir, "test.js")
@@ -867,25 +1220,54 @@ func TestCollectTasksPerFileWithExcludeGlobs(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"prettier": {
-			Name: "prettier",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "prettier",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpFix: {
-					App:          "prettier",
-					Args:         []string{"--write", "{file}"},
-					Scope:        config.ToolScopePerFile,
-					Priority:     10,
-					Globs:        []string{"**/*.js", "**/*.ts"},
-					ExcludeGlobs: []string{"vendor/**", "**/*.min.js"},
+					Arity:             "",
+					Granularity:       "",
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "prettier",
+					Args:              []string{"--write", "{file}"},
+					Scope:             config.ToolScopePerFile,
+					Priority:          10,
+					Globs:             []string{"**/*.js", "**/*.ts"},
+					ExcludeGlobs:      []string{"vendor/**", "**/*.min.js"},
 				},
 			},
 		},
 	}
 
 	planner := &Planner{
-		rootPath:      root,
-		cwdPath:       cwd,
-		detectedTypes: []string{},
-		tools:         tools,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{},
+		tools:              tools,
 		cachedFiles: []string{
 			"/repo/src/app.js",
 			"/repo/src/util.ts",
@@ -897,7 +1279,7 @@ func TestCollectTasksPerFileWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpFix, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpFix, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	// Only src/app.js and src/util.ts should survive after excludeGlobs filter.
 	if len(tasks) != 2 {
@@ -924,24 +1306,54 @@ func TestCollectTasksRepositoryWithExcludeGlobs(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"eslint": {
-			Name: "eslint",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "eslint",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:          "eslint",
-					Scope:        config.ToolScopeRepository,
-					Priority:     10,
-					Globs:        []string{"**/*.js"},
-					ExcludeGlobs: []string{"vendor/**"},
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "eslint",
+					Scope:             config.ToolScopeRepository,
+					Priority:          10,
+					Globs:             []string{"**/*.js"},
+					ExcludeGlobs:      []string{"vendor/**"},
 				},
 			},
 		},
 	}
 
 	planner := &Planner{
-		rootPath:      root,
-		cwdPath:       cwd,
-		detectedTypes: []string{},
-		tools:         tools,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{},
+		tools:              tools,
 		cachedFiles: []string{
 			"/repo/src/app.js",
 			"/repo/src/lib/helper.js",
@@ -952,7 +1364,7 @@ func TestCollectTasksRepositoryWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 repository-scope task, got %d", len(tasks))
@@ -981,12 +1393,27 @@ func TestBuildIgnoreMatcherMalformedFileFails(t *testing.T) {
 	}
 
 	planner := &Planner{
-		rootPath:         root,
-		cwdPath:          root,
-		tools:            config.MapOfTools{},
-		cachedFiles:      []string{path},
-		cachedProjects:   []project.ProjectLocation{},
-		cacheInitialized: true,
+		detectedTypes:      nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            root,
+		tools:              config.MapOfTools{},
+		cachedFiles:        []string{path},
+		cachedProjects:     []project.ProjectLocation{},
+		cacheInitialized:   true,
 	}
 
 	_, err := planner.buildIgnoreMatcher()
@@ -1009,24 +1436,54 @@ func TestCollectTasksRepositoryHonorsFileSpecificIgnore(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"eslint": {
-			Name: "eslint",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "eslint",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "eslint",
-					Scope:    config.ToolScopeRepository,
-					Priority: 10,
-					Globs:    []string{"**/*.js"},
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "eslint",
+					Scope:             config.ToolScopeRepository,
+					Priority:          10,
+					Globs:             []string{"**/*.js"},
 				},
 			},
 		},
 	}
 
 	planner := &Planner{
-		rootPath:         root,
-		cwdPath:          cwd,
-		detectedTypes:    []string{},
-		tools:            tools,
-		extraIgnoreRules: []string{"**/skip.js: eslint"},
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{},
+		tools:              tools,
+		extraIgnoreRules:   []string{"**/skip.js: eslint"},
 		cachedFiles: []string{
 			"/repo/src/app.js",
 			"/repo/src/skip.js",
@@ -1041,7 +1498,7 @@ func TestCollectTasksRepositoryHonorsFileSpecificIgnore(t *testing.T) {
 	}
 	planner.ignoreMatcher = builtMatcher
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 repository-scope task, got %d", len(tasks))
@@ -1067,24 +1524,54 @@ func TestCollectTasksRepositoryHonorsSubdirReEnable(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"yamlfmt": {
-			Name: "yamlfmt",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "yamlfmt",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "yamlfmt",
-					Scope:    config.ToolScopeRepository,
-					Priority: 10,
-					Globs:    []string{"**/*.yaml"},
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "yamlfmt",
+					Scope:             config.ToolScopeRepository,
+					Priority:          10,
+					Globs:             []string{"**/*.yaml"},
 				},
 			},
 		},
 	}
 
 	planner := &Planner{
-		rootPath:         root,
-		cwdPath:          cwd,
-		detectedTypes:    []string{},
-		tools:            tools,
-		extraIgnoreRules: []string{"**/*: yamlfmt", "!config/**/*: yamlfmt"},
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{},
+		tools:              tools,
+		extraIgnoreRules:   []string{"**/*: yamlfmt", "!config/**/*: yamlfmt"},
 		cachedFiles: []string{
 			"/repo/app.yaml",
 			"/repo/config/ci.yaml",
@@ -1098,7 +1585,7 @@ func TestCollectTasksRepositoryHonorsSubdirReEnable(t *testing.T) {
 	}
 	planner.ignoreMatcher = builtMatcher
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 repository-scope task (re-enabled config/), got %d", len(tasks))
@@ -1114,25 +1601,54 @@ func TestCollectTasksPerProjectWithExcludeGlobs(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"go-lint": {
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
 			Name:         "go-lint",
 			ProjectTypes: []string{"go"},
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:          "golangci-lint",
-					Scope:        config.ToolScopePerProject,
-					Priority:     10,
-					Globs:        []string{"**/*.go"},
-					ExcludeGlobs: []string{"**/*_generated.go"},
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "golangci-lint",
+					Scope:             config.ToolScopePerProject,
+					Priority:          10,
+					Globs:             []string{"**/*.go"},
+					ExcludeGlobs:      []string{"**/*_generated.go"},
 				},
 			},
 		},
 	}
 
 	planner := &Planner{
-		rootPath:      root,
-		cwdPath:       cwd,
-		detectedTypes: []string{"go"},
-		tools:         tools,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{"go"},
+		tools:              tools,
 		cachedFiles: []string{
 			"/repo/services/api/main.go",
 			"/repo/services/api/api_generated.go",
@@ -1146,7 +1662,7 @@ func TestCollectTasksPerProjectWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	if len(tasks) != 2 {
 		t.Fatalf("expected 2 tasks (one per detected go project), got %d", len(tasks))
@@ -1189,24 +1705,54 @@ func TestCollectTasksNilGlobsWithExcludeGlobs(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"whole-repo-tool": {
-			Name: "whole-repo-tool",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "whole-repo-tool",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:          "whole-repo-tool",
-					Scope:        config.ToolScopeRepository,
-					Priority:     10,
-					Globs:        nil,
-					ExcludeGlobs: []string{"vendor/**"},
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "whole-repo-tool",
+					Scope:             config.ToolScopeRepository,
+					Priority:          10,
+					Globs:             nil,
+					ExcludeGlobs:      []string{"vendor/**"},
 				},
 			},
 		},
 	}
 
 	planner := &Planner{
-		rootPath:      root,
-		cwdPath:       cwd,
-		detectedTypes: []string{},
-		tools:         tools,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{},
+		tools:              tools,
 		cachedFiles: []string{
 			"/repo/src/app.js",
 			"/repo/vendor/jquery.js",
@@ -1215,7 +1761,7 @@ func TestCollectTasksNilGlobsWithExcludeGlobs(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 task (nil globs still emits repository-scope task), got %d", len(tasks))
@@ -1230,23 +1776,58 @@ func TestPlan(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"tool1": {
-			Name: "tool1",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "tool1",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "tool1",
-					Scope:    config.ToolScopeRepository,
-					Priority: 10,
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					Globs:             nil,
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "tool1",
+					Scope:             config.ToolScopeRepository,
+					Priority:          10,
 				},
 			},
 		},
 		"tool2": {
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
 			Name:         "tool2",
 			ProjectTypes: []string{"rust"},
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "tool2",
-					Scope:    config.ToolScopeRepository,
-					Priority: 20,
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					Globs:             nil,
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "tool2",
+					Scope:             config.ToolScopeRepository,
+					Priority:          20,
 				},
 			},
 		},
@@ -1254,7 +1835,7 @@ func TestPlan(t *testing.T) {
 
 	planner := NewPlanner(tmpDir, tmpDir, []string{"node"}, tools, config.MapOfProjectTypes{}, nil)
 
-	plan, err := planner.Plan(context.Background(), config.OpLint, Selection{}, nil)
+	plan, err := planner.Plan(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil}, nil)
 	if err != nil {
 		t.Fatalf("Plan() error = %v", err)
 	}
@@ -1277,11 +1858,30 @@ func TestCollectTasks(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"tool1": {
-			Name: "tool1",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "tool1",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:   "tool1",
-					Scope: config.ToolScopeRepository,
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					Globs:             nil,
+					ExcludeGlobs:      nil,
+					Priority:          0,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "tool1",
+					Scope:             config.ToolScopeRepository,
 				},
 			},
 		},
@@ -1289,7 +1889,7 @@ func TestCollectTasks(t *testing.T) {
 
 	planner := NewPlanner(tmpDir, tmpDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	if len(tasks) != 1 {
 		t.Errorf("len(tasks) = %d, want 1", len(tasks))
@@ -1307,11 +1907,30 @@ func TestCollectTasksRepositoryScope(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"tool1": {
-			Name: "tool1",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "tool1",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:   "tool1",
-					Scope: config.ToolScopeRepository,
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					Globs:             nil,
+					ExcludeGlobs:      nil,
+					Priority:          0,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "tool1",
+					Scope:             config.ToolScopeRepository,
 				},
 			},
 		},
@@ -1319,7 +1938,7 @@ func TestCollectTasksRepositoryScope(t *testing.T) {
 
 	t.Run("root path", func(t *testing.T) {
 		planner := NewPlanner(tmpDir, tmpDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
-		tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{})
+		tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 		if len(tasks) != 1 {
 			t.Errorf("len(tasks) = %d, want 1", len(tasks))
@@ -1329,7 +1948,7 @@ func TestCollectTasksRepositoryScope(t *testing.T) {
 	t.Run("subdirectory path", func(t *testing.T) {
 		// Repository-scoped tools are skipped when cwd is not the git root
 		planner := NewPlanner(tmpDir, subDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
-		tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{})
+		tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 		if len(tasks) != 0 {
 			t.Errorf("len(tasks) = %d, want 0 (repository scope skipped when cwd != root)", len(tasks))
@@ -1348,11 +1967,30 @@ func TestCollectTasksRepositoryScopeRespectsDatamitsuignore(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"golangci-lint": {
-			Name: "golangci-lint",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "golangci-lint",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:   "golangci-lint",
-					Scope: config.ToolScopeRepository,
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					Globs:             nil,
+					ExcludeGlobs:      nil,
+					Priority:          0,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "golangci-lint",
+					Scope:             config.ToolScopeRepository,
 				},
 			},
 		},
@@ -1364,20 +2002,33 @@ func TestCollectTasksRepositoryScopeRespectsDatamitsuignore(t *testing.T) {
 			t.Fatalf("AddFile(%q) error = %v", rule, err)
 		}
 		return &Planner{
-			rootPath:         root,
-			cwdPath:          cwd,
-			detectedTypes:    []string{},
-			tools:            tools,
-			cachedFiles:      []string{"/repo/main.go"},
-			cachedProjects:   []project.ProjectLocation{},
-			cacheInitialized: true,
-			ignoreMatcher:    m,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedRel:          nil,
+			seedFiles:          nil,
+			globCacheMu:        sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           root,
+			cwdPath:            cwd,
+			detectedTypes:      []string{},
+			tools:              tools,
+			cachedFiles:        []string{"/repo/main.go"},
+			cachedProjects:     []project.ProjectLocation{},
+			cacheInitialized:   true,
+			ignoreMatcher:      m,
 		}
 	}
 
 	t.Run("catch-all rule disables repository-scoped tool", func(t *testing.T) {
 		p := newPlanner("**/*: golangci-lint\n")
-		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{})
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 		if len(tasks) != 0 {
 			t.Errorf("repository-scoped tool should be disabled by '**/*: golangci-lint', got %d task(s)", len(tasks))
 		}
@@ -1385,7 +2036,7 @@ func TestCollectTasksRepositoryScopeRespectsDatamitsuignore(t *testing.T) {
 
 	t.Run("non-matching rule leaves repository-scoped tool enabled", func(t *testing.T) {
 		p := newPlanner("**/*: other-tool\n")
-		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{})
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 		if len(tasks) != 1 {
 			t.Fatalf("repository-scoped tool should run when no rule matches, got %d task(s)", len(tasks))
 		}
@@ -1406,12 +2057,30 @@ func TestCollectTasksPerProjectScopeRespectsDatamitsuignore(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"prettier": {
-			Name: "prettier",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "prettier",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:   "prettier",
-					Scope: config.ToolScopePerProject,
-					Globs: []string{"**/*.js"},
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Priority:          0,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "prettier",
+					Scope:             config.ToolScopePerProject,
+					Globs:             []string{"**/*.js"},
 				},
 			},
 		},
@@ -1423,20 +2092,33 @@ func TestCollectTasksPerProjectScopeRespectsDatamitsuignore(t *testing.T) {
 			t.Fatalf("AddFile(%q) error = %v", rule, err)
 		}
 		return &Planner{
-			rootPath:         root,
-			cwdPath:          cwd,
-			detectedTypes:    []string{},
-			tools:            tools,
-			cachedFiles:      []string{"/repo/src/index.js"},
-			cachedProjects:   []project.ProjectLocation{{Path: "/repo", Type: "node"}},
-			cacheInitialized: true,
-			ignoreMatcher:    m,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedRel:          nil,
+			seedFiles:          nil,
+			globCacheMu:        sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           root,
+			cwdPath:            cwd,
+			detectedTypes:      []string{},
+			tools:              tools,
+			cachedFiles:        []string{"/repo/src/index.js"},
+			cachedProjects:     []project.ProjectLocation{{Path: "/repo", Type: "node"}},
+			cacheInitialized:   true,
+			ignoreMatcher:      m,
 		}
 	}
 
 	t.Run("catch-all disables per-project tool", func(t *testing.T) {
 		p := newPlanner("**/*: prettier\n")
-		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{})
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 		if len(tasks) != 0 {
 			t.Errorf("per-project tool should be disabled by '**/*: prettier', got %d task(s)", len(tasks))
 		}
@@ -1444,7 +2126,7 @@ func TestCollectTasksPerProjectScopeRespectsDatamitsuignore(t *testing.T) {
 
 	t.Run("non-matching rule keeps per-project tool", func(t *testing.T) {
 		p := newPlanner("**/*: other-tool\n")
-		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{})
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 		if len(tasks) != 1 {
 			t.Fatalf("per-project tool should run when no rule matches, got %d task(s)", len(tasks))
 		}
@@ -1465,12 +2147,30 @@ func TestCollectTasksPerProjectScopeNoProjectsRespectsDatamitsuignore(t *testing
 
 	tools := config.MapOfTools{
 		"prettier": {
-			Name: "prettier",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "prettier",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:   "prettier",
-					Scope: config.ToolScopePerProject,
-					Globs: []string{"**/*.js"},
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Priority:          0,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "prettier",
+					Scope:             config.ToolScopePerProject,
+					Globs:             []string{"**/*.js"},
 				},
 			},
 		},
@@ -1482,20 +2182,33 @@ func TestCollectTasksPerProjectScopeNoProjectsRespectsDatamitsuignore(t *testing
 			t.Fatalf("AddFile(%q) error = %v", rule, err)
 		}
 		return &Planner{
-			rootPath:         root,
-			cwdPath:          cwd,
-			detectedTypes:    []string{},
-			tools:            tools,
-			cachedFiles:      []string{"/repo/src/index.js"},
-			cachedProjects:   []project.ProjectLocation{},
-			cacheInitialized: true,
-			ignoreMatcher:    m,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedRel:          nil,
+			seedFiles:          nil,
+			globCacheMu:        sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           root,
+			cwdPath:            cwd,
+			detectedTypes:      []string{},
+			tools:              tools,
+			cachedFiles:        []string{"/repo/src/index.js"},
+			cachedProjects:     []project.ProjectLocation{},
+			cacheInitialized:   true,
+			ignoreMatcher:      m,
 		}
 	}
 
 	t.Run("catch-all disables tool when no projects detected", func(t *testing.T) {
 		p := newPlanner("**/*: prettier\n")
-		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{})
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 		if len(tasks) != 0 {
 			t.Errorf("per-project tool should be disabled by '**/*: prettier', got %d task(s)", len(tasks))
 		}
@@ -1503,7 +2216,7 @@ func TestCollectTasksPerProjectScopeNoProjectsRespectsDatamitsuignore(t *testing
 
 	t.Run("non-matching rule keeps tool when no projects detected", func(t *testing.T) {
 		p := newPlanner("**/*: other-tool\n")
-		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{})
+		tasks, _ := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 		if len(tasks) != 1 {
 			t.Fatalf("per-project tool should run when no rule matches, got %d task(s)", len(tasks))
 		}
@@ -1514,20 +2227,53 @@ func TestCollectTasksPerProjectScopeNoProjectsRespectsDatamitsuignore(t *testing
 }
 
 func TestGroupByPriority(t *testing.T) {
-	planner := &Planner{}
+	planner := &Planner{rootPath: "", cwdPath: "", detectedTypes: nil, tools: nil, projectTypesConfig: nil, platformChecker: nil, extraIgnoreRules: nil, cachedFiles: nil, cachedRel: nil, cachedProjects: nil, cacheInitialized: false, seedFiles: nil, globCacheMu: sync.Mutex{}, globCache: nil, unitCacheMu: sync.Mutex{}, memberCache: nil, guardCache: nil, ignoreMatcher: nil, execution: nil, widenOverride: "", timings: nil}
 
 	tasks := []Task{
 		{
-			ToolName: "tool1",
-			OpConfig: config.ToolOperation{Priority: 20},
+			perFileCache: "",
+			inherited:    toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Operation:    "",
+			Files:        nil,
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "tool1",
+			OpConfig:     config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Priority: 20},
 		},
 		{
-			ToolName: "tool2",
-			OpConfig: config.ToolOperation{Priority: 10},
+			perFileCache: "",
+			inherited:    toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Operation:    "",
+			Files:        nil,
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "tool2",
+			OpConfig:     config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Priority: 10},
 		},
 		{
-			ToolName: "tool3",
-			OpConfig: config.ToolOperation{Priority: 10},
+			perFileCache: "",
+			inherited:    toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Operation:    "",
+			Files:        nil,
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "tool3",
+			OpConfig:     config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Priority: 10},
 		},
 	}
 
@@ -1553,6 +2299,8 @@ func TestGroupByPriority(t *testing.T) {
 func TestBuildCommandEnvMerge(t *testing.T) {
 	tmpDir := t.TempDir()
 	appManager := &mockAppManager{
+		err:      nil,
+		commands: nil,
 		binaries: map[string]string{"testcmd": "/bin/testcmd"},
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
@@ -1562,8 +2310,14 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 		t.Setenv("GITHUB_ACTIONS", "true")
 		t.Setenv("FORCE_COLOR", "1")
 		cmdInfo := &binmanager.CommandInfo{
-			Type:    "binary",
-			Command: "/bin/echo",
+			Args:           nil,
+			Env:            nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "binary",
+			Command:        "/bin/echo",
 		}
 		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"hello"}, tmpDir, nil, toolenv.Inherited{})
 		if !slices.Contains(cmd.Env, "TOOLENV_KEPT=k") || !slices.Contains(cmd.Env, "NO_COLOR=1") {
@@ -1578,7 +2332,7 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 
 	t.Run("inherited pairs come back", func(t *testing.T) {
 		t.Setenv("GITHUB_ACTIONS", "true")
-		cmdInfo := &binmanager.CommandInfo{Type: "binary", Command: "/bin/echo"}
+		cmdInfo := &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "/bin/echo"}
 		inherited := toolenv.Capture(os.Environ(), []string{"GITHUB_ACTIONS"})
 		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, nil, inherited)
 		if !slices.Contains(cmd.Env, "GITHUB_ACTIONS=true") {
@@ -1593,7 +2347,7 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 		inherited := toolenv.Capture(os.Environ(), []string{"TOOLENV_MODE", "TOOLENV_LATE"})
 		t.Setenv("TOOLENV_MODE", "late")
 		t.Setenv("TOOLENV_LATE", "1")
-		cmdInfo := &binmanager.CommandInfo{Type: "binary", Command: "/bin/echo"}
+		cmdInfo := &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "/bin/echo"}
 		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, nil, inherited)
 		if !slices.Contains(cmd.Env, "TOOLENV_MODE=early") {
 			t.Errorf("cmd.Env = %v, want the captured TOOLENV_MODE", cmd.Env)
@@ -1607,9 +2361,14 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 
 	t.Run("app env applied", func(t *testing.T) {
 		cmdInfo := &binmanager.CommandInfo{
-			Type:    "shell",
-			Command: "/bin/echo",
-			Env:     map[string]string{"APP_VAR": "app_value"},
+			Args:           nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "shell",
+			Command:        "/bin/echo",
+			Env:            map[string]string{"APP_VAR": "app_value"},
 		}
 		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, nil, toolenv.Inherited{})
 		found := false
@@ -1625,9 +2384,14 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 
 	t.Run("bun command prepends runtime args", func(t *testing.T) {
 		cmdInfo := &binmanager.CommandInfo{
-			Type:    "bun",
-			Command: "/bin/echo",
-			Args:    []string{"--no-install", "cli.js"},
+			Env:            nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "bun",
+			Command:        "/bin/echo",
+			Args:           []string{"--no-install", "cli.js"},
 		}
 		cmd := executor.buildCommand(context.Background(), cmdInfo, []string{"--fix"}, tmpDir, nil, toolenv.Inherited{})
 		want := []string{"/bin/echo", "--no-install", "cli.js", "--fix"}
@@ -1638,9 +2402,14 @@ func TestBuildCommandEnvMerge(t *testing.T) {
 
 	t.Run("tool op env overrides app env", func(t *testing.T) {
 		cmdInfo := &binmanager.CommandInfo{
-			Type:    "shell",
-			Command: "/bin/echo",
-			Env:     map[string]string{"SHARED": "app"},
+			Args:           nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "shell",
+			Command:        "/bin/echo",
+			Env:            map[string]string{"SHARED": "app"},
 		}
 		toolOpEnv := map[string]string{"SHARED": "tool"}
 		cmd := executor.buildCommand(context.Background(), cmdInfo, nil, tmpDir, toolOpEnv, toolenv.Inherited{})
@@ -1665,16 +2434,28 @@ func TestFailFastStopsNewTasks(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
 			"failing-tool": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", "exit 1"},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", "exit 1"},
 			},
 			"should-not-run": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", "echo ran"},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", "echo ran"},
 			},
 		},
 	}
@@ -1692,17 +2473,44 @@ func TestFailFastStopsNewTasks(t *testing.T) {
 	// Two groups with different priorities: group 1 (priority 10) fails,
 	// group 2 (priority 20) should never start
 	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil,
 		Groups: []TaskGroup{
 			{
 				Priority: 10,
 				Tasks: []Task{
 					{
-						ToolName:  "failing-tool",
-						Operation: config.OpLint,
+						perFileCache: "",
+						inherited:    toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						Files:        nil,
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "failing-tool",
+						Operation:    config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:      "failing-tool",
-							Scope:    config.ToolScopeRepository,
-							Priority: 10,
+							Args:              nil,
+							Arity:             "",
+							Granularity:       "",
+							Globs:             nil,
+							ExcludeGlobs:      nil,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "failing-tool",
+							Scope:             config.ToolScopeRepository,
+							Priority:          10,
 						},
 					},
 				},
@@ -1711,12 +2519,36 @@ func TestFailFastStopsNewTasks(t *testing.T) {
 				Priority: 20,
 				Tasks: []Task{
 					{
-						ToolName:  "should-not-run",
-						Operation: config.OpLint,
+						perFileCache: "",
+						inherited:    toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						Files:        nil,
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "should-not-run",
+						Operation:    config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:      "should-not-run",
-							Scope:    config.ToolScopeRepository,
-							Priority: 20,
+							Args:              nil,
+							Arity:             "",
+							Granularity:       "",
+							Globs:             nil,
+							ExcludeGlobs:      nil,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "should-not-run",
+							Scope:             config.ToolScopeRepository,
+							Priority:          20,
 						},
 					},
 				},
@@ -1761,11 +2593,18 @@ func TestFailFastPerFileSkipsRemainingFiles(t *testing.T) {
 
 	// The tool fails on the first file; remaining files should be skipped
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
 			"per-file-tool": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", "exit 1"},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", "exit 1"},
 			},
 		},
 	}
@@ -1780,17 +2619,43 @@ func TestFailFastPerFileSkipsRemainingFiles(t *testing.T) {
 		mu.Unlock()
 	})
 	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil,
 		Groups: []TaskGroup{
 			{
 				Priority: 10,
 				Tasks: []Task{
 					{
-						ToolName:  "per-file-tool",
-						Operation: config.OpLint,
+						perFileCache: "",
+						inherited:    toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "per-file-tool",
+						Operation:    config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:   "per-file-tool",
-							Args:  []string{"{file}"},
-							Scope: config.ToolScopePerFile,
+							Arity:             "",
+							Granularity:       "",
+							Globs:             nil,
+							ExcludeGlobs:      nil,
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "per-file-tool",
+							Args:              []string{"{file}"},
+							Scope:             config.ToolScopePerFile,
 						},
 						Files: files,
 					},
@@ -1831,16 +2696,28 @@ func TestFailFastCancellationPropagatesParallelTasks(t *testing.T) {
 
 	// Create a tool that fails immediately and a slow tool
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
 			"fast-fail": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", "exit 1"},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", "exit 1"},
 			},
 			"slow-tool": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", "sleep 10"},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", "sleep 10"},
 			},
 		},
 	}
@@ -1849,17 +2726,44 @@ func TestFailFastCancellationPropagatesParallelTasks(t *testing.T) {
 
 	// Two sequential groups: first group has the fast-fail, second has slow-tool
 	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil,
 		Groups: []TaskGroup{
 			{
 				Priority: 10,
 				Tasks: []Task{
 					{
-						ToolName:  "fast-fail",
-						Operation: config.OpLint,
+						perFileCache: "",
+						inherited:    toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						Files:        nil,
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "fast-fail",
+						Operation:    config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:      "fast-fail",
-							Scope:    config.ToolScopeRepository,
-							Priority: 10,
+							Args:              nil,
+							Arity:             "",
+							Granularity:       "",
+							Globs:             nil,
+							ExcludeGlobs:      nil,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "fast-fail",
+							Scope:             config.ToolScopeRepository,
+							Priority:          10,
 						},
 					},
 				},
@@ -1868,12 +2772,36 @@ func TestFailFastCancellationPropagatesParallelTasks(t *testing.T) {
 				Priority: 20,
 				Tasks: []Task{
 					{
-						ToolName:  "slow-tool",
-						Operation: config.OpLint,
+						perFileCache: "",
+						inherited:    toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						Files:        nil,
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "slow-tool",
+						Operation:    config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:      "slow-tool",
-							Scope:    config.ToolScopeRepository,
-							Priority: 20,
+							Args:              nil,
+							Arity:             "",
+							Granularity:       "",
+							Globs:             nil,
+							ExcludeGlobs:      nil,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "slow-tool",
+							Scope:             config.ToolScopeRepository,
+							Priority:          20,
 						},
 					},
 				},
@@ -1911,11 +2839,18 @@ func TestFailFastContextCancelsRunningPerFileLoop(t *testing.T) {
 
 	// Tool fails on every file
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
 			"always-fail": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", "exit 1"},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", "exit 1"},
 			},
 		},
 	}
@@ -1930,17 +2865,43 @@ func TestFailFastContextCancelsRunningPerFileLoop(t *testing.T) {
 		mu.Unlock()
 	})
 	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil,
 		Groups: []TaskGroup{
 			{
 				Priority: 10,
 				Tasks: []Task{
 					{
-						ToolName:  "always-fail",
-						Operation: config.OpLint,
+						perFileCache: "",
+						inherited:    toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "always-fail",
+						Operation:    config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:   "always-fail",
-							Args:  []string{"{file}"},
-							Scope: config.ToolScopePerFile,
+							Arity:             "",
+							Granularity:       "",
+							Globs:             nil,
+							ExcludeGlobs:      nil,
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "always-fail",
+							Args:              []string{"{file}"},
+							Scope:             config.ToolScopePerFile,
 						},
 						Files: files,
 					},
@@ -1968,11 +2929,18 @@ func TestExecutorDoesNotPrintOutputDirectly(t *testing.T) {
 
 	t.Run("per-file failure output captured not printed", func(t *testing.T) {
 		appManager := &mockAppManager{
+			binaries: nil,
+			err:      nil,
 			commands: map[string]*binmanager.CommandInfo{
 				"failing-tool": {
-					Type:    "shell",
-					Command: "/bin/sh",
-					Args:    []string{"-c", "echo 'error output from tool' && exit 1"},
+					Env:            nil,
+					Artifact:       "",
+					ToolCacheDir:   "",
+					ToolCacheSlots: nil,
+					RequiredPaths:  nil,
+					Type:           "shell",
+					Command:        "/bin/sh",
+					Args:           []string{"-c", "echo 'error output from tool' && exit 1"},
 				},
 			},
 		}
@@ -1984,17 +2952,43 @@ func TestExecutorDoesNotPrintOutputDirectly(t *testing.T) {
 			t.Fatal(err)
 		}
 		plan := &ExecutionPlan{
+			ConfigName: "",
+			FailOn:     "",
+			Skipped:    nil,
 			Groups: []TaskGroup{
 				{
 					Priority: 10,
 					Tasks: []Task{
 						{
-							ToolName:  "failing-tool",
-							Operation: config.OpLint,
+							perFileCache: "",
+							inherited:    toolenv.Inherited{},
+							ID:           "",
+							Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+							ProjectPath:  "",
+							UnitDir:      "",
+							UnitMembers:  nil,
+							UnitGuards:   nil,
+							Coverage:     "",
+							ToolName:     "failing-tool",
+							Operation:    config.OpLint,
 							OpConfig: config.ToolOperation{
-								App:   "failing-tool",
-								Args:  []string{"{file}"},
-								Scope: config.ToolScopePerFile,
+								Arity:             "",
+								Granularity:       "",
+								Globs:             nil,
+								ExcludeGlobs:      nil,
+								Priority:          0,
+								Cache:             nil,
+								InvalidateOn:      nil,
+								Env:               nil,
+								InheritEnv:        nil,
+								FailOn:            "",
+								Input:             "",
+								LSP:               nil,
+								Output:            "",
+								ManagedConfigRefs: nil,
+								App:               "failing-tool",
+								Args:              []string{"{file}"},
+								Scope:             config.ToolScopePerFile,
 							},
 							Files: []string{file},
 						},
@@ -2024,11 +3018,18 @@ func TestExecutorDoesNotPrintOutputDirectly(t *testing.T) {
 
 	t.Run("batch failure output captured not printed", func(t *testing.T) {
 		appManager := &mockAppManager{
+			binaries: nil,
+			err:      nil,
 			commands: map[string]*binmanager.CommandInfo{
 				"batch-fail": {
-					Type:    "shell",
-					Command: "/bin/sh",
-					Args:    []string{"-c", "echo 'batch error output' && exit 1"},
+					Env:            nil,
+					Artifact:       "",
+					ToolCacheDir:   "",
+					ToolCacheSlots: nil,
+					RequiredPaths:  nil,
+					Type:           "shell",
+					Command:        "/bin/sh",
+					Args:           []string{"-c", "echo 'batch error output' && exit 1"},
 				},
 			},
 		}
@@ -2036,16 +3037,44 @@ func TestExecutorDoesNotPrintOutputDirectly(t *testing.T) {
 		executor := NewExecutor(tmpDir, false, true, appManager, nil)
 
 		plan := &ExecutionPlan{
+			ConfigName: "",
+			FailOn:     "",
+			Skipped:    nil,
 			Groups: []TaskGroup{
 				{
 					Priority: 10,
 					Tasks: []Task{
 						{
-							ToolName:  "batch-fail",
-							Operation: config.OpLint,
+							perFileCache: "",
+							inherited:    toolenv.Inherited{},
+							ID:           "",
+							Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+							Files:        nil,
+							ProjectPath:  "",
+							UnitDir:      "",
+							UnitMembers:  nil,
+							UnitGuards:   nil,
+							Coverage:     "",
+							ToolName:     "batch-fail",
+							Operation:    config.OpLint,
 							OpConfig: config.ToolOperation{
-								App:   "batch-fail",
-								Scope: config.ToolScopeRepository,
+								Args:              nil,
+								Arity:             "",
+								Granularity:       "",
+								Globs:             nil,
+								ExcludeGlobs:      nil,
+								Priority:          0,
+								Cache:             nil,
+								InvalidateOn:      nil,
+								Env:               nil,
+								InheritEnv:        nil,
+								FailOn:            "",
+								Input:             "",
+								LSP:               nil,
+								Output:            "",
+								ManagedConfigRefs: nil,
+								App:               "batch-fail",
+								Scope:             config.ToolScopeRepository,
 							},
 						},
 					},
@@ -2162,8 +3191,27 @@ func TestIsUnderCwd(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			planner := &Planner{
-				rootPath: tt.root,
-				cwdPath:  tt.cwd,
+				detectedTypes:      nil,
+				tools:              nil,
+				projectTypesConfig: nil,
+				platformChecker:    nil,
+				extraIgnoreRules:   nil,
+				cachedFiles:        nil,
+				cachedRel:          nil,
+				cachedProjects:     nil,
+				cacheInitialized:   false,
+				seedFiles:          nil,
+				globCacheMu:        sync.Mutex{},
+				globCache:          nil,
+				unitCacheMu:        sync.Mutex{},
+				memberCache:        nil,
+				guardCache:         nil,
+				ignoreMatcher:      nil,
+				execution:          nil,
+				widenOverride:      "",
+				timings:            nil,
+				rootPath:           tt.root,
+				cwdPath:            tt.cwd,
 			}
 			result := planner.isUnderCwd(tt.path)
 			if result != tt.expected {
@@ -2177,8 +3225,27 @@ func TestIsUnderCwd(t *testing.T) {
 func TestFilterFilesToCwd(t *testing.T) {
 	t.Run("no-op when cwd equals root", func(t *testing.T) {
 		planner := &Planner{
-			rootPath: "/repo",
-			cwdPath:  "/repo",
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			cacheInitialized:   false,
+			seedFiles:          nil,
+			globCacheMu:        sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo",
 		}
 		files := []string{"/repo/a.go", "/repo/pkg/b.go", "/outside/c.go"}
 		result := planner.filterFilesToCwd(files)
@@ -2189,8 +3256,27 @@ func TestFilterFilesToCwd(t *testing.T) {
 
 	t.Run("filters to cwd subtree", func(t *testing.T) {
 		planner := &Planner{
-			rootPath: "/repo",
-			cwdPath:  "/repo/services/api",
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			cacheInitialized:   false,
+			seedFiles:          nil,
+			globCacheMu:        sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo/services/api",
 		}
 		files := []string{
 			"/repo/services/api/main.go",
@@ -2206,8 +3292,27 @@ func TestFilterFilesToCwd(t *testing.T) {
 
 	t.Run("empty input returns nil", func(t *testing.T) {
 		planner := &Planner{
-			rootPath: "/repo",
-			cwdPath:  "/repo/services/api",
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			cacheInitialized:   false,
+			seedFiles:          nil,
+			globCacheMu:        sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo/services/api",
 		}
 		result := planner.filterFilesToCwd(nil)
 		if result != nil {
@@ -2217,8 +3322,27 @@ func TestFilterFilesToCwd(t *testing.T) {
 
 	t.Run("all files outside cwd returns nil", func(t *testing.T) {
 		planner := &Planner{
-			rootPath: "/repo",
-			cwdPath:  "/repo/services/api",
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			cacheInitialized:   false,
+			seedFiles:          nil,
+			globCacheMu:        sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo/services/api",
 		}
 		files := []string{"/repo/services/web/index.js", "/repo/go.mod"}
 		result := planner.filterFilesToCwd(files)
@@ -2231,8 +3355,27 @@ func TestFilterFilesToCwd(t *testing.T) {
 func TestFilterProjectLocationsToCwd(t *testing.T) {
 	t.Run("no-op when cwd equals root", func(t *testing.T) {
 		planner := &Planner{
-			rootPath: "/repo",
-			cwdPath:  "/repo",
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			cacheInitialized:   false,
+			seedFiles:          nil,
+			globCacheMu:        sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo",
 		}
 		locs := []project.ProjectLocation{
 			{Type: "go", Path: "/repo/services/api"},
@@ -2246,8 +3389,27 @@ func TestFilterProjectLocationsToCwd(t *testing.T) {
 
 	t.Run("filters to cwd subtree", func(t *testing.T) {
 		planner := &Planner{
-			rootPath: "/repo",
-			cwdPath:  "/repo/services/api",
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			cacheInitialized:   false,
+			seedFiles:          nil,
+			globCacheMu:        sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo/services/api",
 		}
 		locs := []project.ProjectLocation{
 			{Type: "go", Path: "/repo/services/api"},
@@ -2263,8 +3425,27 @@ func TestFilterProjectLocationsToCwd(t *testing.T) {
 
 	t.Run("excludes sibling with matching prefix", func(t *testing.T) {
 		planner := &Planner{
-			rootPath: "/repo",
-			cwdPath:  "/repo/services/api",
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			cacheInitialized:   false,
+			seedFiles:          nil,
+			globCacheMu:        sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo/services/api",
 		}
 		locs := []project.ProjectLocation{
 			{Type: "go", Path: "/repo/services/api"},
@@ -2281,8 +3462,27 @@ func TestFilterProjectLocationsToCwd(t *testing.T) {
 
 	t.Run("empty input returns nil", func(t *testing.T) {
 		planner := &Planner{
-			rootPath: "/repo",
-			cwdPath:  "/repo/services/api",
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			cacheInitialized:   false,
+			seedFiles:          nil,
+			globCacheMu:        sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo/services/api",
 		}
 		result := planner.filterProjectLocationsToCwd(nil)
 		if result != nil {
@@ -2297,24 +3497,54 @@ func TestCollectTasksPerProjectFromSubdirectory(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"go-lint": {
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
 			Name:         "go-lint",
 			ProjectTypes: []string{"go"},
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "golangci-lint",
-					Scope:    config.ToolScopePerProject,
-					Priority: 10,
-					Globs:    []string{"**/*.go"},
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "golangci-lint",
+					Scope:             config.ToolScopePerProject,
+					Priority:          10,
+					Globs:             []string{"**/*.go"},
 				},
 			},
 		},
 	}
 
 	planner := &Planner{
-		rootPath:      root,
-		cwdPath:       cwd,
-		detectedTypes: []string{"go"},
-		tools:         tools,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{"go"},
+		tools:              tools,
 		cachedFiles: []string{
 			"/repo/services/api/main.go",
 			"/repo/services/api/internal/handler.go",
@@ -2329,7 +3559,7 @@ func TestCollectTasksPerProjectFromSubdirectory(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	// Should only create tasks for /repo/services/api (inside cwd), not web or root
 	if len(tasks) != 1 {
@@ -2354,24 +3584,54 @@ func TestCollectTasksPerProjectExplicitFilesFromSubdirectory(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"go-lint": {
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
 			Name:         "go-lint",
 			ProjectTypes: []string{"go"},
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "golangci-lint",
-					Scope:    config.ToolScopePerProject,
-					Priority: 10,
-					Globs:    []string{"**/*.go"},
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "golangci-lint",
+					Scope:             config.ToolScopePerProject,
+					Priority:          10,
+					Globs:             []string{"**/*.go"},
 				},
 			},
 		},
 	}
 
 	planner := &Planner{
-		rootPath:      root,
-		cwdPath:       cwd,
-		detectedTypes: []string{"go"},
-		tools:         tools,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{"go"},
+		tools:              tools,
 		cachedFiles: []string{
 			"/repo/services/api/main.go",
 			"/repo/services/api/handler.go",
@@ -2394,7 +3654,7 @@ func TestCollectTasksPerProjectExplicitFilesFromSubdirectory(t *testing.T) {
 		"/repo/services/shared/util.go",
 		"/repo/lib/helper.go",
 	}
-	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: SelectionPaths, Paths: explicitFiles})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Dir: "", Mode: SelectionPaths, Paths: explicitFiles})
 
 	// Every named file is planned, including the one outside cwd. This reverses
 	// what this test used to pin: cwd narrowed explicit paths too, so naming
@@ -2427,14 +3687,30 @@ func TestCollectTasksPerProjectWholeProjectModeFromSubdirectory(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"go-vet": {
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
 			Name:         "go-vet",
 			ProjectTypes: []string{"go"},
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "go",
-					Args:     []string{"vet", "./..."},
-					Scope:    config.ToolScopePerProject,
-					Priority: 10,
+					Arity:             "",
+					Granularity:       "",
+					Globs:             nil,
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "go",
+					Args:              []string{"vet", "./..."},
+					Scope:             config.ToolScopePerProject,
+					Priority:          10,
 					// No Globs -> whole-project mode
 				},
 			},
@@ -2442,11 +3718,25 @@ func TestCollectTasksPerProjectWholeProjectModeFromSubdirectory(t *testing.T) {
 	}
 
 	planner := &Planner{
-		rootPath:      root,
-		cwdPath:       cwd,
-		detectedTypes: []string{"go"},
-		tools:         tools,
-		cachedFiles:   []string{},
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{"go"},
+		tools:              tools,
+		cachedFiles:        []string{},
 		cachedProjects: []project.ProjectLocation{
 			{Type: "go", Path: "/repo/services/api"},
 			{Type: "go", Path: "/repo/services/web"},
@@ -2455,7 +3745,7 @@ func TestCollectTasksPerProjectWholeProjectModeFromSubdirectory(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	// Should only create task for api project (inside cwd)
 	if len(tasks) != 1 {
@@ -2472,24 +3762,54 @@ func TestCollectTasksPerProjectFromRootRegression(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"go-lint": {
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
 			Name:         "go-lint",
 			ProjectTypes: []string{"go"},
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "golangci-lint",
-					Scope:    config.ToolScopePerProject,
-					Priority: 10,
-					Globs:    []string{"**/*.go"},
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "golangci-lint",
+					Scope:             config.ToolScopePerProject,
+					Priority:          10,
+					Globs:             []string{"**/*.go"},
 				},
 			},
 		},
 	}
 
 	planner := &Planner{
-		rootPath:      root,
-		cwdPath:       cwd,
-		detectedTypes: []string{"go"},
-		tools:         tools,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{"go"},
+		tools:              tools,
 		cachedFiles: []string{
 			"/repo/services/api/main.go",
 			"/repo/services/web/server.go",
@@ -2501,7 +3821,7 @@ func TestCollectTasksPerProjectFromRootRegression(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	// From root, should create tasks for both projects
 	if len(tasks) != 2 {
@@ -2529,24 +3849,54 @@ func TestCollectTasksPerFileFromSubdirectory(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"prettier": {
-			Name: "prettier",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "prettier",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpFix: {
-					App:      "prettier",
-					Args:     []string{"--write", "{file}"},
-					Scope:    config.ToolScopePerFile,
-					Priority: 10,
-					Globs:    []string{"**/*.js", "**/*.ts"},
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "prettier",
+					Args:              []string{"--write", "{file}"},
+					Scope:             config.ToolScopePerFile,
+					Priority:          10,
+					Globs:             []string{"**/*.js", "**/*.ts"},
 				},
 			},
 		},
 	}
 
 	planner := &Planner{
-		rootPath:      root,
-		cwdPath:       cwd,
-		detectedTypes: []string{},
-		tools:         tools,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{},
+		tools:              tools,
 		cachedFiles: []string{
 			"/repo/services/api/handler.ts",
 			"/repo/services/api/utils.js",
@@ -2557,7 +3907,7 @@ func TestCollectTasksPerFileFromSubdirectory(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpFix, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpFix, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	// Should only create per-file tasks for files inside cwd
 	if len(tasks) != 2 {
@@ -2580,24 +3930,54 @@ func TestCollectTasksPerFileFromRootRegression(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"prettier": {
-			Name: "prettier",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "prettier",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpFix: {
-					App:      "prettier",
-					Args:     []string{"--write", "{file}"},
-					Scope:    config.ToolScopePerFile,
-					Priority: 10,
-					Globs:    []string{"**/*.js", "**/*.ts"},
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "prettier",
+					Args:              []string{"--write", "{file}"},
+					Scope:             config.ToolScopePerFile,
+					Priority:          10,
+					Globs:             []string{"**/*.js", "**/*.ts"},
 				},
 			},
 		},
 	}
 
 	planner := &Planner{
-		rootPath:      root,
-		cwdPath:       cwd,
-		detectedTypes: []string{},
-		tools:         tools,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           root,
+		cwdPath:            cwd,
+		detectedTypes:      []string{},
+		tools:              tools,
 		cachedFiles: []string{
 			"/repo/services/api/handler.ts",
 			"/repo/services/api/utils.js",
@@ -2608,7 +3988,7 @@ func TestCollectTasksPerFileFromRootRegression(t *testing.T) {
 		cacheInitialized: true,
 	}
 
-	tasks, _ := planner.collectTasks(context.Background(), config.OpFix, Selection{})
+	tasks, _ := planner.collectTasks(context.Background(), config.OpFix, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	// From root, should create tasks for all 4 matching files
 	if len(tasks) != 4 {
@@ -2708,20 +4088,37 @@ func TestDatamitsuignorePerFileScope(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"eslint": {
-			Name: "eslint",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "eslint",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "eslint",
-					Scope:    config.ToolScopePerFile,
-					Globs:    []string{"**/*.js", "**/*.md"},
-					Priority: 10,
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "eslint",
+					Scope:             config.ToolScopePerFile,
+					Globs:             []string{"**/*.js", "**/*.md"},
+					Priority:          10,
 				},
 			},
 		},
 	}
 
 	planner := NewPlanner(tmpDir, tmpDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
-	plan, err := planner.Plan(context.Background(), config.OpLint, Selection{}, nil)
+	plan, err := planner.Plan(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil}, nil)
 	if err != nil {
 		t.Fatalf("Plan() error = %v", err)
 	}
@@ -2759,20 +4156,37 @@ func TestDatamitsuignoreInversion(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"prettier": {
-			Name: "prettier",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "prettier",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpFix: {
-					App:      "prettier",
-					Scope:    config.ToolScopePerFile,
-					Globs:    []string{"**/*.md"},
-					Priority: 10,
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "prettier",
+					Scope:             config.ToolScopePerFile,
+					Globs:             []string{"**/*.md"},
+					Priority:          10,
 				},
 			},
 		},
 	}
 
 	planner := NewPlanner(tmpDir, tmpDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
-	plan, err := planner.Plan(context.Background(), config.OpFix, Selection{}, nil)
+	plan, err := planner.Plan(context.Background(), config.OpFix, Selection{Mode: 0, Dir: "", Paths: nil}, nil)
 	if err != nil {
 		t.Fatalf("Plan() error = %v", err)
 	}
@@ -2810,20 +4224,37 @@ func TestDatamitsuignoreNoEffect(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"eslint": {
-			Name: "eslint",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "eslint",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "eslint",
-					Scope:    config.ToolScopePerFile,
-					Globs:    []string{"**/*.js"},
-					Priority: 10,
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "eslint",
+					Scope:             config.ToolScopePerFile,
+					Globs:             []string{"**/*.js"},
+					Priority:          10,
 				},
 			},
 		},
 	}
 
 	planner := NewPlanner(tmpDir, tmpDir, []string{}, tools, config.MapOfProjectTypes{}, nil)
-	plan, err := planner.Plan(context.Background(), config.OpLint, Selection{}, nil)
+	plan, err := planner.Plan(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil}, nil)
 	if err != nil {
 		t.Fatalf("Plan() error = %v", err)
 	}
@@ -2850,13 +4281,30 @@ func TestConfigDefinedIgnoreRules(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"eslint": {
-			Name: "eslint",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "eslint",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "eslint",
-					Scope:    config.ToolScopePerFile,
-					Globs:    []string{"**/*.js", "**/*.md"},
-					Priority: 10,
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "eslint",
+					Scope:             config.ToolScopePerFile,
+					Globs:             []string{"**/*.js", "**/*.md"},
+					Priority:          10,
 				},
 			},
 		},
@@ -2866,7 +4314,7 @@ func TestConfigDefinedIgnoreRules(t *testing.T) {
 	ignoreRules := []string{"**/*.md: eslint"}
 
 	planner := NewPlanner(tmpDir, tmpDir, []string{}, tools, config.MapOfProjectTypes{}, ignoreRules)
-	plan, err := planner.Plan(context.Background(), config.OpLint, Selection{}, nil)
+	plan, err := planner.Plan(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil}, nil)
 	if err != nil {
 		t.Fatalf("Plan() error = %v", err)
 	}
@@ -2898,13 +4346,30 @@ func TestConfigDefinedIgnoreRulesWithWildcard(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"eslint": {
-			Name: "eslint",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "eslint",
 			Operations: map[config.OperationType]config.ToolOperation{
 				config.OpLint: {
-					App:      "eslint",
-					Scope:    config.ToolScopePerFile,
-					Globs:    []string{"**/*.js", "**/*.ts"},
-					Priority: 10,
+					Args:              nil,
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "eslint",
+					Scope:             config.ToolScopePerFile,
+					Globs:             []string{"**/*.js", "**/*.ts"},
+					Priority:          10,
 				},
 			},
 		},
@@ -2914,7 +4379,7 @@ func TestConfigDefinedIgnoreRulesWithWildcard(t *testing.T) {
 	ignoreRules := []string{"**/*.ts: *"}
 
 	planner := NewPlanner(tmpDir, tmpDir, []string{}, tools, config.MapOfProjectTypes{}, ignoreRules)
-	plan, err := planner.Plan(context.Background(), config.OpLint, Selection{}, nil)
+	plan, err := planner.Plan(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil}, nil)
 	if err != nil {
 		t.Fatalf("Plan() error = %v", err)
 	}
@@ -2938,7 +4403,27 @@ func TestConfigDefinedIgnoreRulesWithWildcard(t *testing.T) {
 
 func TestIsToolDisabledForFile(t *testing.T) {
 	p := &Planner{
-		rootPath: "/repo",
+		cwdPath:            "",
+		detectedTypes:      nil,
+		tools:              nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedFiles:        nil,
+		cachedRel:          nil,
+		cachedProjects:     nil,
+		cacheInitialized:   false,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           "/repo",
 	}
 
 	t.Run("nil matcher returns false", func(t *testing.T) {
@@ -2958,11 +4443,18 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		}
 
 		appManager := &mockAppManager{
+			binaries: nil,
+			err:      nil,
 			commands: map[string]*binmanager.CommandInfo{
 				"echo-tool": {
-					Type:    "shell",
-					Command: "/bin/sh",
-					Args:    []string{"-c"},
+					Env:            nil,
+					Artifact:       "",
+					ToolCacheDir:   "",
+					ToolCacheSlots: nil,
+					RequiredPaths:  nil,
+					Type:           "shell",
+					Command:        "/bin/sh",
+					Args:           []string{"-c"},
 				},
 			},
 		}
@@ -2970,17 +4462,44 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 		plan := &ExecutionPlan{
+			ConfigName: "",
+			FailOn:     "",
+			Skipped:    nil,
 			Groups: []TaskGroup{
 				{
 					Priority: 10,
 					Tasks: []Task{
 						{
-							ToolName:  "echo-tool",
-							Operation: config.OpLint,
+							perFileCache: "",
+							inherited:    toolenv.Inherited{},
+							ID:           "",
+							Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+							Files:        nil,
+							ProjectPath:  "",
+							UnitDir:      "",
+							UnitMembers:  nil,
+							UnitGuards:   nil,
+							Coverage:     "",
+							ToolName:     "echo-tool",
+							Operation:    config.OpLint,
 							OpConfig: config.ToolOperation{
-								App:   "echo-tool",
-								Args:  []string{"echo CACHE={toolCache}"},
-								Scope: config.ToolScopeRepository,
+								Arity:             "",
+								Granularity:       "",
+								Globs:             nil,
+								ExcludeGlobs:      nil,
+								Priority:          0,
+								Cache:             nil,
+								InvalidateOn:      nil,
+								Env:               nil,
+								InheritEnv:        nil,
+								FailOn:            "",
+								Input:             "",
+								LSP:               nil,
+								Output:            "",
+								ManagedConfigRefs: nil,
+								App:               "echo-tool",
+								Args:              []string{"echo CACHE={toolCache}"},
+								Scope:             config.ToolScopeRepository,
 							},
 						},
 					},
@@ -3015,11 +4534,18 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		}
 
 		appManager := &mockAppManager{
+			binaries: nil,
+			err:      nil,
 			commands: map[string]*binmanager.CommandInfo{
 				"write-tool": {
-					Type:    "shell",
-					Command: "/bin/sh",
-					Args:    []string{"-c"},
+					Env:            nil,
+					Artifact:       "",
+					ToolCacheDir:   "",
+					ToolCacheSlots: nil,
+					RequiredPaths:  nil,
+					Type:           "shell",
+					Command:        "/bin/sh",
+					Args:           []string{"-c"},
 				},
 			},
 		}
@@ -3027,17 +4553,44 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 		plan := &ExecutionPlan{
+			ConfigName: "",
+			FailOn:     "",
+			Skipped:    nil,
 			Groups: []TaskGroup{
 				{
 					Priority: 10,
 					Tasks: []Task{
 						{
-							ToolName:  "write-tool",
-							Operation: config.OpFix,
+							perFileCache: "",
+							inherited:    toolenv.Inherited{},
+							ID:           "",
+							Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+							Files:        nil,
+							ProjectPath:  "",
+							UnitDir:      "",
+							UnitMembers:  nil,
+							UnitGuards:   nil,
+							Coverage:     "",
+							ToolName:     "write-tool",
+							Operation:    config.OpFix,
 							OpConfig: config.ToolOperation{
-								App:   "write-tool",
-								Args:  []string{"mkdir -p {toolCache} && echo ok > {toolCache}/testfile.txt && cat {toolCache}/testfile.txt"},
-								Scope: config.ToolScopeRepository,
+								Arity:             "",
+								Granularity:       "",
+								Globs:             nil,
+								ExcludeGlobs:      nil,
+								Priority:          0,
+								Cache:             nil,
+								InvalidateOn:      nil,
+								Env:               nil,
+								InheritEnv:        nil,
+								FailOn:            "",
+								Input:             "",
+								LSP:               nil,
+								Output:            "",
+								ManagedConfigRefs: nil,
+								App:               "write-tool",
+								Args:              []string{"mkdir -p {toolCache} && echo ok > {toolCache}/testfile.txt && cat {toolCache}/testfile.txt"},
+								Scope:             config.ToolScopeRepository,
 							},
 						},
 					},
@@ -3081,11 +4634,18 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		}
 
 		appManager := &mockAppManager{
+			binaries: nil,
+			err:      nil,
 			commands: map[string]*binmanager.CommandInfo{
 				"combo-tool": {
-					Type:    "shell",
-					Command: "/bin/sh",
-					Args:    []string{"-c"},
+					Env:            nil,
+					Artifact:       "",
+					ToolCacheDir:   "",
+					ToolCacheSlots: nil,
+					RequiredPaths:  nil,
+					Type:           "shell",
+					Command:        "/bin/sh",
+					Args:           []string{"-c"},
 				},
 			},
 		}
@@ -3093,17 +4653,43 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 		plan := &ExecutionPlan{
+			ConfigName: "",
+			FailOn:     "",
+			Skipped:    nil,
 			Groups: []TaskGroup{
 				{
 					Priority: 10,
 					Tasks: []Task{
 						{
-							ToolName:  "combo-tool",
-							Operation: config.OpLint,
+							perFileCache: "",
+							inherited:    toolenv.Inherited{},
+							ID:           "",
+							Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+							Files:        nil,
+							UnitDir:      "",
+							UnitMembers:  nil,
+							UnitGuards:   nil,
+							Coverage:     "",
+							ToolName:     "combo-tool",
+							Operation:    config.OpLint,
 							OpConfig: config.ToolOperation{
-								App:   "combo-tool",
-								Args:  []string{"echo CACHE={toolCache} CWD={cwd} ROOT={root}"},
-								Scope: config.ToolScopePerProject,
+								Arity:             "",
+								Granularity:       "",
+								Globs:             nil,
+								ExcludeGlobs:      nil,
+								Priority:          0,
+								Cache:             nil,
+								InvalidateOn:      nil,
+								Env:               nil,
+								InheritEnv:        nil,
+								FailOn:            "",
+								Input:             "",
+								LSP:               nil,
+								Output:            "",
+								ManagedConfigRefs: nil,
+								App:               "combo-tool",
+								Args:              []string{"echo CACHE={toolCache} CWD={cwd} ROOT={root}"},
+								Scope:             config.ToolScopePerProject,
 							},
 							ProjectPath: projectDir,
 						},
@@ -3146,28 +4732,61 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		}
 
 		appManager := &mockAppManager{
+			binaries: nil,
+			err:      nil,
 			commands: map[string]*binmanager.CommandInfo{
 				"file-cache-tool": {
-					Type:    "shell",
-					Command: "/bin/sh",
-					Args:    []string{"-c"},
+					Env:            nil,
+					Artifact:       "",
+					ToolCacheDir:   "",
+					ToolCacheSlots: nil,
+					RequiredPaths:  nil,
+					Type:           "shell",
+					Command:        "/bin/sh",
+					Args:           []string{"-c"},
 				},
 			},
 		}
 
 		executor := NewExecutor(tmpDir, false, false, appManager, nil)
 		plan := &ExecutionPlan{
+			ConfigName: "",
+			FailOn:     "",
+			Skipped:    nil,
 			Groups: []TaskGroup{
 				{
 					Priority: 10,
 					Tasks: []Task{
 						{
-							ToolName:  "file-cache-tool",
-							Operation: config.OpLint,
+							perFileCache: "",
+							inherited:    toolenv.Inherited{},
+							ID:           "",
+							Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+							ProjectPath:  "",
+							UnitDir:      "",
+							UnitMembers:  nil,
+							UnitGuards:   nil,
+							Coverage:     "",
+							ToolName:     "file-cache-tool",
+							Operation:    config.OpLint,
 							OpConfig: config.ToolOperation{
-								App:   "file-cache-tool",
-								Args:  []string{"echo --cache-dir={toolCache} --file={file}"},
-								Scope: config.ToolScopePerFile,
+								Arity:             "",
+								Granularity:       "",
+								Globs:             nil,
+								ExcludeGlobs:      nil,
+								Priority:          0,
+								Cache:             nil,
+								InvalidateOn:      nil,
+								Env:               nil,
+								InheritEnv:        nil,
+								FailOn:            "",
+								Input:             "",
+								LSP:               nil,
+								Output:            "",
+								ManagedConfigRefs: nil,
+								App:               "file-cache-tool",
+								Args:              []string{"echo --cache-dir={toolCache} --file={file}"},
+								Scope:             config.ToolScopePerFile,
 							},
 							Files: []string{testFile},
 						},
@@ -3204,11 +4823,18 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		}
 
 		appManager := &mockAppManager{
+			binaries: nil,
+			err:      nil,
 			commands: map[string]*binmanager.CommandInfo{
 				"nested-tool": {
-					Type:    "shell",
-					Command: "/bin/sh",
-					Args:    []string{"-c"},
+					Env:            nil,
+					Artifact:       "",
+					ToolCacheDir:   "",
+					ToolCacheSlots: nil,
+					RequiredPaths:  nil,
+					Type:           "shell",
+					Command:        "/bin/sh",
+					Args:           []string{"-c"},
 				},
 			},
 		}
@@ -3216,17 +4842,44 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 		plan := &ExecutionPlan{
+			ConfigName: "",
+			FailOn:     "",
+			Skipped:    nil,
 			Groups: []TaskGroup{
 				{
 					Priority: 10,
 					Tasks: []Task{
 						{
-							ToolName:  "nested-tool",
-							Operation: config.OpLint,
+							perFileCache: "",
+							inherited:    toolenv.Inherited{},
+							ID:           "",
+							Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+							Files:        nil,
+							ProjectPath:  "",
+							UnitDir:      "",
+							UnitMembers:  nil,
+							UnitGuards:   nil,
+							Coverage:     "",
+							ToolName:     "nested-tool",
+							Operation:    config.OpLint,
 							OpConfig: config.ToolOperation{
-								App:   "nested-tool",
-								Args:  []string{"echo {toolCache}/tsbuildinfo {toolCache}/eslint-cache {toolCache}/stylelint-cache"},
-								Scope: config.ToolScopeRepository,
+								Arity:             "",
+								Granularity:       "",
+								Globs:             nil,
+								ExcludeGlobs:      nil,
+								Priority:          0,
+								Cache:             nil,
+								InvalidateOn:      nil,
+								Env:               nil,
+								InheritEnv:        nil,
+								FailOn:            "",
+								Input:             "",
+								LSP:               nil,
+								Output:            "",
+								ManagedConfigRefs: nil,
+								App:               "nested-tool",
+								Args:              []string{"echo {toolCache}/tsbuildinfo {toolCache}/eslint-cache {toolCache}/stylelint-cache"},
+								Scope:             config.ToolScopeRepository,
 							},
 						},
 					},
@@ -3262,16 +4915,28 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		}
 
 		appManager := &mockAppManager{
+			binaries: nil,
+			err:      nil,
 			commands: map[string]*binmanager.CommandInfo{
 				"tsc": {
-					Type:    "shell",
-					Command: "/bin/sh",
-					Args:    []string{"-c"},
+					Env:            nil,
+					Artifact:       "",
+					ToolCacheDir:   "",
+					ToolCacheSlots: nil,
+					RequiredPaths:  nil,
+					Type:           "shell",
+					Command:        "/bin/sh",
+					Args:           []string{"-c"},
 				},
 				"eslint": {
-					Type:    "shell",
-					Command: "/bin/sh",
-					Args:    []string{"-c"},
+					Env:            nil,
+					Artifact:       "",
+					ToolCacheDir:   "",
+					ToolCacheSlots: nil,
+					RequiredPaths:  nil,
+					Type:           "shell",
+					Command:        "/bin/sh",
+					Args:           []string{"-c"},
 				},
 			},
 		}
@@ -3279,26 +4944,77 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 		executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 		plan := &ExecutionPlan{
+			ConfigName: "",
+			FailOn:     "",
+			Skipped:    nil,
 			Groups: []TaskGroup{
 				{
 					Priority: 10,
 					Tasks: []Task{
 						{
-							ToolName:  "tsc",
-							Operation: config.OpLint,
+							perFileCache: "",
+							inherited:    toolenv.Inherited{},
+							ID:           "",
+							Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+							Files:        nil,
+							ProjectPath:  "",
+							UnitDir:      "",
+							UnitMembers:  nil,
+							UnitGuards:   nil,
+							Coverage:     "",
+							ToolName:     "tsc",
+							Operation:    config.OpLint,
 							OpConfig: config.ToolOperation{
-								App:   "tsc",
-								Args:  []string{"echo {toolCache}"},
-								Scope: config.ToolScopeRepository,
+								Arity:             "",
+								Granularity:       "",
+								Globs:             nil,
+								ExcludeGlobs:      nil,
+								Priority:          0,
+								Cache:             nil,
+								InvalidateOn:      nil,
+								Env:               nil,
+								InheritEnv:        nil,
+								FailOn:            "",
+								Input:             "",
+								LSP:               nil,
+								Output:            "",
+								ManagedConfigRefs: nil,
+								App:               "tsc",
+								Args:              []string{"echo {toolCache}"},
+								Scope:             config.ToolScopeRepository,
 							},
 						},
 						{
-							ToolName:  "eslint",
-							Operation: config.OpLint,
+							perFileCache: "",
+							inherited:    toolenv.Inherited{},
+							ID:           "",
+							Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+							Files:        nil,
+							ProjectPath:  "",
+							UnitDir:      "",
+							UnitMembers:  nil,
+							UnitGuards:   nil,
+							Coverage:     "",
+							ToolName:     "eslint",
+							Operation:    config.OpLint,
 							OpConfig: config.ToolOperation{
-								App:   "eslint",
-								Args:  []string{"echo {toolCache}"},
-								Scope: config.ToolScopeRepository,
+								Arity:             "",
+								Granularity:       "",
+								Globs:             nil,
+								ExcludeGlobs:      nil,
+								Priority:          0,
+								Cache:             nil,
+								InvalidateOn:      nil,
+								Env:               nil,
+								InheritEnv:        nil,
+								FailOn:            "",
+								Input:             "",
+								LSP:               nil,
+								Output:            "",
+								ManagedConfigRefs: nil,
+								App:               "eslint",
+								Args:              []string{"echo {toolCache}"},
+								Scope:             config.ToolScopeRepository,
 							},
 						},
 					},
@@ -3332,28 +5048,76 @@ func TestToolCachePlaceholderIntegration(t *testing.T) {
 
 func TestJSONFormatterIncludesExcludeGlobs(t *testing.T) {
 	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil,
 		Groups: []TaskGroup{
 			{
 				Priority: 0,
 				Tasks: []Task{
 					{
-						ToolName: "with-exclude",
+						perFileCache: "",
+						inherited:    toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						Operation:    "",
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "with-exclude",
 						OpConfig: config.ToolOperation{
-							App:          "linter",
-							Args:         []string{"--check"},
-							Scope:        config.ToolScopeRepository,
-							Globs:        []string{"**/*.go"},
-							ExcludeGlobs: []string{"vendor/**", "**/*_generated.go"},
+							Arity:             "",
+							Granularity:       "",
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "linter",
+							Args:              []string{"--check"},
+							Scope:             config.ToolScopeRepository,
+							Globs:             []string{"**/*.go"},
+							ExcludeGlobs:      []string{"vendor/**", "**/*_generated.go"},
 						},
 						Files: []string{"/repo/main.go"},
 					},
 					{
-						ToolName: "without-exclude",
+						perFileCache: "",
+						inherited:    toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						Operation:    "",
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "without-exclude",
 						OpConfig: config.ToolOperation{
-							App:   "linter2",
-							Args:  []string{"--check"},
-							Scope: config.ToolScopeRepository,
-							Globs: []string{"**/*.go"},
+							Arity:             "",
+							Granularity:       "",
+							ExcludeGlobs:      nil,
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "linter2",
+							Args:              []string{"--check"},
+							Scope:             config.ToolScopeRepository,
+							Globs:             []string{"**/*.go"},
 						},
 						Files: []string{"/repo/other.go"},
 					},

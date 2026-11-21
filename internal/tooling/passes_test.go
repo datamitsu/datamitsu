@@ -7,11 +7,13 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 
 	"go.uber.org/zap"
 )
@@ -19,21 +21,23 @@ import (
 func TestPassesOf(t *testing.T) {
 	a, b := "/w/a.txt", "/w/b.txt"
 	covered := []string{a, b}
-	finding := func(file string) []diagnostic.Diagnostic { return []diagnostic.Diagnostic{{File: file, Message: "m"}} }
+	finding := func(file string) []diagnostic.Diagnostic {
+		return []diagnostic.Diagnostic{{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, File: file, Message: "m"}}
+	}
 	cases := []struct {
 		name string
 		proc ProcessResult
 		want []string
 	}{
-		{"no parser keeps the exit-status rule", ProcessResult{Extraction: ExtractionNone}, covered},
-		{"parsed, nothing found", ProcessResult{Extraction: ExtractionParsedClean}, covered},
-		{"a finding keeps its file uncached", ProcessResult{Extraction: ExtractionParsedFindings, Diagnostics: finding(a)}, []string{b}},
-		{"findings on every file", ProcessResult{Extraction: ExtractionParsedFindings, Diagnostics: append(finding(a), finding(b)...)}, []string{}},
-		{"a file-less finding blocks every file", ProcessResult{Extraction: ExtractionParsedFindings, Diagnostics: finding("")}, nil},
-		{"a finding outside the process blocks every file", ProcessResult{Extraction: ExtractionParsedFindings, Diagnostics: finding("/elsewhere/c.txt")}, nil},
-		{"a parse failure passes nothing", ProcessResult{Extraction: ExtractionParseFailed}, nil},
-		{"an unavailable parser passes nothing", ProcessResult{Extraction: ExtractionParserUnavailable}, nil},
-		{"a truncated output passes nothing", ProcessResult{Extraction: ExtractionTruncated}, nil},
+		{"no parser keeps the exit-status rule", ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Extraction: ExtractionNone}, covered},
+		{"parsed, nothing found", ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Extraction: ExtractionParsedClean}, covered},
+		{"a finding keeps its file uncached", ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Extraction: ExtractionParsedFindings, Diagnostics: finding(a)}, []string{b}},
+		{"findings on every file", ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Extraction: ExtractionParsedFindings, Diagnostics: append(finding(a), finding(b)...)}, []string{}},
+		{"a file-less finding blocks every file", ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Extraction: ExtractionParsedFindings, Diagnostics: finding("")}, nil},
+		{"a finding outside the process blocks every file", ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Extraction: ExtractionParsedFindings, Diagnostics: finding("/elsewhere/c.txt")}, nil},
+		{"a parse failure passes nothing", ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Extraction: ExtractionParseFailed}, nil},
+		{"an unavailable parser passes nothing", ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Extraction: ExtractionParserUnavailable}, nil},
+		{"a truncated output passes nothing", ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Extraction: ExtractionTruncated}, nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -51,17 +55,73 @@ func TestVerdictEligible(t *testing.T) {
 		result ExecutionResult
 		want   bool
 	}{
-		{"parsed clean", ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionParsedClean}}}, true},
-		{"no parser", ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionNone}}}, true},
+		{"parsed clean", ExecutionResult{ToolName: "", TaskID: "", Success: false, Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", cached: nil, Processes: []ProcessResult{{ID: "", Files: nil, ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", State: ProcessRan, Extraction: ExtractionParsedClean}}}, true},
+		{"no parser", ExecutionResult{ToolName: "", TaskID: "", Success: false, Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", cached: nil, Processes: []ProcessResult{{ID: "", Files: nil, ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", State: ProcessRan, Extraction: ExtractionNone}}}, true},
 		{"a finding of a passing tool", ExecutionResult{
-			Processes:   []ProcessResult{{State: ProcessRan, Extraction: ExtractionParsedFindings}},
-			Diagnostics: []diagnostic.Diagnostic{{Message: "m", Severity: diagnostic.SeverityHint}},
+			ToolName:         "",
+			TaskID:           "",
+			Success:          false,
+			Output:           "",
+			Error:            nil,
+			Duration:         0,
+			Command:          "",
+			ExitCode:         0,
+			WorkingDir:       "",
+			RelativeDir:      "",
+			Scope:            "",
+			Batch:            false,
+			Cancelled:        false,
+			FailureReason:    0,
+			StartedAt:        zerovalue_time.Time{},
+			EndedAt:          zerovalue_time.Time{},
+			FilesNotRun:      0,
+			UnparsedFailures: nil,
+			CapturedStdout:   "",
+			ParseFailed:      false,
+			FailOn:           "",
+			Files:            nil,
+			FileResults:      nil,
+			Cached:           false,
+			WholeUnit:        false,
+			UnitDir:          "",
+			cached:           nil,
+			Processes:        []ProcessResult{{ID: "", Files: nil, ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", State: ProcessRan, Extraction: ExtractionParsedFindings}},
+			Diagnostics:      []diagnostic.Diagnostic{{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m", Severity: diagnostic.SeverityHint}},
 		}, false},
-		{"one unparsed process", ExecutionResult{Processes: []ProcessResult{
-			{State: ProcessRan, Extraction: ExtractionParsedClean}, {State: ProcessRan, Extraction: ExtractionParseFailed},
-		}}, false},
-		{"an unavailable parser", ExecutionResult{Processes: []ProcessResult{{State: ProcessRan, Extraction: ExtractionParserUnavailable}}}, false},
-		{"a dry run", ExecutionResult{Processes: []ProcessResult{{State: ProcessNotStarted, Extraction: ExtractionNone}}}, false},
+		{"one unparsed process", ExecutionResult{
+			ToolName:         "",
+			TaskID:           "",
+			Success:          false,
+			Output:           "",
+			Error:            nil,
+			Duration:         0,
+			Command:          "",
+			ExitCode:         0,
+			WorkingDir:       "",
+			RelativeDir:      "",
+			Scope:            "",
+			Batch:            false,
+			Cancelled:        false,
+			FailureReason:    0,
+			StartedAt:        zerovalue_time.Time{},
+			EndedAt:          zerovalue_time.Time{},
+			FilesNotRun:      0,
+			UnparsedFailures: nil,
+			CapturedStdout:   "",
+			Diagnostics:      nil,
+			ParseFailed:      false,
+			FailOn:           "",
+			Files:            nil,
+			FileResults:      nil,
+			Cached:           false,
+			WholeUnit:        false,
+			UnitDir:          "",
+			cached:           nil, Processes: []ProcessResult{
+				{ID: "", Files: nil, ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", State: ProcessRan, Extraction: ExtractionParsedClean}, {ID: "", Files: nil, ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", State: ProcessRan, Extraction: ExtractionParseFailed},
+			},
+		}, false},
+		{"an unavailable parser", ExecutionResult{ToolName: "", TaskID: "", Success: false, Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", cached: nil, Processes: []ProcessResult{{ID: "", Files: nil, ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", State: ProcessRan, Extraction: ExtractionParserUnavailable}}}, false},
+		{"a dry run", ExecutionResult{ToolName: "", TaskID: "", Success: false, Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", cached: nil, Processes: []ProcessResult{{ID: "", Files: nil, ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", State: ProcessNotStarted, Extraction: ExtractionNone}}}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -79,11 +139,11 @@ type fileParser struct {
 }
 
 func (p fileParser) Parse(_ context.Context, _, parser, _ string, stdout, _ []byte, _ int32) (ParseAnswer, error) {
-	return ParseAnswer{Diagnostics: p.findings(strings.TrimSpace(string(stdout))), Recognized: true, Format: parser}, nil
+	return ParseAnswer{FormatParser: false, Partial: false, Diagnostics: p.findings(strings.TrimSpace(string(stdout))), Recognized: true, Format: parser}, nil
 }
 
 func (fileParser) Fallback(context.Context, string, []byte, []byte, int32) (ParseAnswer, error) {
-	return ParseAnswer{}, nil
+	return ParseAnswer{Diagnostics: nil, Recognized: false, Format: "", FormatParser: false, Partial: false}, nil
 }
 
 func (fileParser) FellBack(string, config.OutputParser, string) {}
@@ -102,25 +162,35 @@ func c1Project(t *testing.T, parser DiagnosticParser) (e *Executor, c *cache.Cac
 		}
 		files = append(files, path)
 	}
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
-	e = NewExecutor(root, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"lint": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", `echo "$@"`, "lint"}},
-	}}, c)
+	e = NewExecutor(root, false, false, &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"lint": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", `echo "$@"`, "lint"}},
+		},
+	}, c)
 	e.SetParser(parser)
 	return e, c, root, files
 }
 
 func c1Task(op config.OperationType, scope config.ToolScope, args []string, files []string, root string) Task {
 	return Task{
-		ToolName:    "lint",
-		Tool:        config.Tool{Name: "lint", OutputParser: &config.OutputParser{Module: "core", Parser: "lint"}},
-		Operation:   op,
-		OpConfig:    config.ToolOperation{App: "lint", Scope: scope, Args: args},
-		Files:       files,
-		ProjectPath: root,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "lint",
+		Tool:         config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "lint", OutputParser: &config.OutputParser{Module: "core", Parser: "lint"}},
+		Operation:    op,
+		OpConfig:     config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "lint", Scope: scope, Args: args},
+		Files:        files,
+		ProjectPath:  root,
 	}
 }
 
@@ -141,7 +211,7 @@ func cachedFiles(t *testing.T, c *cache.Cache, op cache.Operation, files []strin
 func TestPerFileLintPassFollowsTheParse(t *testing.T) {
 	e, c, root, files := c1Project(t, fileParser{findings: func(stdout string) []diagnostic.Diagnostic {
 		if filepath.Base(stdout) == "a.txt" {
-			return []diagnostic.Diagnostic{{Message: "info-level finding", Severity: diagnostic.SeverityInfo}}
+			return []diagnostic.Diagnostic{{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "info-level finding", Severity: diagnostic.SeverityInfo}}
 		}
 		return nil
 	}})
@@ -169,7 +239,7 @@ func TestBatchLintPassAttribution(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var root string
 			e, c, r, files := c1Project(t, fileParser{findings: func(string) []diagnostic.Diagnostic {
-				return []diagnostic.Diagnostic{{Message: "m", File: tc.reported(root)}}
+				return []diagnostic.Diagnostic{{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m", File: tc.reported(root)}}
 			}})
 			root = r
 			task := c1Task(config.OpLint, config.ToolScopeRepository, []string{"{files}"}, files, root)
@@ -189,7 +259,7 @@ func TestBatchLintPassAttribution(t *testing.T) {
 func TestFixPassFollowsTheParse(t *testing.T) {
 	e, c, root, files := c1Project(t, fileParser{findings: func(stdout string) []diagnostic.Diagnostic {
 		if filepath.Base(stdout) == "a.txt" {
-			return []diagnostic.Diagnostic{{Message: "1 problem left", Severity: diagnostic.SeverityHint}}
+			return []diagnostic.Diagnostic{{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "1 problem left", Severity: diagnostic.SeverityHint}}
 		}
 		return nil
 	}})
@@ -211,9 +281,9 @@ func TestUnitVerdictNeedsNothingToReport(t *testing.T) {
 	}{
 		{"clean", fileParser{findings: func(string) []diagnostic.Diagnostic { return nil }}, true},
 		{"a hint", fileParser{findings: func(string) []diagnostic.Diagnostic {
-			return []diagnostic.Diagnostic{{Message: "m", Severity: diagnostic.SeverityHint}}
+			return []diagnostic.Diagnostic{{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m", Severity: diagnostic.SeverityHint}}
 		}}, false},
-		{"unparsed", &fakeParser{err: &ParserUnavailableError{Err: os.ErrNotExist}}, false},
+		{"unparsed", &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, err: &ParserUnavailableError{Err: os.ErrNotExist}}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -239,7 +309,7 @@ func TestUnitVerdictNeedsNothingToReport(t *testing.T) {
 // not replayed once the configuration pins another module.
 func TestUnitVerdictNamesItsParserModule(t *testing.T) {
 	e, _, root, files := c1Project(t, fileParser{findings: func(string) []diagnostic.Diagnostic { return nil }})
-	e.SetParserModules(config.MapOfParsers{"core": {Hash: strings.Repeat("a", 64)}})
+	e.SetParserModules(config.MapOfParsers{"core": {URL: "", OCI: nil, Hash: strings.Repeat("a", 64)}})
 	task := c1Task(config.OpLint, config.ToolScopePerProject, []string{"--check"}, files, root)
 	task.UnitMembers = files
 	task.Coverage = CoverageComplete
@@ -253,7 +323,7 @@ func TestUnitVerdictNamesItsParserModule(t *testing.T) {
 	if !hit() {
 		t.Fatal("the clean run recorded no verdict")
 	}
-	e.SetParserModules(config.MapOfParsers{"core": {Hash: strings.Repeat("b", 64)}})
+	e.SetParserModules(config.MapOfParsers{"core": {URL: "", OCI: nil, Hash: strings.Repeat("b", 64)}})
 	if hit() {
 		t.Error("a verdict recorded with one parser module was replayed for another")
 	}

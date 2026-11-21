@@ -18,7 +18,7 @@ type temurinReleaseVersions struct {
 	AvailableReleases        []int `json:"available_releases"`
 }
 
-var temurinHTTPClient = &http.Client{Timeout: 15 * time.Second}
+var temurinHTTPClient = &http.Client{Transport: nil, CheckRedirect: nil, Jar: nil, Timeout: 15 * time.Second}
 
 // GetTemurinMajorVersions returns the Temurin (Eclipse Adoptium) feature
 // releases, newest first, starting at the most recent one. A caller walks down

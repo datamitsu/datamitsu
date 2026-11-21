@@ -30,7 +30,7 @@ func seedManifestCache(t *testing.T, digest string, body []byte) {
 
 func TestBundleStatus_NoBundleDeclared(t *testing.T) {
 	testStore(t)
-	if _, err := BundleStatus(context.Background(), &config.Config{}); err == nil {
+	if _, err := BundleStatus(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}); err == nil {
 		t.Fatal("expected error without an oci declaration")
 	}
 	if _, err := BundleStatus(context.Background(), nil); err == nil {
@@ -47,13 +47,21 @@ func TestBundleStatus_ManifestWithCoverage(t *testing.T) {
 	})
 
 	manifest := ocispec.Manifest{
-		MediaType:   ocispec.MediaTypeImageManifest,
-		Annotations: map[string]string{AnnotationStoreRoot: testBuilderRoot},
+		SchemaVersion: 0,
+		ArtifactType:  "",
+		Config:        ocispec.Descriptor{MediaType: "", Digest: "", Size: 0, URLs: nil, Annotations: nil, Data: nil, Platform: nil, ArtifactType: ""},
+		Subject:       nil,
+		MediaType:     ocispec.MediaTypeImageManifest,
+		Annotations:   map[string]string{AnnotationStoreRoot: testBuilderRoot},
 		Layers: []ocispec.Descriptor{
 			{
-				MediaType: mediaTypeOCILayerGzip,
-				Digest:    godigest.Digest(sha256DigestOf(payload)),
-				Size:      int64(len(payload)),
+				URLs:         nil,
+				Data:         nil,
+				Platform:     nil,
+				ArtifactType: "",
+				MediaType:    mediaTypeOCILayerGzip,
+				Digest:       godigest.Digest(sha256DigestOf(payload)),
+				Size:         int64(len(payload)),
 				Annotations: map[string]string{
 					AnnotationSubtree: subtrees["covered-tool"],
 					AnnotationKind:    "binary",
@@ -61,6 +69,11 @@ func TestBundleStatus_ManifestWithCoverage(t *testing.T) {
 				},
 			},
 			{
+				URLs:         nil,
+				Annotations:  nil,
+				Data:         nil,
+				Platform:     nil,
+				ArtifactType: "",
 				// base layer without annotations: not store content
 				MediaType: mediaTypeOCILayerGzip,
 				Digest:    godigest.Digest(sha256DigestOf([]byte("base"))),
@@ -74,7 +87,7 @@ func TestBundleStatus_ManifestWithCoverage(t *testing.T) {
 	}
 	digest := sha256DigestOf(raw)
 	seedManifestCache(t, digest, raw)
-	cfg.OCI = &config.OCIRef{Ref: "registry.invalid/owner/repo", Digest: digest}
+	cfg.OCI = &config.OCIRef{Signer: nil, Ref: "registry.invalid/owner/repo", Digest: digest}
 
 	// Materialize the covered subtree so Present flips for it.
 	placed := filepath.Join(storeRoot, filepath.FromSlash(subtrees["covered-tool"]))
@@ -128,13 +141,21 @@ func TestBundleStatus_IndexSelectsHostPlatform(t *testing.T) {
 	cfg, subtrees := testBinaryConfig(t, map[string][]byte{"tool": []byte("x")})
 
 	child := ocispec.Manifest{
-		MediaType:   ocispec.MediaTypeImageManifest,
-		Annotations: map[string]string{AnnotationStoreRoot: testBuilderRoot},
+		SchemaVersion: 0,
+		ArtifactType:  "",
+		Config:        ocispec.Descriptor{MediaType: "", Digest: "", Size: 0, URLs: nil, Annotations: nil, Data: nil, Platform: nil, ArtifactType: ""},
+		Subject:       nil,
+		MediaType:     ocispec.MediaTypeImageManifest,
+		Annotations:   map[string]string{AnnotationStoreRoot: testBuilderRoot},
 		Layers: []ocispec.Descriptor{{
-			MediaType:   mediaTypeOCILayerGzip,
-			Digest:      godigest.Digest(sha256DigestOf([]byte("x"))),
-			Size:        1,
-			Annotations: map[string]string{AnnotationSubtree: subtrees["tool"]},
+			URLs:         nil,
+			Data:         nil,
+			Platform:     nil,
+			ArtifactType: "",
+			MediaType:    mediaTypeOCILayerGzip,
+			Digest:       godigest.Digest(sha256DigestOf([]byte("x"))),
+			Size:         1,
+			Annotations:  map[string]string{AnnotationSubtree: subtrees["tool"]},
 		}},
 	}
 	childRaw, err := json.Marshal(child)
@@ -145,21 +166,35 @@ func TestBundleStatus_IndexSelectsHostPlatform(t *testing.T) {
 	seedManifestCache(t, childDigest, childRaw)
 
 	childDesc := ocispec.Descriptor{
-		MediaType: ocispec.MediaTypeImageManifest,
-		Digest:    godigest.Digest(childDigest),
-		Platform:  &ocispec.Platform{OS: host.OS, Architecture: host.Arch},
+		Size:         0,
+		URLs:         nil,
+		Annotations:  nil,
+		Data:         nil,
+		ArtifactType: "",
+		MediaType:    ocispec.MediaTypeImageManifest,
+		Digest:       godigest.Digest(childDigest),
+		Platform:     &ocispec.Platform{OSVersion: "", OSFeatures: nil, Variant: "", OS: host.OS, Architecture: host.Arch},
 	}
 	if host.OS == "linux" {
 		childDesc.Annotations = map[string]string{AnnotationLibc: string(host.Libc)}
 	}
 	idx := ocispec.Index{
-		MediaType: ocispec.MediaTypeImageIndex,
+		SchemaVersion: 0,
+		ArtifactType:  "",
+		Subject:       nil,
+		Annotations:   nil,
+		MediaType:     ocispec.MediaTypeImageIndex,
 		Manifests: []ocispec.Descriptor{
 			childDesc,
 			{
-				MediaType: ocispec.MediaTypeImageManifest,
-				Digest:    godigest.Digest(sha256DigestOf([]byte("attestation"))),
-				Platform:  &ocispec.Platform{OS: "unknown", Architecture: "unknown"},
+				Size:         0,
+				URLs:         nil,
+				Annotations:  nil,
+				Data:         nil,
+				ArtifactType: "",
+				MediaType:    ocispec.MediaTypeImageManifest,
+				Digest:       godigest.Digest(sha256DigestOf([]byte("attestation"))),
+				Platform:     &ocispec.Platform{OSVersion: "", OSFeatures: nil, Variant: "", OS: "unknown", Architecture: "unknown"},
 			},
 		},
 	}
@@ -184,7 +219,7 @@ func TestBundleStatus_IndexSelectsHostPlatform(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg.OCI = &config.OCIRef{Ref: "registry.invalid/owner/repo", Digest: idxDigest}
+	cfg.OCI = &config.OCIRef{Signer: nil, Ref: "registry.invalid/owner/repo", Digest: idxDigest}
 	status, err := BundleStatus(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("BundleStatus: %v", err)
@@ -209,11 +244,20 @@ func TestBundleStatus_NoPlatformMatchReportsWithoutSelection(t *testing.T) {
 	cfg, _ := testBinaryConfig(t, map[string][]byte{"tool": []byte("x")})
 
 	idx := ocispec.Index{
-		MediaType: ocispec.MediaTypeImageIndex,
+		SchemaVersion: 0,
+		ArtifactType:  "",
+		Subject:       nil,
+		Annotations:   nil,
+		MediaType:     ocispec.MediaTypeImageIndex,
 		Manifests: []ocispec.Descriptor{{
-			MediaType: ocispec.MediaTypeImageManifest,
-			Digest:    godigest.Digest(sha256DigestOf([]byte("other"))),
-			Platform:  &ocispec.Platform{OS: "plan9", Architecture: "mips"},
+			Size:         0,
+			URLs:         nil,
+			Annotations:  nil,
+			Data:         nil,
+			ArtifactType: "",
+			MediaType:    ocispec.MediaTypeImageManifest,
+			Digest:       godigest.Digest(sha256DigestOf([]byte("other"))),
+			Platform:     &ocispec.Platform{OSVersion: "", OSFeatures: nil, Variant: "", OS: "plan9", Architecture: "mips"},
 		}},
 	}
 	idxRaw, err := json.Marshal(idx)

@@ -21,6 +21,11 @@ func TestShellToolDeclaration(t *testing.T) {
 			Extra:        `c.apps["extra"] = { shell: { name: "true", args: [] } };` + "\n",
 		},
 		ShellTool("alpha", script, ToolOpSpec{
+			ParserModule: "",
+			Env:          nil,
+			InheritEnv:   nil,
+			Input:        "",
+			Output:       "",
 			Operation:    "fix",
 			Scope:        "per-file",
 			Args:         []string{"--flag", "{file}"},
@@ -30,10 +35,10 @@ func TestShellToolDeclaration(t *testing.T) {
 			Parser:       "hadolint",
 			FailOn:       "warning",
 		}),
-		ShellTool("beta", "true", ToolOpSpec{}),
+		ShellTool("beta", "true", ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 	))
 
-	res := Run(t, RunOptions{Dir: p.Dir, CacheDir: cache}, "--no-auto-config", "--config", cfg, "config", "show")
+	res := Run(t, RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cache}, "--no-auto-config", "--config", cfg, "config", "show")
 	if res.ExitCode != 0 {
 		t.Fatalf("config show exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -116,15 +121,15 @@ func TestShellToolRecordsRuns(t *testing.T) {
 	p.WriteFile("fixture.marker", "")
 	p.WriteFile("a.txt", "a\n")
 	cfg := p.WriteFile("shell.config.js", ShellConfig(
-		ShellConfigSpec{ProjectTypes: map[string][]string{"fixture": {"fixture.marker"}}},
-		ShellTool("alpha", RecordRun, ToolOpSpec{Scope: "per-file", Globs: []string{"*.txt"}, Args: []string{"{file}"}}),
-		ShellTool("beta", "exit 0", ToolOpSpec{}),
+		ShellConfigSpec{Parsers: "", Extra: "", ProjectTypes: map[string][]string{"fixture": {"fixture.marker"}}},
+		ShellTool("alpha", RecordRun, ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"*.txt"}, Args: []string{"{file}"}}),
+		ShellTool("beta", "exit 0", ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 	))
 
 	if got := p.Markers(); len(got) != 0 {
 		t.Fatalf("Markers before any run = %v, want none", got)
 	}
-	res := Run(t, RunOptions{Dir: p.Dir}, "--no-auto-config", "--config", cfg, "lint")
+	res := Run(t, RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "--no-auto-config", "--config", cfg, "lint")
 	if res.ExitCode != 0 {
 		t.Fatalf("lint exit = %d\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
 	}

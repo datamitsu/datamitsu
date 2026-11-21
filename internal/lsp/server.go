@@ -94,12 +94,30 @@ type Server struct {
 // names none.
 func New(r io.Reader, w io.Writer, loader Loader, launchDir string) *Server {
 	return &Server{
-		conn:      newConn(r, w),
-		loader:    loader,
-		launchDir: launchDir,
-		docs:      make(map[string][]byte),
-		policy:    envFormatPolicy(),
-		now:       time.Now,
+		root:              "",
+		loaded:            nil,
+		supersededKeys:    nil,
+		watch:             nil,
+		loadedInputs:      "",
+		failedInputs:      "",
+		noSession:         "",
+		noSessionReported: "",
+		refused:           nil,
+		options:           nil,
+		optionsInvalid:    false,
+		initialized:       false,
+		shutdownReceived:  false,
+		exitCode:          0,
+		active:            nil,
+		runMu:             sync.Mutex{},
+		stopping:          false,
+		transport:         nil,
+		conn:              newConn(r, w),
+		loader:            loader,
+		launchDir:         launchDir,
+		docs:              make(map[string][]byte),
+		policy:            envFormatPolicy(),
+		now:               time.Now,
 	}
 }
 
@@ -141,7 +159,7 @@ func (s *Server) ExitCode() int { return s.exitCode }
 func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte) (edits []TextEdit, err error) {
 	opID := uievent.NextOpID("fmt")
 	started := time.Now()
-	ui.Emit(uievent.Event{Type: uievent.TypePhase, OpID: opID, Status: uievent.StatusStart, Op: formatOp})
+	ui.Emit(uievent.Event{TS: 0, Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypePhase, OpID: opID, Status: uievent.StatusStart, Op: formatOp})
 	var tally formatTally
 	defer func() { emitFormatDone(opID, started, tally, err) }()
 
@@ -179,7 +197,7 @@ func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte)
 	// Correctness over the saved walk: an editor formats one file per request.
 	ss.planner.Invalidate()
 
-	plan, err = ss.planner.Plan(ctx, config.OpFix, tooling.Selection{Mode: tooling.SelectionPaths, Paths: []string{absPath}}, nil)
+	plan, err = ss.planner.Plan(ctx, config.OpFix, tooling.Selection{Dir: "", Mode: tooling.SelectionPaths, Paths: []string{absPath}}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("plan fix for %s: %w", absPath, err)
 	}
@@ -304,6 +322,8 @@ func (s *Server) executeGroups(
 			return results, ran, stoppedByWatchdog, nil
 		}
 		groupResults, execErr := s.loaded.executor.Execute(ctx, &tooling.ExecutionPlan{
+			FailOn:     "",
+			Skipped:    nil,
 			ConfigName: plan.ConfigName,
 			Groups:     []tooling.TaskGroup{group},
 		})
@@ -321,11 +341,52 @@ func (s *Server) executeGroups(
 func (s *Server) wireToolEvents(opID string) {
 	s.loaded.executor.SetTaskStartCallback(func(taskID, tool, dir string) {
 		ui.Emit(uievent.Event{
-			Type:   uievent.TypeToolRun,
-			OpID:   toolRunOpID(opID, taskID),
-			Status: uievent.StatusStart,
-			Tool:   tool,
-			Dir:    dir,
+			TS:              0,
+			Op:              "",
+			Name:            "",
+			BytesDone:       0,
+			BytesTotal:      0,
+			Percent:         0,
+			Index:           0,
+			Total:           0,
+			Success:         nil,
+			DurationMs:      0,
+			Msg:             "",
+			Level:           "",
+			Tools:           0,
+			Runs:            0,
+			Failed:          0,
+			Skipped:         0,
+			Cancelled:       nil,
+			Complete:        nil,
+			Format:          "",
+			Path:            "",
+			File:            "",
+			Row:             0,
+			Col:             0,
+			EndRow:          0,
+			EndCol:          0,
+			Severity:        "",
+			Code:            "",
+			Source:          "",
+			Fingerprint:     "",
+			Provenance:      "",
+			Reported:        nil,
+			Gates:           nil,
+			Baselined:       false,
+			FindingsError:   nil,
+			FindingsWarning: nil,
+			FindingsInfo:    nil,
+			FindingsHint:    nil,
+			Cached:          nil,
+			Schema:          "",
+			Events:          "",
+			Annotations:     "",
+			Type:            uievent.TypeToolRun,
+			OpID:            toolRunOpID(opID, taskID),
+			Status:          uievent.StatusStart,
+			Tool:            tool,
+			Dir:             dir,
 		})
 	})
 	s.loaded.executor.SetResultCallback(func(result tooling.ExecutionResult) {
@@ -334,23 +395,103 @@ func (s *Server) wireToolEvents(opID string) {
 		}
 		runID := toolRunOpID(opID, result.TaskID)
 		ui.Emit(uievent.Event{
-			Type:       uievent.TypeToolRun,
-			OpID:       runID,
-			Status:     terminalStatus(result.Success),
-			Tool:       result.ToolName,
-			Dir:        result.RelativeDir,
-			Success:    new(result.Success),
-			DurationMs: result.Duration,
+			TS:              0,
+			Op:              "",
+			Name:            "",
+			BytesDone:       0,
+			BytesTotal:      0,
+			Percent:         0,
+			Index:           0,
+			Total:           0,
+			Msg:             "",
+			Level:           "",
+			Tools:           0,
+			Runs:            0,
+			Failed:          0,
+			Skipped:         0,
+			Cancelled:       nil,
+			Complete:        nil,
+			Format:          "",
+			Path:            "",
+			File:            "",
+			Row:             0,
+			Col:             0,
+			EndRow:          0,
+			EndCol:          0,
+			Severity:        "",
+			Code:            "",
+			Source:          "",
+			Fingerprint:     "",
+			Provenance:      "",
+			Reported:        nil,
+			Gates:           nil,
+			Baselined:       false,
+			FindingsError:   nil,
+			FindingsWarning: nil,
+			FindingsInfo:    nil,
+			FindingsHint:    nil,
+			Cached:          nil,
+			Schema:          "",
+			Events:          "",
+			Annotations:     "",
+			Type:            uievent.TypeToolRun,
+			OpID:            runID,
+			Status:          terminalStatus(result.Success),
+			Tool:            result.ToolName,
+			Dir:             result.RelativeDir,
+			Success:         new(result.Success),
+			DurationMs:      result.Duration,
 		})
 		if !result.Success {
 			// Without this a failing formatter is invisible: the request still
 			// succeeds with whatever the other tools left on disk.
 			ui.Emit(uievent.Event{
-				Type: uievent.TypeError,
-				OpID: runID,
-				Tool: result.ToolName,
-				Dir:  result.RelativeDir,
-				Msg:  resultErrorMessage(result),
+				TS:              0,
+				Status:          "",
+				Op:              "",
+				Name:            "",
+				BytesDone:       0,
+				BytesTotal:      0,
+				Percent:         0,
+				Index:           0,
+				Total:           0,
+				Success:         nil,
+				DurationMs:      0,
+				Level:           "",
+				Tools:           0,
+				Runs:            0,
+				Failed:          0,
+				Skipped:         0,
+				Cancelled:       nil,
+				Complete:        nil,
+				Format:          "",
+				Path:            "",
+				File:            "",
+				Row:             0,
+				Col:             0,
+				EndRow:          0,
+				EndCol:          0,
+				Severity:        "",
+				Code:            "",
+				Source:          "",
+				Fingerprint:     "",
+				Provenance:      "",
+				Reported:        nil,
+				Gates:           nil,
+				Baselined:       false,
+				FindingsError:   nil,
+				FindingsWarning: nil,
+				FindingsInfo:    nil,
+				FindingsHint:    nil,
+				Cached:          nil,
+				Schema:          "",
+				Events:          "",
+				Annotations:     "",
+				Type:            uievent.TypeError,
+				OpID:            runID,
+				Tool:            result.ToolName,
+				Dir:             result.RelativeDir,
+				Msg:             resultErrorMessage(result),
 			})
 		}
 	})
@@ -727,7 +868,7 @@ func decodeInitializeParams(raw json.RawMessage) (params initializeParams, ok bo
 func (s *Server) resolvePolicy() {
 	var res policyResolution
 	if s.optionsInvalid {
-		res = policyResolution{Policy: envFormatPolicy()}
+		res = policyResolution{FromOptions: nil, Warnings: nil, Policy: envFormatPolicy()}
 		res.warn("initialize params are not an object; initializationOptions ignored")
 	} else {
 		res = resolveFormatPolicy(s.options, envFormatPolicy(), s.isTool)

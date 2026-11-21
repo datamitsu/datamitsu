@@ -278,16 +278,17 @@ func ruleID(f report.Finding) string {
 // one.
 func invocation(inv report.Invocation) Invocation {
 	out := Invocation{
-		ExecutionSuccessful: analyzed(inv),
-		ExitCode:            inv.ExitCode,
-		WorkingDirectory:    workingDirectory(inv.Dir),
-		Properties:          InvocationProperties{Datamitsu: InvocationFacts{ID: inv.ID, State: inv.State, Extraction: inv.Extraction}},
+		ToolExecutionNotifications: nil,
+		ExecutionSuccessful:        analyzed(inv),
+		ExitCode:                   inv.ExitCode,
+		WorkingDirectory:           workingDirectory(inv.Dir),
+		Properties:                 InvocationProperties{Datamitsu: InvocationFacts{ID: inv.ID, State: inv.State, Extraction: inv.Extraction}},
 	}
 	for _, f := range inv.Findings {
 		switch {
 		case common.Synthetic(f):
 			out.ToolExecutionNotifications = append(out.ToolExecutionNotifications,
-				Notification{Level: LevelError, Message: Message{Text: f.Message}})
+				Notification{Descriptor: nil, Level: LevelError, Message: Message{Text: f.Message}})
 		case f.Location.Path == "":
 			out.ToolExecutionNotifications = append(out.ToolExecutionNotifications,
 				Notification{Level: Level(f.Severity), Message: Message{Text: f.Message}, Descriptor: &Descriptor{ID: ruleID(f)}})
@@ -316,7 +317,7 @@ func workingDirectory(dir string) *ArtifactLocation {
 	case dir == "" || dir == ".":
 		return &ArtifactLocation{URI: "./", URIBaseID: SourceRoot}
 	case common.Outside(dir):
-		return &ArtifactLocation{URI: common.FileURI(strings.TrimSuffix(dir, "/")) + "/"}
+		return &ArtifactLocation{URIBaseID: "", URI: common.FileURI(strings.TrimSuffix(dir, "/")) + "/"}
 	}
 	return &ArtifactLocation{URI: common.RelativeURI(strings.TrimSuffix(dir, "/")) + "/", URIBaseID: SourceRoot}
 }
@@ -324,9 +325,9 @@ func workingDirectory(dir string) *ArtifactLocation {
 func location(loc report.Location) Location {
 	artifact := ArtifactLocation{URI: common.RelativeURI(loc.Path), URIBaseID: SourceRoot}
 	if common.Outside(loc.Path) {
-		artifact = ArtifactLocation{URI: common.FileURI(loc.Path)}
+		artifact = ArtifactLocation{URIBaseID: "", URI: common.FileURI(loc.Path)}
 	}
-	out := Location{PhysicalLocation: PhysicalLocation{ArtifactLocation: artifact}}
+	out := Location{PhysicalLocation: PhysicalLocation{Region: nil, ArtifactLocation: artifact}}
 	if r := common.RegionOf(loc, common.Chars); r.Line > 0 {
 		out.PhysicalLocation.Region = &Region{StartLine: r.Line, StartColumn: r.Col, EndLine: r.EndLine, EndColumn: r.EndCol}
 	}

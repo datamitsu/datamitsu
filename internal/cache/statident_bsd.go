@@ -10,7 +10,7 @@ import (
 func statIdentity(fi os.FileInfo) FileIdentity {
 	st, ok := fi.Sys().(*syscall.Stat_t)
 	if !ok {
-		return FileIdentity{}
+		return FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}
 	}
 	return FileIdentity{
 		Ino:            st.Ino,

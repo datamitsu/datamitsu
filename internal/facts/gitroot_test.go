@@ -134,7 +134,8 @@ func physical(t *testing.T, path string) string {
 func gitRootLayouts() []layout {
 	return []layout{
 		{
-			name: "plain repo",
+			declines: false,
+			name:     "plain repo",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				repo := filepath.Join(base, "repo")
@@ -144,7 +145,8 @@ func gitRootLayouts() []layout {
 			wantPure: func(base string) string { return filepath.Join(base, "repo") },
 		},
 		{
-			name: "nested subdirectory",
+			declines: false,
+			name:     "nested subdirectory",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				repo := filepath.Join(base, "repo")
@@ -158,7 +160,8 @@ func gitRootLayouts() []layout {
 			wantPure: func(base string) string { return filepath.Join(base, "repo") },
 		},
 		{
-			name: "bare repo",
+			wantPure: nil,
+			name:     "bare repo",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				bare := filepath.Join(base, "bare.git")
@@ -171,7 +174,8 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
-			name: "linked worktree",
+			declines: false,
+			name:     "linked worktree",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				repo := filepath.Join(base, "repo")
@@ -183,7 +187,8 @@ func gitRootLayouts() []layout {
 			wantPure: func(base string) string { return filepath.Join(base, "wt") },
 		},
 		{
-			name: "submodule",
+			declines: false,
+			name:     "submodule",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				super := filepath.Join(base, "super")
@@ -196,7 +201,8 @@ func gitRootLayouts() []layout {
 			wantPure: func(base string) string { return filepath.Join(base, "super") },
 		},
 		{
-			name: "submodule inside a submodule",
+			declines: false,
+			name:     "submodule inside a submodule",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				super := filepath.Join(base, "super")
@@ -214,7 +220,8 @@ func gitRootLayouts() []layout {
 			wantPure: func(base string) string { return filepath.Join(base, "super") },
 		},
 		{
-			name: "no repository at all",
+			wantPure: nil,
+			name:     "no repository at all",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				plain := filepath.Join(base, "plain")
@@ -226,7 +233,8 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
-			name: "inside the git directory",
+			wantPure: nil,
+			name:     "inside the git directory",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				repo := filepath.Join(base, "repo")
@@ -236,7 +244,8 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
-			name: "repository nested in another repository",
+			wantPure: nil,
+			name:     "repository nested in another repository",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				outer := filepath.Join(base, "outer")
@@ -248,7 +257,8 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
-			name: "empty .git directory",
+			wantPure: nil,
+			name:     "empty .git directory",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				dir := filepath.Join(base, "no-repo")
@@ -260,7 +270,8 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
-			name: "core.worktree relocates the working tree",
+			wantPure: nil,
+			name:     "core.worktree relocates the working tree",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				repo := filepath.Join(base, "repo")
@@ -275,7 +286,8 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
-			name: "core.worktree on the section header line",
+			wantPure: nil,
+			name:     "core.worktree on the section header line",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				repo := filepath.Join(base, "repo")
@@ -293,6 +305,7 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
+			wantPure: nil,
 			// An ordinary `.git` directory whose config says core.bare=true.
 			// Git reports no working tree for it at all ("this operation must
 			// be run in a work tree"), so answering with the directory holding
@@ -308,6 +321,7 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
+			wantPure: nil,
 			// Git reads a variable written with no `=` as true, so a lone
 			// `bare` line marks the repository bare just as `bare = true` does.
 			name: "core.bare written as a valueless variable",
@@ -321,7 +335,8 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
-			name: "submodule left behind by a branch that lacks it",
+			wantPure: nil,
+			name:     "submodule left behind by a branch that lacks it",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				super := filepath.Join(base, "super")
@@ -338,6 +353,7 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
+			wantPure: nil,
 			// `git rm --cached sub` drops the gitlink from the index while
 			// leaving both `.gitmodules` and the submodule's working tree on
 			// disk. Git stops calling it a submodule the moment the gitlink is
@@ -356,6 +372,7 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
+			declines: false,
 			// The index does not record its digest size, so the scan settles it
 			// by which one accounts for every byte. A sha256 superproject is
 			// the case that proves the 32-byte branch is reachable.
@@ -372,6 +389,7 @@ func gitRootLayouts() []layout {
 			wantPure: func(base string) string { return filepath.Join(base, "super") },
 		},
 		{
+			wantPure: nil,
 			// An unmerged path has no stage 0 entry, and git answers from the
 			// first `ls-files --stage` line for it — here a regular file at
 			// stage 1, so git reports no superproject even though stages 2 and 3
@@ -399,6 +417,7 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
+			wantPure: nil,
 			// Index version 4 prefix-compresses entry paths, which the scan
 			// does not reconstruct — so the gitlink cannot be proved and git
 			// answers instead.
@@ -416,7 +435,8 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
-			name: "per-worktree config extension enabled",
+			wantPure: nil,
+			name:     "per-worktree config extension enabled",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				repo := filepath.Join(base, "repo")
@@ -427,7 +447,8 @@ func gitRootLayouts() []layout {
 			declines: true,
 		},
 		{
-			name: "separate git directory",
+			wantPure: nil,
+			name:     "separate git directory",
 			build: func(t *testing.T, base string) string {
 				t.Helper()
 				work := filepath.Join(base, "work")

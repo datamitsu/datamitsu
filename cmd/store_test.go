@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/digest"
 
@@ -22,7 +23,7 @@ import (
 )
 
 func storeClearTestCommand() *cobra.Command {
-	cmd := &cobra.Command{}
+	cmd := &cobra.Command{Use: "", Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0}
 	cmd.SetContext(context.Background())
 	return cmd
 }
@@ -189,7 +190,7 @@ func TestResolveSeedRef(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("config declaration is used without arguments", func(t *testing.T) {
-		cfg := &config.Config{OCI: &config.OCIRef{Ref: "ghcr.io/owner/repo", Digest: storeTestDigest}}
+		cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, Parsers: nil, Lsp: nil, OCI: &config.OCIRef{Signer: nil, Ref: "ghcr.io/owner/repo", Digest: storeTestDigest}}
 		ref, err := resolveSeedRef(ctx, cfg, nil)
 		if err != nil {
 			t.Fatalf("resolveSeedRef: %v", err)
@@ -200,14 +201,14 @@ func TestResolveSeedRef(t *testing.T) {
 	})
 
 	t.Run("no arguments and no declaration is an error", func(t *testing.T) {
-		_, err := resolveSeedRef(ctx, &config.Config{}, nil)
+		_, err := resolveSeedRef(ctx, &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil)
 		if err == nil || !strings.Contains(err.Error(), "no oci bundle declared") {
 			t.Errorf("err = %v, want a no-declaration error", err)
 		}
 	})
 
 	t.Run("digest-pinned argument overrides the config", func(t *testing.T) {
-		cfg := &config.Config{OCI: &config.OCIRef{Ref: "ghcr.io/owner/other", Digest: storeTestDigest}}
+		cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, Parsers: nil, Lsp: nil, OCI: &config.OCIRef{Signer: nil, Ref: "ghcr.io/owner/other", Digest: storeTestDigest}}
 		ref, err := resolveSeedRef(ctx, cfg, []string{"ghcr.io/owner/repo@" + storeTestDigest})
 		if err != nil {
 			t.Fatalf("resolveSeedRef: %v", err)
@@ -218,14 +219,14 @@ func TestResolveSeedRef(t *testing.T) {
 	})
 
 	t.Run("tag reference without --resolve-tag is refused", func(t *testing.T) {
-		_, err := resolveSeedRef(ctx, &config.Config{}, []string{"ghcr.io/owner/repo:latest"})
+		_, err := resolveSeedRef(ctx, &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, []string{"ghcr.io/owner/repo:latest"})
 		if err == nil || !strings.Contains(err.Error(), "--resolve-tag") {
 			t.Errorf("err = %v, want a pin-the-digest refusal", err)
 		}
 	})
 
 	t.Run("bare reference without tag or digest is refused", func(t *testing.T) {
-		_, err := resolveSeedRef(ctx, &config.Config{}, []string{"ghcr.io/owner/repo"})
+		_, err := resolveSeedRef(ctx, &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, []string{"ghcr.io/owner/repo"})
 		if err == nil {
 			t.Error("expected an error for an unpinned reference")
 		}
@@ -255,11 +256,11 @@ func seedStoreTestBundle(t *testing.T) (digest, subtree string) {
 	gz := gzip.NewWriter(&compressed)
 	tw := tar.NewWriter(gz)
 	for _, dir := range []string{"dm/", "dm/store/", "dm/store/.bin/", "dm/store/.bin/cli-tool/"} {
-		if err := tw.WriteHeader(&tar.Header{Name: dir, Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
+		if err := tw.WriteHeader(&tar.Header{Linkname: "", Size: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: dir, Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := tw.WriteHeader(&tar.Header{Name: "dm/store/" + subtree, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(payload))}); err != nil {
+	if err := tw.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "dm/store/" + subtree, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(payload))}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tw.Write(payload); err != nil {
@@ -274,12 +275,20 @@ func seedStoreTestBundle(t *testing.T) (digest, subtree string) {
 	blob := compressed.Bytes()
 
 	manifest := ocispec.Manifest{
-		MediaType:   ocispec.MediaTypeImageManifest,
-		Annotations: map[string]string{"com.datamitsu.store-root": "/dm/store"},
+		SchemaVersion: 0,
+		ArtifactType:  "",
+		Config:        ocispec.Descriptor{MediaType: "", Digest: "", Size: 0, URLs: nil, Annotations: nil, Data: nil, Platform: nil, ArtifactType: ""},
+		Subject:       nil,
+		MediaType:     ocispec.MediaTypeImageManifest,
+		Annotations:   map[string]string{"com.datamitsu.store-root": "/dm/store"},
 		Layers: []ocispec.Descriptor{{
-			MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
-			Digest:    godigest.Digest(storeTestSHA256(blob)),
-			Size:      int64(len(blob)),
+			URLs:         nil,
+			Data:         nil,
+			Platform:     nil,
+			ArtifactType: "",
+			MediaType:    "application/vnd.oci.image.layer.v1.tar+gzip",
+			Digest:       godigest.Digest(storeTestSHA256(blob)),
+			Size:         int64(len(blob)),
 			Annotations: map[string]string{
 				"com.datamitsu.subtree": subtree,
 				"com.datamitsu.kind":    "binary",

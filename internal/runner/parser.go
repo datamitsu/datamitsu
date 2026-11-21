@@ -137,6 +137,7 @@ type parseProblems struct {
 
 func newParseProblems() *parseProblems {
 	return &parseProblems{
+		mu:          sync.Mutex{},
 		modules:     map[string]string{},
 		moduleTools: map[string]map[string]bool{},
 		unknown:     map[[2]string]map[string]bool{},

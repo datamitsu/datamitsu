@@ -33,9 +33,9 @@ func plantRuntimeBinary(t *testing.T, rm *RuntimeManager, runtimeName string) st
 }
 
 func jvmRuntimes(mode config.RuntimeMode) config.MapOfRuntimes {
-	rc := config.RuntimeConfig{Kind: config.RuntimeKindJVM, Mode: mode}
+	rc := config.RuntimeConfig{Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM, Mode: mode}
 	if mode == config.RuntimeModeSystem {
-		rc.System = &config.RuntimeConfigSystem{Command: "java"}
+		rc.System = &config.RuntimeConfigSystem{SystemVersion: "", Command: "java"}
 	}
 	return config.MapOfRuntimes{"jvm": rc}
 }
@@ -97,12 +97,12 @@ func TestResolveRuntimePath_Errors(t *testing.T) {
 		},
 		{
 			name:     "system mode without system config",
-			runtimes: config.MapOfRuntimes{"jvm": {Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeSystem}},
+			runtimes: config.MapOfRuntimes{"jvm": {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeSystem}},
 			lookup:   "jvm",
 		},
 		{
 			name:     "managed mode without managed config",
-			runtimes: config.MapOfRuntimes{"jvm": {Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeManaged}},
+			runtimes: config.MapOfRuntimes{"jvm": {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeManaged}},
 			lookup:   "jvm",
 		},
 	}
@@ -137,12 +137,14 @@ func TestResolveCommandInfo_NodeMatchesGetCommandInfo(t *testing.T) {
 	nodeBin := plantRuntimeBinary(t, rm, "node")
 
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
-	app := binmanager.App{Node: appConfig}
+	app := binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: appConfig}
 
 	beforeRM, beforeBM := DownloaderConstructions(), binmanager.NetworkDownloads()
 	resolved, err := rm.ResolveCommandInfo("eslint", app)
@@ -223,12 +225,35 @@ func TestResolveCommandInfo_NodeUninstalledRuntime(t *testing.T) {
 	t.Setenv("DATAMITSU_OFFLINE", "1")
 
 	rm := New(nodeRuntimeWith(t, "http://127.0.0.1:1/node.tar.xz", "abc", testLibc))
-	app := binmanager.App{Node: &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
-	}}
+	app := binmanager.App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil, Node: &binmanager.AppConfigNode{
+			LockFile:     "",
+			Dependencies: nil,
+			PackageName:  "eslint",
+			Version:      "9.0.0",
+			BinPath:      "node_modules/.bin/eslint",
+			Runtime:      "node",
+		},
+	}
 
 	beforeRM, beforeBM := DownloaderConstructions(), binmanager.NetworkDownloads()
 	info, err := rm.ResolveCommandInfo("eslint", app)
@@ -253,12 +278,34 @@ func TestResolveCommandInfo_JVM(t *testing.T) {
 	t.Setenv("DATAMITSU_OFFLINE", "1")
 
 	rm := New(jvmRuntimes(config.RuntimeModeSystem))
-	app := binmanager.App{Jvm: &binmanager.AppConfigJVM{
-		Version: "6.11.0",
-		JarURL:  "https://example.com/spectral.jar",
-		JarHash: "0000000000000000000000000000000000000000000000000000000000000000",
-		Runtime: "jvm",
-	}}
+	app := binmanager.App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil, Jvm: &binmanager.AppConfigJVM{
+			MainClass: "",
+			Version:   "6.11.0",
+			JarURL:    "https://example.com/spectral.jar",
+			JarHash:   "0000000000000000000000000000000000000000000000000000000000000000",
+			Runtime:   "jvm",
+		},
+	}
 
 	beforeRM, beforeBM := DownloaderConstructions(), binmanager.NetworkDownloads()
 	info, err := rm.ResolveCommandInfo("spectral", app)
@@ -294,13 +341,34 @@ func TestResolveCommandInfo_JVMMainClass(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
 	rm := New(jvmRuntimes(config.RuntimeModeSystem))
-	app := binmanager.App{Jvm: &binmanager.AppConfigJVM{
-		Version:   "1.0.0",
-		JarURL:    "https://example.com/tool.jar",
-		JarHash:   "0000000000000000000000000000000000000000000000000000000000000000",
-		MainClass: "com.example.Main",
-		Runtime:   "jvm",
-	}}
+	app := binmanager.App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil, Jvm: &binmanager.AppConfigJVM{
+			Version:   "1.0.0",
+			JarURL:    "https://example.com/tool.jar",
+			JarHash:   "0000000000000000000000000000000000000000000000000000000000000000",
+			MainClass: "com.example.Main",
+			Runtime:   "jvm",
+		},
+	}
 
 	info, err := rm.ResolveCommandInfo("tool", app)
 	if err != nil {
@@ -325,12 +393,34 @@ func TestResolveCommandInfo_JVMManagedUninstalled(t *testing.T) {
 	runtimes = config.MapOfRuntimes{"jvm": jvm}
 
 	rm := New(runtimes)
-	app := binmanager.App{Jvm: &binmanager.AppConfigJVM{
-		Version: "1.0.0",
-		JarURL:  "https://example.com/tool.jar",
-		JarHash: "0000000000000000000000000000000000000000000000000000000000000000",
-		Runtime: "jvm",
-	}}
+	app := binmanager.App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil, Jvm: &binmanager.AppConfigJVM{
+			MainClass: "",
+			Version:   "1.0.0",
+			JarURL:    "https://example.com/tool.jar",
+			JarHash:   "0000000000000000000000000000000000000000000000000000000000000000",
+			Runtime:   "jvm",
+		},
+	}
 
 	beforeRM, beforeBM := DownloaderConstructions(), binmanager.NetworkDownloads()
 	info, err := rm.ResolveCommandInfo("tool", app)
@@ -368,12 +458,35 @@ func TestResolveCommandInfo_RequiredPaths(t *testing.T) {
 	t.Run("node names its package and its managed runtime", func(t *testing.T) {
 		rm := New(nodeRuntimeWith(t, "http://127.0.0.1:1/node.tar.xz", "abc", testLibc))
 		nodeBin := plantRuntimeBinary(t, rm, "node")
-		app := binmanager.App{Node: &binmanager.AppConfigNode{
-			PackageName: "eslint",
-			Version:     "9.0.0",
-			BinPath:     "node_modules/.bin/eslint",
-			Runtime:     "node",
-		}}
+		app := binmanager.App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil, Node: &binmanager.AppConfigNode{
+				LockFile:     "",
+				Dependencies: nil,
+				PackageName:  "eslint",
+				Version:      "9.0.0",
+				BinPath:      "node_modules/.bin/eslint",
+				Runtime:      "node",
+			},
+		}
 
 		info, err := rm.ResolveCommandInfo("eslint", app)
 		if err != nil {
@@ -394,12 +507,34 @@ func TestResolveCommandInfo_RequiredPaths(t *testing.T) {
 		jvm.Kind = config.RuntimeKindJVM
 		jvm.Node = nil
 		rm := New(config.MapOfRuntimes{"jvm": jvm})
-		app := binmanager.App{Jvm: &binmanager.AppConfigJVM{
-			Version: "1.0.0",
-			JarURL:  "https://example.com/tool.jar",
-			JarHash: "0000000000000000000000000000000000000000000000000000000000000000",
-			Runtime: "jvm",
-		}}
+		app := binmanager.App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil, Jvm: &binmanager.AppConfigJVM{
+				MainClass: "",
+				Version:   "1.0.0",
+				JarURL:    "https://example.com/tool.jar",
+				JarHash:   "0000000000000000000000000000000000000000000000000000000000000000",
+				Runtime:   "jvm",
+			},
+		}
 
 		info, err := rm.ResolveCommandInfo("tool", app)
 		if err != nil {
@@ -413,12 +548,34 @@ func TestResolveCommandInfo_RequiredPaths(t *testing.T) {
 
 	t.Run("system jvm requires nothing extra", func(t *testing.T) {
 		rm := New(jvmRuntimes(config.RuntimeModeSystem))
-		app := binmanager.App{Jvm: &binmanager.AppConfigJVM{
-			Version: "6.11.0",
-			JarURL:  "https://example.com/spectral.jar",
-			JarHash: "0000000000000000000000000000000000000000000000000000000000000000",
-			Runtime: "jvm",
-		}}
+		app := binmanager.App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil, Jvm: &binmanager.AppConfigJVM{
+				MainClass: "",
+				Version:   "6.11.0",
+				JarURL:    "https://example.com/spectral.jar",
+				JarHash:   "0000000000000000000000000000000000000000000000000000000000000000",
+				Runtime:   "jvm",
+			},
+		}
 
 		info, err := rm.ResolveCommandInfo("spectral", app)
 		if err != nil {
@@ -438,8 +595,8 @@ func TestResolveCommandInfo_UVAndGo(t *testing.T) {
 	t.Setenv("DATAMITSU_OFFLINE", "1")
 
 	rm := New(config.MapOfRuntimes{
-		"uv": {Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "uv"}},
-		"go": {Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "go"}},
+		"uv": {Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{SystemVersion: "", Command: "uv"}},
+		"go": {Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{SystemVersion: "", Command: "go"}},
 	})
 
 	tests := []struct {
@@ -450,13 +607,13 @@ func TestResolveCommandInfo_UVAndGo(t *testing.T) {
 	}{
 		{
 			name:     "uv",
-			app:      binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.38.0", Runtime: "uv"}},
+			app:      binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.38.0", Runtime: "uv"}},
 			wantType: "uv",
 			wantSfx:  "yamllint",
 		},
 		{
 			name:     "go",
-			app:      binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "gofumpt", Version: "0.9.1", Runtime: "go"}},
+			app:      binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "gofumpt", Version: "0.9.1", Runtime: "go"}},
 			wantType: "go",
 			wantSfx:  "gofumpt",
 		},
@@ -486,7 +643,7 @@ func TestResolveCommandInfo_NotRuntimeManaged(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
 	rm := New(config.MapOfRuntimes{})
-	app := binmanager.App{Shell: &binmanager.AppConfigShell{Name: "echo"}}
+	app := binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "echo"}}
 
 	_, resolveErr := rm.ResolveCommandInfo("echo", app)
 	if resolveErr == nil {
@@ -541,10 +698,12 @@ func TestNodeCommandInfo_AppDependencyBinOnPath(t *testing.T) {
 	plantRuntimeBinary(t, rm, "node")
 
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
 
 	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
@@ -606,24 +765,32 @@ func TestResolveCommandInfo_NodeSystemBareCommand(t *testing.T) {
 	rm := New(config.MapOfRuntimes{
 		testPNPMRuntimeName: testPNPMRuntime(),
 		"node": {
-			Kind: config.RuntimeKindNode,
-			Mode: config.RuntimeModeSystem,
+			Managed: nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindNode,
+			Mode:    config.RuntimeModeSystem,
 			Node: &config.RuntimeConfigNode{
 				NodeVersion: "26.2.0",
 				PNPMRuntime: testPNPMRuntimeName,
 			},
-			System: &config.RuntimeConfigSystem{Command: "node"},
+			System: &config.RuntimeConfigSystem{SystemVersion: "", Command: "node"},
 		},
 	})
 
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
 
-	resolved, err := rm.ResolveCommandInfo("eslint", binmanager.App{Node: appConfig})
+	resolved, err := rm.ResolveCommandInfo("eslint", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: appConfig})
 	if err != nil {
 		t.Fatalf("ResolveCommandInfo() error = %v", err)
 	}

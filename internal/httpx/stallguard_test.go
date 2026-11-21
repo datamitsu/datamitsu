@@ -29,7 +29,7 @@ func TestStallGuardReaderRearms(t *testing.T) {
 	guard, ctx := NewStallGuard(context.Background(), 120*time.Millisecond)
 	defer guard.Stop()
 
-	reader := guard.Reader(&slowTrickle{chunks: 6, gap: 60 * time.Millisecond})
+	reader := guard.Reader(&slowTrickle{sent: 0, chunks: 6, gap: 60 * time.Millisecond})
 	buf := make([]byte, 8)
 	total := 0
 	for {

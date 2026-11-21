@@ -170,6 +170,6 @@ func Get() (Effective, error) {
 func resetForTesting() {
 	mu.Lock()
 	defer mu.Unlock()
-	effective = Effective{}
+	effective = Effective{AllowPartial: "", Annotations: "", Concurrency: 0, ConfigCache: false, Events: "", FailFast: false, FailFastSource: "", FailOn: "", ForceGitSubprocess: false, InstallTimeoutSeconds: 0, Libc: "", LogFormat: "", LspFormatTimeoutMs: 0, LspFormatWidenTo: "", LogLevel: "", MaxCmdLength: 0, MaxErrorCmdDisplay: 0, MaxFindingsPerProcess: 0, MaxParallelWorkers: 0, MaxParseInputBytes: 0, MinimumReleaseAgeMinutes: 0, NoOCI: false, OCIRegistry: "", Offline: false, Output: "", Report: "", StartupTimings: false, Timings: false, Trace: false, TraceDir: "", UnitCacheTTLMinutes: 0}
 	initialized = false
 }

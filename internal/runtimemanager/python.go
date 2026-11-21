@@ -385,16 +385,18 @@ func validatePythonDownload(d config.PythonDownload) error {
 func marshalPythonCatalog(selected selectedPythonDownload) ([]byte, error) {
 	entry := selected.Entry
 	record := uvPythonCatalogEntry{
-		Name:   entry.Name,
-		Arch:   uvPythonCatalogArch{Family: entry.Arch.Family},
-		OS:     entry.OS,
-		LibC:   entry.LibC,
-		Major:  entry.Major,
-		Minor:  entry.Minor,
-		Patch:  entry.Patch,
-		URL:    entry.URL,
-		Build:  entry.Build,
-		SHA256: strings.TrimPrefix(entry.Hash, "sha256:"),
+		Prerelease: nil,
+		Variant:    nil,
+		Name:       entry.Name,
+		Arch:       uvPythonCatalogArch{Variant: nil, Family: entry.Arch.Family},
+		OS:         entry.OS,
+		LibC:       entry.LibC,
+		Major:      entry.Major,
+		Minor:      entry.Minor,
+		Patch:      entry.Patch,
+		URL:        entry.URL,
+		Build:      entry.Build,
+		SHA256:     strings.TrimPrefix(entry.Hash, "sha256:"),
 	}
 	if entry.Arch.Variant != "" {
 		record.Arch.Variant = &entry.Arch.Variant

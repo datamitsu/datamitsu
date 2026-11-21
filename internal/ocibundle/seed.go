@@ -99,7 +99,7 @@ func AutoSeed(ctx context.Context, cfg *config.Config, neededApps, neededRuntime
 
 	// Auto-seed is always demand-driven; empty non-nil slices keep it so even
 	// when only one of the two lists has entries.
-	opts := Options{Needed: neededApps, NeededRuntimes: neededRuntimes}
+	opts := Options{RequireRequested: false, Needed: neededApps, NeededRuntimes: neededRuntimes}
 	if opts.Needed == nil {
 		opts.Needed = []string{}
 	}
@@ -128,7 +128,7 @@ func SeedBundle(ctx context.Context, cfg *config.Config, ref *config.OCIRef, opt
 }
 
 func seedBundleChanged(ctx context.Context, cfg *config.Config, ref *config.OCIRef, opts Options) (bool, error) {
-	if changed, handled, err := remoteSeed(ctx, SeedRequest{Config: cfg, Ref: ref, Options: opts}); handled {
+	if changed, handled, err := remoteSeed(ctx, SeedRequest{StoreRoot: "", CacheRoot: "", Layout: "", Digest: "", Signer: nil, Config: cfg, Ref: ref, Options: opts}); handled {
 		return changed, err
 	}
 	if err := config.ValidateOCI(ref); err != nil {
@@ -155,7 +155,7 @@ func SeedFromLayout(ctx context.Context, cfg *config.Config, dir, digest string,
 }
 
 func seedFromLayout(ctx context.Context, cfg *config.Config, dir, digest string, signer *config.OCISigner, opts Options) (bool, error) {
-	if changed, handled, err := remoteSeed(ctx, SeedRequest{Config: cfg, Layout: dir, Digest: digest, Signer: signer, Options: opts}); handled {
+	if changed, handled, err := remoteSeed(ctx, SeedRequest{StoreRoot: "", CacheRoot: "", Ref: nil, Config: cfg, Layout: dir, Digest: digest, Signer: signer, Options: opts}); handled {
 		return changed, err
 	}
 	info, err := os.Stat(dir)

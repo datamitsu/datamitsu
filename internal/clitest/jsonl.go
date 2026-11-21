@@ -165,7 +165,7 @@ func AssertChains(tb testing.TB, events []Event) {
 		}
 		c := chains[e.OpID]
 		if c == nil {
-			c = &chain{}
+			c = &chain{starts: 0, terminal: 0, notStarted: 0, ended: false}
 			chains[e.OpID] = c
 		}
 		if c.ended {

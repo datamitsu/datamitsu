@@ -443,7 +443,7 @@ func (bm *BinManager) stepPATH(appName string, app App, info *CommandInfo) (stri
 	if pp, ok := bm.runtimeManager.(PreparePathPrefixer); ok && (app.Node != nil || app.Bun != nil) {
 		runtimePrefix = pp.ResolvePreparePathPrefix(appName, app)
 	}
-	strict := &CommandInfo{Env: map[string]string{}}
+	strict := &CommandInfo{Type: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: map[string]string{}}
 	if runtimePrefix != "" {
 		strict.Env["PATH"] = runtimePrefix
 	}

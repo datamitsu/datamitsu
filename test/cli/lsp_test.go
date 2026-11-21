@@ -496,7 +496,7 @@ func TestLogLinesAreEventsOnJSONLStream(t *testing.T) {
 		stdin string
 	}{
 		{name: "lsp --verbose", args: []string{"lsp", "--verbose"}, stdin: lspSession},
-		{name: "--log-format=jsonl --verbose", args: []string{"config", "show", "--log-format=jsonl", "--verbose"}},
+		{stdin: "", name: "--log-format=jsonl --verbose", args: []string{"config", "show", "--log-format=jsonl", "--verbose"}},
 	}
 
 	for _, tt := range tests {
@@ -505,7 +505,7 @@ func TestLogLinesAreEventsOnJSONLStream(t *testing.T) {
 			cfg := p.WriteFile("noisy.config.js", noisyConfigJS)
 			args := append(append([]string{}, tt.args...), "--no-auto-config", "--config", cfg)
 
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Stdin: tt.stdin}, args...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Timeout: 0, Dir: p.Dir, Stdin: tt.stdin}, args...)
 			if res.ExitCode != 0 {
 				t.Fatalf("exit %d\n--- stderr ---\n%s", res.ExitCode, res.Stderr)
 			}
@@ -535,8 +535,10 @@ func TestDiagnosticReportsAreEventsInLsp(t *testing.T) {
 		frame(`{"jsonrpc":"2.0","method":"exit"}`)
 
 	res := clitest.Run(t, clitest.RunOptions{
-		Dir:   p.Dir,
-		Stdin: session,
+		CacheDir: "",
+		Timeout:  0,
+		Dir:      p.Dir,
+		Stdin:    session,
 		Env: []string{
 			"DATAMITSU_STARTUP_TIMINGS=1",
 			"DATAMITSU_TRACE=1",

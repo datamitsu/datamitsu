@@ -29,7 +29,7 @@ func TestInitDryRunGolden(t *testing.T) {
 	cfg := clitest.WriteMinimalConfig(p)
 	norm := initGoldenNormalizer(t)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "init", "--dry-run")
 	if res.ExitCode != 0 {
 		t.Fatalf("`init --dry-run` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -52,7 +52,7 @@ func TestInitNoopSuccess(t *testing.T) {
 	home := t.TempDir()
 	norm := initGoldenNormalizer(t)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: []string{"HOME=" + home}},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: p.Dir, Env: []string{"HOME=" + home}},
 		"--no-auto-config", "--config", cfg, "init")
 	if res.ExitCode != 0 {
 		t.Fatalf("`init` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -89,7 +89,7 @@ func TestInitFlagCombosOffline(t *testing.T) {
 
 	base := clitest.NewProject(t)
 	baseCfg := clitest.WriteMinimalConfig(base)
-	baseRes := clitest.Run(t, clitest.RunOptions{Dir: base.Dir},
+	baseRes := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: base.Dir},
 		"--no-auto-config", "--config", baseCfg, "init")
 	if baseRes.ExitCode != 0 {
 		t.Fatalf("baseline `init` exit = %d, want 0\nstderr:\n%s", baseRes.ExitCode, baseRes.Stderr)
@@ -108,7 +108,7 @@ func TestInitFlagCombosOffline(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := clitest.NewProject(t)
 			cfg := clitest.WriteMinimalConfig(p)
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 				"--no-auto-config", "--config", cfg, "init", tc.flag)
 			if res.ExitCode != 0 {
 				t.Fatalf("`init %s` exit = %d, want 0\nstderr:\n%s", tc.flag, res.ExitCode, res.Stderr)
@@ -131,7 +131,7 @@ func TestInitErrorPaths(t *testing.T) {
 		p := clitest.NewProject(t)
 		missing := filepath.Join(p.Dir, "no-such.config.js")
 
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", missing, "init", "--dry-run")
 		if res.ExitCode == 0 {
 			t.Fatalf("`init` with a missing config exit = 0, want non-zero\nstdout:\n%s", res.Stdout)
@@ -151,7 +151,7 @@ func TestInitErrorPaths(t *testing.T) {
 		if err != nil {
 			t.Fatalf("eval symlinks: %v", err)
 		}
-		res := clitest.Run(t, clitest.RunOptions{Dir: nonGit}, "init", "--dry-run")
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: nonGit}, "init", "--dry-run")
 		if res.ExitCode == 0 {
 			t.Fatalf("`init` outside a git repo exit = 0, want non-zero\nstdout:\n%s", res.Stdout)
 		}

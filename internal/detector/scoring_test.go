@@ -9,7 +9,7 @@ import (
 )
 
 func makeAsset(name string) github.Asset {
-	return github.Asset{Name: name, BrowserDownloadURL: "https://example.com/" + name}
+	return github.Asset{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: name, BrowserDownloadURL: "https://example.com/" + name}
 }
 
 func TestScoreAsset_OSMatching(t *testing.T) {
@@ -233,6 +233,7 @@ func TestSelectBestAsset_ForeignArchNotMisclassifiedAsAmd64(t *testing.T) {
 			want: "just-1.51.0-x86_64-unknown-linux-musl.tar.gz",
 		},
 		{
+			libc: "",
 			name: "protoc: linux-aarch_64 must not beat linux-x86_64",
 			assets: []string{
 				"protoc-35.0-linux-aarch_64.zip",
@@ -241,6 +242,7 @@ func TestSelectBestAsset_ForeignArchNotMisclassifiedAsAmd64(t *testing.T) {
 			want: "protoc-35.0-linux-x86_64.zip",
 		},
 		{
+			libc: "",
 			name: "trivy: Linux-32bit must not beat Linux-64bit (alphabetically earlier)",
 			assets: []string{
 				"trivy_0.71.0_Linux-32bit.tar.gz",

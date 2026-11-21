@@ -25,7 +25,7 @@ func runLddVersion(ctx context.Context) string {
 	cmd := exec.CommandContext(ctx, "ldd", "--version")
 	stdout, err := cmd.Output()
 	if err != nil {
-		exitErr := &exec.ExitError{}
+		exitErr := &exec.ExitError{ProcessState: nil, Stderr: nil}
 		if errors.As(err, &exitErr) {
 			return string(exitErr.Stderr)
 		}

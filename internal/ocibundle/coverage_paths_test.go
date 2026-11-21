@@ -74,7 +74,7 @@ func TestLayoutSource_ManifestVerifiesAndOversize(t *testing.T) {
 
 func TestLayoutSource_BlobMissingFile(t *testing.T) {
 	s := newLayoutSource(t.TempDir())
-	desc := ocispec.Descriptor{Digest: godigest.Digest("sha256:" + strings.Repeat("ab", 32)), Size: 1}
+	desc := ocispec.Descriptor{MediaType: "", URLs: nil, Annotations: nil, Data: nil, Platform: nil, ArtifactType: "", Digest: godigest.Digest("sha256:" + strings.Repeat("ab", 32)), Size: 1}
 	if _, err := s.blob(context.Background(), desc, t.TempDir(), "x"); err == nil {
 		t.Fatal("expected error reading an absent blob file")
 	}
@@ -92,7 +92,7 @@ func TestLayoutSource_BlobSizeMismatch(t *testing.T) {
 	}
 
 	s := newLayoutSource(dir)
-	desc := ocispec.Descriptor{Digest: godigest.Digest("sha256:" + sha256Hex(payload)), Size: int64(len(payload)) + 99}
+	desc := ocispec.Descriptor{MediaType: "", URLs: nil, Annotations: nil, Data: nil, Platform: nil, ArtifactType: "", Digest: godigest.Digest("sha256:" + sha256Hex(payload)), Size: int64(len(payload)) + 99}
 	if _, err := s.blob(context.Background(), desc, t.TempDir(), "x"); err == nil {
 		t.Fatal("expected size-mismatch error")
 	}
@@ -100,8 +100,8 @@ func TestLayoutSource_BlobSizeMismatch(t *testing.T) {
 
 func TestSeedFromLayout_MissingDirectory(t *testing.T) {
 	testStore(t)
-	err := SeedFromLayout(context.Background(), &config.Config{},
-		filepath.Join(t.TempDir(), "does-not-exist"), sha256DigestOf([]byte("x")), nil, Options{})
+	err := SeedFromLayout(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil},
+		filepath.Join(t.TempDir(), "does-not-exist"), sha256DigestOf([]byte("x")), nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil {
 		t.Fatal("expected error for a missing layout directory")
 	}
@@ -113,7 +113,7 @@ func TestSeedFromLayout_PathIsNotADirectory(t *testing.T) {
 	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := SeedFromLayout(context.Background(), &config.Config{}, file, sha256DigestOf([]byte("x")), nil, Options{})
+	err := SeedFromLayout(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, file, sha256DigestOf([]byte("x")), nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil || !strings.Contains(err.Error(), "not a directory") {
 		t.Fatalf("expected not-a-directory error, got %v", err)
 	}
@@ -194,12 +194,12 @@ func TestRuntimeAppKind(t *testing.T) {
 		wantOK  bool
 		wantRef config.RuntimeKind
 	}{
-		{"bun", binmanager.App{Bun: &binmanager.AppConfigBun{Runtime: "bun"}}, true, config.RuntimeKindBun},
-		{"uv", binmanager.App{Uv: &binmanager.AppConfigUV{Runtime: "uv"}}, true, config.RuntimeKindUV},
-		{"node", binmanager.App{Node: &binmanager.AppConfigNode{Runtime: "node"}}, true, config.RuntimeKindNode},
-		{"jvm", binmanager.App{Jvm: &binmanager.AppConfigJVM{Runtime: "jvm"}}, true, config.RuntimeKindJVM},
-		{"go", binmanager.App{Go: &binmanager.AppConfigGo{Runtime: "go"}}, true, config.RuntimeKindGo},
-		{"binary not a runtime app", binmanager.App{Binary: &binmanager.AppConfigBinary{}}, false, ""},
+		{"bun", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{PackageName: "", Version: "", BinPath: "", LockFile: "", Dependencies: nil, Runtime: "bun"}}, true, config.RuntimeKindBun},
+		{"uv", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{PackageName: "", Version: "", LockFile: "", RequiresPython: "", Runtime: "uv"}}, true, config.RuntimeKindUV},
+		{"node", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", LockFile: "", Dependencies: nil, Runtime: "node"}}, true, config.RuntimeKindNode},
+		{"jvm", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{JarURL: "", JarHash: "", Version: "", MainClass: "", Runtime: "jvm"}}, true, config.RuntimeKindJVM},
+		{"go", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{PackageName: "", Version: "", LockFile: "", Runtime: "go"}}, true, config.RuntimeKindGo},
+		{"binary not a runtime app", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}}, false, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -237,14 +237,52 @@ func binaryReVerifyConfig(t *testing.T) *config.Config {
 	t.Helper()
 	host := target.HostTarget()
 	return &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Apps: binmanager.MapOfApps{
 			"tool": {
-				Required: true,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Links:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Required:           true,
 				Binary: &binmanager.AppConfigBinary{
+					Version: "",
 					Binaries: binmanager.MapOfBinaries{
 						syslist.OsType(host.OS): {
 							syslist.ArchType(host.Arch): {
 								string(host.Libc): binmanager.BinaryOsArchInfo{
+									Auth:        nil,
+									BinaryPath:  nil,
+									ExtractDir:  false,
 									URL:         "https://example.invalid/tool",
 									Hash:        sha256Hex([]byte("tool payload")),
 									ContentType: binmanager.BinContentTypeBinary,
@@ -300,8 +338,23 @@ func TestExpectedSubtrees_BinaryAppPath(t *testing.T) {
 func TestExpectedSubtrees_UnknownAndShellAppsContributeNothing(t *testing.T) {
 	storeRoot := testStore(t)
 	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Apps: binmanager.MapOfApps{
-			"shellapp": {Shell: &binmanager.AppConfigShell{}},
+			"shellapp": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Name: "", Args: nil}},
 		},
 	}
 	// "unknown" is not in cfg.Apps; "shellapp" is a shell app — both skipped.
@@ -312,7 +365,7 @@ func TestExpectedSubtrees_UnknownAndShellAppsContributeNothing(t *testing.T) {
 }
 
 func TestExecuteSeedClassifiesLocalLayoutErrors(t *testing.T) {
-	result := ExecuteSeed(context.Background(), SeedRequest{Layout: filepath.Join(t.TempDir(), "missing")})
+	result := ExecuteSeed(context.Background(), SeedRequest{StoreRoot: "", CacheRoot: "", Config: nil, Ref: nil, Options: Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}, Digest: "", Signer: nil, Layout: filepath.Join(t.TempDir(), "missing")})
 	if result.Error == "" || result.Changed || result.Fatal || result.NoPlatform || result.Incomplete {
 		t.Fatalf("missing layout result = %+v", result)
 	}

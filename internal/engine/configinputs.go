@@ -27,7 +27,7 @@ type configInputs struct {
 // initConfigInputs uses, so a new field appears here automatically — which is
 // what lets configcache pin the agreement rather than trust a comment.
 func ConfigInputKeys() []string {
-	m, err := configInputsMap(configInputs{})
+	m, err := configInputsMap(configInputs{MinimumReleaseAgeMinutes: 0})
 	if err != nil {
 		return nil
 	}

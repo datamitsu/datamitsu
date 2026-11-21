@@ -109,7 +109,7 @@ func (rm *RuntimeManager) InstallNodeApp(ctx context.Context, appName string, ap
 func (rm *RuntimeManager) installNodeApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigNode, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Node: appConfig, Env: customEnv, Files: files, Archives: archives})
+	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, RuntimeEnv: nil, Caches: nil, Links: nil, Prepare: nil, Node: appConfig, Env: customEnv, Files: files, Archives: archives})
 	if handled || dispatchErr != nil {
 		return wrapInstallTimeout(dispatchErr, timeoutSec)
 	}
@@ -278,11 +278,14 @@ func (rm *RuntimeManager) nodeCommandInfo(appName string, appConfig *binmanager.
 	}
 
 	return &binmanager.CommandInfo{
-		Type:          "node",
-		Command:       appBinPath,
-		Args:          nil,
-		Env:           envVars,
-		RequiredPaths: nodeRequiredPaths(appEnvPath, appConfig.PackageName, nodeBinPath, rc),
+		Artifact:       "",
+		ToolCacheDir:   "",
+		ToolCacheSlots: nil,
+		Type:           "node",
+		Command:        appBinPath,
+		Args:           nil,
+		Env:            envVars,
+		RequiredPaths:  nodeRequiredPaths(appEnvPath, appConfig.PackageName, nodeBinPath, rc),
 	}, pathPrefix, nil
 }
 

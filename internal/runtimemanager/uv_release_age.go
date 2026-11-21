@@ -72,7 +72,7 @@ func uvLockWindow(lock string) (uvWindow, error) {
 	opts := parsed.Options
 
 	// With a span, exclude-newer holds a placeholder timestamp that uv ignores.
-	w := uvWindow{excludeNewer: opts.ExcludeNewerSpan}
+	w := uvWindow{packages: nil, excludeNewer: opts.ExcludeNewerSpan}
 	if w.excludeNewer == "" {
 		w.excludeNewer = opts.ExcludeNewer
 	}
@@ -132,7 +132,7 @@ func uvAppConfigPath(appEnvPath string) (string, error) {
 // pnpm-workspace.yaml does for pnpm apps; uv reads it from that file.
 func uvResolveWindow(configPath string) (uvWindow, error) {
 	if configPath == "" {
-		return uvWindow{excludeNewer: uvDefaultExcludeNewer()}, nil
+		return uvWindow{packages: nil, excludeNewer: uvDefaultExcludeNewer()}, nil
 	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -143,9 +143,9 @@ func uvResolveWindow(configPath string) (uvWindow, error) {
 		return uvWindow{}, fmt.Errorf("failed to parse uv.toml: %w", err)
 	}
 	if _, ok := settings["exclude-newer"]; ok {
-		return uvWindow{}, nil
+		return uvWindow{excludeNewer: "", packages: nil}, nil
 	}
-	return uvWindow{excludeNewer: uvDefaultExcludeNewer()}, nil
+	return uvWindow{packages: nil, excludeNewer: uvDefaultExcludeNewer()}, nil
 }
 
 // uvInheritedOverride reports the inherited variables that would override what

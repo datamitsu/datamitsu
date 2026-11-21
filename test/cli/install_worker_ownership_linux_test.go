@@ -77,7 +77,7 @@ globalThis.getMinVersion = () => "0.0.0";
 			}
 			args := []string{"--no-auto-config", "--config", cfg, "install", "probe"}
 
-			first := clitest.Start(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: env}, args...)
+			first := clitest.Start(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: env, Stdin: "", Timeout: 0}, args...)
 			pid := waitForPID(t, pidFile, first)
 			t.Cleanup(func() {
 				if processAlive(pid) {
@@ -90,8 +90,8 @@ globalThis.getMinVersion = () => "0.0.0";
 			}
 			lateWrite := strings.TrimSpace(string(targetBytes)) + ".late"
 
-			replacement := clitest.Start(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: env}, args...)
-			clearProcess := clitest.Start(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: env}, "store", "clear")
+			replacement := clitest.Start(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: env, Stdin: "", Timeout: 0}, args...)
+			clearProcess := clitest.Start(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: env, Stdin: "", Timeout: 0}, "store", "clear")
 			type completion struct {
 				result          clitest.Result
 				descendantAlive bool
@@ -166,7 +166,7 @@ globalThis.getMinVersion = () => "0.0.0";
 					return got.result
 				case <-time.After(20 * time.Second):
 					t.Fatalf("%s did not proceed after installer descendant was reaped", name)
-					return clitest.Result{}
+					return clitest.Result{Stdout: "", Stderr: "", ExitCode: 0, Err: nil}
 				}
 			}
 			await("replacement install", replacementDone)

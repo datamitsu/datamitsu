@@ -20,8 +20,8 @@ import (
 // path leaves a foreign file alone; the default still takes it over, because
 // nothing else ever rewrites the on-disk key.
 func TestSaveWithAForeignKeyOnDisk(t *testing.T) {
-	cliConfig := config.Config{IgnoreRules: []string{"cli"}}
-	staleConfig := config.Config{IgnoreRules: []string{"stale"}}
+	cliConfig := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, IgnoreRules: []string{"cli"}}
+	staleConfig := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, IgnoreRules: []string{"stale"}}
 
 	// Each flush is one write path; all of them must honour the mode.
 	flushes := map[string]func(t *testing.T, c *Cache) error{
@@ -56,7 +56,7 @@ func TestSaveWithAForeignKeyOnDisk(t *testing.T) {
 				dir, project := t.TempDir(), t.TempDir()
 
 				cli, _ := NewCache(dir, project, cliConfig, nil, zap.NewNop())
-				cli.AfterVerdict("from-cli", VerdictEntry{Tool: "tsc", InputHash: "x"})
+				cli.AfterVerdict("from-cli", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", InputHash: "x"})
 				if err := cli.Save(); err != nil {
 					t.Fatalf("CLI save: %v", err)
 				}
@@ -71,7 +71,7 @@ func TestSaveWithAForeignKeyOnDisk(t *testing.T) {
 				session, _ := NewCache(dir, project, staleConfig, nil, zap.NewNop())
 				t.Cleanup(session.Shutdown)
 				session.SetYieldToForeignKey(tt.yield)
-				session.AfterVerdict("from-session", VerdictEntry{Tool: "tsc", InputHash: "y"})
+				session.AfterVerdict("from-session", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", InputHash: "y"})
 
 				err = flush(t, session)
 				if flushName == "Save" && !errors.Is(err, tt.wantErr) {
@@ -105,7 +105,7 @@ func TestYieldModeStillWritesItsOwnFile(t *testing.T) {
 		c := newTestCache(t)
 		t.Cleanup(c.Shutdown)
 		c.SetYieldToForeignKey(true)
-		c.AfterVerdict("k", VerdictEntry{Tool: "tsc", InputHash: "x"})
+		c.AfterVerdict("k", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", InputHash: "x"})
 		if err := c.Save(); err != nil {
 			t.Fatalf("Save() = %v, want nil", err)
 		}
@@ -116,17 +116,17 @@ func TestYieldModeStillWritesItsOwnFile(t *testing.T) {
 
 	t.Run("same key merges", func(t *testing.T) {
 		dir, project := t.TempDir(), t.TempDir()
-		first, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
-		first.AfterVerdict("from-first", VerdictEntry{Tool: "a", InputHash: "x"})
+		first, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
+		first.AfterVerdict("from-first", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "a", InputHash: "x"})
 		if err := first.Save(); err != nil {
 			t.Fatalf("first save: %v", err)
 		}
 		first.Shutdown()
 
-		session, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+		session, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 		t.Cleanup(session.Shutdown)
 		session.SetYieldToForeignKey(true)
-		session.AfterVerdict("from-session", VerdictEntry{Tool: "b", InputHash: "y"})
+		session.AfterVerdict("from-session", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "b", InputHash: "y"})
 		if err := session.Save(); err != nil {
 			t.Fatalf("Save() = %v, want nil", err)
 		}
@@ -149,19 +149,19 @@ func TestYieldModeReplacesASupersededKey(t *testing.T) {
 	}{{"superseded key", true}, {"any other key", false}} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir, project := t.TempDir(), t.TempDir()
-			before, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"before"}}, nil, zap.NewNop())
+			before, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, IgnoreRules: []string{"before"}}, nil, zap.NewNop())
 			if err := before.Save(); err != nil {
 				t.Fatalf("save: %v", err)
 			}
 			before.Shutdown()
 
-			after, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"after"}}, nil, zap.NewNop())
+			after, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, IgnoreRules: []string{"after"}}, nil, zap.NewNop())
 			t.Cleanup(after.Shutdown)
 			after.SetYieldToForeignKey(true)
 			if tt.superseded {
 				after.SetSupersededKeys([]string{before.InvalidationKey()})
 			}
-			after.AfterVerdict("k", VerdictEntry{Tool: "tsc", InputHash: "x"})
+			after.AfterVerdict("k", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", InputHash: "x"})
 
 			err := after.Save()
 			onDisk := decodeOnDisk(t, after.path)
@@ -214,7 +214,7 @@ func waitForDebounce(t *testing.T, c *Cache) {
 func TestForeignKeyErrorNamesTheWritersVersion(t *testing.T) {
 	dir, project := t.TempDir(), t.TempDir()
 
-	cli, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"cli"}}, nil, zap.NewNop())
+	cli, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, IgnoreRules: []string{"cli"}}, nil, zap.NewNop())
 	if err := cli.Save(); err != nil {
 		t.Fatalf("CLI save: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestForeignKeyErrorNamesTheWritersVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	session, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"session"}}, nil, zap.NewNop())
+	session, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, IgnoreRules: []string{"session"}}, nil, zap.NewNop())
 	t.Cleanup(session.Shutdown)
 	session.SetYieldToForeignKey(true)
 

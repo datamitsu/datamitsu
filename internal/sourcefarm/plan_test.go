@@ -35,19 +35,19 @@ func (s *stubResolver) ResolveCommandInfo(appName string) (*binmanager.CommandIn
 }
 
 func binaryApp() binmanager.App {
-	return binmanager.App{Binary: &binmanager.AppConfigBinary{}}
+	return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}}
 }
 
 func goApp() binmanager.App {
-	return binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "example.com/x", Version: "1.0.0"}}
+	return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{Runtime: "", LockFile: "", PackageName: "example.com/x", Version: "1.0.0"}}
 }
 
 func nodeApp() binmanager.App {
-	return binmanager.App{Node: &binmanager.AppConfigNode{PackageName: "prettier", Version: "3.0.0", BinPath: "bin/prettier.cjs"}}
+	return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{Runtime: "", LockFile: "", Dependencies: nil, PackageName: "prettier", Version: "3.0.0", BinPath: "bin/prettier.cjs"}}
 }
 
 func shellApp(name string) binmanager.App {
-	return binmanager.App{Shell: &binmanager.AppConfigShell{Name: name}}
+	return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: name}}
 }
 
 func entryByName(t *testing.T, plan Plan, name string) Entry {
@@ -58,7 +58,7 @@ func entryByName(t *testing.T, plan Plan, name string) Entry {
 		}
 	}
 	t.Fatalf("no entry named %q in %+v", name, plan.Entries)
-	return Entry{}
+	return Entry{Name: "", Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false}
 }
 
 func excludedReason(plan Plan, name string) (string, bool) {
@@ -78,7 +78,9 @@ func excludedReason(plan Plan, name string) (string, bool) {
 func TestBuildPlan_ShellAppAlwaysExcluded(t *testing.T) {
 	apps := binmanager.MapOfApps{"echo": shellApp("echo")}
 	resolver := &stubResolver{
-		infos:     map[string]*binmanager.CommandInfo{"echo": {Type: "shell", Command: "echo"}},
+		errs:      nil,
+		calls:     nil,
+		infos:     map[string]*binmanager.CommandInfo{"echo": {Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "echo"}},
 		installed: map[string]bool{"echo": true},
 	}
 
@@ -108,7 +110,9 @@ func TestBuildPlan_DenyListedExcluded(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{name: binaryApp()}
 			resolver := &stubResolver{
-				infos:     map[string]*binmanager.CommandInfo{name: {Type: "binary", Command: "/store/.bin/" + name + "/abc"}},
+				errs:      nil,
+				calls:     nil,
+				infos:     map[string]*binmanager.CommandInfo{name: {Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "/store/.bin/" + name + "/abc"}},
 				installed: map[string]bool{name: true},
 			}
 
@@ -138,7 +142,9 @@ func TestBuildPlan_DenyListedExcluded(t *testing.T) {
 func TestBuildPlan_UninstalledIsEntryNotExclusion(t *testing.T) {
 	apps := binmanager.MapOfApps{"tflint": binaryApp()}
 	resolver := &stubResolver{
-		infos:     map[string]*binmanager.CommandInfo{"tflint": {Type: "binary", Command: "/store/.bin/tflint/abc"}},
+		errs:      nil,
+		calls:     nil,
+		infos:     map[string]*binmanager.CommandInfo{"tflint": {Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "/store/.bin/tflint/abc"}},
 		installed: map[string]bool{"tflint": false},
 	}
 
@@ -162,7 +168,7 @@ func TestBuildPlan_UninstalledIsEntryNotExclusion(t *testing.T) {
 // fail loudly instead.
 func TestBuildPlan_UnresolvableIsStillAnEntry(t *testing.T) {
 	apps := binmanager.MapOfApps{"broken": nodeApp()}
-	resolver := &stubResolver{errs: map[string]error{"broken": errors.New("no runtime manager configured")}}
+	resolver := &stubResolver{infos: nil, installed: nil, calls: nil, errs: map[string]error{"broken": errors.New("no runtime manager configured")}}
 
 	plan := BuildPlan("/repo", "/farm", apps, resolver, nil)
 
@@ -195,42 +201,42 @@ func TestBuildPlan_EveryEntryIsAShim(t *testing.T) {
 		{
 			name:      "all conditions met",
 			app:       binaryApp(),
-			info:      &binmanager.CommandInfo{Type: "binary", Command: "/store/.bin/tofu/abc"},
+			info:      &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "/store/.bin/tofu/abc"},
 			installed: true,
 			want:      StrategyShim,
 		},
 		{
 			name:      "go kind, the other symlink candidate",
 			app:       goApp(),
-			info:      &binmanager.CommandInfo{Type: "go", Command: "/store/.apps/go/task/abc/bin/task"},
+			info:      &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "go", Command: "/store/.apps/go/task/abc/bin/task"},
 			installed: true,
 			want:      StrategyShim,
 		},
 		{
 			name:      "wrong kind",
 			app:       nodeApp(),
-			info:      &binmanager.CommandInfo{Type: "node", Command: "/store/.apps/node/prettier/abc/bin"},
+			info:      &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "node", Command: "/store/.apps/node/prettier/abc/bin"},
 			installed: true,
 			want:      StrategyShim,
 		},
 		{
 			name:      "not installed",
 			app:       binaryApp(),
-			info:      &binmanager.CommandInfo{Type: "binary", Command: "/store/.bin/tofu/abc"},
+			info:      &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "/store/.bin/tofu/abc"},
 			installed: false,
 			want:      StrategyShim,
 		},
 		{
 			name:      "carries args",
 			app:       binaryApp(),
-			info:      &binmanager.CommandInfo{Type: "binary", Command: "/store/.bin/tofu/abc", Args: []string{"eval"}},
+			info:      &binmanager.CommandInfo{Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "/store/.bin/tofu/abc", Args: []string{"eval"}},
 			installed: true,
 			want:      StrategyShim,
 		},
 		{
 			name:      "carries env",
 			app:       binaryApp(),
-			info:      &binmanager.CommandInfo{Type: "binary", Command: "/store/.bin/tofu/abc", Env: map[string]string{"TF_LOG": "debug"}},
+			info:      &binmanager.CommandInfo{Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "/store/.bin/tofu/abc", Env: map[string]string{"TF_LOG": "debug"}},
 			installed: true,
 			want:      StrategyShim,
 		},
@@ -240,6 +246,8 @@ func TestBuildPlan_EveryEntryIsAShim(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{"tool": tt.app}
 			resolver := &stubResolver{
+				errs:      nil,
+				calls:     nil,
 				infos:     map[string]*binmanager.CommandInfo{"tool": tt.info},
 				installed: map[string]bool{"tool": tt.installed},
 			}
@@ -259,9 +267,11 @@ func TestBuildPlan_EveryEntryIsAShim(t *testing.T) {
 func TestBuildPlan_ShadowDetection(t *testing.T) {
 	apps := binmanager.MapOfApps{"tofu": binaryApp(), "tflint": binaryApp()}
 	resolver := &stubResolver{
+		errs:  nil,
+		calls: nil,
 		infos: map[string]*binmanager.CommandInfo{
-			"tofu":   {Type: "binary", Command: "/store/.bin/tofu/abc"},
-			"tflint": {Type: "binary", Command: "/store/.bin/tflint/abc"},
+			"tofu":   {Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "/store/.bin/tofu/abc"},
+			"tflint": {Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "/store/.bin/tflint/abc"},
 		},
 		installed: map[string]bool{"tofu": true, "tflint": true},
 	}
@@ -314,7 +324,7 @@ func TestBuildPlan_EveryExclusionCarriesAReason(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"echo":    shellApp("echo"),
 		"sudo":    binaryApp(),
-		"nothing": {},
+		"nothing": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil},
 	}
 
 	plan := BuildPlan("/repo", "/farm", apps, nil, nil)
@@ -360,11 +370,13 @@ func TestBuildPlan_Deterministic(t *testing.T) {
 	build := func() string {
 		t.Helper()
 		resolver := &stubResolver{
+			errs:      nil,
+			calls:     nil,
 			infos:     map[string]*binmanager.CommandInfo{},
 			installed: map[string]bool{},
 		}
 		for name := range apps {
-			resolver.infos[name] = &binmanager.CommandInfo{Type: "binary", Command: "/store/.bin/" + name + "/abc"}
+			resolver.infos[name] = &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "/store/.bin/" + name + "/abc"}
 			resolver.installed[name] = true
 		}
 		out, err := json.Marshal(BuildPlan("/repo", "/farm", apps, resolver, nil))
@@ -408,13 +420,19 @@ func TestBuildPlan_CarriesRootAndFarmDir(t *testing.T) {
 // TestBuildPlan_ResolvedFieldsCopied asserts the entry carries everything the
 // shim needs to exec without re-resolving.
 func TestBuildPlan_ResolvedFieldsCopied(t *testing.T) {
-	apps := binmanager.MapOfApps{"spectral": {Jvm: &binmanager.AppConfigJVM{JarURL: "https://example.com/x.jar"}}}
+	apps := binmanager.MapOfApps{"spectral": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{JarHash: "", Version: "", Runtime: "", MainClass: "", JarURL: "https://example.com/x.jar"}}}
 	resolver := &stubResolver{
+		errs:  nil,
+		calls: nil,
 		infos: map[string]*binmanager.CommandInfo{"spectral": {
-			Type:    "jvm",
-			Command: "/store/.runtimes/java/abc/bin/java",
-			Args:    []string{"-jar", "/store/.apps/jvm/spectral/abc/spectral.jar"},
-			Env:     map[string]string{"JAVA_HOME": "/store/.runtimes/java/abc"},
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "jvm",
+			Command:        "/store/.runtimes/java/abc/bin/java",
+			Args:           []string{"-jar", "/store/.apps/jvm/spectral/abc/spectral.jar"},
+			Env:            map[string]string{"JAVA_HOME": "/store/.runtimes/java/abc"},
 		}},
 		installed: map[string]bool{"spectral": true},
 	}

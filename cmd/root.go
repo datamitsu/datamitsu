@@ -138,12 +138,42 @@ const agentHelpNotice = "AI agents: this binary ships documentation for its exac
 	" describe a different version."
 
 var rootCmd = &cobra.Command{
-	Use:               ldflags.PackageName,
-	Short:             ldflags.PackageName + " - configuration management tool",
-	Long:              "A tool for managing configuration and binaries\n\n" + agentHelpNotice + "\n\n" + sponsor.StaticLine(),
-	SilenceUsage:      true,
-	SilenceErrors:     true,
-	PersistentPreRunE: prepareCommandExecution,
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	Args:                       nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	RunE:                       nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        ldflags.PackageName,
+	Short:                      ldflags.PackageName + " - configuration management tool",
+	Long:                       "A tool for managing configuration and binaries\n\n" + agentHelpNotice + "\n\n" + sponsor.StaticLine(),
+	SilenceUsage:               true,
+	SilenceErrors:              true,
+	PersistentPreRunE:          prepareCommandExecution,
 }
 
 func init() {
@@ -212,7 +242,7 @@ func setJSONLStderr(on bool) {
 		// process: the run still ends, writes its reports and says why on
 		// stdout.
 		absorbBrokenPipe()
-		stream = &helloFirst{JSONLSink: uievent.NewJSONLSink(os.Stderr)}
+		stream = &helloFirst{once: sync.Once{}, JSONLSink: uievent.NewJSONLSink(os.Stderr)}
 		ui.SetEventSink(stream, true)
 		// Masked from its first event: a failure before a run records its
 		// own secrets — a config that does not load — still quotes paths and
@@ -265,11 +295,52 @@ func (h *helloFirst) open() {
 			names[i] = string(t)
 		}
 		h.JSONLSink.Emit(uievent.Event{
-			Type:        uievent.TypeHello,
-			OpID:        "stream",
-			Schema:      report.SchemaVersion,
-			Events:      strings.Join(names, ","),
-			Annotations: streamAnnotations,
+			TS:              0,
+			Status:          "",
+			Op:              "",
+			Tool:            "",
+			Dir:             "",
+			Name:            "",
+			BytesDone:       0,
+			BytesTotal:      0,
+			Percent:         0,
+			Index:           0,
+			Total:           0,
+			Success:         nil,
+			DurationMs:      0,
+			Msg:             "",
+			Level:           "",
+			Tools:           0,
+			Runs:            0,
+			Failed:          0,
+			Skipped:         0,
+			Cancelled:       nil,
+			Complete:        nil,
+			Format:          "",
+			Path:            "",
+			File:            "",
+			Row:             0,
+			Col:             0,
+			EndRow:          0,
+			EndCol:          0,
+			Severity:        "",
+			Code:            "",
+			Source:          "",
+			Fingerprint:     "",
+			Provenance:      "",
+			Reported:        nil,
+			Gates:           nil,
+			Baselined:       false,
+			FindingsError:   nil,
+			FindingsWarning: nil,
+			FindingsInfo:    nil,
+			FindingsHint:    nil,
+			Cached:          nil,
+			Type:            uievent.TypeHello,
+			OpID:            "stream",
+			Schema:          report.SchemaVersion,
+			Events:          strings.Join(names, ","),
+			Annotations:     streamAnnotations,
 		})
 	})
 }
@@ -342,7 +413,7 @@ func reportToStderr(write func(io.Writer)) {
 	var buf bytes.Buffer
 	write(&buf)
 	if report := strings.Trim(buf.String(), "\n"); strings.TrimSpace(report) != "" {
-		ui.Emit(uievent.Event{Type: uievent.TypeLog, OpID: uievent.NextOpID("log"), Level: uievent.LevelInfo, Msg: report})
+		ui.Emit(uievent.Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, OpID: uievent.NextOpID("log"), Level: uievent.LevelInfo, Msg: report})
 	}
 }
 
@@ -513,10 +584,52 @@ func Execute() {
 		// line stays valid JSON.
 		if ui.Quiet() {
 			ui.Emit(uievent.Event{
-				Type:   uievent.TypeError,
-				OpID:   uievent.NextOpID("run"),
-				Status: uievent.StatusFail,
-				Msg:    err.Error(),
+				TS:              0,
+				Op:              "",
+				Tool:            "",
+				Dir:             "",
+				Name:            "",
+				BytesDone:       0,
+				BytesTotal:      0,
+				Percent:         0,
+				Index:           0,
+				Total:           0,
+				Success:         nil,
+				DurationMs:      0,
+				Level:           "",
+				Tools:           0,
+				Runs:            0,
+				Failed:          0,
+				Skipped:         0,
+				Cancelled:       nil,
+				Complete:        nil,
+				Format:          "",
+				Path:            "",
+				File:            "",
+				Row:             0,
+				Col:             0,
+				EndRow:          0,
+				EndCol:          0,
+				Severity:        "",
+				Code:            "",
+				Source:          "",
+				Fingerprint:     "",
+				Provenance:      "",
+				Reported:        nil,
+				Gates:           nil,
+				Baselined:       false,
+				FindingsError:   nil,
+				FindingsWarning: nil,
+				FindingsInfo:    nil,
+				FindingsHint:    nil,
+				Cached:          nil,
+				Schema:          "",
+				Events:          "",
+				Annotations:     "",
+				Type:            uievent.TypeError,
+				OpID:            uievent.NextOpID("run"),
+				Status:          uievent.StatusFail,
+				Msg:             err.Error(),
 			})
 			os.Exit(code)
 		}

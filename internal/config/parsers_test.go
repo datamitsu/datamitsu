@@ -43,7 +43,7 @@ func TestConfig_ParsersIgnoresLegacyVersion(t *testing.T) {
 }
 
 func TestConfig_ParsersOmitEmpty(t *testing.T) {
-	data, err := json.Marshal(Config{})
+	data, err := json.Marshal(Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil})
 	if err != nil {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
@@ -67,8 +67,8 @@ func TestValidateParsers_NilAndEmptyAreValid(t *testing.T) {
 
 func TestValidateParsers_Valid(t *testing.T) {
 	parsers := MapOfParsers{
-		"echo": {URL: "https://example.com/echo.wasm", Hash: validParserHash()},
-		"bare": {URL: "https://example.com/x.wasm", Hash: validParserHash()},
+		"echo": {OCI: nil, URL: "https://example.com/echo.wasm", Hash: validParserHash()},
+		"bare": {OCI: nil, URL: "https://example.com/x.wasm", Hash: validParserHash()},
 	}
 	if err := ValidateParsers(parsers); err != nil {
 		t.Errorf("ValidateParsers() unexpected error: %v", err)
@@ -80,14 +80,14 @@ func TestValidateParsers_Valid(t *testing.T) {
 // may name it as its module.
 func TestTheEmbeddedModuleNameIsReserved(t *testing.T) {
 	err := ValidateParsers(MapOfParsers{
-		ReservedParserModule: {URL: "https://example.com/x.wasm", Hash: validParserHash()},
+		ReservedParserModule: {OCI: nil, URL: "https://example.com/x.wasm", Hash: validParserHash()},
 	})
 	if err == nil || !strings.Contains(err.Error(), `parser "embedded": the name is reserved`) {
 		t.Errorf("ValidateParsers(embedded) = %v, want the reserved-name error", err)
 	}
 	err = ValidateTools(MapOfTools{
-		"ruff": {Name: "ruff", OutputParser: &OutputParser{Module: ReservedParserModule, Parser: "sarif"}},
-	}, MapOfParsers{"core": {URL: "https://example.com/x.wasm", Hash: validParserHash()}}, nil)
+		"ruff": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "ruff", OutputParser: &OutputParser{Module: ReservedParserModule, Parser: "sarif"}},
+	}, MapOfParsers{"core": {OCI: nil, URL: "https://example.com/x.wasm", Hash: validParserHash()}}, nil)
 	if err == nil || !strings.Contains(err.Error(), `outputParser module "embedded" is the fallback built into datamitsu`) {
 		t.Errorf("ValidateTools(module embedded) = %v, want the reserved-module error", err)
 	}
@@ -95,7 +95,7 @@ func TestTheEmbeddedModuleNameIsReserved(t *testing.T) {
 
 func TestValidateParsers_NoSource(t *testing.T) {
 	parsers := MapOfParsers{
-		"echo": {Hash: validParserHash()},
+		"echo": {URL: "", OCI: nil, Hash: validParserHash()},
 	}
 	err := ValidateParsers(parsers)
 	if err == nil {
@@ -129,7 +129,7 @@ func TestValidateParsers_BothSources(t *testing.T) {
 
 func TestValidateParsers_MissingHash(t *testing.T) {
 	parsers := MapOfParsers{
-		"echo": {URL: "https://example.com/echo.wasm", Hash: ""},
+		"echo": {OCI: nil, URL: "https://example.com/echo.wasm", Hash: ""},
 	}
 	err := ValidateParsers(parsers)
 	if err == nil {
@@ -152,7 +152,7 @@ func TestValidateParsers_MalformedHash(t *testing.T) {
 	for name, hash := range cases {
 		t.Run(name, func(t *testing.T) {
 			parsers := MapOfParsers{
-				"echo": {URL: "https://example.com/echo.wasm", Hash: hash},
+				"echo": {OCI: nil, URL: "https://example.com/echo.wasm", Hash: hash},
 			}
 			err := ValidateParsers(parsers)
 			if err == nil {
@@ -167,7 +167,7 @@ func TestValidateParsers_MalformedHash(t *testing.T) {
 
 func TestValidateParsers_EmptyName(t *testing.T) {
 	parsers := MapOfParsers{
-		"": {URL: "https://example.com/echo.wasm", Hash: validParserHash()},
+		"": {OCI: nil, URL: "https://example.com/echo.wasm", Hash: validParserHash()},
 	}
 	err := ValidateParsers(parsers)
 	if err == nil {
@@ -180,9 +180,9 @@ func TestValidateParsers_EmptyName(t *testing.T) {
 
 func TestValidateParsers_AggregatesAllErrors(t *testing.T) {
 	parsers := MapOfParsers{
-		"a": {URL: "", Hash: ""},
-		"b": {URL: "https://example.com/b.wasm", Hash: "bad"},
-		"c": {Hash: validParserHash(), OCI: &ParserOCI{Ref: "NoHost", Digest: "latest"}},
+		"a": {OCI: nil, URL: "", Hash: ""},
+		"b": {OCI: nil, URL: "https://example.com/b.wasm", Hash: "bad"},
+		"c": {URL: "", Hash: validParserHash(), OCI: &ParserOCI{Signer: nil, Ref: "NoHost", Digest: "latest"}},
 	}
 	err := ValidateParsers(parsers)
 	if err == nil {
@@ -204,6 +204,7 @@ func TestValidateParsers_AggregatesAllErrors(t *testing.T) {
 // validParserOCI returns a well-formed registry source for a parser.
 func validParserOCI() *ParserOCI {
 	return &ParserOCI{
+		Signer: nil,
 		Ref:    "ghcr.io/datamitsu/datamitsu-parsers",
 		Digest: "sha256:" + strings.Repeat("cd", 32),
 	}
@@ -217,7 +218,7 @@ func TestValidateParsers_ValidOCISource(t *testing.T) {
 	} {
 		oci := validParserOCI()
 		oci.Ref = ref
-		parsers := MapOfParsers{"core": {Hash: validParserHash(), OCI: oci}}
+		parsers := MapOfParsers{"core": {URL: "", Hash: validParserHash(), OCI: oci}}
 		if err := ValidateParsers(parsers); err != nil {
 			t.Errorf("ValidateParsers(ref=%q) unexpected error: %v", ref, err)
 		}
@@ -229,7 +230,7 @@ func TestValidateParsers_ValidOCISource(t *testing.T) {
 // hash. Without the hash there is nothing tying the artifact to the config, and
 // nothing for the layer digest to be checked against.
 func TestValidateParsers_OCIHashStaysMandatory(t *testing.T) {
-	parsers := MapOfParsers{"core": {OCI: validParserOCI()}}
+	parsers := MapOfParsers{"core": {URL: "", Hash: "", OCI: validParserOCI()}}
 	err := ValidateParsers(parsers)
 	if err == nil {
 		t.Fatal("ValidateParsers() accepted an oci parser with no hash")
@@ -254,7 +255,7 @@ func TestValidateParsers_MalformedOCIRef(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			oci := validParserOCI()
 			oci.Ref = ref
-			err := ValidateParsers(MapOfParsers{"core": {Hash: validParserHash(), OCI: oci}})
+			err := ValidateParsers(MapOfParsers{"core": {URL: "", Hash: validParserHash(), OCI: oci}})
 			if err == nil {
 				t.Fatalf("ValidateParsers(ref=%q) expected error, got nil", ref)
 			}
@@ -271,7 +272,7 @@ func TestValidateParsers_MalformedOCIRef(t *testing.T) {
 func TestValidateParsers_MalformedOCIRefDiscriminatesHost(t *testing.T) {
 	oci := validParserOCI()
 	oci.Ref = "datamitsu/parsers"
-	err := ValidateParsers(MapOfParsers{"core": {Hash: validParserHash(), OCI: oci}})
+	err := ValidateParsers(MapOfParsers{"core": {URL: "", Hash: validParserHash(), OCI: oci}})
 	if err == nil {
 		t.Fatal("expected error for a hostless ref")
 	}
@@ -295,7 +296,7 @@ func TestValidateParsers_MalformedOCIDigest(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			oci := validParserOCI()
 			oci.Digest = digest
-			err := ValidateParsers(MapOfParsers{"core": {Hash: validParserHash(), OCI: oci}})
+			err := ValidateParsers(MapOfParsers{"core": {URL: "", Hash: validParserHash(), OCI: oci}})
 			if err == nil {
 				t.Fatalf("ValidateParsers(digest=%q) expected error, got nil", digest)
 			}
@@ -312,7 +313,7 @@ func TestValidateParsers_OCISignerIsRejected(t *testing.T) {
 		Identity: "https://github.com/datamitsu/datamitsu/.github/workflows/release.yml@refs/heads/main",
 		Issuer:   "https://token.actions.githubusercontent.com",
 	}
-	err := ValidateParsers(MapOfParsers{"core": {Hash: validParserHash(), OCI: oci}})
+	err := ValidateParsers(MapOfParsers{"core": {URL: "", Hash: validParserHash(), OCI: oci}})
 	if err == nil {
 		t.Fatal("ValidateParsers() accepted a signer this build cannot verify")
 	}
@@ -358,9 +359,25 @@ func TestConfig_ParserOCIRoundTripsThroughJSON(t *testing.T) {
 // parser has to serialize exactly as it did before `oci` and `omitempty`
 // existed — otherwise every user's tool cache is invalidated on upgrade.
 func TestConfig_URLParserMarshalUnchanged(t *testing.T) {
-	cfg := Config{Parsers: MapOfParsers{
-		"core": {URL: "https://example.com/core.wasm", Hash: validParserHash()},
-	}}
+	cfg := Config{
+		Name:           "",
+		Version:        "",
+		Apps:           nil,
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Lsp:            nil, Parsers: MapOfParsers{
+			"core": {OCI: nil, URL: "https://example.com/core.wasm", Hash: validParserHash()},
+		},
+	}
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatalf("json.Marshal error: %v", err)

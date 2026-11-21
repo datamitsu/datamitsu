@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -23,6 +24,7 @@ func testPNPMBinaries() binmanager.MapOfBinaries {
 		syslist.OsTypeLinux: {
 			syslist.ArchTypeAmd64: {
 				"glibc": {
+					Auth:        nil,
 					URL:         pnpmTestReleaseURL + "pnpm-linux-x64.tar.gz",
 					Hash:        "sha256:" + testHash1,
 					ContentType: binmanager.BinContentTypeTarGz,
@@ -38,6 +40,12 @@ func testPNPMBinaries() binmanager.MapOfBinaries {
 // runtime references it: validation rejects a pnpmRuntime that names nothing.
 func testPNPMRuntime() config.RuntimeConfig {
 	return config.RuntimeConfig{
+		System:  nil,
+		Bun:     nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
 		Kind:    config.RuntimeKindPNPM,
 		Mode:    config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{Binaries: testPNPMBinaries()},
@@ -51,6 +59,12 @@ func pnpmTestRelease() *github.Release {
 	assets := make([]github.Asset, 0, len(pnpmArchiveSpecs())+1)
 	for i, spec := range pnpmArchiveSpecs() {
 		assets = append(assets, github.Asset{
+			APIURL:             "",
+			UUID:               "",
+			MetadataURL:        "",
+			Auth:               nil,
+			Size:               0,
+			ContentType:        "",
 			Name:               spec.filename,
 			BrowserDownloadURL: pnpmTestReleaseURL + spec.filename,
 			Digest:             "sha256:" + strings.Repeat(fmt.Sprintf("%x", i+1), 64),
@@ -58,11 +72,17 @@ func pnpmTestRelease() *github.Release {
 	}
 	// pnpm publishes platforms no other runtime here covers; they must be ignored.
 	assets = append(assets, github.Asset{
+		APIURL:             "",
+		UUID:               "",
+		MetadataURL:        "",
+		Auth:               nil,
+		Size:               0,
+		ContentType:        "",
 		Name:               "pnpm-freebsd-x64.tar.gz",
 		BrowserDownloadURL: pnpmTestReleaseURL + "pnpm-freebsd-x64.tar.gz",
 		Digest:             "sha256:" + strings.Repeat("f", 64),
 	})
-	return &github.Release{TagName: "v12.4.1", Assets: assets}
+	return &github.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v12.4.1", Assets: assets}
 }
 
 func TestDetectPNPMBinaries(t *testing.T) {
@@ -131,6 +151,12 @@ func TestDetectPNPMBinaries(t *testing.T) {
 	}
 
 	rt := config.RuntimeConfig{
+		System:  nil,
+		Bun:     nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
 		Kind:    config.RuntimeKindPNPM,
 		Mode:    config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{Binaries: binaries},
@@ -212,18 +238,42 @@ func TestBuildPNPMRuntimeJSON(t *testing.T) {
 // runtime: its archives are runtime-binary entries of the pnpm runtime, and a
 // system-mode Node that references it contributes nothing of its own.
 func TestCollectStoreRefsPNPMRuntime(t *testing.T) {
-	cfg := &config.Config{Runtimes: config.MapOfRuntimes{
-		"node": {
-			Kind:   config.RuntimeKindNode,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "node"},
-			Node:   &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: "pnpm"},
+	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Apps:           nil,
+		Bundles:        nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil, Runtimes: config.MapOfRuntimes{
+			"node": {
+				Managed: nil,
+				Bun:     nil,
+				UV:      nil,
+				JVM:     nil,
+				Go:      nil,
+				PNPM:    nil,
+				Kind:    config.RuntimeKindNode,
+				Mode:    config.RuntimeModeSystem,
+				System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "node"},
+				Node:    &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: "pnpm"},
+			},
+			"pnpm": testPNPMRuntime(),
 		},
-		"pnpm": testPNPMRuntime(),
-	}}
+	}
 
 	refs := collectStoreRefs(cfg)
 	want := storeRefEntry{
+		Ref:      "",
+		Digest:   "",
 		Kind:     "runtime-binary",
 		Name:     "pnpm",
 		URL:      pnpmTestReleaseURL + "pnpm-linux-x64.tar.gz",
@@ -281,9 +331,15 @@ func assertEmbeddedPNPMRuntime(t *testing.T, runtimes config.MapOfRuntimes) {
 // the Node entry alone, so it must not repoint it at a runtime that is missing.
 func TestPreservePNPMRuntimeRefKeepsExistingName(t *testing.T) {
 	existing := &RuntimeJSON{
-		Kind: "node",
-		Mode: "managed",
-		Node: &NodeConfigJSON{NodeVersion: "26.7.0", PNPMRuntime: "pnpm-custom"},
+		Managed: nil,
+		Bun:     nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
+		PNPM:    nil,
+		Kind:    "node",
+		Mode:    "managed",
+		Node:    &NodeConfigJSON{NodeVersion: "26.7.0", PNPMRuntime: "pnpm-custom"},
 	}
 	updated := buildNodeRuntimeJSON(&NodeRuntimeData{NodeVersion: "26.8.0"}, nil)
 
@@ -318,7 +374,7 @@ func TestValidatePNPMRuntimeRef(t *testing.T) {
 	}{
 		{"reference resolves", RuntimesJSON{"pnpm": pnpmEntry}, nodeEntry, ""},
 		{"pnpm entry missing", RuntimesJSON{}, nodeEntry, "does not define"},
-		{"reference names another kind", RuntimesJSON{"pnpm": {Kind: "uv", Mode: "managed"}}, nodeEntry, "kind"},
+		{"reference names another kind", RuntimesJSON{"pnpm": {Managed: nil, Bun: nil, UV: nil, JVM: nil, Node: nil, Go: nil, PNPM: nil, Kind: "uv", Mode: "managed"}}, nodeEntry, "kind"},
 		{"entry without a reference", RuntimesJSON{}, pnpmEntry, ""},
 	}
 

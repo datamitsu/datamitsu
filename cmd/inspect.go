@@ -21,7 +21,37 @@ func newInspectCommand() *cobra.Command {
 	var themePath string
 	var printTheme bool
 	command := &cobra.Command{
-		Use: "inspect", Short: "Explore the resolved config or export a standalone HTML inspector",
+		Aliases:                    nil,
+		SuggestFor:                 nil,
+		GroupID:                    "",
+		ValidArgs:                  nil,
+		ValidArgsFunction:          nil,
+		ArgAliases:                 nil,
+		BashCompletionFunction:     "",
+		Deprecated:                 "",
+		Annotations:                nil,
+		Version:                    "",
+		PersistentPreRun:           nil,
+		PersistentPreRunE:          nil,
+		PreRun:                     nil,
+		PreRunE:                    nil,
+		Run:                        nil,
+		PostRun:                    nil,
+		PostRunE:                   nil,
+		PersistentPostRun:          nil,
+		PersistentPostRunE:         nil,
+		FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+		CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+		TraverseChildren:           false,
+		Hidden:                     false,
+		SilenceErrors:              false,
+		SilenceUsage:               false,
+		DisableFlagParsing:         false,
+		DisableAutoGenTag:          false,
+		DisableFlagsInUseLine:      false,
+		DisableSuggestions:         false,
+		SuggestionsMinimumDistance: 0,
+		Use:                        "inspect", Short: "Explore the resolved config or export a standalone HTML inspector",
 		Long: `Explore tools, apps and managed files in a local configuration inspector.
 The server binds to the loopback interface and serves a snapshot of the loaded config.
 Use --output to export the same inspector as one self-contained HTML file, or

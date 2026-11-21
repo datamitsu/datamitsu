@@ -144,7 +144,7 @@ func (rm *RuntimeManager) InstallBunApp(ctx context.Context, appName string, app
 func (rm *RuntimeManager) installBunApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigBun, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec, mergedWorkspaceYAML string) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Bun: appConfig, Env: customEnv, Files: files, Archives: archives})
+	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, RuntimeEnv: nil, Caches: nil, Links: nil, Prepare: nil, Bun: appConfig, Env: customEnv, Files: files, Archives: archives})
 	if handled || dispatchErr != nil {
 		return wrapInstallTimeout(dispatchErr, timeoutSec)
 	}
@@ -264,8 +264,10 @@ func (rm *RuntimeManager) bunCommandInfo(appName string, appConfig *binmanager.A
 	}
 
 	return &binmanager.CommandInfo{
-		Type:    "bun",
-		Command: bunBinPath,
+		ToolCacheDir:   "",
+		ToolCacheSlots: nil,
+		Type:           "bun",
+		Command:        bunBinPath,
 		// Bun normally reads bunfig.toml and .env files from the tool's target
 		// repository. Disable both ambient inputs so a pinned tool has the same
 		// execution boundary it gets under Node; BUN_OPTIONS carries the same

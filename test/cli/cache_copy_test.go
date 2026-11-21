@@ -37,14 +37,14 @@ func newCopyProject(t *testing.T, files map[string]string, tools ...string) *cop
 func (c *copyProject) run(t *testing.T, cache string, args ...string) clitest.Result {
 	t.Helper()
 	full := append([]string{"--no-auto-config", "--config", c.cfg}, args...)
-	return clitest.Run(t, clitest.RunOptions{Dir: c.p.Dir, CacheDir: cache}, full...)
+	return clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: c.p.Dir, CacheDir: cache}, full...)
 }
 
 // runCopy invokes `cache copy` from within dst with --source src.
 func runCopy(t *testing.T, cache, dst, src string, extra ...string) clitest.Result {
 	t.Helper()
 	args := append([]string{"cache", "copy", "--source", src}, extra...)
-	return clitest.Run(t, clitest.RunOptions{Dir: dst, CacheDir: cache}, args...)
+	return clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: dst, CacheDir: cache}, args...)
 }
 
 // runsRecorded counts the lines a tool appended to its marker file.
@@ -84,7 +84,7 @@ func cachedFlags(t *testing.T, res clitest.Result, tool string) []bool {
 func TestCacheCopyWarmsNewWorktree(t *testing.T) {
 	files := map[string]string{"fixture.marker": "", "a.txt": "a\n", "b.txt": "b\n", "c.txt": "c\n"}
 	tool := clitest.ShellTool("alpha", passScript,
-		clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}})
+		clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}})
 	cache := t.TempDir()
 
 	src := newCopyProject(t, files, tool)
@@ -163,7 +163,7 @@ func TestCacheCopyWarmsNewWorktree(t *testing.T) {
 	if got := runsRecorded(t, src.p, "alpha"); got != 3 {
 		t.Errorf("the source re-ran the tool after the copy (%d recorded lines, want the original 3)", got)
 	}
-	clearRun := clitest.Run(t, clitest.RunOptions{Dir: dst.p.Dir, CacheDir: cache}, "cache", "clear")
+	clearRun := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: dst.p.Dir, CacheDir: cache}, "cache", "clear")
 	if clearRun.ExitCode != 0 {
 		t.Fatalf("cache clear in the destination failed:\n%s\n%s", clearRun.Stdout, clearRun.Stderr)
 	}
@@ -182,7 +182,7 @@ func TestCacheCopyWarmsNewWorktree(t *testing.T) {
 func TestCacheCopyChangedFileStillRuns(t *testing.T) {
 	files := map[string]string{"fixture.marker": "", "a.txt": "a\n", "b.txt": "b\n", "c.txt": "c\n"}
 	tool := clitest.ShellTool("alpha", passScript,
-		clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}})
+		clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}})
 	cache := t.TempDir()
 
 	src := newCopyProject(t, files, tool)
@@ -225,12 +225,12 @@ func TestCacheCopyDifferentConfig(t *testing.T) {
 
 	src := newCopyProject(t, files,
 		clitest.ShellTool("alpha", passScript,
-			clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}}))
+			clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}}))
 	// One extra argument is enough to make the destination's configuration —
 	// and with it its invalidation key — different from the source's.
 	dst := newCopyProject(t, files,
 		clitest.ShellTool("alpha", passScript,
-			clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}", "--strict"}}))
+			clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}", "--strict"}}))
 
 	if res := src.run(t, cache, "lint"); res.ExitCode != 0 {
 		t.Fatalf("the source's lint failed:\n%s\n%s", res.Stdout, res.Stderr)
@@ -252,7 +252,7 @@ func TestCacheCopyDifferentConfig(t *testing.T) {
 func TestCacheCopyFixPass(t *testing.T) {
 	files := map[string]string{"fixture.marker": "", "a.txt": "a\n"}
 	fixer := clitest.ShellTool("fixer", passScript,
-		clitest.ToolOpSpec{Operation: "fix", Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}})
+		clitest.ToolOpSpec{Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix", Scope: "per-file", Globs: []string{"**/*.txt"}, Args: []string{"{file}"}})
 	cache := t.TempDir()
 
 	src := newCopyProject(t, files, fixer)
@@ -332,7 +332,7 @@ func TestCacheCopyBadSource(t *testing.T) {
 // TestCacheCopyMissingFlag: the required flag is enforced with exit 2.
 func TestCacheCopyMissingFlag(t *testing.T) {
 	clitest.RequireShell(t, "the cache copy contract")
-	res := clitest.Run(t, clitest.RunOptions{Dir: clitest.NewProject(t).Dir, CacheDir: t.TempDir()},
+	res := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: clitest.NewProject(t).Dir, CacheDir: t.TempDir()},
 		"cache", "copy")
 	if res.ExitCode != 2 {
 		t.Fatalf("exit code = %d, want 2:\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)

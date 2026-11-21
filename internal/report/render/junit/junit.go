@@ -102,7 +102,7 @@ func (c *counts) add(o counts) {
 }
 
 func (s suite) counts() counts {
-	c := counts{tests: len(s.cases), time: s.time}
+	c := counts{failures: 0, errors: 0, skipped: 0, tests: len(s.cases), time: s.time}
 	for _, tc := range s.cases {
 		switch tc.outcome() {
 		case outcomeFailure:
@@ -140,9 +140,10 @@ func operationSuites(run *report.Run, op *report.Operation) []suite {
 	runProps := [][2]string{{"run.complete", strconv.FormatBool(run.Complete)}, {"run.incomplete", reasons(run.Incomplete)}}
 	if !op.Ran {
 		return []suite{{
+			time:       0,
 			name:       op.Name,
 			properties: runProps,
-			cases:      []*testCase{{className: op.Name, name: op.Name, skipped: "did not run"}},
+			cases:      []*testCase{{time: 0, gating: nil, below: nil, failOn: "", failure: nil, className: op.Name, name: op.Name, skipped: "did not run"}},
 		}}
 	}
 	byName := map[string]*suite{}
@@ -151,7 +152,7 @@ func operationSuites(run *report.Run, op *report.Operation) []suite {
 		if s, ok := byName[tool]; ok {
 			return s
 		}
-		byName[tool] = &suite{name: op.Name + "/" + tool}
+		byName[tool] = &suite{properties: nil, cases: nil, time: 0, name: op.Name + "/" + tool}
 		names = append(names, tool)
 		return byName[tool]
 	}
@@ -173,7 +174,7 @@ func operationSuites(run *report.Run, op *report.Operation) []suite {
 		if s.properties == nil {
 			s.properties = runProps
 		}
-		s.cases = append(s.cases, &testCase{className: skip.Tool, name: skip.Tool, skipped: skipMessage(skip)})
+		s.cases = append(s.cases, &testCase{time: 0, gating: nil, below: nil, failOn: "", failure: nil, className: skip.Tool, name: skip.Tool, skipped: skipMessage(skip)})
 	}
 	sort.Strings(names)
 	out := make([]suite, 0, len(names))
@@ -253,7 +254,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 	files := map[string]*testCase{}
 	fileCase := func(path string) *testCase {
 		if files[path] == nil {
-			files[path] = &testCase{className: tr.Name, name: path}
+			files[path] = &testCase{time: 0, gating: nil, below: nil, failOn: "", failure: nil, skipped: "", className: tr.Name, name: path}
 		}
 		return files[path]
 	}
@@ -261,7 +262,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 	byID := map[string]*testCase{}
 	caseOf := func(inv report.Invocation) *testCase {
 		if byID[inv.ID] == nil {
-			byID[inv.ID] = &testCase{className: tr.Name}
+			byID[inv.ID] = &testCase{name: "", time: 0, gating: nil, below: nil, failOn: "", failure: nil, skipped: "", className: tr.Name}
 			invocations = append(invocations, invocationCase{dir: dirName(inv.Dir), id: inv.ID, tc: byID[inv.ID]})
 		}
 		return byID[inv.ID]
@@ -273,7 +274,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		if inv.State == string(tooling.ProcessSetupFailed) {
 			tc := caseOf(inv)
 			tc.time += inv.Duration
-			tc.failure = &caseFailure{kind: "setup", message: "setup failed", tail: tail(inv, withhold)}
+			tc.failure = &caseFailure{onFindings: false, findings: nil, text: "", kind: "setup", message: "setup failed", tail: tail(inv, withhold)}
 			continue
 		}
 		// A task cancelled or never started is its skipped case.
@@ -329,7 +330,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 			if count != 1 {
 				tc.time += inv.Duration
 			}
-			tc.failure = &caseFailure{kind: "exit", message: fmt.Sprintf("exit %d", code), tail: tail(inv, withhold)}
+			tc.failure = &caseFailure{onFindings: false, findings: nil, text: "", kind: "exit", message: fmt.Sprintf("exit %d", code), tail: tail(inv, withhold)}
 			if synthetic != nil {
 				tc.failure.text = synthetic.Message
 			}
@@ -353,7 +354,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		if gated {
 			continue
 		}
-		fail := &caseFailure{kind: "exit", message: fmt.Sprintf("exit %d", e.code), onFindings: true}
+		fail := &caseFailure{findings: nil, text: "", tail: "", kind: "exit", message: fmt.Sprintf("exit %d", e.code), onFindings: true}
 		for _, f := range e.inv.Findings {
 			fail.findings = append(fail.findings, line(f))
 		}
@@ -394,7 +395,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 			state = "cancelled"
 		}
 		listed[c.TaskID] = true
-		stopped = append(stopped, &testCase{className: tr.Name, name: c.TaskID, skipped: state + ": " + c.Cause})
+		stopped = append(stopped, &testCase{time: 0, gating: nil, below: nil, failOn: "", failure: nil, className: tr.Name, name: c.TaskID, skipped: state + ": " + c.Cause})
 	}
 	// A task the run never reached for a reason of its own — the tools could
 	// not be installed — has no stop record; it did not run all the same.
@@ -409,7 +410,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 			continue
 		}
 		listed[inv.TaskID] = true
-		stopped = append(stopped, &testCase{className: tr.Name, name: inv.TaskID, skipped: state})
+		stopped = append(stopped, &testCase{time: 0, gating: nil, below: nil, failOn: "", failure: nil, className: tr.Name, name: inv.TaskID, skipped: state})
 	}
 	sort.SliceStable(stopped, func(i, j int) bool { return stopped[i].name < stopped[j].name })
 	return append(out, stopped...)

@@ -56,9 +56,17 @@ func TestNewClient(t *testing.T) {
 func TestGetRelease(t *testing.T) {
 	t.Run("successful fetch via fetchRelease", func(t *testing.T) {
 		release := &Release{
-			TagName: "v1.0.0",
+			PublishedAt: time.Time{},
+			Prerelease:  false,
+			Draft:       false,
+			TagName:     "v1.0.0",
 			Assets: []Asset{
 				{
+					APIURL:             "",
+					UUID:               "",
+					MetadataURL:        "",
+					Auth:               nil,
+					Digest:             "",
 					Name:               "binary-linux-amd64",
 					BrowserDownloadURL: "https://example.com/binary",
 					Size:               1024,
@@ -108,7 +116,7 @@ func TestGetRelease(t *testing.T) {
 			t.Error("expected error for 404, got nil")
 		}
 
-		notFoundError := &NotFoundError{}
+		notFoundError := &NotFoundError{URL: ""}
 		if !errors.As(err, &notFoundError) {
 			t.Errorf("expected NotFoundError, got %T", err)
 		}
@@ -124,7 +132,7 @@ func TestGetRelease(t *testing.T) {
 			}
 
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(&Release{TagName: "v1.0.0"})
+			_ = json.NewEncoder(w).Encode(&Release{Assets: nil, PublishedAt: time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0"})
 		}))
 		defer server.Close()
 
@@ -148,12 +156,27 @@ func TestGetLatestRelease(t *testing.T) {
 		var capturedURL string
 		client := NewClient()
 		client.httpClient = &http.Client{
+			CheckRedirect: nil,
+			Jar:           nil,
+			Timeout:       0,
 			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				capturedURL = req.URL.String()
 				body := `{"tag_name":"v1.0.0","assets":[]}`
 				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(body)),
+					Status:           "",
+					Proto:            "",
+					ProtoMajor:       0,
+					ProtoMinor:       0,
+					Header:           nil,
+					ContentLength:    0,
+					TransferEncoding: nil,
+					Close:            false,
+					Uncompressed:     false,
+					Trailer:          nil,
+					Request:          nil,
+					TLS:              nil,
+					StatusCode:       http.StatusOK,
+					Body:             io.NopCloser(strings.NewReader(body)),
 				}, nil
 			}),
 		}
@@ -179,12 +202,27 @@ func TestGetReleaseByTag(t *testing.T) {
 		var capturedURL string
 		client := NewClient()
 		client.httpClient = &http.Client{
+			CheckRedirect: nil,
+			Jar:           nil,
+			Timeout:       0,
 			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				capturedURL = req.URL.String()
 				body := `{"tag_name":"v2.0.0","assets":[]}`
 				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(body)),
+					Status:           "",
+					Proto:            "",
+					ProtoMajor:       0,
+					ProtoMinor:       0,
+					Header:           nil,
+					ContentLength:    0,
+					TransferEncoding: nil,
+					Close:            false,
+					Uncompressed:     false,
+					Trailer:          nil,
+					Request:          nil,
+					TLS:              nil,
+					StatusCode:       http.StatusOK,
+					Body:             io.NopCloser(strings.NewReader(body)),
 				}, nil
 			}),
 		}
@@ -226,7 +264,7 @@ func TestFetchReleaseRetry(t *testing.T) {
 			}
 
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(&Release{TagName: "v1.0.0"})
+			_ = json.NewEncoder(w).Encode(&Release{Assets: nil, PublishedAt: time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0"})
 		}))
 		defer server.Close()
 
@@ -284,7 +322,7 @@ func TestFetchReleaseRetry(t *testing.T) {
 			t.Error("expected error for 403")
 		}
 
-		rateLimitError := &RateLimitError{}
+		rateLimitError := &RateLimitError{Wait: 0, Reset: time.Time{}}
 		if !errors.As(err, &rateLimitError) {
 			t.Errorf("expected RateLimitError, got %T", err)
 		}
@@ -328,7 +366,7 @@ func TestFetchReleaseRetry(t *testing.T) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(&Release{TagName: "v1.0.0"})
+			_ = json.NewEncoder(w).Encode(&Release{Assets: nil, PublishedAt: time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0"})
 		}))
 		defer server.Close()
 
@@ -358,7 +396,7 @@ func TestFetchReleaseRetry(t *testing.T) {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}
-			_ = json.NewEncoder(w).Encode(&Release{TagName: "v1.0.0"})
+			_ = json.NewEncoder(w).Encode(&Release{Assets: nil, PublishedAt: time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0"})
 		}))
 		defer server.Close()
 
@@ -423,7 +461,7 @@ func TestFetchReleaseRetry(t *testing.T) {
 				_, _ = w.Write([]byte(`{"tag_name":`))
 				return
 			}
-			_ = json.NewEncoder(w).Encode(&Release{TagName: "v1.0.0"})
+			_ = json.NewEncoder(w).Encode(&Release{Assets: nil, PublishedAt: time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0"})
 		}))
 		defer server.Close()
 
@@ -473,7 +511,7 @@ func TestRateLimitFromResponse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp := &http.Response{Header: http.Header{}}
+			resp := &http.Response{Status: "", StatusCode: 0, Proto: "", ProtoMajor: 0, ProtoMinor: 0, Body: nil, ContentLength: 0, TransferEncoding: nil, Close: false, Uncompressed: false, Trailer: nil, Request: nil, TLS: nil, Header: http.Header{}}
 			for k, v := range tt.headers {
 				resp.Header.Set(k, v)
 			}
@@ -487,8 +525,11 @@ func TestRateLimitFromResponse(t *testing.T) {
 func TestDoRequest(t *testing.T) {
 	t.Run("successful request", func(t *testing.T) {
 		release := &Release{
-			TagName: "v1.0.0",
-			Assets:  []Asset{},
+			PublishedAt: time.Time{},
+			Prerelease:  false,
+			Draft:       false,
+			TagName:     "v1.0.0",
+			Assets:      []Asset{},
 		}
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -560,7 +601,7 @@ func TestNotFoundError(t *testing.T) {
 
 func TestRateLimitError(t *testing.T) {
 	t.Run("error message mentions GITHUB_TOKEN", func(t *testing.T) {
-		err := &RateLimitError{}
+		err := &RateLimitError{Wait: 0, Reset: time.Time{}}
 
 		if !strings.Contains(err.Error(), "GITHUB_TOKEN") {
 			t.Errorf("error message should mention GITHUB_TOKEN: %s", err.Error())
@@ -613,7 +654,7 @@ func TestGetRepository(t *testing.T) {
 		if err == nil {
 			t.Error("expected error for 404, got nil")
 		}
-		notFoundError := &NotFoundError{}
+		notFoundError := &NotFoundError{URL: ""}
 		if !errors.As(err, &notFoundError) {
 			t.Errorf("expected NotFoundError, got %T", err)
 		}
@@ -632,7 +673,7 @@ func TestGetRepository(t *testing.T) {
 		if err == nil {
 			t.Error("expected error for 403, got nil")
 		}
-		rateLimitError := &RateLimitError{}
+		rateLimitError := &RateLimitError{Wait: 0, Reset: time.Time{}}
 		if !errors.As(err, &rateLimitError) {
 			t.Errorf("expected RateLimitError, got %T", err)
 		}
@@ -646,7 +687,7 @@ func TestGetRepository(t *testing.T) {
 				t.Errorf("expected auth header 'Bearer %s', got '%s'", expectedToken, authHeader)
 			}
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(&Repository{FullName: "owner/repo"})
+			_ = json.NewEncoder(w).Encode(&Repository{Description: "", FullName: "owner/repo"})
 		}))
 		defer server.Close()
 
@@ -754,12 +795,27 @@ func TestListReleases(t *testing.T) {
 		var capturedURL string
 		client := NewClient()
 		client.httpClient = &http.Client{
+			CheckRedirect: nil,
+			Jar:           nil,
+			Timeout:       0,
 			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				capturedURL = req.URL.String()
 				body := `[{"tag_name":"v2.0.0","assets":[]},{"tag_name":"v1.0.0","assets":[]}]`
 				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(body)),
+					Status:           "",
+					Proto:            "",
+					ProtoMajor:       0,
+					ProtoMinor:       0,
+					Header:           nil,
+					ContentLength:    0,
+					TransferEncoding: nil,
+					Close:            false,
+					Uncompressed:     false,
+					Trailer:          nil,
+					Request:          nil,
+					TLS:              nil,
+					StatusCode:       http.StatusOK,
+					Body:             io.NopCloser(strings.NewReader(body)),
 				}, nil
 			}),
 		}
@@ -786,11 +842,26 @@ func TestListReleases(t *testing.T) {
 		var capturedURL string
 		client := NewClient()
 		client.httpClient = &http.Client{
+			CheckRedirect: nil,
+			Jar:           nil,
+			Timeout:       0,
 			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				capturedURL = req.URL.String()
 				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(`[]`)),
+					Status:           "",
+					Proto:            "",
+					ProtoMajor:       0,
+					ProtoMinor:       0,
+					Header:           nil,
+					ContentLength:    0,
+					TransferEncoding: nil,
+					Close:            false,
+					Uncompressed:     false,
+					Trailer:          nil,
+					Request:          nil,
+					TLS:              nil,
+					StatusCode:       http.StatusOK,
+					Body:             io.NopCloser(strings.NewReader(`[]`)),
 				}, nil
 			}),
 		}
@@ -808,11 +879,26 @@ func TestListReleases(t *testing.T) {
 		attempts := 0
 		client := NewClient()
 		client.httpClient = &http.Client{
+			CheckRedirect: nil,
+			Jar:           nil,
+			Timeout:       0,
 			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				attempts++
 				return &http.Response{
-					StatusCode: http.StatusNotFound,
-					Body:       io.NopCloser(strings.NewReader("")),
+					Status:           "",
+					Proto:            "",
+					ProtoMajor:       0,
+					ProtoMinor:       0,
+					Header:           nil,
+					ContentLength:    0,
+					TransferEncoding: nil,
+					Close:            false,
+					Uncompressed:     false,
+					Trailer:          nil,
+					Request:          nil,
+					TLS:              nil,
+					StatusCode:       http.StatusNotFound,
+					Body:             io.NopCloser(strings.NewReader("")),
 				}, nil
 			}),
 		}
@@ -832,10 +918,25 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 	newClientReturning := func(body string) *Client {
 		client := NewClient()
 		client.httpClient = &http.Client{
+			CheckRedirect: nil,
+			Jar:           nil,
+			Timeout:       0,
 			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(body)),
+					Status:           "",
+					Proto:            "",
+					ProtoMajor:       0,
+					ProtoMinor:       0,
+					Header:           nil,
+					ContentLength:    0,
+					TransferEncoding: nil,
+					Close:            false,
+					Uncompressed:     false,
+					Trailer:          nil,
+					Request:          nil,
+					TLS:              nil,
+					StatusCode:       http.StatusOK,
+					Body:             io.NopCloser(strings.NewReader(body)),
 				}, nil
 			}),
 		}
@@ -945,18 +1046,45 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 		var latestHit bool
 		client := NewClient()
 		client.httpClient = &http.Client{
+			CheckRedirect: nil,
+			Jar:           nil,
+			Timeout:       0,
 			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				if strings.HasSuffix(req.URL.Path, "/releases/latest") {
 					latestHit = true
 					return &http.Response{
-						StatusCode: http.StatusOK,
-						Body:       io.NopCloser(strings.NewReader(`{"tag_name":"v9.9.9","assets":[]}`)),
+						Status:           "",
+						Proto:            "",
+						ProtoMajor:       0,
+						ProtoMinor:       0,
+						Header:           nil,
+						ContentLength:    0,
+						TransferEncoding: nil,
+						Close:            false,
+						Uncompressed:     false,
+						Trailer:          nil,
+						Request:          nil,
+						TLS:              nil,
+						StatusCode:       http.StatusOK,
+						Body:             io.NopCloser(strings.NewReader(`{"tag_name":"v9.9.9","assets":[]}`)),
 					}, nil
 				}
 				// The list holds only a prerelease, so no stable release
 				// qualifies and selection falls back to the latest endpoint.
 				return &http.Response{
-					StatusCode: http.StatusOK,
+					Status:           "",
+					Proto:            "",
+					ProtoMajor:       0,
+					ProtoMinor:       0,
+					Header:           nil,
+					ContentLength:    0,
+					TransferEncoding: nil,
+					Close:            false,
+					Uncompressed:     false,
+					Trailer:          nil,
+					Request:          nil,
+					TLS:              nil,
+					StatusCode:       http.StatusOK,
 					Body: io.NopCloser(strings.NewReader(
 						`[{"tag_name":"v2.0.0-rc1","published_at":"` + old + `","prerelease":true,"assets":[]}]`)),
 				}, nil
@@ -1001,6 +1129,9 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 	pagedClient := func(pages map[string]string, requested *[]string) *Client {
 		client := NewClient()
 		client.httpClient = &http.Client{
+			CheckRedirect: nil,
+			Jar:           nil,
+			Timeout:       0,
 			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				page := req.URL.Query().Get("page")
 				*requested = append(*requested, page)
@@ -1008,7 +1139,7 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 				if !ok {
 					body = `[]`
 				}
-				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+				return &http.Response{Status: "", Proto: "", ProtoMajor: 0, ProtoMinor: 0, Header: nil, ContentLength: 0, TransferEncoding: nil, Close: false, Uncompressed: false, Trailer: nil, Request: nil, TLS: nil, StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
 			}),
 		}
 		return client
@@ -1036,8 +1167,11 @@ func TestGetLatestReleaseWithMinAge(t *testing.T) {
 	t.Run("a listing that fails is an error", func(t *testing.T) {
 		client := NewClient()
 		client.httpClient = &http.Client{
+			CheckRedirect: nil,
+			Jar:           nil,
+			Timeout:       0,
 			Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
-				return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader(""))}, nil
+				return &http.Response{Status: "", Proto: "", ProtoMajor: 0, ProtoMinor: 0, Header: nil, ContentLength: 0, TransferEncoding: nil, Close: false, Uncompressed: false, Trailer: nil, Request: nil, TLS: nil, StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader(""))}, nil
 			}),
 		}
 

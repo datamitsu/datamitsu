@@ -30,9 +30,9 @@ func TestBinaryStorePath(t *testing.T) {
 		extractDir bool
 		want       string
 	}{
-		{goos: "linux", want: "abc123"},
-		{goos: "darwin", want: "abc123"},
-		{goos: "windows", want: "abc123.exe"},
+		{extractDir: false, goos: "linux", want: "abc123"},
+		{extractDir: false, goos: "darwin", want: "abc123"},
+		{extractDir: false, goos: "windows", want: "abc123.exe"},
 		{goos: "linux", extractDir: true, want: "abc123"},
 		{goos: "windows", extractDir: true, want: "abc123"},
 	}
@@ -93,11 +93,34 @@ func TestExecDownloadedBinary(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"helper": App{
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					osType: {
 						archType: {libc: BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         server.URL,
 							Hash:        sum.Hex(),
 							ContentType: BinContentTypeBinary,

@@ -29,7 +29,7 @@ func TestConfigReconcileDryRunGolden(t *testing.T) {
 	cfg := clitest.WriteMinimalConfig(p)
 	norm := clitest.NewNormalizer()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--dry-run")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config reconcile --dry-run` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -45,7 +45,7 @@ func TestConfigReconcileOptInToolsDryRun(t *testing.T) {
 	cfg := p.WriteFile("tools.config.js", reconcileToolsConfigJS)
 	norm := clitest.NewNormalizer()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--opt-in-tools", "--dry-run")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config reconcile --opt-in-tools --dry-run` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -65,7 +65,7 @@ func TestConfigReconcileToolsScopedDryRun(t *testing.T) {
 	cfg := p.WriteFile("tools.config.js", reconcileToolsConfigJS)
 	norm := clitest.NewNormalizer()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--tools", "alpha", "--dry-run")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config reconcile --tools alpha --dry-run` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -80,7 +80,7 @@ func TestConfigReconcileNoVerifyHashParsesOffline(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--dry-run", "--no-verify-hash")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config reconcile --no-verify-hash` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -91,7 +91,7 @@ func TestConfigReconcileUnknownTools(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := p.WriteFile("tools.config.js", reconcileToolsConfigJS)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--tools", "nonesuch", "--dry-run")
 	if res.ExitCode == 0 {
 		t.Fatalf("`config reconcile --tools nonesuch` exit = 0, want non-zero\nstdout:\n%s", res.Stdout)
@@ -143,7 +143,7 @@ func TestConfigReconcileWriteAndFixModes(t *testing.T) {
 		target := filepath.Join(p.Dir, "generated.txt")
 		fixMarker := filepath.Join(p.Dir, "fix-ran.txt")
 
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "config", "reconcile")
 		if res.ExitCode != 0 {
 			t.Fatalf("reconcile exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -165,7 +165,7 @@ func TestConfigReconcileWriteAndFixModes(t *testing.T) {
 		p.WriteFile("fixture.marker", "fixture\n")
 		cfg := p.WriteFile("reconcile.config.js", reconcileWritesConfigJS)
 
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--log-format", "jsonl", "--no-auto-config", "--config", cfg, "config", "reconcile")
 		if res.ExitCode != 0 {
 			t.Fatalf("reconcile exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -188,7 +188,7 @@ func TestConfigReconcileWriteAndFixModes(t *testing.T) {
 		target := filepath.Join(p.Dir, "generated.txt")
 		fixMarker := filepath.Join(p.Dir, "fix-ran.txt")
 
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "config", "reconcile", "--skip-fix")
 		if res.ExitCode != 0 {
 			t.Fatalf("reconcile --skip-fix exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -206,7 +206,7 @@ func TestConfigReconcileWriteAndFixModes(t *testing.T) {
 		target := filepath.Join(p.Dir, "generated.txt")
 		fixMarker := filepath.Join(p.Dir, "fix-ran.txt")
 
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "config", "reconcile", "--dry-run")
 		if res.ExitCode != 0 {
 			t.Fatalf("reconcile --dry-run exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -225,7 +225,7 @@ func TestRemovedSetupCommandCannotWrite(t *testing.T) {
 	p.WriteFile("datamitsu.config.js", reconcileWritesConfigJS)
 	target := filepath.Join(p.Dir, "generated.txt")
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "setup")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "setup")
 	if res.ExitCode == 0 {
 		t.Fatalf("removed `setup` command exit = 0, want non-zero\nstdout:\n%s", res.Stdout)
 	}
@@ -255,7 +255,7 @@ func TestConfigReconcileChainHashDrift(t *testing.T) {
 	p.WriteFile("datamitsu.config.js", chainDriftRootConfigJS)
 	target := filepath.Join(p.Dir, "drift.txt")
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "config", "reconcile")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "config", "reconcile")
 	if res.ExitCode == 0 {
 		t.Fatalf("reconcile with chain-hash drift exit = 0, want non-zero\nstdout:\n%s", res.Stdout)
 	}
@@ -269,7 +269,7 @@ func TestConfigReconcileChainHashDrift(t *testing.T) {
 		t.Errorf("drift gate must not write drift.txt (stat err = %v)", err)
 	}
 
-	bypass := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	bypass := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"config", "reconcile", "--skip-fix", "--no-verify-hash")
 	if bypass.ExitCode != 0 {
 		t.Fatalf("reconcile bypass exit = %d, want 0\nstderr:\n%s", bypass.ExitCode, bypass.Stderr)
@@ -297,7 +297,7 @@ globalThis.getConfig = () => ({
 	args := []string{"--no-auto-config", "--config", cfg, "config", "reconcile", "--skip-fix"}
 	var first string
 	for run := range 2 {
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, args...)
 		if res.ExitCode != 0 {
 			t.Fatalf("reconcile: %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
 		}

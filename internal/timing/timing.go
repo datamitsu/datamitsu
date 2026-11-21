@@ -29,6 +29,7 @@ type Stage struct {
 // New creates a new Timings instance
 func New() *Timings {
 	return &Timings{
+		mu:      sync.Mutex{},
 		enabled: env.IsTimingsEnabled(),
 		stages:  make([]Stage, 0),
 		started: time.Now(),
@@ -60,6 +61,7 @@ func (t *Timings) Start(name string) func() {
 		t.mu.Lock()
 		defer t.mu.Unlock()
 		t.stages = append(t.stages, Stage{
+			Children: nil,
 			Name:     name,
 			Duration: duration,
 		})
@@ -70,10 +72,11 @@ func (t *Timings) Start(name string) func() {
 // Returns a ChildTimings object that can track sub-stages
 func (t *Timings) StartWithChildren(name string) *ChildTimings {
 	if !t.enabled {
-		return &ChildTimings{enabled: false}
+		return &ChildTimings{mu: sync.Mutex{}, parent: nil, name: "", started: time.Time{}, children: nil, enabled: false}
 	}
 
 	return &ChildTimings{
+		mu:       sync.Mutex{},
 		enabled:  true,
 		parent:   t,
 		name:     name,
@@ -132,6 +135,7 @@ func (c *ChildTimings) StartChild(name string) func() {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		c.children = append(c.children, Stage{
+			Children: nil,
 			Name:     name,
 			Duration: duration,
 		})

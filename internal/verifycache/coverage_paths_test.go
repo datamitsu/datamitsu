@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	zerovalue_time "time"
 )
 
 func TestSaveState_MkdirError(t *testing.T) {
@@ -14,7 +15,7 @@ func TestSaveState_MkdirError(t *testing.T) {
 	}
 
 	path := filepath.Join(fileAsDir, "sub", "state.json")
-	state := &VerifyState{Version: 1, Entries: map[string]VerifyEntry{}}
+	state := &VerifyState{CWD: "", LastRun: zerovalue_time.Time{}, Version: 1, Entries: map[string]VerifyEntry{}}
 	if err := SaveState(path, state); err == nil {
 		t.Error("SaveState() expected error when parent path is a file, got nil")
 	}
@@ -32,7 +33,7 @@ func TestLoadState_ParseError(t *testing.T) {
 }
 
 func TestStateManager_EmptyPath_NoPersist(t *testing.T) {
-	sm := NewStateManager(&VerifyState{Version: 1, Entries: map[string]VerifyEntry{}}, "")
+	sm := NewStateManager(&VerifyState{CWD: "", LastRun: zerovalue_time.Time{}, Version: 1, Entries: map[string]VerifyEntry{}}, "")
 
 	if err := sm.Record("k", "fp", "ok", ""); err != nil {
 		t.Fatalf("Record() with empty path error = %v", err)
@@ -56,7 +57,7 @@ func TestStateManager_Record_SaveError(t *testing.T) {
 	}
 	badPath := filepath.Join(fileAsDir, "sub", "state.json")
 
-	sm := NewStateManager(&VerifyState{Version: 1, Entries: map[string]VerifyEntry{}}, badPath)
+	sm := NewStateManager(&VerifyState{CWD: "", LastRun: zerovalue_time.Time{}, Version: 1, Entries: map[string]VerifyEntry{}}, badPath)
 	if err := sm.Record("k", "fp", "ok", ""); err == nil {
 		t.Error("Record() expected save error with read-only path, got nil")
 	}
@@ -69,7 +70,7 @@ func TestStateManager_Record_PersistsAndLoads(t *testing.T) {
 	dir := t.TempDir()
 	path := StatePath(dir, "/some/cwd")
 
-	sm := NewStateManager(&VerifyState{Version: 1, Entries: map[string]VerifyEntry{}}, path)
+	sm := NewStateManager(&VerifyState{CWD: "", LastRun: zerovalue_time.Time{}, Version: 1, Entries: map[string]VerifyEntry{}}, path)
 	if err := sm.Record("key", "fp1", "ok", ""); err != nil {
 		t.Fatalf("Record() error = %v", err)
 	}

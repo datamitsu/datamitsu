@@ -94,13 +94,20 @@ func MergeManagedConfigLayers(layerMap ManagedConfigLayerMap, layerName string, 
 		history, ok := layerMap[name]
 		if !ok {
 			history = &ManagedConfigLayerHistory{
-				FileName: name,
+				OriginalContent: nil,
+				Layers:          nil,
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        name,
 			}
 			layerMap[name] = history
 		}
 
 		entry := ManagedConfigLayerEntry{
-			LayerName: layerName,
+			GeneratedContent: nil,
+			LayerName:        layerName,
 		}
 
 		if content, hasContent := evaluatedContent[name]; hasContent {
@@ -166,6 +173,11 @@ func EvaluateManagedConfigContentWithProjects(cfg *Config, vm *goja.Runtime, roo
 			cntManagedConfigReads.Add(1)
 			originalContent := readFileContent(filepath.Join(basePath, name))
 			priorLayers[name] = &ManagedConfigLayerHistory{
+				Layers:          nil,
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
 				FileName:        name,
 				OriginalContent: originalContent,
 			}
@@ -190,6 +202,8 @@ func EvaluateManagedConfigContentWithProjects(cfg *Config, vm *goja.Runtime, roo
 			basePath = rootPath
 		}
 		cc := ContentContext{
+			OriginalContent:  nil,
+			ExistingPath:     nil,
 			RootPath:         rootPath,
 			CwdPath:          cwdPath,
 			ProjectTypes:     projectTypes,
@@ -310,7 +324,12 @@ func RenderManagedConfigFromScratch(layers []ManagedConfigLayer, key, rootPath s
 	}
 
 	return RenderManagedConfigWithContext(layers, key, ContentContext{
-		RootPath: rootPath, CwdPath: rootPath, Placement: placement, OutputPath: outputPath,
+		ProjectTypes:     nil,
+		ProjectLocations: nil,
+		ExistingContent:  nil,
+		OriginalContent:  nil,
+		ExistingPath:     nil,
+		RootPath:         rootPath, CwdPath: rootPath, Placement: placement, OutputPath: outputPath,
 	})
 }
 

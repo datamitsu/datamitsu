@@ -10,6 +10,7 @@ import (
 
 func validOCIRef() *OCIRef {
 	return &OCIRef{
+		Signer: nil,
 		Ref:    "ghcr.io/owner/repo",
 		Digest: "sha256:" + strings.Repeat("ab", 32),
 	}
@@ -125,9 +126,9 @@ func TestValidateOCI_MalformedDigest(t *testing.T) {
 // filled in correctly, so no shape of it may slip through.
 func TestValidateOCI_AnyShapeOfSignerIsRejected(t *testing.T) {
 	for name, signer := range map[string]*OCISigner{
-		"missing issuer":   {Identity: "workflow-ref"},
-		"missing identity": {Issuer: "https://token.actions.githubusercontent.com"},
-		"both empty":       {},
+		"missing issuer":   {Issuer: "", Identity: "workflow-ref"},
+		"missing identity": {Identity: "", Issuer: "https://token.actions.githubusercontent.com"},
+		"both empty":       {Identity: "", Issuer: ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			oci := validOCIRef()
@@ -144,7 +145,7 @@ func TestValidateOCI_AnyShapeOfSignerIsRejected(t *testing.T) {
 }
 
 func TestValidateOCI_CollectsAllErrors(t *testing.T) {
-	err := ValidateOCI(&OCIRef{Signer: &OCISigner{}})
+	err := ValidateOCI(&OCIRef{Ref: "", Digest: "", Signer: &OCISigner{Identity: "", Issuer: ""}})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -159,7 +160,7 @@ func TestValidateOCI_CollectsAllErrors(t *testing.T) {
 // contract: a Config with no oci set must marshal exactly as before the field
 // existed, otherwise every tool's cache is invalidated on upgrade.
 func TestEmptyConfigMarshalUnchanged(t *testing.T) {
-	data, err := json.Marshal(Config{})
+	data, err := json.Marshal(Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil})
 	if err != nil {
 		t.Fatalf("Marshal(Config{}) error: %v", err)
 	}
@@ -169,11 +170,27 @@ func TestEmptyConfigMarshalUnchanged(t *testing.T) {
 }
 
 func TestOCIRefJSONRoundTrip(t *testing.T) {
-	in := Config{OCI: &OCIRef{
-		Ref:    "ghcr.io/owner/repo",
-		Digest: "sha256:" + strings.Repeat("ab", 32),
-		Signer: &OCISigner{Identity: "id", Issuer: "iss"},
-	}}
+	in := Config{
+		Name:           "",
+		Version:        "",
+		Apps:           nil,
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		Parsers:        nil,
+		Lsp:            nil, OCI: &OCIRef{
+			Ref:    "ghcr.io/owner/repo",
+			Digest: "sha256:" + strings.Repeat("ab", 32),
+			Signer: &OCISigner{Identity: "id", Issuer: "iss"},
+		},
+	}
 	data, err := json.Marshal(in)
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)

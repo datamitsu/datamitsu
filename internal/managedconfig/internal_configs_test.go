@@ -15,11 +15,17 @@ import (
 
 func internalEntry(content string) config.ManagedConfig {
 	return config.ManagedConfig{
-		Tools:     []string{"tool"},
-		Scope:     config.ScopeGitRoot,
-		Ejectable: true,
-		Placement: config.PlacementInternal,
-		Render:    &config.ManagedConfigRender{Content: content, Hash: digest.XXH3Of([]byte(content)).Hex()},
+		ProjectTypes:      nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Content:           nil,
+		Tools:             []string{"tool"},
+		Scope:             config.ScopeGitRoot,
+		Ejectable:         true,
+		Placement:         config.PlacementInternal,
+		Render:            &config.ManagedConfigRender{Content: content, Hash: digest.XXH3Of([]byte(content)).Hex()},
 	}
 }
 
@@ -37,7 +43,7 @@ func TestWriteInternalConfigs(t *testing.T) {
 	configs := config.MapOfManagedConfigs{
 		".gitleaks.toml":     internalEntry("a"),
 		".github/zizmor.yml": internalEntry("b"),
-		"eslint.config.mjs":  {Tools: []string{"eslint"}, Placement: config.PlacementRepo},
+		"eslint.config.mjs":  {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Render: nil, Content: nil, Tools: []string{"eslint"}, Placement: config.PlacementRepo},
 	}
 
 	res, err := WriteInternalConfigs(root, configs, false)
@@ -120,7 +126,7 @@ func TestLinkRebuildCarriesInternalConfigsOver(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(installRoot, "index.js"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	apps := binmanager.MapOfApps{"tool": {Links: map[string]string{"tool.config.js": "index.js"}}}
+	apps := binmanager.MapOfApps{"tool": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Links: map[string]string{"tool.config.js": "index.js"}}}
 	resolver := &mockResolver{paths: map[string]string{"tool": installRoot}}
 	if _, err := CreateDatamitsuLinks(root, apps, resolver, nil, nil, false); err != nil {
 		t.Fatalf("CreateDatamitsuLinks() = %v", err)
@@ -141,7 +147,7 @@ func TestLinkNameConfigsIsReserved(t *testing.T) {
 	resolver := &mockResolver{paths: map[string]string{"tool": installRoot}}
 	for _, name := range []string{"configs", "configs/x.toml", "Configs", "CONFIGS/x.toml"} {
 		for _, dryRun := range []bool{true, false} {
-			apps := binmanager.MapOfApps{"tool": {Links: map[string]string{name: "index.js"}}}
+			apps := binmanager.MapOfApps{"tool": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Links: map[string]string{name: "index.js"}}}
 			_, err := CreateDatamitsuLinks(t.TempDir(), apps, resolver, nil, nil, dryRun)
 			if err == nil || !strings.Contains(err.Error(), "reserved") {
 				t.Errorf("link %q (dryRun=%v): err = %v, want reserved", name, dryRun, err)
@@ -159,7 +165,7 @@ func TestCheckConfigFiles(t *testing.T) {
 	refs := []config.ManagedConfigRef{{Tool: "gitleaks", Key: ".gitleaks.toml"}}
 	internal := internalEntry("rendered")
 	internal.Tools = []string{"gitleaks"}
-	ejected := config.ManagedConfig{Tools: []string{"gitleaks"}, Scope: config.ScopeGitRoot, Ejectable: true, Placement: config.PlacementRepo}
+	ejected := config.ManagedConfig{ProjectTypes: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Render: nil, Content: nil, Tools: []string{"gitleaks"}, Scope: config.ScopeGitRoot, Ejectable: true, Placement: config.PlacementRepo}
 
 	write := func(t *testing.T, root, rel, content string) {
 		t.Helper()
@@ -187,7 +193,7 @@ func TestCheckConfigFiles(t *testing.T) {
 		}, `add "gitleaks" to ejectConfigs`},
 		{"ejected and present", ejected, map[string]string{".gitleaks.toml": "x"}, ""},
 		{"ejected and missing", ejected, nil, "config reconcile --tools gitleaks"},
-		{"not ejectable is left alone", config.ManagedConfig{Tools: []string{"gitleaks"}, Placement: config.PlacementRepo}, nil, ""},
+		{"not ejectable is left alone", config.ManagedConfig{ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Render: nil, Content: nil, Tools: []string{"gitleaks"}, Placement: config.PlacementRepo}, nil, ""},
 		{"internal with a file under another name", withAlternate(internal), map[string]string{
 			".datamitsu/configs/.gitleaks.toml": "rendered",
 			"gitleaks.toml":                     "[allowlist]",

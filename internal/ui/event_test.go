@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	zerovalue_sync "sync"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/uievent"
@@ -10,7 +11,7 @@ import (
 // Every event passes through the masker before the sink writes it, and
 // removing the masker leaves events as they are.
 func TestSetEventMask(t *testing.T) {
-	cs := &captureSink{}
+	cs := &captureSink{mu: zerovalue_sync.Mutex{}, events: nil}
 	SetEventSink(cs, true)
 	t.Cleanup(func() { SetEventSink(nil, false) })
 	SetEventMask(func(e *uievent.Event) {
@@ -19,9 +20,9 @@ func TestSetEventMask(t *testing.T) {
 	})
 	t.Cleanup(func() { SetEventMask(nil) })
 
-	Emit(uievent.Event{Type: uievent.TypeToolRun, OpID: "run-1:t:secret:1", Dir: "secret"})
+	Emit(uievent.Event{TS: 0, Status: "", Op: "", Tool: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeToolRun, OpID: "run-1:t:secret:1", Dir: "secret"})
 	SetEventMask(nil)
-	Emit(uievent.Event{Type: uievent.TypeToolRun, OpID: "run-1:t:secret:2", Dir: "secret"})
+	Emit(uievent.Event{TS: 0, Status: "", Op: "", Tool: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeToolRun, OpID: "run-1:t:secret:2", Dir: "secret"})
 
 	if len(cs.events) != 2 {
 		t.Fatalf("events = %+v, want two", cs.events)
@@ -58,7 +59,7 @@ func TestEmitWithoutSink(t *testing.T) {
 	called := false
 	SetEventMask(func(*uievent.Event) { called = true })
 	t.Cleanup(func() { SetEventMask(nil) })
-	Emit(uievent.Event{Type: uievent.TypeLog, OpID: "log-1"})
+	Emit(uievent.Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, OpID: "log-1"})
 	if called {
 		t.Error("the masker ran without a sink")
 	}

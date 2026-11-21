@@ -16,6 +16,7 @@ import (
 func testPNPMBinaries() binmanager.MapOfBinaries {
 	entry := func(asset, binaryPath string, contentType binmanager.BinContentType, hashChar string) binmanager.BinaryOsArchInfo {
 		return binmanager.BinaryOsArchInfo{
+			Auth:        nil,
 			URL:         "https://github.com/pnpm/pnpm/releases/download/v12.4.1/" + asset,
 			Hash:        "sha256:" + strings.Repeat(hashChar, 64),
 			ContentType: contentType,
@@ -41,6 +42,12 @@ func testPNPMBinaries() binmanager.MapOfBinaries {
 // testPNPMRuntime returns a valid managed runtime of kind pnpm.
 func testPNPMRuntime() RuntimeConfig {
 	return RuntimeConfig{
+		System:  nil,
+		Bun:     nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
 		Kind:    RuntimeKindPNPM,
 		Mode:    RuntimeModeManaged,
 		Managed: &RuntimeConfigManaged{Binaries: testPNPMBinaries()},
@@ -60,7 +67,7 @@ func TestValidateRuntimes_PNPMKind(t *testing.T) {
 		return rc
 	}
 	system := func(pnpm *RuntimeConfigPNPM) RuntimeConfig {
-		return RuntimeConfig{Kind: RuntimeKindPNPM, Mode: RuntimeModeSystem, System: &RuntimeConfigSystem{Command: "pnpm"}, PNPM: pnpm}
+		return RuntimeConfig{Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, Kind: RuntimeKindPNPM, Mode: RuntimeModeSystem, System: &RuntimeConfigSystem{SystemVersion: "", Command: "pnpm"}, PNPM: pnpm}
 	}
 
 	// want is a substring of the error; empty means the runtime is valid.
@@ -72,14 +79,14 @@ func TestValidateRuntimes_PNPMKind(t *testing.T) {
 		{"managed valid", testPNPMRuntime(), ""},
 		{
 			"managed without pnpm config",
-			RuntimeConfig{Kind: RuntimeKindPNPM, Mode: RuntimeModeManaged, Managed: &RuntimeConfigManaged{Binaries: testPNPMBinaries()}},
+			RuntimeConfig{System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindPNPM, Mode: RuntimeModeManaged, Managed: &RuntimeConfigManaged{Binaries: testPNPMBinaries()}},
 			`runtime "pnpm": pnpm runtime requires pnpm config with pnpmVersion`,
 		},
 		{"managed without pnpmVersion", withVersion(""), `runtime "pnpm": pnpm.pnpmVersion is required`},
 		{"managed with invalid pnpmVersion", withVersion("../12"), `runtime "pnpm": pnpm.pnpmVersion "../12" contains invalid characters`},
 		// A system pnpm is whatever the host provides, so its version is optional.
 		{"system without pnpm config", system(nil), ""},
-		{"system without pnpmVersion", system(&RuntimeConfigPNPM{}), ""},
+		{"system without pnpmVersion", system(&RuntimeConfigPNPM{PNPMVersion: ""}), ""},
 		{"system with invalid pnpmVersion", system(&RuntimeConfigPNPM{PNPMVersion: "12 && x"}), `pnpm.pnpmVersion "12 && x" contains invalid characters`},
 		// The archives go through the managed-runtime checks, messages unchanged.
 		{"managed entry without hash", missingHash, `runtime "pnpm" (linux/amd64/glibc): hash is required`},
@@ -106,7 +113,7 @@ func TestValidateRuntimes_PNPMKind(t *testing.T) {
 
 func TestValidateRuntimes_PNPMRuntimeRef(t *testing.T) {
 	withRef := func(kind RuntimeKind, ref string) RuntimeConfig {
-		rc := RuntimeConfig{Kind: kind, Mode: RuntimeModeSystem, System: &RuntimeConfigSystem{Command: string(kind)}}
+		rc := RuntimeConfig{Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: kind, Mode: RuntimeModeSystem, System: &RuntimeConfigSystem{SystemVersion: "", Command: string(kind)}}
 		if kind == RuntimeKindBun {
 			rc.Bun = &RuntimeConfigBun{BunVersion: "1.4.1", PNPMRuntime: ref}
 		} else {
@@ -135,7 +142,7 @@ func TestValidateRuntimes_PNPMRuntimeRef(t *testing.T) {
 				runtimes := MapOfRuntimes{
 					"rt":   withRef(kind, tt.ref),
 					"pnpm": testPNPMRuntime(),
-					"uv":   {Kind: RuntimeKindUV, Mode: RuntimeModeSystem, System: &RuntimeConfigSystem{Command: "uv"}},
+					"uv":   {Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindUV, Mode: RuntimeModeSystem, System: &RuntimeConfigSystem{SystemVersion: "", Command: "uv"}},
 				}
 				err := ValidateRuntimes(runtimes)
 				if tt.want == "" {
@@ -159,12 +166,33 @@ func TestValidateRuntimes_PNPMRuntimeRef(t *testing.T) {
 func TestValidateApps_NodeAppCannotRunOnPNPMRuntime(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"prettier": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Node: &binmanager.AppConfigNode{
-				PackageName: "prettier",
-				Version:     "3.8.3",
-				BinPath:     "node_modules/.bin/prettier",
-				LockFile:    "lock",
-				Runtime:     "pnpm",
+				Dependencies: nil,
+				PackageName:  "prettier",
+				Version:      "3.8.3",
+				BinPath:      "node_modules/.bin/prettier",
+				LockFile:     "lock",
+				Runtime:      "pnpm",
 			},
 		},
 	}
@@ -180,13 +208,13 @@ func TestRuntimeConfigPNPMRuntimeRef(t *testing.T) {
 		rc   RuntimeConfig
 		want string
 	}{
-		{"node", RuntimeConfig{Kind: RuntimeKindNode, Node: &RuntimeConfigNode{PNPMRuntime: "pnpm-node"}}, "pnpm-node"},
-		{"bun", RuntimeConfig{Kind: RuntimeKindBun, Bun: &RuntimeConfigBun{PNPMRuntime: "pnpm-bun"}}, "pnpm-bun"},
-		{"node without node config", RuntimeConfig{Kind: RuntimeKindNode}, ""},
-		{"bun without bun config", RuntimeConfig{Kind: RuntimeKindBun}, ""},
+		{"node", RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindNode, Node: &RuntimeConfigNode{NodeVersion: "", PNPMRuntime: "pnpm-node"}}, "pnpm-node"},
+		{"bun", RuntimeConfig{Mode: "", Managed: nil, System: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindBun, Bun: &RuntimeConfigBun{BunVersion: "", PNPMRuntime: "pnpm-bun"}}, "pnpm-bun"},
+		{"node without node config", RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindNode}, ""},
+		{"bun without bun config", RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindBun}, ""},
 		{"pnpm", testPNPMRuntime(), ""},
 		// The accessor follows Kind, not whichever sub-config happens to be set.
-		{"jvm with a stray node config", RuntimeConfig{Kind: RuntimeKindJVM, Node: &RuntimeConfigNode{PNPMRuntime: "pnpm"}}, ""},
+		{"jvm with a stray node config", RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindJVM, Node: &RuntimeConfigNode{NodeVersion: "", PNPMRuntime: "pnpm"}}, ""},
 	}
 
 	for _, tt := range tests {
@@ -200,12 +228,12 @@ func TestRuntimeConfigPNPMRuntimeRef(t *testing.T) {
 
 func TestMapOfRuntimesPNPMRuntimeName(t *testing.T) {
 	node := func(ref string) RuntimeConfig {
-		return RuntimeConfig{Kind: RuntimeKindNode, Node: &RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: ref}}
+		return RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindNode, Node: &RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: ref}}
 	}
 	runtimes := MapOfRuntimes{
 		"pnpm-b": testPNPMRuntime(),
 		"pnpm-a": testPNPMRuntime(),
-		"uv":     {Kind: RuntimeKindUV},
+		"uv":     {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindUV},
 	}
 
 	tests := []struct {
@@ -216,13 +244,13 @@ func TestMapOfRuntimesPNPMRuntimeName(t *testing.T) {
 		wantOK bool
 	}{
 		{"explicit reference", runtimes, node("pnpm-b"), "pnpm-b", true},
-		{"bun explicit reference", runtimes, RuntimeConfig{Kind: RuntimeKindBun, Bun: &RuntimeConfigBun{PNPMRuntime: "pnpm-a"}}, "pnpm-a", true},
+		{"bun explicit reference", runtimes, RuntimeConfig{Mode: "", Managed: nil, System: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindBun, Bun: &RuntimeConfigBun{BunVersion: "", PNPMRuntime: "pnpm-a"}}, "pnpm-a", true},
 		// A dangling reference never falls back to another pnpm runtime.
 		{"dangling reference", runtimes, node("pnpm-c"), "", false},
 		{"reference to another kind", runtimes, node("uv"), "", false},
 		{"empty reference takes the first pnpm runtime by name", runtimes, node(""), "pnpm-a", true},
-		{"empty reference with no pnpm runtime", MapOfRuntimes{"uv": {Kind: RuntimeKindUV}}, node(""), "", false},
-		{"uv runtime", runtimes, RuntimeConfig{Kind: RuntimeKindUV}, "", false},
+		{"empty reference with no pnpm runtime", MapOfRuntimes{"uv": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindUV}}, node(""), "", false},
+		{"uv runtime", runtimes, RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindUV}, "", false},
 		{"pnpm runtime itself", runtimes, testPNPMRuntime(), "", false},
 	}
 

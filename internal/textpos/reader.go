@@ -35,7 +35,7 @@ type loaded struct {
 
 // NewReader returns a Reader with nothing loaded.
 func NewReader() *Reader {
-	return &Reader{files: map[string]*loaded{}}
+	return &Reader{mu: sync.Mutex{}, files: map[string]*loaded{}}
 }
 
 // LineAt returns line row (1-based) of path without its terminator, and the

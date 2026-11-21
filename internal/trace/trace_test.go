@@ -229,10 +229,10 @@ func TestFlushIsIdempotent(t *testing.T) {
 	dir := t.TempDir()
 
 	Start(CatPlan, "once").End()
-	if got := Flush(FlushOptions{Dir: dir, Slug: "r"}); len(got) != 2 {
+	if got := Flush(FlushOptions{Summary: nil, Meta: nil, Dir: dir, Slug: "r"}); len(got) != 2 {
 		t.Fatalf("first Flush wrote %d files, want 2", len(got))
 	}
-	if got := Flush(FlushOptions{Dir: dir, Slug: "r"}); got != nil {
+	if got := Flush(FlushOptions{Summary: nil, Meta: nil, Dir: dir, Slug: "r"}); got != nil {
 		t.Errorf("second Flush wrote %v, want nothing", got)
 	}
 }
@@ -244,7 +244,7 @@ func TestFlushDisabledWritesNothing(t *testing.T) {
 
 	dir := t.TempDir()
 	var summary bytes.Buffer
-	if got := Flush(FlushOptions{Dir: dir, Slug: "r", Summary: &summary}); got != nil {
+	if got := Flush(FlushOptions{Meta: nil, Dir: dir, Slug: "r", Summary: &summary}); got != nil {
 		t.Errorf("Flush wrote %v while disabled, want nothing", got)
 	}
 	entries, err := os.ReadDir(dir)
@@ -264,11 +264,11 @@ func TestFlushDisabledWritesNothing(t *testing.T) {
 // spans must nest, never partially overlap.
 func TestAssignLanesKeepsCompleteEventsNested(t *testing.T) {
 	events := []event{
-		{Name: "outer", Start: 0, Dur: 100},
-		{Name: "inner", Start: 10, Dur: 20},
-		{Name: "overlap", Start: 50, Dur: 100}, // crosses outer's end
-		{Name: "after", Start: 200, Dur: 10},
-		{Name: "point", Start: 30, Dur: -1, Instant: true},
+		{Cat: "", Attrs: nil, Instant: false, Name: "outer", Start: 0, Dur: 100},
+		{Cat: "", Attrs: nil, Instant: false, Name: "inner", Start: 10, Dur: 20},
+		{Cat: "", Attrs: nil, Instant: false, Name: "overlap", Start: 50, Dur: 100}, // crosses outer's end
+		{Cat: "", Attrs: nil, Instant: false, Name: "after", Start: 200, Dur: 10},
+		{Cat: "", Attrs: nil, Name: "point", Start: 30, Dur: -1, Instant: true},
 	}
 	lanes := assignLanes(events)
 

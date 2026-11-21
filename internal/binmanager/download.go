@@ -278,7 +278,7 @@ func downloadFileInternal(ctx context.Context, url string, destDir string, name 
 		}
 		installstate.Progress(ctx, installstate.PhaseDownload, completed, total, "bytes")
 	}
-	counted := &installProgressReader{reader: limitedReader, progress: progress, total: resp.ContentLength}
+	counted := &installProgressReader{completed: 0, reader: limitedReader, progress: progress, total: resp.ContentLength}
 
 	// Route the transfer through the process-wide display: in an interactive
 	// terminal this renders a progress bar in the shared container, in CI/pipe

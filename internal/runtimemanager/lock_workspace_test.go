@@ -19,7 +19,7 @@ import (
 func TestGenerateLockRejectsUnsupportedAppAndCanceledWorkspace(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	rm := New(config.MapOfRuntimes{})
-	if _, err := rm.GenerateLock(context.Background(), "empty", binmanager.App{}); err == nil || !strings.Contains(err.Error(), "does not support lockfile generation") {
+	if _, err := rm.GenerateLock(context.Background(), "empty", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil}); err == nil || !strings.Contains(err.Error(), "does not support lockfile generation") {
 		t.Fatalf("GenerateLock() unsupported app error = %v", err)
 	}
 
@@ -61,9 +61,9 @@ func TestGenerateLockRoutesBunUVAndGoPrerequisites(t *testing.T) {
 		name string
 		app  binmanager.App
 	}{
-		{name: "bun", app: binmanager.App{Bun: &binmanager.AppConfigBun{PackageName: "example/tool", Version: "1.0.0", Runtime: "missing"}}},
-		{name: "uv", app: binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "example/tool", Version: "1.0.0", Runtime: "missing"}}},
-		{name: "go", app: binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "example.invalid/tool", Version: "v1.0.0", Runtime: "missing"}}},
+		{name: "bun", app: binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{BinPath: "", LockFile: "", Dependencies: nil, PackageName: "example/tool", Version: "1.0.0", Runtime: "missing"}}},
+		{name: "uv", app: binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "example/tool", Version: "1.0.0", Runtime: "missing"}}},
+		{name: "go", app: binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "example.invalid/tool", Version: "v1.0.0", Runtime: "missing"}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -81,12 +81,31 @@ func TestGenerateGoLockFromLocalFixtureUsesAndRestoresPrivateWorkspace(t *testin
 		t.Fatal(err)
 	}
 	runtimes := config.MapOfRuntimes{
-		"go": {Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "test"}},
+		"go": {Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "test"}},
 	}
 	rm := New(runtimes)
 	app := binmanager.App{
-		Go:    &binmanager.AppConfigGo{PackageName: "example.invalid/local/tool", Version: "v1.0.0", Runtime: "go", LockFile: "pinned"},
-		Files: map[string]string{"go.mod": "module example.invalid/local\n\ngo 1.20\n"},
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Jvm:                nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
+		Go:                 &binmanager.AppConfigGo{PackageName: "example.invalid/local/tool", Version: "v1.0.0", Runtime: "go", LockFile: "pinned"},
+		Files:              map[string]string{"go.mod": "module example.invalid/local\n\ngo 1.20\n"},
 	}
 	pinned, err := rm.GetGoAppPath("local-tool", app.Go, app.Files, app.Archives, "go")
 	if err != nil {
@@ -125,9 +144,32 @@ func TestGenerateGoLockFromLocalFixtureUsesAndRestoresPrivateWorkspace(t *testin
 func TestGenerateLockUsesPrivateWorkspaceAndPreservesPinnedInstall(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	rm := New(config.MapOfRuntimes{})
-	app := binmanager.App{Node: &binmanager.AppConfigNode{
-		PackageName: "example/tool", Version: "1.2.3", Runtime: "missing", LockFile: "pinned-lock",
-	}}
+	app := binmanager.App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil, Node: &binmanager.AppConfigNode{
+			BinPath:      "",
+			Dependencies: nil,
+			PackageName:  "example/tool", Version: "1.2.3", Runtime: "missing", LockFile: "pinned-lock",
+		},
+	}
 	pinned := filepath.Join(env.GetStorePath(), ".apps", "node", "tool", "pinned")
 	if err := os.MkdirAll(pinned, 0o755); err != nil {
 		t.Fatal(err)

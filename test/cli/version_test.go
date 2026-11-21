@@ -14,7 +14,7 @@ import (
 func TestVersionGolden(t *testing.T) {
 	norm := clitest.NewNormalizer()
 
-	res := clitest.Run(t, clitest.RunOptions{}, "version")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "version")
 	if res.ExitCode != 0 {
 		t.Fatalf("`version` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -30,7 +30,7 @@ func TestVersionGolden(t *testing.T) {
 func TestVersionIgnoresExtraArgs(t *testing.T) {
 	norm := clitest.NewNormalizer()
 
-	base := clitest.Run(t, clitest.RunOptions{}, "version")
+	base := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "version")
 	if base.ExitCode != 0 {
 		t.Fatalf("`version` exit = %d, want 0\nstderr:\n%s", base.ExitCode, base.Stderr)
 	}
@@ -48,7 +48,7 @@ func TestVersionIgnoresExtraArgs(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{}, tc.args...)
+			res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, tc.args...)
 			if res.ExitCode != 0 {
 				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s",
 					strings.Join(tc.args, " "), res.ExitCode, res.Stderr)

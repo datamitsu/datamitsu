@@ -97,9 +97,9 @@ func Detect(getenv func(string) string) (Info, Runtime) {
 		}
 	}
 	if ci := strings.TrimSpace(getenv("CI")); ci != "" && !strings.EqualFold(ci, "false") && ci != "0" {
-		return Info{Vendor: VendorGeneric, IsCI: true}, Runtime{}
+		return Info{IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: "", Vendor: VendorGeneric, IsCI: true}, Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}
 	}
-	return Info{}, Runtime{}
+	return Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}
 }
 
 // Current is Detect over the process environment.
@@ -153,10 +153,13 @@ func readGitHubShape(g func(string) string) (Info, Runtime) {
 	event := g("GITHUB_EVENT_NAME")
 	ref := g("GITHUB_REF")
 	info := Info{
-		SHA:     g("GITHUB_SHA"),
-		Ref:     ref,
-		BaseRef: g("GITHUB_BASE_REF"),
-		IsPR:    event == "pull_request" || event == "pull_request_target",
+		Vendor:   "",
+		IsCI:     false,
+		PRNumber: "",
+		SHA:      g("GITHUB_SHA"),
+		Ref:      ref,
+		BaseRef:  g("GITHUB_BASE_REF"),
+		IsPR:     event == "pull_request" || event == "pull_request_target",
 	}
 	// refs/pull/<n>/merge for pull_request; pull_request_target builds the
 	// base branch, whose ref carries no number.
@@ -165,18 +168,20 @@ func readGitHubShape(g func(string) string) (Info, Runtime) {
 			info.PRNumber = n
 		}
 	}
-	return info, Runtime{EventName: event, Workspace: g("GITHUB_WORKSPACE"), EventPath: g("GITHUB_EVENT_PATH")}
+	return info, Runtime{StepSummaryPath: "", EventName: event, Workspace: g("GITHUB_WORKSPACE"), EventPath: g("GITHUB_EVENT_PATH")}
 }
 
 func readGitLab(g func(string) string) (Info, Runtime) {
 	iid := g("CI_MERGE_REQUEST_IID")
 	return Info{
+		Vendor:   "",
+		IsCI:     false,
 		SHA:      g("CI_COMMIT_SHA"),
 		Ref:      g("CI_COMMIT_REF_NAME"),
 		BaseRef:  g("CI_MERGE_REQUEST_TARGET_BRANCH_NAME"),
 		IsPR:     iid != "",
 		PRNumber: iid,
-	}, Runtime{Workspace: g("CI_PROJECT_DIR")}
+	}, Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: g("CI_PROJECT_DIR")}
 }
 
 func readAzure(g func(string) string) (Info, Runtime) {
@@ -185,18 +190,20 @@ func readAzure(g func(string) string) (Info, Runtime) {
 		number = g("SYSTEM_PULLREQUEST_PULLREQUESTID")
 	}
 	return Info{
+		Vendor:   "",
+		IsCI:     false,
 		SHA:      g("BUILD_SOURCEVERSION"),
 		Ref:      g("BUILD_SOURCEBRANCH"),
 		BaseRef:  g("SYSTEM_PULLREQUEST_TARGETBRANCH"),
 		IsPR:     g("BUILD_REASON") == "PullRequest",
 		PRNumber: number,
-	}, Runtime{Workspace: g("BUILD_SOURCESDIRECTORY")}
+	}, Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: g("BUILD_SOURCESDIRECTORY")}
 }
 
 // readTeamCity reads the revision; the branch and a pull request are build
 // parameters TeamCity does not export by default.
 func readTeamCity(g func(string) string) (Info, Runtime) {
-	return Info{SHA: g("BUILD_VCS_NUMBER")}, Runtime{}
+	return Info{Vendor: "", IsCI: false, IsPR: false, Ref: "", BaseRef: "", PRNumber: "", SHA: g("BUILD_VCS_NUMBER")}, Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}
 }
 
 func readBuildkite(g func(string) string) (Info, Runtime) {
@@ -205,12 +212,14 @@ func readBuildkite(g func(string) string) (Info, Runtime) {
 		pr = ""
 	}
 	return Info{
+		Vendor:   "",
+		IsCI:     false,
 		SHA:      g("BUILDKITE_COMMIT"),
 		Ref:      g("BUILDKITE_BRANCH"),
 		BaseRef:  g("BUILDKITE_PULL_REQUEST_BASE_BRANCH"),
 		IsPR:     pr != "",
 		PRNumber: pr,
-	}, Runtime{Workspace: g("BUILDKITE_BUILD_CHECKOUT_PATH")}
+	}, Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: g("BUILDKITE_BUILD_CHECKOUT_PATH")}
 }
 
 func readBitbucket(g func(string) string) (Info, Runtime) {
@@ -220,12 +229,14 @@ func readBitbucket(g func(string) string) (Info, Runtime) {
 	}
 	pr := g("BITBUCKET_PR_ID")
 	return Info{
+		Vendor:   "",
+		IsCI:     false,
 		SHA:      g("BITBUCKET_COMMIT"),
 		Ref:      ref,
 		BaseRef:  g("BITBUCKET_PR_DESTINATION_BRANCH"),
 		IsPR:     pr != "",
 		PRNumber: pr,
-	}, Runtime{Workspace: g("BITBUCKET_CLONE_DIR")}
+	}, Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: g("BITBUCKET_CLONE_DIR")}
 }
 
 // readJenkins reads what the Git plugin and multi-branch pipelines export.
@@ -236,12 +247,14 @@ func readJenkins(g func(string) string) (Info, Runtime) {
 	}
 	change := g("CHANGE_ID")
 	return Info{
+		Vendor:   "",
+		IsCI:     false,
 		SHA:      g("GIT_COMMIT"),
 		Ref:      ref,
 		BaseRef:  g("CHANGE_TARGET"),
 		IsPR:     change != "",
 		PRNumber: change,
-	}, Runtime{Workspace: g("WORKSPACE")}
+	}, Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: g("WORKSPACE")}
 }
 
 func readCircleCI(g func(string) string) (Info, Runtime) {
@@ -257,11 +270,14 @@ func readCircleCI(g func(string) string) (Info, Runtime) {
 		}
 	}
 	return Info{
+		Vendor:   "",
+		IsCI:     false,
+		BaseRef:  "",
 		SHA:      g("CIRCLE_SHA1"),
 		Ref:      ref,
 		IsPR:     url != "" || number != "",
 		PRNumber: number,
-	}, Runtime{Workspace: g("CIRCLE_WORKING_DIRECTORY")}
+	}, Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: g("CIRCLE_WORKING_DIRECTORY")}
 }
 
 func isTrue(v string) bool {

@@ -41,7 +41,7 @@ type pnpmReporter struct {
 const maxPNPMTextLines = 200
 
 func newPNPMReporter(sp *ui.Spinner, progress func(string, int64, int64, string)) *pnpmReporter {
-	return &pnpmReporter{sp: sp, progress: progress}
+	return &pnpmReporter{resolved: 0, downloaded: 0, added: 0, errs: nil, text: nil, sp: sp, progress: progress}
 }
 
 // line consumes one ndjson event. Unknown or malformed lines are ignored so a

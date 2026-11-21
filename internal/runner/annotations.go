@@ -85,7 +85,7 @@ type annotationState struct {
 // for.
 func resolveAnnotations(requested, vendor string, quiet, stdoutDocument bool) annotationState {
 	native := nativeMode(vendor)
-	st := annotationState{mode: AnnotationsOff, recorded: native != ""}
+	st := annotationState{export: "", why: "", regionOpen: false, executed: false, mode: AnnotationsOff, recorded: native != ""}
 	named := native
 	switch requested {
 	case AnnotationsGitHub, AnnotationsAzure, AnnotationsTeamCity:
@@ -212,9 +212,9 @@ func (sc *sharedContext) closeCommandRegion() {
 func (sc *sharedContext) annotationExport() (report.Export, bool) {
 	st := sc.annotations
 	if !st.recorded {
-		return report.Export{}, false
+		return report.Export{Format: "", Path: "", Status: "", Detail: "", Companion: "", Omitted: nil}, false
 	}
-	e := report.Export{Format: st.export, Path: render.Stdout, Status: report.ExportWritten}
+	e := report.Export{Detail: "", Companion: "", Omitted: nil, Format: st.export, Path: render.Stdout, Status: report.ExportWritten}
 	switch {
 	case st.mode == AnnotationsOff:
 		e.Status, e.Detail = report.ExportOmitted, st.why
@@ -230,7 +230,7 @@ func (sc *sharedContext) annotationExport() (report.Export, bool) {
 func (sc *sharedContext) printAnnotations(ctx context.Context, run *report.Run, rest []string) {
 	sc.closeCommandRegion()
 	if e, ok := sc.annotationExport(); ok {
-		emitReport(render.Spec{Format: e.Format, Path: e.Path}, e.Status, e.Detail, sc.secretValues())
+		emitReport(render.Spec{Options: nil, Format: e.Format, Path: e.Path}, e.Status, e.Detail, sc.secretValues())
 	}
 	if sc.annotations.mode == AnnotationsOff || !sc.annotations.executed || run == nil {
 		return
@@ -368,7 +368,7 @@ func annotationsRest(run *report.Run, summary bool) []string {
 		rest = append(rest, "the step summary")
 	}
 	for _, e := range run.Exports {
-		listing := len(render.Listing([]render.Spec{{Format: e.Format}})) > 0
+		listing := len(render.Listing([]render.Spec{{Path: "", Options: nil, Format: e.Format}})) > 0
 		if listing && e.Status == report.ExportWritten && e.Path != render.Stdout {
 			rest = append(rest, e.Path)
 		}
@@ -380,7 +380,7 @@ func annotationsRest(run *report.Run, summary bool) []string {
 // JSON-L stream, a line on stderr otherwise.
 func info(msg string) {
 	if ui.Quiet() {
-		ui.Emit(uievent.Event{Type: uievent.TypeLog, OpID: uievent.NextOpID("log"), Level: uievent.LevelInfo, Msg: msg})
+		ui.Emit(uievent.Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, OpID: uievent.NextOpID("log"), Level: uievent.LevelInfo, Msg: msg})
 		return
 	}
 	fmt.Fprintln(os.Stderr, "info: "+msg)

@@ -96,7 +96,7 @@ func TestMachineConfigDoesNotReachTheProjectConfig(t *testing.T) {
 	home := t.TempDir()
 	cacheDir := t.TempDir()
 
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: machineHomeEnv(home)}
+	opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheDir, Env: machineHomeEnv(home)}
 
 	before := clitest.Run(t, opts, "config", "show")
 	if before.ExitCode != 0 {
@@ -133,7 +133,7 @@ func TestMachineConfigDoesNotAffectPlanning(t *testing.T) {
 			cacheDir := t.TempDir()
 			norm := clitest.NewNormalizer().MaskPath(p.Dir, "<TMP>")
 
-			opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: machineHomeEnv(home)}
+			opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheDir, Env: machineHomeEnv(home)}
 
 			before := clitest.Run(t, opts, cmd, "--explain=json")
 			if before.ExitCode != 0 {
@@ -167,7 +167,7 @@ func TestMachineConfigReachesTheChainOnlyWhenNamed(t *testing.T) {
 	plantMachineConfigs(t, home, p.Dir)
 	named := filepath.Join(home, machineConfigLocations[0])
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: machineHomeEnv(home)},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: p.Dir, Env: machineHomeEnv(home)},
 		"--config", named, "config", "show")
 	if res.ExitCode != 0 {
 		t.Fatalf("`--config <machine config> config show` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)

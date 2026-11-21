@@ -9,7 +9,7 @@ import (
 )
 
 func asset(name string) github.Asset {
-	return github.Asset{Name: name, BrowserDownloadURL: "https://example.test/" + name}
+	return github.Asset{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: name, BrowserDownloadURL: "https://example.test/" + name}
 }
 
 // When a release ships both a raw binary and archive variants of the same

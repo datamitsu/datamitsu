@@ -49,11 +49,11 @@ globalThis.getConfig = input => { `+tc.layer+` };`)
 			p.WriteFile("root.json", `{"keep":"root"}`)
 			args := []string{"--no-auto-config", "--before-config", base, "--config", project}
 			reconcileArgs := append(append([]string{}, args...), "config", "reconcile", "--skip-fix")
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, reconcileArgs...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, reconcileArgs...)
 			if res.ExitCode != 0 {
 				t.Fatalf("reconcile: %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
 			}
-			show := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, append(append([]string{}, args...), "config", "show")...)
+			show := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, append(append([]string{}, args...), "config", "show")...)
 			if show.ExitCode != 0 {
 				t.Fatalf("config show: %d\n%s", show.ExitCode, show.Stderr)
 			}
@@ -135,7 +135,7 @@ globalThis.getConfig = input => merge(input, { version: "second" });`)
 globalThis.getMinVersion = () => "0.0.0";
 globalThis.getConfig = input => { input.managedConfigs["child.json"].content({}); return input; };`)
 	args := []string{"--no-auto-config", "--before-config", base, "--before-config", first, "--before-config", second, "--config", consumer, "config", "show"}
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Timeout: 25 * time.Second}, args...)
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Dir: p.Dir, Timeout: 25 * time.Second}, args...)
 	if res.ExitCode == 0 {
 		t.Fatalf("config show unexpectedly succeeded with non-terminating inherited callback")
 	}
@@ -161,7 +161,7 @@ globalThis.getConfig = input => merge(input, { version: "project" });`)
 	p.WriteFile("fixture.marker", "")
 	p.WriteFile("child.json", `{"keep":"original"}`)
 	args := []string{"--no-auto-config", "--before-config", base, "--config", project, "config", "reconcile", "--skip-fix"}
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Timeout: 20 * time.Second}, args...)
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Dir: p.Dir, Timeout: 20 * time.Second}, args...)
 	if res.ExitCode == 0 || !strings.Contains(res.Stderr+res.Stdout, "inherited-content-failure") {
 		t.Fatalf("reconcile did not surface callback exception: exit %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
 	}
@@ -192,7 +192,7 @@ globalThis.getConfig = input => merge(input, { managedConfigs: {
 		p.WriteFile(filepath.Join(dir, "null-opt-out.json"), `{"keep":"null-original"}`)
 	}
 	args := []string{"--no-auto-config", "--before-config", base, "--config", project, "config", "reconcile", "--skip-fix"}
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, args...)
 	if res.ExitCode != 0 {
 		t.Fatalf("reconcile: %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
 	}
@@ -254,7 +254,7 @@ globalThis.getConfig = base => ({ ...base, managedConfigs: { ...base.managedConf
 	args := []string{"--no-auto-config", "--before-config", base, "--config", project, "config", "reconcile", "--skip-fix", "--tools", "first"}
 	run := func(extra ...string) {
 		t.Helper()
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, append(args, extra...)...)
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, append(args, extra...)...)
 		if res.ExitCode != 0 {
 			t.Fatalf("reconcile: %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
 		}
@@ -293,7 +293,7 @@ func TestConfigReconcileForceKeepsChainHashGate(t *testing.T) {
 	p.WriteFile("before.config.js", chainDriftBeforeConfigJS)
 	p.WriteFile("datamitsu.config.js", chainDriftRootConfigJS)
 	p.WriteFile("drift.txt", "keep customized content")
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "config", "reconcile", "--force", "--skip-fix")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "config", "reconcile", "--force", "--skip-fix")
 	if res.ExitCode == 0 || !strings.Contains(res.Stderr, "chain-hash verification failed") {
 		t.Fatalf("force bypassed pin: %d, %s", res.ExitCode, res.Stderr)
 	}
@@ -321,7 +321,7 @@ globalThis.getConfig = base => ({ ...base, managedConfigs: { "root.json": {
     JSON.stringify(merge(JSON.parse(ctx.existingContent || "{}"), { layer: "project" }))
 }}});`)
 	p.WriteFile("root.json", `{"value":"custom"}`)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--before-config", base, "--config", project,
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "--no-auto-config", "--before-config", base, "--config", project,
 		"config", "reconcile", "--force", "--tools", "second", "--skip-fix")
 	if res.ExitCode != 0 {
 		t.Fatalf("forced source replay: %d\n%s", res.ExitCode, res.Stderr)
@@ -346,13 +346,13 @@ globalThis.getConfig = base => ({ ...base, managedConfigs: { "root.json": {
 	project := p.WriteFile("project.config.js", strings.ReplaceAll(projectText, "__PIN__", ""))
 	p.WriteFile("root.json", `{"value":"custom"}`)
 	args := []string{"--no-auto-config", "--before-config", base, "--config", project}
-	result := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, append(args, "config", "chain-hash", "root.json")...)
+	result := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, append(args, "config", "chain-hash", "root.json")...)
 	pin := regexp.MustCompile(`xxh3:[0-9a-f]{32}`).FindString(result.Stdout)
 	if result.ExitCode != 0 || pin == "" {
 		t.Fatalf("pin: %d, %s, %s", result.ExitCode, result.Stdout, result.Stderr)
 	}
 	p.WriteFile("project.config.js", strings.ReplaceAll(projectText, "__PIN__", `, expectChainHash: "`+pin+`"`))
-	result = clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, append(args, "config", "reconcile", "--force", "--skip-fix")...)
+	result = clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, append(args, "config", "reconcile", "--force", "--skip-fix")...)
 	if result.ExitCode != 0 {
 		t.Fatalf("valid pin refused: %s", result.Stderr)
 	}

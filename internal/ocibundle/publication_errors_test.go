@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 )
 
 func writeLayer(t *testing.T, entries []struct {
@@ -24,7 +25,7 @@ func writeLayer(t *testing.T, entries []struct {
 	gz := gzip.NewWriter(f)
 	tw := tar.NewWriter(gz)
 	for _, e := range entries {
-		h := &tar.Header{Name: e.name, Typeflag: e.kind, Mode: 0o755, Size: int64(len(e.body))}
+		h := &tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: e.name, Typeflag: e.kind, Mode: 0o755, Size: int64(len(e.body))}
 		if e.kind == tar.TypeSymlink {
 			h.Linkname = e.body
 			h.Size = 0
@@ -130,7 +131,7 @@ func TestPlaceSubtreeDestinationConflictPreservesPayloadAndStaging(t *testing.T)
 
 func TestExtractLayerReadFailureLeavesNoEscapedWrites(t *testing.T) {
 	stage := t.TempDir()
-	_, err := extractLayerSubtree(filepath.Join(stage, "missing"), compressionGzip, layerExtractOptions{Subtree: ".bin/tool/" + strings.Repeat("c", 32), BuilderStoreRoot: "/dm/store"}, stage)
+	_, err := extractLayerSubtree(filepath.Join(stage, "missing"), compressionGzip, layerExtractOptions{ConsumerStoreRoot: "", Subtree: ".bin/tool/" + strings.Repeat("c", 32), BuilderStoreRoot: "/dm/store"}, stage)
 	if err == nil {
 		t.Fatal("missing blob read succeeded")
 	}

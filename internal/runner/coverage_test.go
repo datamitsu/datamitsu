@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
+	zerovalue_cienv "github.com/datamitsu/datamitsu/internal/cienv"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/tooling"
@@ -20,18 +22,18 @@ func TestOptionsValidate(t *testing.T) {
 		opts    Options
 		wantErr string
 	}{
-		{"empty", Options{}, ""},
-		{"widen target", Options{WidenTo: "target"}, ""},
-		{"widen unit", Options{WidenTo: "unit"}, ""},
-		{"widen repo", Options{WidenTo: "repo"}, ""},
-		{"widen wrong case", Options{WidenTo: "Repo"}, "invalid --widen-to"},
-		{"widen garbage", Options{WidenTo: "everything"}, "invalid --widen-to"},
-		{"require unit", Options{RequireCoverage: "unit"}, ""},
-		{"require repo", Options{RequireCoverage: "repo"}, ""},
+		{"empty", Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, ""},
+		{"widen target", Options{RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, WidenTo: "target"}, ""},
+		{"widen unit", Options{RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, WidenTo: "unit"}, ""},
+		{"widen repo", Options{RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, WidenTo: "repo"}, ""},
+		{"widen wrong case", Options{RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, WidenTo: "Repo"}, "invalid --widen-to"},
+		{"widen garbage", Options{RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, WidenTo: "everything"}, "invalid --widen-to"},
+		{"require unit", Options{WidenTo: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, RequireCoverage: "unit"}, ""},
+		{"require repo", Options{WidenTo: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, RequireCoverage: "repo"}, ""},
 		// "target" asserts only what was named, which is always true.
-		{"require target", Options{RequireCoverage: "target"}, "always true"},
-		{"require garbage", Options{RequireCoverage: "everything"}, "invalid --require-coverage"},
-		{"require wrong case", Options{RequireCoverage: "Unit"}, "invalid --require-coverage"},
+		{"require target", Options{WidenTo: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, RequireCoverage: "target"}, "always true"},
+		{"require garbage", Options{WidenTo: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, RequireCoverage: "everything"}, "invalid --require-coverage"},
+		{"require wrong case", Options{WidenTo: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, RequireCoverage: "Unit"}, "invalid --require-coverage"},
 	}
 
 	for _, tt := range tests {
@@ -78,15 +80,15 @@ func TestRequireCoverageWithToolsIsAUsageError(t *testing.T) {
 // inert in explain mode.
 func TestExplainAndExecutingPathsAgreeOnCoverage(t *testing.T) {
 	skips := []tooling.SkippedTool{
-		{ToolName: "syncpack", Reason: tooling.SkipReasonNotNarrowable},
-		{ToolName: "typstyle", Reason: tooling.SkipReasonUnsupportedPlatform},
-		{ToolName: "bearer", Reason: tooling.SkipReasonConfig},
+		{Operation: "", Detail: "", ToolName: "syncpack", Reason: tooling.SkipReasonNotNarrowable},
+		{Operation: "", Detail: "", ToolName: "typstyle", Reason: tooling.SkipReasonUnsupportedPlatform},
+		{Operation: "", Detail: "", ToolName: "bearer", Reason: tooling.SkipReasonConfig},
 	}
 
-	explain := &sharedContext{platformSkipped: map[string]struct{}{}}
+	explain := &sharedContext{cfg: nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, placementGated: false, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, platformSkipped: map[string]struct{}{}}
 	explain.recordNarrowingSkips(skips)
 
-	executing := &sharedContext{platformSkipped: map[string]struct{}{}}
+	executing := &sharedContext{cfg: nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, placementGated: false, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, platformSkipped: map[string]struct{}{}}
 	executing.recordSkips(skips)
 
 	if len(explain.narrowed) != len(executing.narrowed) {
@@ -108,11 +110,17 @@ func TestExplainAndExecutingPathsAgreeOnCoverage(t *testing.T) {
 }
 
 func TestRecordCoverage(t *testing.T) {
-	sc := &sharedContext{narrowed: map[string]struct{}{}}
-	sc.recordCoverage(&tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{
-		{ToolName: "tsc", Coverage: tooling.CoveragePartial},
-		{ToolName: "eslint", Coverage: tooling.CoverageComplete},
-	}}}})
+	sc := &sharedContext{cfg: nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, placementGated: false, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, narrowed: map[string]struct{}{}}
+	sc.recordCoverage(&tooling.ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []tooling.TaskGroup{{
+			Priority: 0, Tasks: []tooling.Task{
+				{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, ToolName: "tsc", Coverage: tooling.CoveragePartial},
+				{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, ToolName: "eslint", Coverage: tooling.CoverageComplete},
+			},
+		}},
+	})
 
 	if _, ok := sc.narrowed["tsc"]; !ok {
 		t.Error("a partial task must count against coverage")
@@ -138,33 +146,33 @@ func TestTargetLine(t *testing.T) {
 		sel  tooling.Selection
 		want string // "" means no line at all
 	}{
-		{"whole repository is the common case", tooling.Selection{Mode: tooling.SelectionAll}, ""},
-		{"nothing staged", tooling.Selection{Mode: tooling.SelectionEmpty}, "nothing staged"},
+		{"whole repository is the common case", tooling.Selection{Dir: "", Paths: nil, Mode: tooling.SelectionAll}, ""},
+		{"nothing staged", tooling.Selection{Dir: "", Paths: nil, Mode: tooling.SelectionEmpty}, "nothing staged"},
 		{
 			"one file is singular",
-			tooling.Selection{Mode: tooling.SelectionPaths, Paths: paths("a.ts")},
+			tooling.Selection{Dir: "", Mode: tooling.SelectionPaths, Paths: paths("a.ts")},
 			"1 file · a.ts",
 		},
 		{
 			"several files are plural",
-			tooling.Selection{Mode: tooling.SelectionPaths, Paths: paths("a.ts", "b.ts")},
+			tooling.Selection{Dir: "", Mode: tooling.SelectionPaths, Paths: paths("a.ts", "b.ts")},
 			"2 files · a.ts b.ts",
 		},
 		{
 			"a long list is truncated",
-			tooling.Selection{Mode: tooling.SelectionPaths, Paths: paths("a.ts", "b.ts", "c.ts", "d.ts", "e.ts")},
+			tooling.Selection{Dir: "", Mode: tooling.SelectionPaths, Paths: paths("a.ts", "b.ts", "c.ts", "d.ts", "e.ts")},
 			"+2 more",
 		},
 		{
 			"a subtree names the directory",
-			tooling.Selection{Mode: tooling.SelectionSubtree, Dir: filepath.Join(root, "pkg")},
+			tooling.Selection{Paths: nil, Mode: tooling.SelectionSubtree, Dir: filepath.Join(root, "pkg")},
 			"target: pkg",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc := &sharedContext{rootPath: root, selection: tt.sel}
+			sc := &sharedContext{cfg: nil, cwdPath: "", opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, placementGated: false, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, rootPath: root, selection: tt.sel}
 			got := sc.targetLine()
 
 			if tt.want == "" {

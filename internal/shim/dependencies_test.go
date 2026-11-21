@@ -25,8 +25,8 @@ func TestDependencyDeletionRepairsRoot(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			entry := sourcefarm.Entry{Name: "proxy", Command: root, RequiredPaths: []string{dep}, Env: map[string]string{"UPSTREAM": dep}, Installed: true, Strategy: sourcefarm.StrategyShim}
-			h.writeManifest(sourcefarm.Manifest{Entries: []sourcefarm.Entry{entry}})
+			entry := sourcefarm.Entry{Provider: "", Kind: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, Name: "proxy", Command: root, RequiredPaths: []string{dep}, Env: map[string]string{"UPSTREAM": dep}, Installed: true, Strategy: sourcefarm.StrategyShim}
+			h.writeManifest(sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Excluded: nil, Shadowed: nil, Entries: []sourcefarm.Entry{entry}})
 			if remove {
 				if err := os.Remove(dep); err != nil {
 					t.Fatal(err)

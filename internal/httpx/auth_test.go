@@ -24,7 +24,7 @@ func TestDownloadAuthScopesAndRedirect(t *testing.T) {
 		http.Redirect(w, r, end.URL, http.StatusFound)
 	}))
 	defer start.Close()
-	auth := &RequestAuth{TokenEnv: "TEST_DOWNLOAD_TOKEN", Origin: start.URL, Header: "PRIVATE-TOKEN"}
+	auth := &RequestAuth{Scheme: "", Accept: "", TokenEnv: "TEST_DOWNLOAD_TOKEN", Origin: start.URL, Header: "PRIVATE-TOKEN"}
 	client, err := WithAuth(NewHardenedClient(time.Second), auth)
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +38,7 @@ func TestDownloadAuthScopesAndRedirect(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = resp.Body.Close()
-	for _, ref := range []*RequestAuth{{TokenEnv: "DATAMITSU_TOKEN", Origin: start.URL, Header: "PRIVATE-TOKEN"}, {TokenEnv: "TEST_DOWNLOAD_TOKEN", Origin: "https://example.test/path", Header: "PRIVATE-TOKEN"}, {TokenEnv: "TEST_DOWNLOAD_TOKEN", Origin: start.URL, Header: "Cookie"}} {
+	for _, ref := range []*RequestAuth{{Scheme: "", Accept: "", TokenEnv: "DATAMITSU_TOKEN", Origin: start.URL, Header: "PRIVATE-TOKEN"}, {Scheme: "", Accept: "", TokenEnv: "TEST_DOWNLOAD_TOKEN", Origin: "https://example.test/path", Header: "PRIVATE-TOKEN"}, {Scheme: "", Accept: "", TokenEnv: "TEST_DOWNLOAD_TOKEN", Origin: start.URL, Header: "Cookie"}} {
 		if ref.Validate() == nil {
 			t.Fatal("unsafe auth accepted")
 		}
@@ -48,7 +48,7 @@ func TestDownloadAuthScopesAndRedirect(t *testing.T) {
 func TestAuthDefaultPortsAreSameOrigin(t *testing.T) {
 	t.Setenv("TEST_DOWNLOAD_TOKEN", "credential")
 	for _, pair := range [][2]string{{"https://forge.example.test", "https://forge.example.test:443/file"}, {"https://FORGE.example.test:443", "https://forge.example.test/file"}, {"http://localhost", "http://localhost:80/file"}} {
-		auth := &RequestAuth{TokenEnv: "TEST_DOWNLOAD_TOKEN", Origin: pair[0], Header: "PRIVATE-TOKEN"}
+		auth := &RequestAuth{Scheme: "", Accept: "", TokenEnv: "TEST_DOWNLOAD_TOKEN", Origin: pair[0], Header: "PRIVATE-TOKEN"}
 		req, err := http.NewRequest(http.MethodGet, pair[1], nil)
 		if err != nil {
 			t.Fatal(err)
@@ -64,7 +64,7 @@ func TestAuthDefaultPortsAreSameOrigin(t *testing.T) {
 
 func TestAuthMissingCredentialFailsOnlyOnBoundOrigin(t *testing.T) {
 	t.Setenv("TEST_DOWNLOAD_TOKEN", "")
-	auth := &RequestAuth{TokenEnv: "TEST_DOWNLOAD_TOKEN", Origin: "https://forge.example.test", Header: "Authorization", Scheme: "Bearer"}
+	auth := &RequestAuth{Accept: "", TokenEnv: "TEST_DOWNLOAD_TOKEN", Origin: "https://forge.example.test", Header: "Authorization", Scheme: "Bearer"}
 	req, err := http.NewRequest(http.MethodGet, "https://forge.example.test/binary", nil)
 	if err != nil {
 		t.Fatal(err)

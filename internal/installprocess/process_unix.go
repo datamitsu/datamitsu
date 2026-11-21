@@ -15,7 +15,7 @@ type process struct{ pid int }
 
 func start(cmd *exec.Cmd) (*process, error) {
 	if cmd.SysProcAttr == nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
+		cmd.SysProcAttr = new(syscall.SysProcAttr)
 	}
 	cmd.SysProcAttr.Setpgid = true
 	if err := cmd.Start(); err != nil {

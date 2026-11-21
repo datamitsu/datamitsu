@@ -18,10 +18,10 @@ func TestDetect(t *testing.T) {
 		info Info
 		rt   Runtime
 	}{
-		{name: "none", env: map[string]string{"HOME": "/home/u"}},
-		{name: "ci false", env: map[string]string{"CI": "false"}},
-		{name: "ci zero", env: map[string]string{"CI": "0"}},
-		{name: "generic", env: map[string]string{"CI": "1"}, info: Info{Vendor: VendorGeneric, IsCI: true}},
+		{info: Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, rt: Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, name: "none", env: map[string]string{"HOME": "/home/u"}},
+		{info: Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, rt: Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, name: "ci false", env: map[string]string{"CI": "false"}},
+		{info: Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, rt: Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, name: "ci zero", env: map[string]string{"CI": "0"}},
+		{rt: Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, name: "generic", env: map[string]string{"CI": "1"}, info: Info{IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: "", Vendor: VendorGeneric, IsCI: true}},
 		{
 			name: "github pull request",
 			env: map[string]string{
@@ -35,14 +35,14 @@ func TestDetect(t *testing.T) {
 		{
 			name: "github push",
 			env:  map[string]string{"GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "push", "GITHUB_SHA": "abc", "GITHUB_REF": "refs/heads/main"},
-			info: Info{Vendor: VendorGitHub, IsCI: true, SHA: "abc", Ref: "refs/heads/main"},
-			rt:   Runtime{EventName: "push"},
+			info: Info{IsPR: false, BaseRef: "", PRNumber: "", Vendor: VendorGitHub, IsCI: true, SHA: "abc", Ref: "refs/heads/main"},
+			rt:   Runtime{Workspace: "", StepSummaryPath: "", EventPath: "", EventName: "push"},
 		},
 		{
 			name: "github pull_request_target builds the base",
 			env:  map[string]string{"GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "pull_request_target", "GITHUB_REF": "refs/heads/main", "GITHUB_BASE_REF": "main"},
-			info: Info{Vendor: VendorGitHub, IsCI: true, IsPR: true, Ref: "refs/heads/main", BaseRef: "main"},
-			rt:   Runtime{EventName: "pull_request_target"},
+			info: Info{SHA: "", PRNumber: "", Vendor: VendorGitHub, IsCI: true, IsPR: true, Ref: "refs/heads/main", BaseRef: "main"},
+			rt:   Runtime{Workspace: "", StepSummaryPath: "", EventPath: "", EventName: "pull_request_target"},
 		},
 		{
 			name: "gitea wins over the github variables it also sets",
@@ -50,13 +50,14 @@ func TestDetect(t *testing.T) {
 				"GITHUB_ACTIONS": "true", "GITEA_ACTIONS": "true", "GITHUB_EVENT_NAME": "pull_request",
 				"GITHUB_REF": "refs/pull/7/head", "GITHUB_STEP_SUMMARY": "/s.md",
 			},
-			info: Info{Vendor: VendorGitea, IsCI: true, IsPR: true, Ref: "refs/pull/7/head", PRNumber: "7"},
-			rt:   Runtime{EventName: "pull_request"},
+			info: Info{SHA: "", BaseRef: "", Vendor: VendorGitea, IsCI: true, IsPR: true, Ref: "refs/pull/7/head", PRNumber: "7"},
+			rt:   Runtime{Workspace: "", StepSummaryPath: "", EventPath: "", EventName: "pull_request"},
 		},
 		{
+			rt:   Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
 			name: "forgejo",
 			env:  map[string]string{"GITHUB_ACTIONS": "true", "FORGEJO_ACTIONS": "true"},
-			info: Info{Vendor: VendorGitea, IsCI: true},
+			info: Info{IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: "", Vendor: VendorGitea, IsCI: true},
 		},
 		{
 			name: "gitlab merge request",
@@ -65,7 +66,7 @@ func TestDetect(t *testing.T) {
 				"CI_MERGE_REQUEST_IID": "9", "CI_MERGE_REQUEST_TARGET_BRANCH_NAME": "main", "CI_PROJECT_DIR": "/builds/p",
 			},
 			info: Info{Vendor: VendorGitLab, IsCI: true, IsPR: true, SHA: "abc", Ref: "feature", BaseRef: "main", PRNumber: "9"},
-			rt:   Runtime{Workspace: "/builds/p"},
+			rt:   Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: "/builds/p"},
 		},
 		{
 			name: "azure pull request",
@@ -75,22 +76,25 @@ func TestDetect(t *testing.T) {
 				"SYSTEM_PULLREQUEST_TARGETBRANCH": "refs/heads/main", "BUILD_SOURCESDIRECTORY": "/a/s",
 			},
 			info: Info{Vendor: VendorAzure, IsCI: true, IsPR: true, SHA: "abc", Ref: "refs/pull/5/merge", BaseRef: "refs/heads/main", PRNumber: "123"},
-			rt:   Runtime{Workspace: "/a/s"},
+			rt:   Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: "/a/s"},
 		},
 		{
+			rt:   Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
 			name: "azure prefers the pull request number",
 			env:  map[string]string{"TF_BUILD": "True", "SYSTEM_PULLREQUEST_PULLREQUESTID": "123", "SYSTEM_PULLREQUEST_PULLREQUESTNUMBER": "5"},
-			info: Info{Vendor: VendorAzure, IsCI: true, PRNumber: "5"},
+			info: Info{IsPR: false, SHA: "", Ref: "", BaseRef: "", Vendor: VendorAzure, IsCI: true, PRNumber: "5"},
 		},
 		{
+			rt:   Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
 			name: "teamcity",
 			env:  map[string]string{"TEAMCITY_VERSION": "2025.03", "BUILD_VCS_NUMBER": "abc"},
-			info: Info{Vendor: VendorTeamCity, IsCI: true, SHA: "abc"},
+			info: Info{IsPR: false, Ref: "", BaseRef: "", PRNumber: "", Vendor: VendorTeamCity, IsCI: true, SHA: "abc"},
 		},
 		{
+			rt:   Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
 			name: "buildkite not a pull request",
 			env:  map[string]string{"BUILDKITE": "true", "BUILDKITE_COMMIT": "abc", "BUILDKITE_BRANCH": "main", "BUILDKITE_PULL_REQUEST": "false"},
-			info: Info{Vendor: VendorBuildkite, IsCI: true, SHA: "abc", Ref: "main"},
+			info: Info{IsPR: false, BaseRef: "", PRNumber: "", Vendor: VendorBuildkite, IsCI: true, SHA: "abc", Ref: "main"},
 		},
 		{
 			name: "buildkite pull request",
@@ -98,8 +102,8 @@ func TestDetect(t *testing.T) {
 				"BUILDKITE": "true", "BUILDKITE_PULL_REQUEST": "12", "BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main",
 				"BUILDKITE_BUILD_CHECKOUT_PATH": "/b",
 			},
-			info: Info{Vendor: VendorBuildkite, IsCI: true, IsPR: true, BaseRef: "main", PRNumber: "12"},
-			rt:   Runtime{Workspace: "/b"},
+			info: Info{SHA: "", Ref: "", Vendor: VendorBuildkite, IsCI: true, IsPR: true, BaseRef: "main", PRNumber: "12"},
+			rt:   Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: "/b"},
 		},
 		{
 			name: "bitbucket pull request",
@@ -108,12 +112,13 @@ func TestDetect(t *testing.T) {
 				"BITBUCKET_PR_ID": "8", "BITBUCKET_PR_DESTINATION_BRANCH": "main", "BITBUCKET_CLONE_DIR": "/c",
 			},
 			info: Info{Vendor: VendorBitbucket, IsCI: true, IsPR: true, SHA: "abc", Ref: "feature", BaseRef: "main", PRNumber: "8"},
-			rt:   Runtime{Workspace: "/c"},
+			rt:   Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: "/c"},
 		},
 		{
+			rt:   Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
 			name: "bitbucket tag",
 			env:  map[string]string{"BITBUCKET_BUILD_NUMBER": "3", "BITBUCKET_TAG": "v1"},
-			info: Info{Vendor: VendorBitbucket, IsCI: true, Ref: "v1"},
+			info: Info{IsPR: false, SHA: "", BaseRef: "", PRNumber: "", Vendor: VendorBitbucket, IsCI: true, Ref: "v1"},
 		},
 		{
 			name: "jenkins change",
@@ -122,12 +127,13 @@ func TestDetect(t *testing.T) {
 				"CHANGE_ID": "4", "CHANGE_TARGET": "main", "WORKSPACE": "/j",
 			},
 			info: Info{Vendor: VendorJenkins, IsCI: true, IsPR: true, SHA: "abc", Ref: "PR-4", BaseRef: "main", PRNumber: "4"},
-			rt:   Runtime{Workspace: "/j"},
+			rt:   Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: "/j"},
 		},
 		{
+			rt:   Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
 			name: "jenkins git branch",
 			env:  map[string]string{"JENKINS_URL": "https://ci", "GIT_BRANCH": "origin/main"},
-			info: Info{Vendor: VendorJenkins, IsCI: true, Ref: "origin/main"},
+			info: Info{IsPR: false, SHA: "", BaseRef: "", PRNumber: "", Vendor: VendorJenkins, IsCI: true, Ref: "origin/main"},
 		},
 		{
 			name: "circleci pull request url",
@@ -135,23 +141,26 @@ func TestDetect(t *testing.T) {
 				"CIRCLECI": "true", "CIRCLE_SHA1": "abc", "CIRCLE_BRANCH": "feature",
 				"CIRCLE_PULL_REQUEST": "https://example.com/o/r/pull/31", "CIRCLE_WORKING_DIRECTORY": "~/project",
 			},
-			info: Info{Vendor: VendorCircleCI, IsCI: true, IsPR: true, SHA: "abc", Ref: "feature", PRNumber: "31"},
-			rt:   Runtime{Workspace: "~/project"},
+			info: Info{BaseRef: "", Vendor: VendorCircleCI, IsCI: true, IsPR: true, SHA: "abc", Ref: "feature", PRNumber: "31"},
+			rt:   Runtime{EventName: "", StepSummaryPath: "", EventPath: "", Workspace: "~/project"},
 		},
 		{
+			rt:   Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
 			name: "circleci fork number and tag",
 			env:  map[string]string{"CIRCLECI": "true", "CIRCLE_TAG": "v2", "CIRCLE_PR_NUMBER": "6"},
-			info: Info{Vendor: VendorCircleCI, IsCI: true, IsPR: true, Ref: "v2", PRNumber: "6"},
+			info: Info{SHA: "", BaseRef: "", Vendor: VendorCircleCI, IsCI: true, IsPR: true, Ref: "v2", PRNumber: "6"},
 		},
 		{
+			rt:   Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
 			name: "a vendor wins over generic",
 			env:  map[string]string{"CI": "true", "GITLAB_CI": "true"},
-			info: Info{Vendor: VendorGitLab, IsCI: true},
+			info: Info{IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: "", Vendor: VendorGitLab, IsCI: true},
 		},
 		{
+			rt:   Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
 			name: "a marker that is not true",
 			env:  map[string]string{"GITHUB_ACTIONS": "false", "CI": "true"},
-			info: Info{Vendor: VendorGeneric, IsCI: true},
+			info: Info{IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: "", Vendor: VendorGeneric, IsCI: true},
 		},
 	}
 	for _, tt := range tests {

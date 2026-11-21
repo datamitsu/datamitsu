@@ -141,13 +141,20 @@ func Resolve(raw parsermanager.RawDiagnostic, source string, failed bool) Diagno
 		}
 	}
 	d := Diagnostic{
-		Row:      row,
-		Col:      col,
-		EndRow:   endRow,
-		EndCol:   endCol,
-		Severity: levelWithout(failed),
-		Message:  raw.Message,
-		Source:   source,
+		File:      "",
+		Code:      "",
+		URL:       "",
+		Reported:  false,
+		Gates:     false,
+		Baselined: false,
+		Anchor:    nil,
+		Row:       row,
+		Col:       col,
+		EndRow:    endRow,
+		EndCol:    endCol,
+		Severity:  levelWithout(failed),
+		Message:   raw.Message,
+		Source:    source,
 	}
 	if raw.Severity != nil {
 		if s := Severity(*raw.Severity); s >= SeverityError && s <= SeverityHint {

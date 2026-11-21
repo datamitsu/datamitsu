@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/textpos"
@@ -46,55 +47,70 @@ func TestCommand(t *testing.T) {
 	}{
 		{
 			name: "one line with exact columns",
-			loc:  report.Location{Path: "pkg/a.go", Row: 3, EndRow: 3, Chars: span(5, 9), Precision: "exact"},
+			loc:  report.Location{Col: 0, EndCol: 0, Unit: "", Bytes: nil, Utf16: nil, Path: "pkg/a.go", Row: 3, EndRow: 3, Chars: span(5, 9), Precision: "exact"},
 			code: "errcheck", msg: "unchecked",
 			want: "::error file=pkg/a.go,line=3,col=5,endColumn=9,title=golangci-lint(errcheck)::unchecked",
 		},
 		{
+			code: "",
+			msg:  "",
 			name: "an ASCII line counts alike in every unit",
-			loc:  report.Location{Path: "a.go", Row: 3, EndRow: 3, Chars: span(5, 9), Precision: "ascii"},
+			loc:  report.Location{Col: 0, EndCol: 0, Unit: "", Bytes: nil, Utf16: nil, Path: "a.go", Row: 3, EndRow: 3, Chars: span(5, 9), Precision: "ascii"},
 			want: "::error file=a.go,line=3,col=5,endColumn=9,title=golangci-lint::m",
 		},
 		{
+			code: "",
+			msg:  "",
 			name: "columns of unknown precision are left out",
-			loc:  report.Location{Path: "a.go", Row: 3, EndRow: 3, Col: 5, EndCol: 9, Precision: "unknown"},
+			loc:  report.Location{Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Path: "a.go", Row: 3, EndRow: 3, Col: 5, EndCol: 9, Precision: "unknown"},
 			want: "::error file=a.go,line=3,title=golangci-lint::m",
 		},
 		{
+			code: "",
+			msg:  "",
 			name: "a span over lines keeps its lines and drops its columns",
-			loc:  report.Location{Path: "a.go", Row: 3, EndRow: 5, Chars: span(5, 2), Precision: "exact"},
+			loc:  report.Location{Col: 0, EndCol: 0, Unit: "", Bytes: nil, Utf16: nil, Path: "a.go", Row: 3, EndRow: 5, Chars: span(5, 2), Precision: "exact"},
 			want: "::error file=a.go,line=3,endLine=5,title=golangci-lint::m",
 		},
 		{
+			code: "",
+			msg:  "",
 			name: "a point has no end column",
-			loc:  report.Location{Path: "a.go", Row: 3, EndRow: 3, Chars: span(5, 5), Precision: "exact"},
+			loc:  report.Location{Col: 0, EndCol: 0, Unit: "", Bytes: nil, Utf16: nil, Path: "a.go", Row: 3, EndRow: 3, Chars: span(5, 5), Precision: "exact"},
 			want: "::error file=a.go,line=3,col=5,title=golangci-lint::m",
 		},
 		{
+			code: "",
+			msg:  "",
 			name: "a file outside the repository is not named",
-			loc:  report.Location{Path: "/elsewhere/a.go", Row: 3, EndRow: 3, Chars: span(5, 9), Precision: "exact"},
+			loc:  report.Location{Col: 0, EndCol: 0, Unit: "", Bytes: nil, Utf16: nil, Path: "/elsewhere/a.go", Row: 3, EndRow: 3, Chars: span(5, 9), Precision: "exact"},
 			want: "::error title=golangci-lint::m",
 		},
 		{
+			code: "",
+			msg:  "",
 			name: "a Windows path outside the repository is not named",
-			loc:  report.Location{Path: `C:\elsewhere\a.go`, Row: 3},
+			loc:  report.Location{EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "", Path: `C:\elsewhere\a.go`, Row: 3},
 			want: "::error title=golangci-lint::m",
 		},
 		{
+			code: "",
 			name: "no file",
-			loc:  report.Location{Precision: "unknown"},
+			loc:  report.Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "unknown"},
 			msg:  "golangci-lint exited 3 without parsable findings",
 			want: "::error title=golangci-lint::golangci-lint exited 3 without parsable findings",
 		},
 		{
+			msg:  "",
 			name: "a file name and a title with separators",
-			loc:  report.Location{Path: "dir,x/a:b.go", Row: 1, EndRow: 1},
+			loc:  report.Location{Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "", Path: "dir,x/a:b.go", Row: 1, EndRow: 1},
 			code: "a,b:c",
 			want: "::error file=dir%2Cx/a%3Ab.go,line=1,title=golangci-lint(a%2Cb%3Ac)::m",
 		},
 		{
+			code: "",
 			name: "a message with a newline and a command stays one command",
-			loc:  report.Location{Path: "a.go", Row: 1, EndRow: 1},
+			loc:  report.Location{Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "", Path: "a.go", Row: 1, EndRow: 1},
 			msg:  "first\n::error::x",
 			want: "::error file=a.go,line=1,title=golangci-lint::first%0A::error::x",
 		},
@@ -105,7 +121,7 @@ func TestCommand(t *testing.T) {
 			if msg == "" {
 				msg = "m"
 			}
-			a := fromFinding(report.Finding{Tool: "golangci-lint", Source: "golangci-lint", Code: tt.code, Severity: "error", Message: msg, Location: tt.loc})
+			a := fromFinding(report.Finding{Fingerprint: "", FingerprintBasis: "", RuleURL: "", Reported: false, Gates: false, Shown: false, Baselined: false, Kind: "", Provenance: "", Tool: "golangci-lint", Source: "golangci-lint", Code: tt.code, Severity: "error", Message: msg, Location: tt.loc})
 			if got := a.Command(); got != tt.want {
 				t.Errorf("Command() =\n%s\nwant\n%s", got, tt.want)
 			}
@@ -117,12 +133,12 @@ func TestCommand(t *testing.T) {
 // bytes written never exceed the characters it keeps.
 func TestCommandCutsTheMessage(t *testing.T) {
 	msg := strings.Repeat("a", MessageLimit-1) + "é" + "tail"
-	a := Annotation{Level: LevelError, Source: "t", Message: msg}
+	a := Annotation{File: "", Line: 0, EndLine: 0, Col: 0, EndCol: 0, Code: "", Fingerprint: "", Tool: "", RuleURL: "", Severity: "", Synthetic: false, Level: LevelError, Source: "t", Message: msg}
 	got := strings.TrimPrefix(a.Command(), "::error title=t::")
 	if got != strings.Repeat("a", MessageLimit-1) {
 		t.Errorf("message cut to %d bytes ending %q, want the %d ASCII bytes before the split character", len(got), got[len(got)-3:], MessageLimit-1)
 	}
-	short := Annotation{Level: LevelError, Source: "t", Message: "é"}
+	short := Annotation{File: "", Line: 0, EndLine: 0, Col: 0, EndCol: 0, Code: "", Fingerprint: "", Tool: "", RuleURL: "", Severity: "", Synthetic: false, Level: LevelError, Source: "t", Message: "é"}
 	if !strings.HasSuffix(short.Command(), "::é") {
 		t.Errorf("a short message was changed: %q", short.Command())
 	}
@@ -135,7 +151,7 @@ func TestCommandCutsTheMessage(t *testing.T) {
 func TestFileIsRelativeToTheRepositoryRoot(t *testing.T) {
 	root, workspace := "/w/sub", "/w"
 	rel := report.RelPath(root, "/w/sub/pkg/a.go")
-	a := fromFinding(report.Finding{Source: "t", Severity: "error", Location: report.Location{Path: rel, Row: 1, EndRow: 1}})
+	a := fromFinding(report.Finding{Fingerprint: "", FingerprintBasis: "", Tool: "", Code: "", RuleURL: "", Reported: false, Gates: false, Shown: false, Baselined: false, Kind: "", Message: "", Provenance: "", Source: "t", Severity: "error", Location: report.Location{Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "", Path: rel, Row: 1, EndRow: 1}})
 	if a.File != "pkg/a.go" {
 		t.Errorf("file = %q, want pkg/a.go (not relative to the workspace %s)", a.File, workspace)
 	}
@@ -143,21 +159,52 @@ func TestFileIsRelativeToTheRepositoryRoot(t *testing.T) {
 
 func finding(file string, row int, severity string) report.Finding {
 	return report.Finding{
-		Fingerprint: fmt.Sprintf("%s:%d:%s", file, row, severity), Tool: "t", Source: "t", Code: "c",
+		FingerprintBasis: "",
+		RuleURL:          "",
+		Gates:            false,
+		Baselined:        false,
+		Provenance:       "",
+		Fingerprint:      fmt.Sprintf("%s:%d:%s", file, row, severity), Tool: "t", Source: "t", Code: "c",
 		Severity: severity, Reported: true, Shown: true, Kind: "issue", Message: "m",
-		Location: report.Location{Path: file, Row: row, EndRow: row, Precision: "unknown"},
+		Location: report.Location{Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Path: file, Row: row, EndRow: row, Precision: "unknown"},
 	}
 }
 
 func failedRun(findings ...report.Finding) *report.Run {
 	code := 1
-	return &report.Run{Operations: []report.Operation{{
-		Name: "lint", Ran: true,
-		Tools: []report.ToolRun{{
-			Name: "t", FailOn: "error", GateActive: true,
-			Invocations: []report.Invocation{{State: "ran", ExitCode: &code, Findings: findings}},
+	return &report.Run{
+		Schema:      "",
+		Fingerprint: "",
+		Datamitsu:   report.Producer{Version: "", Configuration: ""},
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		Selection:   report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:    false,
+		Complete:    false,
+		Incomplete:  nil,
+		Exports:     nil,
+		CI:          report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Operations: []report.Operation{{
+			Success:         false,
+			Duration:        0,
+			Skipped:         nil,
+			Cancelled:       nil,
+			ChangesObserved: false,
+			ChangesReason:   "",
+			ChangesDetail:   "",
+			ChangesScope:    nil,
+			Changes:         nil,
+			Name:            "lint", Ran: true,
+			Tools: []report.ToolRun{{
+				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+				Parser:     nil,
+				Category:   "",
+				Complete:   false,
+				Incomplete: nil,
+				Name:       "t", FailOn: "error", GateActive: true,
+				Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", ExitCode: &code, Findings: findings}},
+			}},
 		}},
-	}}}
+	}
 }
 
 // 25 errors in five files, two of them touched: the touched files come first,
@@ -238,13 +285,20 @@ func TestCandidates(t *testing.T) {
 	warn.Reported, warn.Shown = false, false
 	dup := finding("a.go", 1, "error")
 	synthetic := report.Finding{
-		Tool: "t", Source: "t", Severity: "error", Kind: "synthetic", Gates: true,
-		Fingerprint: "syn", Message: "t exited 2 without parsable findings", Location: report.Location{Precision: "unknown"},
+		FingerprintBasis: "",
+		Code:             "",
+		RuleURL:          "",
+		Reported:         false,
+		Shown:            false,
+		Baselined:        false,
+		Provenance:       "",
+		Tool:             "t", Source: "t", Severity: "error", Kind: "synthetic", Gates: true,
+		Fingerprint: "syn", Message: "t exited 2 without parsable findings", Location: report.Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "unknown"},
 	}
 	run := failedRun(finding("a.go", 1, "error"), warn)
 	code := 2
 	run.Operations[0].Tools[0].Invocations = append(run.Operations[0].Tools[0].Invocations,
-		report.Invocation{State: "ran", ExitCode: &code, Findings: []report.Finding{dup, synthetic}})
+		report.Invocation{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", ExitCode: &code, Findings: []report.Finding{dup, synthetic}})
 	candidates := Candidates(run)
 	got := make([]string, 0, len(candidates))
 	for _, a := range candidates {

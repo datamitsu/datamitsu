@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	zerovalue_sync "sync"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -26,23 +27,40 @@ func (f fakePlatformChecker) BinaryAvailable(app string) (bool, string) {
 
 func repoScopedTool(name, app string) config.Tool {
 	return config.Tool{
-		Name: name,
+		ProjectTypes: nil,
+		Skip:         false,
+		SkipReason:   "",
+		OutputParser: nil,
+		Name:         name,
 		Operations: map[config.OperationType]config.ToolOperation{
-			config.OpLint: {App: app, Scope: config.ToolScopeRepository},
+			config.OpLint: {Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: app, Scope: config.ToolScopeRepository},
 		},
 	}
 }
 
 func newSkipTestPlanner(tools config.MapOfTools) *Planner {
 	return &Planner{
-		rootPath:         "/repo",
-		cwdPath:          "/repo",
-		detectedTypes:    []string{},
-		tools:            tools,
-		cachedFiles:      []string{},
-		cachedProjects:   []project.ProjectLocation{},
-		cacheInitialized: true,
-		timings:          timing.New(),
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        zerovalue_sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        zerovalue_sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		rootPath:           "/repo",
+		cwdPath:            "/repo",
+		detectedTypes:      []string{},
+		tools:              tools,
+		cachedFiles:        []string{},
+		cachedProjects:     []project.ProjectLocation{},
+		cacheInitialized:   true,
+		timings:            timing.New(),
 	}
 }
 
@@ -52,7 +70,7 @@ func TestCollectTasks_ConfigSkip(t *testing.T) {
 	tool.SkipReason = "runs in CI only"
 	p := newSkipTestPlanner(config.MapOfTools{"trufflehog": tool})
 
-	tasks, skipped := p.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, skipped := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	if len(tasks) != 0 {
 		t.Fatalf("expected no tasks for a skip:true tool, got %d", len(tasks))
@@ -73,7 +91,7 @@ func TestCollectTasks_PlatformSkip(t *testing.T) {
 	p := newSkipTestPlanner(config.MapOfTools{"typstyle": repoScopedTool("typstyle", "typstyle")})
 	p.SetPlatformChecker(fakePlatformChecker{unavailable: map[string]string{"typstyle": "linux/arm64/musl"}})
 
-	tasks, skipped := p.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, skipped := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	if len(tasks) != 0 {
 		t.Fatalf("expected no tasks for a platform-unsupported tool, got %d", len(tasks))
@@ -91,7 +109,7 @@ func TestCollectTasks_AvailableToolNotSkipped(t *testing.T) {
 	p := newSkipTestPlanner(config.MapOfTools{"shellcheck": repoScopedTool("shellcheck", "shellcheck")})
 	p.SetPlatformChecker(fakePlatformChecker{unavailable: map[string]string{"typstyle": "linux/arm64/musl"}})
 
-	tasks, skipped := p.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, skipped := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 task for an available tool, got %d", len(tasks))
@@ -109,7 +127,7 @@ func TestCollectTasks_InapplicableSkipNotReported(t *testing.T) {
 	tool.ProjectTypes = []string{"golang"} // not in detectedTypes
 	p := newSkipTestPlanner(config.MapOfTools{"go-thing": tool})
 
-	tasks, skipped := p.collectTasks(context.Background(), config.OpLint, Selection{})
+	tasks, skipped := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 
 	if len(tasks) != 0 || len(skipped) != 0 {
 		t.Fatalf("expected no tasks and no skips for an inapplicable tool, got %d tasks / %d skips", len(tasks), len(skipped))
@@ -122,12 +140,12 @@ func TestCollectTasks_SkipScopedToOperation(t *testing.T) {
 	tool.Skip = true
 	p := newSkipTestPlanner(config.MapOfTools{"trufflehog": tool})
 
-	_, skippedFix := p.collectTasks(context.Background(), config.OpFix, Selection{})
+	_, skippedFix := p.collectTasks(context.Background(), config.OpFix, Selection{Mode: 0, Dir: "", Paths: nil})
 	if len(skippedFix) != 0 {
 		t.Errorf("skip:true tool without a fix op should not be reported in fix, got %d", len(skippedFix))
 	}
 
-	_, skippedLint := p.collectTasks(context.Background(), config.OpLint, Selection{})
+	_, skippedLint := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil})
 	if len(skippedLint) != 1 {
 		t.Errorf("expected the skip to be reported in lint, got %d", len(skippedLint))
 	}
@@ -143,7 +161,7 @@ func TestPlan_SkippedFilteredBySelectedTools(t *testing.T) {
 	p := newSkipTestPlanner(tools)
 
 	// Selecting only shellcheck drops trufflehog's skip from the plan.
-	plan, err := p.Plan(context.Background(), config.OpLint, Selection{}, []string{"shellcheck"})
+	plan, err := p.Plan(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil}, []string{"shellcheck"})
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
@@ -152,7 +170,7 @@ func TestPlan_SkippedFilteredBySelectedTools(t *testing.T) {
 	}
 
 	// Selecting trufflehog keeps it.
-	plan, err = p.Plan(context.Background(), config.OpLint, Selection{}, []string{"trufflehog"})
+	plan, err = p.Plan(context.Background(), config.OpLint, Selection{Mode: 0, Dir: "", Paths: nil}, []string{"trufflehog"})
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
@@ -167,10 +185,10 @@ func TestSkippedTool_ReasonText(t *testing.T) {
 		in   SkippedTool
 		want string
 	}{
-		{"config with detail", SkippedTool{Reason: SkipReasonConfig, Detail: "runs in CI only"}, "runs in CI only"},
-		{"config no detail", SkippedTool{Reason: SkipReasonConfig}, "disabled in config"},
-		{"platform with host", SkippedTool{Reason: SkipReasonUnsupportedPlatform, Detail: "linux/arm64/musl"}, "no binary for linux/arm64/musl"},
-		{"platform no host", SkippedTool{Reason: SkipReasonUnsupportedPlatform}, "no binary for this platform"},
+		{"config with detail", SkippedTool{ToolName: "", Operation: "", Reason: SkipReasonConfig, Detail: "runs in CI only"}, "runs in CI only"},
+		{"config no detail", SkippedTool{ToolName: "", Operation: "", Detail: "", Reason: SkipReasonConfig}, "disabled in config"},
+		{"platform with host", SkippedTool{ToolName: "", Operation: "", Reason: SkipReasonUnsupportedPlatform, Detail: "linux/arm64/musl"}, "no binary for linux/arm64/musl"},
+		{"platform no host", SkippedTool{ToolName: "", Operation: "", Detail: "", Reason: SkipReasonUnsupportedPlatform}, "no binary for this platform"},
 	}
 	for _, tc := range cases {
 		if got := tc.in.ReasonText(); got != tc.want {
@@ -190,6 +208,9 @@ func TestSkipReason_String(t *testing.T) {
 
 func TestJSONFormatter_IncludesSkipped(t *testing.T) {
 	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Groups:     nil,
 		Skipped: []SkippedTool{
 			{ToolName: "trufflehog", Operation: config.OpLint, Reason: SkipReasonConfig, Detail: "runs in CI only"},
 			{ToolName: "typstyle", Operation: config.OpLint, Reason: SkipReasonUnsupportedPlatform, Detail: "linux/arm64/musl"},
@@ -214,7 +235,10 @@ func TestJSONFormatter_IncludesSkipped(t *testing.T) {
 
 func TestSummaryFormatter_ShowsSkippedWhenNoGroups(t *testing.T) {
 	plan := &ExecutionPlan{
-		Skipped: []SkippedTool{{ToolName: "trufflehog", Reason: SkipReasonConfig, Detail: "runs in CI only"}},
+		ConfigName: "",
+		FailOn:     "",
+		Groups:     nil,
+		Skipped:    []SkippedTool{{Operation: "", ToolName: "trufflehog", Reason: SkipReasonConfig, Detail: "runs in CI only"}},
 	}
 	out := NewSummaryFormatter().Format(plan, "/repo", "/repo", config.OpLint)
 	if !strings.Contains(out, "Skipped (1)") || !strings.Contains(out, "trufflehog") || !strings.Contains(out, "runs in CI only") {

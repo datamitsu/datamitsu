@@ -14,6 +14,7 @@ import (
 	"os"
 	"slices"
 	"sync/atomic"
+	zerovalue_time "time"
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
 	"github.com/datamitsu/datamitsu/internal/env"
@@ -37,7 +38,7 @@ var Logger *zap.Logger
 var consoleFilter atomic.Pointer[func(string) string]
 
 func init() {
-	Logger = zap.New(&switchCore{console: newConsoleCore(zapcore.Lock(zapcore.AddSync(filteredWriter{os.Stderr})))})
+	Logger = zap.New(&switchCore{fields: nil, console: newConsoleCore(zapcore.Lock(zapcore.AddSync(filteredWriter{os.Stderr})))})
 }
 
 // SetConsoleFilter rewrites every entry written to the console from now on —
@@ -132,10 +133,52 @@ func (c *switchCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore
 func (c *switchCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 	if emit := route.Load(); emit != nil {
 		(*emit)(uievent.Event{
-			Type:  uievent.TypeLog,
-			OpID:  uievent.NextOpID("log"),
-			Level: eventLevel(ent.Level),
-			Msg:   routedMessage(ent.Message, c.fields, fields),
+			TS:              0,
+			Status:          "",
+			Op:              "",
+			Tool:            "",
+			Dir:             "",
+			Name:            "",
+			BytesDone:       0,
+			BytesTotal:      0,
+			Percent:         0,
+			Index:           0,
+			Total:           0,
+			Success:         nil,
+			DurationMs:      0,
+			Tools:           0,
+			Runs:            0,
+			Failed:          0,
+			Skipped:         0,
+			Cancelled:       nil,
+			Complete:        nil,
+			Format:          "",
+			Path:            "",
+			File:            "",
+			Row:             0,
+			Col:             0,
+			EndRow:          0,
+			EndCol:          0,
+			Severity:        "",
+			Code:            "",
+			Source:          "",
+			Fingerprint:     "",
+			Provenance:      "",
+			Reported:        nil,
+			Gates:           nil,
+			Baselined:       false,
+			FindingsError:   nil,
+			FindingsWarning: nil,
+			FindingsInfo:    nil,
+			FindingsHint:    nil,
+			Cached:          nil,
+			Schema:          "",
+			Events:          "",
+			Annotations:     "",
+			Type:            uievent.TypeLog,
+			OpID:            uievent.NextOpID("log"),
+			Level:           eventLevel(ent.Level),
+			Msg:             routedMessage(ent.Message, c.fields, fields),
 		})
 		return nil
 	}
@@ -167,9 +210,22 @@ func eventLevel(level zapcore.Level) string {
 
 // fieldEncoderConfig encodes fields only: every entry key is empty.
 var fieldEncoderConfig = zapcore.EncoderConfig{
-	EncodeDuration: zapcore.StringDurationEncoder,
-	EncodeTime:     zapcore.ISO8601TimeEncoder,
-	SkipLineEnding: true,
+	MessageKey:          "",
+	LevelKey:            "",
+	TimeKey:             "",
+	NameKey:             "",
+	CallerKey:           "",
+	FunctionKey:         "",
+	StacktraceKey:       "",
+	LineEnding:          "",
+	EncodeLevel:         nil,
+	EncodeCaller:        nil,
+	EncodeName:          nil,
+	NewReflectedEncoder: nil,
+	ConsoleSeparator:    "",
+	EncodeDuration:      zapcore.StringDurationEncoder,
+	EncodeTime:          zapcore.ISO8601TimeEncoder,
+	SkipLineEnding:      true,
 }
 
 // withheldFields are the fields a routed log line never carries: a tool's
@@ -209,7 +265,7 @@ func routedMessage(msg string, with, fields []zapcore.Field) string {
 	if added == 0 {
 		return msg
 	}
-	buf, err := enc.EncodeEntry(zapcore.Entry{}, nil)
+	buf, err := enc.EncodeEntry(zapcore.Entry{Level: 0, Time: zerovalue_time.Time{}, LoggerName: "", Message: "", Caller: zapcore.EntryCaller{Defined: false, PC: 0, File: "", Line: 0, Function: ""}, Stack: ""}, nil)
 	if err != nil {
 		return msg
 	}

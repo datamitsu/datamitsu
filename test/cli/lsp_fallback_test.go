@@ -61,7 +61,7 @@ func TestLspRecordsOnlyPassesTheCLIWould(t *testing.T) {
 	if err := os.Remove(markers); err != nil {
 		t.Fatal(err)
 	}
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cache, Env: []string{"MARKERS=" + markers}}, "fix")
+	res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cache, Env: []string{"MARKERS=" + markers}}, "fix")
 	if res.ExitCode != 1 || !strings.Contains(res.Stdout+res.Stderr, "still broken") {
 		t.Errorf("fix exited %d without the error the fixer printed\n--- stdout ---\n%s\n--- stderr ---\n%s",
 			res.ExitCode, res.Stdout, res.Stderr)

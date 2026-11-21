@@ -13,7 +13,7 @@ func TestInspectExport(t *testing.T) {
 	project := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(project)
 	args := []string{"--no-auto-config", "--config", cfg, "inspect", "--output", "-"}
-	result := clitest.Run(t, clitest.RunOptions{Dir: project.Dir}, args...)
+	result := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: project.Dir}, args...)
 	if result.ExitCode != 0 {
 		t.Fatal(result.Stderr)
 	}
@@ -22,7 +22,7 @@ func TestInspectExport(t *testing.T) {
 	}
 	target := filepath.Join(project.Dir, "atlas.html")
 	args[len(args)-1] = target
-	written := clitest.Run(t, clitest.RunOptions{Dir: project.Dir}, args...)
+	written := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: project.Dir}, args...)
 	if written.ExitCode != 0 || written.Stdout != "" {
 		t.Fatalf("export: %d %s %s", written.ExitCode, written.Stdout, written.Stderr)
 	}
@@ -34,7 +34,7 @@ func TestInspectExport(t *testing.T) {
 		t.Fatal("file differs from stdout artifact")
 	}
 	args[len(args)-1] = filepath.Join(project.Dir, "missing", "atlas.html")
-	failed := clitest.Run(t, clitest.RunOptions{Dir: project.Dir}, args...)
+	failed := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: project.Dir}, args...)
 	if failed.ExitCode == 0 {
 		t.Fatal("write failure must fail the command")
 	}
@@ -43,7 +43,7 @@ func TestInspectExport(t *testing.T) {
 // Every one of these is a caller mistake, refused with the usage code.
 func TestInspectInvalidFlags(t *testing.T) {
 	for _, args := range [][]string{{"inspect", "--port", "-1"}, {"inspect", "--port", "65536"}, {"inspect", "--output", ""}, {"inspect", "--output", "-", "--port", "0"}, {"inspect", "unexpected"}} {
-		result := clitest.Run(t, clitest.RunOptions{}, args...)
+		result := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, args...)
 		if result.ExitCode != 2 {
 			t.Fatalf("%v exit = %d, want 2\nstderr:\n%s", args, result.ExitCode, result.Stderr)
 		}

@@ -20,17 +20,17 @@ func TestResolveFailOn(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{name: "neither"},
-		{name: "env only", env: "info", want: "info"},
-		{name: "flag only", flag: "warning", want: "warning"},
-		{name: "flag wins", env: "hint", flag: "warning", want: "warning"},
-		{name: "invalid env", env: "warnings", wantErr: true},
-		{name: "invalid env under a valid flag", env: "warnings", flag: "warning", wantErr: true},
-		{name: "invalid flag", flag: "Error", wantErr: true},
+		{env: "", flag: "", want: "", wantErr: false, name: "neither"},
+		{flag: "", wantErr: false, name: "env only", env: "info", want: "info"},
+		{env: "", wantErr: false, name: "flag only", flag: "warning", want: "warning"},
+		{wantErr: false, name: "flag wins", env: "hint", flag: "warning", want: "warning"},
+		{flag: "", want: "", name: "invalid env", env: "warnings", wantErr: true},
+		{want: "", name: "invalid env under a valid flag", env: "warnings", flag: "warning", wantErr: true},
+		{env: "", want: "", name: "invalid flag", flag: "Error", wantErr: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := &cobra.Command{}
+			c := &cobra.Command{Use: "", Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0}
 			var value string
 			addFailOnFlag(c, &value)
 			if tc.flag != "" {

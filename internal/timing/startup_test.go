@@ -23,7 +23,7 @@ func TestStartStartupPhaseRecordsNothingWhenDisabled(t *testing.T) {
 		value string
 		set   bool
 	}{
-		{name: "unset"},
+		{value: "", set: false, name: "unset"},
 		{name: "zero", value: "0", set: true},
 		{name: "empty", value: "", set: true},
 		{name: "non-numeric", value: "yes", set: true},

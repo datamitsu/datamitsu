@@ -12,13 +12,20 @@ func planWith(ops ...config.ToolOperation) *tooling.ExecutionPlan {
 	tasks := make([]tooling.Task, 0, len(ops))
 	for i, op := range ops {
 		tasks = append(tasks, tooling.Task{
+			ID:          "",
+			Tool:        config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Operation:   "",
+			UnitDir:     "",
+			UnitMembers: nil,
+			UnitGuards:  nil,
+			Coverage:    "",
 			ToolName:    string(rune('a' + i)),
 			OpConfig:    op,
 			ProjectPath: "/repo/pkg",
 			Files:       []string{"/repo/pkg/a.ts"},
 		})
 	}
-	return &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: tasks}}}
+	return &tooling.ExecutionPlan{ConfigName: "", FailOn: "", Skipped: nil, Groups: []tooling.TaskGroup{{Priority: 0, Tasks: tasks}}}
 }
 
 func toolNames(plan *tooling.ExecutionPlan) []string {
@@ -32,11 +39,11 @@ func toolNames(plan *tooling.ExecutionPlan) []string {
 }
 
 var (
-	fileOp = config.ToolOperation{Scope: config.ToolScopePerFile, Args: []string{"{file}"}}
-	unitOp = config.ToolOperation{Scope: config.ToolScopePerProject, Args: []string{"fmt"}, Globs: []string{"**/*.go"}}
+	fileOp = config.ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile, Args: []string{"{file}"}}
+	unitOp = config.ToolOperation{App: "", Arity: "", Granularity: "", ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerProject, Args: []string{"fmt"}, Globs: []string{"**/*.go"}}
 	// noGlobsOp claims every file in its unit, like `golangci-lint fmt`.
-	noGlobsOp = config.ToolOperation{Scope: config.ToolScopePerProject, Args: []string{"fmt"}}
-	repoOp    = config.ToolOperation{Scope: config.ToolScopeRepository, Args: []string{"run"}}
+	noGlobsOp = config.ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerProject, Args: []string{"fmt"}}
+	repoOp    = config.ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopeRepository, Args: []string{"run"}}
 )
 
 func withLSP(op config.ToolOperation, on bool) config.ToolOperation {
@@ -61,92 +68,121 @@ func TestEditorDecision(t *testing.T) {
 		wantRun    bool
 		wantReason string
 	}{
-		{name: "file runs", op: fileOp, unit: "/repo/pkg", project: config.WidenToUnit, session: config.WidenToTarget, wantRun: true},
-		{name: "lsp true is the same as unset", op: withLSP(fileOp, true), unit: "/repo/pkg", project: config.WidenToUnit, session: config.WidenToUnit, wantRun: true},
+		{tools: nil, wantReason: "", name: "file runs", op: fileOp, unit: "/repo/pkg", project: config.WidenToUnit, session: config.WidenToTarget, wantRun: true},
+		{tools: nil, wantReason: "", name: "lsp true is the same as unset", op: withLSP(fileOp, true), unit: "/repo/pkg", project: config.WidenToUnit, session: config.WidenToUnit, wantRun: true},
 		{
-			name: "lsp false drops a file task", op: withLSP(fileOp, false), unit: "/repo/pkg",
+			tools:   nil,
+			wantRun: false,
+			name:    "lsp false drops a file task", op: withLSP(fileOp, false), unit: "/repo/pkg",
 			project: config.WidenToUnit, session: config.WidenToUnit, wantReason: reasonLSPFalse,
 		},
 		{
-			name: "lsp false beats tools true", op: withLSP(unitOp, false), unit: "/repo/pkg",
+			wantRun: false,
+			name:    "lsp false beats tools true", op: withLSP(unitOp, false), unit: "/repo/pkg",
 			project: config.WidenToUnit, session: config.WidenToUnit, tools: map[string]bool{"t": true}, wantReason: reasonLSPFalse,
 		},
 		{
-			name: "tools false drops a file task", op: fileOp, unit: "/repo/pkg",
+			wantRun: false,
+			name:    "tools false drops a file task", op: fileOp, unit: "/repo/pkg",
 			project: config.WidenToUnit, session: config.WidenToUnit, tools: map[string]bool{"t": false}, wantReason: reasonToolsFalse,
 		},
 		{
-			name: "tools false drops a unit task", op: unitOp, unit: "/repo/pkg",
+			wantRun: false,
+			name:    "tools false drops a unit task", op: unitOp, unit: "/repo/pkg",
 			project: config.WidenToUnit, session: config.WidenToUnit, tools: map[string]bool{"t": false}, wantReason: reasonToolsFalse,
 		},
 		{
-			name: "repo never runs", op: repoOp, unit: "/repo",
+			tools:   nil,
+			wantRun: false,
+			name:    "repo never runs", op: repoOp, unit: "/repo",
 			project: config.WidenToRepo, session: config.WidenToUnit, wantReason: reasonRepo,
 		},
 		{
-			name: "tools true does not lift a repo task", op: repoOp, unit: "/repo",
+			wantRun: false,
+			name:    "tools true does not lift a repo task", op: repoOp, unit: "/repo",
 			project: config.WidenToRepo, session: config.WidenToUnit, tools: map[string]bool{"t": true}, wantReason: reasonRepo,
 		},
-		{name: "unit under unit session", op: unitOp, unit: "/repo/pkg", project: config.WidenToUnit, session: config.WidenToUnit, wantRun: true},
-		{name: "unit under a repo project is still min(project, session)", op: unitOp, unit: "/repo/pkg", project: config.WidenToRepo, session: config.WidenToUnit, wantRun: true},
-		{name: "unset project policy takes the default", op: unitOp, unit: "/repo/pkg", project: "", session: config.WidenToUnit, wantRun: true},
+		{tools: nil, wantReason: "", name: "unit under unit session", op: unitOp, unit: "/repo/pkg", project: config.WidenToUnit, session: config.WidenToUnit, wantRun: true},
+		{tools: nil, wantReason: "", name: "unit under a repo project is still min(project, session)", op: unitOp, unit: "/repo/pkg", project: config.WidenToRepo, session: config.WidenToUnit, wantRun: true},
+		{tools: nil, wantReason: "", name: "unset project policy takes the default", op: unitOp, unit: "/repo/pkg", project: "", session: config.WidenToUnit, wantRun: true},
 		{
-			name: "unit under a target session", op: unitOp, unit: "/repo/pkg",
+			tools:   nil,
+			wantRun: false,
+			name:    "unit under a target session", op: unitOp, unit: "/repo/pkg",
 			project: config.WidenToUnit, session: config.WidenToTarget, wantReason: reasonSessionTarget,
 		},
 		{
-			name: "tools true lifts a unit task over a target session", op: unitOp, unit: "/repo/pkg",
+			wantReason: "",
+			name:       "tools true lifts a unit task over a target session", op: unitOp, unit: "/repo/pkg",
 			project: config.WidenToUnit, session: config.WidenToTarget, tools: map[string]bool{"t": true}, wantRun: true,
 		},
 		{
-			name: "unit under a target project", op: unitOp, unit: "/repo/pkg",
+			tools:   nil,
+			wantRun: false,
+			name:    "unit under a target project", op: unitOp, unit: "/repo/pkg",
 			project: config.WidenToTarget, session: config.WidenToUnit, wantReason: reasonProjectTarget,
 		},
 		{
-			name: "tools true never passes a target project", op: unitOp, unit: "/repo/pkg",
+			wantRun: false,
+			name:    "tools true never passes a target project", op: unitOp, unit: "/repo/pkg",
 			project: config.WidenToTarget, session: config.WidenToTarget, tools: map[string]bool{"t": true}, wantReason: reasonProjectTarget,
 		},
 		{
-			name: "both target names the project", op: unitOp, unit: "/repo/pkg",
+			tools:   nil,
+			wantRun: false,
+			name:    "both target names the project", op: unitOp, unit: "/repo/pkg",
 			project: config.WidenToTarget, session: config.WidenToTarget, wantReason: reasonProjectTarget,
 		},
 		{
-			name: "glob-less unit task stays out", op: noGlobsOp, unit: "/repo/pkg",
+			tools:   nil,
+			wantRun: false,
+			name:    "glob-less unit task stays out", op: noGlobsOp, unit: "/repo/pkg",
 			project: config.WidenToUnit, session: config.WidenToUnit, wantReason: reasonNoGlobs,
 		},
 		{
-			name: "tools true opts a glob-less unit task in", op: noGlobsOp, unit: "/repo/pkg",
+			wantReason: "",
+			name:       "tools true opts a glob-less unit task in", op: noGlobsOp, unit: "/repo/pkg",
 			project: config.WidenToUnit, session: config.WidenToTarget, tools: map[string]bool{"t": true}, wantRun: true,
 		},
 		{
-			name: "an opted-in glob-less task is still bounded by the project", op: noGlobsOp, unit: "/repo/pkg",
+			wantRun: false,
+			name:    "an opted-in glob-less task is still bounded by the project", op: noGlobsOp, unit: "/repo/pkg",
 			project: config.WidenToTarget, session: config.WidenToUnit, tools: map[string]bool{"t": true}, wantReason: reasonProjectTarget,
 		},
 		{
-			name: "lsp false beats opting a glob-less task in", op: withLSP(noGlobsOp, false), unit: "/repo/pkg",
+			wantRun: false,
+			name:    "lsp false beats opting a glob-less task in", op: withLSP(noGlobsOp, false), unit: "/repo/pkg",
 			project: config.WidenToUnit, session: config.WidenToUnit, tools: map[string]bool{"t": true}, wantReason: reasonLSPFalse,
 		},
 		{
-			name: "tools false on a glob-less task names the user's choice", op: noGlobsOp, unit: "/repo/pkg",
+			wantRun: false,
+			name:    "tools false on a glob-less task names the user's choice", op: noGlobsOp, unit: "/repo/pkg",
 			project: config.WidenToUnit, session: config.WidenToUnit, tools: map[string]bool{"t": false}, wantReason: reasonToolsFalse,
 		},
 		{
-			name: "glob-less file task is unaffected", op: config.ToolOperation{Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
+			tools:      nil,
+			wantReason: "",
+			name:       "glob-less file task is unaffected", op: config.ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
 			unit: "/repo/pkg", project: config.WidenToUnit, session: config.WidenToUnit, wantRun: true,
 		},
 		{
-			name: "another module is dropped silently", op: unitOp, unit: "/repo/other",
+			tools:      nil,
+			wantRun:    false,
+			wantReason: "",
+			name:       "another module is dropped silently", op: unitOp, unit: "/repo/other",
 			project: config.WidenToUnit, session: config.WidenToUnit,
 		},
 		{
-			name: "another module stays silent whatever else applies", op: withLSP(unitOp, false), unit: "/repo/other",
+			wantRun:    false,
+			wantReason: "",
+			name:       "another module stays silent whatever else applies", op: withLSP(unitOp, false), unit: "/repo/other",
 			project: config.WidenToUnit, session: config.WidenToUnit, tools: map[string]bool{"t": true},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := tooling.Task{ToolName: "t", OpConfig: tt.op, ProjectPath: tt.unit}
+			task := tooling.Task{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "t", OpConfig: tt.op, ProjectPath: tt.unit}
 			run, reason := editorDecision(task, saved, tt.project, sessionPolicy(tt.session, tt.tools))
 			if run != tt.wantRun || reason != tt.wantReason {
 				t.Errorf("editorDecision() = (%v, %q), want (%v, %q)", run, reason, tt.wantRun, tt.wantReason)
@@ -190,9 +226,23 @@ func TestFilterPlanForEditorDefaultKeepsUnitTasks(t *testing.T) {
 	t.Setenv("DATAMITSU_LSP_FORMAT_WIDEN_TO", "")
 
 	plan := planWith(config.ToolOperation{
-		Scope: config.ToolScopePerProject,
-		Args:  []string{"run", "--fix", "--allow-parallel-runners"},
-		Globs: []string{"**/*.go"},
+		App:               "",
+		Arity:             "",
+		Granularity:       "",
+		ExcludeGlobs:      nil,
+		Priority:          0,
+		Cache:             nil,
+		InvalidateOn:      nil,
+		Env:               nil,
+		InheritEnv:        nil,
+		FailOn:            "",
+		Input:             "",
+		LSP:               nil,
+		Output:            "",
+		ManagedConfigRefs: nil,
+		Scope:             config.ToolScopePerProject,
+		Args:              []string{"run", "--fix", "--allow-parallel-runners"},
+		Globs:             []string{"**/*.go"},
 	})
 	filterPlanForEditor(plan, "/repo/pkg/a.ts", "", envFormatPolicy())
 
@@ -207,10 +257,16 @@ func TestFilterPlanForEditorDefaultKeepsUnitTasks(t *testing.T) {
 // rewritten behind its back. Those modules are not reported either: they are
 // not what the user saved.
 func TestFilterPlanForEditorSkipsOtherUnits(t *testing.T) {
-	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{
-		{ToolName: "mine", OpConfig: unitOp, ProjectPath: "/repo/svc/a"},
-		{ToolName: "theirs", OpConfig: unitOp, ProjectPath: "/repo/svc/b"},
-	}}}}
+	plan := &tooling.ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []tooling.TaskGroup{{
+			Priority: 0, Tasks: []tooling.Task{
+				{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "mine", OpConfig: unitOp, ProjectPath: "/repo/svc/a"},
+				{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "theirs", OpConfig: unitOp, ProjectPath: "/repo/svc/b"},
+			},
+		}},
+	}
 
 	left := filterPlanForEditor(plan, "/repo/svc/a/main.go", "", sessionPolicy(config.WidenToUnit, nil))
 
@@ -225,10 +281,14 @@ func TestFilterPlanForEditorSkipsOtherUnits(t *testing.T) {
 // The watchdog counts groups, so a group the policy emptied must not count as
 // one that ran.
 func TestFilterPlanForEditorDropsEmptyGroups(t *testing.T) {
-	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{
-		{Priority: 0, Tasks: []tooling.Task{{ToolName: "repo-only", OpConfig: repoOp, ProjectPath: "/repo"}}},
-		{Priority: 1, Tasks: []tooling.Task{{ToolName: "fmt", OpConfig: fileOp, ProjectPath: "/repo/pkg"}}},
-	}}
+	plan := &tooling.ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []tooling.TaskGroup{
+			{Priority: 0, Tasks: []tooling.Task{{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "repo-only", OpConfig: repoOp, ProjectPath: "/repo"}}},
+			{Priority: 1, Tasks: []tooling.Task{{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "fmt", OpConfig: fileOp, ProjectPath: "/repo/pkg"}}},
+		},
+	}
 
 	filterPlanForEditor(plan, "/repo/pkg/a.ts", "", sessionPolicy(config.WidenToUnit, nil))
 
@@ -265,11 +325,13 @@ func TestFilterPlanForEditorUnitTasksWithoutGlobs(t *testing.T) {
 		wantLeft []leftOut
 	}{
 		{
+			tools:    nil,
 			name:     "left out and reported",
 			wantKept: []string{"a", "b"},
 			wantLeft: []leftOut{{Tool: "c", Reason: reasonNoGlobs}},
 		},
 		{
+			wantLeft: nil,
 			name:     "opted in by format.tools",
 			tools:    map[string]bool{"c": true},
 			wantKept: []string{"a", "b", "c"},

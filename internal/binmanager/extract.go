@@ -227,7 +227,7 @@ func extractZip(zipPath string, binaryPath *string, destDir string) (string, err
 	// Pick the strongest match across all entries rather than the first, so an
 	// exact path wins over an unrelated entry that only shares a basename.
 	var best *zip.File
-	bestMatch := entryMatch{rank: matchNone}
+	bestMatch := entryMatch{executable: false, inBinDir: false, rank: matchNone}
 	for _, file := range reader.File {
 		if file.FileInfo().IsDir() {
 			continue
@@ -357,7 +357,7 @@ func isRegularTarEntry(t byte) bool {
 }
 
 func extractFromTar(tarReader *tar.Reader, targetPath, archiveType, archivePath, destDir string) (string, error) {
-	best := entryMatch{rank: matchNone}
+	best := entryMatch{executable: false, inBinDir: false, rank: matchNone}
 	bestPath := ""
 	bestName := ""
 

@@ -76,6 +76,13 @@ func newHarness(t *testing.T) *harness {
 	}
 
 	h := &harness{
+		stderr:       bytes.Buffer{},
+		execs:        nil,
+		spawns:       nil,
+		spawnExes:    nil,
+		spawnReqs:    nil,
+		spawnFunc:    nil,
+		d:            nil,
 		t:            t,
 		base:         base,
 		root:         root,
@@ -84,9 +91,13 @@ func newHarness(t *testing.T) *harness {
 	}
 
 	h.d = &Dispatcher{
-		Getwd:      func() (string, error) { return root, nil },
-		Executable: func() (string, error) { return filepath.Join(base, "datamitsu"), nil },
-		Environ:    func() []string { return []string{"PATH=/usr/bin", "HOME=/home/u"} },
+		Args:           nil,
+		QuietFarm:      nil,
+		throughFarm:    false,
+		invokedFarmDir: "",
+		Getwd:          func() (string, error) { return root, nil },
+		Executable:     func() (string, error) { return filepath.Join(base, "datamitsu"), nil },
+		Environ:        func() []string { return []string{"PATH=/usr/bin", "HOME=/home/u"} },
 		ManifestPath: func(gitRoot string) (string, error) {
 			if gitRoot != root {
 				return "", errors.New("unexpected root " + gitRoot)
@@ -188,7 +199,21 @@ func TestDispatchDeclinesOwnName(t *testing.T) {
 func TestDispatchDeclinesRenamedBinary(t *testing.T) {
 	h := newHarness(t)
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: "/store/tofu", Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: "/store/tofu", Installed: true}},
 	})
 	// Not a farm path: a datamitsu binary somebody copied to another name.
 	h.d.Args = []string{filepath.Join(t.TempDir(), "datamitsu-dev"), "--help"}
@@ -206,7 +231,21 @@ func TestDispatchDeclinesRenamedBinary(t *testing.T) {
 func TestDispatchUnknownNameThroughFarmExits127(t *testing.T) {
 	h := newHarness(t)
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: "/store/tofu", Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: "/store/tofu", Installed: true}},
 	})
 	h.invokeThroughFarm("terragrunt", "plan")
 
@@ -231,7 +270,21 @@ func TestDispatchUnknownNameThroughFarmExits127(t *testing.T) {
 func TestDispatchExcludedNameReportsReason(t *testing.T) {
 	h := newHarness(t)
 	h.writeManifest(sourcefarm.Manifest{
-		Excluded: []sourcefarm.Excluded{{Name: "echo", Reason: sourcefarm.ReasonShellApp}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Entries:          nil,
+		Shadowed:         nil,
+		Excluded:         []sourcefarm.Excluded{{Name: "echo", Reason: sourcefarm.ReasonShellApp}},
 	})
 	h.invokeThroughFarm("echo", "hi")
 
@@ -249,7 +302,7 @@ func TestDispatchRecreatesToolCacheWithoutInstalling(t *testing.T) {
 	h := newHarness(t)
 	cacheDir := filepath.Join(h.d.CacheRoot(), "tools", "tofu")
 	tool := h.tool("tofu")
-	h.writeManifest(sourcefarm.Manifest{Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, ToolCacheDir: cacheDir, ToolCacheSlots: []string{"default", "providers"}, Installed: true}}})
+	h.writeManifest(sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Excluded: nil, Shadowed: nil, Entries: []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, ToolCacheDir: cacheDir, ToolCacheSlots: []string{"default", "providers"}, Installed: true}}})
 	h.invokeThroughFarm("tofu")
 
 	code, handled := h.d.Dispatch()
@@ -282,7 +335,7 @@ func TestDispatchDoesNotExecWhenToolCacheCreationFails(t *testing.T) {
 	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h.writeManifest(sourcefarm.Manifest{Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, ToolCacheDir: filepath.Join(blocker, "tofu"), ToolCacheSlots: []string{"providers"}, Installed: true}}})
+	h.writeManifest(sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Excluded: nil, Shadowed: nil, Entries: []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, ToolCacheDir: filepath.Join(blocker, "tofu"), ToolCacheSlots: []string{"providers"}, Installed: true}}})
 	h.invokeThroughFarm("tofu")
 
 	code, handled := h.d.Dispatch()
@@ -365,7 +418,21 @@ func TestDispatchPassesArgvVerbatim(t *testing.T) {
 	h := newHarness(t)
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true, Strategy: sourcefarm.StrategySymlink}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true, Strategy: sourcefarm.StrategySymlink}},
 	})
 	userArgs := []string{"--version", "an arg with spaces", "quote'and\"quote", "line\nbreak", "-"}
 	h.invokeThroughFarm("tofu", userArgs...)
@@ -395,12 +462,33 @@ func TestDispatchPrependsArgsAndMergesEnv(t *testing.T) {
 	h := newHarness(t)
 	java := h.tool("java")
 	h.writeManifest(sourcefarm.Manifest{
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
 		Entries: []sourcefarm.Entry{{
-			Name:      "spectral",
-			Command:   java,
-			Args:      []string{"-jar", "/store/spectral.jar"},
-			Env:       map[string]string{"JAVA_HOME": "/store/jdk", "PATH": "/store/jdk/bin:/usr/bin"},
-			Installed: true,
+			Provider:       "",
+			Kind:           "",
+			Strategy:       "",
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Name:           "spectral",
+			Command:        java,
+			Args:           []string{"-jar", "/store/spectral.jar"},
+			Env:            map[string]string{"JAVA_HOME": "/store/jdk", "PATH": "/store/jdk/bin:/usr/bin"},
+			Installed:      true,
 		}},
 	})
 	h.invokeThroughFarm("spectral", "lint", "api.yaml")
@@ -437,11 +525,33 @@ func TestDispatchPrependsRatherThanReplacesPATH(t *testing.T) {
 	h := newHarness(t)
 	node := h.tool("eslint")
 	h.writeManifest(sourcefarm.Manifest{
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
 		Entries: []sourcefarm.Entry{{
-			Name:      "eslint",
-			Command:   node,
-			Env:       map[string]string{"PATH": "/store/node/bin"},
-			Installed: true,
+			Provider:       "",
+			Kind:           "",
+			Strategy:       "",
+			Args:           nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Name:           "eslint",
+			Command:        node,
+			Env:            map[string]string{"PATH": "/store/node/bin"},
+			Installed:      true,
 		}},
 	})
 	h.invokeThroughFarm("eslint")
@@ -468,13 +578,41 @@ func TestDispatchStaleManifestRebakesOnce(t *testing.T) {
 	oldTool := h.tool("tofu-v1")
 	newTool := h.tool("tofu-v2")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: oldTool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: oldTool, Installed: true}},
 	})
 	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
 	h.spawnFunc = func(args []string) error {
 		if args[0] == "source" {
 			h.writeManifest(sourcefarm.Manifest{
-				Entries: []sourcefarm.Entry{{Name: "tofu", Command: newTool, Installed: true}},
+				FormatVersion:    0,
+				Origin:           "",
+				Root:             "",
+				ConfigPaths:      nil,
+				FarmDir:          "",
+				DatamitsuVersion: "",
+				OS:               "",
+				Arch:             "",
+				ShimTarget:       "",
+				StalenessKey:     "",
+				Watch:            nil,
+				ConfigArgs:       nil,
+				Excluded:         nil,
+				Shadowed:         nil,
+				Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: newTool, Installed: true}},
 			})
 		}
 		return nil
@@ -498,7 +636,21 @@ func TestDispatchRebakeFailureKeepsPreviousFarm(t *testing.T) {
 	h := newHarness(t)
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
 	h.spawnFunc = func([]string) error { return errors.New("offline") }
@@ -526,8 +678,21 @@ func TestDispatchRebakeFailureOnARetiredManifestExits127(t *testing.T) {
 	h := newHarness(t)
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		FormatVersion: sourcefarm.ManifestFormatVersion - 1,
-		Entries:       []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		FormatVersion:    sourcefarm.ManifestFormatVersion - 1,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
 	h.spawnFunc = func([]string) error { return errors.New("offline") }
@@ -550,12 +715,26 @@ func TestDispatchRebakeDroppingTheEntryExits127(t *testing.T) {
 	h := newHarness(t)
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
 	h.spawnFunc = func([]string) error {
 		// The branch that made the manifest stale also removed the app.
-		h.writeManifest(sourcefarm.Manifest{})
+		h.writeManifest(sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil})
 		return nil
 	}
 	h.invokeThroughFarm("tofu")
@@ -582,9 +761,21 @@ func TestDispatchRebakeThatLandsElsewhereExits127(t *testing.T) {
 	h := newHarness(t)
 	tool := h.tool("tofu")
 	stale := sourcefarm.Manifest{
-		FormatVersion: sourcefarm.ManifestFormatVersion - 1,
-		ConfigArgs:    []string{"--config", "/etc/datamitsu/datamitsu.config.js"},
-		Entries:       []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		FormatVersion:    sourcefarm.ManifestFormatVersion - 1,
+		ConfigArgs:       []string{"--config", "/etc/datamitsu/datamitsu.config.js"},
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	}
 	h.writeManifest(stale)
 	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
@@ -616,7 +807,21 @@ func TestDispatchInstallsOnDemandExactlyOnce(t *testing.T) {
 	h := newHarness(t)
 	target := filepath.Join(t.TempDir(), "tflint")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tflint", Command: target, Installed: false, Strategy: sourcefarm.StrategyShim}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tflint", Command: target, Installed: false, Strategy: sourcefarm.StrategyShim}},
 	})
 	h.spawnFunc = func(args []string) error {
 		if args[0] == "install" {
@@ -655,12 +860,33 @@ func TestDispatchInstallsWhenARequiredPathIsMissing(t *testing.T) {
 		t.Fatalf("write command: %v", err)
 	}
 	h.writeManifest(sourcefarm.Manifest{
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
 		Entries: []sourcefarm.Entry{{
-			Name:          "prettier",
-			Command:       target,
-			RequiredPaths: []string{required},
-			Installed:     true,
-			Strategy:      sourcefarm.StrategyShim,
+			Provider:       "",
+			Kind:           "",
+			Args:           nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			Env:            nil,
+			Name:           "prettier",
+			Command:        target,
+			RequiredPaths:  []string{required},
+			Installed:      true,
+			Strategy:       sourcefarm.StrategyShim,
 		}},
 	})
 	h.spawnFunc = func(args []string) error {
@@ -696,12 +922,33 @@ func TestDispatchSkipsInstallWhenEveryRequiredPathIsPresent(t *testing.T) {
 		}
 	}
 	h.writeManifest(sourcefarm.Manifest{
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
 		Entries: []sourcefarm.Entry{{
-			Name:          "prettier",
-			Command:       target,
-			RequiredPaths: []string{required},
-			Installed:     false,
-			Strategy:      sourcefarm.StrategyShim,
+			Provider:       "",
+			Kind:           "",
+			Args:           nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			Env:            nil,
+			Name:           "prettier",
+			Command:        target,
+			RequiredPaths:  []string{required},
+			Installed:      false,
+			Strategy:       sourcefarm.StrategyShim,
 		}},
 	})
 	h.invokeThroughFarm("prettier", "--version")
@@ -729,7 +976,21 @@ func TestDispatchAfterInstallSpawnsNothing(t *testing.T) {
 	h := newHarness(t)
 	target := filepath.Join(t.TempDir(), "tflint")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tflint", Command: target, Installed: false, Strategy: sourcefarm.StrategyShim}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tflint", Command: target, Installed: false, Strategy: sourcefarm.StrategyShim}},
 	})
 	h.spawnFunc = func(args []string) error {
 		if args[0] == "install" {
@@ -769,8 +1030,21 @@ func TestSpawnArgsReplayTheRecordedConfigChain(t *testing.T) {
 	tool := h.tool("tofu")
 	chain := []string{"--before-config", "/abs/shared.js"}
 	h.writeManifest(sourcefarm.Manifest{
-		ConfigArgs: chain,
-		Entries:    []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		ConfigArgs:       chain,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
 	h.invokeThroughFarm("tofu")
@@ -794,8 +1068,21 @@ func TestSpawnArgsReplayOnInstall(t *testing.T) {
 	h := newHarness(t)
 	target := filepath.Join(t.TempDir(), "wrapper-tool")
 	h.writeManifest(sourcefarm.Manifest{
-		ConfigArgs: []string{"--no-auto-config", "--config", "/abs/w.ts"},
-		Entries:    []sourcefarm.Entry{{Name: "wrapper-tool", Command: target, Strategy: sourcefarm.StrategyShim}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		ConfigArgs:       []string{"--no-auto-config", "--config", "/abs/w.ts"},
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false, Name: "wrapper-tool", Command: target, Strategy: sourcefarm.StrategyShim}},
 	})
 	h.spawnFunc = func(args []string) error {
 		return os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755)
@@ -815,7 +1102,21 @@ func TestDispatchInstallWithoutRecordedPathRefreshes(t *testing.T) {
 	h := newHarness(t)
 	target := filepath.Join(t.TempDir(), "prettier")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "prettier", Installed: false, Strategy: sourcefarm.StrategyShim}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "prettier", Installed: false, Strategy: sourcefarm.StrategyShim}},
 	})
 	h.spawnFunc = func(args []string) error {
 		switch args[0] {
@@ -823,7 +1124,21 @@ func TestDispatchInstallWithoutRecordedPathRefreshes(t *testing.T) {
 			return os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755)
 		case "source":
 			h.writeManifest(sourcefarm.Manifest{
-				Entries: []sourcefarm.Entry{{Name: "prettier", Command: target, Installed: true}},
+				FormatVersion:    0,
+				Origin:           "",
+				Root:             "",
+				ConfigPaths:      nil,
+				FarmDir:          "",
+				DatamitsuVersion: "",
+				OS:               "",
+				Arch:             "",
+				ShimTarget:       "",
+				StalenessKey:     "",
+				Watch:            nil,
+				ConfigArgs:       nil,
+				Excluded:         nil,
+				Shadowed:         nil,
+				Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "prettier", Command: target, Installed: true}},
 			})
 		}
 		return nil
@@ -855,7 +1170,21 @@ func TestDispatchBareArgv0ResolvesThroughPATH(t *testing.T) {
 	t.Run("found in the farm, fails loudly", func(t *testing.T) {
 		h := newHarness(t)
 		h.writeManifest(sourcefarm.Manifest{
-			Entries: []sourcefarm.Entry{{Name: "tofu", Command: "/store/tofu", Installed: true}},
+			FormatVersion:    0,
+			Origin:           "",
+			Root:             "",
+			ConfigPaths:      nil,
+			FarmDir:          "",
+			DatamitsuVersion: "",
+			OS:               "",
+			Arch:             "",
+			ShimTarget:       "",
+			StalenessKey:     "",
+			Watch:            nil,
+			ConfigArgs:       nil,
+			Excluded:         nil,
+			Shadowed:         nil,
+			Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: "/store/tofu", Installed: true}},
 		})
 		// The farm holds the name; the system copy is further down PATH.
 		system := t.TempDir()
@@ -909,14 +1238,28 @@ func TestDispatchThroughFarmIsDecidedBeforeARebake(t *testing.T) {
 	h.d.Args = []string{"tofu"}
 	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: "/store/tofu", Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: "/store/tofu", Installed: true}},
 	})
 	// The rebake drops the app, exactly as a branch that stops declaring it does.
 	h.spawnFunc = func([]string) error {
 		if err := os.Remove(entry); err != nil {
 			return err
 		}
-		h.writeManifest(sourcefarm.Manifest{})
+		h.writeManifest(sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil})
 		return nil
 	}
 
@@ -952,7 +1295,21 @@ func TestDispatchSpawnResolvesTheFarmSymlink(t *testing.T) {
 
 	target := filepath.Join(t.TempDir(), "tflint")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tflint", Command: target, Installed: false, Strategy: sourcefarm.StrategyShim}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tflint", Command: target, Installed: false, Strategy: sourcefarm.StrategyShim}},
 	})
 	h.spawnFunc = func(args []string) error {
 		if args[0] == "install" {
@@ -993,7 +1350,21 @@ func TestDispatchRefusesToSpawnAFarmEntry(t *testing.T) {
 	}
 	h.d.Executable = func() (string, error) { return entry, nil }
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tflint", Installed: false, Strategy: sourcefarm.StrategyShim}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tflint", Installed: false, Strategy: sourcefarm.StrategyShim}},
 	})
 	h.invokeThroughFarm("tflint")
 
@@ -1013,7 +1384,21 @@ func TestDispatchRefusesToSpawnAFarmEntry(t *testing.T) {
 func TestDispatchInstallFailureExits127(t *testing.T) {
 	h := newHarness(t)
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tflint", Installed: false}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tflint", Installed: false}},
 	})
 	h.spawnFunc = func([]string) error { return errors.New("no network") }
 	h.invokeThroughFarm("tflint")
@@ -1035,7 +1420,21 @@ func TestDispatchMissingTargetIsReportedNotRun(t *testing.T) {
 	h := newHarness(t)
 	missing := filepath.Join(t.TempDir(), "tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: missing, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: missing, Installed: true}},
 	})
 	// The install path runs and still produces nothing: the store entry is gone.
 	h.invokeThroughFarm("tofu")
@@ -1054,7 +1453,21 @@ func TestDispatchExecFailureExits126(t *testing.T) {
 	h := newHarness(t)
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	h.d.Exec = func(string, []string, []string) error { return errors.New("exec format error") }
 	h.invokeThroughFarm("tofu")
@@ -1076,7 +1489,21 @@ func TestDispatchUsesTheManifestForTheCurrentDirectory(t *testing.T) {
 	}
 	h.d.Getwd = func() (string, error) { return other, nil }
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: h.tool("tofu"), Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: h.tool("tofu"), Installed: true}},
 	})
 	h.invokeThroughFarm("tofu")
 
@@ -1095,7 +1522,7 @@ func TestDispatchIgnoresABinDirectoryOutsideTheCache(t *testing.T) {
 	// it as one would turn `/opt/tool/bin/tofu` into an exit 127 for a binary
 	// datamitsu has nothing to do with.
 	h := newHarness(t)
-	h.writeManifest(sourcefarm.Manifest{})
+	h.writeManifest(sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil})
 	elsewhere := filepath.Join(t.TempDir(), "opt", "bin")
 	if err := os.MkdirAll(elsewhere, 0o755); err != nil {
 		t.Fatalf("create directory: %v", err)
@@ -1113,7 +1540,21 @@ func TestDispatchSpawnsTheRunningExecutable(t *testing.T) {
 	h := newHarness(t)
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
 
@@ -1173,9 +1614,10 @@ func TestMergeEnv(t *testing.T) {
 		want    []string
 	}{
 		{
-			name: "no overlay returns the base unchanged",
-			base: []string{"B=2", "A=1"},
-			want: []string{"B=2", "A=1"},
+			overlay: nil,
+			name:    "no overlay returns the base unchanged",
+			base:    []string{"B=2", "A=1"},
+			want:    []string{"B=2", "A=1"},
 		},
 		{
 			name:    "overlay wins and the result is sorted",
@@ -1288,13 +1730,22 @@ func BenchmarkDispatch(b *testing.B) {
 	entries := make([]sourcefarm.Entry, 0, 100)
 	for i := range 100 {
 		entries = append(entries, sourcefarm.Entry{
-			Name:      "app" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
-			Command:   tool,
-			Installed: true,
+			Provider:       "",
+			Kind:           "",
+			Strategy:       "",
+			Args:           nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Env:            nil,
+			Name:           "app" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
+			Command:        tool,
+			Installed:      true,
 		})
 	}
-	entries = append(entries, sourcefarm.Entry{Name: "tofu", Command: tool, Installed: true})
-	data, err := sourcefarm.Encode(sourcefarm.Manifest{Root: root, FarmDir: farmDir, Entries: entries})
+	entries = append(entries, sourcefarm.Entry{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true})
+	data, err := sourcefarm.Encode(sourcefarm.Manifest{FormatVersion: 0, Origin: "", ConfigPaths: nil, DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Excluded: nil, Shadowed: nil, Root: root, FarmDir: farmDir, Entries: entries})
 	if err != nil {
 		b.Fatalf("encode manifest: %v", err)
 	}
@@ -1311,18 +1762,23 @@ func BenchmarkDispatch(b *testing.B) {
 	environ := append(os.Environ(), "PATH="+farmDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	d := &Dispatcher{
-		Args:         []string{"tofu", "plan"},
-		Getwd:        func() (string, error) { return root, nil },
-		Executable:   func() (string, error) { return filepath.Join(base, "datamitsu"), nil },
-		Environ:      func() []string { return environ },
-		ManifestPath: func(string) (string, error) { return manifestPath, nil },
-		CacheRoot:    func() string { return cacheRoot },
-		Load:         sourcefarm.Load,
-		Validate:     func(sourcefarm.Manifest) bool { return true },
-		Stat:         os.Stat,
-		Exec:         func(string, []string, []string) error { return nil },
-		Spawn:        func(SpawnRequest) error { return errors.New("unexpected spawn") },
-		Stderr:       io.Discard,
+		EvalSymlinks:   nil,
+		Superproject:   nil,
+		QuietFarm:      nil,
+		throughFarm:    false,
+		invokedFarmDir: "",
+		Args:           []string{"tofu", "plan"},
+		Getwd:          func() (string, error) { return root, nil },
+		Executable:     func() (string, error) { return filepath.Join(base, "datamitsu"), nil },
+		Environ:        func() []string { return environ },
+		ManifestPath:   func(string) (string, error) { return manifestPath, nil },
+		CacheRoot:      func() string { return cacheRoot },
+		Load:           sourcefarm.Load,
+		Validate:       func(sourcefarm.Manifest) bool { return true },
+		Stat:           os.Stat,
+		Exec:           func(string, []string, []string) error { return nil },
+		Spawn:          func(SpawnRequest) error { return errors.New("unexpected spawn") },
+		Stderr:         io.Discard,
 	}
 
 	b.ReportAllocs()
@@ -1392,7 +1848,21 @@ func TestSpawnRunsOutsideTheFarm(t *testing.T) {
 	h := newHarness(t)
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
 
@@ -1445,7 +1915,21 @@ func TestSpawnInheritsTheCwdWhenTheRootIsGone(t *testing.T) {
 	h := newHarness(t)
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	h.d.Validate = func(sourcefarm.Manifest) bool { return false }
 	h.d.Stat = func(path string) (os.FileInfo, error) {
@@ -1480,12 +1964,33 @@ func TestExecEntryResolvesABareInterpreterOutsideTheFarm(t *testing.T) {
 	h.d.Environ = func() []string { return []string{"PATH=" + h.farmDir + ":" + system} }
 	jar := h.tool("spotless.jar")
 	h.writeManifest(sourcefarm.Manifest{
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
 		Entries: []sourcefarm.Entry{{
-			Name:      "spotless",
-			Command:   "java",
-			Args:      []string{"-jar", jar},
-			Artifact:  jar,
-			Installed: true,
+			Provider:       "",
+			Kind:           "",
+			Strategy:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Env:            nil,
+			Name:           "spotless",
+			Command:        "java",
+			Args:           []string{"-jar", jar},
+			Artifact:       jar,
+			Installed:      true,
 		}},
 	})
 	h.invokeThroughFarm("spotless", "--version")
@@ -1515,12 +2020,33 @@ func TestExecEntryBareInterpreterNotOnPATHFailsLoudly(t *testing.T) {
 	h.d.Environ = func() []string { return []string{"PATH=" + h.farmDir} }
 	jar := h.tool("spotless.jar")
 	h.writeManifest(sourcefarm.Manifest{
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
 		Entries: []sourcefarm.Entry{{
-			Name:      "spotless",
-			Command:   "java",
-			Args:      []string{"-jar", jar},
-			Artifact:  jar,
-			Installed: true,
+			Provider:       "",
+			Kind:           "",
+			Strategy:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Env:            nil,
+			Name:           "spotless",
+			Command:        "java",
+			Args:           []string{"-jar", jar},
+			Artifact:       jar,
+			Installed:      true,
 		}},
 	})
 	h.invokeThroughFarm("spotless")
@@ -1623,7 +2149,21 @@ func TestLoadManifestClimbsPastASubmodule(t *testing.T) {
 	h.onlySuperprojectHasAManifest()
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	h.invokeThroughFarm("tofu", "plan")
 
@@ -1652,7 +2192,21 @@ func TestLoadManifestRefusesASubmoduleTheSuperprojectNoLongerRecords(t *testing.
 	h.onlySuperprojectHasAManifest()
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	h.invokeThroughFarm("tofu", "plan")
 
@@ -1683,7 +2237,21 @@ func TestLoadManifestRefusesAnUnrelatedNestedRepo(t *testing.T) {
 	h.onlySuperprojectHasAManifest()
 	tool := h.tool("tofu")
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	h.invokeThroughFarm("tofu", "plan")
 
@@ -1723,7 +2291,21 @@ func TestLoadManifestRefusesALinkedWorktreeOfAnotherRepo(t *testing.T) {
 	h.d.Getwd = func() (string, error) { return wt, nil }
 	h.onlySuperprojectHasAManifest()
 	h.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: h.tool("tofu"), Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: h.tool("tofu"), Installed: true}},
 	})
 	h.invokeThroughFarm("tofu")
 

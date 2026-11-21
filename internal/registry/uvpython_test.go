@@ -13,13 +13,13 @@ import (
 // per interpreter/platform combination, keyed by a descriptive slug.
 func metadataFixture() map[string]uvPythonEntry {
 	return map[string]uvPythonEntry{
-		"cpython-3.14.6-linux-x86_64-gnu":  {Name: "cpython", Major: 3, Minor: 14, Patch: 6},
-		"cpython-3.14.6-darwin-aarch64":    {Name: "cpython", Major: 3, Minor: 14, Patch: 6},
-		"cpython-3.14.5-linux-x86_64-gnu":  {Name: "cpython", Major: 3, Minor: 14, Patch: 5},
-		"cpython-3.13.12-linux-x86_64-gnu": {Name: "cpython", Major: 3, Minor: 13, Patch: 12},
-		"cpython-3.15.0b4-linux-x86_64":    {Name: "cpython", Major: 3, Minor: 15, Patch: 0, Prerelease: "b4"},
-		"pypy-3.11.15-linux-x86_64-gnu":    {Name: "pypy", Major: 3, Minor: 11, Patch: 15},
-		"graalpy-3.12.0-linux-x86_64-gnu":  {Name: "graalpy", Major: 3, Minor: 12, Patch: 0},
+		"cpython-3.14.6-linux-x86_64-gnu":  {Arch: UVPythonArch{Family: "", Variant: ""}, OS: "", Libc: "", Prerelease: "", URL: "", SHA256: "", Variant: "", Build: "", Name: "cpython", Major: 3, Minor: 14, Patch: 6},
+		"cpython-3.14.6-darwin-aarch64":    {Arch: UVPythonArch{Family: "", Variant: ""}, OS: "", Libc: "", Prerelease: "", URL: "", SHA256: "", Variant: "", Build: "", Name: "cpython", Major: 3, Minor: 14, Patch: 6},
+		"cpython-3.14.5-linux-x86_64-gnu":  {Arch: UVPythonArch{Family: "", Variant: ""}, OS: "", Libc: "", Prerelease: "", URL: "", SHA256: "", Variant: "", Build: "", Name: "cpython", Major: 3, Minor: 14, Patch: 5},
+		"cpython-3.13.12-linux-x86_64-gnu": {Arch: UVPythonArch{Family: "", Variant: ""}, OS: "", Libc: "", Prerelease: "", URL: "", SHA256: "", Variant: "", Build: "", Name: "cpython", Major: 3, Minor: 13, Patch: 12},
+		"cpython-3.15.0b4-linux-x86_64":    {Arch: UVPythonArch{Family: "", Variant: ""}, OS: "", Libc: "", URL: "", SHA256: "", Variant: "", Build: "", Name: "cpython", Major: 3, Minor: 15, Patch: 0, Prerelease: "b4"},
+		"pypy-3.11.15-linux-x86_64-gnu":    {Arch: UVPythonArch{Family: "", Variant: ""}, OS: "", Libc: "", Prerelease: "", URL: "", SHA256: "", Variant: "", Build: "", Name: "pypy", Major: 3, Minor: 11, Patch: 15},
+		"graalpy-3.12.0-linux-x86_64-gnu":  {Arch: UVPythonArch{Family: "", Variant: ""}, OS: "", Libc: "", Prerelease: "", URL: "", SHA256: "", Variant: "", Build: "", Name: "graalpy", Major: 3, Minor: 12, Patch: 0},
 	}
 }
 
@@ -169,7 +169,7 @@ func TestGetUVSupportedPythonVersions(t *testing.T) {
 		url := serveMetadata(t, func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]uvPythonEntry{
-				"pypy-3.11.15-linux-x86_64-gnu": {Name: "pypy", Major: 3, Minor: 11, Patch: 15},
+				"pypy-3.11.15-linux-x86_64-gnu": {Arch: UVPythonArch{Family: "", Variant: ""}, OS: "", Libc: "", Prerelease: "", URL: "", SHA256: "", Variant: "", Build: "", Name: "pypy", Major: 3, Minor: 11, Patch: 15},
 			})
 		})
 

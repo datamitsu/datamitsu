@@ -9,13 +9,13 @@ import (
 
 func sampleParsers() config.MapOfParsers {
 	return config.MapOfParsers{
-		"core":   {URL: "https://example.com/datamitsu_parsers_0.1.8.wasm", Hash: strings.Repeat("a", 64)},
-		"legacy": {URL: "https://example.com/datamitsu_parsers_0.1.7.wasm", Hash: strings.Repeat("b", 64)},
+		"core":   {OCI: nil, URL: "https://example.com/datamitsu_parsers_0.1.8.wasm", Hash: strings.Repeat("a", 64)},
+		"legacy": {OCI: nil, URL: "https://example.com/datamitsu_parsers_0.1.7.wasm", Hash: strings.Repeat("b", 64)},
 	}
 }
 
 func TestBuildPlan_ParserStagesSorted(t *testing.T) {
-	plan := BuildPlan(nil, nil, PlanOptions{Parsers: sampleParsers()})
+	plan := BuildPlan(nil, nil, PlanOptions{TargetLibc: "", ForceInclude: nil, Parsers: sampleParsers()})
 	if len(plan.ParserStages) != 2 {
 		t.Fatalf("ParserStages = %d, want 2", len(plan.ParserStages))
 	}
@@ -32,8 +32,14 @@ func TestBuildPlan_ParserStagesSorted(t *testing.T) {
 
 func TestBuildOCIMap_ParserEntriesAfterBinaries(t *testing.T) {
 	plan := Plan{
-		BinaryStages: []BinaryStage{{App: "shellcheck"}},
-		ParserStages: []ParserStage{{Module: "core"}},
+		RuntimeStages:          nil,
+		RuntimeAppStages:       nil,
+		Skipped:                nil,
+		LibcExcluded:           nil,
+		RegistrySourcedParsers: nil,
+		PreparedApps:           nil,
+		BinaryStages:           []BinaryStage{{App: "shellcheck"}},
+		ParserStages:           []ParserStage{{Module: "core"}},
 	}
 	opts := DefaultRenderOptions()
 	m := BuildOCIMap(plan, opts)
@@ -52,9 +58,12 @@ func TestBuildOCIMap_ParserEntriesAfterBinaries(t *testing.T) {
 }
 
 func TestRender_ParserStageAndFinalCopy(t *testing.T) {
-	plan := BuildPlan(nil, nil, PlanOptions{Parsers: config.MapOfParsers{
-		"core": {URL: "https://example.com/m.wasm", Hash: strings.Repeat("a", 64)},
-	}})
+	plan := BuildPlan(nil, nil, PlanOptions{
+		TargetLibc:   "",
+		ForceInclude: nil, Parsers: config.MapOfParsers{
+			"core": {OCI: nil, URL: "https://example.com/m.wasm", Hash: strings.Repeat("a", 64)},
+		},
+	})
 	opts := DefaultRenderOptions()
 	opts.BaseImage = "ghcr.io/datamitsu/datamitsu:1.0.0"
 	out := Render(plan, opts)
@@ -75,8 +84,14 @@ func TestRender_ParserStageAndFinalCopy(t *testing.T) {
 // so the post-process maps layers→subtrees correctly.
 func TestBuildOCIMap_MirrorsRenderWithParsers(t *testing.T) {
 	plan := Plan{
-		BinaryStages: []BinaryStage{{App: "shellcheck"}},
-		ParserStages: []ParserStage{{Module: "core"}, {Module: "legacy"}},
+		RuntimeStages:          nil,
+		RuntimeAppStages:       nil,
+		Skipped:                nil,
+		LibcExcluded:           nil,
+		RegistrySourcedParsers: nil,
+		PreparedApps:           nil,
+		BinaryStages:           []BinaryStage{{App: "shellcheck"}},
+		ParserStages:           []ParserStage{{Module: "core"}, {Module: "legacy"}},
 	}
 	opts := DefaultRenderOptions()
 	opts.BaseImage = "ghcr.io/datamitsu/datamitsu:1.0.0"

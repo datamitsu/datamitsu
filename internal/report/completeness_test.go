@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
 func ran(extraction tooling.Extraction) Invocation {
-	return Invocation{State: "ran", Coverage: "complete", Extraction: string(extraction)}
+	return Invocation{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", Coverage: "complete", Extraction: string(extraction)}
 }
 
 func TestToolReasons(t *testing.T) {
-	all := Selection{Mode: "all"}
+	all := Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}
 	tests := []struct {
 		name        string
 		sel         Selection
@@ -27,15 +28,16 @@ func TestToolReasons(t *testing.T) {
 			invocations: []Invocation{ran(tooling.ExtractionParsedClean), ran(tooling.ExtractionParsedFindings)}, want: []Reason{},
 		},
 		{
-			name: "a narrowed selection", sel: Selection{Mode: "paths"}, parsed: true,
+			name: "a narrowed selection", sel: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "paths"}, parsed: true,
 			invocations: []Invocation{ran(tooling.ExtractionParsedClean)}, want: []Reason{ReasonNarrowedSelection},
 		},
 		{
 			name: "a task over part of its unit", sel: all, parsed: true,
-			invocations: []Invocation{{State: "ran", Coverage: "partial", Extraction: "parsed-clean"}}, want: []Reason{ReasonPartialUnit},
+			invocations: []Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", Coverage: "partial", Extraction: "parsed-clean"}}, want: []Reason{ReasonPartialUnit},
 		},
 		{
-			name: "no parser", sel: all,
+			parsed: false,
+			name:   "no parser", sel: all,
 			invocations: []Invocation{ran(tooling.ExtractionNone)}, want: []Reason{ReasonNoExtraction},
 		},
 		{
@@ -46,29 +48,30 @@ func TestToolReasons(t *testing.T) {
 		{
 			name: "a failed process its parser found nothing in", sel: all, parsed: true,
 			invocations: []Invocation{
-				{State: "ran", Coverage: "complete", Extraction: "parsed-clean", ExitCode: new(2)},
-				{State: "ran", Coverage: "complete", Extraction: "parsed-clean", ExitCode: new(0)},
-				{State: "ran", Coverage: "complete", Extraction: "parsed-findings", ExitCode: new(1)},
+				{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", Coverage: "complete", Extraction: "parsed-clean", ExitCode: new(2)},
+				{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", Coverage: "complete", Extraction: "parsed-clean", ExitCode: new(0)},
+				{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", Coverage: "complete", Extraction: "parsed-findings", ExitCode: new(1)},
 			},
 			want: []Reason{ReasonFailedWithoutFindings},
 		},
 		{
 			name: "a cache hit of a parsed tool replays a parsed-clean pass", sel: all, parsed: true,
-			invocations: []Invocation{{State: "cached"}, {State: "verdict-hit"}}, want: []Reason{},
+			invocations: []Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "cached"}, {ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "verdict-hit"}}, want: []Reason{},
 		},
 		{
-			name: "a cache hit of a tool without a parser", sel: all,
-			invocations: []Invocation{{State: "cached"}}, want: []Reason{ReasonUnparsedCacheHit},
+			parsed: false,
+			name:   "a cache hit of a tool without a parser", sel: all,
+			invocations: []Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "cached"}}, want: []Reason{ReasonUnparsedCacheHit},
 		},
 		{
 			name: "tasks that did not run to the end", sel: all, parsed: true,
-			invocations: []Invocation{{State: "cancelled"}, {State: "not-started"}, {State: "setup-failed"}},
+			invocations: []Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "cancelled"}, {ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "not-started"}, {ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "setup-failed"}},
 			want:        []Reason{ReasonCancelled, ReasonNotStarted, ReasonSetupFailed},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toolReasons(&ToolRun{Invocations: tt.invocations}, tt.sel, tt.parsed)
+			got := toolReasons(&ToolRun{Name: "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, mayHoldSecrets: false, Invocations: tt.invocations}, tt.sel, tt.parsed)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("toolReasons() = %v, want %v", got, tt.want)
 			}
@@ -80,10 +83,31 @@ func TestToolReasons(t *testing.T) {
 // its processes failed while its parser found nothing; read back, it is not.
 func TestRevise(t *testing.T) {
 	two := 2
-	run := &Run{Complete: true, Operations: []Operation{{Name: "lint", Ran: true, Tools: []ToolRun{
-		{Name: "a", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{State: "ran", Extraction: "parsed-clean", ExitCode: &two}}},
-		{Name: "b", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{State: "ran", Extraction: "parsed-findings", ExitCode: &two}}},
-	}}}}
+	run := &Run{
+		Schema:      "",
+		Fingerprint: "",
+		Datamitsu:   Producer{Version: "", Configuration: ""},
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		Selection:   Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:    false,
+		Incomplete:  nil,
+		Exports:     nil,
+		CI:          CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Complete: true, Operations: []Operation{{
+			Success:         false,
+			Duration:        0,
+			Skipped:         nil,
+			Cancelled:       nil,
+			ChangesObserved: false,
+			ChangesReason:   "",
+			ChangesDetail:   "",
+			ChangesScope:    nil,
+			Changes:         nil, Name: "lint", Ran: true, Tools: []ToolRun{
+				{App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", mayHoldSecrets: false, Name: "a", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", Extraction: "parsed-clean", ExitCode: &two}}},
+				{App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", mayHoldSecrets: false, Name: "b", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", Extraction: "parsed-findings", ExitCode: &two}}},
+			},
+		}},
+	}
 	Revise(run)
 	a, b := run.Operations[0].Tools[0], run.Operations[0].Tools[1]
 	if run.Complete || a.Complete || !reflect.DeepEqual(a.Incomplete, []Reason{ReasonFailedWithoutFindings}) || !b.Complete {
@@ -100,7 +124,7 @@ func TestRevise(t *testing.T) {
 // nothing was left out at run level; --tools leaves the listed tools' own runs
 // complete.
 func TestJudge(t *testing.T) {
-	tools := config.MapOfTools{"a": {OutputParser: &config.OutputParser{}}, "b": {}}
+	tools := config.MapOfTools{"a": {Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: &config.OutputParser{Module: "", Parser: ""}}, "b": {Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}}
 	clean := []Invocation{ran(tooling.ExtractionParsedClean)}
 	tests := []struct {
 		name         string
@@ -111,31 +135,47 @@ func TestJudge(t *testing.T) {
 	}{
 		{
 			name:         "complete",
-			run:          Run{Selection: Selection{Mode: "all"}, Operations: []Operation{{Ran: true, Tools: []ToolRun{{Name: "a", Invocations: clean}}}}},
+			run:          Run{Schema: "", Fingerprint: "", Datamitsu: Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Complete: false, Incomplete: nil, Exports: nil, CI: CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}, Operations: []Operation{{Name: "", Success: false, Duration: 0, Skipped: nil, Cancelled: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Ran: true, Tools: []ToolRun{{App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, mayHoldSecrets: false, Name: "a", Invocations: clean}}}}},
 			wantComplete: true, wantRun: []Reason{}, wantTool: []Reason{},
 		},
 		{
-			name:    "a tools filter",
-			run:     Run{Selection: Selection{Mode: "all", Tools: []string{"a"}}, Operations: []Operation{{Ran: true, Tools: []ToolRun{{Name: "a", Invocations: clean}}}}},
-			wantRun: []Reason{ReasonToolsFilter}, wantTool: []Reason{},
+			wantComplete: false,
+			name:         "a tools filter",
+			run:          Run{Schema: "", Fingerprint: "", Datamitsu: Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Complete: false, Incomplete: nil, Exports: nil, CI: CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: Selection{Dir: "", Paths: nil, FileScoped: false, ExcludedTools: nil, Mode: "all", Tools: []string{"a"}}, Operations: []Operation{{Name: "", Success: false, Duration: 0, Skipped: nil, Cancelled: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Ran: true, Tools: []ToolRun{{App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, mayHoldSecrets: false, Name: "a", Invocations: clean}}}}},
+			wantRun:      []Reason{ReasonToolsFilter}, wantTool: []Reason{},
 		},
 		{
-			name: "an operation that did not run and a tool that could not narrow",
-			run: Run{Selection: Selection{Mode: "all"}, Operations: []Operation{
-				{Ran: true, Skipped: []Skip{{Tool: "b", Reason: "not-narrowable"}, {Tool: "c", Reason: "config"}}, Tools: []ToolRun{{Name: "a", Invocations: clean}}},
-				{Name: "lint"},
-			}},
+			wantComplete: false,
+			name:         "an operation that did not run and a tool that could not narrow",
+			run: Run{
+				Schema:      "",
+				Fingerprint: "",
+				Datamitsu:   Producer{Version: "", Configuration: ""},
+				StartedAt:   zerovalue_time.Time{},
+				EndedAt:     zerovalue_time.Time{},
+				FailFast:    false,
+				Complete:    false,
+				Incomplete:  nil,
+				Exports:     nil,
+				CI:          CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}, Operations: []Operation{
+					{Name: "", Success: false, Duration: 0, Cancelled: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Ran: true, Skipped: []Skip{{Detail: "", Tool: "b", Reason: "not-narrowable"}, {Detail: "", Tool: "c", Reason: "config"}}, Tools: []ToolRun{{App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, mayHoldSecrets: false, Name: "a", Invocations: clean}}},
+					{Ran: false, Success: false, Duration: 0, Skipped: nil, Cancelled: nil, Tools: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "lint"},
+				},
+			},
 			wantRun: []Reason{ReasonNotNarrowable, ReasonOperationSkipped}, wantTool: []Reason{},
 		},
 		{
-			name:    "a narrowed run that matched no tool",
-			run:     Run{Selection: Selection{Mode: "subtree"}, Operations: []Operation{{Ran: true}}},
-			wantRun: []Reason{ReasonNarrowedSelection},
+			wantComplete: false,
+			wantTool:     nil,
+			name:         "a narrowed run that matched no tool",
+			run:          Run{Schema: "", Fingerprint: "", Datamitsu: Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Complete: false, Incomplete: nil, Exports: nil, CI: CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "subtree"}, Operations: []Operation{{Name: "", Success: false, Duration: 0, Skipped: nil, Cancelled: nil, Tools: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Ran: true}}},
+			wantRun:      []Reason{ReasonNarrowedSelection},
 		},
 		{
-			name:    "a platform skip",
-			run:     Run{Selection: Selection{Mode: "all"}, Operations: []Operation{{Ran: true, Tools: []ToolRun{{Name: "b", Incomplete: []Reason{ReasonPlatformSkip}}}}}},
-			wantRun: []Reason{}, wantTool: []Reason{ReasonPlatformSkip},
+			wantComplete: false,
+			name:         "a platform skip",
+			run:          Run{Schema: "", Fingerprint: "", Datamitsu: Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Complete: false, Incomplete: nil, Exports: nil, CI: CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}, Operations: []Operation{{Name: "", Success: false, Duration: 0, Skipped: nil, Cancelled: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Ran: true, Tools: []ToolRun{{App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Invocations: nil, mayHoldSecrets: false, Name: "b", Incomplete: []Reason{ReasonPlatformSkip}}}}}},
+			wantRun:      []Reason{}, wantTool: []Reason{ReasonPlatformSkip},
 		},
 	}
 	for _, tt := range tests {
@@ -160,17 +200,32 @@ func TestJudge(t *testing.T) {
 // parsed-clean pass.
 func TestJudgeCachedStdoutFormatter(t *testing.T) {
 	tools := config.MapOfTools{"fmt": {
+		Name:         "",
+		ProjectTypes: nil,
+		Skip:         false,
+		SkipReason:   "",
 		OutputParser: &config.OutputParser{Module: "m", Parser: "p"},
 		Operations: map[config.OperationType]config.ToolOperation{
-			config.OpFix:  {Output: config.ToolOutputStdout},
-			config.OpLint: {},
+			config.OpFix:  {App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, ManagedConfigRefs: nil, Output: config.ToolOutputStdout},
+			config.OpLint: {App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil},
 		},
 	}}
-	cached := []Invocation{{State: "cached"}}
-	run := Run{Selection: Selection{Mode: "all"}, Operations: []Operation{
-		{Name: "fix", Ran: true, Tools: []ToolRun{{Name: "fmt", Invocations: cached}}},
-		{Name: "lint", Ran: true, Tools: []ToolRun{{Name: "fmt", Invocations: cached}}},
-	}}
+	cached := []Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "cached"}}
+	run := Run{
+		Schema:      "",
+		Fingerprint: "",
+		Datamitsu:   Producer{Version: "", Configuration: ""},
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		FailFast:    false,
+		Complete:    false,
+		Incomplete:  nil,
+		Exports:     nil,
+		CI:          CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}, Operations: []Operation{
+			{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "fix", Ran: true, Tools: []ToolRun{{App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, mayHoldSecrets: false, Name: "fmt", Invocations: cached}}},
+			{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "lint", Ran: true, Tools: []ToolRun{{App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, mayHoldSecrets: false, Name: "fmt", Invocations: cached}}},
+		},
+	}
 	judge(&run, tools)
 	if fix := run.Operations[0].Tools[0]; !reflect.DeepEqual(fix.Incomplete, []Reason{ReasonUnparsedCacheHit}) {
 		t.Errorf("the formatter's fix = %v, want unparsed-cache-hit", fix.Incomplete)
@@ -182,19 +237,43 @@ func TestJudgeCachedStdoutFormatter(t *testing.T) {
 	task := perFileTask("fmt::1", "a")
 	task.OpConfig.Output = config.ToolOutputStdout
 	result := tooling.ExecutionResult{
-		TaskID: task.ID, Success: true, Cached: true,
-		FileResults: []tooling.FileResult{{File: abs("a"), State: tooling.FileCached, Success: true}},
+		ToolName:         "",
+		Output:           "",
+		Error:            nil,
+		Duration:         0,
+		Command:          "",
+		ExitCode:         0,
+		WorkingDir:       "",
+		RelativeDir:      "",
+		Scope:            "",
+		Batch:            false,
+		Cancelled:        false,
+		FailureReason:    0,
+		StartedAt:        zerovalue_time.Time{},
+		EndedAt:          zerovalue_time.Time{},
+		FilesNotRun:      0,
+		UnparsedFailures: nil,
+		CapturedStdout:   "",
+		Diagnostics:      nil,
+		Processes:        nil,
+		ParseFailed:      false,
+		FailOn:           "",
+		Files:            nil,
+		WholeUnit:        false,
+		UnitDir:          "",
+		TaskID:           task.ID, Success: true, Cached: true,
+		FileResults: []tooling.FileResult{{ProcessID: "", ExitCode: nil, Edits: nil, Patch: "", File: abs("a"), State: tooling.FileCached, Success: true}},
 	}
-	if inv := NewAccumulator(Options{Root: root}).invocations(task, &result, nil, &ToolRun{})[0]; inv.Extraction != "none" {
+	if inv := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root}).invocations(task, &result, nil, &ToolRun{Name: "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: nil, mayHoldSecrets: false})[0]; inv.Extraction != "none" {
 		t.Errorf("a stdout formatter's cache hit claims extraction %s", inv.Extraction)
 	}
 }
 
 func TestExcludedTools(t *testing.T) {
 	tools := config.MapOfTools{
-		"a":     {Operations: map[config.OperationType]config.ToolOperation{config.OpLint: {}}},
-		"b":     {Operations: map[config.OperationType]config.ToolOperation{config.OpLint: {}}},
-		"fixer": {Operations: map[config.OperationType]config.ToolOperation{config.OpFix: {}}},
+		"a":     {Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{config.OpLint: {App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}}},
+		"b":     {Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{config.OpLint: {App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}}},
+		"fixer": {Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{config.OpFix: {App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}}},
 	}
 	if got := excludedTools(tools, []string{"lint"}, []string{"a"}); !reflect.DeepEqual(got, []string{"b"}) {
 		t.Errorf("excludedTools(lint, a) = %v, want [b]: a fix-only tool was never asked for", got)
@@ -210,13 +289,17 @@ func TestExcludedTools(t *testing.T) {
 // A tool with no binary for this host is listed as a tool run that did not
 // complete, never left out.
 func TestPlatformSkippedToolIsListed(t *testing.T) {
-	plan := &tooling.ExecutionPlan{Skipped: []tooling.SkippedTool{
-		{ToolName: "hadolint", Reason: tooling.SkipReasonUnsupportedPlatform, Detail: "windows/arm64"},
-		{ToolName: "off", Reason: tooling.SkipReasonConfig},
-	}}
+	plan := &tooling.ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Groups:     nil, Skipped: []tooling.SkippedTool{
+			{Operation: "", ToolName: "hadolint", Reason: tooling.SkipReasonUnsupportedPlatform, Detail: "windows/arm64"},
+			{Operation: "", Detail: "", ToolName: "off", Reason: tooling.SkipReasonConfig},
+		},
+	}
 	acc := NewAccumulator(testOptions())
 	acc.BeginOperation("lint", plan, nil).End(true, 0)
-	run := acc.Build(BuildInfo{Selection: Selection{Mode: "all"}})
+	run := acc.Build(BuildInfo{Version: "", Configuration: "", StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Exports: nil, CI: CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}})
 	tools := run.Operations[0].Tools
 	if len(tools) != 1 || tools[0].Name != "hadolint" || tools[0].Complete ||
 		!reflect.DeepEqual(tools[0].Incomplete, []Reason{ReasonPlatformSkip}) {

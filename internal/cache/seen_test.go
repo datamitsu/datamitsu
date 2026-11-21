@@ -21,16 +21,16 @@ func observeFile(path string) Seen {
 	at := time.Now()
 	f, err := os.Open(path)
 	if err != nil {
-		return Seen{At: at}
+		return Seen{Hash: "", Size: 0, ModTime: time.Time{}, Identity: FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, At: at}
 	}
 	defer func() { _ = f.Close() }()
 	fi, err := f.Stat()
 	if err != nil {
-		return Seen{At: at}
+		return Seen{Hash: "", Size: 0, ModTime: time.Time{}, Identity: FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, At: at}
 	}
 	d, err := digest.XXH3Reader(f)
 	if err != nil {
-		return Seen{At: at}
+		return Seen{Hash: "", Size: 0, ModTime: time.Time{}, Identity: FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, At: at}
 	}
 	return Seen{Hash: d.Hex(), Size: fi.Size(), ModTime: fi.ModTime(), Identity: IdentityOf(fi), At: at}
 }
@@ -48,7 +48,7 @@ func writeFile(t *testing.T, path, content string) {
 // saw.
 func TestPassIsRecordedAgainstTheBytesTheToolSaw(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -92,13 +92,15 @@ func TestAfterLintRecordsNothingForBytesItCannotVouchFor(t *testing.T) {
 		enabled   bool
 	}{
 		{"the file changed during the run", observeFile, false, true},
-		{"the bytes could not be hashed", func(string) Seen { return Seen{At: time.Now()} }, true, true},
+		{"the bytes could not be hashed", func(string) Seen {
+			return Seen{Hash: "", Size: 0, ModTime: time.Time{}, Identity: FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, At: time.Now()}
+		}, true, true},
 		{"caching is off for the tool", observeFile, true, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cacheDir, projectPath, file := newProject(t)
-			c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
+			c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 			if err != nil {
 				t.Fatalf("NewCache() error = %v", err)
 			}
@@ -119,7 +121,7 @@ func TestAfterLintRecordsNothingForBytesItCannotVouchFor(t *testing.T) {
 // same bytes share an entry, and neither pass is lost to the other.
 func TestAfterLintExtendsAnEntryForTheSameBytes(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -139,14 +141,14 @@ func TestAfterLintExtendsAnEntryForTheSameBytes(t *testing.T) {
 // whatever the cache holds for its path.
 func TestCheckNeedsAHash(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
 	if err := c.AfterLint(file, "tool", observeFile(file), true, true); err != nil {
 		t.Fatalf("AfterLint() error = %v", err)
 	}
-	if !c.Check(file, "tool", OperationLint, Seen{}, true) {
+	if !c.Check(file, "tool", OperationLint, Seen{Hash: "", Size: 0, ModTime: time.Time{}, Identity: FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, At: time.Time{}}, true) {
 		t.Error("a Seen without a hash hit the cache")
 	}
 }
@@ -172,7 +174,7 @@ func TestEntriesRecordedUnderTheOldRuleMiss(t *testing.T) {
 func entriesRecordedUnderAnOldRuleMiss(t *testing.T, semantics []byte) {
 	t.Helper()
 	cacheDir, projectPath, file := newProject(t)
-	cfg := config.Config{}
+	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	configJSON, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -184,10 +186,12 @@ func entriesRecordedUnderAnOldRuleMiss(t *testing.T, semantics []byte) {
 	oldKey := digest.XXH3Multi(append(parts, configJSON)...).Hex()
 	rel, _ := filepath.Rel(projectPath, file)
 	old := File{
+		Version:         "",
+		Verdicts:        nil,
 		InvalidationKey: oldKey,
 		ProjectPath:     projectPath,
 		LastPruned:      time.Now(),
-		Entries:         map[string]FileEntry{rel: {ContentHash: observeFile(file).Hash, Lint: []string{"tool"}}},
+		Entries:         map[string]FileEntry{rel: {Fix: nil, ContentHash: observeFile(file).Hash, Lint: []string{"tool"}}},
 	}
 	data, err := msgpack.Marshal(old)
 	if err != nil {

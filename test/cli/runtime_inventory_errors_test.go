@@ -10,7 +10,7 @@ import (
 
 func TestRuntimeHumanInventoryExplainsDirectRunCapability(t *testing.T) {
 	project, configPath, _ := runtimeProject(t, runtimeProbe(t))
-	result := clitest.Run(t, clitest.RunOptions{Dir: project.Dir, CacheDir: t.TempDir()}, runtimeArgs(project, configPath, "list")...)
+	result := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: t.TempDir()}, runtimeArgs(project, configPath, "list")...)
 	if result.ExitCode != 0 || result.Stderr != "" {
 		t.Fatalf("human inventory failed: %+v", result)
 	}
@@ -60,7 +60,7 @@ func TestRuntimeCommandsRejectMissingConfiguration(t *testing.T) {
 			if operation == "run" {
 				args = append(args, "zed", "--", "unused")
 			}
-			result := clitest.Run(t, clitest.RunOptions{Dir: project.Dir}, runtimeArgs(project, configPath, args...)...)
+			result := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: project.Dir}, runtimeArgs(project, configPath, args...)...)
 			if result.ExitCode != 1 || result.Stdout != "" || result.Stderr == "" {
 				t.Fatalf("missing configuration did not fail before runtime output: %+v", result)
 			}

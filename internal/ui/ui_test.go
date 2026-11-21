@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"strings"
+	zerovalue_sync "sync"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 
 // newPlainDisplay builds a Plain-mode Display writing to the given buffers.
 func newPlainDisplay(out, errOut io.Writer) *Display {
-	return &Display{mode: term.Plain, out: out, err: errOut}
+	return &Display{quiet: false, mu: zerovalue_sync.Mutex{}, prog: nil, bars: 0, mode: term.Plain, out: out, err: errOut}
 }
 
 func TestPlainPrintlnAndStatus(t *testing.T) {
@@ -121,7 +122,7 @@ func TestPlainTask(t *testing.T) {
 // subsequent direct write by non-ui code would drop it.
 func TestInteractiveLineDirectWhenNoActiveBar(t *testing.T) {
 	var buf bytes.Buffer
-	d := &Display{mode: term.Interactive, out: &buf, err: &buf}
+	d := &Display{quiet: false, mu: zerovalue_sync.Mutex{}, prog: nil, bars: 0, mode: term.Interactive, out: &buf, err: &buf}
 
 	task := d.Task("work", 2) // creates the mpb container, bars == 1
 	task.Complete()           // bars == 0, container still alive

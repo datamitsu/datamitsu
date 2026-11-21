@@ -26,12 +26,34 @@ import (
 // overall budget varies.
 func NewHardenedClient(timeout time.Duration) *http.Client {
 	return &http.Client{
+		Jar:     nil,
 		Timeout: timeout,
 		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
+			OnProxyConnectResponse: nil,
+
+			DialTLSContext: nil,
+
+			TLSClientConfig:        nil,
+			DisableKeepAlives:      false,
+			DisableCompression:     false,
+			MaxIdleConns:           0,
+			MaxIdleConnsPerHost:    0,
+			MaxConnsPerHost:        0,
+			IdleConnTimeout:        0,
+			ExpectContinueTimeout:  0,
+			TLSNextProto:           nil,
+			ProxyConnectHeader:     nil,
+			GetProxyConnectHeader:  nil,
+			MaxResponseHeaderBytes: 0,
+			WriteBufferSize:        0,
+			ReadBufferSize:         0,
+			ForceAttemptHTTP2:      false,
+			HTTP2:                  nil,
+			Protocols:              nil,
+			Proxy:                  http.ProxyFromEnvironment,
+			DialContext:            (&net.Dialer{Deadline: time.Time{}, LocalAddr: nil, FallbackDelay: 0, KeepAlive: 0, KeepAliveConfig: net.KeepAliveConfig{Enable: false, Idle: 0, Interval: 0, Count: 0}, Resolver: nil, Control: nil, ControlContext: nil, Timeout: 30 * time.Second}).DialContext,
+			TLSHandshakeTimeout:    10 * time.Second,
+			ResponseHeaderTimeout:  30 * time.Second,
 		},
 		CheckRedirect: hardenedRedirect,
 	}

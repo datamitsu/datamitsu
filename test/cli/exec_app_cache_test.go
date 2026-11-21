@@ -36,17 +36,42 @@ func TestExecDependencyToolCacheUsesCheckoutRoot(t *testing.T) {
 	apps := make(binmanager.MapOfApps, len(bodies))
 	for name, body := range bodies {
 		info := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
+			ExtractDir:  false,
 			URL:         "https://example.invalid/" + name,
 			Hash:        digest.SHA256Of([]byte(body)).String(),
 			ContentType: binmanager.BinContentTypeBinary,
 		}
-		apps[name] = binmanager.App{Binary: &binmanager.AppConfigBinary{
-			Binaries: binmanager.MapOfBinaries{osType: {arch: {
-				"unknown": info,
-				"glibc":   info,
-				"musl":    info,
-			}}},
-		}}
+		apps[name] = binmanager.App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil, Binary: &binmanager.AppConfigBinary{
+				Version: "",
+				Binaries: binmanager.MapOfBinaries{osType: {arch: {
+					"unknown": info,
+					"glibc":   info,
+					"musl":    info,
+				}}},
+			},
+		}
 	}
 	wrapper := apps["wrapper"]
 	wrapper.DependsOn = edges("cache-helper")
@@ -88,7 +113,7 @@ globalThis.getMinVersion = () => "0.0.0";
 			t.Fatal(err)
 		}
 		output := filepath.Join(dir, "processed.txt")
-		res := clitest.Run(t, clitest.RunOptions{Dir: dir, CacheDir: cacheBase},
+		res := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: dir, CacheDir: cacheBase},
 			"--no-auto-config", "--config", cfg, "exec", "wrapper", "--", output)
 		if res.ExitCode != 0 {
 			t.Fatalf("exec from %s failed: %s", subdir, res.Stderr)
@@ -112,7 +137,7 @@ globalThis.getMinVersion = () => "0.0.0";
 			t.Fatalf("exec created a subdirectory-scoped cache: %s: %v", wrongNamespace, err)
 		}
 	}
-	cleared := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheBase}, "cache", "clear")
+	cleared := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheBase}, "cache", "clear")
 	if cleared.ExitCode != 0 {
 		t.Fatalf("cache clear failed: %s", cleared.Stderr)
 	}

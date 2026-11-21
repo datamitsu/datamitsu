@@ -22,16 +22,22 @@ func TestHandleProvisionOperationRuntimeAppPrerequisiteErrorsDoNotMutateApps(t *
 		kind string
 		app  binmanager.App
 	}{
-		{"uv", binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "example", Version: "1", Runtime: "missing"}}},
-		{"node", binmanager.App{Node: &binmanager.AppConfigNode{PackageName: "example", Version: "1", BinPath: "bin/example", Runtime: "missing"}}},
-		{"bun", binmanager.App{Bun: &binmanager.AppConfigBun{PackageName: "example", Version: "1", BinPath: "bin/example", Runtime: "missing"}}},
-		{"go", binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "example", Version: "1", Runtime: "missing"}}},
-		{"jvm", binmanager.App{Jvm: &binmanager.AppConfigJVM{JarURL: "https://example.invalid/tool.jar", JarHash: "sha256:" + strings.Repeat("a", 64), Version: "1", Runtime: "missing"}}},
+		{"uv", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "example", Version: "1", Runtime: "missing"}}},
+		{"node", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{LockFile: "", Dependencies: nil, PackageName: "example", Version: "1", BinPath: "bin/example", Runtime: "missing"}}},
+		{"bun", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{LockFile: "", Dependencies: nil, PackageName: "example", Version: "1", BinPath: "bin/example", Runtime: "missing"}}},
+		{"go", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "example", Version: "1", Runtime: "missing"}}},
+		{"jvm", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{MainClass: "", JarURL: "https://example.invalid/tool.jar", JarHash: "sha256:" + strings.Repeat("a", 64), Version: "1", Runtime: "missing"}}},
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
 			store, cache := workerTestRoots(t)
 			request := binmanager.ProvisionRequest{
-				StoreRoot: store, CacheRoot: cache, Apps: binmanager.MapOfApps{"probe": tc.app},
+				ToolCacheRoot:   "",
+				Bundles:         nil,
+				Names:           nil,
+				IncludeOptional: false,
+				Concurrency:     0,
+				FailOnError:     false,
+				StoreRoot:       store, CacheRoot: cache, Apps: binmanager.MapOfApps{"probe": tc.app},
 				RuntimeDefinitions: json.RawMessage(`{}`), Action: "install-runtime-app", AppName: "probe",
 			}
 			_, err := handleProvisionOperation(context.Background(), "install-apps", workerPayload(t, request))
@@ -45,12 +51,12 @@ func TestHandleProvisionOperationRuntimeAppPrerequisiteErrorsDoNotMutateApps(t *
 
 func TestHandleProvisionOperationRuntimeAppDomainErrorsDoNotMutateApps(t *testing.T) {
 	store, cache := workerTestRoots(t)
-	base := binmanager.ProvisionRequest{StoreRoot: store, CacheRoot: cache, Apps: binmanager.MapOfApps{}, RuntimeDefinitions: json.RawMessage(`{}`), Action: "install-runtime-app", AppName: "absent"}
+	base := binmanager.ProvisionRequest{ToolCacheRoot: "", Bundles: nil, Names: nil, IncludeOptional: false, Concurrency: 0, FailOnError: false, StoreRoot: store, CacheRoot: cache, Apps: binmanager.MapOfApps{}, RuntimeDefinitions: json.RawMessage(`{}`), Action: "install-runtime-app", AppName: "absent"}
 	_, err := handleProvisionOperation(context.Background(), "install-apps", workerPayload(t, base))
 	if err == nil || !strings.Contains(err.Error(), `runtime app "absent" is missing`) {
 		t.Fatalf("missing app error = %v", err)
 	}
-	base.Apps["unsupported"] = binmanager.App{Shell: &binmanager.AppConfigShell{Name: "true"}}
+	base.Apps["unsupported"] = binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "true"}}
 	base.AppName = "unsupported"
 	_, err = handleProvisionOperation(context.Background(), "install-apps", workerPayload(t, base))
 	if err == nil || !strings.Contains(err.Error(), "not a runtime-managed app") {
@@ -65,8 +71,8 @@ func TestHandleProvisionOperationRejectsWellFormedInvalidDomainRequestsBeforeSto
 		name, operation, want string
 		payload               any
 	}{
-		{"generate lock app", "generate-lock", "does not support lockfile generation", runtimemanager.GenerateLockRequest{StoreRoot: store, CacheRoot: cache, AppName: "probe"}},
-		{"prepare missing app", "prepare-apps", "not found in registry", binmanager.PrepareAppsRequest{StoreRoot: store, CacheRoot: cache, Apps: binmanager.MapOfApps{}, Names: []string{"absent"}}},
+		{"generate lock app", "generate-lock", "does not support lockfile generation", runtimemanager.GenerateLockRequest{App: binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil}, Runtimes: nil, StoreRoot: store, CacheRoot: cache, AppName: "probe"}},
+		{"prepare missing app", "prepare-apps", "not found in registry", binmanager.PrepareAppsRequest{ToolCacheRoot: "", Bundles: nil, RuntimeDefinitions: nil, StoreRoot: store, CacheRoot: cache, Apps: binmanager.MapOfApps{}, Names: []string{"absent"}}},
 		{"parser missing module", "ensure-parsers", "is not declared", parsermanager.EnsureRequest{StoreRoot: store, CacheRoot: cache, Parsers: config.MapOfParsers{}, Names: []string{"absent"}}},
 		{"execution missing runtime", "ensure-execution", "unknown runtime", runtimemanager.EnsureExecutionRequest{StoreRoot: store, CacheRoot: cache, Runtimes: config.MapOfRuntimes{}, Name: "absent"}},
 	}
@@ -80,7 +86,7 @@ func TestHandleProvisionOperationRejectsWellFormedInvalidDomainRequestsBeforeSto
 		})
 	}
 	t.Run("seed missing source", func(t *testing.T) {
-		result, err := handleProvisionOperation(context.Background(), "seed-oci", workerPayload(t, ocibundle.SeedRequest{StoreRoot: store, CacheRoot: cache}))
+		result, err := handleProvisionOperation(context.Background(), "seed-oci", workerPayload(t, ocibundle.SeedRequest{Config: nil, Ref: nil, Options: ocibundle.Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}, Layout: "", Digest: "", Signer: nil, StoreRoot: store, CacheRoot: cache}))
 		if err != nil {
 			t.Fatalf("seed-oci transport error = %v", err)
 		}

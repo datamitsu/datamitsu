@@ -59,7 +59,7 @@ func runtimeArgs(p *clitest.Project, cfg string, args ...string) []string {
 func TestRuntimeListJSONInventoryAndEmpty(t *testing.T) {
 	p, cfg, probe := runtimeProject(t, runtimeProbe(t))
 	cacheRoot := t.TempDir()
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheRoot}, runtimeArgs(p, cfg, "list", "--json")...)
+	res := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheRoot}, runtimeArgs(p, cfg, "list", "--json")...)
 	if res.ExitCode != 0 || res.Stderr != "" {
 		t.Fatalf("runtime list: %d\n%s", res.ExitCode, res.Stderr)
 	}
@@ -115,7 +115,7 @@ func TestRuntimeListJSONInventoryAndEmpty(t *testing.T) {
 
 	empty := clitest.NewProject(t)
 	emptyCfg := clitest.WriteMinimalConfig(empty)
-	emptyRes := clitest.Run(t, clitest.RunOptions{Dir: empty.Dir}, runtimeArgs(empty, emptyCfg, "list", "--json")...)
+	emptyRes := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: empty.Dir}, runtimeArgs(empty, emptyCfg, "list", "--json")...)
 	var emptyDoc struct {
 		Runtimes []json.RawMessage `json:"runtimes"`
 	}
@@ -128,7 +128,7 @@ func TestRuntimeRunDryRunAndExactExecution(t *testing.T) {
 	p, cfg, _ := runtimeProject(t, runtimeProbe(t))
 	args := []string{"", "two words", "$(literal); *"}
 	cacheRoot := t.TempDir()
-	dry := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheRoot}, runtimeArgs(p, cfg, append([]string{"run", "--dry-run", "zed", "--"}, args...)...)...)
+	dry := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheRoot}, runtimeArgs(p, cfg, append([]string{"run", "--dry-run", "zed", "--"}, args...)...)...)
 	if dry.ExitCode != 0 {
 		t.Fatalf("dry run: %d\n%s", dry.ExitCode, dry.Stderr)
 	}
@@ -153,7 +153,7 @@ func TestRuntimeRunDryRunAndExactExecution(t *testing.T) {
 
 	record := filepath.Join(p.Dir, "probe.json")
 	childArgs := []string{"--record", record, "", "space value", "';$(echo no)"}
-	run := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Stdin: "stdin payload"}, runtimeArgs(p, cfg, append([]string{"run", "zed", "--"}, childArgs...)...)...)
+	run := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Timeout: 0, Dir: p.Dir, Stdin: "stdin payload"}, runtimeArgs(p, cfg, append([]string{"run", "zed", "--"}, childArgs...)...)...)
 	if run.ExitCode != 0 || run.Stdout != "probe stdout\n" || run.Stderr != "probe stderr\n" {
 		t.Fatalf("execution: %#v", run)
 	}
@@ -180,7 +180,7 @@ func TestRuntimeRunDryRunAndExactExecution(t *testing.T) {
 
 func TestRuntimeRunChildExitAndUsageErrors(t *testing.T) {
 	p, cfg, probe := runtimeProject(t, runtimeProbe(t))
-	status := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, runtimeArgs(p, cfg, "run", "zed", "--", "--exit", "37")...)
+	status := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, runtimeArgs(p, cfg, "run", "zed", "--", "--exit", "37")...)
 	if status.ExitCode != 37 || status.Stdout != "probe stdout\n" || status.Stderr != "probe stderr\n" {
 		t.Fatalf("child result = %#v, want exit 37 and separate streams", status)
 	}
@@ -201,7 +201,7 @@ func TestRuntimeRunChildExitAndUsageErrors(t *testing.T) {
 			if len(tc.extra) > 0 {
 				args = append(tc.extra, args...)
 			}
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, runtimeArgs(p, cfg, args...)...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, runtimeArgs(p, cfg, args...)...)
 			if res.ExitCode != 2 || !strings.Contains(res.Stderr, tc.contains) {
 				t.Fatalf("got %d\n%s", res.ExitCode, res.Stderr)
 			}
@@ -209,7 +209,7 @@ func TestRuntimeRunChildExitAndUsageErrors(t *testing.T) {
 	}
 	jsonlRecord := filepath.Join(p.Dir, "jsonl-probe.json")
 	jsonlArgs := []string{"--no-auto-config", "--config", cfg, "--log-format=jsonl", "runtime", "run", "zed", "--", "--record", jsonlRecord, "x"}
-	jsonl := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, jsonlArgs...)
+	jsonl := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, jsonlArgs...)
 	if jsonl.ExitCode != 2 || !strings.Contains(jsonl.Stderr, "cannot use --log-format jsonl") {
 		t.Fatalf("JSONL rejection: %d\n%s", jsonl.ExitCode, jsonl.Stderr)
 	}
@@ -223,12 +223,12 @@ func TestRuntimeRunChildExitAndUsageErrors(t *testing.T) {
 
 func TestRuntimeSystemExecutablePresentAndMissing(t *testing.T) {
 	p, cfg, probe := runtimeProject(t, runtimeProbe(t))
-	present := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, runtimeArgs(p, cfg, "run", "zed", "--", "--exit", "0")...)
+	present := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, runtimeArgs(p, cfg, "run", "zed", "--", "--exit", "0")...)
 	if present.ExitCode != 0 {
 		t.Fatalf("present executable: %d\n%s", present.ExitCode, present.Stderr)
 	}
 	missingCfg := p.WriteFile("missing.config.js", sprintfRuntimeConfig(filepath.Join(p.Dir, "does-not-exist"), probe))
-	missing := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, runtimeArgs(p, missingCfg, "run", "zed", "--", "x")...)
+	missing := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, runtimeArgs(p, missingCfg, "run", "zed", "--", "x")...)
 	if missing.ExitCode == 0 || !strings.Contains(missing.Stderr, filepath.Base(filepath.Join(p.Dir, "does-not-exist"))) {
 		t.Fatalf("missing executable: %d\n%s", missing.ExitCode, missing.Stderr)
 	}

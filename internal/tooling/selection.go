@@ -29,13 +29,13 @@ type Selection struct {
 func NewSelection(rootPath, cwdPath string, paths []string, fileScoped bool) Selection {
 	switch {
 	case len(paths) > 0:
-		return Selection{Mode: SelectionPaths, Paths: paths}
+		return Selection{Dir: "", Mode: SelectionPaths, Paths: paths}
 	case fileScoped:
-		return Selection{Mode: SelectionEmpty}
+		return Selection{Dir: "", Paths: nil, Mode: SelectionEmpty}
 	case cwdPath != rootPath:
-		return Selection{Mode: SelectionSubtree, Dir: cwdPath}
+		return Selection{Paths: nil, Mode: SelectionSubtree, Dir: cwdPath}
 	default:
-		return Selection{Mode: SelectionAll}
+		return Selection{Dir: "", Paths: nil, Mode: SelectionAll}
 	}
 }
 

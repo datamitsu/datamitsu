@@ -4,10 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	zerovalue_sync "sync"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/project"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 // The defect this whole mechanism exists for: tsc's answer depends on
@@ -66,12 +68,36 @@ func TestVerdictInputsNoticeADeletedMember(t *testing.T) {
 // every entry.
 func TestVerdictIdentityIgnoresAbsolutePaths(t *testing.T) {
 	task := Task{
-		ToolName:  "tsc",
-		Operation: config.OpLint,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Files:        nil,
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "tsc",
+		Operation:    config.OpLint,
 		OpConfig: config.ToolOperation{
-			App:   "tsc",
-			Args:  []string{"--noEmit", "--tsBuildInfoFile", "{toolCache}/x.json"},
-			Scope: config.ToolScopePerProject,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "tsc",
+			Args:              []string{"--noEmit", "--tsBuildInfoFile", "{toolCache}/x.json"},
+			Scope:             config.ToolScopePerProject,
 		},
 	}
 	// Raw args are hashed, so the same operation in two checkouts agrees.
@@ -90,15 +116,49 @@ func TestVerdictIdentityIgnoresAbsolutePaths(t *testing.T) {
 // hand-fed denominator is exactly what hid the tautology this replaced.
 func TestCoverageIsPartialForANarrowedRun(t *testing.T) {
 	p := &Planner{
-		rootPath: "/repo",
-		cwdPath:  "/repo",
+		detectedTypes:      nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        zerovalue_sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        zerovalue_sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           "/repo",
+		cwdPath:            "/repo",
 		tools: config.MapOfTools{
-			"eslint": {Operations: map[config.OperationType]config.ToolOperation{
-				config.OpLint: {
-					App: "eslint", Args: []string{"{files}"},
-					Scope: config.ToolScopePerProject, Globs: []string{"**/*.ts"},
+			"eslint": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+					config.OpLint: {
+						Arity:             "",
+						Granularity:       "",
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						Env:               nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						App:               "eslint", Args: []string{"{files}"},
+						Scope: config.ToolScopePerProject, Globs: []string{"**/*.ts"},
+					},
 				},
-			}},
+			},
 		},
 		cachedFiles:      []string{"/repo/pkg/a.ts", "/repo/pkg/b.ts", "/repo/pkg/package.json"},
 		cachedProjects:   []project.ProjectLocation{{Type: "npm-package", Path: "/repo/pkg"}},
@@ -107,7 +167,7 @@ func TestCoverageIsPartialForANarrowedRun(t *testing.T) {
 
 	// One file named out of two the unit contains.
 	narrowed, _ := p.collectTasks(context.Background(), config.OpLint,
-		Selection{Mode: SelectionPaths, Paths: []string{"/repo/pkg/a.ts"}})
+		Selection{Dir: "", Mode: SelectionPaths, Paths: []string{"/repo/pkg/a.ts"}})
 	if len(narrowed) != 1 {
 		t.Fatalf("expected one task, got %d", len(narrowed))
 	}
@@ -117,7 +177,7 @@ func TestCoverageIsPartialForANarrowedRun(t *testing.T) {
 	}
 
 	// The whole repository: the same unit is now fully covered.
-	full, _ := p.collectTasks(context.Background(), config.OpLint, Selection{Mode: SelectionAll})
+	full, _ := p.collectTasks(context.Background(), config.OpLint, Selection{Dir: "", Paths: nil, Mode: SelectionAll})
 	if len(full) != 1 {
 		t.Fatalf("expected one task, got %d", len(full))
 	}
@@ -130,15 +190,49 @@ func TestCoverageIsPartialForANarrowedRun(t *testing.T) {
 // a narrowed selection still covers its unit.
 func TestCoverageIsCompleteWhenArgvIgnoresTheSelection(t *testing.T) {
 	p := &Planner{
-		rootPath: "/repo",
-		cwdPath:  "/repo",
+		detectedTypes:      nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        zerovalue_sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        zerovalue_sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           "/repo",
+		cwdPath:            "/repo",
 		tools: config.MapOfTools{
-			"tsc": {Operations: map[config.OperationType]config.ToolOperation{
-				config.OpLint: {
-					App: "tsc", Args: []string{"--noEmit"},
-					Scope: config.ToolScopePerProject, Globs: []string{"**/*.ts"},
+			"tsc": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+					config.OpLint: {
+						Arity:             "",
+						Granularity:       "",
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						Env:               nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						App:               "tsc", Args: []string{"--noEmit"},
+						Scope: config.ToolScopePerProject, Globs: []string{"**/*.ts"},
+					},
 				},
-			}},
+			},
 		},
 		cachedFiles:      []string{"/repo/pkg/a.ts", "/repo/pkg/b.ts"},
 		cachedProjects:   []project.ProjectLocation{{Type: "npm-package", Path: "/repo/pkg"}},
@@ -146,7 +240,7 @@ func TestCoverageIsCompleteWhenArgvIgnoresTheSelection(t *testing.T) {
 	}
 
 	tasks, _ := p.collectTasks(context.Background(), config.OpLint,
-		Selection{Mode: SelectionPaths, Paths: []string{"/repo/pkg/a.ts"}})
+		Selection{Dir: "", Mode: SelectionPaths, Paths: []string{"/repo/pkg/a.ts"}})
 	if len(tasks) != 1 {
 		t.Fatalf("expected one task, got %d", len(tasks))
 	}

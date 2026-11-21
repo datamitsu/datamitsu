@@ -24,23 +24,120 @@ import (
 )
 
 var storeCmd = &cobra.Command{
-	Use:   "store",
-	Short: "Manage the global binary and runtime store",
-	Long:  `Manage the global binary and runtime store (binaries, runtimes, apps, remote configs).`,
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	Args:                       nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	RunE:                       nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "store",
+	Short:                      "Manage the global binary and runtime store",
+	Long:                       `Manage the global binary and runtime store (binaries, runtimes, apps, remote configs).`,
 }
 
 var storePathCmd = &cobra.Command{
-	Use:   "path",
-	Short: "Print store directory path",
-	Long:  `Print the absolute path to the global store directory.`,
-	RunE:  runStorePath,
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	Args:                       nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "path",
+	Short:                      "Print store directory path",
+	Long:                       `Print the absolute path to the global store directory.`,
+	RunE:                       runStorePath,
 }
 
 var storeClearCmd = &cobra.Command{
-	Use:   "clear",
-	Short: "Clear the entire store",
-	Long:  `Remove the entire global store directory including all binaries, runtimes, apps, and remote configs.`,
-	RunE:  runStoreClear,
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	Args:                       nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "clear",
+	Short:                      "Clear the entire store",
+	Long:                       `Remove the entire global store directory including all binaries, runtimes, apps, and remote configs.`,
+	RunE:                       runStoreClear,
 }
 
 var (
@@ -51,8 +148,39 @@ var (
 )
 
 var storeSeedCmd = &cobra.Command{
-	Use:   "seed [<ref>@<digest>]",
-	Short: "Seed the store from the declared OCI bundle",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "seed [<ref>@<digest>]",
+	Short:                      "Seed the store from the declared OCI bundle",
 	Long: `Pull the OCI bundle into the global store without docker/podman.
 
 Without arguments the bundle is taken from the effective config (the top-level
@@ -69,8 +197,39 @@ layers of the named tools plus their runtime dependencies are pulled.`,
 }
 
 var storeStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show OCI bundle contents and store coverage",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "status",
+	Short:                      "Show OCI bundle contents and store coverage",
 	Long: `Show what the declared OCI bundle contains for this platform and which of
 the configured apps it covers (vs which require the network).`,
 	Args: usageArgs(cobra.NoArgs),
@@ -80,8 +239,39 @@ the configured apps it covers (vs which require the network).`,
 }
 
 var storeImportCmd = &cobra.Command{
-	Use:   "import <oci-layout-dir>",
-	Short: "Seed the store from a local OCI image layout directory",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "import <oci-layout-dir>",
+	Short:                      "Seed the store from a local OCI image layout directory",
 	Long: `Seed the store from a standard OCI image layout directory (as produced by
 "crane pull --format=oci", "oras copy --to-oci-layout", or "skopeo copy") —
 fully offline bundle transfer. The bundle digest is taken from the effective
@@ -140,7 +330,7 @@ func resolveSeedRef(ctx context.Context, cfg *config.Config, args []string) (*co
 		return nil, fmt.Errorf("resolve tag %q: %w", arg, err)
 	}
 	fmt.Printf("Resolved %s -> %s\nPin it in the config as oci: { ref: %q, digest: %q }\n", arg, digest, a.ref, digest)
-	return &config.OCIRef{Ref: a.ref, Digest: digest}, nil
+	return &config.OCIRef{Signer: nil, Ref: a.ref, Digest: digest}, nil
 }
 
 // seedArg is an explicit store seed reference that passed its checks: pinned
@@ -154,11 +344,11 @@ type seedArg struct {
 // network, so a malformed one is refused before either is touched.
 func parseSeedArg(arg string) (seedArg, error) {
 	if ref, digest, ok := strings.Cut(arg, "@"); ok {
-		pinned := &config.OCIRef{Ref: ref, Digest: digest}
+		pinned := &config.OCIRef{Signer: nil, Ref: ref, Digest: digest}
 		if err := config.ValidateOCI(pinned); err != nil {
 			return seedArg{}, exitcode.UsageErrorf("reference %q: %w", arg, err)
 		}
-		return seedArg{pinned: pinned}, nil
+		return seedArg{ref: "", tag: "", host: "", repo: "", pinned: pinned}, nil
 	}
 
 	// The tag separator is the last colon after the last "/", so a ported
@@ -177,7 +367,7 @@ func parseSeedArg(arg string) (seedArg, error) {
 	if err != nil {
 		return seedArg{}, exitcode.UsageErrorf("reference %q %w", ref, err)
 	}
-	return seedArg{ref: ref, tag: tag, host: host, repo: repo}, nil
+	return seedArg{pinned: nil, ref: ref, tag: tag, host: host, repo: repo}, nil
 }
 
 func runStoreSeed(ctx context.Context, args []string) error {
@@ -195,7 +385,7 @@ func runStoreSeed(ctx context.Context, args []string) error {
 		return err
 	}
 
-	opts := ocibundle.Options{}
+	opts := ocibundle.Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}
 	if len(storeSeedApps) > 0 {
 		opts.Needed = storeSeedApps
 		// The caller named these tools; a store that still cannot run them is a
@@ -306,7 +496,7 @@ func runStoreImport(ctx context.Context, dir string) error {
 		restore()
 	}()
 
-	if err := ocibundle.SeedFromLayout(ctx, cfg, dir, digest, signer, ocibundle.Options{}); err != nil {
+	if err := ocibundle.SeedFromLayout(ctx, cfg, dir, digest, signer, ocibundle.Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		return err
 	}
 	fmt.Printf("Imported store seed from %s (%s)\n", dir, digest)

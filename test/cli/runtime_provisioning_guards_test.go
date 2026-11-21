@@ -18,7 +18,7 @@ func TestInstallerChildCannotRunRuntimeButCanInspectIt(t *testing.T) {
 	project, configPath, _ := runtimeProject(t, runtimeProbe(t))
 	cache := t.TempDir()
 	record := filepath.Join(project.Dir, "must-not-run.json")
-	options := clitest.RunOptions{Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_INSTALL_CHILD=1"}}
+	options := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_INSTALL_CHILD=1"}}
 	blocked := clitest.Run(t, options, runtimeArgs(project, configPath, "run", "zed", "--", "--record", record)...)
 	if blocked.ExitCode != 1 || blocked.Stdout != "" || blocked.Stderr == "" {
 		t.Fatalf("installer reentry was not rejected before interpreter execution: %+v", blocked)
@@ -59,7 +59,7 @@ kind:"go",mode:"managed",go:{goVersion:"1.23"},managed:{binaries:{%q:{%q:{unknow
 globalThis.getMinVersion = () => "0.0.0";`, platform, runtime.GOARCH, server.URL, digest.SHA256Of([]byte("unused")).String()))
 	cache := t.TempDir()
 	for _, args := range [][]string{{"run", "probe", "--", "unused"}, {"run", "--dry-run", "probe", "--", "unused"}} {
-		result := clitest.Run(t, clitest.RunOptions{Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="}}, runtimeArgs(project, configPath, args...)...)
+		result := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="}}, runtimeArgs(project, configPath, args...)...)
 		if result.ExitCode != 1 || result.Stdout != "" || result.Stderr == "" {
 			t.Fatalf("unavailable host target was not rejected: %+v", result)
 		}

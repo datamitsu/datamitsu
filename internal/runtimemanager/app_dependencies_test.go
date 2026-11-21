@@ -13,14 +13,14 @@ func TestCollectRequiredRuntimesDependencies(t *testing.T) {
 	for _, ref := range []string{"", "node"} {
 		t.Run("runtime="+ref, func(t *testing.T) {
 			apps := binmanager.MapOfApps{
-				"root": {Required: true, Binary: &binmanager.AppConfigBinary{}, DependsOn: edges("dep")},
-				"dep":  {Lazy: true, DependsOn: edges("leaf"), Binary: &binmanager.AppConfigBinary{}},
-				"leaf": {Lazy: true, Node: &binmanager.AppConfigNode{Runtime: ref}},
+				"root": {Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}, DependsOn: edges("dep")},
+				"dep":  {Required: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Lazy: true, DependsOn: edges("leaf"), Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}},
+				"leaf": {Required: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Lazy: true, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", LockFile: "", Dependencies: nil, Runtime: ref}},
 			}
 			runtimes := config.MapOfRuntimes{
-				"node":   {Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{PNPMRuntime: "pnpm"}},
-				"pnpm":   {Kind: config.RuntimeKindPNPM},
-				"unused": {Kind: config.RuntimeKindUV},
+				"node":   {Mode: "", Managed: nil, System: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "", PNPMRuntime: "pnpm"}},
+				"pnpm":   {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindPNPM},
+				"unused": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV},
 			}
 			got, err := CollectRequiredRuntimes(apps, runtimes, false)
 			if err != nil {
@@ -29,7 +29,7 @@ func TestCollectRequiredRuntimesDependencies(t *testing.T) {
 			if want := []string{"node", "pnpm"}; !slices.Equal(got, want) {
 				t.Fatalf("runtimes = %v, want %v", got, want)
 			}
-			apps["dep"] = binmanager.App{DependsOn: edges("missing")}
+			apps["dep"] = binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, DependsOn: edges("missing")}
 			if _, err := CollectRequiredRuntimes(apps, runtimes, false); err == nil || !strings.Contains(err.Error(), "missing") {
 				t.Fatalf("error = %v, want missing dependency", err)
 			}
@@ -39,8 +39,8 @@ func TestCollectRequiredRuntimesDependencies(t *testing.T) {
 
 func TestDependsOnPreservesInstallIdentity(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
-	rm := New(config.MapOfRuntimes{"uv": {Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem}})
-	app := binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "tool", Version: "1", LockFile: "lock", Runtime: "uv"}}
+	rm := New(config.MapOfRuntimes{"uv": {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem}})
+	app := binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{RequiresPython: "", PackageName: "tool", Version: "1", LockFile: "lock", Runtime: "uv"}}
 	before, err := rm.ComputeAppPath("tool", app)
 	if err != nil {
 		t.Fatal(err)

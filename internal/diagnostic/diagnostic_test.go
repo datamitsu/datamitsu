@@ -15,18 +15,18 @@ func TestResolve_PositionContract(t *testing.T) {
 		raw                      parsermanager.RawDiagnostic
 		row, col, endRow, endCol int
 	}{
-		{"nil positions", parsermanager.RawDiagnostic{}, 1, 1, 1, 1},
-		{"0 row", parsermanager.RawDiagnostic{Row: u(0), Col: u(4)}, 1, 4, 1, 4},
-		{"0 col", parsermanager.RawDiagnostic{Row: u(3), Col: u(0)}, 3, 1, 3, 1},
-		{"missing end", parsermanager.RawDiagnostic{Row: u(3), Col: u(5)}, 3, 5, 3, 5},
-		{"end kept", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndRow: u(4), EndCol: u(2)}, 3, 5, 4, 2},
-		{"end column on the start row", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndCol: u(9)}, 3, 5, 3, 9},
-		{"end row before start", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndRow: u(2), EndCol: u(9)}, 3, 5, 3, 5},
-		{"end column before start", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndRow: u(3), EndCol: u(4)}, 3, 5, 3, 5},
-		{"end column only, before start", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndCol: u(2)}, 3, 5, 3, 5},
-		{"end row only", parsermanager.RawDiagnostic{Row: u(3), Col: u(5), EndRow: u(4)}, 3, 5, 3, 5},
-		{"0 end", parsermanager.RawDiagnostic{Row: u(1), Col: u(1), EndRow: u(0), EndCol: u(0)}, 1, 1, 1, 1},
-		{"0 start with an end", parsermanager.RawDiagnostic{Row: u(0), Col: u(0), EndRow: u(1), EndCol: u(3)}, 1, 1, 1, 3},
+		{"nil positions", parsermanager.RawDiagnostic{Message: "", Row: nil, Col: nil, EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil}, 1, 1, 1, 1},
+		{"0 row", parsermanager.RawDiagnostic{Message: "", EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Row: u(0), Col: u(4)}, 1, 4, 1, 4},
+		{"0 col", parsermanager.RawDiagnostic{Message: "", EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Row: u(3), Col: u(0)}, 3, 1, 3, 1},
+		{"missing end", parsermanager.RawDiagnostic{Message: "", EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Row: u(3), Col: u(5)}, 3, 5, 3, 5},
+		{"end kept", parsermanager.RawDiagnostic{Message: "", Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Row: u(3), Col: u(5), EndRow: u(4), EndCol: u(2)}, 3, 5, 4, 2},
+		{"end column on the start row", parsermanager.RawDiagnostic{Message: "", EndRow: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Row: u(3), Col: u(5), EndCol: u(9)}, 3, 5, 3, 9},
+		{"end row before start", parsermanager.RawDiagnostic{Message: "", Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Row: u(3), Col: u(5), EndRow: u(2), EndCol: u(9)}, 3, 5, 3, 5},
+		{"end column before start", parsermanager.RawDiagnostic{Message: "", Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Row: u(3), Col: u(5), EndRow: u(3), EndCol: u(4)}, 3, 5, 3, 5},
+		{"end column only, before start", parsermanager.RawDiagnostic{Message: "", EndRow: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Row: u(3), Col: u(5), EndCol: u(2)}, 3, 5, 3, 5},
+		{"end row only", parsermanager.RawDiagnostic{Message: "", EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Row: u(3), Col: u(5), EndRow: u(4)}, 3, 5, 3, 5},
+		{"0 end", parsermanager.RawDiagnostic{Message: "", Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Row: u(1), Col: u(1), EndRow: u(0), EndCol: u(0)}, 1, 1, 1, 1},
+		{"0 start with an end", parsermanager.RawDiagnostic{Message: "", Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Row: u(0), Col: u(0), EndRow: u(1), EndCol: u(3)}, 1, 1, 1, 3},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -63,7 +63,7 @@ func TestAbsPath(t *testing.T) {
 
 func TestResolve_FillsDefaultsForAbsentFields(t *testing.T) {
 	// Only message present — every other field defaulted.
-	d := Resolve(parsermanager.RawDiagnostic{Message: "boom"}, "dotenv_linter", false)
+	d := Resolve(parsermanager.RawDiagnostic{Row: nil, Col: nil, EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Message: "boom"}, "dotenv_linter", false)
 	if d.Message != "boom" {
 		t.Errorf("message = %q", d.Message)
 	}
@@ -86,6 +86,9 @@ func TestResolve_FillsDefaultsForAbsentFields(t *testing.T) {
 
 func TestResolve_UsesProvidedFields(t *testing.T) {
 	d := Resolve(parsermanager.RawDiagnostic{
+		Source:   nil,
+		URL:      nil,
+		File:     nil,
 		Message:  "x",
 		Row:      new(uint32(3)),
 		Col:      new(uint32(7)),
@@ -106,7 +109,7 @@ func TestResolve_UsesProvidedFields(t *testing.T) {
 }
 
 func TestResolve_EndDefaultsToStartWhenOnlyStartGiven(t *testing.T) {
-	d := Resolve(parsermanager.RawDiagnostic{Message: "m", Row: new(uint32(5)), Col: new(uint32(2))}, "t", false)
+	d := Resolve(parsermanager.RawDiagnostic{EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Message: "m", Row: new(uint32(5)), Col: new(uint32(2))}, "t", false)
 	if d.EndRow != 5 || d.EndCol != 2 {
 		t.Errorf("end should default to start (5/2), got %d/%d", d.EndRow, d.EndCol)
 	}
@@ -114,7 +117,7 @@ func TestResolve_EndDefaultsToStartWhenOnlyStartGiven(t *testing.T) {
 
 func TestResolve_ParserSourceOverridesToolName(t *testing.T) {
 	// cue_fmt sets its own source; it wins over the dispatch tool name.
-	d := Resolve(parsermanager.RawDiagnostic{Message: "m", Source: new("cue_fmt")}, "cue", false)
+	d := Resolve(parsermanager.RawDiagnostic{Row: nil, Col: nil, EndRow: nil, EndCol: nil, Severity: nil, Code: nil, URL: nil, File: nil, Message: "m", Source: new("cue_fmt")}, "cue", false)
 	if d.Source != "cue_fmt" {
 		t.Errorf("source = %q, want parser-provided cue_fmt", d.Source)
 	}
@@ -146,7 +149,7 @@ func TestResolve_LevelFromTheExitCode(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			d := Resolve(parsermanager.RawDiagnostic{Message: "m", Severity: c.level}, "t", c.failed)
+			d := Resolve(parsermanager.RawDiagnostic{Row: nil, Col: nil, EndRow: nil, EndCol: nil, Source: nil, Code: nil, URL: nil, File: nil, Message: "m", Severity: c.level}, "t", c.failed)
 			if d.Severity != c.want {
 				t.Errorf("severity = %v, want %v", d.Severity, c.want)
 			}
@@ -155,11 +158,11 @@ func TestResolve_LevelFromTheExitCode(t *testing.T) {
 }
 
 func TestResolve_CopiesTheRuleURL(t *testing.T) {
-	d := Resolve(parsermanager.RawDiagnostic{Message: "m", URL: new("https://example.test/rule")}, "t", false)
+	d := Resolve(parsermanager.RawDiagnostic{Row: nil, Col: nil, EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, File: nil, Message: "m", URL: new("https://example.test/rule")}, "t", false)
 	if d.URL != "https://example.test/rule" {
 		t.Errorf("url = %q, want the parser-reported URL", d.URL)
 	}
-	if got := Resolve(parsermanager.RawDiagnostic{Message: "m"}, "t", false); got.URL != "" {
+	if got := Resolve(parsermanager.RawDiagnostic{Row: nil, Col: nil, EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Message: "m"}, "t", false); got.URL != "" {
 		t.Errorf("url = %q, want empty when the parser reported none", got.URL)
 	}
 }
@@ -167,12 +170,12 @@ func TestResolve_CopiesTheRuleURL(t *testing.T) {
 // A batch parser (eslint) names the file per diagnostic; the core must keep it,
 // since the executor has no single file to stamp on a many-file run.
 func TestResolve_CarriesParserReportedFile(t *testing.T) {
-	d := Resolve(parsermanager.RawDiagnostic{Message: "m", File: new("src/a.ts")}, "eslint", false)
+	d := Resolve(parsermanager.RawDiagnostic{Row: nil, Col: nil, EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, Message: "m", File: new("src/a.ts")}, "eslint", false)
 	if d.File != "src/a.ts" {
 		t.Errorf("file = %q, want the parser-reported path", d.File)
 	}
 	// Absent stays empty so the executor's own stamping still applies.
-	if got := Resolve(parsermanager.RawDiagnostic{Message: "m"}, "eslint", false); got.File != "" {
+	if got := Resolve(parsermanager.RawDiagnostic{Row: nil, Col: nil, EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Message: "m"}, "eslint", false); got.File != "" {
 		t.Errorf("file = %q, want empty when the parser reported none", got.File)
 	}
 }
@@ -193,7 +196,7 @@ func TestResolveAll(t *testing.T) {
 	if got := ResolveAll(nil, "t", false); got != nil {
 		t.Errorf("ResolveAll(nil) = %v, want nil", got)
 	}
-	out := ResolveAll([]parsermanager.RawDiagnostic{{Message: "a"}, {Message: "b", Row: new(uint32(2))}}, "yamllint", false)
+	out := ResolveAll([]parsermanager.RawDiagnostic{{Row: nil, Col: nil, EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Message: "a"}, {Col: nil, EndRow: nil, EndCol: nil, Severity: nil, Source: nil, Code: nil, URL: nil, File: nil, Message: "b", Row: new(uint32(2))}}, "yamllint", false)
 	if len(out) != 2 || out[0].Message != "a" || out[1].Row != 2 {
 		t.Fatalf("unexpected: %+v", out)
 	}

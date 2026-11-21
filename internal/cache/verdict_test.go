@@ -11,7 +11,7 @@ import (
 
 func newTestCache(t *testing.T) *Cache {
 	t.Helper()
-	c, err := NewCache(t.TempDir(), t.TempDir(), config.Config{}, nil, zap.NewNop())
+	c, err := NewCache(t.TempDir(), t.TempDir(), config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestVerdictRoundTrip(t *testing.T) {
 		t.Error("an empty cache must not report a pass")
 	}
 
-	c.AfterVerdict("k", VerdictEntry{Tool: "tsc", Op: "lint", InputHash: "inputs", Members: 3})
+	c.AfterVerdict("k", VerdictEntry{UnitDir: "", ValidatedAt: time.Time{}, Tool: "tsc", Op: "lint", InputHash: "inputs", Members: 3})
 
 	if c.ShouldRunVerdict("k", "inputs", testTTL) {
 		t.Error("a recorded pass with identical inputs should skip the run")
@@ -45,7 +45,7 @@ func TestVerdictRoundTrip(t *testing.T) {
 
 func TestVerdictTTL(t *testing.T) {
 	c := newTestCache(t)
-	c.AfterVerdict("k", VerdictEntry{InputHash: "inputs"})
+	c.AfterVerdict("k", VerdictEntry{Tool: "", Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, InputHash: "inputs"})
 
 	if !c.ShouldRunVerdict("k", "inputs", time.Nanosecond) {
 		t.Error("an entry older than the TTL must miss")
@@ -60,7 +60,7 @@ func TestVerdictTTL(t *testing.T) {
 func TestVerdictFutureTimestampIsNotTrusted(t *testing.T) {
 	c := newTestCache(t)
 	c.mu.Lock()
-	c.data.Verdicts["k"] = VerdictEntry{InputHash: "inputs", ValidatedAt: time.Now().Add(time.Hour)}
+	c.data.Verdicts["k"] = VerdictEntry{Tool: "", Op: "", UnitDir: "", Members: 0, InputHash: "inputs", ValidatedAt: time.Now().Add(time.Hour)}
 	c.mu.Unlock()
 
 	if !c.ShouldRunVerdict("k", "inputs", time.Minute) {
@@ -70,8 +70,8 @@ func TestVerdictFutureTimestampIsNotTrusted(t *testing.T) {
 
 func TestDeleteVerdict(t *testing.T) {
 	c := newTestCache(t)
-	c.AfterVerdict("a", VerdictEntry{Tool: "tsc", Op: "lint", InputHash: "x"})
-	c.AfterVerdict("b", VerdictEntry{Tool: "tsc", Op: "fix", InputHash: "y"})
+	c.AfterVerdict("a", VerdictEntry{UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", Op: "lint", InputHash: "x"})
+	c.AfterVerdict("b", VerdictEntry{UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", Op: "fix", InputHash: "y"})
 
 	c.DeleteVerdict("a")
 
@@ -90,21 +90,21 @@ func TestDeleteVerdict(t *testing.T) {
 func TestDeletedVerdictStaysDeletedAcrossSave(t *testing.T) {
 	dir, project := t.TempDir(), t.TempDir()
 
-	first, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
-	first.AfterVerdict("k", VerdictEntry{Tool: "tsc", InputHash: "x"})
+	first, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
+	first.AfterVerdict("k", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", InputHash: "x"})
 	if err := first.Save(); err != nil {
 		t.Fatalf("first save: %v", err)
 	}
 	first.Shutdown()
 
-	second, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+	second, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	second.DeleteVerdict("k")
 	if err := second.Save(); err != nil {
 		t.Fatalf("second save: %v", err)
 	}
 	second.Shutdown()
 
-	reloaded, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+	reloaded, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if !reloaded.ShouldRunVerdict("k", "x", testTTL) {
 		t.Error("the deleted verdict came back after the save")
 	}
@@ -115,21 +115,21 @@ func TestDeletedVerdictStaysDeletedAcrossSave(t *testing.T) {
 func TestSaveTakesOverAStaleCacheFile(t *testing.T) {
 	dir, project := t.TempDir(), t.TempDir()
 
-	old, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"a"}}, nil, zap.NewNop())
-	old.AfterVerdict("k", VerdictEntry{Tool: "tsc", InputHash: "x"})
+	old, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, IgnoreRules: []string{"a"}}, nil, zap.NewNop())
+	old.AfterVerdict("k", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", InputHash: "x"})
 	if err := old.Save(); err != nil {
 		t.Fatalf("save with the first config: %v", err)
 	}
 	old.Shutdown()
 
-	fresh, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"b"}}, nil, zap.NewNop())
-	fresh.AfterVerdict("k2", VerdictEntry{Tool: "tsc", InputHash: "y"})
+	fresh, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, IgnoreRules: []string{"b"}}, nil, zap.NewNop())
+	fresh.AfterVerdict("k2", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", InputHash: "y"})
 	if err := fresh.Save(); err != nil {
 		t.Fatalf("save after a config change must succeed, got: %v", err)
 	}
 	fresh.Shutdown()
 
-	reloaded, _ := NewCache(dir, project, config.Config{IgnoreRules: []string{"b"}}, nil, zap.NewNop())
+	reloaded, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, IgnoreRules: []string{"b"}}, nil, zap.NewNop())
 	if reloaded.ShouldRunVerdict("k2", "y", testTTL) {
 		t.Error("the cache never warmed again after a config change")
 	}
@@ -140,27 +140,27 @@ func TestSaveTakesOverAStaleCacheFile(t *testing.T) {
 func TestSaveMergesVerdictsFromDisk(t *testing.T) {
 	dir, project := t.TempDir(), t.TempDir()
 
-	first, err := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+	first, err := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
-	first.AfterVerdict("from-first", VerdictEntry{Tool: "a", InputHash: "x"})
+	first.AfterVerdict("from-first", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "a", InputHash: "x"})
 	if err := first.Save(); err != nil {
 		t.Fatalf("first save: %v", err)
 	}
 	first.Shutdown()
 
-	second, err := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+	second, err := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
-	second.AfterVerdict("from-second", VerdictEntry{Tool: "b", InputHash: "y"})
+	second.AfterVerdict("from-second", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "b", InputHash: "y"})
 	if err := second.Save(); err != nil {
 		t.Fatalf("second save: %v", err)
 	}
 	second.Shutdown()
 
-	reloaded, err := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+	reloaded, err := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
@@ -177,23 +177,23 @@ func TestSaveMergesVerdictsFromDisk(t *testing.T) {
 func TestSaveDropsFileEntriesWithConflictingContent(t *testing.T) {
 	dir, project := t.TempDir(), t.TempDir()
 
-	first, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+	first, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	first.mu.Lock()
-	first.data.Entries["a.go"] = FileEntry{ContentHash: "h1", Lint: []string{"vet"}}
+	first.data.Entries["a.go"] = FileEntry{Fix: nil, ContentHash: "h1", Lint: []string{"vet"}}
 	first.mu.Unlock()
 	if err := first.Save(); err != nil {
 		t.Fatalf("first save: %v", err)
 	}
 
-	second, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+	second, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	second.mu.Lock()
-	second.data.Entries["a.go"] = FileEntry{ContentHash: "h2", Lint: []string{"golangci"}}
+	second.data.Entries["a.go"] = FileEntry{Fix: nil, ContentHash: "h2", Lint: []string{"golangci"}}
 	second.mu.Unlock()
 	if err := second.Save(); err != nil {
 		t.Fatalf("second save: %v", err)
 	}
 
-	reloaded, _ := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+	reloaded, _ := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	reloaded.mu.RLock()
 	_, present := reloaded.data.Entries["a.go"]
 	reloaded.mu.RUnlock()
@@ -214,7 +214,7 @@ func TestNilVerdictsMapMisses(t *testing.T) {
 		t.Error("a nil verdict map must miss")
 	}
 	// And a write against it must not panic on a nil map.
-	c.AfterVerdict("k", VerdictEntry{InputHash: "inputs"})
+	c.AfterVerdict("k", VerdictEntry{Tool: "", Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, InputHash: "inputs"})
 	if c.ShouldRunVerdict("k", "inputs", testTTL) {
 		t.Error("the write should have created the map and stored the entry")
 	}

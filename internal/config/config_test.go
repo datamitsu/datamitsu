@@ -193,7 +193,7 @@ func runDefaultConfigForTest(t *testing.T) *Config {
 		t.Fatalf("getConfig() error = %v", err)
 	}
 
-	cfg := &Config{}
+	cfg := &Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	if err := vm.ExportTo(result, cfg); err != nil {
 		t.Fatalf("ExportTo error = %v", err)
 	}
@@ -439,8 +439,15 @@ func TestRuntimeKindConstants(t *testing.T) {
 
 func TestRuntimeConfig_BunField_JSONRoundTrip(t *testing.T) {
 	original := RuntimeConfig{
-		Kind: RuntimeKindBun,
-		Mode: RuntimeModeManaged,
+		Managed: nil,
+		System:  nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
+		PNPM:    nil,
+		Kind:    RuntimeKindBun,
+		Mode:    RuntimeModeManaged,
 		Bun: &RuntimeConfigBun{
 			BunVersion:  "1.4.1",
 			PNPMRuntime: "pnpm",
@@ -476,8 +483,15 @@ func TestRuntimeConfigGo_Fields(t *testing.T) {
 
 func TestRuntimeConfig_GoField_JSONRoundTrip(t *testing.T) {
 	original := RuntimeConfig{
-		Kind: RuntimeKindGo,
-		Mode: RuntimeModeManaged,
+		Managed: nil,
+		System:  nil,
+		Bun:     nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		PNPM:    nil,
+		Kind:    RuntimeKindGo,
+		Mode:    RuntimeModeManaged,
 		Go: &RuntimeConfigGo{
 			GoVersion: "1.24.3",
 		},
@@ -511,8 +525,16 @@ func TestRuntimeConfig_GoField_JSONRoundTrip(t *testing.T) {
 
 func TestRuntimeConfig_GoField_OmittedWhenNil(t *testing.T) {
 	rc := RuntimeConfig{
-		Kind: RuntimeKindUV,
-		Mode: RuntimeModeManaged,
+		Managed: nil,
+		System:  nil,
+		Bun:     nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
+		PNPM:    nil,
+		Kind:    RuntimeKindUV,
+		Mode:    RuntimeModeManaged,
 	}
 
 	data, err := json.Marshal(rc)
@@ -579,8 +601,16 @@ func TestRuntimeConfig_NodeField_JSONRoundTrip(t *testing.T) {
 
 func TestRuntimeConfig_NodeField_OmittedWhenNil(t *testing.T) {
 	rc := RuntimeConfig{
-		Kind: RuntimeKindUV,
-		Mode: RuntimeModeManaged,
+		Managed: nil,
+		System:  nil,
+		Bun:     nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
+		PNPM:    nil,
+		Kind:    RuntimeKindUV,
+		Mode:    RuntimeModeManaged,
 	}
 
 	data, err := json.Marshal(rc)
@@ -612,11 +642,23 @@ func TestProjectType(t *testing.T) {
 
 func TestToolOperation(t *testing.T) {
 	op := ToolOperation{
-		App:      "eslint",
-		Args:     []string{"--fix"},
-		Scope:    ToolScopePerFile,
-		Globs:    []string{"*.js", "*.ts"},
-		Priority: 10,
+		Arity:             "",
+		Granularity:       "",
+		ExcludeGlobs:      nil,
+		Cache:             nil,
+		InvalidateOn:      nil,
+		Env:               nil,
+		InheritEnv:        nil,
+		FailOn:            "",
+		Input:             "",
+		LSP:               nil,
+		Output:            "",
+		ManagedConfigRefs: nil,
+		App:               "eslint",
+		Args:              []string{"--fix"},
+		Scope:             ToolScopePerFile,
+		Globs:             []string{"*.js", "*.ts"},
+		Priority:          10,
 	}
 
 	if op.App != "eslint" {
@@ -634,10 +676,23 @@ func TestToolOperation(t *testing.T) {
 
 func TestToolOperationAppJSONMarshal(t *testing.T) {
 	op := ToolOperation{
-		App:   "golangci-lint",
-		Args:  []string{"run", "--fix"},
-		Scope: ToolScopeRepository,
-		Globs: []string{"**/*.go"},
+		Arity:             "",
+		Granularity:       "",
+		ExcludeGlobs:      nil,
+		Priority:          0,
+		Cache:             nil,
+		InvalidateOn:      nil,
+		Env:               nil,
+		InheritEnv:        nil,
+		FailOn:            "",
+		Input:             "",
+		LSP:               nil,
+		Output:            "",
+		ManagedConfigRefs: nil,
+		App:               "golangci-lint",
+		Args:              []string{"run", "--fix"},
+		Scope:             ToolScopeRepository,
+		Globs:             []string{"**/*.go"},
 	}
 
 	data, err := json.Marshal(op)
@@ -681,17 +736,49 @@ func TestToolOperationAppJSONUnmarshal(t *testing.T) {
 
 func TestTool(t *testing.T) {
 	tool := Tool{
+		Skip:         false,
+		SkipReason:   "",
+		OutputParser: nil,
 		Name:         "eslint",
 		ProjectTypes: []string{"node"},
 		Operations: map[OperationType]ToolOperation{
 			OpLint: {
-				App:   "eslint",
-				Scope: ToolScopePerFile,
+				Args:              nil,
+				Arity:             "",
+				Granularity:       "",
+				Globs:             nil,
+				ExcludeGlobs:      nil,
+				Priority:          0,
+				Cache:             nil,
+				InvalidateOn:      nil,
+				Env:               nil,
+				InheritEnv:        nil,
+				FailOn:            "",
+				Input:             "",
+				LSP:               nil,
+				Output:            "",
+				ManagedConfigRefs: nil,
+				App:               "eslint",
+				Scope:             ToolScopePerFile,
 			},
 			OpFix: {
-				App:   "eslint",
-				Args:  []string{"--fix"},
-				Scope: ToolScopePerFile,
+				Arity:             "",
+				Granularity:       "",
+				Globs:             nil,
+				ExcludeGlobs:      nil,
+				Priority:          0,
+				Cache:             nil,
+				InvalidateOn:      nil,
+				Env:               nil,
+				InheritEnv:        nil,
+				FailOn:            "",
+				Input:             "",
+				LSP:               nil,
+				Output:            "",
+				ManagedConfigRefs: nil,
+				App:               "eslint",
+				Args:              []string{"--fix"},
+				Scope:             ToolScopePerFile,
 			},
 		},
 	}
@@ -716,11 +803,13 @@ func TestTool(t *testing.T) {
 
 func TestToolSkipFields(t *testing.T) {
 	tool := Tool{
-		Name:       "trufflehog",
-		Skip:       true,
-		SkipReason: "runs in CI only",
+		ProjectTypes: nil,
+		OutputParser: nil,
+		Name:         "trufflehog",
+		Skip:         true,
+		SkipReason:   "runs in CI only",
 		Operations: map[OperationType]ToolOperation{
-			OpLint: {App: "trufflehog", Scope: ToolScopeRepository},
+			OpLint: {Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "trufflehog", Scope: ToolScopeRepository},
 		},
 	}
 	if !tool.Skip {
@@ -732,7 +821,7 @@ func TestToolSkipFields(t *testing.T) {
 }
 
 func TestToolSkipJSONRoundTrip(t *testing.T) {
-	in := Tool{Name: "trufflehog", Skip: true, SkipReason: "runs in CI only"}
+	in := Tool{ProjectTypes: nil, Operations: nil, OutputParser: nil, Name: "trufflehog", Skip: true, SkipReason: "runs in CI only"}
 	data, err := json.Marshal(in)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -752,7 +841,7 @@ func TestToolSkipJSONRoundTrip(t *testing.T) {
 // Unset skip fields must be omitted so configs that don't use skip serialize
 // identically (keeping cache keys stable).
 func TestToolSkipJSONOmitEmpty(t *testing.T) {
-	data, err := json.Marshal(Tool{Name: "eslint"})
+	data, err := json.Marshal(Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "eslint"})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -763,6 +852,13 @@ func TestToolSkipJSONOmitEmpty(t *testing.T) {
 
 func TestManagedConfig(t *testing.T) {
 	managedConfig := ManagedConfig{
+		Tools:             nil,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
 		ProjectTypes:      []string{"node"},
 		Scope:             ScopeGitRoot,
 		OtherFileNameList: []string{".eslintrc.js", ".eslintrc.json"},
@@ -788,8 +884,17 @@ func TestManagedConfig(t *testing.T) {
 
 func TestManagedConfigLinkTarget(t *testing.T) {
 	ci := ManagedConfig{
-		Scope:      ScopeGitRoot,
-		LinkTarget: "AGENTS.md",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             ScopeGitRoot,
+		LinkTarget:        "AGENTS.md",
 	}
 
 	if ci.LinkTarget != "AGENTS.md" {
@@ -802,7 +907,17 @@ func TestManagedConfigLinkTarget(t *testing.T) {
 
 func TestManagedConfigLinkTargetEmpty(t *testing.T) {
 	ci := ManagedConfig{
-		Scope: ScopeGitRoot,
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             ScopeGitRoot,
 	}
 
 	if ci.LinkTarget != "" {
@@ -812,8 +927,17 @@ func TestManagedConfigLinkTargetEmpty(t *testing.T) {
 
 func TestManagedConfigLinkTargetJSON(t *testing.T) {
 	ci := ManagedConfig{
-		Scope:      ScopeGitRoot,
-		LinkTarget: "../AGENTS.md",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             ScopeGitRoot,
+		LinkTarget:        "../AGENTS.md",
 	}
 
 	data, err := json.Marshal(ci)
@@ -836,7 +960,17 @@ func TestManagedConfigLinkTargetJSON(t *testing.T) {
 
 func TestManagedConfigLinkTargetJSONOmitEmpty(t *testing.T) {
 	ci := ManagedConfig{
-		Scope: ScopeGitRoot,
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             ScopeGitRoot,
 	}
 
 	data, err := json.Marshal(ci)
@@ -852,7 +986,17 @@ func TestManagedConfigLinkTargetJSONOmitEmpty(t *testing.T) {
 
 func TestManagedConfigTools(t *testing.T) {
 	ci := ManagedConfig{
-		Tools: []string{"golangci-lint"},
+		ProjectTypes:      nil,
+		Scope:             "",
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Tools:             []string{"golangci-lint"},
 	}
 
 	if len(ci.Tools) != 1 {
@@ -865,7 +1009,17 @@ func TestManagedConfigTools(t *testing.T) {
 
 func TestManagedConfigToolsJSON(t *testing.T) {
 	ci := ManagedConfig{
-		Tools: []string{"golangci-lint", "prettier"},
+		ProjectTypes:      nil,
+		Scope:             "",
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Tools:             []string{"golangci-lint", "prettier"},
 	}
 
 	data, err := json.Marshal(ci)
@@ -885,7 +1039,17 @@ func TestManagedConfigToolsJSON(t *testing.T) {
 
 func TestManagedConfigToolsJSONOmitEmpty(t *testing.T) {
 	ci := ManagedConfig{
-		Scope: ScopeGitRoot,
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             ScopeGitRoot,
 	}
 
 	data, err := json.Marshal(ci)

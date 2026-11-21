@@ -48,7 +48,7 @@ type Accumulator struct {
 
 // NewAccumulator starts recording a run.
 func NewAccumulator(opts Options) *Accumulator {
-	return &Accumulator{opts: opts}
+	return &Accumulator{mu: sync.Mutex{}, ops: nil, opts: opts}
 }
 
 // OperationRecord collects one operation.
@@ -92,14 +92,20 @@ type changeLog struct {
 // for the tasks the run never reached.
 func (a *Accumulator) BeginOperation(name string, plan *tooling.ExecutionPlan, taskDir func(tooling.Task) string) *OperationRecord {
 	rec := &OperationRecord{
-		acc:     a,
-		name:    name,
-		ran:     true,
-		plan:    plan,
-		taskDir: taskDir,
-		results: map[string]tooling.ExecutionResult{},
-		pending: map[string]int{},
-		flushed: map[string]bool{},
+		stopped:      nil,
+		steps:        nil,
+		changes:      changeLog{observed: false, reason: "", detail: "", byStep: nil},
+		coreToolRuns: nil,
+		success:      false,
+		duration:     0,
+		acc:          a,
+		name:         name,
+		ran:          true,
+		plan:         plan,
+		taskDir:      taskDir,
+		results:      map[string]tooling.ExecutionResult{},
+		pending:      map[string]int{},
+		flushed:      map[string]bool{},
 	}
 	if plan != nil {
 		for _, group := range plan.Groups {
@@ -124,7 +130,7 @@ func (a *Accumulator) NotRun(name string) {
 			return
 		}
 	}
-	a.ops = append(a.ops, &OperationRecord{acc: a, name: name})
+	a.ops = append(a.ops, &OperationRecord{ran: false, plan: nil, taskDir: nil, results: nil, stopped: nil, pending: nil, flushed: nil, steps: nil, changes: changeLog{observed: false, reason: "", detail: "", byStep: nil}, coreToolRuns: nil, success: false, duration: 0, acc: a, name: name})
 }
 
 // ToolFinding is a finding with the task that reported it, as the event
@@ -203,14 +209,26 @@ func (o *OperationRecord) AddCoreFindings(tool string, diags []diagnostic.Diagno
 	tr := o.acc.newToolRun(o.name, tool)
 	gated := false
 	inv := Invocation{
-		ID:         tool + "#0",
-		TaskID:     "builtin",
-		Coverage:   string(tooling.CoverageComplete),
-		State:      string(tooling.ProcessRan),
-		Extraction: string(tooling.ExtractionParsedFindings),
-		Files:      []FileResult{},
-		Findings:   []Finding{},
-		Provenance: provenanceCore,
+		Dir:         "",
+		Scope:       "",
+		Granularity: "",
+		Arity:       "",
+		WholeUnit:   false,
+		ExitCode:    nil,
+		Success:     false,
+		FailureKind: "",
+		Duration:    0,
+		Step:        0,
+		Changes:     nil,
+		OutputTail:  "",
+		ID:          tool + "#0",
+		TaskID:      "builtin",
+		Coverage:    string(tooling.CoverageComplete),
+		State:       string(tooling.ProcessRan),
+		Extraction:  string(tooling.ExtractionParsedFindings),
+		Files:       []FileResult{},
+		Findings:    []Finding{},
+		Provenance:  provenanceCore,
 	}
 	for _, d := range diags {
 		if d.Gates {
@@ -301,7 +319,7 @@ func (o *OperationRecord) ChangesNotObserved(reason, detail string) {
 // was called. It is not masked.
 func (o *OperationRecord) Operation() Operation {
 	if o == nil {
-		return Operation{}
+		return Operation{Name: "", Ran: false, Success: false, Duration: 0, Skipped: nil, Cancelled: nil, Tools: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil}
 	}
 	o.acc.mu.Lock()
 	defer o.acc.mu.Unlock()
@@ -354,6 +372,8 @@ func (a *Accumulator) Build(info BuildInfo) *Run {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	run := &Run{
+		Complete:    false,
+		Incomplete:  nil,
 		Schema:      SchemaVersion,
 		Fingerprint: FingerprintVersion,
 		Datamitsu:   Producer{Version: info.Version, Configuration: info.Configuration},
@@ -377,13 +397,18 @@ func (a *Accumulator) Build(info BuildInfo) *Run {
 
 func (a *Accumulator) buildOperation(o *OperationRecord) Operation {
 	op := Operation{
-		Name:      o.name,
-		Ran:       o.ran,
-		Success:   o.success,
-		Duration:  Millis(o.duration),
-		Skipped:   []Skip{},
-		Cancelled: append([]Cancel{}, o.stopped...),
-		Tools:     []ToolRun{},
+		ChangesObserved: false,
+		ChangesReason:   "",
+		ChangesDetail:   "",
+		ChangesScope:    nil,
+		Changes:         nil,
+		Name:            o.name,
+		Ran:             o.ran,
+		Success:         o.success,
+		Duration:        Millis(o.duration),
+		Skipped:         []Skip{},
+		Cancelled:       append([]Cancel{}, o.stopped...),
+		Tools:           []ToolRun{},
 	}
 	if o.plan == nil {
 		// A core check's tool run survives an operation that never planned
@@ -470,7 +495,7 @@ func recordChanges(o *OperationRecord, op *Operation) {
 	for _, step := range steps {
 		for _, c := range log.byStep[step] {
 			if !attributeChange(op, step, c) {
-				op.Changes = append(op.Changes, Change{Path: c.Path, Kind: c.Kind, Step: step})
+				op.Changes = append(op.Changes, Change{Patch: false, Path: c.Path, Kind: c.Kind, Step: step})
 			}
 		}
 	}
@@ -521,14 +546,20 @@ func (a *Accumulator) newToolRun(op, name string) *ToolRun {
 	tool := a.opts.Tools[name]
 	toolOp := tool.Operations[config.OperationType(op)]
 	tr := &ToolRun{
-		Name:        name,
-		App:         a.appRef(toolOp.App),
-		FailOn:      string(config.EffectiveFailOn(toolOp, a.opts.FailOn)),
-		Invocations: []Invocation{},
+		Parser:         nil,
+		GateActive:     false,
+		Category:       "",
+		Complete:       false,
+		Incomplete:     nil,
+		mayHoldSecrets: false,
+		Name:           name,
+		App:            a.appRef(toolOp.App),
+		FailOn:         string(config.EffectiveFailOn(toolOp, a.opts.FailOn)),
+		Invocations:    []Invocation{},
 	}
 	tr.mayHoldSecrets = withholdsOutput(tool, a.opts.Parsers)
 	if p := tool.OutputParser; p != nil {
-		tr.Parser = &ParserRef{Module: p.Module, Parser: p.Parser}
+		tr.Parser = &ParserRef{Version: "", Schema: 0, ColumnUnit: "", Module: p.Module, Parser: p.Parser}
 		if a.opts.Parsers != nil {
 			if facts, ok := a.opts.Parsers(p.Module, p.Parser); ok {
 				tr.Parser.Version = facts.Version
@@ -561,7 +592,7 @@ func withholdsOutput(tool config.Tool, parsers ParserFacts) bool {
 func (a *Accumulator) appRef(name string) AppRef {
 	app, ok := a.opts.Apps[name]
 	if !ok {
-		return AppRef{Name: name}
+		return AppRef{Kind: "", Version: "", OfficialURL: "", Name: name}
 	}
 	info := binmanager.DescribeApp(name, app)
 	return AppRef{Name: name, Kind: info.Type, Version: info.Version, OfficialURL: app.OfficialURL}
@@ -572,6 +603,18 @@ func (a *Accumulator) appRef(name string) AppRef {
 // that spawned nothing.
 func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionResult, taskDir func(tooling.Task) string, tr *ToolRun) []Invocation {
 	base := Invocation{
+		ID:          "",
+		Dir:         "",
+		State:       "",
+		ExitCode:    nil,
+		Success:     false,
+		FailureKind: "",
+		Duration:    0,
+		Extraction:  "",
+		Provenance:  "",
+		Step:        0,
+		Changes:     nil,
+		OutputTail:  "",
 		TaskID:      task.ID,
 		Scope:       string(task.OpConfig.Scope),
 		Granularity: string(config.InferGranularity(task.OpConfig)),
@@ -592,7 +635,7 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 		inv.State = string(tooling.ProcessNotStarted)
 		inv.Extraction, inv.Provenance = string(tooling.ExtractionNone), provenanceNone
 		for _, file := range plannedFiles(task) {
-			inv.Files = append(inv.Files, FileResult{Path: a.rel(file), State: string(tooling.FileNotStarted)})
+			inv.Files = append(inv.Files, FileResult{Success: false, ExitCode: nil, Patch: "", Path: a.rel(file), State: string(tooling.FileNotStarted)})
 		}
 		sortFiles(inv.Files)
 		return []Invocation{inv}
@@ -729,6 +772,9 @@ func (a *Accumulator) fileResult(fr tooling.FileResult) FileResult {
 
 func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun) Finding {
 	f := Finding{
+		Fingerprint:      "",
+		Shown:            false,
+		lineHash:         "",
 		FingerprintBasis: BasisNone,
 		Tool:             tool,
 		Source:           d.Source,
@@ -742,6 +788,10 @@ func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun)
 		Message:          string(tooling.StripCSI([]byte(d.Message))),
 		Provenance:       provenanceParser,
 		Location: Location{
+			Unit:      "",
+			Chars:     nil,
+			Bytes:     nil,
+			Utf16:     nil,
 			Path:      a.rel(d.File),
 			Row:       d.Row,
 			EndRow:    d.EndRow,

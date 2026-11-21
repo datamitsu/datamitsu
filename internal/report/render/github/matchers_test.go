@@ -41,7 +41,7 @@ func loadMatcher(t *testing.T, name string) matcher {
 		t.Fatal(err)
 	}
 	pm := doc.ProblemMatcher[0]
-	m := matcher{owner: pm.Owner}
+	m := matcher{patterns: nil, owner: pm.Owner}
 	for _, p := range pm.Pattern {
 		m.patterns = append(m.patterns, regexp.MustCompile(p.Regexp))
 	}

@@ -62,7 +62,7 @@ func TestExplicitConfigResolvesWithoutGitRoot(t *testing.T) {
 	d := clitest.NewBareDir(t)
 	cfg := d.WriteFile("machine.config.js", explicitAppConfigJS)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir}, "--config", cfg, "exec")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: d.Dir}, "--config", cfg, "exec")
 	if res.ExitCode != 0 {
 		t.Fatalf("`--config <path> exec` outside a repository exit = %d, want 0\nstdout:\n%s\nstderr:\n%s",
 			res.ExitCode, res.Stdout, res.Stderr)
@@ -84,7 +84,7 @@ func TestExplicitConfigMissingPathErrors(t *testing.T) {
 	d := clitest.NewBareDir(t)
 	missing := filepath.Join(d.Dir, "absent.config.js")
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir}, "--config", missing, "exec")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: d.Dir}, "--config", missing, "exec")
 	if res.ExitCode == 0 {
 		t.Fatalf("`--config <missing> exec` exit = 0, want non-zero\nstdout:\n%s", res.Stdout)
 	}
@@ -104,7 +104,7 @@ func TestExplicitConfigMergesWithDiscovered(t *testing.T) {
 	p.WriteFile("datamitsu.config.js", autoOnlyAppConfigJS)
 	cfg := p.WriteFile("extra.config.js", explicitMergeConfigJS)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--config", cfg, "exec")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "--config", cfg, "exec")
 	if res.ExitCode != 0 {
 		t.Fatalf("`--config <path> exec` in a repository exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -125,7 +125,7 @@ func TestExplicitConfigNoAutoConfigSuppressesDiscovered(t *testing.T) {
 	p.WriteFile("datamitsu.config.js", autoOnlyAppConfigJS)
 	cfg := p.WriteFile("extra.config.js", explicitMergeConfigJS)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "exec")
 	if res.ExitCode != 0 {
 		t.Fatalf("`--no-auto-config --config <path> exec` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)

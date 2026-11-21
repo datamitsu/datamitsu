@@ -45,7 +45,7 @@ func TestConfigShowAgainstMinimalConfig(t *testing.T) {
 	p := NewProject(t)
 	cfgPath := WriteMinimalConfig(p)
 
-	res := Run(t, RunOptions{Dir: p.Dir}, "config", "show", "--no-auto-config", "--config", cfgPath)
+	res := Run(t, RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "config", "show", "--no-auto-config", "--config", cfgPath)
 	if res.ExitCode != 0 {
 		t.Fatalf("config show exit = %d, want 0\nstdout: %s\nstderr: %s", res.ExitCode, res.Stdout, res.Stderr)
 	}

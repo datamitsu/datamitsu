@@ -25,8 +25,8 @@ func gatedProject(t *testing.T, output string, exitCode int) *execProject {
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	hadolint := clitest.ShellTool("hadolint",
 		fmt.Sprintf("%s%s; echo '%s'; exit %d", settle, clitest.RecordRun, output, exitCode),
-		clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint", Priority: 10})
-	beta := clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Priority: 20})
+		clitest.ToolOpSpec{Operation: "", ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint", Priority: 10})
+	beta := clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Priority: 20})
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, hadolint, beta))
 	return e
 }
@@ -175,8 +175,8 @@ func diffProject(t *testing.T, findings string) *execProject {
 	spec := fixtureSpec
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	hadolint := clitest.ShellTool("hadolint", settle+clitest.RecordRun+`; cat "$MARKERS/findings"`,
-		clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint"})
-	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}), hadolint))
+		clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint"})
+	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}), hadolint))
 	e.p.WriteFile(filepath.Join(clitest.MarkerDirName, "findings"), findings)
 	return e
 }

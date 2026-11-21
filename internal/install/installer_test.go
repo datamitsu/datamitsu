@@ -39,7 +39,17 @@ func TestNewInstaller(t *testing.T) {
 
 func TestIsApplicable(t *testing.T) {
 	installer := &Installer{
-		projectTypes: []string{"node", "go"},
+		rootPath:          "",
+		cwdPath:           "",
+		projectLocations:  nil,
+		selectedTools:     nil,
+		repoProjectTypes:  nil,
+		configs:           nil,
+		vm:                nil,
+		layerMap:          nil,
+		force:             false,
+		createMissingOnly: false,
+		projectTypes:      []string{"node", "go"},
 	}
 
 	tests := []struct {
@@ -49,27 +59,57 @@ func TestIsApplicable(t *testing.T) {
 	}{
 		{
 			name:     "no project types specified",
-			cfg:      config.ManagedConfig{},
+			cfg:      config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
 			expected: true,
 		},
 		{
 			name: "matching project type",
 			cfg: config.ManagedConfig{
-				ProjectTypes: []string{"node"},
+				Tools:             nil,
+				Scope:             "",
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				ProjectTypes:      []string{"node"},
 			},
 			expected: true,
 		},
 		{
 			name: "non-matching project type",
 			cfg: config.ManagedConfig{
-				ProjectTypes: []string{"rust"},
+				Tools:             nil,
+				Scope:             "",
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				ProjectTypes:      []string{"rust"},
 			},
 			expected: false,
 		},
 		{
 			name: "one matching, one non-matching",
 			cfg: config.ManagedConfig{
-				ProjectTypes: []string{"node", "rust"},
+				Tools:             nil,
+				Scope:             "",
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				ProjectTypes:      []string{"node", "rust"},
 			},
 			expected: true,
 		},
@@ -95,44 +135,44 @@ func TestIsToolSelected(t *testing.T) {
 		{
 			name:          "no filter, config without tools",
 			selectedTools: nil,
-			cfg:           config.ManagedConfig{},
+			cfg:           config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
 			expected:      true,
 		},
 		{
 			name:          "no filter, config with tools",
 			selectedTools: nil,
-			cfg:           config.ManagedConfig{Tools: []string{"golangci-lint"}},
+			cfg:           config.ManagedConfig{ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"golangci-lint"}},
 			expected:      true,
 		},
 		{
 			name:          "filter matches",
 			selectedTools: []string{"golangci-lint"},
-			cfg:           config.ManagedConfig{Tools: []string{"golangci-lint"}},
+			cfg:           config.ManagedConfig{ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"golangci-lint"}},
 			expected:      true,
 		},
 		{
 			name:          "filter does not match",
 			selectedTools: []string{"golangci-lint"},
-			cfg:           config.ManagedConfig{Tools: []string{"prettier"}},
+			cfg:           config.ManagedConfig{ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"prettier"}},
 			expected:      false,
 		},
 		{
 			name:          "filter active, config has no tools (infra)",
 			selectedTools: []string{"golangci-lint"},
-			cfg:           config.ManagedConfig{},
+			cfg:           config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
 			expected:      false,
 		},
 		{
 			name:          "intersection of multiple",
 			selectedTools: []string{"a", "b"},
-			cfg:           config.ManagedConfig{Tools: []string{"b", "c"}},
+			cfg:           config.ManagedConfig{ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"b", "c"}},
 			expected:      true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			installer := &Installer{selectedTools: tt.selectedTools}
+			installer := &Installer{rootPath: "", cwdPath: "", projectTypes: nil, projectLocations: nil, repoProjectTypes: nil, configs: nil, vm: nil, layerMap: nil, force: false, createMissingOnly: false, selectedTools: tt.selectedTools}
 			if got := installer.isToolSelected(tt.cfg); got != tt.expected {
 				t.Errorf("isToolSelected() = %v, want %v", got, tt.expected)
 			}
@@ -150,9 +190,9 @@ func TestInstallAllFiltersBySelectedTools(t *testing.T) {
 	contentFunc := vm.Get("contentFunc")
 
 	configs := config.MapOfManagedConfigs{
-		".golangci.yml": {Tools: []string{"golangci-lint"}, Content: contentFunc},
-		".prettierrc":   {Tools: []string{"prettier"}, Content: contentFunc},
-		".gitignore":    {Content: contentFunc}, // infra, no tools association
+		".golangci.yml": {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Tools: []string{"golangci-lint"}, Content: contentFunc},
+		".prettierrc":   {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Tools: []string{"prettier"}, Content: contentFunc},
+		".gitignore":    {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: contentFunc}, // infra, no tools association
 	}
 
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, []string{"golangci-lint"}, configs, vm, nil)
@@ -194,9 +234,9 @@ func TestInstallAllNoToolFilterInstallsAll(t *testing.T) {
 	contentFunc := vm.Get("contentFunc")
 
 	configs := config.MapOfManagedConfigs{
-		".golangci.yml": {Tools: []string{"golangci-lint"}, Content: contentFunc},
-		".prettierrc":   {Tools: []string{"prettier"}, Content: contentFunc},
-		".gitignore":    {Content: contentFunc},
+		".golangci.yml": {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Tools: []string{"golangci-lint"}, Content: contentFunc},
+		".prettierrc":   {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Tools: []string{"prettier"}, Content: contentFunc},
+		".gitignore":    {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: contentFunc},
 	}
 
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, nil)
@@ -229,8 +269,8 @@ func TestInstallAllToolFilterDryRun(t *testing.T) {
 	contentFunc := vm.Get("contentFunc")
 
 	configs := config.MapOfManagedConfigs{
-		".golangci.yml": {Tools: []string{"golangci-lint"}, Content: contentFunc},
-		".prettierrc":   {Tools: []string{"prettier"}, Content: contentFunc},
+		".golangci.yml": {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Tools: []string{"golangci-lint"}, Content: contentFunc},
+		".prettierrc":   {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Tools: []string{"prettier"}, Content: contentFunc},
 	}
 
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, []string{"golangci-lint"}, configs, vm, nil)
@@ -258,7 +298,7 @@ func TestInstallAllToolFilterDryRun(t *testing.T) {
 
 func TestFileExists(t *testing.T) {
 	tmpDir := t.TempDir()
-	installer := &Installer{}
+	installer := &Installer{rootPath: "", cwdPath: "", projectTypes: nil, projectLocations: nil, selectedTools: nil, repoProjectTypes: nil, configs: nil, vm: nil, layerMap: nil, force: false, createMissingOnly: false}
 
 	t.Run("file exists", func(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "test.txt")
@@ -287,7 +327,17 @@ func TestInstallConfigSkipped(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{"node"}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		ProjectTypes: []string{"rust"},
+		Tools:             nil,
+		Scope:             "",
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		ProjectTypes:      []string{"rust"},
 	}
 
 	ctx := context.Background()
@@ -310,6 +360,15 @@ func TestInstallConfigDeleteOnly(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
+		ProjectTypes:      nil,
+		Tools:             nil,
+		Scope:             "",
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
 		OtherFileNameList: []string{"alt.yml"},
 		DeleteOnly:        true,
 	}
@@ -343,7 +402,17 @@ func TestInstallConfigCreated(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Content: contentFunc,
+		ProjectTypes:      nil,
+		Tools:             nil,
+		Scope:             "",
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           contentFunc,
 	}
 
 	ctx := context.Background()
@@ -381,7 +450,17 @@ func TestInstallConfigDryRun(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Content: contentFunc,
+		ProjectTypes:      nil,
+		Tools:             nil,
+		Scope:             "",
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           contentFunc,
 	}
 
 	ctx := context.Background()
@@ -417,8 +496,17 @@ func TestInstallConfigScopeGitRootSkipsWhenNotAtRoot(t *testing.T) {
 	installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:   config.ScopeGitRoot,
-		Content: contentFunc,
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Scope:             config.ScopeGitRoot,
+		Content:           contentFunc,
 	}
 
 	ctx := context.Background()
@@ -448,8 +536,17 @@ func TestInstallConfigScopeGitRootRunsAtRoot(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:   config.ScopeGitRoot,
-		Content: contentFunc,
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Scope:             config.ScopeGitRoot,
+		Content:           contentFunc,
 	}
 
 	ctx := context.Background()
@@ -483,9 +580,17 @@ func TestInstallConfigScopeGitRootWithProjectTypesSkipsWhenTypeNotMatched(t *tes
 	installer := NewInstaller(tmpDir, tmpDir, []string{"node"}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:        config.ScopeGitRoot,
-		ProjectTypes: []string{"rust"},
-		Content:      contentFunc,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Scope:             config.ScopeGitRoot,
+		ProjectTypes:      []string{"rust"},
+		Content:           contentFunc,
 	}
 
 	ctx := context.Background()
@@ -518,6 +623,15 @@ func TestInstallConfigDeletesAlternatives(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
+		ProjectTypes:      nil,
+		Tools:             nil,
+		Scope:             "",
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
 		OtherFileNameList: []string{"alt1.yml", "alt2.yml"},
 		Content:           contentFunc,
 	}
@@ -550,10 +664,30 @@ func TestInstallAll(t *testing.T) {
 
 	configs := config.MapOfManagedConfigs{
 		"config1.yml": {
-			Content: contentFunc,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			Scope:             "",
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			LinkTarget:        "",
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           contentFunc,
 		},
 		"config2.yml": {
-			Content: contentFunc,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			Scope:             "",
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			LinkTarget:        "",
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           contentFunc,
 		},
 	}
 
@@ -594,12 +728,14 @@ func TestInstallSymlinkSetsLinkTarget(t *testing.T) {
 		dryRun         bool
 	}{
 		{
+			dryRun:         false,
 			name:           "same-dir link target",
 			configName:     "CLAUDE.md",
 			linkTarget:     "AGENTS.md",
 			expectedTarget: "AGENTS.md",
 		},
 		{
+			dryRun:         false,
 			name:           "parent-dir link target for nested config",
 			configName:     ".cursor/rules",
 			linkTarget:     "../AGENTS.md",
@@ -617,8 +753,17 @@ func TestInstallSymlinkSetsLinkTarget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := config.ManagedConfig{
-				Scope:      config.ScopeGitRoot,
-				LinkTarget: tt.linkTarget,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				Scope:             config.ScopeGitRoot,
+				LinkTarget:        tt.linkTarget,
 			}
 
 			ctx := context.Background()
@@ -652,8 +797,17 @@ func TestInstallConfigLinkTargetCreatesSymlink(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:      config.ScopeGitRoot,
-		LinkTarget: "AGENTS.md",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             config.ScopeGitRoot,
+		LinkTarget:        "AGENTS.md",
 	}
 
 	ctx := context.Background()
@@ -697,8 +851,17 @@ func TestInstallConfigLinkTargetUpdatesStaleSymlink(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:      config.ScopeGitRoot,
-		LinkTarget: "AGENTS.md",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             config.ScopeGitRoot,
+		LinkTarget:        "AGENTS.md",
 	}
 
 	ctx := context.Background()
@@ -738,8 +901,17 @@ func TestInstallConfigLinkTargetReplacesRegularFile(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:      config.ScopeGitRoot,
-		LinkTarget: "AGENTS.md",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             config.ScopeGitRoot,
+		LinkTarget:        "AGENTS.md",
 	}
 
 	ctx := context.Background()
@@ -774,8 +946,17 @@ func TestInstallConfigLinkTargetIdempotent(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:      config.ScopeGitRoot,
-		LinkTarget: "AGENTS.md",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             config.ScopeGitRoot,
+		LinkTarget:        "AGENTS.md",
 	}
 
 	ctx := context.Background()
@@ -813,8 +994,17 @@ func TestInstallConfigLinkTargetDryRun(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:      config.ScopeGitRoot,
-		LinkTarget: "AGENTS.md",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             config.ScopeGitRoot,
+		LinkTarget:        "AGENTS.md",
 	}
 
 	ctx := context.Background()
@@ -846,8 +1036,17 @@ func TestInstallConfigLinkTargetNestedPath(t *testing.T) {
 
 	// Symlink in a subdirectory pointing to parent
 	cfg := config.ManagedConfig{
-		Scope:      config.ScopeGitRoot,
-		LinkTarget: "../AGENTS.md",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             config.ScopeGitRoot,
+		LinkTarget:        "../AGENTS.md",
 	}
 
 	ctx := context.Background()
@@ -889,10 +1088,17 @@ func TestInstallConfigLinkTargetIgnoresContentAndDeleteOnly(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:      config.ScopeGitRoot,
-		LinkTarget: "AGENTS.md",
-		Content:    contentFunc,
-		DeleteOnly: true,
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Scope:             config.ScopeGitRoot,
+		LinkTarget:        "AGENTS.md",
+		Content:           contentFunc,
+		DeleteOnly:        true,
 	}
 
 	ctx := context.Background()
@@ -934,32 +1140,95 @@ func TestInstallAllAgentsMDAndSymlinks(t *testing.T) {
 
 	configs := config.MapOfManagedConfigs{
 		"AGENTS.md": {
-			Content: agentsContentFunc,
-			Scope:   config.ScopeGitRoot,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			LinkTarget:        "",
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           agentsContentFunc,
+			Scope:             config.ScopeGitRoot,
 		},
 		"CLAUDE.md": {
-			LinkTarget: "AGENTS.md",
-			Scope:      config.ScopeGitRoot,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           nil,
+			LinkTarget:        "AGENTS.md",
+			Scope:             config.ScopeGitRoot,
 		},
 		"GEMINI.md": {
-			LinkTarget: "AGENTS.md",
-			Scope:      config.ScopeGitRoot,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           nil,
+			LinkTarget:        "AGENTS.md",
+			Scope:             config.ScopeGitRoot,
 		},
 		".cursorrules": {
-			LinkTarget: "AGENTS.md",
-			Scope:      config.ScopeGitRoot,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           nil,
+			LinkTarget:        "AGENTS.md",
+			Scope:             config.ScopeGitRoot,
 		},
 		".cursor/rules": {
-			LinkTarget: "../AGENTS.md",
-			Scope:      config.ScopeGitRoot,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           nil,
+			LinkTarget:        "../AGENTS.md",
+			Scope:             config.ScopeGitRoot,
 		},
 		".windsurfrules": {
-			LinkTarget: "AGENTS.md",
-			Scope:      config.ScopeGitRoot,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           nil,
+			LinkTarget:        "AGENTS.md",
+			Scope:             config.ScopeGitRoot,
 		},
 		".github/copilot-instructions.md": {
-			LinkTarget: "../AGENTS.md",
-			Scope:      config.ScopeGitRoot,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           nil,
+			LinkTarget:        "../AGENTS.md",
+			Scope:             config.ScopeGitRoot,
 		},
 	}
 
@@ -1044,8 +1313,17 @@ func TestInstallAgentsMDPreservesExistingContent(t *testing.T) {
 
 	configs := config.MapOfManagedConfigs{
 		"AGENTS.md": {
-			Content: agentsContentFunc,
-			Scope:   config.ScopeGitRoot,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			LinkTarget:        "",
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           agentsContentFunc,
+			Scope:             config.ScopeGitRoot,
 		},
 	}
 
@@ -1089,8 +1367,17 @@ func TestInstallConfigSetsScope(t *testing.T) {
 
 	t.Run("scope git-root", func(t *testing.T) {
 		cfg := config.ManagedConfig{
-			Scope:   config.ScopeGitRoot,
-			Content: contentFunc,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			LinkTarget:        "",
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Scope:             config.ScopeGitRoot,
+			Content:           contentFunc,
 		}
 		result := installer.installConfig(ctx, "root.yml", cfg, true)
 		if result.Scope != config.ScopeGitRoot {
@@ -1100,7 +1387,17 @@ func TestInstallConfigSetsScope(t *testing.T) {
 
 	t.Run("scope empty (project default)", func(t *testing.T) {
 		cfg := config.ManagedConfig{
-			Content: contentFunc,
+			ProjectTypes:      nil,
+			Tools:             nil,
+			Scope:             "",
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			LinkTarget:        "",
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           contentFunc,
 		}
 		result := installer.installConfig(ctx, "local.yml", cfg, true)
 		if result.Scope != "" {
@@ -1110,8 +1407,17 @@ func TestInstallConfigSetsScope(t *testing.T) {
 
 	t.Run("scope preserved on skipped config", func(t *testing.T) {
 		cfg := config.ManagedConfig{
-			Scope:        config.ScopeGitRoot,
-			ProjectTypes: []string{"rust"},
+			Tools:             nil,
+			OtherFileNameList: nil,
+			DeleteOnly:        false,
+			LinkTarget:        "",
+			ExpectChainHash:   "",
+			Ejectable:         false,
+			Placement:         "",
+			Render:            nil,
+			Content:           nil,
+			Scope:             config.ScopeGitRoot,
+			ProjectTypes:      []string{"rust"},
 		}
 		result := installer.installConfig(ctx, "skip.yml", cfg, true)
 		if result.Action != "skipped" {
@@ -1142,7 +1448,17 @@ func TestGenerateContentWithContext(t *testing.T) {
 	installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Content: contentFunc,
+		ProjectTypes:      nil,
+		Tools:             nil,
+		Scope:             "",
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           contentFunc,
 	}
 
 	existingContent := "old"
@@ -1174,7 +1490,7 @@ func TestInstallConfigSkipsOnUndefinedContent(t *testing.T) {
 	contentFunc := vm.Get("contentFunc")
 
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
-	cfg := config.ManagedConfig{Content: contentFunc}
+	cfg := config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: contentFunc}
 
 	result := installer.installConfig(context.Background(), "opt-out.yml", cfg, false)
 	if result.Error != nil {
@@ -1209,7 +1525,7 @@ func TestGenerateContentExposesProjectContext(t *testing.T) {
 		{Type: "npm-package", Path: "."},
 		{Type: "golang-package", Path: "service"},
 	})
-	cfg := config.ManagedConfig{Content: contentFunc}
+	cfg := config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: contentFunc}
 
 	content, skip, err := installer.generateContent(context.Background(), cfg, "", nil, nil, nil)
 	if err != nil {
@@ -1271,8 +1587,17 @@ func TestInstallConfigLinkTargetRejectsTraversal(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := config.ManagedConfig{
-				Scope:      config.ScopeGitRoot,
-				LinkTarget: tt.linkTarget,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				Scope:             config.ScopeGitRoot,
+				LinkTarget:        tt.linkTarget,
 			}
 
 			ctx := context.Background()
@@ -1304,8 +1629,17 @@ func TestInstallConfigLinkTargetRejectsSymlinkEscape(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:      config.ScopeGitRoot,
-		LinkTarget: "escape/secret.txt",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             config.ScopeGitRoot,
+		LinkTarget:        "escape/secret.txt",
 	}
 
 	ctx := context.Background()
@@ -1331,8 +1665,17 @@ func TestInstallConfigLinkTargetRejectsSymlinkEscapeNonExistentTarget(t *testing
 	// Target file does NOT exist in outsideDir — EvalSymlinks on the full path will fail,
 	// but the ancestor check should still catch the escape
 	cfg := config.ManagedConfig{
-		Scope:      config.ScopeGitRoot,
-		LinkTarget: "escape/new.txt",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             config.ScopeGitRoot,
+		LinkTarget:        "escape/new.txt",
 	}
 
 	ctx := context.Background()
@@ -1357,8 +1700,17 @@ func TestInstallConfigLinkTargetRejectsBrokenSymlinkEscape(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:      config.ScopeGitRoot,
-		LinkTarget: "escape/new.txt",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             config.ScopeGitRoot,
+		LinkTarget:        "escape/new.txt",
 	}
 
 	ctx := context.Background()
@@ -1383,8 +1735,17 @@ func TestInstallConfigLinkTargetRejectsBrokenLeafSymlink(t *testing.T) {
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 
 	cfg := config.ManagedConfig{
-		Scope:      config.ScopeGitRoot,
-		LinkTarget: "escape",
+		ProjectTypes:      nil,
+		Tools:             nil,
+		OtherFileNameList: nil,
+		DeleteOnly:        false,
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
+		Content:           nil,
+		Scope:             config.ScopeGitRoot,
+		LinkTarget:        "escape",
 	}
 
 	ctx := context.Background()
@@ -1414,6 +1775,15 @@ func TestInstallConfigOtherFileNameListSkipsMainFile(t *testing.T) {
 
 	// OtherFileNameList includes the main filename — should be skipped
 	cfg := config.ManagedConfig{
+		ProjectTypes:      nil,
+		Tools:             nil,
+		Scope:             "",
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Ejectable:         false,
+		Placement:         "",
+		Render:            nil,
 		OtherFileNameList: []string{"main.yml", "alt.yml"},
 		Content:           contentFunc,
 	}
@@ -1489,7 +1859,17 @@ func TestGenerateContentDatamitsuDir(t *testing.T) {
 
 			installer := NewInstaller(tmpDir, cwdDir, []string{}, nil, config.MapOfManagedConfigs{}, vm, nil)
 			cfg := config.ManagedConfig{
-				Content: contentFunc,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				Scope:             "",
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           contentFunc,
 			}
 
 			content, skip, err := installer.generateContent(context.Background(), cfg, "", nil, nil, nil)
@@ -1539,7 +1919,11 @@ func TestInstallConfigUsesLayerHistoryWhenPresent(t *testing.T) {
 	layerContent := "content from layer history"
 	layerMap := config.ManagedConfigLayerMap{
 		"test.yml": &config.ManagedConfigLayerHistory{
-			FileName: "test.yml",
+			OriginalContent: nil,
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
+			FileName:        "test.yml",
 			Layers: []config.ManagedConfigLayerEntry{
 				{
 					LayerName:        "default",
@@ -1547,13 +1931,23 @@ func TestInstallConfigUsesLayerHistoryWhenPresent(t *testing.T) {
 				},
 			},
 			FinalConfig: config.ManagedConfig{
-				Content: contentFunc,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				Scope:             "",
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           contentFunc,
 			},
 		},
 	}
 
 	configs := config.MapOfManagedConfigs{
-		"test.yml": {Content: contentFunc, Scope: config.ScopeGitRoot},
+		"test.yml": {ProjectTypes: nil, Tools: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: contentFunc, Scope: config.ScopeGitRoot},
 	}
 
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, &layerMap)
@@ -1593,7 +1987,11 @@ func TestInstallConfigProjectScopedSkipsLayerHistory(t *testing.T) {
 	layerContent := "content from layer history"
 	layerMap := config.ManagedConfigLayerMap{
 		"tsconfig.json": &config.ManagedConfigLayerHistory{
-			FileName: "tsconfig.json",
+			OriginalContent: nil,
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
+			FileName:        "tsconfig.json",
 			Layers: []config.ManagedConfigLayerEntry{
 				{
 					LayerName:        "default",
@@ -1601,13 +1999,23 @@ func TestInstallConfigProjectScopedSkipsLayerHistory(t *testing.T) {
 				},
 			},
 			FinalConfig: config.ManagedConfig{
-				Content: contentFunc,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				Scope:             "",
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           contentFunc,
 			},
 		},
 	}
 
 	configs := config.MapOfManagedConfigs{
-		"tsconfig.json": {Content: contentFunc, Scope: config.ScopeProject},
+		"tsconfig.json": {ProjectTypes: nil, Tools: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: contentFunc, Scope: config.ScopeProject},
 	}
 
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, &layerMap)
@@ -1643,13 +2051,18 @@ func TestInstallConfigFallsToDiskWhenNoLayerHistory(t *testing.T) {
 	// layerMap exists but has no entry for "other.yml"
 	layerMap := config.ManagedConfigLayerMap{
 		"test.yml": &config.ManagedConfigLayerHistory{
-			FileName: "test.yml",
-			Layers:   []config.ManagedConfigLayerEntry{},
+			OriginalContent: nil,
+			FinalConfig:     config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
+			FileName:        "test.yml",
+			Layers:          []config.ManagedConfigLayerEntry{},
 		},
 	}
 
 	configs := config.MapOfManagedConfigs{
-		"other.yml": {Content: contentFunc},
+		"other.yml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: contentFunc},
 	}
 
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, &layerMap)
@@ -1685,7 +2098,11 @@ func TestInstallConfigUsesGetLastGeneratedContent(t *testing.T) {
 	secondContent := "second layer override"
 	layerMap := config.ManagedConfigLayerMap{
 		"test.yml": &config.ManagedConfigLayerHistory{
-			FileName: "test.yml",
+			OriginalContent: nil,
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
+			FileName:        "test.yml",
 			Layers: []config.ManagedConfigLayerEntry{
 				{
 					LayerName:        "default",
@@ -1697,13 +2114,23 @@ func TestInstallConfigUsesGetLastGeneratedContent(t *testing.T) {
 				},
 			},
 			FinalConfig: config.ManagedConfig{
-				Content: contentFunc,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				Scope:             "",
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           contentFunc,
 			},
 		},
 	}
 
 	configs := config.MapOfManagedConfigs{
-		"test.yml": {Content: contentFunc, Scope: config.ScopeGitRoot},
+		"test.yml": {ProjectTypes: nil, Tools: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: contentFunc, Scope: config.ScopeGitRoot},
 	}
 
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, &layerMap)

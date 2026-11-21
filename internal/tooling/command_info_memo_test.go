@@ -11,6 +11,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 // countingAppManager records every GetCommandInfo call per app and hands back one
@@ -60,10 +61,11 @@ func memoPlanFixture(t *testing.T, n int) (*Executor, *countingAppManager, *Exec
 	}
 
 	mgr := &countingAppManager{
+		mu:    sync.Mutex{},
 		calls: map[string]int{},
 		commands: map[string]*binmanager.CommandInfo{
-			"alpha": {Type: "binary", Command: "true", Env: map[string]string{"K": "v"}, Args: []string{"-x"}},
-			"beta":  {Type: "binary", Command: "true"},
+			"alpha": {Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "true", Env: map[string]string{"K": "v"}, Args: []string{"-x"}},
+			"beta":  {Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "true"},
 		},
 	}
 	e := NewExecutor(root, true /* dryRun: no process is spawned */, false, mgr, nil)
@@ -75,17 +77,40 @@ func memoPlanFixture(t *testing.T, n int) (*Executor, *countingAppManager, *Exec
 			app = "beta"
 		}
 		tasks = append(tasks, Task{
-			ToolName:  fmt.Sprintf("tool%d", i),
-			Operation: config.OpLint,
+			perFileCache: "",
+			inherited:    zerovalue_toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     fmt.Sprintf("tool%d", i),
+			Operation:    config.OpLint,
 			OpConfig: config.ToolOperation{
-				App:   app,
-				Scope: config.ToolScopeRepository,
+				Args:              nil,
+				Arity:             "",
+				Granularity:       "",
+				Globs:             nil,
+				ExcludeGlobs:      nil,
+				Priority:          0,
+				Cache:             nil,
+				InvalidateOn:      nil,
+				Env:               nil,
+				InheritEnv:        nil,
+				FailOn:            "",
+				Input:             "",
+				LSP:               nil,
+				Output:            "",
+				ManagedConfigRefs: nil,
+				App:               app,
+				Scope:             config.ToolScopeRepository,
 			},
 			ProjectPath: root,
 			Files:       []string{file},
 		})
 	}
-	return e, mgr, &ExecutionPlan{Groups: []TaskGroup{{Priority: 1, Tasks: tasks}}}
+	return e, mgr, &ExecutionPlan{ConfigName: "", FailOn: "", Skipped: nil, Groups: []TaskGroup{{Priority: 1, Tasks: tasks}}}
 }
 
 // The plan's tools are already installed by EnsureTools before Execute runs, so
@@ -126,6 +151,8 @@ func TestMemoDoesNotSurviveExecute(t *testing.T) {
 // another task's command line — the memo hands out copies.
 func TestMemoHandsOutIsolatedCopies(t *testing.T) {
 	source := &binmanager.CommandInfo{
+		Artifact:       "",
+		ToolCacheDir:   "",
 		Type:           "shell",
 		Command:        "sh",
 		Args:           []string{"-c"},
@@ -134,6 +161,7 @@ func TestMemoHandsOutIsolatedCopies(t *testing.T) {
 		ToolCacheSlots: []string{"default", "providers"},
 	}
 	mgr := &countingAppManager{
+		mu:       sync.Mutex{},
 		calls:    map[string]int{},
 		commands: map[string]*binmanager.CommandInfo{"alpha": source},
 	}
@@ -180,9 +208,10 @@ func TestMemoHandsOutIsolatedCopies(t *testing.T) {
 // must still happen exactly once, and every caller must get a usable answer.
 func TestMemoIsSingleFlightedUnderConcurrency(t *testing.T) {
 	mgr := &countingAppManager{
+		mu:    sync.Mutex{},
 		calls: map[string]int{},
 		commands: map[string]*binmanager.CommandInfo{
-			"alpha": {Type: "binary", Command: "true", Env: map[string]string{"K": "v"}},
+			"alpha": {Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "true", Env: map[string]string{"K": "v"}},
 		},
 	}
 	memo := newCommandInfoMemo()
@@ -211,7 +240,7 @@ func TestMemoIsSingleFlightedUnderConcurrency(t *testing.T) {
 // cannot become resolvable, and retrying per task turns one error into N
 // installs. The error must still reach every caller.
 func TestMemoRemembersFailure(t *testing.T) {
-	mgr := &countingAppManager{calls: map[string]int{}}
+	mgr := &countingAppManager{mu: sync.Mutex{}, commands: nil, calls: map[string]int{}}
 	memo := newCommandInfoMemo()
 
 	for range 3 {

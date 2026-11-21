@@ -161,8 +161,9 @@ func DescribeLocal(ctx context.Context, wasm []byte) (Capabilities, error) {
 // attributing every tool to the given parser name. Used by the --wasm path.
 func CatalogFromCapabilities(parserName string, caps Capabilities) *ParserCatalog {
 	cat := &ParserCatalog{
-		Tools:   make([]CatalogTool, 0, len(caps.Tools)),
-		Modules: []CatalogModule{moduleOf(parserName, caps)},
+		Conflicts: nil,
+		Tools:     make([]CatalogTool, 0, len(caps.Tools)),
+		Modules:   []CatalogModule{moduleOf(parserName, caps)},
 	}
 	for _, t := range caps.Tools {
 		cat.Tools = append(cat.Tools, CatalogTool{

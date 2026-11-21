@@ -25,7 +25,12 @@ func TestGetPriorLayerContent(t *testing.T) {
 		content := "root = true"
 		layerMap := ManagedConfigLayerMap{
 			".editorconfig": &ManagedConfigLayerHistory{
-				FileName: ".editorconfig",
+				OriginalContent: nil,
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        ".editorconfig",
 				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &content},
 				},
@@ -45,7 +50,12 @@ func TestGetPriorLayerContent(t *testing.T) {
 		content2 := "second"
 		layerMap := ManagedConfigLayerMap{
 			".editorconfig": &ManagedConfigLayerHistory{
-				FileName: ".editorconfig",
+				OriginalContent: nil,
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        ".editorconfig",
 				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &content1},
 					{LayerName: "auto", GeneratedContent: &content2},
@@ -65,7 +75,12 @@ func TestGetPriorLayerContent(t *testing.T) {
 		content := "some content"
 		layerMap := ManagedConfigLayerMap{
 			".editorconfig": &ManagedConfigLayerHistory{
-				FileName: ".editorconfig",
+				OriginalContent: nil,
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        ".editorconfig",
 				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &content},
 				},
@@ -80,7 +95,12 @@ func TestGetPriorLayerContent(t *testing.T) {
 	t.Run("returns nil when layers have no content", func(t *testing.T) {
 		layerMap := ManagedConfigLayerMap{
 			".editorconfig": &ManagedConfigLayerHistory{
-				FileName: ".editorconfig",
+				OriginalContent: nil,
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        ".editorconfig",
 				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: nil},
 				},
@@ -105,7 +125,17 @@ func TestMergeManagedConfigLayers(t *testing.T) {
 		}
 		managedConfigs := MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope: ScopeGitRoot,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				Scope:             ScopeGitRoot,
 			},
 		}
 
@@ -134,11 +164,15 @@ func TestMergeManagedConfigLayers(t *testing.T) {
 		content1 := "first"
 		layerMap := ManagedConfigLayerMap{
 			".editorconfig": &ManagedConfigLayerHistory{
-				FileName: ".editorconfig",
+				OriginalContent: nil,
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        ".editorconfig",
 				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &content1},
 				},
-				FinalConfig: ManagedConfig{Scope: ScopeGitRoot},
+				FinalConfig: ManagedConfig{ProjectTypes: nil, Tools: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Scope: ScopeGitRoot},
 			},
 		}
 		evaluatedContent := map[string]string{
@@ -146,8 +180,17 @@ func TestMergeManagedConfigLayers(t *testing.T) {
 		}
 		managedConfigs := MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope:        ScopeGitRoot,
-				ProjectTypes: []string{"go"},
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				Scope:             ScopeGitRoot,
+				ProjectTypes:      []string{"go"},
 			},
 		}
 
@@ -172,8 +215,17 @@ func TestMergeManagedConfigLayers(t *testing.T) {
 		}
 		managedConfigs := MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope:        ScopeGitRoot,
-				ProjectTypes: []string{"go", "typescript"},
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				Scope:             ScopeGitRoot,
+				ProjectTypes:      []string{"go", "typescript"},
 			},
 		}
 
@@ -192,6 +244,11 @@ func TestMergeManagedConfigLayers(t *testing.T) {
 		originalContent := "original disk content"
 		layerMap := ManagedConfigLayerMap{
 			".editorconfig": &ManagedConfigLayerHistory{
+				Layers:          nil,
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
 				FileName:        ".editorconfig",
 				OriginalContent: &originalContent,
 			},
@@ -201,7 +258,17 @@ func TestMergeManagedConfigLayers(t *testing.T) {
 		}
 		managedConfigs := MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope: ScopeGitRoot,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				Scope:             ScopeGitRoot,
 			},
 		}
 
@@ -221,12 +288,15 @@ func TestMergeManagedConfigLayers(t *testing.T) {
 		content1 := "layer1 generated"
 		layerMap := ManagedConfigLayerMap{
 			".editorconfig": &ManagedConfigLayerHistory{
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
 				FileName:        ".editorconfig",
 				OriginalContent: &originalContent,
 				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &content1},
 				},
-				FinalConfig: ManagedConfig{Scope: ScopeGitRoot},
+				FinalConfig: ManagedConfig{ProjectTypes: nil, Tools: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Scope: ScopeGitRoot},
 			},
 		}
 
@@ -236,7 +306,17 @@ func TestMergeManagedConfigLayers(t *testing.T) {
 		}
 		managedConfigs := MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope: ScopeGitRoot,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				Scope:             ScopeGitRoot,
 			},
 		}
 
@@ -261,7 +341,17 @@ func TestMergeManagedConfigLayers(t *testing.T) {
 		}
 		managedConfigs := MapOfManagedConfigs{
 			"new-file.txt": ManagedConfig{
-				Scope: ScopeGitRoot,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				Scope:             ScopeGitRoot,
 			},
 		}
 
@@ -281,8 +371,17 @@ func TestMergeManagedConfigLayers(t *testing.T) {
 		evaluatedContent := map[string]string{} // no content evaluated
 		managedConfigs := MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope:      ScopeGitRoot,
-				LinkTarget: "../some/path",
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				Scope:             ScopeGitRoot,
+				LinkTarget:        "../some/path",
 			},
 		}
 
@@ -308,10 +407,34 @@ func TestMergeManagedConfigLayers(t *testing.T) {
 func TestEvaluateManagedConfigContent(t *testing.T) {
 	t.Run("no content functions returns empty map", func(t *testing.T) {
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				".editorconfig": ManagedConfig{
-					Scope:      ScopeGitRoot,
-					LinkTarget: "../target",
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Content:           nil,
+					Scope:             ScopeGitRoot,
+					LinkTarget:        "../target",
 				},
 			},
 		}
@@ -333,10 +456,34 @@ func TestEvaluateManagedConfigContent(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				".editorconfig": ManagedConfig{
-					Scope:   ScopeGitRoot,
-					Content: fnVal,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Scope:             ScopeGitRoot,
+					Content:           fnVal,
 				},
 			},
 		}
@@ -367,7 +514,12 @@ func TestEvaluateManagedConfigContent(t *testing.T) {
 		priorContent := "root = true"
 		priorLayers := ManagedConfigLayerMap{
 			".editorconfig": &ManagedConfigLayerHistory{
-				FileName: ".editorconfig",
+				OriginalContent: nil,
+				FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+				PristineContent: nil,
+				RenderFailed:    false,
+				SourceLayers:    nil,
+				FileName:        ".editorconfig",
 				Layers: []ManagedConfigLayerEntry{
 					{LayerName: "default", GeneratedContent: &priorContent},
 				},
@@ -375,10 +527,34 @@ func TestEvaluateManagedConfigContent(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				".editorconfig": ManagedConfig{
-					Scope:   ScopeGitRoot,
-					Content: fnVal,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Scope:             ScopeGitRoot,
+					Content:           fnVal,
 				},
 			},
 		}
@@ -399,10 +575,34 @@ func TestEvaluateManagedConfigContent(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				".editorconfig": ManagedConfig{
-					Scope:   ScopeGitRoot,
-					Content: fnVal,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Scope:             ScopeGitRoot,
+					Content:           fnVal,
 				},
 			},
 		}
@@ -417,10 +617,34 @@ func TestEvaluateManagedConfigContent(t *testing.T) {
 		vm := goja.New()
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				".editorconfig": ManagedConfig{
-					Scope:      ScopeGitRoot,
-					DeleteOnly: true,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Content:           nil,
+					Scope:             ScopeGitRoot,
+					DeleteOnly:        true,
 				},
 			},
 		}
@@ -435,10 +659,34 @@ func TestEvaluateManagedConfigContent(t *testing.T) {
 		vm := goja.New()
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				".editorconfig": ManagedConfig{
-					Scope:      ScopeGitRoot,
-					LinkTarget: "../target",
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Content:           nil,
+					Scope:             ScopeGitRoot,
+					LinkTarget:        "../target",
 				},
 			},
 		}
@@ -460,10 +708,34 @@ func TestEvaluateManagedConfigContent(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				"test.txt": ManagedConfig{
-					Scope:   ScopeGitRoot,
-					Content: fnVal,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Scope:             ScopeGitRoot,
+					Content:           fnVal,
 				},
 			},
 		}
@@ -487,9 +759,24 @@ func TestEvaluateManagedConfigContent(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
-				".editorconfig": ManagedConfig{Scope: ScopeGitRoot, Content: fn1},
-				"lefthook.yml":  ManagedConfig{Scope: ScopeGitRoot, Content: fn2},
+				".editorconfig": ManagedConfig{ProjectTypes: nil, Tools: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Scope: ScopeGitRoot, Content: fn1},
+				"lefthook.yml":  ManagedConfig{ProjectTypes: nil, Tools: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Scope: ScopeGitRoot, Content: fn2},
 			},
 		}
 
@@ -514,6 +801,10 @@ func TestManagedConfigLayerHistoryOriginalContent(t *testing.T) {
 	t.Run("can store OriginalContent", func(t *testing.T) {
 		content := "existing file content"
 		history := &ManagedConfigLayerHistory{
+			FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
 			FileName:        ".editorconfig",
 			OriginalContent: &content,
 			Layers:          []ManagedConfigLayerEntry{},
@@ -528,6 +819,10 @@ func TestManagedConfigLayerHistoryOriginalContent(t *testing.T) {
 
 	t.Run("nil OriginalContent when file does not exist", func(t *testing.T) {
 		history := &ManagedConfigLayerHistory{
+			FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
 			FileName:        "nonexistent.txt",
 			OriginalContent: nil,
 			Layers:          []ManagedConfigLayerEntry{},
@@ -541,6 +836,10 @@ func TestManagedConfigLayerHistoryOriginalContent(t *testing.T) {
 		original := "original disk content"
 		generated := "generated content"
 		history := &ManagedConfigLayerHistory{
+			FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
 			FileName:        ".editorconfig",
 			OriginalContent: &original,
 			Layers: []ManagedConfigLayerEntry{
@@ -632,10 +931,34 @@ func TestEvaluateManagedConfigContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				"package.json": ManagedConfig{
-					Scope:   ScopeGitRoot,
-					Content: fnVal,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Scope:             ScopeGitRoot,
+					Content:           fnVal,
 				},
 			},
 		}
@@ -676,10 +999,34 @@ func TestEvaluateManagedConfigContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				"tsconfig.json": ManagedConfig{
-					Scope:   ScopeProject,
-					Content: fnVal,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Scope:             ScopeProject,
+					Content:           fnVal,
 				},
 			},
 		}
@@ -709,10 +1056,34 @@ func TestEvaluateManagedConfigContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				"nonexistent.json": ManagedConfig{
-					Scope:   ScopeGitRoot,
-					Content: fnVal,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Scope:             ScopeGitRoot,
+					Content:           fnVal,
 				},
 			},
 		}
@@ -743,10 +1114,34 @@ func TestEvaluateManagedConfigContentReadsOriginalContent(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				"config.json": ManagedConfig{
-					Scope:   ScopeGitRoot,
-					Content: fnVal,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Scope:             ScopeGitRoot,
+					Content:           fnVal,
 				},
 			},
 		}
@@ -799,10 +1194,34 @@ func TestEvaluateManagedConfigContentPassesOriginalContentToJS(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				"package.json": ManagedConfig{
-					Scope:   ScopeGitRoot,
-					Content: fnVal,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Scope:             ScopeGitRoot,
+					Content:           fnVal,
 				},
 			},
 		}
@@ -836,10 +1255,34 @@ func TestEvaluateManagedConfigContentPassesOriginalContentToJS(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				"package.json": ManagedConfig{
-					Scope:   ScopeGitRoot,
-					Content: fnVal,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Scope:             ScopeGitRoot,
+					Content:           fnVal,
 				},
 			},
 		}
@@ -889,10 +1332,34 @@ func TestEvaluateManagedConfigContentPassesOriginalContentToJS(t *testing.T) {
 		}
 
 		cfg := &Config{
+			Name:          "",
+			Version:       "",
+			Apps:          nil,
+			Bundles:       nil,
+			Runtimes:      nil,
+			EjectConfigs:  nil,
+			ProjectTypes:  nil,
+			Tools:         nil,
+			Execution:     nil,
+			InitCommands:  nil,
+			IgnoreRules:   nil,
+			SharedStorage: nil,
+			OCI:           nil,
+			Parsers:       nil,
+			Lsp:           nil,
 			ManagedConfigs: MapOfManagedConfigs{
 				"nonexistent.json": ManagedConfig{
-					Scope:   ScopeGitRoot,
-					Content: fnVal,
+					ProjectTypes:      nil,
+					Tools:             nil,
+					OtherFileNameList: nil,
+					DeleteOnly:        false,
+					LinkTarget:        "",
+					ExpectChainHash:   "",
+					Ejectable:         false,
+					Placement:         "",
+					Render:            nil,
+					Scope:             ScopeGitRoot,
+					Content:           fnVal,
 				},
 			},
 		}
@@ -930,10 +1397,34 @@ func TestEdgeCaseRemoteConfigOverridesDefault(t *testing.T) {
 
 	// Layer 1: default config provides .editorconfig
 	defaultCfg := &Config{
+		Name:          "",
+		Version:       "",
+		Apps:          nil,
+		Bundles:       nil,
+		Runtimes:      nil,
+		EjectConfigs:  nil,
+		ProjectTypes:  nil,
+		Tools:         nil,
+		Execution:     nil,
+		InitCommands:  nil,
+		IgnoreRules:   nil,
+		SharedStorage: nil,
+		OCI:           nil,
+		Parsers:       nil,
+		Lsp:           nil,
 		ManagedConfigs: MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope:   ScopeGitRoot,
-				Content: defaultFn,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Scope:             ScopeGitRoot,
+				Content:           defaultFn,
 			},
 		},
 	}
@@ -948,10 +1439,34 @@ func TestEdgeCaseRemoteConfigOverridesDefault(t *testing.T) {
 
 	// Layer 2: remote config overrides .editorconfig, receives default's content
 	remoteCfg := &Config{
+		Name:          "",
+		Version:       "",
+		Apps:          nil,
+		Bundles:       nil,
+		Runtimes:      nil,
+		EjectConfigs:  nil,
+		ProjectTypes:  nil,
+		Tools:         nil,
+		Execution:     nil,
+		InitCommands:  nil,
+		IgnoreRules:   nil,
+		SharedStorage: nil,
+		OCI:           nil,
+		Parsers:       nil,
+		Lsp:           nil,
 		ManagedConfigs: MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope:   ScopeGitRoot,
-				Content: remoteFn,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Scope:             ScopeGitRoot,
+				Content:           remoteFn,
 			},
 		},
 	}
@@ -991,10 +1506,34 @@ func TestEdgeCaseInitEntryRemovedInNextLayer(t *testing.T) {
 
 	// Layer 1: defines .editorconfig with content
 	layer1Cfg := &Config{
+		Name:          "",
+		Version:       "",
+		Apps:          nil,
+		Bundles:       nil,
+		Runtimes:      nil,
+		EjectConfigs:  nil,
+		ProjectTypes:  nil,
+		Tools:         nil,
+		Execution:     nil,
+		InitCommands:  nil,
+		IgnoreRules:   nil,
+		SharedStorage: nil,
+		OCI:           nil,
+		Parsers:       nil,
+		Lsp:           nil,
 		ManagedConfigs: MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope:   ScopeGitRoot,
-				Content: fn,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Scope:             ScopeGitRoot,
+				Content:           fn,
 			},
 		},
 	}
@@ -1005,10 +1544,34 @@ func TestEdgeCaseInitEntryRemovedInNextLayer(t *testing.T) {
 
 	// Layer 2: removes .editorconfig (marks as deleteOnly)
 	layer2Cfg := &Config{
+		Name:          "",
+		Version:       "",
+		Apps:          nil,
+		Bundles:       nil,
+		Runtimes:      nil,
+		EjectConfigs:  nil,
+		ProjectTypes:  nil,
+		Tools:         nil,
+		Execution:     nil,
+		InitCommands:  nil,
+		IgnoreRules:   nil,
+		SharedStorage: nil,
+		OCI:           nil,
+		Parsers:       nil,
+		Lsp:           nil,
 		ManagedConfigs: MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope:      ScopeGitRoot,
-				DeleteOnly: true,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Content:           nil,
+				Scope:             ScopeGitRoot,
+				DeleteOnly:        true,
 			},
 		},
 	}
@@ -1055,14 +1618,47 @@ func TestEdgeCaseContentThrowsDuringEvaluation(t *testing.T) {
 	}
 
 	cfg := &Config{
+		Name:          "",
+		Version:       "",
+		Apps:          nil,
+		Bundles:       nil,
+		Runtimes:      nil,
+		EjectConfigs:  nil,
+		ProjectTypes:  nil,
+		Tools:         nil,
+		Execution:     nil,
+		InitCommands:  nil,
+		IgnoreRules:   nil,
+		SharedStorage: nil,
+		OCI:           nil,
+		Parsers:       nil,
+		Lsp:           nil,
 		ManagedConfigs: MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope:   ScopeGitRoot,
-				Content: throwFn,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Scope:             ScopeGitRoot,
+				Content:           throwFn,
 			},
 			"lefthook.yml": ManagedConfig{
-				Scope:   ScopeGitRoot,
-				Content: okFn,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Scope:             ScopeGitRoot,
+				Content:           okFn,
 			},
 		},
 	}
@@ -1106,15 +1702,47 @@ func TestEdgeCaseScopeFiltering(t *testing.T) {
 	}
 
 	cfg := &Config{
+		Name:          "",
+		Version:       "",
+		Apps:          nil,
+		Bundles:       nil,
+		Runtimes:      nil,
+		EjectConfigs:  nil,
+		ProjectTypes:  nil,
+		Tools:         nil,
+		Execution:     nil,
+		InitCommands:  nil,
+		IgnoreRules:   nil,
+		SharedStorage: nil,
+		OCI:           nil,
+		Parsers:       nil,
+		Lsp:           nil,
 		ManagedConfigs: MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope:   ScopeGitRoot,
-				Content: gitRootFn,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Scope:             ScopeGitRoot,
+				Content:           gitRootFn,
 			},
 			"tsconfig.json": ManagedConfig{
-				Scope:        ScopeProject,
-				Content:      projectFn,
-				ProjectTypes: []string{"typescript"},
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Scope:             ScopeProject,
+				Content:           projectFn,
+				ProjectTypes:      []string{"typescript"},
 			},
 		},
 	}
@@ -1176,10 +1804,34 @@ func TestOriginalContentReadsFromRootPathForGitRootScope(t *testing.T) {
 	}
 
 	cfg := &Config{
+		Name:          "",
+		Version:       "",
+		Apps:          nil,
+		Bundles:       nil,
+		Runtimes:      nil,
+		EjectConfigs:  nil,
+		ProjectTypes:  nil,
+		Tools:         nil,
+		Execution:     nil,
+		InitCommands:  nil,
+		IgnoreRules:   nil,
+		SharedStorage: nil,
+		OCI:           nil,
+		Parsers:       nil,
+		Lsp:           nil,
 		ManagedConfigs: MapOfManagedConfigs{
 			".editorconfig": ManagedConfig{
-				Scope:   ScopeGitRoot,
-				Content: fn,
+				ProjectTypes:      nil,
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				Scope:             ScopeGitRoot,
+				Content:           fn,
 			},
 		},
 	}

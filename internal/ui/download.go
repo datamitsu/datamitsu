@@ -67,7 +67,7 @@ func (d *Display) Download(name string, total int64, r io.Reader) io.ReadCloser 
 			),
 		)
 		if proxy, err := bar.ProxyReader(r); err == nil {
-			rc = &barReader{ReadCloser: proxy, bar: bar, d: d}
+			rc = &barReader{once: sync.Once{}, ReadCloser: proxy, bar: bar, d: d}
 		} else {
 			// Only a completed or aborted bar refuses a proxy; release it so
 			// the active-bar count cannot leak.
@@ -76,7 +76,7 @@ func (d *Display) Download(name string, total int64, r io.Reader) io.ReadCloser 
 		}
 	}
 	if rc == nil {
-		rc = &plainDownload{d: d, name: name, total: total, r: r, lastPct: -1}
+		rc = &plainDownload{mu: sync.Mutex{}, read: 0, lastAt: time.Time{}, done: false, d: d, name: name, total: total, r: r, lastPct: -1}
 	}
 
 	// Emit typed download events independent of the render branch above: the
@@ -96,13 +96,54 @@ func wrapDownloadEvents(name string, total int64, rc io.ReadCloser) io.ReadClose
 	}
 	opID := uievent.NextOpID("dl")
 	Emit(uievent.Event{
-		Type:       uievent.TypeDownload,
-		OpID:       opID,
-		Status:     uievent.StatusStart,
-		Name:       name,
-		BytesTotal: total,
+		TS:              0,
+		Op:              "",
+		Tool:            "",
+		Dir:             "",
+		BytesDone:       0,
+		Percent:         0,
+		Index:           0,
+		Total:           0,
+		Success:         nil,
+		DurationMs:      0,
+		Msg:             "",
+		Level:           "",
+		Tools:           0,
+		Runs:            0,
+		Failed:          0,
+		Skipped:         0,
+		Cancelled:       nil,
+		Complete:        nil,
+		Format:          "",
+		Path:            "",
+		File:            "",
+		Row:             0,
+		Col:             0,
+		EndRow:          0,
+		EndCol:          0,
+		Severity:        "",
+		Code:            "",
+		Source:          "",
+		Fingerprint:     "",
+		Provenance:      "",
+		Reported:        nil,
+		Gates:           nil,
+		Baselined:       false,
+		FindingsError:   nil,
+		FindingsWarning: nil,
+		FindingsInfo:    nil,
+		FindingsHint:    nil,
+		Cached:          nil,
+		Schema:          "",
+		Events:          "",
+		Annotations:     "",
+		Type:            uievent.TypeDownload,
+		OpID:            opID,
+		Status:          uievent.StatusStart,
+		Name:            name,
+		BytesTotal:      total,
 	})
-	return &meteredEmitter{ReadCloser: rc, opID: opID, name: name, total: total}
+	return &meteredEmitter{mu: sync.Mutex{}, read: 0, doneSent: false, ReadCloser: rc, opID: opID, name: name, total: total}
 }
 
 // meteredEmitter counts bytes flowing through an underlying download reader and
@@ -129,13 +170,52 @@ func (m *meteredEmitter) Read(b []byte) (int, error) {
 		read := m.read
 		m.mu.Unlock()
 		Emit(uievent.Event{
-			Type:       uievent.TypeDownload,
-			OpID:       m.opID,
-			Status:     uievent.StatusProgress,
-			Name:       m.name,
-			BytesDone:  read,
-			BytesTotal: m.total,
-			Percent:    downloadPct(read, m.total),
+			TS:              0,
+			Op:              "",
+			Tool:            "",
+			Dir:             "",
+			Index:           0,
+			Total:           0,
+			Success:         nil,
+			DurationMs:      0,
+			Msg:             "",
+			Level:           "",
+			Tools:           0,
+			Runs:            0,
+			Failed:          0,
+			Skipped:         0,
+			Cancelled:       nil,
+			Complete:        nil,
+			Format:          "",
+			Path:            "",
+			File:            "",
+			Row:             0,
+			Col:             0,
+			EndRow:          0,
+			EndCol:          0,
+			Severity:        "",
+			Code:            "",
+			Source:          "",
+			Fingerprint:     "",
+			Provenance:      "",
+			Reported:        nil,
+			Gates:           nil,
+			Baselined:       false,
+			FindingsError:   nil,
+			FindingsWarning: nil,
+			FindingsInfo:    nil,
+			FindingsHint:    nil,
+			Cached:          nil,
+			Schema:          "",
+			Events:          "",
+			Annotations:     "",
+			Type:            uievent.TypeDownload,
+			OpID:            m.opID,
+			Status:          uievent.StatusProgress,
+			Name:            m.name,
+			BytesDone:       read,
+			BytesTotal:      m.total,
+			Percent:         downloadPct(read, m.total),
 		})
 	}
 	if err == io.EOF {
@@ -164,13 +244,52 @@ func (m *meteredEmitter) emitTerminal(status string) {
 	read := m.read
 	m.mu.Unlock()
 	Emit(uievent.Event{
-		Type:       uievent.TypeDownload,
-		OpID:       m.opID,
-		Status:     status,
-		Name:       m.name,
-		BytesDone:  read,
-		BytesTotal: m.total,
-		Percent:    downloadPct(read, m.total),
+		TS:              0,
+		Op:              "",
+		Tool:            "",
+		Dir:             "",
+		Index:           0,
+		Total:           0,
+		Success:         nil,
+		DurationMs:      0,
+		Msg:             "",
+		Level:           "",
+		Tools:           0,
+		Runs:            0,
+		Failed:          0,
+		Skipped:         0,
+		Cancelled:       nil,
+		Complete:        nil,
+		Format:          "",
+		Path:            "",
+		File:            "",
+		Row:             0,
+		Col:             0,
+		EndRow:          0,
+		EndCol:          0,
+		Severity:        "",
+		Code:            "",
+		Source:          "",
+		Fingerprint:     "",
+		Provenance:      "",
+		Reported:        nil,
+		Gates:           nil,
+		Baselined:       false,
+		FindingsError:   nil,
+		FindingsWarning: nil,
+		FindingsInfo:    nil,
+		FindingsHint:    nil,
+		Cached:          nil,
+		Schema:          "",
+		Events:          "",
+		Annotations:     "",
+		Type:            uievent.TypeDownload,
+		OpID:            m.opID,
+		Status:          status,
+		Name:            m.name,
+		BytesDone:       read,
+		BytesTotal:      m.total,
+		Percent:         downloadPct(read, m.total),
 	})
 }
 

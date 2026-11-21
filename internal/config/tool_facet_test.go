@@ -18,9 +18,13 @@ func TestValidateToolFacets_EmptyAndNil(t *testing.T) {
 func TestValidateToolFacets_WithFixOp(t *testing.T) {
 	tools := MapOfTools{
 		"gofmt": {
-			Name: "gofmt",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "gofmt",
 			Operations: map[OperationType]ToolOperation{
-				OpFix: {App: "gofmt"},
+				OpFix: {Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "gofmt"},
 			},
 		},
 	}
@@ -32,9 +36,13 @@ func TestValidateToolFacets_WithFixOp(t *testing.T) {
 func TestValidateToolFacets_WithLintOp(t *testing.T) {
 	tools := MapOfTools{
 		"golangci-lint": {
-			Name: "golangci-lint",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "golangci-lint",
 			Operations: map[OperationType]ToolOperation{
-				OpLint: {App: "golangci-lint"},
+				OpLint: {Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "golangci-lint"},
 			},
 		},
 	}
@@ -44,7 +52,7 @@ func TestValidateToolFacets_WithLintOp(t *testing.T) {
 }
 
 func TestValidateToolFacets_NoOps(t *testing.T) {
-	tools := MapOfTools{"empty": {Name: "empty"}}
+	tools := MapOfTools{"empty": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "empty"}}
 	err := ValidateToolFacets(tools)
 	if err == nil {
 		t.Fatal("ValidateToolFacets() expected error for tool with no operations, got nil")
@@ -56,11 +64,15 @@ func TestValidateToolFacets_NoOps(t *testing.T) {
 
 func TestValidateToolFacets_AggregatesAllErrors(t *testing.T) {
 	tools := MapOfTools{
-		"a": {Name: "a"},
-		"b": {Name: "b"},
+		"a": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "a"},
+		"b": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "b"},
 		"ok": {
-			Name:       "ok",
-			Operations: map[OperationType]ToolOperation{OpFix: {App: "ok"}},
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "ok",
+			Operations:   map[OperationType]ToolOperation{OpFix: {Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "ok"}},
 		},
 	}
 	err := ValidateToolFacets(tools)
@@ -88,7 +100,7 @@ func TestLessLspByOrderThenName(t *testing.T) {
 		{"equal order alphabetical", LspSortable{Name: "a", Order: 5}, LspSortable{Name: "b", Order: 5}, true},
 		{"equal order alphabetical reversed", LspSortable{Name: "b", Order: 5}, LspSortable{Name: "a", Order: 5}, false},
 		{"identical not less", LspSortable{Name: "a", Order: 5}, LspSortable{Name: "a", Order: 5}, false},
-		{"zero order ties alphabetical", LspSortable{Name: "alpha"}, LspSortable{Name: "beta"}, true},
+		{"zero order ties alphabetical", LspSortable{Order: 0, Name: "alpha"}, LspSortable{Order: 0, Name: "beta"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

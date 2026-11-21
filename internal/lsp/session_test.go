@@ -61,8 +61,22 @@ func (f *fakeLoader) Load(_ context.Context, _ string) (*config.Config, []string
 
 func appendConfig(letter string) *config.Config {
 	return &config.Config{
-		Apps:  binmanager.MapOfApps{"append": shellApp(`printf ` + letter + ` >> "$1"`)},
-		Tools: config.MapOfTools{"append-" + letter: {Name: "append-" + letter, Operations: fixOp("append", 0)}},
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
+		Apps:           binmanager.MapOfApps{"append": shellApp(`printf ` + letter + ` >> "$1"`)},
+		Tools:          config.MapOfTools{"append-" + letter: {ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Name: "append-" + letter, Operations: fixOp("append", 0)}},
 	}
 }
 
@@ -70,7 +84,7 @@ func appendConfig(letter string) *config.Config {
 func loaderServer(t *testing.T, content string) (s *Server, loader *fakeLoader, buf *bytes.Buffer) {
 	t.Helper()
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
-	loader = &fakeLoader{cfgFile: filepath.Join(t.TempDir(), "config")}
+	loader = &fakeLoader{rootErr: nil, rootDirs: nil, loads: 0, duringLoad: nil, cfgFile: filepath.Join(t.TempDir(), "config")}
 	writeFile(t, loader.cfgFile, content)
 	buf = &bytes.Buffer{}
 	s = New(strings.NewReader(""), buf, loader, "")
@@ -209,6 +223,7 @@ func TestInitializeWithoutAConfiguration(t *testing.T) {
 			wantMsg: "exit status 128",
 		},
 		{
+			setup:   nil,
 			name:    "not a file uri",
 			params:  func(string) any { return map[string]any{"rootUri": "vscode-remote://host/x"} },
 			wantMsg: `unsupported uri scheme "vscode-remote"`,
@@ -274,11 +289,11 @@ func TestFormatReloadsAChangedConfiguration(t *testing.T) {
 			name:    "changed, unchanged, failed, failed again, fixed",
 			initial: "a",
 			steps: []step{
-				{wantLoads: 1, wantAdded: "a"},
-				{config: "b", wantLoads: 2, wantAdded: "b", wantInfo: 1},
-				{wantLoads: 2, wantAdded: "b", wantInfo: 1},
+				{config: "", wantInfo: 0, wantWarn: 0, wantLoads: 1, wantAdded: "a"},
+				{wantWarn: 0, config: "b", wantLoads: 2, wantAdded: "b", wantInfo: 1},
+				{config: "", wantWarn: 0, wantLoads: 2, wantAdded: "b", wantInfo: 1},
 				{config: "broken", wantLoads: 3, wantAdded: "b", wantInfo: 1, wantWarn: 1},
-				{wantLoads: 3, wantAdded: "b", wantInfo: 1, wantWarn: 1},
+				{config: "", wantLoads: 3, wantAdded: "b", wantInfo: 1, wantWarn: 1},
 				{config: "c", wantLoads: 4, wantAdded: "c", wantInfo: 2, wantWarn: 1},
 			},
 		},
@@ -286,8 +301,8 @@ func TestFormatReloadsAChangedConfiguration(t *testing.T) {
 			name:    "no configuration until it is fixed",
 			initial: "broken",
 			steps: []step{
-				{wantLoads: 1},
-				{config: "a", wantLoads: 2, wantAdded: "a", wantInfo: 1},
+				{config: "", wantAdded: "", wantInfo: 0, wantWarn: 0, wantLoads: 1},
+				{wantWarn: 0, config: "a", wantLoads: 2, wantAdded: "a", wantInfo: 1},
 			},
 		},
 	}

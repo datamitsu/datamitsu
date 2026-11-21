@@ -68,12 +68,17 @@ func TestRunStepStopsDescendantHoldingStderrOpen(t *testing.T) {
 			t.Errorf("close step stderr file: %v", err)
 		}
 	})
-	lay := &layout{root: root, out: filepath.Join(root, "out"), work: root, tmp: filepath.Join(root, "tmp")}
+	lay := &layout{result: "", lease: "", root: root, out: filepath.Join(root, "out"), work: root, tmp: filepath.Join(root, "tmp")}
 	if err := os.MkdirAll(lay.out, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	req := Request{
-		App: "prepared-probe", Command: []string{os.Args[0], "-test.run=^TestPrepareProcessHelper$"},
+		Key:          "",
+		Network:      false,
+		PreparedRoot: "",
+		Protocol:     "",
+		Store:        "",
+		App:          "prepared-probe", Command: []string{os.Args[0], "-test.run=^TestPrepareProcessHelper$"},
 		Env:    []string{"PREPARE_PROCESS_TEST_MODE=leader", "PREPARE_PROCESS_TEST_OUTPUT=" + output, "PREPARE_PROCESS_TEST_READY=" + ready},
 		Stderr: stderr, Timeout: 5 * time.Second,
 	}

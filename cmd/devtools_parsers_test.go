@@ -23,7 +23,7 @@ func echoFixture() string {
 // Execute, which we bypass).
 func newWasmCmd(t *testing.T) *cobra.Command {
 	t.Helper()
-	c := &cobra.Command{}
+	c := &cobra.Command{Use: "", Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0}
 	c.SetContext(context.Background())
 	addParsersFlags(c)
 	if err := c.Flags().Set("wasm", echoFixture()); err != nil {
@@ -42,7 +42,7 @@ func findTool(t *testing.T, cat *parsermanager.ParserCatalog, name string) parse
 		}
 	}
 	t.Fatalf("tool %q not in catalog %+v", name, cat.Tools)
-	return parsermanager.CatalogTool{}
+	return parsermanager.CatalogTool{Name: "", Description: "", URL: "", Operations: nil, Severities: nil, ColumnUnit: "", Category: "", Kind: "", Parser: "", Module: "", Version: ""}
 }
 
 func TestLoadParserCatalog_FromWasmFixture(t *testing.T) {
@@ -103,9 +103,13 @@ func TestRenderTool_SchemaFields(t *testing.T) {
 		absent     []string
 	}{
 		{
-			name: "schema 2 with a vocabulary",
+			absent: nil,
+			name:   "schema 2 with a vocabulary",
 			tool: parsermanager.ToolCapability{
-				Name: "tfsec", Severities: []string{"CRITICAL", "HIGH", "MEDIUM", "LOW"},
+				Description: "",
+				URL:         "",
+				Operations:  nil,
+				Name:        "tfsec", Severities: []string{"CRITICAL", "HIGH", "MEDIUM", "LOW"},
 				ColumnUnit: "utf-8", Category: "security", Kind: "tool",
 			},
 			wantLine:   "  levels: CRITICAL, HIGH, MEDIUM, LOW · columns: utf-8 · category: security\n",
@@ -113,20 +117,28 @@ func TestRenderTool_SchemaFields(t *testing.T) {
 		},
 		{
 			name:       "schema 2 without levels",
-			tool:       parsermanager.ToolCapability{Name: "knip", Severities: []string{}, Kind: "tool"},
+			tool:       parsermanager.ToolCapability{Description: "", URL: "", Operations: nil, ColumnUnit: "", Category: "", Name: "knip", Severities: []string{}, Kind: "tool"},
 			wantLine:   "  levels: none\n",
 			wantDetail: []string{"levels:   none"},
 			absent:     []string{"columns", "category"},
 		},
 		{
-			name:   "schema 1",
-			tool:   parsermanager.ToolCapability{Name: "old"},
-			absent: []string{"levels", "columns", "category", "kind"},
+			wantLine:   "",
+			wantDetail: nil,
+			name:       "schema 1",
+			tool:       parsermanager.ToolCapability{Description: "", URL: "", Operations: nil, Severities: nil, ColumnUnit: "", Category: "", Kind: "", Name: "old"},
+			absent:     []string{"levels", "columns", "category", "kind"},
 		},
 		{
-			name: "schema 3 format parser",
+			absent: nil,
+			name:   "schema 3 format parser",
 			tool: parsermanager.ToolCapability{
-				Name: "sarif", Severities: []string{"error", "warning", "note"}, Kind: "format",
+				Description: "",
+				URL:         "",
+				Operations:  nil,
+				ColumnUnit:  "",
+				Category:    "",
+				Name:        "sarif", Severities: []string{"error", "warning", "note"}, Kind: "format",
 			},
 			wantLine:   "  format · levels: error, warning, note\n",
 			wantDetail: []string{"kind:     format"},

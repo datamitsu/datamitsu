@@ -30,10 +30,10 @@ func TestPlanDependencyHealthAndRuntimeEnv(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			binary := &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{osType: {arch: {"unknown": {URL: "https://example.invalid/tool", Hash: "0000000000000000000000000000000000000000000000000000000000000000", ContentType: binmanager.BinContentTypeBinary}}}}}
+			binary := &binmanager.AppConfigBinary{Version: "", Binaries: binmanager.MapOfBinaries{osType: {arch: {"unknown": {Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.invalid/tool", Hash: "0000000000000000000000000000000000000000000000000000000000000000", ContentType: binmanager.BinContentTypeBinary}}}}}
 			apps := binmanager.MapOfApps{
-				"root": {Binary: binary, DependsOn: edges("git", "dep"), RuntimeEnv: map[string]string{"UPSTREAM": "${APP_BIN:git}"}},
-				"dep":  {Binary: binary, DependsOn: edges("git")}, "git": {Binary: binary, Lazy: true},
+				"root": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: binary, DependsOn: edges("git", "dep"), RuntimeEnv: map[string]string{"UPSTREAM": "${APP_BIN:git}"}},
+				"dep":  {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: binary, DependsOn: edges("git")}, "git": {Required: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: binary, Lazy: true},
 			}
 			bm := binmanager.New(apps, nil, nil)
 			dependency, _, err := bm.ResolveCommandInfo("git")

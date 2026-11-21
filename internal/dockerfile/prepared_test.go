@@ -12,9 +12,13 @@ import (
 // one binary app, and none on the others.
 func preparedPlan() Plan {
 	return Plan{
+		ParserStages:           nil,
+		Skipped:                nil,
+		LibcExcluded:           nil,
+		RegistrySourcedParsers: nil,
 		RuntimeStages: []RuntimeStage{
 			{Name: "node", Kind: config.RuntimeKindNode, PNPMRuntime: "pnpm"},
-			{Name: "uv", Kind: config.RuntimeKindUV},
+			{PNPMRuntime: "", Name: "uv", Kind: config.RuntimeKindUV},
 		},
 		RuntimeAppStages: []RuntimeAppStage{
 			{App: "prettier", Kind: config.RuntimeKindNode, Runtime: "node"},
@@ -48,14 +52,14 @@ func TestRender_NoPrepareNoPreparedBlock(t *testing.T) {
 func TestBuildPlan_CollectsPreparedApps(t *testing.T) {
 	off := false
 	step := func() *binmanager.AppPrepare {
-		return &binmanager.AppPrepare{Args: []string{"--prepare"}, Network: &off}
+		return &binmanager.AppPrepare{Env: nil, BinPath: "", Path: "", Args: []string{"--prepare"}, Network: &off}
 	}
 	apps := binmanager.MapOfApps{
-		"withstep": {Required: true, Binary: &binmanager.AppConfigBinary{}, Prepare: step()},
-		"nostep":   {Required: true, Binary: &binmanager.AppConfigBinary{}},
+		"withstep": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Required: true, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}, Prepare: step()},
+		"nostep":   {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}},
 		// A shell app with a step: BuildPlan must not include it, so its step
 		// must not contribute a prepared entry either.
-		"shellstep": {Shell: &binmanager.AppConfigShell{Name: "true"}, Prepare: step()},
+		"shellstep": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "true"}, Prepare: step()},
 	}
 	plan := BuildPlan(apps, config.MapOfRuntimes{})
 	if len(plan.PreparedApps) != 1 || plan.PreparedApps[0] != "withstep" {

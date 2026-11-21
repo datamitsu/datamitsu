@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/releaseasset"
 )
@@ -17,14 +18,14 @@ func TestDownloadPolicy(t *testing.T) {
 			name, mode, visibility string
 			wantAuth, wantError    bool
 		}{
-			{name: "public", visibility: "public"},
-			{name: "restricted", visibility: "private", wantAuth: true},
-			{name: "none-public", mode: "none", visibility: "public"},
-			{name: "none-private", mode: "none", visibility: "private", wantError: true},
-			{name: "required-public", mode: "required", visibility: "public", wantAuth: true},
-			{name: "unknown", wantError: true},
-			{name: "unknown-required", mode: "required", wantAuth: true},
-			{name: "unknown-none", mode: "none"},
+			{mode: "", wantAuth: false, wantError: false, name: "public", visibility: "public"},
+			{mode: "", wantError: false, name: "restricted", visibility: "private", wantAuth: true},
+			{wantAuth: false, wantError: false, name: "none-public", mode: "none", visibility: "public"},
+			{wantAuth: false, name: "none-private", mode: "none", visibility: "private", wantError: true},
+			{wantError: false, name: "required-public", mode: "required", visibility: "public", wantAuth: true},
+			{mode: "", visibility: "", wantAuth: false, name: "unknown", wantError: true},
+			{visibility: "", wantError: false, name: "unknown-required", mode: "required", wantAuth: true},
+			{visibility: "", wantAuth: false, wantError: false, name: "unknown-none", mode: "none"},
 		} {
 			t.Run(kind+"/"+tc.name, func(t *testing.T) {
 				t.Setenv("TEST_DOWNLOAD_TOKEN", "fixture")
@@ -49,7 +50,7 @@ func TestDownloadPolicy(t *testing.T) {
 						return
 					}
 					if strings.Contains(req.URL.Path, "/releases/") {
-						_ = json.NewEncoder(w).Encode(releaseasset.Release{TagName: "v1", Assets: []releaseasset.Asset{{Name: "tool-linux-amd64", BrowserDownloadURL: base + "/group/tool/releases/download/v1/tool-linux-amd64", APIURL: base + "/repos/group/tool/releases/assets/1"}}})
+						_ = json.NewEncoder(w).Encode(releaseasset.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1", Assets: []releaseasset.Asset{{UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "tool-linux-amd64", BrowserDownloadURL: base + "/group/tool/releases/download/v1/tool-linux-amd64", APIURL: base + "/repos/group/tool/releases/assets/1"}}})
 						return
 					}
 					metadata := map[string]any{"id": 42}
@@ -117,8 +118,8 @@ func TestGitLabAssetSpecificAccess(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(map[string]any{"id": 42, "visibility": tc.visibility, "package_registry_access_level": tc.access})
 			}))
 			defer srv.Close()
-			c, _ := New(Source{Type: "gitlab", URL: srv.URL, TokenEnv: "TEST_DOWNLOAD_TOKEN", DownloadAuth: tc.mode})
-			r := &releaseasset.Release{TagName: "v1", Assets: []releaseasset.Asset{{Name: "tool", BrowserDownloadURL: srv.URL + tc.path}}}
+			c, _ := New(Source{APIURL: "", Type: "gitlab", URL: srv.URL, TokenEnv: "TEST_DOWNLOAD_TOKEN", DownloadAuth: tc.mode})
+			r := &releaseasset.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1", Assets: []releaseasset.Asset{{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "tool", BrowserDownloadURL: srv.URL + tc.path}}}
 			err := c.decorate(context.Background(), "group/tool", r)
 			if (err != nil) != tc.wantError {
 				t.Fatalf("err=%v", err)
@@ -135,8 +136,8 @@ func TestExternalLinkDoesNotInheritPrivateRepositoryAuth(t *testing.T) {
 		for _, mode := range []string{"auto", "required", "none"} {
 			t.Run(kind+"/"+mode, func(t *testing.T) {
 				t.Setenv("TEST_DOWNLOAD_TOKEN", "fixture")
-				c, _ := New(Source{Type: kind, URL: "https://forge.example.test", TokenEnv: "TEST_DOWNLOAD_TOKEN", DownloadAuth: mode})
-				r := &releaseasset.Release{TagName: "v1", Assets: []releaseasset.Asset{{Name: "tool", BrowserDownloadURL: "https://files.example.test/tool"}}}
+				c, _ := New(Source{APIURL: "", Type: kind, URL: "https://forge.example.test", TokenEnv: "TEST_DOWNLOAD_TOKEN", DownloadAuth: mode})
+				r := &releaseasset.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1", Assets: []releaseasset.Asset{{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "tool", BrowserDownloadURL: "https://files.example.test/tool"}}}
 				if err := c.decorate(context.Background(), "group/tool", r); err != nil {
 					t.Fatal(err)
 				}
@@ -177,8 +178,8 @@ func TestChecksumDownloadUsesResolvedAuth(t *testing.T) {
 			}))
 			defer srv.Close()
 			base = srv.URL
-			c, _ := New(Source{Type: "gitea", URL: base, TokenEnv: "TEST_DOWNLOAD_TOKEN"})
-			r := &releaseasset.Release{TagName: "v1", Assets: []releaseasset.Asset{{Name: "tool", BrowserDownloadURL: base + "/group/tool/releases/download/v1/tool"}, {Name: "checksums", BrowserDownloadURL: base + "/group/tool/releases/download/v1/checksums"}}}
+			c, _ := New(Source{APIURL: "", DownloadAuth: "", Type: "gitea", URL: base, TokenEnv: "TEST_DOWNLOAD_TOKEN"})
+			r := &releaseasset.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1", Assets: []releaseasset.Asset{{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "tool", BrowserDownloadURL: base + "/group/tool/releases/download/v1/tool"}, {APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "checksums", BrowserDownloadURL: base + "/group/tool/releases/download/v1/checksums"}}}
 			if err := c.decorate(context.Background(), "group/tool", r); err != nil {
 				t.Fatal(err)
 			}
@@ -196,7 +197,7 @@ func TestChecksumDownloadUsesResolvedAuth(t *testing.T) {
 }
 
 func TestDownloadPolicyValidation(t *testing.T) {
-	for _, s := range []Source{{Type: "github", URL: "https://github.com", DownloadAuth: "yes"}, {Type: "gitlab", URL: "https://gitlab.com", DownloadAuth: "required"}} {
+	for _, s := range []Source{{APIURL: "", TokenEnv: "", Type: "github", URL: "https://github.com", DownloadAuth: "yes"}, {APIURL: "", TokenEnv: "", Type: "gitlab", URL: "https://gitlab.com", DownloadAuth: "required"}} {
 		if _, err := New(s); err == nil {
 			t.Fatal("invalid downloadAuth accepted")
 		}
@@ -214,9 +215,9 @@ func TestNativeAttachmentDraftAndSubpath(t *testing.T) {
 				_, _ = w.Write([]byte(`{"private":false}`))
 			}))
 			defer srv.Close()
-			c, _ := New(Source{Type: kind, URL: srv.URL + "/forge", TokenEnv: "TEST_DOWNLOAD_TOKEN"})
+			c, _ := New(Source{APIURL: "", DownloadAuth: "", Type: kind, URL: srv.URL + "/forge", TokenEnv: "TEST_DOWNLOAD_TOKEN"})
 			for _, draft := range []bool{false, true} {
-				r := &releaseasset.Release{TagName: "v1", Draft: draft, Assets: []releaseasset.Asset{{UUID: "asset-id", Name: "tool", BrowserDownloadURL: srv.URL + "/forge/attachments/asset-id"}}}
+				r := &releaseasset.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, TagName: "v1", Draft: draft, Assets: []releaseasset.Asset{{APIURL: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", UUID: "asset-id", Name: "tool", BrowserDownloadURL: srv.URL + "/forge/attachments/asset-id"}}}
 				if err := c.decorate(context.Background(), "group/tool", r); err != nil {
 					t.Fatal(err)
 				}
@@ -224,7 +225,7 @@ func TestNativeAttachmentDraftAndSubpath(t *testing.T) {
 					t.Fatalf("draft=%v auth=%+v", draft, r.Assets[0].Auth)
 				}
 			}
-			foreign := &releaseasset.Release{TagName: "v1", Assets: []releaseasset.Asset{{Name: "tool", BrowserDownloadURL: srv.URL + "/forge/other/project/releases/download/v1/tool"}}}
+			foreign := &releaseasset.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1", Assets: []releaseasset.Asset{{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "tool", BrowserDownloadURL: srv.URL + "/forge/other/project/releases/download/v1/tool"}}}
 			if err := c.decorate(context.Background(), "group/tool", foreign); err == nil {
 				t.Fatal("unrelated native route inherited visibility")
 			}
@@ -233,14 +234,20 @@ func TestNativeAttachmentDraftAndSubpath(t *testing.T) {
 }
 
 func TestGitLabExternalTargetBypassesPrivatePermanentLink(t *testing.T) {
-	raw := gitlabRelease{TagName: "v1"}
+	raw := gitlabRelease{ReleasedAt: zerovalue_time.Time{}, Upcoming: false, Assets: struct {
+		Links []struct {
+			Name      string `json:"name"`
+			URL       string `json:"url"`
+			DirectURL string `json:"direct_asset_url"`
+		} `json:"links"`
+	}{Links: nil}, TagName: "v1"}
 	// Discovery may supply a private project's permanent redirect for a public
 	// external file. Keep the actual target so no project credential is needed.
 	if err := json.Unmarshal([]byte(`{"tag_name":"v1","assets":{"links":[{"name":"tool","url":"https://files.example.test/tool","direct_asset_url":"https://gitlab.example.test/group/tool/-/releases/v1/downloads/tool"}]}}`), &raw); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("TEST_DOWNLOAD_TOKEN", "fixture")
-	c, _ := New(Source{Type: "gitlab", URL: "https://gitlab.example.test", TokenEnv: "TEST_DOWNLOAD_TOKEN"})
+	c, _ := New(Source{APIURL: "", DownloadAuth: "", Type: "gitlab", URL: "https://gitlab.example.test", TokenEnv: "TEST_DOWNLOAD_TOKEN"})
 	r := raw.release()
 	if err := c.decorate(context.Background(), "group/tool", &r); err != nil {
 		t.Fatal(err)

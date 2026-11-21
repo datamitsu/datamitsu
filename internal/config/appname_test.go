@@ -12,7 +12,7 @@ import (
 func appWithName(names ...string) binmanager.MapOfApps {
 	apps := make(binmanager.MapOfApps, len(names))
 	for _, n := range names {
-		apps[n] = binmanager.App{Required: true}
+		apps[n] = binmanager.App{Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true}
 	}
 	return apps
 }
@@ -154,7 +154,27 @@ func TestValidateAppNames(t *testing.T) {
 func TestValidateApps_BadNameSuppressesPerKindErrors(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"../evil": {
-			Jvm: &binmanager.AppConfigJVM{}, // missing jarUrl, jarHash and version
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Jvm:                &binmanager.AppConfigJVM{JarURL: "", JarHash: "", Version: "", Runtime: "", MainClass: ""}, // missing jarUrl, jarHash and version
 		},
 	}
 

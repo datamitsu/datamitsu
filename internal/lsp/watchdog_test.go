@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	zerovalue_sync "sync"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ type shellApps struct{}
 func (shellApps) GetBinaryPath(context.Context, string) (string, error) { return "sh", nil }
 
 func (shellApps) GetCommandInfo(context.Context, string) (*binmanager.CommandInfo, error) {
-	return &binmanager.CommandInfo{Type: "shell", Command: "sh"}, nil
+	return &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "sh"}, nil
 }
 
 func (shellApps) ResolveBindingPath(_ context.Context, _ string, alias string) (string, error) {
@@ -31,15 +32,37 @@ func (shellApps) ResolveBindingPath(_ context.Context, _ string, alias string) (
 // recordingPlan has one group per name; each group's task appends its name to
 // ran.log in root, so the log is the order groups actually ran in.
 func recordingPlan(root string, names ...string) *tooling.ExecutionPlan {
-	plan := &tooling.ExecutionPlan{}
+	plan := &tooling.ExecutionPlan{ConfigName: "", FailOn: "", Groups: nil, Skipped: nil}
 	for i, name := range names {
 		plan.Groups = append(plan.Groups, tooling.TaskGroup{Priority: i, Tasks: []tooling.Task{{
+			ID:          "",
+			Tool:        config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Operation:   "",
+			Files:       nil,
+			UnitDir:     "",
+			UnitMembers: nil,
+			UnitGuards:  nil,
+			Coverage:    "",
 			ToolName:    name,
 			ProjectPath: root,
 			OpConfig: config.ToolOperation{
-				App:   "sh",
-				Scope: config.ToolScopeRepository,
-				Args:  []string{"-c", "echo " + name + " >> ran.log"},
+				Arity:             "",
+				Granularity:       "",
+				Globs:             nil,
+				ExcludeGlobs:      nil,
+				Priority:          0,
+				Cache:             nil,
+				InvalidateOn:      nil,
+				Env:               nil,
+				InheritEnv:        nil,
+				FailOn:            "",
+				Input:             "",
+				LSP:               nil,
+				Output:            "",
+				ManagedConfigRefs: nil,
+				App:               "sh",
+				Scope:             config.ToolScopeRepository,
+				Args:              []string{"-c", "echo " + name + " >> ran.log"},
 			},
 		}}})
 	}
@@ -80,9 +103,30 @@ func TestExecuteWithWatchdog(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
 			s := &Server{
-				root:   root,
-				loaded: &session{executor: tooling.NewExecutor(root, false, false, shellApps{}, nil)},
-				now:    steppingClock(tt.elapsed),
+				conn:              nil,
+				loader:            nil,
+				launchDir:         "",
+				supersededKeys:    nil,
+				watch:             nil,
+				loadedInputs:      "",
+				failedInputs:      "",
+				noSession:         "",
+				noSessionReported: "",
+				refused:           nil,
+				options:           nil,
+				optionsInvalid:    false,
+				policy:            formatPolicy{WidenTo: "", TimeoutMs: 0, Tools: nil},
+				docs:              nil,
+				initialized:       false,
+				shutdownReceived:  false,
+				exitCode:          0,
+				active:            nil,
+				runMu:             zerovalue_sync.Mutex{},
+				stopping:          false,
+				transport:         nil,
+				root:              root,
+				loaded:            &session{planner: nil, binMgr: nil, cache: nil, parsers: nil, fixWidenTo: "", managedConfigs: nil, tools: nil, foreignCacheReported: false, executor: tooling.NewExecutor(root, false, false, shellApps{}, nil)},
+				now:               steppingClock(tt.elapsed),
 			}
 			plan := recordingPlan(root, "g1", "g2", "g3")
 
@@ -111,19 +155,40 @@ func TestExecuteGroupsStopsWhenCancelled(t *testing.T) {
 		wantRan  []string
 		wantStop groupsStop
 	}{
-		{name: "before the first group", after: 0, wantStop: stoppedByCancel},
-		{name: "after the first group", after: 1, wantRan: []string{"g1"}, wantStop: stoppedByCancel},
+		{limit: 0, wantRan: nil, name: "before the first group", after: 0, wantStop: stoppedByCancel},
+		{limit: 0, name: "after the first group", after: 1, wantRan: []string{"g1"}, wantStop: stoppedByCancel},
 		{name: "over the watchdog", after: 1, limit: time.Nanosecond, wantRan: []string{"g1"}, wantStop: stoppedByCancel},
-		{name: "never", after: 99, wantRan: []string{"g1", "g2", "g3"}, wantStop: ranAll},
+		{limit: 0, name: "never", after: 99, wantRan: []string{"g1", "g2", "g3"}, wantStop: ranAll},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
 			s := &Server{
-				root:   root,
-				loaded: &session{executor: tooling.NewExecutor(root, false, false, shellApps{}, nil)},
-				now:    steppingClock(time.Hour),
+				conn:              nil,
+				loader:            nil,
+				launchDir:         "",
+				supersededKeys:    nil,
+				watch:             nil,
+				loadedInputs:      "",
+				failedInputs:      "",
+				noSession:         "",
+				noSessionReported: "",
+				refused:           nil,
+				options:           nil,
+				optionsInvalid:    false,
+				policy:            formatPolicy{WidenTo: "", TimeoutMs: 0, Tools: nil},
+				docs:              nil,
+				initialized:       false,
+				shutdownReceived:  false,
+				exitCode:          0,
+				active:            nil,
+				runMu:             zerovalue_sync.Mutex{},
+				stopping:          false,
+				transport:         nil,
+				root:              root,
+				loaded:            &session{planner: nil, binMgr: nil, cache: nil, parsers: nil, fixWidenTo: "", managedConfigs: nil, tools: nil, foreignCacheReported: false, executor: tooling.NewExecutor(root, false, false, shellApps{}, nil)},
+				now:               steppingClock(time.Hour),
 			}
 			cancelled := func() bool { return len(ranLog(t, root)) >= tt.after }
 
@@ -143,8 +208,8 @@ func TestExecuteGroupsStopsWhenCancelled(t *testing.T) {
 
 func TestWatchdogNotice(t *testing.T) {
 	notRun := []tooling.TaskGroup{
-		{Tasks: []tooling.Task{{ToolName: "prettier"}, {ToolName: "eslint"}}},
-		{Tasks: []tooling.Task{{ToolName: "prettier"}}},
+		{Priority: 0, Tasks: []tooling.Task{{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "prettier"}, {ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "eslint"}}},
+		{Priority: 0, Tasks: []tooling.Task{{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "prettier"}}},
 	}
 	got := watchdogNotice("src/a.ts", 1, 3, 3000, notRun)
 	for _, want := range []string{

@@ -14,13 +14,13 @@ func TestURIToPathFor(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{name: "percent-decoded", uri: "file:///home/u/a%20b.go", goos: "linux", want: "/home/u/a b.go"},
-		{name: "localhost host", uri: "file://localhost/home/u/a.go", goos: "darwin", want: "/home/u/a.go"},
-		{name: "windows drive", uri: "file:///C:/Users/u/a.go", goos: "windows", want: `C:\Users\u\a.go`},
-		{name: "windows drive, colon escaped as VS Code does", uri: "file:///c%3A/Users/u/a.go", goos: "windows", want: `c:\Users\u\a.go`},
-		{name: "windows UNC", uri: "file://server/share/a.go", goos: "windows", want: `\\server\share\a.go`},
-		{name: "not a file uri", uri: "untitled:Untitled-1", goos: "linux", wantErr: true},
-		{name: "no path", uri: "file://", goos: "linux", wantErr: true},
+		{wantErr: false, name: "percent-decoded", uri: "file:///home/u/a%20b.go", goos: "linux", want: "/home/u/a b.go"},
+		{wantErr: false, name: "localhost host", uri: "file://localhost/home/u/a.go", goos: "darwin", want: "/home/u/a.go"},
+		{wantErr: false, name: "windows drive", uri: "file:///C:/Users/u/a.go", goos: "windows", want: `C:\Users\u\a.go`},
+		{wantErr: false, name: "windows drive, colon escaped as VS Code does", uri: "file:///c%3A/Users/u/a.go", goos: "windows", want: `c:\Users\u\a.go`},
+		{wantErr: false, name: "windows UNC", uri: "file://server/share/a.go", goos: "windows", want: `\\server\share\a.go`},
+		{want: "", name: "not a file uri", uri: "untitled:Untitled-1", goos: "linux", wantErr: true},
+		{want: "", name: "no path", uri: "file://", goos: "linux", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

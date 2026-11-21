@@ -3,10 +3,12 @@ package tooling
 import (
 	"context"
 	"slices"
+	zerovalue_sync "sync"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/project"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 func TestExplicitUnitFileArgsUseOwnedSources(t *testing.T) {
@@ -18,18 +20,35 @@ func TestExplicitUnitFileArgsUseOwnedSources(t *testing.T) {
 				"/repo/svc/a/ignored.py", "/repo/svc/a/child/main.py",
 				"/repo/svc/a/src/child/main.py", "/repo/svc/b/main.py",
 			}
-			p.cachedProjects = append(p.cachedProjects, project.ProjectLocation{Path: "/repo/svc/a/child"})
-			p.cachedProjects = append(p.cachedProjects, project.ProjectLocation{Path: "/repo/svc/a/src/child"})
+			p.cachedProjects = append(p.cachedProjects, project.ProjectLocation{Type: "", Path: "/repo/svc/a/child"})
+			p.cachedProjects = append(p.cachedProjects, project.ProjectLocation{Type: "", Path: "/repo/svc/a/src/child"})
 			p.tools = config.MapOfTools{
-				"analyzer": {Operations: map[config.OperationType]config.ToolOperation{
-					config.OpLint: {
-						App: "analyzer", Args: []string{"{files}"}, Scope: config.ToolScopePerProject,
-						Granularity: config.GranularityUnit, Globs: []string{"**/*.py"},
-						ExcludeGlobs: []string{"**/ignored.py"},
+				"analyzer": {
+					Name:         "",
+					ProjectTypes: nil,
+					Skip:         false,
+					SkipReason:   "",
+					OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+						config.OpLint: {
+							Arity:             "",
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "analyzer", Args: []string{"{files}"}, Scope: config.ToolScopePerProject,
+							Granularity: config.GranularityUnit, Globs: []string{"**/*.py"},
+							ExcludeGlobs: []string{"**/ignored.py"},
+						},
 					},
-				}},
+				},
 			}
-			sel := Selection{Mode: SelectionPaths, Paths: []string{"/repo/svc/a/src/values.py"}}
+			sel := Selection{Dir: "", Mode: SelectionPaths, Paths: []string{"/repo/svc/a/src/values.py"}}
 			tasks, skipped := p.collectTasks(context.Background(), config.OpLint, sel)
 			if len(tasks) != 1 || len(skipped) != 0 {
 				t.Fatalf("tasks = %+v, skipped = %+v", tasks, skipped)
@@ -52,9 +71,32 @@ func TestExplicitUnitFileArgsUseOwnedSources(t *testing.T) {
 
 func TestExplicitUnitVerdictTracksSourceOwnership(t *testing.T) {
 	task := Task{
-		ToolName: "analyzer", Operation: config.OpLint,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "analyzer", Operation: config.OpLint,
 		OpConfig: config.ToolOperation{
-			Scope: config.ToolScopePerProject, Granularity: config.GranularityUnit,
+			App:               "",
+			Arity:             "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			Scope:             config.ToolScopePerProject, Granularity: config.GranularityUnit,
 			Args: []string{"{files}"},
 		},
 		Files: []string{"/repo/main.py", "/repo/child/main.py"},
@@ -71,18 +113,53 @@ func TestExplicitUnitVerdictTracksSourceOwnership(t *testing.T) {
 // and every other formatter that finds its own files. Those rewrite in place.
 func noArgvPathPlanner(cwd string) *Planner {
 	return &Planner{
-		rootPath: "/repo",
-		cwdPath:  cwd,
+		detectedTypes:      nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        zerovalue_sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        zerovalue_sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           "/repo",
+		cwdPath:            cwd,
 		tools: config.MapOfTools{
-			"gofmt": {Operations: map[config.OperationType]config.ToolOperation{
-				config.OpFix: {
-					App: "gofmt", Args: []string{"fmt", "./..."},
-					Scope: config.ToolScopePerProject,
+			"gofmt": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+					config.OpFix: {
+						Arity:             "",
+						Granularity:       "",
+						Globs:             nil,
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						Env:               nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						App:               "gofmt", Args: []string{"fmt", "./..."},
+						Scope: config.ToolScopePerProject,
+					},
 				},
-			}},
+			},
 		},
 		cachedFiles:      []string{"/repo/svc/a/main.go", "/repo/svc/b/main.go"},
-		cachedProjects:   []project.ProjectLocation{{Path: "/repo/svc/a"}, {Path: "/repo/svc/b"}},
+		cachedProjects:   []project.ProjectLocation{{Type: "", Path: "/repo/svc/a"}, {Type: "", Path: "/repo/svc/b"}},
 		cacheInitialized: true,
 	}
 }
@@ -100,7 +177,7 @@ func projectPaths(tasks []Task) []string {
 // consulted the widening policy there. The tool then rewrote files in modules
 // the user never mentioned — a silent widening, and the widening is what edits.
 func TestCollectTasksHonoursWidenToForGlobLessUnitTools(t *testing.T) {
-	sel := Selection{Mode: SelectionPaths, Paths: []string{"/repo/svc/a/main.go"}}
+	sel := Selection{Dir: "", Mode: SelectionPaths, Paths: []string{"/repo/svc/a/main.go"}}
 
 	t.Run("the default policy reaches the unit holding the file, and no further", func(t *testing.T) {
 		p := noArgvPathPlanner("/repo")
@@ -144,17 +221,36 @@ func TestCollectTasksHonoursWidenToForGlobLessUnitTools(t *testing.T) {
 func TestCollectTasksLeavesFileCarryingArgsAlone(t *testing.T) {
 	p := noArgvPathPlanner("/repo")
 	p.tools = config.MapOfTools{
-		"prettier": {Operations: map[config.OperationType]config.ToolOperation{
-			config.OpFix: {
-				App: "prettier", Args: []string{"--write", "{files}"},
-				Scope: config.ToolScopePerProject, Globs: []string{"**/*.go"},
+		"prettier": {
+			Name:         "",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+				config.OpFix: {
+					Arity:             "",
+					Granularity:       "",
+					ExcludeGlobs:      nil,
+					Priority:          0,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "prettier", Args: []string{"--write", "{files}"},
+					Scope: config.ToolScopePerProject, Globs: []string{"**/*.go"},
+				},
 			},
-		}},
+		},
 	}
 	p.SetWidenPolicy(nil, config.WidenToTarget)
 
 	tasks, skipped := p.collectTasks(context.Background(), config.OpFix,
-		Selection{Mode: SelectionPaths, Paths: []string{"/repo/svc/a/main.go"}})
+		Selection{Dir: "", Mode: SelectionPaths, Paths: []string{"/repo/svc/a/main.go"}})
 
 	if len(tasks) != 1 || tasks[0].ProjectPath != "/repo/svc/a" {
 		t.Fatalf("planned %v, want the named file's unit", projectPaths(tasks))
@@ -167,7 +263,7 @@ func TestCollectTasksLeavesFileCarryingArgsAlone(t *testing.T) {
 // Standing in a directory targets that subtree: units inside it run, and under
 // the default policy the unit you are standing in runs too.
 func TestCollectTasksHonoursWidenToForASubtree(t *testing.T) {
-	sel := Selection{Mode: SelectionSubtree, Dir: "/repo/svc/a"}
+	sel := Selection{Paths: nil, Mode: SelectionSubtree, Dir: "/repo/svc/a"}
 
 	t.Run("default reaches the surrounding unit", func(t *testing.T) {
 		p := noArgvPathPlanner("/repo/svc/a")
@@ -182,7 +278,7 @@ func TestCollectTasksHonoursWidenToForASubtree(t *testing.T) {
 		p := noArgvPathPlanner("/repo/svc")
 		p.SetWidenPolicy(nil, config.WidenToTarget)
 		tasks, _ := p.collectTasks(context.Background(), config.OpFix,
-			Selection{Mode: SelectionSubtree, Dir: "/repo/svc"})
+			Selection{Paths: nil, Mode: SelectionSubtree, Dir: "/repo/svc"})
 
 		if len(tasks) != 2 {
 			t.Errorf("planned %v, want both units — they are inside what was targeted",
@@ -199,12 +295,31 @@ func TestCollectTasksHonoursWidenToForASubtree(t *testing.T) {
 // branch and plans a whole-repository run for a narrowed request.
 func TestRepositoryScopeNeverSeesUnitGranularity(t *testing.T) {
 	err := config.ValidateTools(config.MapOfTools{
-		"tool": {Operations: map[config.OperationType]config.ToolOperation{
-			config.OpLint: {
-				App: "x", Args: []string{"run"},
-				Scope: config.ToolScopeRepository, Granularity: config.GranularityUnit,
+		"tool": {
+			Name:         "",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: {
+					Arity:             "",
+					Globs:             nil,
+					ExcludeGlobs:      nil,
+					Priority:          0,
+					Cache:             nil,
+					InvalidateOn:      nil,
+					Env:               nil,
+					InheritEnv:        nil,
+					FailOn:            "",
+					Input:             "",
+					LSP:               nil,
+					Output:            "",
+					ManagedConfigRefs: nil,
+					App:               "x", Args: []string{"run"},
+					Scope: config.ToolScopeRepository, Granularity: config.GranularityUnit,
+				},
 			},
-		}},
+		},
 	}, nil, nil)
 
 	if err == nil {
@@ -219,15 +334,50 @@ func TestRepositoryScopeNeverSeesUnitGranularity(t *testing.T) {
 func TestCollectTasksNarrowsRepositoryScopeByGranularity(t *testing.T) {
 	newPlanner := func(args []string) *Planner {
 		return &Planner{
-			rootPath: "/repo",
-			cwdPath:  "/repo/packages/api",
+			detectedTypes:      nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			seedFiles:          nil,
+			globCacheMu:        zerovalue_sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        zerovalue_sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo/packages/api",
 			tools: config.MapOfTools{
-				"tool": {Operations: map[config.OperationType]config.ToolOperation{
-					config.OpLint: {
-						App: "tool", Args: args,
-						Scope: config.ToolScopeRepository, Globs: []string{"**/*.json"},
+				"tool": {
+					Name:         "",
+					ProjectTypes: nil,
+					Skip:         false,
+					SkipReason:   "",
+					OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+						config.OpLint: {
+							Arity:             "",
+							Granularity:       "",
+							ExcludeGlobs:      nil,
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "tool", Args: args,
+							Scope: config.ToolScopeRepository, Globs: []string{"**/*.json"},
+						},
 					},
-				}},
+				},
 			},
 			cachedFiles: []string{
 				"/repo/packages/api/a.json",
@@ -236,7 +386,7 @@ func TestCollectTasksNarrowsRepositoryScopeByGranularity(t *testing.T) {
 			cacheInitialized: true,
 		}
 	}
-	sel := Selection{Mode: SelectionSubtree, Dir: "/repo/packages/api"}
+	sel := Selection{Paths: nil, Mode: SelectionSubtree, Dir: "/repo/packages/api"}
 
 	t.Run("a file list narrows", func(t *testing.T) {
 		tasks, skipped := newPlanner([]string{"check", "{files}"}).
@@ -269,7 +419,7 @@ func TestCollectTasksPlansEveryUnitForAWholeRepositoryRun(t *testing.T) {
 	p := noArgvPathPlanner("/repo")
 	p.SetWidenPolicy(nil, config.WidenToTarget)
 
-	tasks, skipped := p.collectTasks(context.Background(), config.OpFix, Selection{Mode: SelectionAll})
+	tasks, skipped := p.collectTasks(context.Background(), config.OpFix, Selection{Dir: "", Paths: nil, Mode: SelectionAll})
 
 	if len(tasks) != 2 {
 		t.Errorf("planned %v, want both units", projectPaths(tasks))

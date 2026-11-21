@@ -10,7 +10,12 @@ func TestGetLastGeneratedContent(t *testing.T) {
 		content2 := "second content"
 
 		history := &ManagedConfigLayerHistory{
-			FileName: ".editorconfig",
+			OriginalContent: nil,
+			FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
+			FileName:        ".editorconfig",
 			Layers: []ManagedConfigLayerEntry{
 				{LayerName: "default", GeneratedContent: &content1},
 				{LayerName: "auto", GeneratedContent: &content2},
@@ -30,7 +35,12 @@ func TestGetLastGeneratedContent(t *testing.T) {
 		content1 := "first content"
 
 		history := &ManagedConfigLayerHistory{
-			FileName: ".editorconfig",
+			OriginalContent: nil,
+			FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
+			FileName:        ".editorconfig",
 			Layers: []ManagedConfigLayerEntry{
 				{LayerName: "default", GeneratedContent: &content1},
 				{LayerName: "auto", GeneratedContent: nil},
@@ -48,8 +58,13 @@ func TestGetLastGeneratedContent(t *testing.T) {
 
 	t.Run("returns nil for empty layers", func(t *testing.T) {
 		history := &ManagedConfigLayerHistory{
-			FileName: ".editorconfig",
-			Layers:   nil,
+			OriginalContent: nil,
+			FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
+			FileName:        ".editorconfig",
+			Layers:          nil,
 		}
 
 		result := GetLastGeneratedContent(history)
@@ -60,7 +75,12 @@ func TestGetLastGeneratedContent(t *testing.T) {
 
 	t.Run("returns nil when no content layers", func(t *testing.T) {
 		history := &ManagedConfigLayerHistory{
-			FileName: ".editorconfig",
+			OriginalContent: nil,
+			FinalConfig:     ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
+			FileName:        ".editorconfig",
 			Layers: []ManagedConfigLayerEntry{
 				{LayerName: "default", GeneratedContent: nil},
 				{LayerName: "auto", GeneratedContent: nil},

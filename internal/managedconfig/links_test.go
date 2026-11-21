@@ -127,6 +127,26 @@ func TestCreateDatamitsuLinks_BlocksPathTraversal(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"evil-app": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				"config": "../../../etc/passwd",
 			},
@@ -157,6 +177,26 @@ func TestCreateDatamitsuLinks_BlocksAbsolutePathInLinks(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"evil-app": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				"config": "/etc/passwd",
 			},
@@ -199,6 +239,26 @@ func TestCreateDatamitsuLinks_BlocksPathTraversalInLinkName(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{
 				"app": {
+					Required:           false,
+					Lazy:               false,
+					Description:        "",
+					VersionCheck:       nil,
+					DependsOn:          nil,
+					OfficialURL:        "",
+					OfficialURLDerived: false,
+					Binary:             nil,
+					Bun:                nil,
+					Uv:                 nil,
+					Node:               nil,
+					Jvm:                nil,
+					Go:                 nil,
+					Shell:              nil,
+					Env:                nil,
+					RuntimeEnv:         nil,
+					Caches:             nil,
+					Files:              nil,
+					Archives:           nil,
+					Prepare:            nil,
 					Links: map[string]string{
 						tc.linkName: "config.js",
 					},
@@ -251,6 +311,25 @@ func TestCreateDatamitsuLinks_CreatesSymlinks(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"eslint-base.js": configContent,
 			},
@@ -321,6 +400,26 @@ func TestCreateDatamitsuLinks_NestedRelativePath(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint-config": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				"eslint-config": "dist/eslint.config.js",
 			},
@@ -371,6 +470,26 @@ func TestCreateDatamitsuLinks_ErrorWhenTargetNotExist(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"app": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				"config": "dist/nonexistent.js",
 			},
@@ -413,12 +532,50 @@ func TestCreateDatamitsuLinks_MultipleApps(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Files: map[string]string{"eslint.js": "eslint"},
-			Links: map[string]string{"eslint.js": "eslint.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Files:              map[string]string{"eslint.js": "eslint"},
+			Links:              map[string]string{"eslint.js": "eslint.js"},
 		},
 		"prettier": {
-			Files: map[string]string{"prettier.js": "prettier"},
-			Links: map[string]string{"prettier.js": "prettier.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Files:              map[string]string{"prettier.js": "prettier"},
+			Links:              map[string]string{"prettier.js": "prettier.js"},
 		},
 	}
 
@@ -456,8 +613,27 @@ func TestCreateDatamitsuLinks_DryRunDoesNotTouchFilesystem(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Files: map[string]string{"eslint.js": "content"},
-			Links: map[string]string{"eslint.js": "eslint.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Files:              map[string]string{"eslint.js": "content"},
+			Links:              map[string]string{"eslint.js": "eslint.js"},
 		},
 	}
 
@@ -484,7 +660,27 @@ func TestCreateDatamitsuLinks_DryRunDetectsUninstalledApp(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Links: map[string]string{"eslint.js": "eslint.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Links:              map[string]string{"eslint.js": "eslint.js"},
 		},
 	}
 
@@ -507,7 +703,27 @@ func TestCreateDatamitsuLinks_ErrorsOnUninstalledApp(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Links: map[string]string{"eslint.js": "eslint.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Links:              map[string]string{"eslint.js": "eslint.js"},
 		},
 	}
 
@@ -542,11 +758,50 @@ func TestCreateDatamitsuLinks_ErrorsOnPartiallyInstalledApps(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Files: map[string]string{"eslint.js": "eslint"},
-			Links: map[string]string{"eslint.js": "eslint.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Files:              map[string]string{"eslint.js": "eslint"},
+			Links:              map[string]string{"eslint.js": "eslint.js"},
 		},
 		"prettier": {
-			Links: map[string]string{"prettier.js": "prettier.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Links:              map[string]string{"prettier.js": "prettier.js"},
 		},
 	}
 
@@ -592,8 +847,27 @@ func TestCreateDatamitsuLinks_RemovesExistingDirectory(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"app1": {
-			Files: map[string]string{"config.js": "new"},
-			Links: map[string]string{"config.js": "config.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Files:              map[string]string{"config.js": "new"},
+			Links:              map[string]string{"config.js": "config.js"},
 		},
 	}
 
@@ -633,15 +907,56 @@ func TestCreateDatamitsuLinks_NoLinksIsNoop(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Files: map[string]string{"eslint.js": "content"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Files:              map[string]string{"eslint.js": "content"},
 			// No Links
 		},
 		"prettier": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			// No Files or Links
 		},
 	}
 
-	resolver := &mockResolver{}
+	resolver := &mockResolver{paths: nil}
 
 	if _, err := CreateDatamitsuLinks(gitRoot, apps, resolver, nil, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -765,8 +1080,8 @@ func TestCreateDatamitsuLinks_VerifiesAllLinks(t *testing.T) {
 	}
 
 	apps := binmanager.MapOfApps{
-		"eslint":   {Links: map[string]string{"eslint.js": "eslint.js"}},
-		"prettier": {Links: map[string]string{"prettier.js": "prettier.js"}},
+		"eslint":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Links: map[string]string{"eslint.js": "eslint.js"}},
+		"prettier": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Links: map[string]string{"prettier.js": "prettier.js"}},
 	}
 
 	resolver := &mockResolver{paths: map[string]string{
@@ -826,7 +1141,7 @@ func TestCreateDatamitsuLinks_BrokenTargetAfterCreation(t *testing.T) {
 	}
 
 	apps := binmanager.MapOfApps{
-		"myapp": {Links: map[string]string{"config.js": "config.js"}},
+		"myapp": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Links: map[string]string{"config.js": "config.js"}},
 	}
 
 	resolver := &mockResolver{paths: map[string]string{
@@ -888,7 +1203,7 @@ func TestCreateDatamitsuLinks_DetectsStaleBrokenLinks(t *testing.T) {
 
 	// Call CreateDatamitsuLinks with new config (old link not referenced)
 	apps := binmanager.MapOfApps{
-		"newapp": {Links: map[string]string{"config.js": "config.js"}},
+		"newapp": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Links: map[string]string{"config.js": "config.js"}},
 	}
 
 	resolver := &mockResolver{paths: map[string]string{
@@ -920,7 +1235,7 @@ func TestCreateDatamitsuLinks_EmptyAppsIsNoop(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitRoot := filepath.Join(tmpDir, "repo")
 
-	if _, err := CreateDatamitsuLinks(gitRoot, binmanager.MapOfApps{}, &mockResolver{}, nil, nil, false); err != nil {
+	if _, err := CreateDatamitsuLinks(gitRoot, binmanager.MapOfApps{}, &mockResolver{paths: nil}, nil, nil, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -966,6 +1281,26 @@ func TestCreateDatamitsuLinks_AcceptsDirectoryTarget(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"app": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				"my-dir": "dist",
 			},
@@ -1007,6 +1342,26 @@ func TestCreateDatamitsuLinks_DryRunValidatesLinkPaths(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"app": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				"config": "../../../etc/passwd",
 			},
@@ -1042,6 +1397,26 @@ func TestCreateDatamitsuLinks_DryRunValidatesLinkNames(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"app": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				"../../etc/shadow": "config.js",
 			},
@@ -1074,6 +1449,26 @@ func TestCreateDatamitsuLinks_DryRunAcceptsDirectoryTarget(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"app": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				"my-dir": "dist",
 			},
@@ -1110,6 +1505,26 @@ func TestCreateDatamitsuLinks_DirectorySubdirEndToEnd(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"skills-bundle": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				"skills": "skills",
 			},
@@ -1170,9 +1585,10 @@ func TestCreateDatamitsuLinks_BundleLinks(t *testing.T) {
 
 	bundles := binmanager.MapOfBundles{
 		"my-bundle": {
-			Version: "1.0",
-			Files:   map[string]string{"agents.md": "# Agents"},
-			Links:   map[string]string{"agents": "agents.md"},
+			Archives: nil,
+			Version:  "1.0",
+			Files:    map[string]string{"agents.md": "# Agents"},
+			Links:    map[string]string{"agents": "agents.md"},
 		},
 	}
 
@@ -1219,14 +1635,35 @@ func TestCreateDatamitsuLinks_MixedAppAndBundleLinks(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Links: map[string]string{"eslint-config": "eslint.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Links:              map[string]string{"eslint-config": "eslint.js"},
 		},
 	}
 	bundles := binmanager.MapOfBundles{
 		"skills": {
-			Version: "1.0",
-			Files:   map[string]string{"skills.md": "# Skills"},
-			Links:   map[string]string{"skills-md": "skills.md"},
+			Archives: nil,
+			Version:  "1.0",
+			Files:    map[string]string{"skills.md": "# Skills"},
+			Links:    map[string]string{"skills-md": "skills.md"},
 		},
 	}
 
@@ -1265,8 +1702,10 @@ func TestCreateDatamitsuLinks_BundleDirectoryLink(t *testing.T) {
 
 	bundles := binmanager.MapOfBundles{
 		"agent-skills": {
-			Version: "1.0",
-			Links:   map[string]string{"agent-skills": "skills"},
+			Files:    nil,
+			Archives: nil,
+			Version:  "1.0",
+			Links:    map[string]string{"agent-skills": "skills"},
 		},
 	}
 
@@ -1315,6 +1754,26 @@ func TestCreateDatamitsuLinks_GitignoreCreated(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				"eslint.js": "eslint.js",
 			},
@@ -1355,7 +1814,27 @@ func TestCreateDatamitsuLinks_DryRunNoGitignore(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Links: map[string]string{"eslint.js": "eslint.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Links:              map[string]string{"eslint.js": "eslint.js"},
 		},
 	}
 
@@ -1406,6 +1885,26 @@ func TestCreateDatamitsuLinks_RejectsGitignoreLinkName(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"myapp": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				".gitignore": "config.js",
 			},
@@ -1437,6 +1936,26 @@ func TestCreateDatamitsuLinks_RejectsGitignoreLinkNameDryRun(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"myapp": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				".gitignore": "config.js",
 			},
@@ -1523,7 +2042,27 @@ func TestCreateDatamitsuLinks_WritesTypeDefinitions(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"eslint": binmanager.App{
-			Links: map[string]string{"eslint-config": "config.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Links:              map[string]string{"eslint-config": "config.js"},
 		},
 	}
 	resolver := &mockResolver{paths: map[string]string{"eslint": appDir}}
@@ -1561,7 +2100,27 @@ func TestCreateDatamitsuLinks_RejectsReservedTypeDefinitionsName(t *testing.T) {
 
 	apps := binmanager.MapOfApps{
 		"myapp": binmanager.App{
-			Links: map[string]string{"datamitsu.config.d.ts": "file.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Links:              map[string]string{"datamitsu.config.d.ts": "file.js"},
 		},
 	}
 	resolver := &mockResolver{paths: map[string]string{"myapp": appDir}}
@@ -1592,7 +2151,27 @@ func TestCreateDatamitsuLinks_RejectsReservedTypeDefinitionsNameDryRun(t *testin
 
 	apps := binmanager.MapOfApps{
 		"myapp": binmanager.App{
-			Links: map[string]string{"datamitsu.config.d.ts": "file.js"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Links:              map[string]string{"datamitsu.config.d.ts": "file.js"},
 		},
 	}
 	resolver := &mockResolver{paths: map[string]string{"myapp": appDir}}

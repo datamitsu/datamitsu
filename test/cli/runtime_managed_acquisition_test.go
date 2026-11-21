@@ -37,7 +37,7 @@ func TestRuntimeRunAcquiresPinnedManagedRuntimeThenReusesItOffline(t *testing.T)
 	cache := t.TempDir()
 	record := filepath.Join(project.Dir, "run.json")
 	args := runtimeArgs(project, configPath, "run", "probe", "--", "--record", record, "argument with space")
-	first := clitest.Run(t, clitest.RunOptions{Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="}}, args...)
+	first := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="}}, args...)
 	if first.ExitCode != 0 || first.Stdout != "probe stdout\n" {
 		t.Fatalf("cold managed runtime did not execute: %+v", first)
 	}
@@ -50,7 +50,7 @@ func TestRuntimeRunAcquiresPinnedManagedRuntimeThenReusesItOffline(t *testing.T)
 	if err := os.Remove(record); err != nil {
 		t.Fatal(err)
 	}
-	second := clitest.Run(t, clitest.RunOptions{Dir: project.Dir, CacheDir: cache}, args...)
+	second := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: cache}, args...)
 	if second.ExitCode != 0 || second.Stdout != "probe stdout\n" || second.Stderr != "probe stderr\n" {
 		t.Fatalf("offline managed runtime did not reuse its installation: %+v", second)
 	}
@@ -75,7 +75,7 @@ func TestManagedRuntimeStartFailureDoesNotRetryOrRetainStoreLease(t *testing.T) 
 	cache := t.TempDir()
 	args := runtimeArgs(project, configPath, "run", "probe", "--", "unused")
 	for _, offline := range []string{"", "1"} {
-		result := clitest.Run(t, clitest.RunOptions{Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE=" + offline}}, args...)
+		result := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE=" + offline}}, args...)
 		if result.ExitCode != 1 || result.Stdout != "" || result.Stderr == "" {
 			t.Fatalf("invalid managed interpreter did not report a start error: %+v", result)
 		}
@@ -83,7 +83,7 @@ func TestManagedRuntimeStartFailureDoesNotRetryOrRetainStoreLease(t *testing.T) 
 			t.Fatalf("start failure retried provisioning: %d requests", requests.Load())
 		}
 	}
-	cleared := clitest.Run(t, clitest.RunOptions{Dir: project.Dir, CacheDir: cache}, "store", "clear")
+	cleared := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: cache}, "store", "clear")
 	if cleared.ExitCode != 0 {
 		t.Fatalf("start failure retained provisioning ownership: %+v", cleared)
 	}

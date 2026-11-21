@@ -32,6 +32,7 @@ type OCIMap struct {
 // writeFinalStage renders, so the two cannot drift.
 func BuildOCIMap(plan Plan, opts RenderOptions) OCIMap {
 	m := OCIMap{
+		Layers:    nil,
 		Version:   1,
 		StoreRoot: path.Join(opts.StoreRoot, "store"),
 	}

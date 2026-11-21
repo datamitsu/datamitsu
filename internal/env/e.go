@@ -26,8 +26,9 @@ func getDefaultMaxWorkers() string {
 
 var (
 	cacheDir = envVar{
-		Name:        strings.ToUpper(ldflags.PackageName) + "_CACHE_DIR",
-		Description: "Custom cache directory path",
+		DefaultValue: "",
+		Name:         strings.ToUpper(ldflags.PackageName) + "_CACHE_DIR",
+		Description:  "Custom cache directory path",
 	}
 
 	logLevel = envVar{
@@ -108,8 +109,9 @@ var (
 	}
 
 	traceDir = envVar{
-		Name:        strings.ToUpper(ldflags.PackageName) + "_TRACE_DIR",
-		Description: "Directory for execution trace files (default {cache}/traces)",
+		DefaultValue: "",
+		Name:         strings.ToUpper(ldflags.PackageName) + "_TRACE_DIR",
+		Description:  "Directory for execution trace files (default {cache}/traces)",
 	}
 
 	concurrency = envVar{
@@ -279,13 +281,15 @@ var (
 	//
 	// They are deliberately excluded from Environ — see the note there.
 	sourceRoot = envVar{
-		Name:        strings.ToUpper(ldflags.PackageName) + "_ROOT",
-		Description: "Git root of the source-mode farm activated in this shell (set by `datamitsu source`)",
+		DefaultValue: "",
+		Name:         strings.ToUpper(ldflags.PackageName) + "_ROOT",
+		Description:  "Git root of the source-mode farm activated in this shell (set by `datamitsu source`)",
 	}
 
 	sourceFarm = envVar{
-		Name:        strings.ToUpper(ldflags.PackageName) + "_FARM",
-		Description: "Directory of the source-mode farm activated in this shell (set by `datamitsu source`)",
+		DefaultValue: "",
+		Name:         strings.ToUpper(ldflags.PackageName) + "_FARM",
+		Description:  "Directory of the source-mode farm activated in this shell (set by `datamitsu source`)",
 	}
 
 	// sourceFarmConfig is the explicit-config counterpart of sourceRoot. A farm
@@ -301,11 +305,13 @@ var (
 	// Excluded from Environ for the same reason as the other two — see the note
 	// there.
 	sourceFarmConfig = envVar{
-		Name:        strings.ToUpper(ldflags.PackageName) + "_FARM_CONFIG",
-		Description: "Config chain of the source-mode farm activated in this shell (set by `datamitsu source --config`)",
+		DefaultValue: "",
+		Name:         strings.ToUpper(ldflags.PackageName) + "_FARM_CONFIG",
+		Description:  "Config chain of the source-mode farm activated in this shell (set by `datamitsu source --config`)",
 	}
 	sourceQuiet = envVar{
-		Name:        strings.ToUpper(ldflags.PackageName) + "_SOURCE_QUIET",
-		Description: "Private source-mode session marker for automatic refresh output suppression",
+		DefaultValue: "",
+		Name:         strings.ToUpper(ldflags.PackageName) + "_SOURCE_QUIET",
+		Description:  "Private source-mode session marker for automatic refresh output suppression",
 	}
 )

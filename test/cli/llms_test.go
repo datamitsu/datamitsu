@@ -26,7 +26,7 @@ var pageCountRE = regexp.MustCompile(`all \d+ pages`)
 // every page under a link target that is the literal argument fetching it, so an
 // agent can pick its next call straight out of this text.
 func TestLlmsRootIndex(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "llms")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms")
 	if res.ExitCode != 0 {
 		t.Fatalf("`llms` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -48,7 +48,7 @@ func TestLlmsRootIndex(t *testing.T) {
 	if len(slugs) == 0 {
 		t.Fatal("index lists no pages")
 	}
-	listed := lines(t, clitest.Run(t, clitest.RunOptions{}, "llms", "--list").Stdout)
+	listed := lines(t, clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", "--list").Stdout)
 	if len(slugs) != len(listed) {
 		t.Errorf("index lists %d pages, --list reports %d", len(slugs), len(listed))
 	}
@@ -62,7 +62,7 @@ func TestLlmsRootIndex(t *testing.T) {
 // TestLlmsPage covers the core contract: a page goes to stdout, verbatim
 // markdown, with nothing on stderr, so the output can be piped into a model.
 func TestLlmsPage(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "llms", "about")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", "about")
 	if res.ExitCode != 0 {
 		t.Fatalf("`llms about` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -81,7 +81,7 @@ func TestLlmsPage(t *testing.T) {
 // forgiving about how an agent found a page name: a unique page may be named by
 // its last segment, and a section's own page answers to the section.
 func TestLlmsShorthandAndAlias(t *testing.T) {
-	full := clitest.Run(t, clitest.RunOptions{}, "llms", "contributing/brand-guidelines")
+	full := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", "contributing/brand-guidelines")
 	if full.ExitCode != 0 {
 		t.Fatalf("`llms contributing/brand-guidelines` exit = %d\nstderr:\n%s", full.ExitCode, full.Stderr)
 	}
@@ -93,7 +93,7 @@ func TestLlmsShorthandAndAlias(t *testing.T) {
 	}
 	for name, args := range cases {
 		t.Run(name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{}, args...)
+			res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, args...)
 			if res.ExitCode != 0 {
 				t.Fatalf("exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 			}
@@ -105,8 +105,8 @@ func TestLlmsShorthandAndAlias(t *testing.T) {
 
 	// A directory index is addressed by its directory, and by its pre-collapse
 	// spelling, and both return the same page.
-	canonical := clitest.Run(t, clitest.RunOptions{}, "llms", "contributing")
-	alias := clitest.Run(t, clitest.RunOptions{}, "llms", "contributing/index")
+	canonical := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", "contributing")
+	alias := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", "contributing/index")
 	if canonical.ExitCode != 0 || alias.ExitCode != 0 {
 		t.Fatalf("index page exits: canonical=%d alias=%d", canonical.ExitCode, alias.ExitCode)
 	}
@@ -128,7 +128,7 @@ func TestLlmsUnknownPageGolden(t *testing.T) {
 	//nolint:misspell // the misspelling is the input under test
 	const typo = "instalation"
 
-	res := clitest.Run(t, clitest.RunOptions{}, "llms", typo)
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", typo)
 	if res.ExitCode != 3 {
 		t.Errorf("`llms %s` exit = %d, want 3", typo, res.ExitCode)
 	}
@@ -153,7 +153,7 @@ func TestLlmsUsageErrorsGolden(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{}, tc.args...)
+			res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, tc.args...)
 			if res.ExitCode != 2 {
 				t.Errorf("`%s` exit = %d, want 2", strings.Join(tc.args, " "), res.ExitCode)
 			}
@@ -168,7 +168,7 @@ func TestLlmsUsageErrorsGolden(t *testing.T) {
 // TestLlmsListJSON checks the machine-readable page list an agent would use to
 // choose a page by title or description rather than by guessing a slug.
 func TestLlmsListJSON(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "llms", "--list", "--json")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", "--list", "--json")
 	if res.ExitCode != 0 {
 		t.Fatalf("`llms --list --json` exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -187,7 +187,7 @@ func TestLlmsListJSON(t *testing.T) {
 		t.Fatal("no pages in JSON output")
 	}
 
-	plain := lines(t, clitest.Run(t, clitest.RunOptions{}, "llms", "--list").Stdout)
+	plain := lines(t, clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", "--list").Stdout)
 	if len(pages) != len(plain) {
 		t.Errorf("--list --json has %d pages, --list has %d", len(pages), len(plain))
 	}
@@ -204,7 +204,7 @@ func TestLlmsListJSON(t *testing.T) {
 // TestLlmsPageJSON checks the single-page JSON form, which unlike the list does
 // carry the body.
 func TestLlmsPageJSON(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "llms", "about", "--json")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", "about", "--json")
 	if res.ExitCode != 0 {
 		t.Fatalf("`llms about --json` exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -227,7 +227,7 @@ func TestLlmsPageJSON(t *testing.T) {
 // TestLlmsProvenanceJSON checks the introspection surface that lets a caller
 // verify which documentation snapshot a binary carries.
 func TestLlmsProvenanceJSON(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "llms", "--json")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", "--json")
 	if res.ExitCode != 0 {
 		t.Fatalf("`llms --json` exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -255,7 +255,7 @@ func TestLlmsProvenanceJSON(t *testing.T) {
 	if len(prov.PageSetHash) != 32 {
 		t.Errorf("pageSetHash = %q, want a 32-char XXH3-128 hex digest", prov.PageSetHash)
 	}
-	if want := len(lines(t, clitest.Run(t, clitest.RunOptions{}, "llms", "--list").Stdout)); prov.PageCount != want {
+	if want := len(lines(t, clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", "--list").Stdout)); prov.PageCount != want {
 		t.Errorf("pageCount = %d, but --list printed %d slugs", prov.PageCount, want)
 	}
 }
@@ -263,7 +263,7 @@ func TestLlmsProvenanceJSON(t *testing.T) {
 // TestLlmsWeb checks the interoperable index: the same pages, but under their
 // real website URLs, for consumers that expect a standard llms.txt.
 func TestLlmsWeb(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "llms", "--web")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "llms", "--web")
 	if res.ExitCode != 0 {
 		t.Fatalf("`llms --web` exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -284,7 +284,7 @@ func TestLlmsWeb(t *testing.T) {
 func TestLlmsIsOffline(t *testing.T) {
 	p := clitest.NewProject(t)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "llms", "about")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "llms", "about")
 	if res.ExitCode != 0 {
 		t.Fatalf("`llms about` in an empty project exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}

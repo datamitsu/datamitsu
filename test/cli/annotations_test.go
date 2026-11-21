@@ -57,7 +57,7 @@ const injectedFinding = `[{"file":"Dockerfile","line":1,"column":1,"level":"erro
 // commandPrinter fails and prints a workflow command of its own. The command
 // names a file that does not exist, so the fallback parser does not read it as
 // a finding: the tool stays unparsed and its output prints as it is.
-var commandPrinter = clitest.ShellTool("beta", settle+clitest.RecordRun+`; echo '::error file=gone.txt,title=x::y'; exit 1`, clitest.ToolOpSpec{})
+var commandPrinter = clitest.ShellTool("beta", settle+clitest.RecordRun+`; echo '::error file=gone.txt,title=x::y'; exit 1`, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""})
 
 // annotatedProject is a repository with a parsed tool whose finding's message
 // tries to print a command, and an unparsed tool that prints one.
@@ -68,7 +68,7 @@ func annotatedProject(t *testing.T, operation string) *execProject {
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	hadolint := clitest.ShellTool("hadolint",
 		settle+clitest.RecordRun+`; printf '%s\n' '`+injectedFinding+`'; exit 1`,
-		clitest.ToolOpSpec{Operation: operation, Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint"})
+		clitest.ToolOpSpec{Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: operation, Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint"})
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, hadolint, commandPrinter))
 	return e
 }
@@ -221,7 +221,7 @@ func TestAnnotationsWhenNot(t *testing.T) {
 
 	t.Run("empty_plan", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Globs: []string{"**/*.none"}}))
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Globs: []string{"**/*.none"}}))
 		res := e.run("", githubEnv(summaryFile(t)), "lint")
 		e.wantExit(res, 0)
 		if strings.Contains(res.Stdout, "::") {
@@ -238,16 +238,16 @@ func TestAnnotationsUsage(t *testing.T) {
 		// jsonl marks a run whose report on stdout made stderr a JSON-L stream.
 		jsonl bool
 	}{
-		{name: "github_with_report_on_stdout", jsonl: true, args: []string{"lint", "--annotations", "github", "--report", "json=-"}},
+		{env: nil, name: "github_with_report_on_stdout", jsonl: true, args: []string{"lint", "--annotations", "github", "--report", "json=-"}},
 		{name: "github_env_with_report_on_stdout", jsonl: true, env: []string{"DATAMITSU_ANNOTATIONS=github"}, args: []string{"lint", "--report", "json=-"}},
-		{name: "github_with_explain_json", args: []string{"lint", "--annotations", "github", "--explain=json"}},
-		{name: "invalid_flag", args: []string{"lint", "--annotations", "gitlab"}},
-		{name: "invalid_env", env: []string{"DATAMITSU_ANNOTATIONS=on"}, args: []string{"lint", "--annotations", "off"}},
+		{env: nil, jsonl: false, name: "github_with_explain_json", args: []string{"lint", "--annotations", "github", "--explain=json"}},
+		{env: nil, jsonl: false, name: "invalid_flag", args: []string{"lint", "--annotations", "gitlab"}},
+		{jsonl: false, name: "invalid_env", env: []string{"DATAMITSU_ANNOTATIONS=on"}, args: []string{"lint", "--annotations", "off"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-				clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+				clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 			res := e.run("", tc.env, tc.args...)
 			e.wantExit(res, 2)
 			e.wantMarker("alpha", "")

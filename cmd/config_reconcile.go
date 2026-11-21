@@ -45,8 +45,39 @@ var (
 const optInIgnoreFilename = ".datamitsuignore"
 
 var configReconcileCmd = &cobra.Command{
-	Use:   "reconcile",
-	Short: "Reconcile managed configuration files",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "reconcile",
+	Short:                      "Reconcile managed configuration files",
 	Long: `Reconcile managedConfigs entries by creating, replacing, patching, linking,
 or removing project-owned files for the detected project types. The command
 writes those changes and then runs "datamitsu fix" by default. Use --dry-run to
@@ -477,6 +508,7 @@ func writeReconcileJSON(results []install.InstallResult, counts reconcileJSONCou
 			}
 		}
 		entry := reconcileJSONResult{
+			Error:  "",
 			Config: result.ConfigName,
 			Path:   relPath,
 			Action: action,
@@ -671,7 +703,7 @@ func deduplicateGitRootResults(results []install.InstallResult) []install.Instal
 	for i, r := range results {
 		g, exists := groups[r.FilePath]
 		if !exists {
-			g = &group{allGitRoot: true}
+			g = &group{indices: nil, allGitRoot: true}
 			groups[r.FilePath] = g
 			order = append(order, r.FilePath)
 		}

@@ -10,10 +10,15 @@ import (
 
 func testOCIMapPlan() Plan {
 	return Plan{
+		ParserStages:           nil,
+		Skipped:                nil,
+		LibcExcluded:           nil,
+		RegistrySourcedParsers: nil,
+		PreparedApps:           nil,
 		RuntimeStages: []RuntimeStage{
-			{Name: "go", Kind: config.RuntimeKindGo}, // build-only: excluded from the final image
-			{Name: "node", Kind: config.RuntimeKindNode},
-			{Name: "uv", Kind: config.RuntimeKindUV},
+			{PNPMRuntime: "", Name: "go", Kind: config.RuntimeKindGo}, // build-only: excluded from the final image
+			{PNPMRuntime: "", Name: "node", Kind: config.RuntimeKindNode},
+			{PNPMRuntime: "", Name: "uv", Kind: config.RuntimeKindUV},
 		},
 		RuntimeAppStages: []RuntimeAppStage{
 			{App: "cowsay", Kind: config.RuntimeKindUV, Runtime: "uv"},
@@ -81,12 +86,20 @@ func TestBuildOCIMapMirrorsRenderedCopyOrder(t *testing.T) {
 }
 
 func TestPythonExportSourcesDeduplicatesByRuntime(t *testing.T) {
-	plan := Plan{RuntimeAppStages: []RuntimeAppStage{
-		{App: "z-tool", Kind: config.RuntimeKindUV, Runtime: "z-uv"},
-		{App: "b-tool", Kind: config.RuntimeKindUV, Runtime: "a-uv"},
-		{App: "a-tool", Kind: config.RuntimeKindUV, Runtime: "z-uv"},
-		{App: "node-tool", Kind: config.RuntimeKindNode, Runtime: "node"},
-	}}
+	plan := Plan{
+		RuntimeStages:          nil,
+		BinaryStages:           nil,
+		ParserStages:           nil,
+		Skipped:                nil,
+		LibcExcluded:           nil,
+		RegistrySourcedParsers: nil,
+		PreparedApps:           nil, RuntimeAppStages: []RuntimeAppStage{
+			{App: "z-tool", Kind: config.RuntimeKindUV, Runtime: "z-uv"},
+			{App: "b-tool", Kind: config.RuntimeKindUV, Runtime: "a-uv"},
+			{App: "a-tool", Kind: config.RuntimeKindUV, Runtime: "z-uv"},
+			{App: "node-tool", Kind: config.RuntimeKindNode, Runtime: "node"},
+		},
+	}
 	sources := pythonExportSources(plan)
 	if len(sources) != 2 {
 		t.Fatalf("Python export sources = %+v, want one per UV runtime", sources)

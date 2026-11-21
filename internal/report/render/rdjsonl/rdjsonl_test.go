@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/textpos"
@@ -60,29 +61,81 @@ func sampleRun() *report.Run {
 	// "é" is two UTF-8 bytes: a column after it counts one more byte than
 	// characters.
 	accented := report.Finding{
-		Tool: "eslint", Source: "eslint", Code: "no-var", RuleURL: "https://eslint.org/docs/latest/rules/no-var", Severity: "error", Kind: "issue", Message: "Unexpected var",
-		Location: report.Location{Path: "src/a.ts", Row: 2, EndRow: 2, Chars: &textpos.Span{Start: 5, End: 8}, Bytes: &textpos.Span{Start: 6, End: 9}, Precision: "exact"},
+		Fingerprint:      "",
+		FingerprintBasis: "",
+		Reported:         false,
+		Gates:            false,
+		Shown:            false,
+		Baselined:        false,
+		Provenance:       "",
+		Tool:             "eslint", Source: "eslint", Code: "no-var", RuleURL: "https://eslint.org/docs/latest/rules/no-var", Severity: "error", Kind: "issue", Message: "Unexpected var",
+		Location: report.Location{Col: 0, EndCol: 0, Unit: "", Utf16: nil, Path: "src/a.ts", Row: 2, EndRow: 2, Chars: &textpos.Span{Start: 5, End: 8}, Bytes: &textpos.Span{Start: 6, End: 9}, Precision: "exact"},
 	}
 	imprecise := report.Finding{
-		Tool: "eslint", Source: "eslint", Severity: "hint", Kind: "issue", Message: "no rule",
-		Location: report.Location{Path: "src/a.ts", Row: 3, EndRow: 5, Col: 2, EndCol: 4, Precision: "unknown"},
+		Fingerprint:      "",
+		FingerprintBasis: "",
+		Code:             "",
+		RuleURL:          "",
+		Reported:         false,
+		Gates:            false,
+		Shown:            false,
+		Baselined:        false,
+		Provenance:       "",
+		Tool:             "eslint", Source: "eslint", Severity: "hint", Kind: "issue", Message: "no rule",
+		Location: report.Location{Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Path: "src/a.ts", Row: 3, EndRow: 5, Col: 2, EndCol: 4, Precision: "unknown"},
 	}
 	point := report.Finding{
-		Tool: "eslint", Source: "eslint", Code: "eqeqeq", Severity: "warning", Kind: "issue", Message: "use ===",
-		Location: report.Location{Path: "/elsewhere/b.ts", Row: 1, EndRow: 1, Chars: &textpos.Span{Start: 4, End: 4}, Bytes: &textpos.Span{Start: 4, End: 4}, Precision: "ascii"},
+		Fingerprint:      "",
+		FingerprintBasis: "",
+		RuleURL:          "",
+		Reported:         false,
+		Gates:            false,
+		Shown:            false,
+		Baselined:        false,
+		Provenance:       "",
+		Tool:             "eslint", Source: "eslint", Code: "eqeqeq", Severity: "warning", Kind: "issue", Message: "use ===",
+		Location: report.Location{Col: 0, EndCol: 0, Unit: "", Utf16: nil, Path: "/elsewhere/b.ts", Row: 1, EndRow: 1, Chars: &textpos.Span{Start: 4, End: 4}, Bytes: &textpos.Span{Start: 4, End: 4}, Precision: "ascii"},
 	}
 	synthetic := report.Finding{
-		Tool: "tsc", Source: "tsc", Severity: "error", Gates: true, Kind: "synthetic",
-		Message: "tsc exited 2 without parsable findings", Location: report.Location{Precision: "unknown"},
+		Fingerprint:      "",
+		FingerprintBasis: "",
+		Code:             "",
+		RuleURL:          "",
+		Reported:         false,
+		Shown:            false,
+		Baselined:        false,
+		Provenance:       "",
+		Tool:             "tsc", Source: "tsc", Severity: "error", Gates: true, Kind: "synthetic",
+		Message: "tsc exited 2 without parsable findings", Location: report.Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "unknown"},
 	}
 	return &report.Run{
-		Selection: report.Selection{Mode: "all"},
+		Schema:      "",
+		Fingerprint: "",
+		Datamitsu:   report.Producer{Version: "", Configuration: ""},
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		FailFast:    false,
+		Complete:    false,
+		Incomplete:  nil,
+		Exports:     nil,
+		CI:          report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		Selection:   report.Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"},
 		Operations: []report.Operation{
-			{Name: "fix", Ran: true, Tools: []report.ToolRun{{Name: "prettier", Invocations: []report.Invocation{{Findings: []report.Finding{accented}}}}}},
-			{Name: "lint", Ran: true, Tools: []report.ToolRun{
-				{Name: "eslint", Complete: true, App: report.AppRef{OfficialURL: "https://eslint.org"}, Invocations: []report.Invocation{{Findings: []report.Finding{imprecise, accented, point}}}},
-				{Name: "tsc", Incomplete: []report.Reason{"no-extraction"}, Invocations: []report.Invocation{{Findings: []report.Finding{synthetic}}}},
-			}},
+			{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "fix", Ran: true, Tools: []report.ToolRun{{App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Name: "prettier", Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", Findings: []report.Finding{accented}}}}}},
+			{
+				Success:         false,
+				Duration:        0,
+				Skipped:         nil,
+				Cancelled:       nil,
+				ChangesObserved: false,
+				ChangesReason:   "",
+				ChangesDetail:   "",
+				ChangesScope:    nil,
+				Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{
+					{Parser: nil, FailOn: "", GateActive: false, Category: "", Incomplete: nil, Name: "eslint", Complete: true, App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: "https://eslint.org"}, Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", Findings: []report.Finding{imprecise, accented, point}}}},
+					{App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Name: "tsc", Incomplete: []report.Reason{"no-extraction"}, Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", Findings: []report.Finding{synthetic}}}},
+				},
+			},
 		},
 	}
 }
@@ -111,8 +164,8 @@ func TestRender(t *testing.T) {
 	}
 	want := []Diagnostic{
 		{
-			Message: "use ===", Severity: "WARNING", Source: Source{Name: "eslint", URL: "https://eslint.org"}, Code: &Code{Value: "eqeqeq"},
-			Location: &Location{Path: "/elsewhere/b.ts", Range: &Range{Start: Position{Line: 1, Column: 4}}},
+			Message: "use ===", Severity: "WARNING", Source: Source{Name: "eslint", URL: "https://eslint.org"}, Code: &Code{URL: "", Value: "eqeqeq"},
+			Location: &Location{Path: "/elsewhere/b.ts", Range: &Range{End: nil, Start: Position{Line: 1, Column: 4}}},
 		},
 		{
 			Message: "Unexpected var", Severity: "ERROR", Source: Source{Name: "eslint", URL: "https://eslint.org"},
@@ -120,10 +173,11 @@ func TestRender(t *testing.T) {
 			Location: &Location{Path: "src/a.ts", Range: &Range{Start: Position{Line: 2, Column: 6}, End: &Position{Line: 2, Column: 9}}},
 		},
 		{
+			Code:    nil,
 			Message: "no rule", Severity: "INFO", Source: Source{Name: "eslint", URL: "https://eslint.org"},
-			Location: &Location{Path: "src/a.ts", Range: &Range{Start: Position{Line: 3}, End: &Position{Line: 5}}},
+			Location: &Location{Path: "src/a.ts", Range: &Range{Start: Position{Column: 0, Line: 3}, End: &Position{Column: 0, Line: 5}}},
 		},
-		{Message: "tsc exited 2 without parsable findings", Severity: "ERROR", Source: Source{Name: "tsc"}},
+		{Location: nil, Code: nil, Message: "tsc exited 2 without parsable findings", Severity: "ERROR", Source: Source{URL: "", Name: "tsc"}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		gotJSON, _ := json.MarshalIndent(got, "", " ")

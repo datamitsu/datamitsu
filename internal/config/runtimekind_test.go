@@ -58,35 +58,44 @@ func TestRuntimeKindHashFields(t *testing.T) {
 				kind: RuntimeKindBun,
 				// The pnpm runtime folds into the app hash, not the Bun
 				// runtime's, so a pnpm bump never re-downloads Bun.
-				rc: RuntimeConfig{Kind: RuntimeKindBun, Bun: &RuntimeConfigBun{
-					BunVersion:  "1.4.1",
-					PNPMRuntime: "pnpm",
-				}},
+				rc: RuntimeConfig{
+					Mode:    "",
+					Managed: nil,
+					System:  nil,
+					Node:    nil,
+					UV:      nil,
+					JVM:     nil,
+					Go:      nil,
+					PNPM:    nil, Kind: RuntimeKindBun, Bun: &RuntimeConfigBun{
+						BunVersion:  "1.4.1",
+						PNPMRuntime: "pnpm",
+					},
+				},
 				want: []string{"1.4.1"},
 			},
 			{
 				kind: RuntimeKindUV,
-				rc:   RuntimeConfig{Kind: RuntimeKindUV, UV: &RuntimeConfigUV{PythonVersion: "3.12"}},
+				rc:   RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindUV, UV: &RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.12"}},
 				want: []string{"3.12"},
 			},
 			{
 				kind: RuntimeKindNode,
-				rc:   RuntimeConfig{Kind: RuntimeKindNode, Node: &RuntimeConfigNode{NodeVersion: "22.0.0", PNPMRuntime: "pnpm"}},
+				rc:   RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindNode, Node: &RuntimeConfigNode{NodeVersion: "22.0.0", PNPMRuntime: "pnpm"}},
 				want: []string{"22.0.0"},
 			},
 			{
 				kind: RuntimeKindPNPM,
-				rc:   RuntimeConfig{Kind: RuntimeKindPNPM, PNPM: &RuntimeConfigPNPM{PNPMVersion: "12.4.1"}},
+				rc:   RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, Kind: RuntimeKindPNPM, PNPM: &RuntimeConfigPNPM{PNPMVersion: "12.4.1"}},
 				want: []string{"12.4.1"},
 			},
 			{
 				kind: RuntimeKindJVM,
-				rc:   RuntimeConfig{Kind: RuntimeKindJVM, JVM: &RuntimeConfigJVM{JavaVersion: "21"}},
+				rc:   RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, Go: nil, PNPM: nil, Kind: RuntimeKindJVM, JVM: &RuntimeConfigJVM{JavaVersion: "21"}},
 				want: []string{"21"},
 			},
 			{
 				kind: RuntimeKindGo,
-				rc:   RuntimeConfig{Kind: RuntimeKindGo, Go: &RuntimeConfigGo{GoVersion: "1.26.3"}},
+				rc:   RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, PNPM: nil, Kind: RuntimeKindGo, Go: &RuntimeConfigGo{GoVersion: "1.26.3"}},
 				want: []string{"1.26.3"},
 			},
 		}
@@ -104,14 +113,26 @@ func TestRuntimeKindHashFields(t *testing.T) {
 	t.Run("uv hashes complete catalogs in sorted key order", func(t *testing.T) {
 		entry := func(url string) PythonDownload {
 			return PythonDownload{
-				Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+				Prerelease: "",
+				Variant:    "",
+				Build:      "",
+				Name:       "cpython", Arch: PythonDownloadArch{Variant: "", Family: "x86_64"}, OS: "linux", LibC: "gnu",
 				Major: 3, Minor: 14, Patch: 6, URL: url, Hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			}
 		}
 		info, _ := LookupRuntimeKind(RuntimeKindUV)
-		rc := RuntimeConfig{Kind: RuntimeKindUV, UV: &RuntimeConfigUV{PythonVersion: "3.14.6", PythonDownloads: map[string]PythonDownload{
-			"z-key": entry("https://example.com/z"), "a-key": entry("https://example.com/a"),
-		}}}
+		rc := RuntimeConfig{
+			Mode:    "",
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil, Kind: RuntimeKindUV, UV: &RuntimeConfigUV{PythonVersion: "3.14.6", PythonDownloads: map[string]PythonDownload{
+				"z-key": entry("https://example.com/z"), "a-key": entry("https://example.com/a"),
+			}},
+		}
 		got := info.HashFields(rc)
 		want := []string{"3.14.6", "a-key", "cpython", "x86_64", "", "linux", "gnu", "3", "14", "6", "", "https://example.com/a", "", "", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "z-key", "cpython", "x86_64", "", "linux", "gnu", "3", "14", "6", "", "https://example.com/z", "", "", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 		if !slices.Equal(got, want) {
@@ -123,7 +144,7 @@ func TestRuntimeKindHashFields(t *testing.T) {
 		for _, kind := range AllRuntimeKinds() {
 			info, _ := LookupRuntimeKind(kind)
 			// An empty RuntimeConfig has no typed sub-config for any kind.
-			if got := info.HashFields(RuntimeConfig{Kind: kind}); got != nil {
+			if got := info.HashFields(RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: kind}); got != nil {
 				t.Errorf("kind %q HashFields with absent sub-config = %v, want nil", kind, got)
 			}
 		}
@@ -133,7 +154,7 @@ func TestRuntimeKindHashFields(t *testing.T) {
 func TestRuntimeKindValidate(t *testing.T) {
 	t.Run("uv allows an omitted optional Python version and catalog", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindUV)
-		if errs := info.Validate("rt", RuntimeConfig{Kind: RuntimeKindUV, UV: &RuntimeConfigUV{}}); len(errs) != 0 {
+		if errs := info.Validate("rt", RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindUV, UV: &RuntimeConfigUV{PythonVersion: "", PythonDownloads: nil}}); len(errs) != 0 {
 			t.Errorf("empty optional uv config errors = %v", errs)
 		}
 	})
@@ -141,13 +162,25 @@ func TestRuntimeKindValidate(t *testing.T) {
 	t.Run("validates pinned stable default-GIL catalog entries", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindUV)
 		entry := PythonDownload{
-			Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+			Prerelease: "",
+			Variant:    "",
+			Build:      "",
+			Name:       "cpython", Arch: PythonDownloadArch{Variant: "", Family: "x86_64"}, OS: "linux", LibC: "gnu",
 			Major: 3, Minor: 14, Patch: 6, URL: "https://example.com/python.tar.zst",
 			Hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		}
-		rc := RuntimeConfig{Kind: RuntimeKindUV, UV: &RuntimeConfigUV{
-			PythonVersion: "3.14.6", PythonDownloads: map[string]PythonDownload{"catalog-key": entry},
-		}}
+		rc := RuntimeConfig{
+			Mode:    "",
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil, Kind: RuntimeKindUV, UV: &RuntimeConfigUV{
+				PythonVersion: "3.14.6", PythonDownloads: map[string]PythonDownload{"catalog-key": entry},
+			},
+		}
 		if errs := info.Validate("uv-main", rc); len(errs) != 0 {
 			t.Fatalf("valid Python download rejected: %v", errs)
 		}
@@ -167,12 +200,24 @@ func TestRuntimeKindValidate(t *testing.T) {
 	t.Run("rejects version mismatch and noncanonical hash", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindUV)
 		entry := PythonDownload{
-			Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+			Prerelease: "",
+			Variant:    "",
+			Build:      "",
+			Name:       "cpython", Arch: PythonDownloadArch{Variant: "", Family: "x86_64"}, OS: "linux", LibC: "gnu",
 			Major: 3, Minor: 14, Patch: 5, URL: "https://example.com/python.tar.zst", Hash: strings.Repeat("a", 64),
 		}
-		rc := RuntimeConfig{Kind: RuntimeKindUV, UV: &RuntimeConfigUV{
-			PythonVersion: "3.14.6", PythonDownloads: map[string]PythonDownload{"catalog-key": entry},
-		}}
+		rc := RuntimeConfig{
+			Mode:    "",
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil, Kind: RuntimeKindUV, UV: &RuntimeConfigUV{
+				PythonVersion: "3.14.6", PythonDownloads: map[string]PythonDownload{"catalog-key": entry},
+			},
+		}
 		errs := strings.Join(info.Validate("uv-main", rc), "\n")
 		for _, want := range []string{"does not match uv.pythonVersion", "canonical SHA-256"} {
 			if !strings.Contains(errs, want) {
@@ -183,7 +228,7 @@ func TestRuntimeKindValidate(t *testing.T) {
 
 	t.Run("node missing config errors", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindNode)
-		errs := info.Validate("rt", RuntimeConfig{Kind: RuntimeKindNode})
+		errs := info.Validate("rt", RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindNode})
 		if len(errs) == 0 {
 			t.Fatal("expected node validation error when node config is nil")
 		}
@@ -194,7 +239,7 @@ func TestRuntimeKindValidate(t *testing.T) {
 
 	t.Run("bun missing config errors", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindBun)
-		errs := info.Validate("rt", RuntimeConfig{Kind: RuntimeKindBun})
+		errs := info.Validate("rt", RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindBun})
 		if len(errs) == 0 {
 			t.Fatal("expected Bun validation error when bun config is nil")
 		}
@@ -206,8 +251,16 @@ func TestRuntimeKindValidate(t *testing.T) {
 	t.Run("bun requires a pnpm runtime", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindBun)
 		errs := info.Validate("rt", RuntimeConfig{
-			Kind: RuntimeKindBun,
-			Bun:  &RuntimeConfigBun{BunVersion: "1.4.1"},
+			Mode:    "",
+			Managed: nil,
+			System:  nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindBun,
+			Bun:     &RuntimeConfigBun{PNPMRuntime: "", BunVersion: "1.4.1"},
 		})
 		if joined := strings.Join(errs, "\n"); !strings.Contains(joined, "bun.pnpmRuntime is required") {
 			t.Errorf("validation errors %q do not contain bun.pnpmRuntime is required", joined)
@@ -217,8 +270,16 @@ func TestRuntimeKindValidate(t *testing.T) {
 	t.Run("node requires a pnpm runtime", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindNode)
 		errs := info.Validate("rt", RuntimeConfig{
-			Kind: RuntimeKindNode,
-			Node: &RuntimeConfigNode{NodeVersion: "26.2.0"},
+			Mode:    "",
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindNode,
+			Node:    &RuntimeConfigNode{PNPMRuntime: "", NodeVersion: "26.2.0"},
 		})
 		if joined := strings.Join(errs, "\n"); !strings.Contains(joined, "node.pnpmRuntime is required") {
 			t.Errorf("validation errors %q do not contain node.pnpmRuntime is required", joined)
@@ -227,7 +288,7 @@ func TestRuntimeKindValidate(t *testing.T) {
 
 	t.Run("go system mode tolerates missing goVersion", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindGo)
-		errs := info.Validate("rt", RuntimeConfig{Kind: RuntimeKindGo, Mode: RuntimeModeSystem})
+		errs := info.Validate("rt", RuntimeConfig{Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindGo, Mode: RuntimeModeSystem})
 		if len(errs) != 0 {
 			t.Errorf("go system mode should not require goVersion, got: %v", errs)
 		}
@@ -235,7 +296,7 @@ func TestRuntimeKindValidate(t *testing.T) {
 
 	t.Run("go managed mode requires goVersion", func(t *testing.T) {
 		info, _ := LookupRuntimeKind(RuntimeKindGo)
-		errs := info.Validate("rt", RuntimeConfig{Kind: RuntimeKindGo, Mode: RuntimeModeManaged})
+		errs := info.Validate("rt", RuntimeConfig{Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindGo, Mode: RuntimeModeManaged})
 		if len(errs) == 0 {
 			t.Fatal("expected go validation error in managed mode without go config")
 		}

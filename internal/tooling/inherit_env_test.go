@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	zerovalue_atomic "sync/atomic"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
@@ -20,10 +21,31 @@ const probeVar = "TOOLENV_PROBE"
 
 func inheritingTask(root string, files ...string) Task {
 	return Task{
-		ToolName:  "probe",
-		Operation: config.OpLint,
+		perFileCache: "",
+		inherited:    toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "probe",
+		Operation:    config.OpLint,
 		OpConfig: config.ToolOperation{
-			App: "probe", Scope: config.ToolScopePerFile, Args: []string{"{file}"},
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "probe", Scope: config.ToolScopePerFile, Args: []string{"{file}"},
 			InheritEnv: []string{probeVar},
 		},
 		Files:       files,
@@ -35,7 +57,7 @@ func inheritingTask(root string, files ...string) Task {
 // a pass under one value must never answer for another.
 func TestInheritedValuesArePartOfTheIdentities(t *testing.T) {
 	root := t.TempDir()
-	e := &Executor{rootPath: root}
+	e := &Executor{dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, cache: nil, parser: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: zerovalue_atomic.Pointer[commandInfoMemo]{}, rootPath: root}
 	withValue := func(pairs ...string) Task {
 		task := inheritingTask(root)
 		task.inherited = toolenv.Capture(pairs, []string{probeVar})
@@ -95,13 +117,16 @@ func TestWarmPerFileCacheRerunsWhenAnInheritedValueChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	seen := filepath.Join(t.TempDir(), "seen")
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := NewExecutor(root, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"probe": shellApp(`printf '%s\n' "${` + probeVar + `-absent}" >> "$SEEN"`),
-	}}, c)
+	e := NewExecutor(root, false, false, &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"probe": shellApp(`printf '%s\n' "${` + probeVar + `-absent}" >> "$SEEN"`),
+		},
+	}, c)
 
 	run := func() {
 		t.Helper()

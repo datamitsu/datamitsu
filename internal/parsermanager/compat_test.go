@@ -30,7 +30,7 @@ func servedManager(t *testing.T, modules map[string][]byte) *Manager {
 		}))
 		t.Cleanup(srv.Close)
 		sum := digest.SHA256Of(wasm)
-		parsers[name] = config.Parser{URL: srv.URL, Hash: sum.Hex()}
+		parsers[name] = config.Parser{OCI: nil, URL: srv.URL, Hash: sum.Hex()}
 	}
 	m := New(parsers)
 	t.Cleanup(func() { _ = m.Close(context.Background()) })

@@ -9,6 +9,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 
 	"go.uber.org/zap"
 )
@@ -28,22 +29,45 @@ func TestExecuteTaskHitsTheVerdictCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{Tools: config.MapOfTools{}}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
 
 	// A command that would fail loudly if it ever ran.
-	appMgr := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"tsc": {Command: filepath.Join(root, "does-not-exist"), Args: nil},
-	}}
+	appMgr := &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"tsc": {Type: "", Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Command: filepath.Join(root, "does-not-exist"), Args: nil},
+		},
+	}
 	e := NewExecutor(root, false, false, appMgr, c)
 
 	task := Task{
-		ToolName:  "tsc",
-		Operation: config.OpLint,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Files:        nil,
+		UnitGuards:   nil,
+		ToolName:     "tsc",
+		Operation:    config.OpLint,
 		OpConfig: config.ToolOperation{
-			App: "tsc", Args: []string{"--noEmit"},
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "tsc", Args: []string{"--noEmit"},
 			Scope: config.ToolScopePerProject,
 		},
 		ProjectPath: unitDir,
@@ -93,11 +117,11 @@ func mustInputs(e *Executor, task Task) string {
 // every content hash unchanged and the whole task was skipped with a tick.
 func TestFilterFilesByCacheSkipsNonFileGranularity(t *testing.T) {
 	root := t.TempDir()
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{Tools: config.MapOfTools{}}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
-	e := NewExecutor(root, false, false, &mockAppManager{}, c)
+	e := NewExecutor(root, false, false, &mockAppManager{binaries: nil, err: nil, commands: nil}, c)
 
 	files := []string{filepath.Join(root, "a.ts"), filepath.Join(root, "b.ts")}
 	for _, f := range files {
@@ -107,10 +131,33 @@ func TestFilterFilesByCacheSkipsNonFileGranularity(t *testing.T) {
 	}
 
 	unit := Task{
-		ToolName:  "tsc",
-		Operation: config.OpLint,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "tsc",
+		Operation:    config.OpLint,
 		OpConfig: config.ToolOperation{
-			App: "tsc", Args: []string{"--noEmit"},
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "tsc", Args: []string{"--noEmit"},
 			Scope: config.ToolScopePerProject,
 		},
 		Files: files,
@@ -129,7 +176,21 @@ func TestFilterFilesByCacheSkipsNonFileGranularity(t *testing.T) {
 
 	perFile := unit
 	perFile.OpConfig = config.ToolOperation{
-		App: "prettier", Args: []string{"--write", "{file}"},
+		Arity:             "",
+		Granularity:       "",
+		Globs:             nil,
+		ExcludeGlobs:      nil,
+		Priority:          0,
+		Cache:             nil,
+		InvalidateOn:      nil,
+		Env:               nil,
+		InheritEnv:        nil,
+		FailOn:            "",
+		Input:             "",
+		LSP:               nil,
+		Output:            "",
+		ManagedConfigRefs: nil,
+		App:               "prettier", Args: []string{"--write", "{file}"},
 		Scope: config.ToolScopePerFile,
 	}
 	perFile.ToolName = "tsc"

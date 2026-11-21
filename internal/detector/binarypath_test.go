@@ -208,7 +208,7 @@ func TestDerivePath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := derivePath(historicalEntry{asset: tt.oldAsset, path: tt.oldPath}, tt.newFilename)
+			got := derivePath(historicalEntry{arch: "", libc: "", asset: tt.oldAsset, path: tt.oldPath}, tt.newFilename)
 			if got != tt.want {
 				t.Errorf("derivePath = %q, want %q", got, tt.want)
 			}
@@ -307,6 +307,10 @@ func TestDetectBinaryPathWithHistory(t *testing.T) {
 		syslist.OsTypeLinux: {
 			syslist.ArchTypeAmd64: {
 				"glibc": binmanager.BinaryOsArchInfo{
+					Auth:        nil,
+					URL:         "",
+					Hash:        "",
+					ExtractDir:  false,
 					ContentType: binmanager.BinContentTypeTarGz,
 					BinaryPath:  new("mytool-1.0.0/bin/mytool"),
 				},
@@ -354,7 +358,7 @@ func TestHistoricalBinaryPath(t *testing.T) {
 		history := binmanager.MapOfBinaries{
 			syslist.OsTypeLinux: {
 				syslist.ArchTypeAmd64: {
-					"glibc": binmanager.BinaryOsArchInfo{ContentType: binmanager.BinContentTypeBinary, BinaryPath: nil},
+					"glibc": binmanager.BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ExtractDir: false, ContentType: binmanager.BinContentTypeBinary, BinaryPath: nil},
 				},
 			},
 		}
@@ -367,7 +371,7 @@ func TestHistoricalBinaryPath(t *testing.T) {
 		history := binmanager.MapOfBinaries{
 			syslist.OsTypeDarwin: {
 				syslist.ArchTypeAmd64: {
-					"": binmanager.BinaryOsArchInfo{ContentType: binmanager.BinContentTypeTarGz, BinaryPath: new("app-1.0.0/app")},
+					"": binmanager.BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ExtractDir: false, ContentType: binmanager.BinContentTypeTarGz, BinaryPath: new("app-1.0.0/app")},
 				},
 			},
 		}
@@ -380,7 +384,7 @@ func TestHistoricalBinaryPath(t *testing.T) {
 		history := binmanager.MapOfBinaries{
 			syslist.OsTypeLinux: {
 				syslist.ArchTypeArm64: {
-					"glibc": binmanager.BinaryOsArchInfo{ContentType: binmanager.BinContentTypeTarGz, BinaryPath: new("app-1.0.0-arm64/app")},
+					"glibc": binmanager.BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ExtractDir: false, ContentType: binmanager.BinContentTypeTarGz, BinaryPath: new("app-1.0.0-arm64/app")},
 				},
 			},
 		}
@@ -397,6 +401,9 @@ func TestHistoricalBinaryPath(t *testing.T) {
 func TestDetectBinaryPathWithHistory_EachArchKeepsItsDirectory(t *testing.T) {
 	entry := func(stem string) binmanager.BinaryOsArchInfo {
 		return binmanager.BinaryOsArchInfo{
+			Auth:        nil,
+			Hash:        "",
+			ExtractDir:  false,
 			URL:         "https://example.test/releases/download/v1.5.0/" + stem + ".tar.gz",
 			ContentType: binmanager.BinContentTypeTarGz,
 			BinaryPath:  new(stem + "/tombi"),
@@ -450,11 +457,17 @@ func TestDetectBinaryPathWithHistory_ContradictingLayoutIsSkipped(t *testing.T) 
 	history := binmanager.MapOfBinaries{
 		syslist.OsTypeDarwin: {
 			syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{
+				Auth:        nil,
+				Hash:        "",
+				ExtractDir:  false,
 				URL:         "https://example.test/v1.5.5/tombi-cli-1.5.5-x86_64-apple-darwin.tar.gz",
 				ContentType: binmanager.BinContentTypeTarGz,
 				BinaryPath:  new("tombi-cli-1.5.5-aarch64-apple-darwin/tombi"),
 			}},
 			syslist.ArchTypeArm64: {"unknown": binmanager.BinaryOsArchInfo{
+				Auth:        nil,
+				Hash:        "",
+				ExtractDir:  false,
 				URL:         "https://example.test/v1.5.5/tombi-cli-1.5.5-aarch64-apple-darwin.tar.gz",
 				ContentType: binmanager.BinContentTypeTarGz,
 				BinaryPath:  new("tombi-cli-1.5.5-aarch64-apple-darwin/tombi"),
@@ -475,6 +488,9 @@ func TestDetectBinaryPathWithHistory_VersionDigitsAreNotAnArch(t *testing.T) {
 	history := binmanager.MapOfBinaries{
 		syslist.OsTypeLinux: {
 			syslist.ArchTypeAmd64: {"glibc": binmanager.BinaryOsArchInfo{
+				Auth:        nil,
+				Hash:        "",
+				ExtractDir:  false,
 				URL:         "https://example.test/v1.385.0/tool-1.385.0-linux-amd64.tar.gz",
 				ContentType: binmanager.BinContentTypeTarGz,
 				BinaryPath:  new("tool-1.385.0/bin/tool-cli"),
@@ -495,6 +511,9 @@ func TestDetectBinaryPathWithHistory_OtherLibcLendsNeutralLayout(t *testing.T) {
 	history := binmanager.MapOfBinaries{
 		syslist.OsTypeLinux: {
 			syslist.ArchTypeAmd64: {"glibc": binmanager.BinaryOsArchInfo{
+				Auth:        nil,
+				Hash:        "",
+				ExtractDir:  false,
 				URL:         "https://example.test/v1.0.0/app-1.0.0-linux-x86_64.tar.gz",
 				ContentType: binmanager.BinContentTypeTarGz,
 				BinaryPath:  new("app-1.0.0-linux-x86_64/bin/app"),
@@ -516,6 +535,9 @@ func TestDetectBinaryPathWithHistory_OtherLibcLendsNeutralLayout(t *testing.T) {
 func TestDetectBinaryPathWithHistory_UnversionedAssetKeepsPath(t *testing.T) {
 	entry := func(asset string) binmanager.BinaryOsArchInfo {
 		return binmanager.BinaryOsArchInfo{
+			Auth:        nil,
+			Hash:        "",
+			ExtractDir:  false,
 			URL:         "https://example.test/releases/download/v1.72.0/" + asset,
 			ContentType: binmanager.BinContentTypeTarGz,
 			BinaryPath:  new("buf/bin/buf"),
@@ -552,6 +574,9 @@ func TestDetectBinaryPathWithHistory_UnversionedAssetKeepsPath(t *testing.T) {
 func TestDetectBinaryPathWithHistory_SameAssetNameWins(t *testing.T) {
 	entry := func(arch string) binmanager.BinaryOsArchInfo {
 		return binmanager.BinaryOsArchInfo{
+			Auth:        nil,
+			Hash:        "",
+			ExtractDir:  false,
 			URL:         "https://example.test/v4.1.0/yq_linux_" + arch + ".tar.gz",
 			ContentType: binmanager.BinContentTypeTarGz,
 			BinaryPath:  new("./yq_linux_" + arch),

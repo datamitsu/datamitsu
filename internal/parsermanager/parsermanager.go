@@ -121,15 +121,15 @@ type ParserFacts struct {
 func (m *Manager) DescribedParser(module, parser string) (ParserFacts, bool) {
 	key, ok := m.instanceKey(module)
 	if !ok {
-		return ParserFacts{}, false
+		return ParserFacts{Version: "", Schema: 0, Contract: false, Tool: ToolCapability{Name: "", Description: "", URL: "", Operations: nil, Severities: nil, ColumnUnit: "", Category: "", Kind: ""}}, false
 	}
 	m.mu.Lock()
 	facts, described := m.described[key]
 	m.mu.Unlock()
 	if !described {
-		return ParserFacts{}, false
+		return ParserFacts{Version: "", Schema: 0, Contract: false, Tool: ToolCapability{Name: "", Description: "", URL: "", Operations: nil, Severities: nil, ColumnUnit: "", Category: "", Kind: ""}}, false
 	}
-	out := ParserFacts{Version: facts.caps.Version, Schema: facts.caps.SchemaVersion, Contract: facts.contract}
+	out := ParserFacts{Tool: ToolCapability{Name: "", Description: "", URL: "", Operations: nil, Severities: nil, ColumnUnit: "", Category: "", Kind: ""}, Version: facts.caps.Version, Schema: facts.caps.SchemaVersion, Contract: facts.contract}
 	for _, t := range facts.caps.Tools {
 		if t.Name == parser {
 			out.Tool = t
@@ -168,10 +168,16 @@ var errClosed = errors.New("parser manager is closed")
 // (yields not-found for every name).
 func New(parsers config.MapOfParsers) *Manager {
 	return &Manager{
-		parsers:   parsers,
-		compiled:  map[string]wazero.CompiledModule{},
-		idle:      map[string][]*ParserRuntime{},
-		described: map[string]moduleFacts{},
+		downloadGroup: singleflight.Group{},
+		mu:            sync.Mutex{},
+		runtime:       nil,
+		compileGroup:  singleflight.Group{},
+		closed:        false,
+		describeGroup: singleflight.Group{},
+		parsers:       parsers,
+		compiled:      map[string]wazero.CompiledModule{},
+		idle:          map[string][]*ParserRuntime{},
+		described:     map[string]moduleFacts{},
 	}
 }
 
@@ -543,7 +549,7 @@ func (m *Manager) source(module string) (moduleSource, bool) {
 	}
 	p, ok := m.parsers[module]
 	if !ok {
-		return moduleSource{}, false
+		return moduleSource{key: "", load: nil}, false
 	}
 	return moduleSource{
 		key:  cacheKey(p),

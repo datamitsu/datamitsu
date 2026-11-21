@@ -17,12 +17,12 @@ func TestSlugFromURL(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{name: "root page", url: "https://datamitsu.com/docs/about.md", want: "about"},
-		{name: "nested page", url: "https://datamitsu.com/docs/guides/architecture/caching.md", want: "guides/architecture/caching"},
-		{name: "directory index", url: "https://datamitsu.com/docs/contributing/index.md", want: "contributing/index"},
-		{name: "innermost docs segment wins", url: "https://example.com/docs/site/docs/about.md", want: "about"},
-		{name: "no docs segment", url: "https://datamitsu.com/blog/hello.md", wantErr: true},
-		{name: "nothing after the marker", url: "https://datamitsu.com/docs/", wantErr: true},
+		{wantErr: false, name: "root page", url: "https://datamitsu.com/docs/about.md", want: "about"},
+		{wantErr: false, name: "nested page", url: "https://datamitsu.com/docs/guides/architecture/caching.md", want: "guides/architecture/caching"},
+		{wantErr: false, name: "directory index", url: "https://datamitsu.com/docs/contributing/index.md", want: "contributing/index"},
+		{wantErr: false, name: "innermost docs segment wins", url: "https://example.com/docs/site/docs/about.md", want: "about"},
+		{want: "", name: "no docs segment", url: "https://datamitsu.com/blog/hello.md", wantErr: true},
+		{want: "", name: "nothing after the marker", url: "https://datamitsu.com/docs/", wantErr: true},
 	}
 
 	for _, tc := range cases {

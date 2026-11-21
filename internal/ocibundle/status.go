@@ -61,9 +61,14 @@ func BundleStatus(ctx context.Context, cfg *config.Config) (*Status, error) {
 	storeRoot := env.GetStorePath()
 
 	status := &Status{
-		Ref:    ref.Ref,
-		Digest: ref.Digest,
-		Signed: ref.Signer != nil,
+		Platforms: nil,
+		Selected:  "",
+		StoreRoot: "",
+		Layers:    nil,
+		Apps:      nil,
+		Ref:       ref.Ref,
+		Digest:    ref.Digest,
+		Signed:    ref.Signer != nil,
 		// Same question the seeder asks, so `store status` and a re-run of
 		// `store seed` can never disagree about whether this bundle is seeded.
 		Seeded: markerSatisfied(storeRoot, ref.Digest),

@@ -366,6 +366,7 @@ func writeSnapshot(outDir, license, siteTitle, siteTagline string, pages []harve
 	}
 
 	manifest := llmsmanifest.Manifest{
+		PageSetHash:   "",
 		SchemaVersion: llmsmanifest.SchemaVersion,
 		Generator:     llmsmanifest.Generator,
 		License:       license,

@@ -19,9 +19,12 @@ func runOCIConfigSource(t *testing.T, input *config.Config, name, js string) *co
 	t.Helper()
 	content := "function getMinVersion() { return \"0.0.0\"; }\n" + js
 	result, _, err := processConfigSource(context.Background(), input, configSource{
-		name:    name,
-		content: content,
-	}, make(map[string]bool), make(map[string]bool), loadConfigOptions{}, nil, "")
+		path:      "",
+		isDefault: false,
+		isRemote:  false,
+		name:      name,
+		content:   content,
+	}, make(map[string]bool), make(map[string]bool), loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false}, nil, "")
 	if err != nil {
 		t.Fatalf("processConfigSource(%s) error: %v", name, err)
 	}

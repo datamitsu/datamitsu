@@ -18,11 +18,11 @@ import (
 
 func TestAppDependencyClosure(t *testing.T) {
 	apps := MapOfApps{
-		"a": {DependsOn: edges("c", "b")},
-		"b": {DependsOn: edges("d")},
-		"c": {DependsOn: edges("d")},
-		"d": {},
-		"e": {},
+		"a": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, DependsOn: edges("c", "b")},
+		"b": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, DependsOn: edges("d")},
+		"c": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, DependsOn: edges("d")},
+		"d": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil},
+		"e": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil},
 	}
 	for _, tt := range []struct {
 		name        string
@@ -65,23 +65,26 @@ func TestDependencyProvisioning(t *testing.T) {
 			root.Required = true
 			root.DependsOn = edges("left", "right")
 			apps["root"] = root
-			apps["left"] = App{Uv: &AppConfigUV{}, DependsOn: edges("leaf"), Lazy: true}
-			apps["right"] = App{Node: &AppConfigNode{}, DependsOn: edges("leaf")}
-			apps["leaf"] = App{Bun: &AppConfigBun{}, Lazy: true}
-			apps["shell"] = App{Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges("root")}
+			apps["left"] = App{Required: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &AppConfigUV{PackageName: "", Version: "", Runtime: "", LockFile: "", RequiresPython: ""}, DependsOn: edges("leaf"), Lazy: true}
+			apps["right"] = App{Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &AppConfigNode{PackageName: "", Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil}, DependsOn: edges("leaf")}
+			apps["leaf"] = App{Required: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &AppConfigBun{PackageName: "", Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil}, Lazy: true}
+			apps["shell"] = App{Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &AppConfigShell{Args: nil, Name: "echo"}, DependsOn: edges("root")}
 			dir := t.TempDir()
 			var mu sync.Mutex
 			calls := map[string]int{}
-			mock := &mockRuntimeAppManager{getCommandInfoFunc: func(_ context.Context, name string, _ App) (*CommandInfo, error) {
-				mu.Lock()
-				defer mu.Unlock()
-				calls[name]++
-				path := filepath.Join(dir, name)
-				if err := os.WriteFile(path, []byte("installed"), 0o600); err != nil {
-					return nil, err
-				}
-				return &CommandInfo{Command: path}, nil
-			}}
+			mock := &mockRuntimeAppManager{
+				resolveCommandInfoFunc: nil,
+				computeAppPathFunc:     nil, getCommandInfoFunc: func(_ context.Context, name string, _ App) (*CommandInfo, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					calls[name]++
+					path := filepath.Join(dir, name)
+					if err := os.WriteFile(path, []byte("installed"), 0o600); err != nil {
+						return nil, err
+					}
+					return &CommandInfo{Type: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Command: path}, nil
+				},
+			}
 			bm := New(apps, nil, mock)
 			path, err := bm.getBinaryPath("root")
 			if err != nil {
@@ -132,12 +135,12 @@ func TestDependencyFailurePreventsCommandResolution(t *testing.T) {
 		apps    MapOfApps
 		wantErr string
 	}{
-		{"missing", MapOfApps{"root": {Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges("missing")}}, "missing"},
-		{"cycle", MapOfApps{"root": {DependsOn: edges("dep")}, "dep": {DependsOn: edges("root")}}, "root -> dep -> root"},
-		{"install error", MapOfApps{"root": {Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges("dep")}, "dep": {Uv: &AppConfigUV{}}}, "install failed"},
+		{"missing", MapOfApps{"root": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &AppConfigShell{Args: nil, Name: "echo"}, DependsOn: edges("missing")}}, "missing"},
+		{"cycle", MapOfApps{"root": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, DependsOn: edges("dep")}, "dep": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, DependsOn: edges("root")}}, "root -> dep -> root"},
+		{"install error", MapOfApps{"root": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &AppConfigShell{Args: nil, Name: "echo"}, DependsOn: edges("dep")}, "dep": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &AppConfigUV{PackageName: "", Version: "", Runtime: "", LockFile: "", RequiresPython: ""}}}, "install failed"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			bm := New(tt.apps, nil, &mockRuntimeAppManager{getCommandInfoFunc: func(context.Context, string, App) (*CommandInfo, error) { return nil, errors.New("install failed") }})
+			bm := New(tt.apps, nil, &mockRuntimeAppManager{resolveCommandInfoFunc: nil, computeAppPathFunc: nil, getCommandInfoFunc: func(context.Context, string, App) (*CommandInfo, error) { return nil, errors.New("install failed") }})
 			if _, err := bm.GetCommandInfo(t.Context(), "root"); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("error = %v, want %q", err, tt.wantErr)
 			}
@@ -150,7 +153,7 @@ func TestConcurrentAppDependencyInstalls(t *testing.T) {
 	t.Setenv("DATAMITSU_OFFLINE", "")
 	payload := []byte("#!/bin/sh\necho fixture\n")
 	previousClient := httpClient
-	httpClient = &http.Client{Transport: dependencyTransport{payload: payload}}
+	httpClient = &http.Client{CheckRedirect: nil, Jar: nil, Timeout: 0, Transport: dependencyTransport{payload: payload}}
 	t.Cleanup(func() { httpClient = previousClient })
 	sum := digest.SHA256Of(payload)
 	apps := MapOfApps{}
@@ -217,7 +220,7 @@ func TestConcurrentAppDependencyInstalls(t *testing.T) {
 type dependencyTransport struct{ payload []byte }
 
 func (d dependencyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(d.payload)), ContentLength: int64(len(d.payload)), Header: make(http.Header), Request: req}, nil
+	return &http.Response{Status: "", Proto: "", ProtoMajor: 0, ProtoMinor: 0, TransferEncoding: nil, Close: false, Uncompressed: false, Trailer: nil, TLS: nil, StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(d.payload)), ContentLength: int64(len(d.payload)), Header: make(http.Header), Request: req}, nil
 }
 
 // edges builds a dependsOn edge list from plain names, mirroring the

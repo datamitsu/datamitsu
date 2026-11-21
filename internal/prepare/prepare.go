@@ -283,7 +283,7 @@ func (l *layout) runStep(ctx context.Context, req Request) error {
 	}
 	defer func() { _ = devNull.Close() }()
 	cmd.Stdout = devNull
-	diagnostics := &diagnosticTail{}
+	diagnostics := &diagnosticTail{data: nil}
 	cmd.Stderr = diagnostics
 	if req.Stderr != nil {
 		cmd.Stderr = io.MultiWriter(diagnostics, req.Stderr)

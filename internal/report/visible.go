@@ -67,5 +67,5 @@ func Synthetic(inv Invocation) (Finding, bool) {
 			return f, true
 		}
 	}
-	return Finding{}, false
+	return Finding{Fingerprint: "", FingerprintBasis: "", Tool: "", Source: "", Code: "", RuleURL: "", Severity: "", Reported: false, Gates: false, Shown: false, Baselined: false, Kind: "", Message: "", Location: Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: ""}, Provenance: "", lineHash: ""}, false
 }

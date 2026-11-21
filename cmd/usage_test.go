@@ -20,7 +20,7 @@ func exitCodeOf(err error) int {
 // code; an accepted one passes through untouched.
 func TestUsageArgs(t *testing.T) {
 	check := usageArgs(cobra.ExactArgs(1))
-	cmd := &cobra.Command{Use: "x"}
+	cmd := &cobra.Command{Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0, Use: "x"}
 
 	err := check(cmd, nil)
 	if err == nil || exitCodeOf(err) != exitcode.Usage {
@@ -49,7 +49,7 @@ func TestFlagErrorsAreUsageErrors(t *testing.T) {
 // the usage code; cobra would return both without one.
 func TestValidateFlagConstraints(t *testing.T) {
 	newCmd := func() *cobra.Command {
-		c := &cobra.Command{Use: "x"}
+		c := &cobra.Command{Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0, Use: "x"}
 		c.Flags().String("output", "", "")
 		c.Flags().Int("port", 0, "")
 		c.Flags().Bool("print", false, "")
@@ -87,7 +87,7 @@ func TestValidateFlagConstraints(t *testing.T) {
 func TestApplyFailFastInvalidEnvIsAUsageError(t *testing.T) {
 	t.Setenv("DATAMITSU_FAIL_FAST", "maybe")
 	var value bool
-	c := &cobra.Command{Use: "x"}
+	c := &cobra.Command{Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0, Use: "x"}
 	addFailFastFlag(c, &value)
 	if err := applyFailFast(c, value, nil); exitCodeOf(err) != exitcode.Usage {
 		t.Errorf("applyFailFast() = %v, want a usage error", err)
