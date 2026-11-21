@@ -587,6 +587,8 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// any explicit skips — recording unsupported-platform ones for --fail-on-skip
 	// — instead of leaving them invisible.
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
+		sc.recordSkips(plan.Skipped)
+		sc.recordCoverage(plan)
 		if coreHere {
 			runOpID := uievent.NextOpID("run")
 			ui.Emit(uievent.Event{Type: uievent.TypePhase, OpID: runOpID, Status: uievent.StatusStart, Op: string(operation)})
@@ -641,8 +643,6 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		}
 		if len(plan.Skipped) > 0 {
 			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth, sc.footerNote(operation))
-			sc.recordSkips(plan.Skipped)
-			sc.recordCoverage(plan)
 		} else if !ui.Muted() {
 			msg := "ℹ️  No applicable tools found"
 			if len(projectTypes) == 0 {

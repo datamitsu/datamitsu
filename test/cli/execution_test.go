@@ -1323,6 +1323,17 @@ func TestExecutionFailOnSkip(t *testing.T) {
 		e.golden("s10_lint_fail_on_skip", res, maskHost)
 	})
 
+	t.Run("core advisory with only platform skips", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": "", ".datamitsuignore": "*.go:native\n"}, spec)
+		for _, flag := range []string{"--fail-on-skip", "--require-coverage=repo"} {
+			res := e.run("", nil, "lint", flag)
+			e.wantExit(res, 4)
+			if !strings.Contains(res.Stdout, "[datamitsuignore-format]") || !strings.Contains(res.Stdout, "⊘ native") || !strings.Contains(res.Stderr, flag+":") {
+				t.Errorf("%s: expected advisory, platform skip and coverage error:\n%s\n%s", flag, res.Stdout, res.Stderr)
+			}
+		}
+	})
+
 	t.Run("tool_failure_wins", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec,
 			clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{}))
