@@ -36,7 +36,7 @@
   "devDependencies": {
     "@shibanet0/datamitsu-config": "catalog:",
     "@types/node": "26.6.6",
-    "tsdown": "0.23.4"
+    "tsdown": "0.23.7"
   },
   "packageManager": "pnpm@12.17.0",
   "engines": {
