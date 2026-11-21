@@ -149,6 +149,7 @@ interface AppCommon {
   required?: boolean; // Whether the app is required for init
   lazy?: boolean; // Defer installation and link creation until first exec
   dependsOn?: AppDependency[]; // Apps that must be available when this app runs
+  caches?: string[]; // Managed apps only: named isolated execution cache slots
   officialUrl?: string; // Where a person reads about this app (never fetched)
   files?: Record<string, string>; // Bun/UV/Node/Go only: filename → static content
   links?: Record<string, string>; // Bun/UV/Node/Go only: linkName → relativePath
@@ -364,6 +365,25 @@ Bindings remain symbolic in the evaluated-config cache. Resolution computes
 paths without downloading, installing, or spawning a process; an unresolved
 binary or an unsupported platform is an error. `${APP_DIR}` keeps its existing
 best-effort behavior when an app has no managed install directory.
+
+Managed apps declare named isolated cache slots with `caches`. The default slot
+is implicit and selected by `{toolCache}`; `{toolCache:name}` selects a named
+slot. For example:
+
+```javascript
+caches: ["providers"],
+runtimeEnv: { CACHE_DIR: "{toolCache:providers}" },
+```
+
+Slots are siblings beneath the existing checkout/app/install-identity cache
+parent. Names match `[a-z_]{1,255}`. Windows device names and `default` are
+reserved; duplicate declarations and unknown references are errors. Named slots are created before
+execution, including through source-mode shims; default is created only when
+referenced. Read-only resolution does not create slots. Cache declarations are
+execution-only and do not affect install identity. Normal `cache clear` still
+removes the parent recursively without changing the store. Shell apps cannot
+declare app cache slots. This is not a sandbox for app writes or arbitrary
+`initCommands`.
 
 Empty or unterminated `${APP_BIN:...}` bindings and unknown colon forms such as
 `${FOO:bar}` are validation errors in `runtimeEnv` values. `${APP_BIN` in app

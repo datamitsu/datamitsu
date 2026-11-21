@@ -306,6 +306,18 @@ DATAMITSU_INSTALL_TIMEOUT=1200 datamitsu config runtime | jq .installTimeoutSeco
 - `PATH` is rejected in app `env` and `runtimeEnv` in any case: values are not
   expanded against the inherited environment, so it would replace `PATH`
   wholesale. Only runtime-owned keys win over app env; inherited ones do not.
+- In app `runtimeEnv`, `{toolCache}` selects the implicit `default` slot and
+  `{toolCache:name}` selects a declared name in `caches`. They are siblings under
+  the existing checkout/app/install-identity parent; `default` cannot be declared.
+  Names are unique lowercase ASCII identifiers with Windows device names excluded.
+  Malformed or unknown references fail both config loading and runtime resolution.
+  Create declared named slots before app execution, including source shims; create
+  default only when referenced. Read-only resolution creates nothing. Reject slot
+  symlinks (including aliases to another slot) and non-directories with `os.Root`.
+  These execution-only settings do not affect install or prepared identity; normal
+  `cache clear` still recursively removes the existing parent. This is not a sandbox
+  for applications or arbitrary `initCommands`. Tool-operation `{toolCache}` keeps
+  its separate per-tool scope.
 
 - Docker app slices carry the dependency closure and all referenced runtimes
   (including pnpm). Each stage installs its closure; the final image copies each

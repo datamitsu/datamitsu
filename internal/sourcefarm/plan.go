@@ -153,6 +153,10 @@ type Entry struct {
 	// the artifact.
 	Artifact string `json:"artifact,omitempty"`
 
+	// ToolCacheDir is the parent of the selected cache slots.
+	ToolCacheDir   string   `json:"toolCacheDir,omitempty"`
+	ToolCacheSlots []string `json:"toolCacheSlots,omitempty"`
+
 	// RequiredPaths are the other files that must exist for the app to run as
 	// pinned — a uv app's venv interpreter, a Bun/Node app's installed package
 	// and managed runtime binary, a managed JVM's java. They come from the resolver,
@@ -291,6 +295,8 @@ func BuildPlan(root, farmDir string, apps binmanager.MapOfApps, resolve Resolver
 			if info, installed, err := resolve.ResolveCommandInfo(name); err == nil && info != nil {
 				entry.Provider = info.Type
 				entry.Command = info.Command
+				entry.ToolCacheDir = info.ToolCacheDir
+				entry.ToolCacheSlots = info.ToolCacheSlots
 				entry.Args = info.Args
 				entry.Env = info.Env
 				entry.Artifact = info.Artifact

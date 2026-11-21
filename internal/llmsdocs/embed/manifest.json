@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "808777e482524435f02ab481a7ed35f2",
+  "pageSetHash": "b1d898f472062c97fee9c7a6113f8610",
   "pages": [
     {
       "slug": "about",
@@ -415,8 +415,8 @@
       "url": "https://datamitsu.com/docs/how-to/manage-cache.md",
       "title": "Manage Cache",
       "description": "How to manage datamitsu's cache, store, and per-project data",
-      "bytes": 8406,
-      "contentHash": "a8d67aa44f587f74de94caea908da095"
+      "bytes": 9382,
+      "contentHash": "a21de93bc81f7ead2ded3a7a483535c2"
     },
     {
       "slug": "how-to/use-in-alpine",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 92800,
-      "contentHash": "a3ad622fc26134810ce115907b069c90"
+      "bytes": 93806,
+      "contentHash": "5e010c2c1517fb37066daee4164a1731"
     },
     {
       "slug": "reference/ignore-rules",
@@ -514,8 +514,8 @@
       "url": "https://datamitsu.com/docs/reference/template-placeholders.md",
       "title": "Template Placeholders",
       "description": "Reference for template placeholders in tool operation arguments and environment values",
-      "bytes": 10475,
-      "contentHash": "937aa553f243f287817b081998c40107"
+      "bytes": 12468,
+      "contentHash": "1ba8d04ecd05f8c574a45ecdff18a4f8"
     },
     {
       "slug": "reference/tool-environment",

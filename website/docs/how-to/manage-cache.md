@@ -62,6 +62,20 @@ farms. Rebuild one with
 
 Tools reference their cache directory using the `{toolCache}` placeholder in their operation arguments or environment variables.
 
+Managed apps can use `{toolCache}` in `runtimeEnv` for a writable default cache
+scoped to the checkout root, app name and install identity. Declare named slots
+with `caches`, then reference one as `{toolCache:name}`. The default and named
+slots are siblings beneath the same computed app-cache parent; `{toolCache}` maps
+to `default`. Names are lowercase ASCII identifiers, `default` is reserved, and
+unknown or malformed references fail configuration loading. Named slots are
+created before execution, including by source-mode shims; the implicit default
+is created only when referenced. Read-only resolution does not create slots.
+Existing contents directly in the former app-cache parent are not migrated into
+`default`; apps repopulate the new slots normally.
+Normal `cache clear` still removes the parent recursively without deleting
+installed apps from the store. Shell apps cannot use app cache slots. This is not
+a sandbox for app writes or arbitrary `initCommands`.
+
 ## Store Structure
 
 The global store holds all downloaded artifacts:

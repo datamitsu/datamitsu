@@ -125,6 +125,7 @@ func handleProvisionOperation(ctx context.Context, operation string, payload jso
 			return nil, err
 		}
 		bm := binmanager.New(req.Apps, req.Bundles, runtimemanager.New(runtimes))
+		bm.SetToolCacheRoot(req.ToolCacheRoot)
 		switch req.Action {
 		case "install-concurrency":
 			return bm.InstallWithConcurrency(ctx, req.IncludeOptional, req.Concurrency, req.FailOnError)
@@ -217,6 +218,7 @@ func handleProvisionOperation(ctx context.Context, operation string, payload jso
 			return nil, err
 		}
 		bm := binmanager.New(req.Apps, req.Bundles, runtimemanager.New(runtimes))
+		bm.SetToolCacheRoot(req.ToolCacheRoot)
 		for _, name := range req.Names {
 			if err := bm.EnsurePrepared(ctx, name); err != nil {
 				return nil, err

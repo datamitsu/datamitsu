@@ -88,7 +88,11 @@ import (
 // as its command; the command is now the binaryPath inside it.
 // Version 9 adds runtime app completion markers to farm health paths.
 // Version 10 retires entries that do not record runtime-scoped cache paths.
-const ManifestFormatVersion = 10
+// Version 11 records the managed app cache directory so shims can recreate it without reinstalling.
+// Version 12 recorded relative cache subdirectories; version 13 replaces those
+// paths with independent cache-slot names.
+// Version 13 records named cache slots for execution and source-mode shims.
+const ManifestFormatVersion = 13
 
 // Origin records how the farm's root was established.
 type Origin string

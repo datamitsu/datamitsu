@@ -75,6 +75,7 @@ type session struct {
 func newSession(cfg *config.Config, root string) *session {
 	rm := runtimemanager.New(cfg.Runtimes)
 	binMgr := binmanager.New(cfg.Apps, cfg.Bundles, rm)
+	binMgr.SetToolCacheRoot(root)
 
 	planner := tooling.NewPlanner(root, root, nil, cfg.Tools, cfg.ProjectTypes, cfg.IgnoreRules)
 	planner.SetPlatformChecker(binMgr)
