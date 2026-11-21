@@ -53,7 +53,7 @@ func TestStepSummary(t *testing.T) {
 
 	t.Run("unwritable", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		res := e.run("", githubEnv(t.TempDir()), "lint")
 		e.wantExit(res, 0)
 		if n := strings.Count(res.Stderr, "the step summary was not written:"); n != 1 {
@@ -85,7 +85,7 @@ func TestStepSummary(t *testing.T) {
 // TestReportMarkdown: --report markdown writes the document a step summary
 // holds, and report render gives it again from the run's own JSON.
 func TestReportMarkdown(t *testing.T) {
-	e := reportProject(t, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{}))
+	e := reportProject(t, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 	res := e.run("", nil, "lint", "--report", "markdown=out/run.md", "--report", "json=out/run.json")
 	e.wantExit(res, 1)
 	doc := e.read("out/run.md")

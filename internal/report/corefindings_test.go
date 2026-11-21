@@ -3,6 +3,7 @@ package report
 import (
 	"slices"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/textpos"
@@ -14,12 +15,16 @@ import (
 // artifact may be a directory).
 func placementDiag(rel string) diagnostic.Diagnostic {
 	return diagnostic.Diagnostic{
-		File: abs(rel), Row: 1, Col: 1,
+		EndRow:    0,
+		EndCol:    0,
+		URL:       "",
+		Baselined: false,
+		File:      abs(rel), Row: 1, Col: 1,
 		Severity: diagnostic.SeverityError,
 		Source:   "datamitsu", Code: "config-placement",
 		Message:  "Datamitsu config must be located at the repository git root",
 		Reported: true, Gates: true,
-		Anchor: &diagnostic.Anchor{Basis: BasisRow, LineHash: RowHash(1), Precision: textpos.Unknown},
+		Anchor: &diagnostic.Anchor{Fingerprint: "", Chars: nil, Bytes: nil, UTF16: nil, Basis: BasisRow, LineHash: RowHash(1), Precision: textpos.Unknown},
 	}
 }
 
@@ -28,11 +33,44 @@ func placementDiag(rel string) diagnostic.Diagnostic {
 // failed on its threshold.
 func TestAddCoreFindings(t *testing.T) {
 	task := perFileTask("hadolint::1", "a/Dockerfile")
-	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{task}}}}
+	plan := &tooling.ExecutionPlan{ConfigName: "", FailOn: "", Skipped: nil, Groups: []tooling.TaskGroup{{Priority: 0, Tasks: []tooling.Task{task}}}}
 	pass := tooling.ExecutionResult{
-		ToolName: "hadolint", TaskID: task.ID, Success: true,
+		Output:           "",
+		Error:            nil,
+		Duration:         0,
+		Command:          "",
+		ExitCode:         0,
+		WorkingDir:       "",
+		RelativeDir:      "",
+		Scope:            "",
+		Batch:            false,
+		Cancelled:        false,
+		FailureReason:    0,
+		StartedAt:        zerovalue_time.Time{},
+		EndedAt:          zerovalue_time.Time{},
+		FilesNotRun:      0,
+		UnparsedFailures: nil,
+		CapturedStdout:   "",
+		Diagnostics:      nil,
+		ParseFailed:      false,
+		FailOn:           "",
+		Files:            nil,
+		FileResults:      nil,
+		Cached:           false,
+		WholeUnit:        false,
+		UnitDir:          "",
+		ToolName:         "hadolint", TaskID: task.ID, Success: true,
 		Processes: []tooling.ProcessResult{{
-			ID: task.ID + "#1", Files: task.Files, State: tooling.ProcessRan,
+			ParseError:      "",
+			Provenance:      "",
+			ParserModule:    "",
+			OutputTail:      nil,
+			Diagnostics:     nil,
+			DurationMs:      0,
+			FailOn:          "",
+			GateActive:      false,
+			ThresholdFailed: false,
+			ID:              task.ID + "#1", Files: task.Files, State: tooling.ProcessRan,
 			ExitCode: new(int), Success: true, Extraction: tooling.ExtractionParsedClean,
 		}},
 	}
@@ -48,7 +86,7 @@ func TestAddCoreFindings(t *testing.T) {
 		t.Fatalf("AddCoreFindings = %+v, want two builtin tool findings", got)
 	}
 
-	run := acc.Build(BuildInfo{Selection: Selection{Mode: "all"}})
+	run := acc.Build(BuildInfo{Version: "", Configuration: "", StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Exports: nil, CI: CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}})
 	var tr *ToolRun
 	for i := range run.Operations[0].Tools {
 		if run.Operations[0].Tools[i].Name == "datamitsu" {
@@ -131,7 +169,7 @@ func TestAddCoreFindingsVisibility(t *testing.T) {
 			got[0].Finding.Shown, got[1].Finding.Shown)
 	}
 
-	run := acc.Build(BuildInfo{Selection: Selection{Mode: "all"}})
+	run := acc.Build(BuildInfo{Version: "", Configuration: "", StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Exports: nil, CI: CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}})
 	tr := run.Operations[0].Tools[0]
 	inv := tr.Invocations[0]
 	if inv.ExitCode == nil || *inv.ExitCode != 1 || inv.Success || inv.FailureKind != FailureThreshold {
@@ -149,7 +187,7 @@ func TestAddCoreFindingsNarrowed(t *testing.T) {
 	op := acc.BeginOperation("lint", nil, nil)
 	op.AddCoreFindings("datamitsu", []diagnostic.Diagnostic{placementDiag("sub/.datamitsuignore")})
 
-	run := acc.Build(BuildInfo{Selection: Selection{Mode: "dir"}})
+	run := acc.Build(BuildInfo{Version: "", Configuration: "", StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Exports: nil, CI: CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "dir"}})
 	tr := run.Operations[0].Tools[0]
 	if tr.Complete || !slices.Contains(tr.Incomplete, ReasonNarrowedSelection) {
 		t.Errorf("incomplete = %v, want %v", tr.Incomplete, ReasonNarrowedSelection)

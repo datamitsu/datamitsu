@@ -105,9 +105,21 @@ func newExecFixture(t *testing.T, name, body string) execFixture {
 
 	manifestPath := filepath.Join(project, "manifest.json")
 	data, err := sourcefarm.Encode(sourcefarm.Manifest{
-		Root:    root,
-		FarmDir: farmDir,
-		Entries: []sourcefarm.Entry{{Name: name, Command: script, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		ConfigPaths:      nil,
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Root:             root,
+		FarmDir:          farmDir,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: name, Command: script, Installed: true}},
 	})
 	if err != nil {
 		t.Fatalf("encode manifest: %v", err)
@@ -211,13 +223,33 @@ func TestExecPassesEntryEnvironment(t *testing.T) {
 
 	// Rewrite the manifest with an env overlay on the entry.
 	data, err := sourcefarm.Encode(sourcefarm.Manifest{
-		Root:    f.root,
-		FarmDir: f.farmDir,
+		FormatVersion:    0,
+		Origin:           "",
+		ConfigPaths:      nil,
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Root:             f.root,
+		FarmDir:          f.farmDir,
 		Entries: []sourcefarm.Entry{{
-			Name:      "overlay",
-			Command:   f.script,
-			Env:       map[string]string{"DATAMITSU_SHIM_TEST_OVERLAY": "from-the-manifest"},
-			Installed: true,
+			Provider:       "",
+			Kind:           "",
+			Strategy:       "",
+			Args:           nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Name:           "overlay",
+			Command:        f.script,
+			Env:            map[string]string{"DATAMITSU_SHIM_TEST_OVERLAY": "from-the-manifest"},
+			Installed:      true,
 		}},
 	})
 	if err != nil {

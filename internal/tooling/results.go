@@ -10,7 +10,7 @@ import (
 
 func (r *ExecutionResult) addNotStarted(files []string) {
 	for _, file := range files {
-		r.addProcess(ProcessResult{Files: []string{filepath.Clean(file)}, State: ProcessNotStarted, Extraction: ExtractionNone})
+		r.addProcess(ProcessResult{ID: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Files: []string{filepath.Clean(file)}, State: ProcessNotStarted, Extraction: ExtractionNone})
 	}
 }
 
@@ -94,7 +94,7 @@ func describeFiles(task Task, result *ExecutionResult, fallback FileState) {
 	result.FileResults = make([]FileResult, 0, len(result.Files))
 	gated := make(map[int]gatedFiles)
 	for _, file := range result.Files {
-		fr := FileResult{File: file, State: fallback}
+		fr := FileResult{ProcessID: "", Success: false, ExitCode: nil, Edits: nil, Patch: "", File: file, State: fallback}
 		idx, ok := byFile[file]
 		if !ok && whole >= 0 && !cached[file] {
 			idx, ok = whole, true
@@ -139,7 +139,7 @@ func gatedFilesOf(proc ProcessResult) gatedFiles {
 	for _, f := range proc.Files {
 		given[f] = true
 	}
-	g := gatedFiles{files: make(map[string]bool)}
+	g := gatedFiles{all: false, files: make(map[string]bool)}
 	for _, d := range proc.Diagnostics {
 		if !d.Gates {
 			continue
@@ -160,7 +160,7 @@ func describeVerdictHit(task Task, result *ExecutionResult) {
 	result.Files = cleanPaths(task.UnitMembers)
 	result.FileResults = make([]FileResult, 0, len(result.Files))
 	for _, file := range result.Files {
-		result.FileResults = append(result.FileResults, FileResult{File: file, State: FileVerdictHit, Success: true})
+		result.FileResults = append(result.FileResults, FileResult{ProcessID: "", ExitCode: nil, Edits: nil, Patch: "", File: file, State: FileVerdictHit, Success: true})
 	}
 	result.Cached = true
 }

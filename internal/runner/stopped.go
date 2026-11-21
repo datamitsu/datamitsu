@@ -92,7 +92,7 @@ func unreachedTasks(plan *tooling.ExecutionPlan, results []tooling.GroupExecutio
 			if reached[task.ID] {
 				continue
 			}
-			out = append(out, stoppedTask{taskID: task.ID, tool: task.ToolName, dir: taskDir(task), cause: cause})
+			out = append(out, stoppedTask{started: false, durationMs: 0, taskID: task.ID, tool: task.ToolName, dir: taskDir(task), cause: cause})
 		}
 	}
 	return out
@@ -103,13 +103,52 @@ func unreachedTasks(plan *tooling.ExecutionPlan, results []tooling.GroupExecutio
 // event. Both are "skip", never "fail": a stopped task is not a failure.
 func emitStopped(runOpID string, t stoppedTask) {
 	ui.Emit(uievent.Event{
-		Type:       uievent.TypeToolRun,
-		OpID:       toolOpID(runOpID, t.taskID),
-		Status:     uievent.StatusSkip,
-		Tool:       t.tool,
-		Dir:        t.dir,
-		Msg:        t.eventMsg(),
-		DurationMs: t.durationMs,
+		TS:              0,
+		Op:              "",
+		Name:            "",
+		BytesDone:       0,
+		BytesTotal:      0,
+		Percent:         0,
+		Index:           0,
+		Total:           0,
+		Success:         nil,
+		Level:           "",
+		Tools:           0,
+		Runs:            0,
+		Failed:          0,
+		Skipped:         0,
+		Cancelled:       nil,
+		Complete:        nil,
+		Format:          "",
+		Path:            "",
+		File:            "",
+		Row:             0,
+		Col:             0,
+		EndRow:          0,
+		EndCol:          0,
+		Severity:        "",
+		Code:            "",
+		Source:          "",
+		Fingerprint:     "",
+		Provenance:      "",
+		Reported:        nil,
+		Gates:           nil,
+		Baselined:       false,
+		FindingsError:   nil,
+		FindingsWarning: nil,
+		FindingsInfo:    nil,
+		FindingsHint:    nil,
+		Cached:          nil,
+		Schema:          "",
+		Events:          "",
+		Annotations:     "",
+		Type:            uievent.TypeToolRun,
+		OpID:            toolOpID(runOpID, t.taskID),
+		Status:          uievent.StatusSkip,
+		Tool:            t.tool,
+		Dir:             t.dir,
+		Msg:             t.eventMsg(),
+		DurationMs:      t.durationMs,
 	})
 }
 
@@ -200,7 +239,7 @@ func printUnrunFiles(results []tooling.GroupExecutionResult, root string, nameWi
 			if len(files) == 1 {
 				noun = "file"
 			}
-			label := stoppedTask{tool: result.ToolName, dir: result.RelativeDir}.label()
+			label := stoppedTask{taskID: "", started: false, cause: "", durationMs: 0, tool: result.ToolName, dir: result.RelativeDir}.label()
 			pad := max(nameWidth-utf8.RuneCountInString(label), 0) + 2
 			text := fmt.Sprintf("%d %s not run (%s): %s", len(files), noun, cause, list)
 			fmt.Println(clr.Faint("┃ ⊘ ") + clr.Faint(toolText(label)) + strings.Repeat(" ", pad) + clr.Faint(toolText(text)))

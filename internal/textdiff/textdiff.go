@@ -64,10 +64,12 @@ func ComputeEdits(before, after string) []Edit {
 		switch op.Kind {
 		case opDelete:
 			// before[I1:I2] is removed.
-			edits = append(edits, Edit{Range: Range{
-				Start: Position{Line: op.I1, Character: 0},
-				End:   Position{Line: op.I2, Character: 0},
-			}})
+			edits = append(edits, Edit{
+				NewText: "", Range: Range{
+					Start: Position{Line: op.I1, Character: 0},
+					End:   Position{Line: op.I2, Character: 0},
+				},
+			})
 		case opInsert:
 			// after[J1:J2] is inserted at before line I1.
 			if content := strings.Join(op.Content, ""); content != "" {
@@ -156,9 +158,11 @@ func operations(a, b []string) []*operation {
 		for snake[0]-snake[1] > x-y {
 			if op == nil {
 				op = &operation{
-					Kind: opDelete,
-					I1:   x,
-					J1:   y,
+					Content: nil,
+					I2:      0,
+					Kind:    opDelete,
+					I1:      x,
+					J1:      y,
 				}
 			}
 			x++
@@ -172,9 +176,11 @@ func operations(a, b []string) []*operation {
 		for snake[0]-snake[1] < x-y {
 			if op == nil {
 				op = &operation{
-					Kind: opInsert,
-					I1:   x,
-					J1:   y,
+					Content: nil,
+					I2:      0,
+					Kind:    opInsert,
+					I1:      x,
+					J1:      y,
 				}
 			}
 			y++

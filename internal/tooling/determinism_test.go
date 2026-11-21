@@ -34,20 +34,24 @@ func TestPlanOrderIsDeterministic(t *testing.T) {
 
 	tools := config.MapOfTools{
 		"tsc": {
-			Name: "tsc",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil,
+			Name:         "tsc",
 			Operations: map[config.OperationType]config.ToolOperation{
-				config.OpLint: {App: "tsc", Scope: config.ToolScopePerProject, Globs: []string{"**/*.ts"}},
+				config.OpLint: {Args: nil, Arity: "", Granularity: "", ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "tsc", Scope: config.ToolScopePerProject, Globs: []string{"**/*.ts"}},
 			},
 		},
 	}
 	types := config.MapOfProjectTypes{
-		"npm-package": {Markers: []string{"**/package.json"}},
+		"npm-package": {Description: "", Markers: []string{"**/package.json"}},
 	}
 
 	plans := make([]string, 2)
 	for i := range plans {
 		p := NewPlanner(root, root, nil, tools, types, nil)
-		plan, err := p.Plan(context.Background(), config.OpLint, Selection{Mode: SelectionAll}, nil)
+		plan, err := p.Plan(context.Background(), config.OpLint, Selection{Dir: "", Paths: nil, Mode: SelectionAll}, nil)
 		if err != nil {
 			t.Fatalf("Plan: %v", err)
 		}

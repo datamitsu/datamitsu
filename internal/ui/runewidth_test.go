@@ -22,7 +22,7 @@ import (
 // variants block on a width channel that only a running mpb container feeds;
 // the padding arithmetic under test is identical.
 func nameColumn(s string, w int) (string, int) {
-	return decor.Name(s, decor.WC{W: w, C: decor.DextraSpace}).Decor(decor.Statistics{})
+	return decor.Name(s, decor.WC{W: w, C: decor.DextraSpace}).Decor(decor.Statistics{AvailableWidth: 0, RequestedWidth: 0, ID: 0, Total: 0, Current: 0, Refill: 0, Completed: false, Aborted: false})
 }
 
 // TestNameColumnPadsByDisplayWidth asserts the name column is padded to a fixed

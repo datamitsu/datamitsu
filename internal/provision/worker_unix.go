@@ -66,7 +66,7 @@ func StartWorker(ctx context.Context) (*Worker, error) {
 	// #nosec G204 -- The OS supplies this binary's absolute path; only private pipe descriptors are passed.
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), executable, workerArgs...)
 	cmd.Cancel = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Chroot: "", Credential: nil, Ptrace: false, Setsid: false, Setctty: false, Noctty: false, Ctty: 0, Foreground: false, Pgid: 0, Setpgid: true}
 	cmd.ExtraFiles = []*os.File{rpcChild, rpcWrite, liveRead, cancelRead, handshakeRead}
 	if err := cmd.Start(); err != nil {
 		closeFiles([]*os.File{rpcChild, rpcParent, rpcRead, rpcWrite, liveRead, liveWrite, cancelRead, cancelWrite, handshakeRead, handshakeWrite})
@@ -87,7 +87,7 @@ func StartWorker(ctx context.Context) (*Worker, error) {
 		return nil, fmt.Errorf("close provision startup handshake: %w", err)
 	}
 	client := NewClient(&duplex{r: rpcRead, w: rpcParent}, nil)
-	worker := &Worker{Cmd: cmd, Client: client, liveness: liveWrite, cancel: cancelWrite, done: make(chan struct{})}
+	worker := &Worker{waitErr: nil, Cmd: cmd, Client: client, liveness: liveWrite, cancel: cancelWrite, done: make(chan struct{})}
 	go func() {
 		worker.waitErr = cmd.Wait()
 		close(worker.done)

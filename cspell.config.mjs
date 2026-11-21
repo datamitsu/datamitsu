@@ -45,6 +45,9 @@ export default defineConfig((config) => ({
     "darkk",
   ],
   words: [
+    "zerovalue",
+    "Alives",
+    "Noctty",
     "Diagnosticf",
     "releaseasset",
     // The prepare step's vocabulary: the init set over-approximates, and a

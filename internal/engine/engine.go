@@ -48,7 +48,7 @@ type Options struct {
 // New collects environment facts and constructs an Engine with a fully
 // initialized goja runtime ready to evaluate datamitsu config scripts.
 func New(ctx context.Context, binaryCommandOverride string) (*Engine, error) {
-	return NewWithOptions(ctx, binaryCommandOverride, Options{})
+	return NewWithOptions(ctx, binaryCommandOverride, Options{TolerateGitRootFailure: false})
 }
 
 // NewWithOptions is New with explicit Options.
@@ -81,9 +81,12 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 	vmSpan.End()
 
 	e = &Engine{
-		vm:       vm,
-		facts:    projectFacts,
-		rootPath: rootPath,
+		timeoutDepth:   0,
+		nonDeterminism: "",
+		sideEffect:     "",
+		vm:             vm,
+		facts:          projectFacts,
+		rootPath:       rootPath,
 	}
 
 	globalsSpan := trace.Start(trace.CatEngine, "engine.initGlobals")

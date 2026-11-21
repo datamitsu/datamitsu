@@ -32,7 +32,7 @@ func getJVMBinaryPath(appEnvPath string, appName string) string {
 func (rm *RuntimeManager) InstallJVMApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigJVM, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Jvm: appConfig, Files: files, Archives: archives})
+	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Links: nil, Prepare: nil, Jvm: appConfig, Files: files, Archives: archives})
 	if handled || dispatchErr != nil {
 		return wrapInstallTimeout(dispatchErr, timeoutSec)
 	}
@@ -268,9 +268,12 @@ func (rm *RuntimeManager) jvmCommandInfo(appName string, appConfig *binmanager.A
 	}
 
 	return &binmanager.CommandInfo{
-		Type:    "jvm",
-		Command: javaBin,
-		Args:    args,
+		Env:            nil,
+		ToolCacheDir:   "",
+		ToolCacheSlots: nil,
+		Type:           "jvm",
+		Command:        javaBin,
+		Args:           args,
 		// The JAR is what gets downloaded; javaBin is an interpreter that a
 		// system-mode runtime supplies as a bare "java" off PATH. Without this,
 		// "is it installed?" would be answered by stat'ing the JVM.

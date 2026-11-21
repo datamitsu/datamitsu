@@ -70,8 +70,8 @@ func TestWriteNodeAppsJSON(t *testing.T) {
 	path := filepath.Join(dir, "nodeApps.json")
 
 	apps := nodeAppsJSON{
-		"cspell": {PackageName: "cspell", Version: "9.8.0"},
-		"mmdc":   {PackageName: "@mermaid-js/mermaid-cli", Version: "12.0.0"},
+		"cspell": {Description: "", PackageName: "cspell", Version: "9.8.0"},
+		"mmdc":   {Description: "", PackageName: "@mermaid-js/mermaid-cli", Version: "12.0.0"},
 	}
 
 	if err := writeNodeAppsJSON(path, apps); err != nil {

@@ -13,7 +13,8 @@ func TestNewDetector(t *testing.T) {
 	tmpDir := t.TempDir()
 	types := config.MapOfProjectTypes{
 		"test": config.ProjectType{
-			Markers: []string{"test.txt"},
+			Description: "",
+			Markers:     []string{"test.txt"},
 		},
 	}
 
@@ -40,13 +41,16 @@ func TestDetectAll(t *testing.T) {
 
 	types := config.MapOfProjectTypes{
 		"node": config.ProjectType{
-			Markers: []string{"package.json"},
+			Description: "",
+			Markers:     []string{"package.json"},
 		},
 		"go": config.ProjectType{
-			Markers: []string{"go.mod"},
+			Description: "",
+			Markers:     []string{"go.mod"},
 		},
 		"rust": config.ProjectType{
-			Markers: []string{"Cargo.toml"},
+			Description: "",
+			Markers:     []string{"Cargo.toml"},
 		},
 	}
 
@@ -86,7 +90,8 @@ func TestDetectAllNoMatches(t *testing.T) {
 
 	types := config.MapOfProjectTypes{
 		"node": config.ProjectType{
-			Markers: []string{"package.json"},
+			Description: "",
+			Markers:     []string{"package.json"},
 		},
 	}
 
@@ -109,10 +114,12 @@ func TestIsType(t *testing.T) {
 
 	types := config.MapOfProjectTypes{
 		"node": config.ProjectType{
-			Markers: []string{"package.json"},
+			Description: "",
+			Markers:     []string{"package.json"},
 		},
 		"rust": config.ProjectType{
-			Markers: []string{"Cargo.toml"},
+			Description: "",
+			Markers:     []string{"Cargo.toml"},
 		},
 	}
 
@@ -158,7 +165,8 @@ func TestMatchesTypeWithGlob(t *testing.T) {
 
 	types := config.MapOfProjectTypes{
 		"test": config.ProjectType{
-			Markers: []string{"*.txt"},
+			Description: "",
+			Markers:     []string{"*.txt"},
 		},
 	}
 
@@ -182,7 +190,8 @@ func TestMatchesTypeMultipleMarkers(t *testing.T) {
 
 	types := config.MapOfProjectTypes{
 		"test": config.ProjectType{
-			Markers: []string{"marker1.txt", "marker2.txt", "marker3.txt"},
+			Description: "",
+			Markers:     []string{"marker1.txt", "marker2.txt", "marker3.txt"},
 		},
 	}
 

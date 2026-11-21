@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
@@ -124,9 +125,23 @@ func TestExtractTarGz(t *testing.T) {
 		tarWriter := tar.NewWriter(gzWriter)
 
 		header := &tar.Header{
-			Name: targetPath,
-			Mode: 0o755,
-			Size: int64(len(testContent)),
+			Typeflag:   0,
+			Linkname:   "",
+			Uid:        0,
+			Gid:        0,
+			Uname:      "",
+			Gname:      "",
+			ModTime:    zerovalue_time.Time{},
+			AccessTime: zerovalue_time.Time{},
+			ChangeTime: zerovalue_time.Time{},
+			Devmajor:   0,
+			Devminor:   0,
+
+			PAXRecords: nil,
+			Format:     0,
+			Name:       targetPath,
+			Mode:       0o755,
+			Size:       int64(len(testContent)),
 		}
 		_ = tarWriter.WriteHeader(header)
 		_, _ = tarWriter.Write(testContent)
@@ -168,9 +183,23 @@ func TestExtractTarGz(t *testing.T) {
 
 		testContent := []byte("content")
 		header := &tar.Header{
-			Name: "other/file",
-			Mode: 0o755,
-			Size: int64(len(testContent)),
+			Typeflag:   0,
+			Linkname:   "",
+			Uid:        0,
+			Gid:        0,
+			Uname:      "",
+			Gname:      "",
+			ModTime:    zerovalue_time.Time{},
+			AccessTime: zerovalue_time.Time{},
+			ChangeTime: zerovalue_time.Time{},
+			Devmajor:   0,
+			Devminor:   0,
+
+			PAXRecords: nil,
+			Format:     0,
+			Name:       "other/file",
+			Mode:       0o755,
+			Size:       int64(len(testContent)),
 		}
 		_ = tarWriter.WriteHeader(header)
 		_, _ = tarWriter.Write(testContent)
@@ -200,10 +229,23 @@ func writeTarGz(t *testing.T, path string, entries [][2]string) {
 	for _, e := range entries {
 		name, content := e[0], e[1]
 		if err := tarWriter.WriteHeader(&tar.Header{
-			Name:     name,
-			Typeflag: tar.TypeReg,
-			Mode:     0o755,
-			Size:     int64(len(content)),
+			Linkname:   "",
+			Uid:        0,
+			Gid:        0,
+			Uname:      "",
+			Gname:      "",
+			ModTime:    zerovalue_time.Time{},
+			AccessTime: zerovalue_time.Time{},
+			ChangeTime: zerovalue_time.Time{},
+			Devmajor:   0,
+			Devminor:   0,
+
+			PAXRecords: nil,
+			Format:     0,
+			Name:       name,
+			Typeflag:   tar.TypeReg,
+			Mode:       0o755,
+			Size:       int64(len(content)),
 		}); err != nil {
 			t.Fatalf("write header %q: %v", name, err)
 		}
@@ -386,10 +428,23 @@ func writeTarGzWithModes(t *testing.T, path string, entries []archiveEntry) {
 	tarWriter := tar.NewWriter(gzWriter)
 	for _, e := range entries {
 		if err := tarWriter.WriteHeader(&tar.Header{
-			Name:     e.name,
-			Typeflag: tar.TypeReg,
-			Mode:     int64(e.mode),
-			Size:     int64(len(e.content)),
+			Linkname:   "",
+			Uid:        0,
+			Gid:        0,
+			Uname:      "",
+			Gname:      "",
+			ModTime:    zerovalue_time.Time{},
+			AccessTime: zerovalue_time.Time{},
+			ChangeTime: zerovalue_time.Time{},
+			Devmajor:   0,
+			Devminor:   0,
+
+			PAXRecords: nil,
+			Format:     0,
+			Name:       e.name,
+			Typeflag:   tar.TypeReg,
+			Mode:       int64(e.mode),
+			Size:       int64(len(e.content)),
 		}); err != nil {
 			t.Fatalf("write header %q: %v", e.name, err)
 		}
@@ -410,7 +465,7 @@ func writeZipWithModes(t *testing.T, path string, entries []archiveEntry) {
 	}
 	zipWriter := zip.NewWriter(file)
 	for _, e := range entries {
-		header := &zip.FileHeader{Name: e.name, Method: zip.Deflate}
+		header := &zip.FileHeader{Comment: "", NonUTF8: false, CreatorVersion: 0, ReaderVersion: 0, Flags: 0, Modified: zerovalue_time.Time{}, CRC32: 0, CompressedSize64: 0, UncompressedSize64: 0, Extra: nil, ExternalAttrs: 0, Name: e.name, Method: zip.Deflate}
 		header.SetMode(e.mode)
 		w, err := zipWriter.CreateHeader(header)
 		if err != nil {
@@ -437,9 +492,23 @@ func TestExtractTarXz(t *testing.T) {
 		tarWriter := tar.NewWriter(xzWriter)
 
 		header := &tar.Header{
-			Name: targetPath,
-			Mode: 0o755,
-			Size: int64(len(testContent)),
+			Typeflag:   0,
+			Linkname:   "",
+			Uid:        0,
+			Gid:        0,
+			Uname:      "",
+			Gname:      "",
+			ModTime:    zerovalue_time.Time{},
+			AccessTime: zerovalue_time.Time{},
+			ChangeTime: zerovalue_time.Time{},
+			Devmajor:   0,
+			Devminor:   0,
+
+			PAXRecords: nil,
+			Format:     0,
+			Name:       targetPath,
+			Mode:       0o755,
+			Size:       int64(len(testContent)),
 		}
 		_ = tarWriter.WriteHeader(header)
 		_, _ = tarWriter.Write(testContent)
@@ -721,9 +790,23 @@ func TestExtractTarGz_PathTraversalProtection(t *testing.T) {
 
 	maliciousContent := []byte("malicious content")
 	header := &tar.Header{
-		Name: "../../../etc/passwd",
-		Mode: 0o755,
-		Size: int64(len(maliciousContent)),
+		Typeflag:   0,
+		Linkname:   "",
+		Uid:        0,
+		Gid:        0,
+		Uname:      "",
+		Gname:      "",
+		ModTime:    zerovalue_time.Time{},
+		AccessTime: zerovalue_time.Time{},
+		ChangeTime: zerovalue_time.Time{},
+		Devmajor:   0,
+		Devminor:   0,
+
+		PAXRecords: nil,
+		Format:     0,
+		Name:       "../../../etc/passwd",
+		Mode:       0o755,
+		Size:       int64(len(maliciousContent)),
 	}
 	_ = tarWriter.WriteHeader(header)
 	_, _ = tarWriter.Write(maliciousContent)
@@ -751,18 +834,18 @@ func TestExtractTarGzToDir(t *testing.T) {
 		gzWriter := gzip.NewWriter(file)
 		tarWriter := tar.NewWriter(gzWriter)
 
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/", Typeflag: tar.TypeDir, Mode: 0o755})
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/bin/", Typeflag: tar.TypeDir, Mode: 0o755})
+		_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Size: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "jdk/", Typeflag: tar.TypeDir, Mode: 0o755})
+		_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Size: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "jdk/bin/", Typeflag: tar.TypeDir, Mode: 0o755})
 
 		javaContent := []byte("#!/bin/sh\necho java")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/bin/java", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(javaContent))})
+		_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "jdk/bin/java", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(javaContent))})
 		_, _ = tarWriter.Write(javaContent)
 
 		libContent := []byte("library data")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/lib/libjvm.so", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(libContent))})
+		_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "jdk/lib/libjvm.so", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(libContent))})
 		_, _ = tarWriter.Write(libContent)
 
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "jdk/bin/javac", Typeflag: tar.TypeSymlink, Linkname: "java"})
+		_ = tarWriter.WriteHeader(&tar.Header{Size: 0, Mode: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "jdk/bin/javac", Typeflag: tar.TypeSymlink, Linkname: "java"})
 
 		_ = tarWriter.Close()
 		_ = gzWriter.Close()
@@ -825,7 +908,7 @@ func TestExtractTarGzToDir(t *testing.T) {
 		gzWriter := gzip.NewWriter(file)
 		tarWriter := tar.NewWriter(gzWriter)
 
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "link", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"})
+		_ = tarWriter.WriteHeader(&tar.Header{Size: 0, Mode: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "link", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"})
 		_ = tarWriter.Close()
 		_ = gzWriter.Close()
 		_ = file.Close()
@@ -850,7 +933,7 @@ func TestExtractTarGzToDir(t *testing.T) {
 		tarWriter := tar.NewWriter(gzWriter)
 
 		content := []byte("malicious")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "../../../etc/passwd", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
+		_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "../../../etc/passwd", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
 		_, _ = tarWriter.Write(content)
 		_ = tarWriter.Close()
 		_ = gzWriter.Close()
@@ -885,10 +968,10 @@ func TestExtractTarXzToDir(t *testing.T) {
 		}
 		tarWriter := tar.NewWriter(xzWriter)
 
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "app/", Typeflag: tar.TypeDir, Mode: 0o755})
+		_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Size: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "app/", Typeflag: tar.TypeDir, Mode: 0o755})
 
 		binContent := []byte("binary content")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "app/bin", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(binContent))})
+		_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "app/bin", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(binContent))})
 		_, _ = tarWriter.Write(binContent)
 
 		_ = tarWriter.Close()
@@ -934,11 +1017,11 @@ func makeNodeTarXz(t *testing.T, path string) {
 	}
 	tarWriter := tar.NewWriter(xzWriter)
 
-	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/", Typeflag: tar.TypeDir, Mode: 0o755})
-	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/bin/", Typeflag: tar.TypeDir, Mode: 0o755})
+	_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Size: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "node-v26.2.0-linux-x64/", Typeflag: tar.TypeDir, Mode: 0o755})
+	_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Size: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "node-v26.2.0-linux-x64/bin/", Typeflag: tar.TypeDir, Mode: 0o755})
 
 	nodeContent := []byte("#!/bin/sh\necho node")
-	_ = tarWriter.WriteHeader(&tar.Header{Name: "node-v26.2.0-linux-x64/bin/node", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(nodeContent))})
+	_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "node-v26.2.0-linux-x64/bin/node", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(nodeContent))})
 	_, _ = tarWriter.Write(nodeContent)
 
 	_ = tarWriter.Close()
@@ -996,7 +1079,7 @@ func TestExtractTarXzToDir_RejectsPathTraversal(t *testing.T) {
 	tarWriter := tar.NewWriter(xzWriter)
 
 	content := []byte("malicious")
-	_ = tarWriter.WriteHeader(&tar.Header{Name: "../../../etc/passwd", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
+	_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "../../../etc/passwd", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
 	_, _ = tarWriter.Write(content)
 	_ = tarWriter.Close()
 	_ = xzWriter.Close()
@@ -1038,7 +1121,7 @@ func TestExtractTarXz_MalformedStream(t *testing.T) {
 		}
 		tarWriter := tar.NewWriter(xzWriter)
 		content := bytes.Repeat([]byte{0xAB}, 64*1024)
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "bin/node", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(content))})
+		_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "bin/node", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(content))})
 		_, _ = tarWriter.Write(content)
 		_ = tarWriter.Close()
 		_ = xzWriter.Close()
@@ -1078,7 +1161,7 @@ func TestExtractBinaryToDir(t *testing.T) {
 		tarWriter := tar.NewWriter(gzWriter)
 
 		content := []byte("test")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "file.txt", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
+		_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "file.txt", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
 		_, _ = tarWriter.Write(content)
 		_ = tarWriter.Close()
 		_ = gzWriter.Close()
@@ -1103,7 +1186,7 @@ func TestExtractBinaryToDir(t *testing.T) {
 		tarWriter := tar.NewWriter(xzWriter)
 
 		content := []byte("test")
-		_ = tarWriter.WriteHeader(&tar.Header{Name: "file.txt", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
+		_ = tarWriter.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "file.txt", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(content))})
 		_, _ = tarWriter.Write(content)
 		_ = tarWriter.Close()
 		_ = xzWriter.Close()
@@ -1475,10 +1558,23 @@ func createTarZst(t *testing.T, path, entryName string, content []byte) {
 	tarWriter := tar.NewWriter(zstWriter)
 
 	header := &tar.Header{
-		Name:     entryName,
-		Mode:     0o755,
-		Size:     int64(len(content)),
-		Typeflag: tar.TypeReg,
+		Linkname:   "",
+		Uid:        0,
+		Gid:        0,
+		Uname:      "",
+		Gname:      "",
+		ModTime:    zerovalue_time.Time{},
+		AccessTime: zerovalue_time.Time{},
+		ChangeTime: zerovalue_time.Time{},
+		Devmajor:   0,
+		Devminor:   0,
+
+		PAXRecords: nil,
+		Format:     0,
+		Name:       entryName,
+		Mode:       0o755,
+		Size:       int64(len(content)),
+		Typeflag:   tar.TypeReg,
 	}
 	if err := tarWriter.WriteHeader(header); err != nil {
 		t.Fatalf("failed to write tar header: %v", err)
@@ -1500,10 +1596,23 @@ func createPlainTar(t *testing.T, path, entryName string, content []byte) {
 	tarWriter := tar.NewWriter(file)
 
 	header := &tar.Header{
-		Name:     entryName,
-		Mode:     0o755,
-		Size:     int64(len(content)),
-		Typeflag: tar.TypeReg,
+		Linkname:   "",
+		Uid:        0,
+		Gid:        0,
+		Uname:      "",
+		Gname:      "",
+		ModTime:    zerovalue_time.Time{},
+		AccessTime: zerovalue_time.Time{},
+		ChangeTime: zerovalue_time.Time{},
+		Devmajor:   0,
+		Devminor:   0,
+
+		PAXRecords: nil,
+		Format:     0,
+		Name:       entryName,
+		Mode:       0o755,
+		Size:       int64(len(content)),
+		Typeflag:   tar.TypeReg,
 	}
 	if err := tarWriter.WriteHeader(header); err != nil {
 		t.Fatalf("failed to write tar header: %v", err)
@@ -1577,9 +1686,23 @@ func makeTestTar(t *testing.T, files map[string]string) []byte {
 	tw := tar.NewWriter(&buf)
 	for name, content := range files {
 		hdr := &tar.Header{
-			Name: name,
-			Mode: 0o644,
-			Size: int64(len(content)),
+			Typeflag:   0,
+			Linkname:   "",
+			Uid:        0,
+			Gid:        0,
+			Uname:      "",
+			Gname:      "",
+			ModTime:    zerovalue_time.Time{},
+			AccessTime: zerovalue_time.Time{},
+			ChangeTime: zerovalue_time.Time{},
+			Devmajor:   0,
+			Devminor:   0,
+
+			PAXRecords: nil,
+			Format:     0,
+			Name:       name,
+			Mode:       0o644,
+			Size:       int64(len(content)),
 		}
 		if err := tw.WriteHeader(hdr); err != nil {
 			t.Fatalf("tar write header: %v", err)
@@ -1665,9 +1788,9 @@ func TestExtractArchiveToPath_FileIntoDestDir(t *testing.T) {
 	t.Run("skips path traversal entries", func(t *testing.T) {
 		var buf bytes.Buffer
 		tw := tar.NewWriter(&buf)
-		_ = tw.WriteHeader(&tar.Header{Name: "../escape.txt", Mode: 0o644, Size: 4})
+		_ = tw.WriteHeader(&tar.Header{Typeflag: 0, Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "../escape.txt", Mode: 0o644, Size: 4})
 		_, _ = tw.Write([]byte("evil"))
-		_ = tw.WriteHeader(&tar.Header{Name: "safe/file.txt", Mode: 0o644, Size: 4})
+		_ = tw.WriteHeader(&tar.Header{Typeflag: 0, Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "safe/file.txt", Mode: 0o644, Size: 4})
 		_, _ = tw.Write([]byte("safe"))
 		_ = tw.Close()
 		tgz := writeTgz(t, buf.Bytes())
@@ -1688,7 +1811,7 @@ func TestExtractArchiveToPath_FileIntoDestDir(t *testing.T) {
 	t.Run("skips absolute symlink", func(t *testing.T) {
 		var buf bytes.Buffer
 		tw := tar.NewWriter(&buf)
-		_ = tw.WriteHeader(&tar.Header{Name: "abslink", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"})
+		_ = tw.WriteHeader(&tar.Header{Size: 0, Mode: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "abslink", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"})
 		_ = tw.Close()
 		tgz := writeTgz(t, buf.Bytes())
 
@@ -1704,7 +1827,7 @@ func TestExtractArchiveToPath_FileIntoDestDir(t *testing.T) {
 	t.Run("skips symlink escaping destDir", func(t *testing.T) {
 		var buf bytes.Buffer
 		tw := tar.NewWriter(&buf)
-		_ = tw.WriteHeader(&tar.Header{Name: "link", Typeflag: tar.TypeSymlink, Linkname: "../../etc/passwd"})
+		_ = tw.WriteHeader(&tar.Header{Size: 0, Mode: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "link", Typeflag: tar.TypeSymlink, Linkname: "../../etc/passwd"})
 		_ = tw.Close()
 		tgz := writeTgz(t, buf.Bytes())
 
@@ -1793,9 +1916,23 @@ func TestExtractArchiveToPath_PathTraversal(t *testing.T) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	hdr := &tar.Header{
-		Name: "../escape.txt",
-		Mode: 0o644,
-		Size: 4,
+		Typeflag:   0,
+		Linkname:   "",
+		Uid:        0,
+		Gid:        0,
+		Uname:      "",
+		Gname:      "",
+		ModTime:    zerovalue_time.Time{},
+		AccessTime: zerovalue_time.Time{},
+		ChangeTime: zerovalue_time.Time{},
+		Devmajor:   0,
+		Devminor:   0,
+
+		PAXRecords: nil,
+		Format:     0,
+		Name:       "../escape.txt",
+		Mode:       0o644,
+		Size:       4,
 	}
 	_ = tw.WriteHeader(hdr)
 	_, _ = tw.Write([]byte("evil"))
@@ -1817,9 +1954,23 @@ func TestExtractArchiveToPath_SymlinkEscape(t *testing.T) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	hdr := &tar.Header{
-		Name:     "link",
-		Typeflag: tar.TypeSymlink,
-		Linkname: "../../etc/passwd",
+		Size:       0,
+		Mode:       0,
+		Uid:        0,
+		Gid:        0,
+		Uname:      "",
+		Gname:      "",
+		ModTime:    zerovalue_time.Time{},
+		AccessTime: zerovalue_time.Time{},
+		ChangeTime: zerovalue_time.Time{},
+		Devmajor:   0,
+		Devminor:   0,
+
+		PAXRecords: nil,
+		Format:     0,
+		Name:       "link",
+		Typeflag:   tar.TypeSymlink,
+		Linkname:   "../../etc/passwd",
 	}
 	_ = tw.WriteHeader(hdr)
 	_ = tw.Close()
@@ -1840,9 +1991,23 @@ func TestExtractArchiveToPath_AbsoluteSymlink(t *testing.T) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	hdr := &tar.Header{
-		Name:     "abslink",
-		Typeflag: tar.TypeSymlink,
-		Linkname: "/etc/passwd",
+		Size:       0,
+		Mode:       0,
+		Uid:        0,
+		Gid:        0,
+		Uname:      "",
+		Gname:      "",
+		ModTime:    zerovalue_time.Time{},
+		AccessTime: zerovalue_time.Time{},
+		ChangeTime: zerovalue_time.Time{},
+		Devmajor:   0,
+		Devminor:   0,
+
+		PAXRecords: nil,
+		Format:     0,
+		Name:       "abslink",
+		Typeflag:   tar.TypeSymlink,
+		Linkname:   "/etc/passwd",
 	}
 	_ = tw.WriteHeader(hdr)
 	_ = tw.Close()
@@ -1874,9 +2039,9 @@ func TestExtractArchiveToPath_ValidSymlink(t *testing.T) {
 
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-	_ = tw.WriteHeader(&tar.Header{Name: "real.txt", Mode: 0o644, Size: 5})
+	_ = tw.WriteHeader(&tar.Header{Typeflag: 0, Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "real.txt", Mode: 0o644, Size: 5})
 	_, _ = tw.Write([]byte("hello"))
-	_ = tw.WriteHeader(&tar.Header{Name: "link.txt", Typeflag: tar.TypeSymlink, Linkname: "real.txt"})
+	_ = tw.WriteHeader(&tar.Header{Size: 0, Mode: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "link.txt", Typeflag: tar.TypeSymlink, Linkname: "real.txt"})
 	_ = tw.Close()
 
 	_, err := extractArchiveToPath(destDir, buf.Bytes(), "", BinContentTypeTar)

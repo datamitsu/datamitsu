@@ -23,7 +23,7 @@ func (f *fakeCommandInfoGetter) GetCommandInfo(_ context.Context, appName string
 		return nil, errors.New("install failed")
 	}
 	f.installed = append(f.installed, appName)
-	return &binmanager.CommandInfo{}, nil
+	return &binmanager.CommandInfo{Type: "", Command: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil}, nil
 }
 
 func TestInstallCmd_NoArgsErrors(t *testing.T) {
@@ -34,15 +34,34 @@ func TestInstallCmd_NoArgsErrors(t *testing.T) {
 
 func TestVersionCheckArgs(t *testing.T) {
 	t.Run("default is --version", func(t *testing.T) {
-		args, ok := versionCheckArgs(binmanager.App{Binary: &binmanager.AppConfigBinary{}})
+		args, ok := versionCheckArgs(binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}})
 		if !ok || len(args) != 1 || args[0] != "--version" {
 			t.Errorf("args=%v ok=%v, want [--version] true", args, ok)
 		}
 	})
 	t.Run("custom args honored", func(t *testing.T) {
 		app := binmanager.App{
-			Binary:       &binmanager.AppConfigBinary{},
-			VersionCheck: &binmanager.AppVersionCheck{Args: []string{"version", "--short"}},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Binary:             &binmanager.AppConfigBinary{Binaries: nil, Version: ""},
+			VersionCheck:       &binmanager.AppVersionCheck{Disabled: false, Args: []string{"version", "--short"}},
 		}
 		args, ok := versionCheckArgs(app)
 		if !ok || len(args) != 2 || args[0] != "version" {
@@ -51,22 +70,41 @@ func TestVersionCheckArgs(t *testing.T) {
 	})
 	t.Run("disabled is not verifiable", func(t *testing.T) {
 		app := binmanager.App{
-			Binary:       &binmanager.AppConfigBinary{},
-			VersionCheck: &binmanager.AppVersionCheck{Disabled: true},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Binary:             &binmanager.AppConfigBinary{Binaries: nil, Version: ""},
+			VersionCheck:       &binmanager.AppVersionCheck{Args: nil, Disabled: true},
 		}
 		if _, ok := versionCheckArgs(app); ok {
 			t.Error("disabled version check should not be verifiable")
 		}
 	})
 	t.Run("shell is not verifiable", func(t *testing.T) {
-		if _, ok := versionCheckArgs(binmanager.App{Shell: &binmanager.AppConfigShell{Name: "fmt"}}); ok {
+		if _, ok := versionCheckArgs(binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "fmt"}}); ok {
 			t.Error("shell app should not be verifiable")
 		}
 	})
 }
 
 func TestInstallSmartInitApps_InstallsEachApp(t *testing.T) {
-	getter := &fakeCommandInfoGetter{}
+	getter := &fakeCommandInfoGetter{installed: nil, failOn: ""}
 	if err := installSmartInitApps(context.Background(), getter, []string{"shellcheck", "prettier"}); err != nil {
 		t.Fatalf("installSmartInitApps: %v", err)
 	}
@@ -83,7 +121,7 @@ func TestInstallSmartInitApps_InstallsEachApp(t *testing.T) {
 }
 
 func TestInstallSmartInitApps_PropagatesError(t *testing.T) {
-	getter := &fakeCommandInfoGetter{failOn: "broken"}
+	getter := &fakeCommandInfoGetter{installed: nil, failOn: "broken"}
 	err := installSmartInitApps(context.Background(), getter, []string{"ok", "broken"})
 	if err == nil {
 		t.Fatal("expected error when an app fails to install")

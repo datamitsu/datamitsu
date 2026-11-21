@@ -7,7 +7,7 @@ import (
 )
 
 func TestMergeSettings(t *testing.T) {
-	e := &Engine{vm: goja.New()}
+	e := &Engine{facts: nil, rootPath: "", timeoutDepth: 0, nonDeterminism: "", sideEffect: "", vm: goja.New()}
 	e.initMerge()
 	_, err := e.vm.RunString(`
 const base = { rules: { a: 1, b: 2 }, list: [{ x: 1 }], enabled: true, count: 5 };
@@ -30,7 +30,7 @@ func TestMergeRejectsInvalidInputs(t *testing.T) {
 		`const a = {}; a.self = a; merge(a)`,
 		`const a = []; a.push(a); merge({a})`,
 	} {
-		e := &Engine{vm: goja.New()}
+		e := &Engine{facts: nil, rootPath: "", timeoutDepth: 0, nonDeterminism: "", sideEffect: "", vm: goja.New()}
 		e.initMerge()
 		if _, err := e.vm.RunString(script); err == nil {
 			t.Errorf("expected rejection for %s", script)

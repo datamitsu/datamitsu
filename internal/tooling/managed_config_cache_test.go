@@ -4,18 +4,46 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	zerovalue_sync "sync"
+	zerovalue_atomic "sync/atomic"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 
 	"go.uber.org/zap"
 )
 
 func managedConfigTask(root string) Task {
 	return Task{
-		ToolName: "yamlfmt",
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Operation:    "",
+		Files:        nil,
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "yamlfmt",
 		OpConfig: config.ToolOperation{
+			App:               "",
+			Scope:             "",
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
 			Args:              []string{"-conf={root}/.datamitsu/configs/.yamlfmt.yaml", "{files}"},
 			ManagedConfigRefs: []config.ManagedConfigOpRef{{Key: ".yamlfmt.yaml", Path: "{root}/.datamitsu/configs/.yamlfmt.yaml"}},
 		},
@@ -37,7 +65,7 @@ func writeManagedConfig(t *testing.T, root, content string) string {
 
 func TestPerFileCacheToolFollowsManagedConfigContent(t *testing.T) {
 	root := t.TempDir()
-	e := &Executor{rootPath: root}
+	e := &Executor{dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, cache: nil, parser: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: zerovalue_atomic.Pointer[commandInfoMemo]{}, rootPath: root}
 	task := managedConfigTask(root)
 
 	missing := e.perFileCacheTool(task)
@@ -63,7 +91,7 @@ func TestPerFileCacheToolFollowsManagedConfigContent(t *testing.T) {
 func TestUnitGuardsIncludeManagedConfigs(t *testing.T) {
 	root := t.TempDir()
 	path := writeManagedConfig(t, root, "indent: 2\n")
-	p := &Planner{rootPath: root}
+	p := &Planner{cwdPath: "", detectedTypes: nil, tools: nil, projectTypesConfig: nil, platformChecker: nil, extraIgnoreRules: nil, cachedFiles: nil, cachedRel: nil, cachedProjects: nil, cacheInitialized: false, seedFiles: nil, globCacheMu: zerovalue_sync.Mutex{}, globCache: nil, unitCacheMu: zerovalue_sync.Mutex{}, memberCache: nil, guardCache: nil, ignoreMatcher: nil, execution: nil, widenOverride: "", timings: nil, rootPath: root}
 
 	guards := p.unitGuards(managedConfigTask(root), root)
 	if !slices.Contains(guards, path) {
@@ -79,11 +107,11 @@ func TestAConfigEditedDuringTheRunIsNotCached(t *testing.T) {
 		if err := os.WriteFile(file, []byte("a: 1\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		c, err := cache.NewCache(t.TempDir(), root, config.Config{}, nil, zap.NewNop())
+		c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 		if err != nil {
 			t.Fatal(err)
 		}
-		e := &Executor{rootPath: root, cache: c}
+		e := &Executor{dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, parser: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: zerovalue_atomic.Pointer[commandInfoMemo]{}, rootPath: root, cache: c}
 		task := managedConfigTask(root)
 		task.Operation = config.OpLint
 		task.OpConfig.Granularity = config.GranularityFile

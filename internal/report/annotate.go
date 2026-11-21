@@ -60,17 +60,17 @@ func (a *Annotator) columnUnit(task tooling.Task, proc *tooling.ProcessResult) t
 
 func (a *Annotator) anchor(d diagnostic.Diagnostic, unit textpos.Unit) *diagnostic.Anchor {
 	if d.File == "" {
-		return &diagnostic.Anchor{Basis: BasisNone, Precision: textpos.Unknown}
+		return &diagnostic.Anchor{Fingerprint: "", LineHash: "", Chars: nil, Bytes: nil, UTF16: nil, Basis: BasisNone, Precision: textpos.Unknown}
 	}
 	// A file outside the repository is not read: it rests on its row.
 	if filepath.IsAbs(RelPath(a.root, d.File)) {
-		return &diagnostic.Anchor{Basis: BasisRow, LineHash: RowHash(d.Row), Precision: textpos.Unknown}
+		return &diagnostic.Anchor{Fingerprint: "", Chars: nil, Bytes: nil, UTF16: nil, Basis: BasisRow, LineHash: RowHash(d.Row), Precision: textpos.Unknown}
 	}
 	start, err := a.lines.LineAt(d.File, d.Row)
 	if err != nil {
-		return &diagnostic.Anchor{Basis: BasisRow, LineHash: RowHash(d.Row), Precision: textpos.Unknown}
+		return &diagnostic.Anchor{Fingerprint: "", Chars: nil, Bytes: nil, UTF16: nil, Basis: BasisRow, LineHash: RowHash(d.Row), Precision: textpos.Unknown}
 	}
-	anchor := &diagnostic.Anchor{Basis: BasisLine, LineHash: LineHash(start), Precision: textpos.Unknown}
+	anchor := &diagnostic.Anchor{Fingerprint: "", Chars: nil, Bytes: nil, UTF16: nil, Basis: BasisLine, LineHash: LineHash(start), Precision: textpos.Unknown}
 	end := start
 	if d.EndRow != d.Row {
 		if end, err = a.lines.LineAt(d.File, d.EndRow); err != nil {
@@ -89,7 +89,8 @@ func (a *Annotator) anchor(d diagnostic.Diagnostic, unit textpos.Unit) *diagnost
 // never anchored rests on its row, or on nothing when it names no file.
 func inputOf(tool, relPath string, d diagnostic.Diagnostic) fingerprintInput {
 	in := fingerprintInput{
-		tool: tool, code: d.Code, relPath: relPath,
+		lineHash: "",
+		tool:     tool, code: d.Code, relPath: relPath,
 		row: d.Row, col: d.Col, source: d.Source, message: d.Message,
 	}
 	switch {

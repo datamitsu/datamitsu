@@ -28,13 +28,23 @@ func TestValidateRuntimes_ManagedBinaries_Valid(t *testing.T) {
 	bp := "node-v22/bin/node"
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind: RuntimeKindUV,
-			Mode: RuntimeModeManaged,
+			System: nil,
+			Bun:    nil,
+			Node:   nil,
+			UV:     nil,
+			JVM:    nil,
+			Go:     nil,
+			PNPM:   nil,
+			Kind:   RuntimeKindUV,
+			Mode:   RuntimeModeManaged,
 			Managed: &RuntimeConfigManaged{
 				Binaries: managedBinaries(string(target.LibcGlibc), binmanager.BinaryOsArchInfo{
-					URL:        "https://example.com/uv.tar.gz",
-					Hash:       validPin,
-					BinaryPath: &bp,
+					Auth:        nil,
+					ContentType: "",
+					ExtractDir:  false,
+					URL:         "https://example.com/uv.tar.gz",
+					Hash:        validPin,
+					BinaryPath:  &bp,
 				}),
 			},
 		},
@@ -56,43 +66,43 @@ func TestValidateRuntimes_ManagedBinaries_Errors(t *testing.T) {
 		{
 			name:    "invalid libc key",
 			libc:    "bogus",
-			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: validPin},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "https://x/u.tgz", Hash: validPin},
 			wantSub: "libc key",
 		},
 		{
 			name:    "missing url",
 			libc:    string(target.LibcMusl),
-			info:    binmanager.BinaryOsArchInfo{Hash: validPin},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, URL: "", ContentType: "", BinaryPath: nil, ExtractDir: false, Hash: validPin},
 			wantSub: "url is required",
 		},
 		{
 			name:    "missing hash",
 			libc:    string(target.LibcUnknown),
-			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz"},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "https://x/u.tgz"},
 			wantSub: "hash is required",
 		},
 		{
 			name:    "invalid hash",
 			libc:    string(target.LibcGlibc),
-			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: "zzzz"},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "https://x/u.tgz", Hash: "zzzz"},
 			wantSub: "canonical SHA-256",
 		},
 		{
 			name:    "bare hex hash is rejected",
 			libc:    string(target.LibcGlibc),
-			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "https://x/u.tgz", Hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"},
 			wantSub: "canonical SHA-256",
 		},
 		{
 			name:    "weak algorithm pin is rejected",
 			libc:    string(target.LibcGlibc),
-			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: "sha512:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "https://x/u.tgz", Hash: "sha512:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"},
 			wantSub: "canonical SHA-256",
 		},
 		{
 			name:    "unsafe binary path",
 			libc:    string(target.LibcGlibc),
-			info:    binmanager.BinaryOsArchInfo{URL: "https://x/u.tgz", Hash: validPin, BinaryPath: &unsafePath},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, ContentType: "", ExtractDir: false, URL: "https://x/u.tgz", Hash: validPin, BinaryPath: &unsafePath},
 			wantSub: "escapes parent directory",
 		},
 	}
@@ -101,6 +111,13 @@ func TestValidateRuntimes_ManagedBinaries_Errors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			runtimes := MapOfRuntimes{
 				"uv": {
+					System:  nil,
+					Bun:     nil,
+					Node:    nil,
+					UV:      nil,
+					JVM:     nil,
+					Go:      nil,
+					PNPM:    nil,
 					Kind:    RuntimeKindUV,
 					Mode:    RuntimeModeManaged,
 					Managed: &RuntimeConfigManaged{Binaries: managedBinaries(tt.libc, tt.info)},
@@ -119,7 +136,7 @@ func TestValidateRuntimes_ManagedBinaries_Errors(t *testing.T) {
 
 func TestValidateRuntimes_SystemMode_MissingConfig(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"uv": {Kind: RuntimeKindUV, Mode: RuntimeModeSystem},
+		"uv": {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindUV, Mode: RuntimeModeSystem},
 	}
 	err := ValidateRuntimes(runtimes)
 	if err == nil || !strings.Contains(err.Error(), "system mode requires system config") {
@@ -129,7 +146,7 @@ func TestValidateRuntimes_SystemMode_MissingConfig(t *testing.T) {
 
 func TestValidateRuntimes_ManagedMode_NilManaged(t *testing.T) {
 	runtimes := MapOfRuntimes{
-		"uv": {Kind: RuntimeKindUV, Mode: RuntimeModeManaged},
+		"uv": {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindUV, Mode: RuntimeModeManaged},
 	}
 	err := ValidateRuntimes(runtimes)
 	if err == nil || !strings.Contains(err.Error(), "managed mode requires managed config") {

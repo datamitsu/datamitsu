@@ -42,7 +42,7 @@ type pypiReleaseFile struct {
 	Yanked            bool   `json:"yanked"`
 }
 
-var pypiHTTPClient = &http.Client{Timeout: 15 * time.Second}
+var pypiHTTPClient = &http.Client{Transport: nil, CheckRedirect: nil, Jar: nil, Timeout: 15 * time.Second}
 
 // pypiBaseURL is the registry root; overridable in tests.
 var pypiBaseURL = "https://pypi.org"

@@ -25,7 +25,7 @@ func loadState(path string) (*State, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &State{}, nil
+			return &State{Activated: false, SuccessfulRuns: 0, LastShown: time.Time{}}, nil
 		}
 		return nil, fmt.Errorf("failed to read sponsor state: %w", err)
 	}

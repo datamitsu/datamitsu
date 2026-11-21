@@ -44,7 +44,7 @@ type StallGuard struct {
 // (cause ErrStalled) when window elapses with no Reset/Reader progress.
 func NewStallGuard(parent context.Context, window time.Duration) (*StallGuard, context.Context) {
 	ctx, cancel := context.WithCancelCause(parent)
-	g := &StallGuard{cancel: cancel, ctx: ctx, window: window}
+	g := &StallGuard{timer: nil, cancel: cancel, ctx: ctx, window: window}
 	g.timer = time.AfterFunc(window, func() { cancel(ErrStalled) })
 	return g, ctx
 }

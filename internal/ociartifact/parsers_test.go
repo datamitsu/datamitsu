@@ -292,7 +292,7 @@ const testRef = "ghcr.io/datamitsu/datamitsu-parsers"
 var testDigest = "sha256:" + strings.Repeat("ab", 32)
 
 func TestFetchParserModule_HappyPath(t *testing.T) {
-	fake := &fakeRegistry{manifest: goldenManifest(t), blobBytes: []byte("\x00asm-module")}
+	fake := &fakeRegistry{manifestErr: nil, manifestCalls: 0, blobCalls: 0, lastBlobDgst: "", manifest: goldenManifest(t), blobBytes: []byte("\x00asm-module")}
 	withFakeRegistry(t, fake)
 
 	dir := t.TempDir()
@@ -319,7 +319,7 @@ func TestFetchParserModule_MismatchIssuesNoBlobRequest(t *testing.T) {
 	raw := mutate(t, func(m map[string]any) {
 		layer0(t, m)["digest"] = "sha256:" + strings.Repeat("99", 32)
 	})
-	fake := &fakeRegistry{manifest: raw}
+	fake := &fakeRegistry{manifestErr: nil, manifestCalls: 0, blobCalls: 0, blobBytes: nil, lastBlobDgst: "", manifest: raw}
 	withFakeRegistry(t, fake)
 
 	_, err := FetchParserModule(context.Background(), testRef, testDigest, moduleSHA256, t.TempDir(), "core")
@@ -346,7 +346,7 @@ func TestFetchParserModule_MalformedRefNeverBuildsAClient(t *testing.T) {
 		"empty":         "",
 	} {
 		t.Run(name, func(t *testing.T) {
-			fake := &fakeRegistry{manifest: goldenManifest(t)}
+			fake := &fakeRegistry{manifestErr: nil, manifestCalls: 0, blobCalls: 0, blobBytes: nil, lastBlobDgst: "", manifest: goldenManifest(t)}
 			constructed := withFakeRegistry(t, fake)
 
 			_, err := FetchParserModule(context.Background(), ref, testDigest, moduleSHA256, t.TempDir(), "core")
@@ -369,7 +369,7 @@ func TestFetchParserModule_MalformedDigestNeverReachesTheRegistry(t *testing.T) 
 		"tag":             "latest",
 	} {
 		t.Run(name, func(t *testing.T) {
-			fake := &fakeRegistry{manifest: goldenManifest(t)}
+			fake := &fakeRegistry{manifestErr: nil, manifestCalls: 0, blobCalls: 0, blobBytes: nil, lastBlobDgst: "", manifest: goldenManifest(t)}
 			withFakeRegistry(t, fake)
 
 			_, err := FetchParserModule(context.Background(), testRef, digest, moduleSHA256, t.TempDir(), "core")
@@ -388,7 +388,7 @@ func TestFetchParserModule_MalformedDigestNeverReachesTheRegistry(t *testing.T) 
 // requests and no retry backoff.
 func TestFetchParserModule_OfflineIsRefusedImmediately(t *testing.T) {
 	t.Setenv("DATAMITSU_OFFLINE", "1")
-	fake := &fakeRegistry{manifest: goldenManifest(t)}
+	fake := &fakeRegistry{manifestErr: nil, manifestCalls: 0, blobCalls: 0, blobBytes: nil, lastBlobDgst: "", manifest: goldenManifest(t)}
 	constructed := withFakeRegistry(t, fake)
 
 	_, err := FetchParserModule(context.Background(), testRef, testDigest, moduleSHA256, t.TempDir(), "core")
@@ -407,7 +407,7 @@ func TestFetchParserModule_OfflineIsRefusedImmediately(t *testing.T) {
 // advice ("was the bundle garbage-collected?") out of an error about a parser,
 // where it would send the reader to the wrong config key.
 func TestFetchParserModule_NotFoundIsRewordedForParsers(t *testing.T) {
-	fake := &fakeRegistry{manifestErr: ocidigest.ErrManifestNotFound}
+	fake := &fakeRegistry{manifest: nil, manifestCalls: 0, blobCalls: 0, blobBytes: nil, lastBlobDgst: "", manifestErr: ocidigest.ErrManifestNotFound}
 	withFakeRegistry(t, fake)
 
 	_, err := FetchParserModule(context.Background(), testRef, testDigest, moduleSHA256, t.TempDir(), "core")

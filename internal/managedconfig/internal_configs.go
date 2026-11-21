@@ -243,7 +243,7 @@ func readInternalConfigs(dir string) (map[string][]byte, error) {
 }
 
 func diffInternalConfigs(current map[string][]byte, desired map[string]string) *InternalConfigsResult {
-	result := &InternalConfigsResult{}
+	result := &InternalConfigsResult{Written: nil, Unchanged: nil, Removed: nil}
 	for key, content := range desired {
 		rel := config.InternalConfigRelPath(key)
 		if data, ok := current[key]; ok && data != nil && bytes.Equal(data, []byte(content)) {

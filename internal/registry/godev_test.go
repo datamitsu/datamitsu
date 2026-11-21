@@ -22,16 +22,16 @@ func TestGetLatestGoRelease(t *testing.T) {
 				Version: "go1.26.3",
 				Stable:  true,
 				Files: []goDevFile{
-					{Filename: "go1.26.3.src.tar.gz", Kind: "source", SHA256: "1111111111111111111111111111111111111111111111111111111111111111"},
-					{Filename: "go1.26.3.linux-amd64.tar.gz", OS: "linux", Arch: "amd64", Kind: "archive", SHA256: "2222222222222222222222222222222222222222222222222222222222222222"},
-					{Filename: "go1.26.3.darwin-arm64.tar.gz", OS: "darwin", Arch: "arm64", Kind: "archive", SHA256: "3333333333333333333333333333333333333333333333333333333333333333"},
+					{OS: "", Arch: "", Version: "", Filename: "go1.26.3.src.tar.gz", Kind: "source", SHA256: "1111111111111111111111111111111111111111111111111111111111111111"},
+					{Version: "", Filename: "go1.26.3.linux-amd64.tar.gz", OS: "linux", Arch: "amd64", Kind: "archive", SHA256: "2222222222222222222222222222222222222222222222222222222222222222"},
+					{Version: "", Filename: "go1.26.3.darwin-arm64.tar.gz", OS: "darwin", Arch: "arm64", Kind: "archive", SHA256: "3333333333333333333333333333333333333333333333333333333333333333"},
 				},
 			},
 			{
 				Version: "go1.25.7",
 				Stable:  true,
 				Files: []goDevFile{
-					{Filename: "go1.25.7.linux-amd64.tar.gz", OS: "linux", Arch: "amd64", Kind: "archive", SHA256: "4444444444444444444444444444444444444444444444444444444444444444"},
+					{Version: "", Filename: "go1.25.7.linux-amd64.tar.gz", OS: "linux", Arch: "amd64", Kind: "archive", SHA256: "4444444444444444444444444444444444444444444444444444444444444444"},
 				},
 			},
 		}
@@ -66,8 +66,8 @@ func TestGetLatestGoRelease(t *testing.T) {
 
 	t.Run("highest version wins regardless of order", func(t *testing.T) {
 		releases := []goDevRelease{
-			{Version: "go1.25.7", Stable: true, Files: []goDevFile{{Filename: "go1.25.7.linux-amd64.tar.gz", SHA256: "aaaa"}}},
-			{Version: "go1.26.3", Stable: true, Files: []goDevFile{{Filename: "go1.26.3.linux-amd64.tar.gz", SHA256: "bbbb"}}},
+			{Version: "go1.25.7", Stable: true, Files: []goDevFile{{OS: "", Arch: "", Version: "", Kind: "", Filename: "go1.25.7.linux-amd64.tar.gz", SHA256: "aaaa"}}},
+			{Version: "go1.26.3", Stable: true, Files: []goDevFile{{OS: "", Arch: "", Version: "", Kind: "", Filename: "go1.26.3.linux-amd64.tar.gz", SHA256: "bbbb"}}},
 		}
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(goDevBody(releases)))
@@ -89,8 +89,8 @@ func TestGetLatestGoRelease(t *testing.T) {
 
 	t.Run("skips unstable releases", func(t *testing.T) {
 		releases := []goDevRelease{
-			{Version: "go1.27rc1", Stable: false, Files: []goDevFile{{Filename: "go1.27rc1.linux-amd64.tar.gz", SHA256: "cccc"}}},
-			{Version: "go1.26.3", Stable: true, Files: []goDevFile{{Filename: "go1.26.3.linux-amd64.tar.gz", SHA256: "dddd"}}},
+			{Version: "go1.27rc1", Stable: false, Files: []goDevFile{{OS: "", Arch: "", Version: "", Kind: "", Filename: "go1.27rc1.linux-amd64.tar.gz", SHA256: "cccc"}}},
+			{Version: "go1.26.3", Stable: true, Files: []goDevFile{{OS: "", Arch: "", Version: "", Kind: "", Filename: "go1.26.3.linux-amd64.tar.gz", SHA256: "dddd"}}},
 		}
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(goDevBody(releases)))
@@ -112,7 +112,7 @@ func TestGetLatestGoRelease(t *testing.T) {
 
 	t.Run("no stable releases errors", func(t *testing.T) {
 		releases := []goDevRelease{
-			{Version: "go1.27rc1", Stable: false, Files: []goDevFile{{Filename: "x", SHA256: "y"}}},
+			{Version: "go1.27rc1", Stable: false, Files: []goDevFile{{OS: "", Arch: "", Version: "", Kind: "", Filename: "x", SHA256: "y"}}},
 		}
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(goDevBody(releases)))
@@ -130,7 +130,7 @@ func TestGetLatestGoRelease(t *testing.T) {
 
 	t.Run("stable release with no hashed files errors", func(t *testing.T) {
 		releases := []goDevRelease{
-			{Version: "go1.26.3", Stable: true, Files: []goDevFile{{Filename: "go1.26.3.src.tar.gz", SHA256: ""}}},
+			{Version: "go1.26.3", Stable: true, Files: []goDevFile{{OS: "", Arch: "", Version: "", Kind: "", Filename: "go1.26.3.src.tar.gz", SHA256: ""}}},
 		}
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(goDevBody(releases)))
@@ -151,7 +151,7 @@ func TestGetLatestGoRelease(t *testing.T) {
 		// is the empty string, which must be rejected rather than yielding a
 		// release with a blank Version field.
 		releases := []goDevRelease{
-			{Version: "go", Stable: true, Files: []goDevFile{{Filename: "go.src.tar.gz", SHA256: "1111111111111111111111111111111111111111111111111111111111111111"}}},
+			{Version: "go", Stable: true, Files: []goDevFile{{OS: "", Arch: "", Version: "", Kind: "", Filename: "go.src.tar.gz", SHA256: "1111111111111111111111111111111111111111111111111111111111111111"}}},
 		}
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(goDevBody(releases)))

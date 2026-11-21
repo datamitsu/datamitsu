@@ -153,7 +153,7 @@ func LoadBaseline(path string) (LoadedBaseline, error) {
 			}
 			set[fp] = true
 		}
-		return LoadedBaseline{Set: set, Version: b.Fingerprint, Complete: b.Source.Complete, Incomplete: b.Source.Incomplete}, nil
+		return LoadedBaseline{FromReport: false, Set: set, Version: b.Fingerprint, Complete: b.Source.Complete, Incomplete: b.Source.Incomplete}, nil
 	case SchemaVersion:
 		var run Run
 		if err := json.Unmarshal(data, &run); err != nil {

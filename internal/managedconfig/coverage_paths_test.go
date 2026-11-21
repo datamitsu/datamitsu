@@ -35,7 +35,7 @@ func TestCreateDatamitsuLinks_MkdirGitRootError(t *testing.T) {
 		t.Fatal(err)
 	}
 	apps := binmanager.MapOfApps{
-		"tool": {Links: map[string]string{"bin": "bin"}},
+		"tool": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Links: map[string]string{"bin": "bin"}},
 	}
 	resolver := &mockResolver{paths: map[string]string{"tool": installRoot}}
 

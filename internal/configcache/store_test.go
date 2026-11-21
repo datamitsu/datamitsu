@@ -35,19 +35,58 @@ func isolatedCache(t *testing.T) string {
 func sampleConfig(t *testing.T) *config.Config {
 	t.Helper()
 	return &config.Config{
+		Name:         "",
+		Version:      "",
+		Bundles:      nil,
+		Runtimes:     nil,
+		EjectConfigs: nil,
+		ProjectTypes: nil,
+		Tools:        nil,
+		Execution:    nil,
+		InitCommands: nil,
+		OCI:          nil,
+		Parsers:      nil,
+		Lsp:          nil,
 		Apps: binmanager.MapOfApps{
 			"task": {
-				Required:    true,
-				Description: "task runner",
+				Lazy:               false,
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Links:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Required:           true,
+				Description:        "task runner",
 				Binary: &binmanager.AppConfigBinary{
-					Version: "3.44.0",
+					Binaries: nil,
+					Version:  "3.44.0",
 				},
 			},
 		},
 		ManagedConfigs: config.MapOfManagedConfigs{
 			"eslint": {
-				ProjectTypes: []string{"node"},
-				Scope:        "project",
+				Tools:             nil,
+				OtherFileNameList: nil,
+				DeleteOnly:        false,
+				LinkTarget:        "",
+				ExpectChainHash:   "",
+				Ejectable:         false,
+				Placement:         "",
+				Render:            nil,
+				ProjectTypes:      []string{"node"},
+				Scope:             "project",
 				// A live goja value in the real thing; anything non-nil is
 				// enough to prove Save drops it.
 				Content: func() {},
@@ -142,7 +181,7 @@ func TestStoreArtifactPathIsUnderTheCacheTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Save(testKey, &Entry{Config: sampleConfig(t)}); err != nil {
+	if err := s.Save(testKey, &Entry{Warnings: nil, RemoteURLs: nil, Config: sampleConfig(t)}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	want := filepath.Join(cachePath, DirName, filepath.FromSlash(ns), testKey+artifactExt)
@@ -174,7 +213,7 @@ func TestStoreCorruptArtifactIsAMissAndIsRemoved(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newTestStore(t)
-			if err := s.Save(testKey, &Entry{Config: sampleConfig(t)}); err != nil {
+			if err := s.Save(testKey, &Entry{Warnings: nil, RemoteURLs: nil, Config: sampleConfig(t)}); err != nil {
 				t.Fatalf("Save: %v", err)
 			}
 			p := filepath.Join(s.Dir(), testKey+artifactExt)
@@ -241,7 +280,7 @@ func TestStoreEveryTruncationIsAMiss(t *testing.T) {
 // matches its recorded digest must not be served, however well it decodes.
 func TestStoreTamperedPayloadIsAMiss(t *testing.T) {
 	s := newTestStore(t)
-	body, err := msgpack.Marshal(payload{Config: withoutManagedConfigContent(sampleConfig(t))})
+	body, err := msgpack.Marshal(payload{Warnings: nil, RemoteURLs: nil, Config: withoutManagedConfigContent(sampleConfig(t))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +310,7 @@ func TestStoreTamperedPayloadIsAMiss(t *testing.T) {
 
 func TestStoreUnknownFormatVersionIsAMiss(t *testing.T) {
 	s := newTestStore(t)
-	body, err := msgpack.Marshal(payload{Config: withoutManagedConfigContent(sampleConfig(t))})
+	body, err := msgpack.Marshal(payload{Warnings: nil, RemoteURLs: nil, Config: withoutManagedConfigContent(sampleConfig(t))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +350,7 @@ func TestStoreConcurrentWritersProduceAReadableArtifact(t *testing.T) {
 	errs := make([]error, writers)
 	for i := range writers {
 		wg.Go(func() {
-			errs[i] = s.Save(testKey, &Entry{Config: cfg})
+			errs[i] = s.Save(testKey, &Entry{Warnings: nil, RemoteURLs: nil, Config: cfg})
 		})
 	}
 	// Read while the writers run: a rename is atomic, so every read either
@@ -349,7 +388,7 @@ func TestStoreConcurrentWritersProduceAReadableArtifact(t *testing.T) {
 func TestPruneRemovesUnreadEntriesAndEmptyDirs(t *testing.T) {
 	cachePath := isolatedCache(t)
 	s := storeForRoot(t, filepath.Join(t.TempDir(), "repo"))
-	if err := s.Save(testKey, &Entry{Config: sampleConfig(t)}); err != nil {
+	if err := s.Save(testKey, &Entry{Warnings: nil, RemoteURLs: nil, Config: sampleConfig(t)}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	fresh := filepath.Join(s.Dir(), testKey+artifactExt)
@@ -449,7 +488,7 @@ func TestSavePrunes(t *testing.T) {
 	if err := os.Chtimes(stale, old, old); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Save(testKey, &Entry{Config: sampleConfig(t)}); err != nil {
+	if err := s.Save(testKey, &Entry{Warnings: nil, RemoteURLs: nil, Config: sampleConfig(t)}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
@@ -551,7 +590,7 @@ func TestPruneCapsEachNamespaceIndependently(t *testing.T) {
 // who runs it every day.
 func TestLoadRefreshesAnAgingEntry(t *testing.T) {
 	s := newTestStore(t)
-	if err := s.Save(testKey, &Entry{Config: sampleConfig(t)}); err != nil {
+	if err := s.Save(testKey, &Entry{Warnings: nil, RemoteURLs: nil, Config: sampleConfig(t)}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	p := filepath.Join(s.Dir(), testKey+artifactExt)
@@ -583,7 +622,7 @@ func TestPruneKeepsTheEntryAHitRefreshed(t *testing.T) {
 	s := storeForRoot(t, filepath.Join(t.TempDir(), "repo"))
 
 	// The hot entry, written before everything else and never rewritten.
-	if err := s.Save(testKey, &Entry{Config: sampleConfig(t)}); err != nil {
+	if err := s.Save(testKey, &Entry{Warnings: nil, RemoteURLs: nil, Config: sampleConfig(t)}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	hot := filepath.Join(s.Dir(), testKey+artifactExt)
@@ -706,7 +745,7 @@ func TestNewStoreRejectsAnUnsafeNamespace(t *testing.T) {
 func TestStoreRejectsAKeyThatIsNotAHexDigest(t *testing.T) {
 	s := newTestStore(t)
 	for _, key := range []string{"", "../escape", "not-hex", "ABCDEF"} {
-		if err := s.Save(key, &Entry{Config: sampleConfig(t)}); err == nil {
+		if err := s.Save(key, &Entry{Warnings: nil, RemoteURLs: nil, Config: sampleConfig(t)}); err == nil {
 			t.Errorf("Save(%q) = nil error, want a refusal", key)
 		}
 		if _, ok := s.Load(key); ok {
@@ -718,7 +757,7 @@ func TestStoreRejectsAKeyThatIsNotAHexDigest(t *testing.T) {
 func TestClearAllRemovesTheTree(t *testing.T) {
 	cachePath := isolatedCache(t)
 	s := storeForRoot(t, filepath.Join(t.TempDir(), "repo"))
-	if err := s.Save(testKey, &Entry{Config: sampleConfig(t)}); err != nil {
+	if err := s.Save(testKey, &Entry{Warnings: nil, RemoteURLs: nil, Config: sampleConfig(t)}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if err := ClearAll(cachePath); err != nil {
@@ -753,7 +792,7 @@ func TestClearProjectRemovesOnlyItsNamespace(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := s.Save(testKey, &Entry{Config: sampleConfig(t)}); err != nil {
+		if err := s.Save(testKey, &Entry{Warnings: nil, RemoteURLs: nil, Config: sampleConfig(t)}); err != nil {
 			t.Fatal(err)
 		}
 		stores[root] = s

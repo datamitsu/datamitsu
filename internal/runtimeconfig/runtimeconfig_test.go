@@ -22,6 +22,17 @@ func TestConstants(t *testing.T) {
 
 func TestEffectiveJSONRoundTrip(t *testing.T) {
 	in := Effective{
+		Annotations:              "",
+		ConfigCache:              false,
+		ForceGitSubprocess:       false,
+		LspFormatWidenTo:         "",
+		MaxFindingsPerProcess:    0,
+		MaxParseInputBytes:       0,
+		Output:                   "",
+		StartupTimings:           false,
+		Trace:                    false,
+		TraceDir:                 "",
+		UnitCacheTTLMinutes:      0,
 		Concurrency:              3,
 		InstallTimeoutSeconds:    600,
 		Libc:                     "glibc",

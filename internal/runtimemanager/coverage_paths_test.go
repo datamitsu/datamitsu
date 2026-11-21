@@ -29,6 +29,8 @@ func hostBinaries(t *testing.T, libc string, binaryPath *string) binmanager.MapO
 	return binmanager.MapOfBinaries{
 		osType: {
 			archType: {libc: binmanager.BinaryOsArchInfo{
+				Auth:        nil,
+				ExtractDir:  false,
 				URL:         "https://example.com/runtime.tar.gz",
 				Hash:        "deadbeef",
 				ContentType: binmanager.BinContentTypeTarGz,
@@ -45,6 +47,13 @@ func hostTargetWithLibc(libc target.LibcType) target.Target {
 func TestComputeRuntimeStorePath(t *testing.T) {
 	t.Run("managed runtime returns store path", func(t *testing.T) {
 		rc := config.RuntimeConfig{
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
 			Kind:    config.RuntimeKindUV,
 			Mode:    config.RuntimeModeManaged,
 			Managed: &config.RuntimeConfigManaged{Binaries: hostBinaries(t, testLibc, nil)},
@@ -64,9 +73,16 @@ func TestComputeRuntimeStorePath(t *testing.T) {
 
 	t.Run("system runtime returns ok=false", func(t *testing.T) {
 		rc := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/uv"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/uv"},
 		}
 		rm := New(config.MapOfRuntimes{"uv": rc})
 		path, ok, err := rm.ComputeRuntimeStorePath("uv")
@@ -90,6 +106,13 @@ func TestComputeRuntimeStorePath(t *testing.T) {
 
 	t.Run("managed mode without managed config errors", func(t *testing.T) {
 		rc := config.RuntimeConfig{
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
 			Kind:    config.RuntimeKindUV,
 			Mode:    config.RuntimeModeManaged,
 			Managed: nil,
@@ -108,12 +131,22 @@ func TestComputeRuntimeStorePath(t *testing.T) {
 			otherOS = syslist.OsTypeLinux
 		}
 		rc := config.RuntimeConfig{
-			Kind: config.RuntimeKindUV,
-			Mode: config.RuntimeModeManaged,
+			System: nil,
+			Bun:    nil,
+			Node:   nil,
+			UV:     nil,
+			JVM:    nil,
+			Go:     nil,
+			PNPM:   nil,
+			Kind:   config.RuntimeKindUV,
+			Mode:   config.RuntimeModeManaged,
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{
 					otherOS: {
 						syslist.ArchTypeAmd64: {testLibc: binmanager.BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         "https://example.com/x.tar.gz",
 							Hash:        "abc",
 							ContentType: binmanager.BinContentTypeTarGz,
@@ -132,6 +165,13 @@ func TestComputeRuntimeStorePath(t *testing.T) {
 		// Only a "musl" entry, host requests a non-musl, non-glibc libc so the
 		// glibc fallback in resolveLibcKey also misses.
 		rc := config.RuntimeConfig{
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
 			Kind:    config.RuntimeKindUV,
 			Mode:    config.RuntimeModeManaged,
 			Managed: &config.RuntimeConfigManaged{Binaries: hostBinaries(t, "musl", nil)},
@@ -152,7 +192,7 @@ func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 	})
 
 	t.Run("system mode without system config", func(t *testing.T) {
-		rc := config.RuntimeConfig{Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: nil}
+		rc := config.RuntimeConfig{Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: nil}
 		rm := New(config.MapOfRuntimes{"uv": rc})
 		if _, err := rm.GetRuntimePath(context.Background(), "uv"); err == nil {
 			t.Error("expected error for system mode without system config")
@@ -161,9 +201,16 @@ func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 
 	t.Run("system mode returns command", func(t *testing.T) {
 		rc := config.RuntimeConfig{
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/opt/uv"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/opt/uv"},
 		}
 		rm := New(config.MapOfRuntimes{"uv": rc})
 		got, err := rm.GetRuntimePath(context.Background(), "uv")
@@ -176,7 +223,7 @@ func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 	})
 
 	t.Run("managed mode without managed config", func(t *testing.T) {
-		rc := config.RuntimeConfig{Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged, Managed: nil}
+		rc := config.RuntimeConfig{System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged, Managed: nil}
 		rm := newTestRMWithTarget(config.MapOfRuntimes{"uv": rc}, hostTargetWithLibc(target.LibcGlibc))
 		if _, err := rm.GetRuntimePath(context.Background(), "uv"); err == nil {
 			t.Error("expected error for managed mode without managed config")
@@ -189,12 +236,22 @@ func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 			otherOS = syslist.OsTypeLinux
 		}
 		rc := config.RuntimeConfig{
-			Kind: config.RuntimeKindUV,
-			Mode: config.RuntimeModeManaged,
+			System: nil,
+			Bun:    nil,
+			Node:   nil,
+			UV:     nil,
+			JVM:    nil,
+			Go:     nil,
+			PNPM:   nil,
+			Kind:   config.RuntimeKindUV,
+			Mode:   config.RuntimeModeManaged,
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{
 					otherOS: {syslist.ArchTypeAmd64: {testLibc: binmanager.BinaryOsArchInfo{
-						URL: "https://example.com/x.tar.gz", Hash: "abc", ContentType: binmanager.BinContentTypeTarGz,
+						Auth:       nil,
+						BinaryPath: nil,
+						ExtractDir: false,
+						URL:        "https://example.com/x.tar.gz", Hash: "abc", ContentType: binmanager.BinContentTypeTarGz,
 					}}},
 				},
 			},
@@ -208,6 +265,13 @@ func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 	t.Run("unsafe binaryPath rejected", func(t *testing.T) {
 		bad := "../escape"
 		rc := config.RuntimeConfig{
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
 			Kind:    config.RuntimeKindUV,
 			Mode:    config.RuntimeModeManaged,
 			Managed: &config.RuntimeConfigManaged{Binaries: hostBinaries(t, testLibc, &bad)},
@@ -221,7 +285,7 @@ func TestGetRuntimePath_ErrorBranches(t *testing.T) {
 
 func TestGetCommandInfo_NotRuntimeApp(t *testing.T) {
 	rm := New(config.MapOfRuntimes{})
-	app := binmanager.App{Required: true} // no Uv/Node/Jvm/Go
+	app := binmanager.App{Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true} // no Uv/Node/Jvm/Go
 	if _, err := rm.GetCommandInfo(context.Background(), "x", app); err == nil {
 		t.Error("expected error for non-runtime-managed app")
 	}
@@ -229,7 +293,7 @@ func TestGetCommandInfo_NotRuntimeApp(t *testing.T) {
 
 func TestComputeAppPath_NotRuntimeApp(t *testing.T) {
 	rm := New(config.MapOfRuntimes{})
-	app := binmanager.App{Required: true}
+	app := binmanager.App{Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true}
 	if _, err := rm.ComputeAppPath("x", app); err == nil {
 		t.Error("expected error for non-runtime-managed app")
 	}
@@ -238,10 +302,10 @@ func TestComputeAppPath_NotRuntimeApp(t *testing.T) {
 func TestComputeAppPath_UnresolvableRuntime(t *testing.T) {
 	rm := New(config.MapOfRuntimes{})
 	tests := map[string]binmanager.App{
-		"uv":   {Uv: &binmanager.AppConfigUV{Runtime: "missing"}},
-		"node": {Node: &binmanager.AppConfigNode{Runtime: "missing"}},
-		"jvm":  {Jvm: &binmanager.AppConfigJVM{Runtime: "missing"}},
-		"go":   {Go: &binmanager.AppConfigGo{Runtime: "missing"}},
+		"uv":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{PackageName: "", Version: "", LockFile: "", RequiresPython: "", Runtime: "missing"}},
+		"node": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", LockFile: "", Dependencies: nil, Runtime: "missing"}},
+		"jvm":  {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{JarURL: "", JarHash: "", Version: "", MainClass: "", Runtime: "missing"}},
+		"go":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{PackageName: "", Version: "", LockFile: "", Runtime: "missing"}},
 	}
 	for name, app := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -286,17 +350,27 @@ func TestMoveRuntimeFiles_ErrorBranches(t *testing.T) {
 func TestGetJVMCommandInfo(t *testing.T) {
 	systemJVM := config.MapOfRuntimes{
 		"jvm": {
-			Kind:   config.RuntimeKindJVM,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "/usr/bin/java"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindJVM,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/java"},
 		},
 	}
 
 	t.Run("jar mode (no main class)", func(t *testing.T) {
 		rm := New(systemJVM)
 		ci, err := rm.GetJVMCommandInfo(context.Background(), "app", &binmanager.AppConfigJVM{
-			Version: "1.0.0",
-			JarHash: "deadbeef",
+			JarURL:    "",
+			Runtime:   "",
+			MainClass: "",
+			Version:   "1.0.0",
+			JarHash:   "deadbeef",
 		}, nil, nil)
 		if err != nil {
 			t.Fatalf("GetJVMCommandInfo() error = %v", err)
@@ -312,6 +386,8 @@ func TestGetJVMCommandInfo(t *testing.T) {
 	t.Run("main class mode", func(t *testing.T) {
 		rm := New(systemJVM)
 		ci, err := rm.GetJVMCommandInfo(context.Background(), "app", &binmanager.AppConfigJVM{
+			JarURL:    "",
+			Runtime:   "",
 			Version:   "1.0.0",
 			JarHash:   "deadbeef",
 			MainClass: "com.example.Main",
@@ -326,10 +402,13 @@ func TestGetJVMCommandInfo(t *testing.T) {
 
 	t.Run("system mode without system config defaults to java", func(t *testing.T) {
 		rm := New(config.MapOfRuntimes{
-			"jvm": {Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeSystem, System: nil},
+			"jvm": {Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeSystem, System: nil},
 		})
 		ci, err := rm.GetJVMCommandInfo(context.Background(), "app", &binmanager.AppConfigJVM{
-			Version: "1.0.0", JarHash: "deadbeef",
+			JarURL:    "",
+			Runtime:   "",
+			MainClass: "",
+			Version:   "1.0.0", JarHash: "deadbeef",
 		}, nil, nil)
 		if err != nil {
 			t.Fatalf("GetJVMCommandInfo() error = %v", err)
@@ -342,7 +421,9 @@ func TestGetJVMCommandInfo(t *testing.T) {
 	t.Run("unresolvable runtime errors", func(t *testing.T) {
 		rm := New(config.MapOfRuntimes{})
 		if _, err := rm.GetJVMCommandInfo(context.Background(), "app", &binmanager.AppConfigJVM{
-			Runtime: "missing", Version: "1.0.0", JarHash: "deadbeef",
+			JarURL:    "",
+			MainClass: "",
+			Runtime:   "missing", Version: "1.0.0", JarHash: "deadbeef",
 		}, nil, nil); err == nil {
 			t.Error("expected error for unresolvable JVM runtime")
 		}
@@ -367,7 +448,7 @@ func TestRemoveAll(t *testing.T) {
 
 	t.Run("injected seam is used", func(t *testing.T) {
 		called := ""
-		rm := &RuntimeManager{removeAllFunc: func(p string) error { called = p; return nil }}
+		rm := &RuntimeManager{mapOfRuntimes: nil, hostTarget: target.Target{OS: "", Arch: "", Libc: ""}, lookPathFunc: nil, removeAllFunc: func(p string) error { called = p; return nil }}
 		if err := rm.removeAll("/some/path"); err != nil {
 			t.Fatalf("removeAll() error = %v", err)
 		}
@@ -385,12 +466,22 @@ func TestInstallRuntimes_SkipBranches(t *testing.T) {
 		}
 		runtimes := config.MapOfRuntimes{
 			"r": {
-				Kind: config.RuntimeKindUV,
-				Mode: config.RuntimeModeManaged,
+				System: nil,
+				Bun:    nil,
+				Node:   nil,
+				UV:     nil,
+				JVM:    nil,
+				Go:     nil,
+				PNPM:   nil,
+				Kind:   config.RuntimeKindUV,
+				Mode:   config.RuntimeModeManaged,
 				Managed: &config.RuntimeConfigManaged{
 					Binaries: binmanager.MapOfBinaries{
 						otherOS: {syslist.ArchTypeAmd64: {testLibc: binmanager.BinaryOsArchInfo{
-							URL: "https://example.com/x.tar.gz", Hash: "abc", ContentType: binmanager.BinContentTypeTarGz,
+							Auth:       nil,
+							BinaryPath: nil,
+							ExtractDir: false,
+							URL:        "https://example.com/x.tar.gz", Hash: "abc", ContentType: binmanager.BinContentTypeTarGz,
 						}}},
 					},
 				},
@@ -409,6 +500,13 @@ func TestInstallRuntimes_SkipBranches(t *testing.T) {
 	t.Run("unavailable libc skipped", func(t *testing.T) {
 		runtimes := config.MapOfRuntimes{
 			"r": {
+				System:  nil,
+				Bun:     nil,
+				Node:    nil,
+				UV:      nil,
+				JVM:     nil,
+				Go:      nil,
+				PNPM:    nil,
 				Kind:    config.RuntimeKindUV,
 				Mode:    config.RuntimeModeManaged,
 				Managed: &config.RuntimeConfigManaged{Binaries: hostBinaries(t, "musl", nil)},

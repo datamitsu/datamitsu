@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/cache"
@@ -66,7 +67,7 @@ func coreModule(t *testing.T) *parsermanager.Manager {
 	// The parsers entry is named "core", NOT after the dispatch key — proving
 	// module and parser are independent (so versions can be aliased freely).
 	mgr := parsermanager.New(config.MapOfParsers{
-		"core": {URL: srv.URL, Hash: sum.Hex()},
+		"core": {OCI: nil, URL: srv.URL, Hash: sum.Hex()},
 	})
 	t.Cleanup(func() { _ = mgr.Close(context.Background()) })
 	return mgr
@@ -124,8 +125,8 @@ func TestDiagnosticParser_Unavailable(t *testing.T) {
 	t.Cleanup(srv.Close)
 	sum := digest.SHA256Of(wasm)
 	mgr := parsermanager.New(config.MapOfParsers{
-		"core":   {URL: srv.URL, Hash: sum.Hex()},
-		"broken": {URL: srv.URL, Hash: strings.Repeat("0", 64)},
+		"core":   {OCI: nil, URL: srv.URL, Hash: sum.Hex()},
+		"broken": {OCI: nil, URL: srv.URL, Hash: strings.Repeat("0", 64)},
 	})
 	t.Cleanup(func() { _ = mgr.Close(context.Background()) })
 	problems := newParseProblems()
@@ -191,11 +192,11 @@ func (failingModules) ParseOutput(context.Context, string, string, []byte, []byt
 }
 
 func (failingModules) Fallback(context.Context, []byte, []byte, int32) (parsermanager.Response, error) {
-	return parsermanager.Response{ABI: 2, Diagnostics: []parsermanager.RawDiagnostic{}}, nil
+	return parsermanager.Response{Recognized: false, Format: "", Partial: false, ABI: 2, Diagnostics: []parsermanager.RawDiagnostic{}}, nil
 }
 
 func (failingModules) DescribedParser(string, string) (parsermanager.ParserFacts, bool) {
-	return parsermanager.ParserFacts{}, false
+	return parsermanager.ParserFacts{Version: "", Schema: 0, Contract: false, Tool: parsermanager.ToolCapability{Name: "", Description: "", URL: "", Operations: nil, Severities: nil, ColumnUnit: "", Category: "", Kind: ""}}, false
 }
 
 type shellApps map[string]*binmanager.CommandInfo
@@ -224,24 +225,35 @@ func TestParseFailureThroughTheExecutor(t *testing.T) {
 		}
 		files = append(files, path)
 	}
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
 	executor := tooling.NewExecutor(root, false, false, shellApps{
-		"hadolint": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "exit 0"}},
+		"hadolint": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", "exit 0"}},
 	}, c)
 	problems := newParseProblems()
 	executor.SetParser(newDiagnosticParser(failingModules{}, problems))
 
-	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{{
-		ToolName:    "hadolint",
-		Tool:        config.Tool{Name: "hadolint", OutputParser: &config.OutputParser{Module: "core", Parser: "hadolint"}},
-		Operation:   config.OpLint,
-		OpConfig:    config.ToolOperation{App: "hadolint", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
-		Files:       files,
-		ProjectPath: root,
-	}}}}}
+	plan := &tooling.ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []tooling.TaskGroup{{
+			Priority: 0, Tasks: []tooling.Task{{
+				ID:          "",
+				UnitDir:     "",
+				UnitMembers: nil,
+				UnitGuards:  nil,
+				Coverage:    "",
+				ToolName:    "hadolint",
+				Tool:        config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "hadolint", OutputParser: &config.OutputParser{Module: "core", Parser: "hadolint"}},
+				Operation:   config.OpLint,
+				OpConfig:    config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "hadolint", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
+				Files:       files,
+				ProjectPath: root,
+			}},
+		}},
+	}
 	results, err := executor.Execute(context.Background(), plan)
 	if err != nil {
 		t.Fatal(err)
@@ -299,17 +311,28 @@ func TestLevelsAndRuleURLThroughTheExecutor(t *testing.T) {
 			}
 			script := fmt.Sprintf("printf '%%s\\n' '%s'; exit %d", tc.output, tc.exit)
 			executor := tooling.NewExecutor(root, false, false, shellApps{
-				"tool": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", script}},
+				"tool": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", script}},
 			}, nil)
 			executor.SetParser(newDiagnosticParser(mgr, newParseProblems()))
-			plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{{
-				ToolName:    tc.parser,
-				Tool:        config.Tool{Name: tc.parser, OutputParser: &config.OutputParser{Module: "core", Parser: tc.parser}},
-				Operation:   config.OpLint,
-				OpConfig:    config.ToolOperation{App: "tool", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
-				Files:       []string{file},
-				ProjectPath: root,
-			}}}}}
+			plan := &tooling.ExecutionPlan{
+				ConfigName: "",
+				FailOn:     "",
+				Skipped:    nil, Groups: []tooling.TaskGroup{{
+					Priority: 0, Tasks: []tooling.Task{{
+						ID:          "",
+						UnitDir:     "",
+						UnitMembers: nil,
+						UnitGuards:  nil,
+						Coverage:    "",
+						ToolName:    tc.parser,
+						Tool:        config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: tc.parser, OutputParser: &config.OutputParser{Module: "core", Parser: tc.parser}},
+						Operation:   config.OpLint,
+						OpConfig:    config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "tool", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
+						Files:       []string{file},
+						ProjectPath: root,
+					}},
+				}},
+			}
 			results, err := executor.Execute(context.Background(), plan)
 			if err != nil {
 				t.Fatal(err)
@@ -360,21 +383,32 @@ func TestThresholdFailsTheNamedFileOfABatch(t *testing.T) {
 				files = append(files, path)
 			}
 			executor := tooling.NewExecutor(root, false, false, shellApps{
-				"tool": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "printf '%s' '" + report + "'"}},
+				"tool": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", "printf '%s' '" + report + "'"}},
 			}, nil)
 			executor.SetParser(newDiagnosticParser(mgr, newParseProblems()))
 			executor.SetGate(tooling.ThresholdGate(config.SeverityWarning, func(module string) bool {
 				ok, err := mgr.SeverityContract(context.Background(), module)
 				return err == nil && ok
 			}, nil))
-			plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{{
-				ToolName:    parser,
-				Tool:        config.Tool{Name: parser, OutputParser: &config.OutputParser{Module: "core", Parser: parser}},
-				Operation:   config.OpLint,
-				OpConfig:    config.ToolOperation{App: "tool", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
-				Files:       files,
-				ProjectPath: root,
-			}}}}}
+			plan := &tooling.ExecutionPlan{
+				ConfigName: "",
+				FailOn:     "",
+				Skipped:    nil, Groups: []tooling.TaskGroup{{
+					Priority: 0, Tasks: []tooling.Task{{
+						ID:          "",
+						UnitDir:     "",
+						UnitMembers: nil,
+						UnitGuards:  nil,
+						Coverage:    "",
+						ToolName:    parser,
+						Tool:        config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: parser, OutputParser: &config.OutputParser{Module: "core", Parser: parser}},
+						Operation:   config.OpLint,
+						OpConfig:    config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "tool", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
+						Files:       files,
+						ProjectPath: root,
+					}},
+				}},
+			}
 			results, err := executor.Execute(context.Background(), plan)
 			if err != nil {
 				t.Fatal(err)
@@ -409,21 +443,32 @@ func TestThresholdKeepsAFileNameAsPrinted(t *testing.T) {
 		files = append(files, path)
 	}
 	executor := tooling.NewExecutor(root, false, false, shellApps{
-		"tool": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "printf ' a.py:1:1: warning: m\\n' >&2"}},
+		"tool": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", "printf ' a.py:1:1: warning: m\\n' >&2"}},
 	}, nil)
 	executor.SetParser(newDiagnosticParser(mgr, newParseProblems()))
 	executor.SetGate(tooling.ThresholdGate(config.SeverityWarning, func(module string) bool {
 		ok, err := mgr.SeverityContract(context.Background(), module)
 		return err == nil && ok
 	}, nil))
-	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{{
-		ToolName:    "gccdiag",
-		Tool:        config.Tool{Name: "gccdiag", OutputParser: &config.OutputParser{Module: "core", Parser: "gccdiag"}},
-		Operation:   config.OpLint,
-		OpConfig:    config.ToolOperation{App: "tool", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
-		Files:       files,
-		ProjectPath: root,
-	}}}}}
+	plan := &tooling.ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []tooling.TaskGroup{{
+			Priority: 0, Tasks: []tooling.Task{{
+				ID:          "",
+				UnitDir:     "",
+				UnitMembers: nil,
+				UnitGuards:  nil,
+				Coverage:    "",
+				ToolName:    "gccdiag",
+				Tool:        config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "gccdiag", OutputParser: &config.OutputParser{Module: "core", Parser: "gccdiag"}},
+				Operation:   config.OpLint,
+				OpConfig:    config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "tool", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
+				Files:       files,
+				ProjectPath: root,
+			}},
+		}},
+	}
 	results, err := executor.Execute(context.Background(), plan)
 	if err != nil {
 		t.Fatal(err)
@@ -452,18 +497,24 @@ func observeFile(t *testing.T, path string) cache.Seen {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return cache.Seen{Hash: hash.Hex()}
+	return cache.Seen{Size: 0, ModTime: zerovalue_time.Time{}, Identity: cache.FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, At: zerovalue_time.Time{}, Hash: hash.Hex()}
 }
 
 func TestPlannedParserModulesIncludeTheFallback(t *testing.T) {
-	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{
-		{Tool: config.Tool{OutputParser: &config.OutputParser{Module: "core", Parser: "eslint"}}},
-		{Tool: config.Tool{}},
-	}}}}
+	plan := &tooling.ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []tooling.TaskGroup{{
+			Priority: 0, Tasks: []tooling.Task{
+				{ID: "", ToolName: "", Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: &config.OutputParser{Module: "core", Parser: "eslint"}}},
+				{ID: "", ToolName: "", Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}},
+			},
+		}},
+	}
 	if got := plannedParserModules(plan); !slices.Equal(got, []string{parsermanager.EmbeddedModule, "core"}) {
 		t.Errorf("plannedParserModules() = %v, want the fallback and core", got)
 	}
-	if got := plannedParserModules(&tooling.ExecutionPlan{}); len(got) != 0 {
+	if got := plannedParserModules(&tooling.ExecutionPlan{ConfigName: "", FailOn: "", Groups: nil, Skipped: nil}); len(got) != 0 {
 		t.Errorf("an empty plan prewarms %v", got)
 	}
 }

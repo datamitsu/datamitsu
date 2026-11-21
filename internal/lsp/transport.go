@@ -127,12 +127,12 @@ func (s *Server) route(t *transport, m *message) bool {
 		if !t.shutdownRead {
 			t.registry.stopFormatting()
 		}
-		t.queue.push(job{msg: m})
+		t.queue.push(job{req: nil, snap: nil, msg: m})
 		t.queue.close()
 		return false
 	}
 
-	j := job{msg: m}
+	j := job{req: nil, snap: nil, msg: m}
 	formatting := m.Method == "textDocument/formatting"
 	if m.isRequest() {
 		j.req = t.registry.add(m.ID, formatting)
@@ -149,7 +149,7 @@ func (s *Server) route(t *transport, m *message) bool {
 func (s *Server) snapshot(m *message) *docSnapshot {
 	var params formattingParams
 	if json.Unmarshal(m.Params, &params) != nil {
-		return &docSnapshot{}
+		return &docSnapshot{text: nil, open: false}
 	}
 	text, open := s.docs[params.TextDocument.URI]
 	return &docSnapshot{text: text, open: open}
@@ -220,7 +220,7 @@ type transport struct {
 }
 
 func newTransport() *transport {
-	return &transport{registry: &registry{reqs: map[string]*request{}}, queue: newJobQueue()}
+	return &transport{shutdownRead: false, mu: sync.Mutex{}, err: nil, registry: &registry{mu: sync.Mutex{}, reqs: map[string]*request{}}, queue: newJobQueue()}
 }
 
 // abort ends the session: the running request stops at its next checkpoint and
@@ -280,7 +280,7 @@ type registry struct {
 }
 
 func (r *registry) add(id json.RawMessage, formatting bool) *request {
-	req := &request{id: id, key: requestKey(id), formatting: formatting}
+	req := &request{state: atomic.Int32{}, id: id, key: requestKey(id), formatting: formatting}
 	r.mu.Lock()
 	r.reqs[req.key] = req
 	r.mu.Unlock()
@@ -349,7 +349,7 @@ type jobQueue struct {
 }
 
 func newJobQueue() *jobQueue {
-	q := &jobQueue{}
+	q := &jobQueue{mu: sync.Mutex{}, cond: nil, jobs: nil, closed: false}
 	q.cond = sync.NewCond(&q.mu)
 	return q
 }
@@ -374,10 +374,10 @@ func (q *jobQueue) pop() (job, bool) {
 		q.cond.Wait()
 	}
 	if len(q.jobs) == 0 {
-		return job{}, false
+		return job{msg: nil, req: nil, snap: nil}, false
 	}
 	j := q.jobs[0]
-	q.jobs[0] = job{}
+	q.jobs[0] = job{msg: nil, req: nil, snap: nil}
 	q.jobs = q.jobs[1:]
 	return j, true
 }

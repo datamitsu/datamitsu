@@ -26,8 +26,38 @@ import (
 )
 
 var sourceCmd = &cobra.Command{
-	Use:   "source",
-	Short: "Put the project's toolchain on PATH for this shell",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "source",
+	Short:                      "Put the project's toolchain on PATH for this shell",
 	Long: `Prints shell code that puts every tool this project declares on PATH for the
 current shell session, so they can be run as ordinary commands:
 
@@ -72,16 +102,80 @@ binaries this shadows — go to stderr, so the output is always safe to eval.`,
 }
 
 var sourceBashCmd = &cobra.Command{
-	Use:   "bash",
-	Short: "Print bash activation code",
-	Args:  usageArgs(cobra.NoArgs),
-	RunE:  func(cmd *cobra.Command, _ []string) error { return runSource(cmd, renderBash) },
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Long:                       "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "bash",
+	Short:                      "Print bash activation code",
+	Args:                       usageArgs(cobra.NoArgs),
+	RunE:                       func(cmd *cobra.Command, _ []string) error { return runSource(cmd, renderBash) },
 }
 
 var sourceZshCmd = &cobra.Command{
-	Use:   "zsh",
-	Short: "Print zsh activation code",
-	Args:  usageArgs(cobra.NoArgs),
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Long:                       "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "zsh",
+	Short:                      "Print zsh activation code",
+	Args:                       usageArgs(cobra.NoArgs),
 	// zsh implements every construct the bash renderer uses (the ${var//pat/rep}
 	// substitution with a quoted pattern, and `hash -r`), so it shares the
 	// renderer rather than carrying a near-copy that can drift.
@@ -89,10 +183,42 @@ var sourceZshCmd = &cobra.Command{
 }
 
 var sourceFishCmd = &cobra.Command{
-	Use:   "fish",
-	Short: "Print fish activation code",
-	Args:  usageArgs(cobra.NoArgs),
-	RunE:  func(cmd *cobra.Command, _ []string) error { return runSource(cmd, renderFish) },
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Long:                       "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "fish",
+	Short:                      "Print fish activation code",
+	Args:                       usageArgs(cobra.NoArgs),
+	RunE:                       func(cmd *cobra.Command, _ []string) error { return runSource(cmd, renderFish) },
 }
 
 var sourceQuiet bool
@@ -228,6 +354,7 @@ func resolveSourceTarget(ctx context.Context) (sourceTarget, error) {
 		return sourceTarget{}, fmt.Errorf("determine the farm manifest path: %w", err)
 	}
 	return sourceTarget{
+		ConfigPaths:  nil,
 		Origin:       sourcefarm.OriginGitRoot,
 		Root:         root,
 		FarmDir:      farmDir,
@@ -259,6 +386,7 @@ func explicitConfigTarget() (sourceTarget, error) {
 		return sourceTarget{}, fmt.Errorf("determine the farm manifest path: %w", err)
 	}
 	return sourceTarget{
+		Root:         "",
 		Origin:       sourcefarm.OriginExplicitConfig,
 		ConfigPaths:  resolved,
 		FarmDir:      farmDir,
@@ -282,7 +410,7 @@ func explicitConfigTarget() (sourceTarget, error) {
 // it deliberately keeps resolving.
 func freshSourcePlan(target sourceTarget) (sourcefarm.Plan, bool) {
 	if !sourceManifestDecides(target) {
-		return sourcefarm.Plan{}, false
+		return sourcefarm.Plan{Root: "", FarmDir: "", Entries: nil, Excluded: nil, Shadowed: nil}, false
 	}
 	return freshSourcePlanFor(target)
 }
@@ -326,21 +454,21 @@ func previousSourcePlan(target sourceTarget) (sourcefarm.Plan, bool) {
 // could correct it.
 func loadSourcePlan(target sourceTarget, requireFresh bool) (sourcefarm.Plan, bool) {
 	if target.ManifestPath == "" {
-		return sourcefarm.Plan{}, false
+		return sourcefarm.Plan{Root: "", FarmDir: "", Entries: nil, Excluded: nil, Shadowed: nil}, false
 	}
 	m, err := sourcefarm.Load(target.ManifestPath)
 	if err != nil || m.Origin != target.Origin || !manifestChainMatches(m, target) {
-		return sourcefarm.Plan{}, false
+		return sourcefarm.Plan{Root: "", FarmDir: "", Entries: nil, Excluded: nil, Shadowed: nil}, false
 	}
 	if requireFresh {
 		if !sourcefarm.Validate(m) {
-			return sourcefarm.Plan{}, false
+			return sourcefarm.Plan{Root: "", FarmDir: "", Entries: nil, Excluded: nil, Shadowed: nil}, false
 		}
 	} else if !sourcefarm.UsableStale(m) {
-		return sourcefarm.Plan{}, false
+		return sourcefarm.Plan{Root: "", FarmDir: "", Entries: nil, Excluded: nil, Shadowed: nil}, false
 	}
 	if !sourcefarm.FarmUsable(m.FarmDir, "") || !farmEntriesPresent(m) {
-		return sourcefarm.Plan{}, false
+		return sourcefarm.Plan{Root: "", FarmDir: "", Entries: nil, Excluded: nil, Shadowed: nil}, false
 	}
 
 	return sourcefarm.Plan{
@@ -561,7 +689,13 @@ func bakeSourceFarm(ctx context.Context, stderr io.Writer, target sourceTarget) 
 
 	// sourcefarm already reports the failure on the writer it was given.
 	matErr := sourcefarm.MaterializeWithOptions(plan, m, sourcefarm.Options{
-		Warn: func(line string) { _, _ = fmt.Fprintln(stderr, line) },
+		ShimTarget:   "",
+		CacheRoot:    "",
+		ManifestPath: "",
+		LockPath:     "",
+		LockTimeout:  0,
+		PollInterval: 0,
+		Warn:         func(line string) { _, _ = fmt.Fprintln(stderr, line) },
 	})
 	if matErr != nil && !farmOnDisk(plan, target) {
 		return bakeResult{}, fmt.Errorf("failed to bake the source farm for %s, and no previous farm is usable: %w", target.label(), matErr)

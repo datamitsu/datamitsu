@@ -26,8 +26,8 @@ func TestTrackStop(t *testing.T) {
 	}{
 		{name: "exited 0 before the stop", script: "exit 0", exitFirst: true, wantStopped: false, wantExit: 0},
 		{name: "exited 7 before the stop", script: "exit 7", exitFirst: true, wantStopped: false, wantExit: 7},
-		{name: "dies to the stop", script: `touch "$0"; sleep 30`, wantStopped: true, wantExit: -1},
-		{name: "handles the stop and exits 1", script: `trap 'exit 1' TERM; touch "$0"; while :; do sleep 0.05; done`, wantStopped: true, wantExit: 1},
+		{exitFirst: false, name: "dies to the stop", script: `touch "$0"; sleep 30`, wantStopped: true, wantExit: -1},
+		{exitFirst: false, name: "handles the stop and exits 1", script: `trap 'exit 1' TERM; touch "$0"; while :; do sleep 0.05; done`, wantStopped: true, wantExit: 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

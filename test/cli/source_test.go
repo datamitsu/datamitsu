@@ -82,7 +82,7 @@ func TestSourceActivationGolden(t *testing.T) {
 			cacheBase := t.TempDir()
 			mask := sourceNormalizer(p, cacheBase)
 
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheBase, Env: sourceEnv()},
+			res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheBase, Env: sourceEnv()},
 				"source", shell)
 			if res.ExitCode != 0 {
 				t.Fatalf("`source %s` exit = %d, want 0\nstderr:\n%s", shell, res.ExitCode, res.Stderr)
@@ -109,7 +109,7 @@ func TestSourceConfigCannotInjectIntoStdout(t *testing.T) {
 			"return { version: \"1.0.0\", apps: {}, tools: {}, projectTypes: {} }; };\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
 	noisyCache := t.TempDir()
-	noisyRes := clitest.Run(t, clitest.RunOptions{Dir: noisy.Dir, CacheDir: noisyCache, Env: sourceEnv()},
+	noisyRes := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: noisy.Dir, CacheDir: noisyCache, Env: sourceEnv()},
 		"source", "bash")
 	if noisyRes.ExitCode != 0 {
 		t.Fatalf("`source bash` exit = %d, want 0\nstderr:\n%s", noisyRes.ExitCode, noisyRes.Stderr)
@@ -118,7 +118,7 @@ func TestSourceConfigCannotInjectIntoStdout(t *testing.T) {
 	control := clitest.NewProject(t)
 	writeAutoConfig(control)
 	controlCache := t.TempDir()
-	controlRes := clitest.Run(t, clitest.RunOptions{Dir: control.Dir, CacheDir: controlCache, Env: sourceEnv()},
+	controlRes := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: control.Dir, CacheDir: controlCache, Env: sourceEnv()},
 		"source", "bash")
 
 	got := sourceNormalizer(noisy, noisyCache)(noisyRes.Stdout)
@@ -145,7 +145,7 @@ func TestSourceShellAppNotInFarm(t *testing.T) {
 			"}, tools: {}, projectTypes: {} });\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()},
+	res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()},
 		"source", "bash")
 	if res.ExitCode != 0 {
 		t.Fatalf("`source bash` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -175,7 +175,7 @@ func TestSourceDenyListedAppExcluded(t *testing.T) {
 			strings.Repeat("22", 32)+"\", contentType: \"tar.gz\" } } } } } },\n"+
 			"}, tools: {}, projectTypes: {} });\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()}
+	opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()}
 
 	res := clitest.Run(t, opts, "source", "status", "--json")
 	if res.ExitCode != 0 {
@@ -209,7 +209,7 @@ func TestSourceBashActivation(t *testing.T) {
 	p := clitest.NewProject(t)
 	writeAutoConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "source", "bash")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: p.Dir, Env: sourceEnv()}, "source", "bash")
 	if res.ExitCode != 0 {
 		t.Fatalf("`source bash` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -238,8 +238,8 @@ func TestSourceZshActivation(t *testing.T) {
 	p := clitest.NewProject(t)
 	writeAutoConfig(p)
 
-	bash := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()}, "source", "bash")
-	zsh := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()}, "source", "zsh")
+	bash := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()}, "source", "bash")
+	zsh := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()}, "source", "zsh")
 	if zsh.ExitCode != 0 {
 		t.Fatalf("`source zsh` exit = %d, want 0\nstderr:\n%s", zsh.ExitCode, zsh.Stderr)
 	}
@@ -257,7 +257,7 @@ func TestSourceFishActivation(t *testing.T) {
 	p := clitest.NewProject(t)
 	writeAutoConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "source", "fish")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: p.Dir, Env: sourceEnv()}, "source", "fish")
 	if res.ExitCode != 0 {
 		t.Fatalf("`source fish` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -282,7 +282,7 @@ func TestSourceStatus(t *testing.T) {
 			"}, tools: {}, projectTypes: {} });\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "source", "status")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: p.Dir, Env: sourceEnv()}, "source", "status")
 	if res.ExitCode != 0 {
 		t.Fatalf("`source status` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -310,7 +310,7 @@ func TestSourceStatusJSON(t *testing.T) {
 	p := clitest.NewProject(t)
 	writeAutoConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "source", "status", "--json")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: p.Dir, Env: sourceEnv()}, "source", "status", "--json")
 	if res.ExitCode != 0 {
 		t.Fatalf("`source status --json` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -338,7 +338,7 @@ func TestSourceStatusDoesNotBake(t *testing.T) {
 	writeAutoConfig(p)
 	cacheDir := t.TempDir()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: sourceEnv()}, "source", "status")
+	res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheDir, Env: sourceEnv()}, "source", "status")
 	if res.ExitCode != 0 {
 		t.Fatalf("`source status` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -364,7 +364,7 @@ func TestSourceRefresh(t *testing.T) {
 	p := clitest.NewProject(t)
 	writeAutoConfig(p)
 	cacheDir := t.TempDir()
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: sourceEnv()}
+	opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheDir, Env: sourceEnv()}
 
 	first := clitest.Run(t, opts, "source", "refresh")
 	if first.ExitCode != 0 {
@@ -424,7 +424,7 @@ func TestSourceRefreshDownloadsNothing(t *testing.T) {
 			"}, tools: {}, projectTypes: {} });\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
 	cacheDir := t.TempDir()
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: sourceEnv()}
+	opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheDir, Env: sourceEnv()}
 
 	res := clitest.Run(t, opts, "source", "refresh")
 	if res.ExitCode != 0 {
@@ -478,7 +478,7 @@ func dirExists(path string) bool {
 // the embedded default config would emit shell code for a handful of built-in
 // apps and look like it worked, which is the worst available outcome.
 func TestSourceOutsideAGitRepository(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{Dir: t.TempDir(), Env: sourceEnv()}, "source", "bash")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: t.TempDir(), Env: sourceEnv()}, "source", "bash")
 	if res.ExitCode == 0 {
 		t.Fatalf("`source bash` outside a repository exited 0:\n%s", res.Stdout)
 	}
@@ -495,7 +495,7 @@ func TestSourceOutsideAGitRepository(t *testing.T) {
 func TestSourceWithoutAConfig(t *testing.T) {
 	p := clitest.NewProject(t)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "source", "bash")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: p.Dir, Env: sourceEnv()}, "source", "bash")
 	if res.ExitCode == 0 {
 		t.Fatalf("`source bash` with no config exited 0:\n%s", res.Stdout)
 	}
@@ -517,7 +517,7 @@ func TestSourceWithoutAShellIsAnError(t *testing.T) {
 	p := clitest.NewProject(t)
 	writeAutoConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "source")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: p.Dir, Env: sourceEnv()}, "source")
 	if res.ExitCode != 2 {
 		t.Fatalf("bare `source` exited %d, want 2 (a usage error):\n%s", res.ExitCode, res.Stdout)
 	}
@@ -537,7 +537,7 @@ func TestSourceUnknownShell(t *testing.T) {
 	p := clitest.NewProject(t)
 	writeAutoConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "source", "powershell")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: p.Dir, Env: sourceEnv()}, "source", "powershell")
 	if res.ExitCode != 2 {
 		t.Fatalf("`source powershell` exited %d, want 2 (a usage error):\n%s", res.ExitCode, res.Stdout)
 	}
@@ -565,7 +565,7 @@ func TestSourceNoAutoConfigIsRefused(t *testing.T) {
 	p := clitest.NewProject(t)
 	writeAutoConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: sourceEnv()}, "--no-auto-config", "source", "bash")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: p.Dir, Env: sourceEnv()}, "--no-auto-config", "source", "bash")
 	if res.ExitCode != 2 {
 		t.Fatalf("`--no-auto-config source bash` exited %d, want 2 (a usage error):\n%s", res.ExitCode, res.Stdout)
 	}
@@ -590,7 +590,7 @@ func TestSourceActivationIsIdempotentAcrossRuns(t *testing.T) {
 
 	// One cache across both runs: the second activation must find the farm the
 	// first one baked, which is the whole point of the fast path.
-	opts := clitest.RunOptions{Dir: p.Dir, Env: sourceEnv(), CacheDir: t.TempDir()}
+	opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, Env: sourceEnv(), CacheDir: t.TempDir()}
 
 	first := clitest.Run(t, opts, "source", "bash")
 	if first.ExitCode != 0 {

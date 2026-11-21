@@ -48,8 +48,8 @@ func TestRuntimeInventoryIsSortedAndDoesNotMaterialize(t *testing.T) {
 	base := t.TempDir()
 	t.Setenv("DATAMITSU_CACHE_DIR", base)
 	rm := New(config.MapOfRuntimes{
-		"z-go":   {Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "definitely-not-a-real-go-command"}, Go: &config.RuntimeConfigGo{GoVersion: "1.23.0"}},
-		"a-uv":   {Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "definitely-not-a-real-uv-command"}, UV: &config.RuntimeConfigUV{PythonVersion: "3.14.6"}},
+		"z-go":   {Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, PNPM: nil, Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{SystemVersion: "", Command: "definitely-not-a-real-go-command"}, Go: &config.RuntimeConfigGo{GoVersion: "1.23.0"}},
+		"a-uv":   {Managed: nil, Bun: nil, Node: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{SystemVersion: "", Command: "definitely-not-a-real-uv-command"}, UV: &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.14.6"}},
 		"b-pnpm": testPNPMRuntime(),
 	})
 	got, err := rm.RuntimeInventory()
@@ -115,7 +115,7 @@ func TestResolveExecutionRuntimeEnvironmentReachesInterpreterProcess(t *testing.
 		t.Fatal(err)
 	}
 	rm := New(config.MapOfRuntimes{
-		"go-host": {Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: binary, SystemVersion: "go-test"}, Go: &config.RuntimeConfigGo{GoVersion: "go-test"}},
+		"go-host": {Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, PNPM: nil, Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: binary, SystemVersion: "go-test"}, Go: &config.RuntimeConfigGo{GoVersion: "go-test"}},
 	})
 	execution, err := rm.ResolveExecution("go-host")
 	if err != nil {
@@ -166,7 +166,7 @@ func TestEnsureExecutionRejectsPackageManagerAndMissingSystemRuntime(t *testing.
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	rm := New(config.MapOfRuntimes{
 		"pnpm":         testPNPMRuntime(),
-		"missing-node": {Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "absent-node-command"}, Node: &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: testPNPMRuntimeName}},
+		"missing-node": {Managed: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{SystemVersion: "", Command: "absent-node-command"}, Node: &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: testPNPMRuntimeName}},
 	})
 	if _, err := rm.EnsureExecution(context.Background(), "pnpm"); err == nil || !strings.Contains(err.Error(), "package manager, not a directly runnable interpreter") {
 		t.Fatalf("EnsureExecution(pnpm) = %v, want package-manager explanation", err)
@@ -177,7 +177,7 @@ func TestEnsureExecutionRejectsPackageManagerAndMissingSystemRuntime(t *testing.
 }
 
 func TestResolveExecutionRejectsUnknownAndMalformedRuntimeKind(t *testing.T) {
-	rm := New(config.MapOfRuntimes{"broken": {Kind: config.RuntimeKind("unknown")}})
+	rm := New(config.MapOfRuntimes{"broken": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKind("unknown")}})
 	if _, err := rm.ResolveExecution("absent"); !errors.Is(err, ErrUnknownRuntime) {
 		t.Fatalf("unknown runtime error = %v", err)
 	}
@@ -188,10 +188,10 @@ func TestResolveExecutionRejectsUnknownAndMalformedRuntimeKind(t *testing.T) {
 
 func TestRuntimeInventorySeparatesAvailabilityAndRunnableReasons(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
-		"bad/name":    {Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "node"}},
-		"no-platform": {Kind: config.RuntimeKindGo, Mode: config.RuntimeModeManaged, Managed: &config.RuntimeConfigManaged{}},
-		"jvm-system":  {Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "java", SystemVersion: "21"}, JVM: &config.RuntimeConfigJVM{JavaVersion: "21"}},
-		"bun":         {Kind: config.RuntimeKindBun, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "bun"}, Bun: &config.RuntimeConfigBun{BunVersion: "1"}},
+		"bad/name":    {Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{SystemVersion: "", Command: "node"}},
+		"no-platform": {System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindGo, Mode: config.RuntimeModeManaged, Managed: &config.RuntimeConfigManaged{Binaries: nil}},
+		"jvm-system":  {Managed: nil, Bun: nil, Node: nil, UV: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: "java", SystemVersion: "21"}, JVM: &config.RuntimeConfigJVM{JavaVersion: "21"}},
+		"bun":         {Managed: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindBun, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{SystemVersion: "", Command: "bun"}, Bun: &config.RuntimeConfigBun{PNPMRuntime: "", BunVersion: "1"}},
 		"pnpm":        testPNPMRuntime(),
 	}
 	rm := New(runtimes)
@@ -232,14 +232,14 @@ func TestRuntimeConfiguredVersionUsesSystemOverrideThenKindVersion(t *testing.T)
 		rc   config.RuntimeConfig
 		want string
 	}{
-		{name: "node", rc: config.RuntimeConfig{Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "22"}}, want: "22"},
-		{name: "bun", rc: config.RuntimeConfig{Kind: config.RuntimeKindBun, Bun: &config.RuntimeConfigBun{BunVersion: "1.2"}}, want: "1.2"},
-		{name: "uv", rc: config.RuntimeConfig{Kind: config.RuntimeKindUV, UV: &config.RuntimeConfigUV{PythonVersion: "3.14.6"}}, want: "3.14.6"},
-		{name: "go", rc: config.RuntimeConfig{Kind: config.RuntimeKindGo, Go: &config.RuntimeConfigGo{GoVersion: "1.25"}}, want: "1.25"},
-		{name: "jvm", rc: config.RuntimeConfig{Kind: config.RuntimeKindJVM, JVM: &config.RuntimeConfigJVM{JavaVersion: "25"}}, want: "25"},
-		{name: "pnpm", rc: config.RuntimeConfig{Kind: config.RuntimeKindPNPM, PNPM: &config.RuntimeConfigPNPM{PNPMVersion: "12"}}, want: "12"},
-		{name: "system override", rc: config.RuntimeConfig{Kind: config.RuntimeKindNode, System: &config.RuntimeConfigSystem{SystemVersion: "system-current"}, Node: &config.RuntimeConfigNode{NodeVersion: "configured"}}, want: "system-current"},
-		{name: "missing version", rc: config.RuntimeConfig{Kind: config.RuntimeKind("unknown")}, want: ""},
+		{name: "node", rc: config.RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{PNPMRuntime: "", NodeVersion: "22"}}, want: "22"},
+		{name: "bun", rc: config.RuntimeConfig{Mode: "", Managed: nil, System: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindBun, Bun: &config.RuntimeConfigBun{PNPMRuntime: "", BunVersion: "1.2"}}, want: "1.2"},
+		{name: "uv", rc: config.RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, UV: &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.14.6"}}, want: "3.14.6"},
+		{name: "go", rc: config.RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, PNPM: nil, Kind: config.RuntimeKindGo, Go: &config.RuntimeConfigGo{GoVersion: "1.25"}}, want: "1.25"},
+		{name: "jvm", rc: config.RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM, JVM: &config.RuntimeConfigJVM{JavaVersion: "25"}}, want: "25"},
+		{name: "pnpm", rc: config.RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, Kind: config.RuntimeKindPNPM, PNPM: &config.RuntimeConfigPNPM{PNPMVersion: "12"}}, want: "12"},
+		{name: "system override", rc: config.RuntimeConfig{Mode: "", Managed: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode, System: &config.RuntimeConfigSystem{Command: "", SystemVersion: "system-current"}, Node: &config.RuntimeConfigNode{PNPMRuntime: "", NodeVersion: "configured"}}, want: "system-current"},
+		{name: "missing version", rc: config.RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKind("unknown")}, want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

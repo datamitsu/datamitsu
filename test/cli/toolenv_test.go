@@ -29,7 +29,7 @@ func probeProject(t *testing.T, op clitest.ToolOpSpec) *execProject {
 // host is a GitHub job, whose annotations annotations_test.go freezes.
 func TestToolEnvironment(t *testing.T) {
 	t.Run("lint strips and sets", func(t *testing.T) {
-		e := probeProject(t, clitest.ToolOpSpec{})
+		e := probeProject(t, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""})
 		res := e.run("", hostEnv, "lint", "--annotations", "off")
 		e.wantExit(res, 1)
 		if !strings.Contains(res.Stdout, "CI=true GITHUB_ACTIONS= AI_AGENT= FORCE_COLOR= NO_COLOR=1\n") {
@@ -39,7 +39,7 @@ func TestToolEnvironment(t *testing.T) {
 	})
 
 	t.Run("inheritEnv hands one back", func(t *testing.T) {
-		e := probeProject(t, clitest.ToolOpSpec{InheritEnv: []string{"GITHUB_ACTIONS"}})
+		e := probeProject(t, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, FailOn: "", Input: "", Output: "", InheritEnv: []string{"GITHUB_ACTIONS"}})
 		res := e.run("", hostEnv, "lint", "--annotations", "off")
 		e.wantExit(res, 1)
 		if !strings.Contains(res.Stdout, "CI=true GITHUB_ACTIONS=true AI_AGENT= FORCE_COLOR= NO_COLOR=1\n") {
@@ -49,7 +49,7 @@ func TestToolEnvironment(t *testing.T) {
 	})
 
 	t.Run("env cannot set NO_COLOR", func(t *testing.T) {
-		e := probeProject(t, clitest.ToolOpSpec{Env: map[string]string{"NO_COLOR": ""}})
+		e := probeProject(t, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", InheritEnv: nil, FailOn: "", Input: "", Output: "", Env: map[string]string{"NO_COLOR": ""}})
 		res := e.run("", hostEnv, "lint")
 		e.wantExit(res, 1)
 		if !strings.Contains(res.Stderr, `env "NO_COLOR": datamitsu sets NO_COLOR=1`) {
@@ -62,7 +62,7 @@ func TestToolEnvironment(t *testing.T) {
 	})
 
 	t.Run("exec changes nothing", func(t *testing.T) {
-		e := probeProject(t, clitest.ToolOpSpec{})
+		e := probeProject(t, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""})
 		res := e.run("", hostEnv, "exec", "probe")
 		e.wantExit(res, 1)
 		if want := "CI=true GITHUB_ACTIONS=true AI_AGENT=claude FORCE_COLOR=3 NO_COLOR=host\n"; res.Stdout != want {

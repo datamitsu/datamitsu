@@ -37,8 +37,40 @@ var (
 )
 
 var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize project - download binaries and run init commands",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	Args:                       nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "init",
+	Short:                      "Initialize project - download binaries and run init commands",
 	Long: `Downloads required binaries and runs initialization commands (like npm install, lefthook install, etc.)
 By default, downloads only Required binaries with concurrency of 3 (configurable via DATAMITSU_CONCURRENCY env var).`,
 	RunE: runInit,
@@ -289,7 +321,7 @@ type initRow struct {
 func okRows(names []string, status string) []initRow {
 	rows := make([]initRow, 0, len(names))
 	for _, name := range names {
-		rows = append(rows, initRow{sym: clr.Green("✓"), name: name, status: clr.Faint(status)})
+		rows = append(rows, initRow{diagnostic: false, sym: clr.Green("✓"), name: name, status: clr.Faint(status)})
 	}
 	return rows
 }
@@ -415,7 +447,7 @@ func reportPrepared(ctx context.Context, disp *ui.Display, binMgr *binmanager.Bi
 		// that is actually installed, and an absent one is a visible skip,
 		// not a failure — its first `exec`/`check` installs and prepares it.
 		if !binMgr.AppInstalled(name) {
-			rows = append(rows, initRow{name: name, sym: clr.Faint("⊘"), status: clr.Faint("not installed")})
+			rows = append(rows, initRow{diagnostic: false, name: name, sym: clr.Faint("⊘"), status: clr.Faint("not installed")})
 			continue
 		}
 		before, keyErr := binMgr.PreparedStateReady(name)
@@ -425,7 +457,7 @@ func reportPrepared(ctx context.Context, disp *ui.Display, binMgr *binmanager.Bi
 			continue
 		}
 		if before {
-			rows = append(rows, initRow{name: name, sym: clr.Green("✓"), status: clr.Faint("ready")})
+			rows = append(rows, initRow{diagnostic: false, name: name, sym: clr.Green("✓"), status: clr.Faint("ready")})
 			prepared++
 			continue
 		}
@@ -434,7 +466,7 @@ func reportPrepared(ctx context.Context, disp *ui.Display, binMgr *binmanager.Bi
 			failed++
 			continue
 		}
-		rows = append(rows, initRow{name: name, sym: clr.Green("✓"), status: clr.Faint("prepared")})
+		rows = append(rows, initRow{diagnostic: false, name: name, sym: clr.Green("✓"), status: clr.Faint("prepared")})
 		prepared++
 	}
 	initSection(disp, "prepare", rows)

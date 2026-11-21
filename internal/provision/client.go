@@ -43,7 +43,7 @@ func RemoteSelected() bool {
 
 // NewClient creates a client that reads responses and progress from rw.
 func NewClient(rw io.ReadWriteCloser, onProgress func(json.RawMessage)) *Client {
-	c := &Client{rw: rw, pending: make(map[uint64]chan Response), discarded: make(map[uint64]struct{}), closed: make(chan struct{}), onProgress: onProgress}
+	c := &Client{writeMu: sync.Mutex{}, mu: sync.Mutex{}, next: atomic.Uint64{}, err: nil, rw: rw, pending: make(map[uint64]chan Response), discarded: make(map[uint64]struct{}), closed: make(chan struct{}), onProgress: onProgress}
 	go c.readLoop()
 	return c
 }
@@ -89,7 +89,7 @@ func (c *Client) Call(ctx context.Context, operation string, payload any, result
 	id := c.next.Add(1)
 	c.pending[id] = ch
 	c.mu.Unlock()
-	err = writeFrame(c.rw, Request{Version: ProtocolVersion, ID: id, Kind: "request", Method: operation, Params: params})
+	err = writeFrame(c.rw, Request{CancelID: 0, Version: ProtocolVersion, ID: id, Kind: "request", Method: operation, Params: params})
 	c.writeMu.Unlock()
 	if err != nil {
 		c.fail(err)
@@ -122,7 +122,7 @@ func (c *Client) Call(ctx context.Context, operation string, payload any, result
 		c.mu.Unlock()
 		c.writeMu.Lock()
 		cancelID := c.next.Add(1)
-		cancelErr := writeFrame(c.rw, Request{Version: ProtocolVersion, ID: cancelID, Kind: "cancel", CancelID: id})
+		cancelErr := writeFrame(c.rw, Request{Method: "", Params: nil, Version: ProtocolVersion, ID: cancelID, Kind: "cancel", CancelID: id})
 		c.writeMu.Unlock()
 		if cancelErr != nil {
 			c.fail(cancelErr)

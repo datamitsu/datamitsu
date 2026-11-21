@@ -1,6 +1,8 @@
 package cache
 
 import (
+	zerovalue_sync "sync"
+	zerovalue_atomic "sync/atomic"
 	"testing"
 	"time"
 )
@@ -11,8 +13,8 @@ import (
 func TestAfterVerdictRejectsIncompleteEntries(t *testing.T) {
 	c := newVerdictTestCache(t)
 
-	c.AfterVerdict("", VerdictEntry{InputHash: "h"})
-	c.AfterVerdict("k", VerdictEntry{InputHash: ""})
+	c.AfterVerdict("", VerdictEntry{Tool: "", Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, InputHash: "h"})
+	c.AfterVerdict("k", VerdictEntry{Tool: "", Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, InputHash: ""})
 
 	if len(c.data.Verdicts) != 0 {
 		t.Errorf("stored %d verdict(s), want none", len(c.data.Verdicts))
@@ -32,7 +34,7 @@ func TestDeleteVerdictIgnoresAnEmptyKey(t *testing.T) {
 // disk: the merge can only add, so without one the entry comes straight back.
 func TestDeleteVerdictLeavesATombstone(t *testing.T) {
 	c := newVerdictTestCache(t)
-	c.AfterVerdict("k", VerdictEntry{InputHash: "h"})
+	c.AfterVerdict("k", VerdictEntry{Tool: "", Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, InputHash: "h"})
 	c.DeleteVerdict("k")
 
 	if _, ok := c.data.Verdicts["k"]; ok {
@@ -46,7 +48,7 @@ func TestDeleteVerdictLeavesATombstone(t *testing.T) {
 func TestShouldRunVerdict(t *testing.T) {
 	fresh := func() *Cache {
 		c := newVerdictTestCache(t)
-		c.AfterVerdict("k", VerdictEntry{InputHash: "h"})
+		c.AfterVerdict("k", VerdictEntry{Tool: "", Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, InputHash: "h"})
 		return c
 	}
 
@@ -76,7 +78,7 @@ func TestShouldRunVerdict(t *testing.T) {
 
 	t.Run("expired entry", func(t *testing.T) {
 		c := newVerdictTestCache(t)
-		c.AfterVerdict("k", VerdictEntry{InputHash: "h"})
+		c.AfterVerdict("k", VerdictEntry{Tool: "", Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, InputHash: "h"})
 		entry := c.data.Verdicts["k"]
 		entry.ValidatedAt = time.Now().Add(-2 * time.Hour)
 		c.data.Verdicts["k"] = entry
@@ -90,7 +92,7 @@ func TestShouldRunVerdict(t *testing.T) {
 	// would pin the verdict until the clock caught up.
 	t.Run("timestamp in the future", func(t *testing.T) {
 		c := newVerdictTestCache(t)
-		c.AfterVerdict("k", VerdictEntry{InputHash: "h"})
+		c.AfterVerdict("k", VerdictEntry{Tool: "", Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, InputHash: "h"})
 		entry := c.data.Verdicts["k"]
 		entry.ValidatedAt = time.Now().Add(time.Hour)
 		c.data.Verdicts["k"] = entry
@@ -104,8 +106,8 @@ func TestShouldRunVerdict(t *testing.T) {
 func TestPruneVerdicts(t *testing.T) {
 	build := func() *Cache {
 		c := newVerdictTestCache(t)
-		c.AfterVerdict("old", VerdictEntry{InputHash: "h"})
-		c.AfterVerdict("new", VerdictEntry{InputHash: "h"})
+		c.AfterVerdict("old", VerdictEntry{Tool: "", Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, InputHash: "h"})
+		c.AfterVerdict("new", VerdictEntry{Tool: "", Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, InputHash: "h"})
 		stale := c.data.Verdicts["old"]
 		stale.ValidatedAt = time.Now().Add(-48 * time.Hour)
 		c.data.Verdicts["old"] = stale
@@ -145,7 +147,7 @@ func TestPruneVerdicts(t *testing.T) {
 // c.data, and previously a nil-logger panic that took the whole binary down.
 func newVerdictTestCache(t *testing.T) *Cache {
 	t.Helper()
-	c := &Cache{data: &File{Verdicts: map[string]VerdictEntry{}}}
+	c := &Cache{path: "", projectPath: "", invalidationKey: "", hits: zerovalue_atomic.Int64{}, misses: zerovalue_atomic.Int64{}, logger: nil, mu: zerovalue_sync.RWMutex{}, deletedEntries: nil, deletedVerdicts: nil, saveMu: zerovalue_sync.Mutex{}, yieldToForeignKey: zerovalue_atomic.Bool{}, supersededKeys: nil, dirty: zerovalue_atomic.Bool{}, saveTimer: nil, saveTimerMu: zerovalue_sync.Mutex{}, flushMu: zerovalue_sync.Mutex{}, shutdownCh: nil, shutdownOnce: zerovalue_sync.Once{}, data: &File{InvalidationKey: "", Version: "", ProjectPath: "", LastPruned: time.Time{}, Entries: nil, Verdicts: map[string]VerdictEntry{}}}
 	t.Cleanup(c.Shutdown)
 	return c
 }

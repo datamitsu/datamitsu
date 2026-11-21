@@ -9,7 +9,7 @@ import (
 )
 
 func TestNestedWatchdogAllowsReuseAfterInterruption(t *testing.T) {
-	e := &Engine{vm: goja.New()}
+	e := &Engine{facts: nil, rootPath: "", timeoutDepth: 0, nonDeterminism: "", sideEffect: "", vm: goja.New()}
 	if err := e.vm.Set("nested", func() goja.Value {
 		program := goja.MustCompile("nested.js", `while (true) {}`, false)
 		value, err := e.RunProgramWithTimeout(program, 10*time.Millisecond)

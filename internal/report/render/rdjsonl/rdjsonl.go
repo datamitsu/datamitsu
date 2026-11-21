@@ -96,6 +96,8 @@ func (Renderer) Render(w io.Writer, run *report.Run, _ map[string]string) error 
 func diagnostic(l common.Located) Diagnostic {
 	f := l.Finding
 	d := Diagnostic{
+		Location: nil,
+		Code:     nil,
 		Message:  f.Message,
 		Severity: Severity(f.Severity),
 		Source:   Source{Name: common.SourceOf(f), URL: l.Tool.App.OfficialURL},
@@ -106,9 +108,9 @@ func diagnostic(l common.Located) Diagnostic {
 	if f.Location.Path == "" {
 		return d
 	}
-	d.Location = &Location{Path: f.Location.Path}
+	d.Location = &Location{Range: nil, Path: f.Location.Path}
 	if r := common.RegionOf(f.Location, common.Bytes); r.Line > 0 {
-		d.Location.Range = &Range{Start: Position{Line: r.Line, Column: r.Col}}
+		d.Location.Range = &Range{End: nil, Start: Position{Line: r.Line, Column: r.Col}}
 		if r.EndLine > r.Line || r.EndCol > 0 {
 			d.Location.Range.End = &Position{Line: r.EndLine, Column: r.EndCol}
 		}

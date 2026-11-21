@@ -38,7 +38,7 @@ var expectedTopLevelCommands = []string{
 // `--help` is exactly expectedTopLevelCommands, decoupled from help formatting:
 // it parses the "Available Commands:" block and compares the name set.
 func TestRootCommandListDrift(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "--help")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "--help")
 	if res.ExitCode != 0 {
 		t.Fatalf("`--help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -79,7 +79,7 @@ func TestRootGlobalFlagsAccepted(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, tc.args...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, tc.args...)
 			if res.ExitCode != 0 {
 				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s",
 					strings.Join(tc.args, " "), res.ExitCode, res.Stderr)
@@ -98,7 +98,7 @@ func TestRootSilenceUsage(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "exec", "definitely-not-an-app")
 	if res.ExitCode == 0 {
 		t.Fatalf("expected non-zero exit for unknown app, got 0\nstdout:\n%s", res.Stdout)
@@ -130,7 +130,7 @@ func TestRootBadFlags(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{}, tc.args...)
+			res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, tc.args...)
 			if res.ExitCode == 0 {
 				t.Fatalf("`%s` exit = 0, want non-zero\nstdout:\n%s",
 					strings.Join(tc.args, " "), res.Stdout)

@@ -68,7 +68,7 @@ func TestLauncherMarkerSurvivesRebuilds(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(installDir, "config.js"), []byte("ok"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		apps := binmanager.MapOfApps{"theme-app": {Links: map[string]string{"theme": "config.js"}}}
+		apps := binmanager.MapOfApps{"theme-app": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Links: map[string]string{"theme": "config.js"}}}
 
 		links, err := CreateDatamitsuLinks(root, apps, &mockResolver{paths: map[string]string{"theme-app": installDir}}, nil, nil, false)
 		if err != nil {
@@ -107,7 +107,7 @@ func TestLauncherMarkerSurvivesRebuilds(t *testing.T) {
 
 func TestWriteLauncherMarkerDryRunAndReservedName(t *testing.T) {
 	root := t.TempDir()
-	if err := WriteLauncherMarker(root, LauncherMarker{Command: "datamitsu"}, true); err != nil {
+	if err := WriteLauncherMarker(root, LauncherMarker{BinaryPath: "", CoreVersion: "", Command: "datamitsu"}, true); err != nil {
 		t.Fatalf("dry-run write error = %v", err)
 	}
 	if _, ok := ReadLauncherMarker(root); ok {

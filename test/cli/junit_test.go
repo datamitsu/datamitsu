@@ -46,7 +46,7 @@ func (e *execProject) companion(rel string) (string, map[string]any) {
 // its output; the companion says which tools are incomplete.
 func TestReportJUnit(t *testing.T) {
 	t.Run("lint", func(t *testing.T) {
-		e := reportProject(t, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{}))
+		e := reportProject(t, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		res := e.run("", nil, "lint", "--report", "junit=out/junit.xml")
 		e.wantExit(res, 1)
 		doc := e.junit("out/junit.xml")
@@ -74,7 +74,7 @@ func TestReportJUnit(t *testing.T) {
 	})
 
 	t.Run("check", func(t *testing.T) {
-		e := reportProject(t, clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Operation: "fix"}))
+		e := reportProject(t, clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix"}))
 		res := e.run("", nil, "check", "--report", "junit=junit.xml")
 		e.wantExit(res, 0)
 		doc := e.junit("junit.xml")
@@ -104,7 +104,7 @@ func TestReportJUnit(t *testing.T) {
 	// skipped case, not an empty suite.
 	t.Run("not_installed", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""},
-			clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")})
+			clitest.ShellConfigSpec{Parsers: "", ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")})
 		res := e.run("", nil, "lint", "--report", "junit=junit.xml")
 		e.wantExit(res, 1)
 		doc := e.junit("junit.xml")

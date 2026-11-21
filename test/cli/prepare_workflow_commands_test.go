@@ -37,7 +37,7 @@ globalThis.getMinVersion = () => "0.5.0";`, server.URL, digest.SHA256Of(payload)
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			args := append([]string{"--no-auto-config", "--config", cfg}, scenario.args...)
-			result := clitest.Run(t, clitest.RunOptions{Dir: project.Dir, CacheDir: t.TempDir(), Env: []string{"DATAMITSU_OFFLINE=", "GITHUB_ACTIONS=true", "CI=true"}}, args...)
+			result := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: t.TempDir(), Env: []string{"DATAMITSU_OFFLINE=", "GITHUB_ACTIONS=true", "CI=true"}}, args...)
 			if result.ExitCode != 1 || !strings.Contains(result.Stderr, "PREPARE_INJECTED_ERROR") || !strings.Contains(result.Stderr, "PREPARE_INJECTED_WARNING") {
 				t.Fatalf("prepare diagnostics missing: %+v", result)
 			}

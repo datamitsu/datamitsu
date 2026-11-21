@@ -22,8 +22,39 @@ var (
 )
 
 var pullUVCmd = &cobra.Command{
-	Use:   "pull-uv <file>",
-	Short: "Pull latest versions for Python packages from PyPI",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "pull-uv <file>",
+	Short:                      "Pull latest versions for Python packages from PyPI",
 	Long: `Query the PyPI registry for latest versions of all UV apps in a JSON file.
 
 Reads the specified JSON file directly, fetches latest versions and descriptions
@@ -111,6 +142,10 @@ func runPullUV(cmd *cobra.Command, args []string) error {
 		counter := fmt.Sprintf("[%*d/%d]", counterWidth, i+1, len(names))
 		entry := apps[name]
 		result := pypiVersionResult{
+			LatestVersion:  "",
+			Description:    "",
+			UpdateNeeded:   false,
+			Error:          "",
 			Name:           name,
 			PackageName:    entry.PackageName,
 			CurrentVersion: entry.Version,

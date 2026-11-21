@@ -101,7 +101,7 @@ func TestBuildFileTreeVenvCollapsed(t *testing.T) {
 
 func TestAppsInspectErrorNotInstalled(t *testing.T) {
 	bm := binmanager.New(binmanager.MapOfApps{
-		"test-app": {Shell: &binmanager.AppConfigShell{Name: "bash"}},
+		"test-app": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "bash"}},
 	}, nil, nil)
 
 	_, err := bm.GetInstallRoot("test-app")
@@ -134,8 +134,27 @@ func TestCountFilesEmpty(t *testing.T) {
 
 func TestAppsInspect_ShowsDescription(t *testing.T) {
 	app := binmanager.App{
-		Description: "A spell checker for code",
-		Node:        &binmanager.AppConfigNode{PackageName: "cspell", Version: "9.8.0"},
+		Required:           false,
+		Lazy:               false,
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
+		Description:        "A spell checker for code",
+		Node:               &binmanager.AppConfigNode{BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, PackageName: "cspell", Version: "9.8.0"},
 	}
 
 	output := formatInspectHeader("/path/to/app", &app)
@@ -150,8 +169,27 @@ func TestAppsInspect_ShowsDescription(t *testing.T) {
 
 func TestAppsInspect_NoDescriptionWhenEmpty(t *testing.T) {
 	app := binmanager.App{
-		Description: "",
-		Shell:       &binmanager.AppConfigShell{Name: "echo"},
+		Required:           false,
+		Lazy:               false,
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
+		Description:        "",
+		Shell:              &binmanager.AppConfigShell{Args: nil, Name: "echo"},
 	}
 
 	output := formatInspectHeader("/path/to/app", &app)
@@ -167,15 +205,73 @@ func TestAppsInspect_NoDescriptionWhenEmpty(t *testing.T) {
 func TestAppsListFormatWithVersionAndDescription(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"yamllint": {
-			Description: "A linter for YAML files",
-			Uv:          &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.33"},
+			Required:           false,
+			Lazy:               false,
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Description:        "A linter for YAML files",
+			Uv:                 &binmanager.AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.33"},
 		},
 		"echo": {
-			Shell: &binmanager.AppConfigShell{Name: "echo"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Shell:              &binmanager.AppConfigShell{Args: nil, Name: "echo"},
 		},
 		"golangci-lint": {
-			Description: "Go linter",
-			Binary:      &binmanager.AppConfigBinary{Version: "v2.7.2"},
+			Required:           false,
+			Lazy:               false,
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Description:        "Go linter",
+			Binary:             &binmanager.AppConfigBinary{Binaries: nil, Version: "v2.7.2"},
 		},
 	}
 

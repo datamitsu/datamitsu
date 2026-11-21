@@ -63,7 +63,7 @@ func sarifProject(t *testing.T, extra ...string) *execProject {
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	spec.Extra = `c.apps.hadolint.officialUrl = "https://example.com/hadolint";` + "\n"
 	tools := append([]string{
-		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}),
+		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 		parsedTool(hadolintFinding, 0),
 	}, extra...)
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, tools...))
@@ -107,9 +107,9 @@ func TestReportSARIF(t *testing.T) {
 	// check writes the lint operation alone: two runs of one tool in one
 	// category are rejected.
 	t.Run("check", func(t *testing.T) {
-		e := sarifProject(t, clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Operation: "fix"}),
+		e := sarifProject(t, clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix"}),
 			clitest.ShellTool("delta", settle+clitest.RecordRun+"; echo '[]'",
-				clitest.ToolOpSpec{Operation: "fix", Parser: "hadolint"}))
+				clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix", Parser: "hadolint"}))
 		res := e.run("", nil, "check", "--report", "sarif=r.sarif")
 		e.wantExit(res, 0)
 		if _, doc := e.sarif("r.sarif"); strings.Join(doc.tools(), ",") != "hadolint" {
@@ -133,7 +133,7 @@ func TestReportSARIF(t *testing.T) {
 	// results would close every alert it has.
 	t.Run("failed_without_findings", func(t *testing.T) {
 		e := sarifProject(t, clitest.ShellTool("crasher", settle+clitest.RecordRun+"; echo '[]'; exit 2",
-			clitest.ToolOpSpec{Parser: "hadolint"}))
+			clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Parser: "hadolint"}))
 		res := e.run("", nil, "lint", "--report", "sarif=r.sarif", "--report", "json=run.json")
 		e.wantExit(res, 1)
 		if _, doc := e.sarif("r.sarif"); strings.Join(doc.tools(), ",") != "hadolint" {
@@ -218,7 +218,7 @@ func manyParsedTools(n int) []string {
 	var tools []string
 	for i := n; i >= 1; i-- {
 		tools = append(tools, clitest.ShellTool(fmt.Sprintf("t%02d", i), settle+clitest.RecordRun+"; echo '[]'",
-			clitest.ToolOpSpec{Parser: "hadolint"}))
+			clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Parser: "hadolint"}))
 	}
 	return tools
 }

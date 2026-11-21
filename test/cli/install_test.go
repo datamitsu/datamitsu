@@ -40,7 +40,7 @@ func TestInstallNoTargets(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "install")
 	if res.ExitCode != 2 {
 		t.Fatalf("`install` (no targets) exit = %d, want 2\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
@@ -59,7 +59,7 @@ func TestInstallUnknownApp(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "install", "nonesuch")
 	if res.ExitCode != 1 {
 		t.Fatalf("`install nonesuch` exit = %d, want 1\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
@@ -84,7 +84,7 @@ func TestInstallOfflineDownloadError(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := p.WriteFile("bin.config.js", installBinaryConfigJS)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "install", "mytool")
 	if res.ExitCode != 1 {
 		t.Fatalf("`install mytool` (offline) exit = %d, want 1\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
@@ -109,7 +109,7 @@ func TestInstallNoVerifyFlagParses(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := p.WriteFile("bin.config.js", installBinaryConfigJS)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "install", "--no-verify", "mytool")
 	if res.ExitCode != 1 {
 		t.Fatalf("`install --no-verify mytool` exit = %d, want 1\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
@@ -130,7 +130,7 @@ func TestInstallRuntimeFlagParses(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "install", "--runtime", "node")
 	if res.ExitCode != 0 {
 		t.Fatalf("`install --runtime node` (undeclared) exit = %d, want 0\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)

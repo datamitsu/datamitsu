@@ -35,7 +35,10 @@ type GitIgnore struct {
 // NewGitIgnore returns a GitIgnore rooted at the given repository root path.
 func NewGitIgnore(root string) *GitIgnore {
 	return &GitIgnore{
-		root: filepath.Clean(root),
+		list:       nil,
+		patterns:   nil,
+		isCompiled: false,
+		root:       filepath.Clean(root),
 	}
 }
 
@@ -84,8 +87,10 @@ func (g *GitIgnore) CountPatterns() (int, error) {
 // compiled patterns, so additional files can be added before compiling.
 func (g *GitIgnore) Clone() *GitIgnore {
 	return &GitIgnore{
-		root: g.root,
-		list: append([]gitIgnoreFile{}, g.list...),
+		patterns:   nil,
+		isCompiled: false,
+		root:       g.root,
+		list:       append([]gitIgnoreFile{}, g.list...),
 	}
 }
 
@@ -97,8 +102,9 @@ func (g *GitIgnore) AddGitIgnoreFile(absPath string, content []byte) {
 	}
 
 	g.list = append(g.list, gitIgnoreFile{
-		absPath: absPath,
-		content: content,
+		repoWide: false,
+		absPath:  absPath,
+		content:  content,
 	})
 }
 

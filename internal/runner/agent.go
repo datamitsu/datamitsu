@@ -151,7 +151,7 @@ func skipText(s report.Skip) string {
 	for _, r := range []tooling.SkipReason{tooling.SkipReasonConfig, tooling.SkipReasonUnsupportedPlatform, tooling.SkipReasonNotNarrowable} {
 		reasons[r.String()] = r
 	}
-	return tooling.SkippedTool{ToolName: s.Tool, Reason: reasons[s.Reason], Detail: s.Detail}.ReasonText()
+	return tooling.SkippedTool{Operation: "", ToolName: s.Tool, Reason: reasons[s.Reason], Detail: s.Detail}.ReasonText()
 }
 
 func agentInvocation(b *strings.Builder, tr report.ToolRun, inv report.Invocation, shown, hidden *levelCounts, baselined *int) {

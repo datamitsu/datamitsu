@@ -27,6 +27,7 @@ func SeedParserModule(tb testing.TB, cacheDir, modulePath string) string {
 	}
 	pin := digest.SHA256Of(data)
 	decl := config.Parser{
+		OCI:  nil,
 		URL:  "https://parsers.example.invalid/module.wasm",
 		Hash: pin.String(),
 	}

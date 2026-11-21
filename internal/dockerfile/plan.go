@@ -221,7 +221,7 @@ func BuildPlan(apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, opts ..
 	}
 	sort.Strings(runtimeNames)
 	for _, name := range runtimeNames {
-		stage := RuntimeStage{Name: name, Kind: neededRuntimes[name]}
+		stage := RuntimeStage{PNPMRuntime: "", Name: name, Kind: neededRuntimes[name]}
 		if pnpmName, ok := runtimes.PNPMRuntimeName(runtimes[name]); ok {
 			stage.PNPMRuntime = pnpmName
 		}

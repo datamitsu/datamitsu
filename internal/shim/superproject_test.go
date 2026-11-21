@@ -80,10 +80,10 @@ func TestParseGitFile(t *testing.T) {
 	}{
 		{name: "the line git writes", content: "gitdir: ../.git/modules/lib\n", want: "../.git/modules/lib", wantOK: true},
 		{name: "no trailing newline", content: "gitdir: /w/outer/.git/modules/lib", want: "/w/outer/.git/modules/lib", wantOK: true},
-		{name: "extra content", content: "gitdir: /a\nsomething else\n"},
-		{name: "empty target", content: "gitdir:   \n"},
-		{name: "not a gitdir line", content: "worktree: /a\n"},
-		{name: "empty file", content: ""},
+		{want: "", wantOK: false, name: "extra content", content: "gitdir: /a\nsomething else\n"},
+		{want: "", wantOK: false, name: "empty target", content: "gitdir:   \n"},
+		{want: "", wantOK: false, name: "not a gitdir line", content: "worktree: /a\n"},
+		{want: "", wantOK: false, name: "empty file", content: ""},
 	}
 
 	for _, tt := range tests {

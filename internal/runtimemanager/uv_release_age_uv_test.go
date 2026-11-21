@@ -109,7 +109,7 @@ func serveTestIndex(t *testing.T, wheels []*testWheel) string {
 			Name     string            `json:"name"`
 			Versions []string          `json:"versions"`
 			Files    []file            `json:"files"`
-		}{Meta: map[string]string{"api-version": "1.1"}, Name: project}
+		}{Versions: nil, Files: nil, Meta: map[string]string{"api-version": "1.1"}, Name: project}
 		for _, w := range wheels {
 			if w.name != project {
 				continue
@@ -176,10 +176,10 @@ func newUVReleaseAgeFixture(t *testing.T) *uvReleaseAgeFixture {
 	old := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 	fresh := time.Now().Add(-time.Hour)
 	index := serveTestIndex(t, []*testWheel{
-		{name: "widget", version: "1.0.0", requires: []string{"gadget"}, uploaded: old},
-		{name: "widget", version: "3.0.0", requires: []string{"gadget"}, uploaded: fresh},
-		{name: "gadget", version: "1.0.0", uploaded: old},
-		{name: "gadget", version: "2.0.0", uploaded: fresh},
+		{data: nil, name: "widget", version: "1.0.0", requires: []string{"gadget"}, uploaded: old},
+		{data: nil, name: "widget", version: "3.0.0", requires: []string{"gadget"}, uploaded: fresh},
+		{requires: nil, data: nil, name: "gadget", version: "1.0.0", uploaded: old},
+		{requires: nil, data: nil, name: "gadget", version: "2.0.0", uploaded: fresh},
 	})
 	return &uvReleaseAgeFixture{
 		t: t, uvBin: uvBin, pythonPath: pythonPath, pythonVersion: pythonVersion, stdlibPath: stdlibPath,
@@ -194,7 +194,7 @@ func (f *uvReleaseAgeFixture) install(version, lockFile string, files map[string
 	f.t.Setenv("DATAMITSU_CACHE_DIR", f.t.TempDir())
 	rm := New(config.MapOfRuntimes{"uv": testUVRuntimeConfig(f.t, f.uvBin, f.pythonVersion)})
 	seedTestPythonReady(f.t, rm, "uv", f.pythonPath, f.stdlibPath)
-	app := &binmanager.AppConfigUV{PackageName: "widget", Version: version, Runtime: "uv", LockFile: lockFile}
+	app := &binmanager.AppConfigUV{RequiresPython: "", PackageName: "widget", Version: version, Runtime: "uv", LockFile: lockFile}
 	if err := rm.InstallUVApp(context.Background(), "widget", app, f.indexEnv, files, nil); err != nil {
 		return "", err
 	}

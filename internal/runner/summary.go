@@ -34,7 +34,7 @@ func (sc *sharedContext) recordOp(s opSummary) {
 func (sc *sharedContext) summaryOf(op config.OperationType) (opSummary, bool) {
 	i := slices.IndexFunc(sc.summaries, func(s opSummary) bool { return s.op == op })
 	if i < 0 {
-		return opSummary{}, false
+		return opSummary{op: "", tools: 0, runs: 0, failed: 0, skipped: 0, cancelled: 0, partial: 0, durationMs: 0}, false
 	}
 	return sc.summaries[i], true
 }
@@ -104,17 +104,51 @@ func (sc *sharedContext) emitRunDone(command string, operations []config.Operati
 		complete = false
 	}
 	ui.Emit(uievent.Event{
-		Type:       uievent.TypeDone,
-		OpID:       uievent.NextOpID("cmd"),
-		Status:     doneStatus(success),
-		Op:         command,
-		Success:    new(success),
-		DurationMs: elapsedMs,
-		Tools:      total.tools,
-		Runs:       total.runs,
-		Failed:     total.failed,
-		Skipped:    total.skipped,
-		Cancelled:  new(total.cancelled),
-		Complete:   new(complete),
+		TS:              0,
+		Tool:            "",
+		Dir:             "",
+		Name:            "",
+		BytesDone:       0,
+		BytesTotal:      0,
+		Percent:         0,
+		Index:           0,
+		Total:           0,
+		Msg:             "",
+		Level:           "",
+		Format:          "",
+		Path:            "",
+		File:            "",
+		Row:             0,
+		Col:             0,
+		EndRow:          0,
+		EndCol:          0,
+		Severity:        "",
+		Code:            "",
+		Source:          "",
+		Fingerprint:     "",
+		Provenance:      "",
+		Reported:        nil,
+		Gates:           nil,
+		Baselined:       false,
+		FindingsError:   nil,
+		FindingsWarning: nil,
+		FindingsInfo:    nil,
+		FindingsHint:    nil,
+		Cached:          nil,
+		Schema:          "",
+		Events:          "",
+		Annotations:     "",
+		Type:            uievent.TypeDone,
+		OpID:            uievent.NextOpID("cmd"),
+		Status:          doneStatus(success),
+		Op:              command,
+		Success:         new(success),
+		DurationMs:      elapsedMs,
+		Tools:           total.tools,
+		Runs:            total.runs,
+		Failed:          total.failed,
+		Skipped:         total.skipped,
+		Cancelled:       new(total.cancelled),
+		Complete:        new(complete),
 	})
 }

@@ -24,9 +24,9 @@ type Inherited struct {
 // exactly what the host has.
 func Capture(environ, names []string) Inherited {
 	if len(names) == 0 {
-		return Inherited{}
+		return Inherited{names: nil, pairs: nil}
 	}
-	in := Inherited{names: names}
+	in := Inherited{pairs: nil, names: names}
 	for _, kv := range environ {
 		name, _, found := strings.Cut(kv, "=")
 		if !found || name == "" {

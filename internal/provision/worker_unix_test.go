@@ -62,7 +62,7 @@ func startTestWorkerContext(ctx context.Context, t *testing.T, mode string) *Wor
 	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestWorkerSubprocess$")
 	cmd.Env = append(os.Environ(), workerTestHelperEnv+"="+mode)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Chroot: "", Credential: nil, Ptrace: false, Setsid: false, Setctty: false, Noctty: false, Ctty: 0, Foreground: false, Pgid: 0, Setpgid: true}
 	rpcChildRead, rpcParentWrite, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func startTestWorkerContext(ctx context.Context, t *testing.T, mode string) *Wor
 	if err := handshakeWrite.Close(); err != nil {
 		t.Fatal(err)
 	}
-	worker := &Worker{Cmd: cmd, Client: NewClient(&duplex{r: rpcParentRead, w: rpcParentWrite}, nil), liveness: liveWrite, cancel: cancelWrite, done: make(chan struct{})}
+	worker := &Worker{waitErr: nil, Cmd: cmd, Client: NewClient(&duplex{r: rpcParentRead, w: rpcParentWrite}, nil), liveness: liveWrite, cancel: cancelWrite, done: make(chan struct{})}
 	go func() {
 		worker.waitErr = cmd.Wait()
 		close(worker.done)

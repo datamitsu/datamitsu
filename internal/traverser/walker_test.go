@@ -271,6 +271,7 @@ func TestWalk(t *testing.T) {
 	_ = git.Compile()
 
 	walker := Walker{
+		onDir:    nil,
 		rootPath: tmpDir,
 		path:     tmpDir,
 		git:      git,
@@ -293,6 +294,7 @@ func TestWalkEmptyDirectory(t *testing.T) {
 	_ = git.Compile()
 
 	walker := Walker{
+		onDir:    nil,
 		rootPath: tmpDir,
 		path:     tmpDir,
 		git:      git,
@@ -326,6 +328,7 @@ func TestWalkContextCancellation(t *testing.T) {
 	_ = git.Compile()
 
 	walker := Walker{
+		onDir:    nil,
 		rootPath: tmpDir,
 		path:     tmpDir,
 		git:      git,

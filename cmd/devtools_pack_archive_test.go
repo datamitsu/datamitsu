@@ -190,7 +190,7 @@ func TestPackInlineArchiveHardLimit(t *testing.T) {
 
 func TestLimitedWriterEnforcesLimit(t *testing.T) {
 	var buf bytes.Buffer
-	lw := &limitedWriter{w: &buf, limit: 100}
+	lw := &limitedWriter{n: 0, w: &buf, limit: 100}
 
 	// Write within limit should succeed
 	n, err := lw.Write([]byte("hello"))

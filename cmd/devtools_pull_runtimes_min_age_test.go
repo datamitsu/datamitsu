@@ -61,7 +61,7 @@ func TestPullPNPMRuntime_MinAgeNotOldEnough(t *testing.T) {
 // pull-runtimes flag sentinel (-1) to the effective global minimum release age,
 // the same contract the other pull-* commands rely on.
 func TestResolveMinAge_PullRuntimesSentinel(t *testing.T) {
-	eff := runtimeconfig.Effective{MinimumReleaseAgeMinutes: 4321}
+	eff := runtimeconfig.Effective{AllowPartial: "", Annotations: "", Concurrency: 0, ConfigCache: false, Events: "", FailFast: false, FailFastSource: "", FailOn: "", ForceGitSubprocess: false, InstallTimeoutSeconds: 0, Libc: "", LogFormat: "", LspFormatTimeoutMs: 0, LspFormatWidenTo: "", LogLevel: "", MaxCmdLength: 0, MaxErrorCmdDisplay: 0, MaxFindingsPerProcess: 0, MaxParallelWorkers: 0, MaxParseInputBytes: 0, NoOCI: false, OCIRegistry: "", Offline: false, Output: "", Report: "", StartupTimings: false, Timings: false, Trace: false, TraceDir: "", UnitCacheTTLMinutes: 0, MinimumReleaseAgeMinutes: 4321}
 	if got := resolveMinAge(minAgeFlagDefault, eff); got != 4321 {
 		t.Errorf("resolveMinAge(sentinel) = %d, want 4321 (effective default)", got)
 	}

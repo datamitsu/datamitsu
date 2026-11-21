@@ -58,7 +58,7 @@ func Spans(start, end []byte, col, endCol int, unit Unit) (chars, bytes, utf16 S
 		precision = Exact
 	default:
 		if !isASCII(start) || !isASCII(end) {
-			return Span{}, Span{}, Span{}, Unknown
+			return Span{Start: 0, End: 0}, Span{Start: 0, End: 0}, Span{Start: 0, End: 0}, Unknown
 		}
 		precision, unit = ASCII, UTF8
 	}

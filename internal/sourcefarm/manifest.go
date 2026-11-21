@@ -246,7 +246,7 @@ var lstat = os.Lstat
 func StatWatchFile(path string) WatchFile {
 	info, err := lstat(path)
 	if err != nil {
-		return WatchFile{Path: path, Exists: false}
+		return WatchFile{MtimeNS: 0, Size: 0, Path: path, Exists: false}
 	}
 	return WatchFile{
 		Path:    path,
@@ -422,6 +422,10 @@ func ComputeStalenessKey(formatVersion int, datamitsuVersion, root, goos, goarch
 // See cmd.bakeSourceFarm, which snapshots before the load for that reason.
 func BuildManifest(plan Plan, origin Origin, watch []WatchFile) Manifest {
 	m := Manifest{
+		ConfigPaths:      nil,
+		ShimTarget:       "",
+		StalenessKey:     "",
+		ConfigArgs:       nil,
 		FormatVersion:    ManifestFormatVersion,
 		Origin:           origin,
 		Root:             plan.Root,

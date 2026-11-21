@@ -157,7 +157,7 @@ type ChangesScope struct {
 
 // ObservedScope is the scope of every observation: the working tree as the
 // version control status reports it.
-var ObservedScope = ChangesScope{Tracked: true, Untracked: true, Renames: "deleted+created"}
+var ObservedScope = ChangesScope{Ignored: false, Submodules: false, Tracked: true, Untracked: true, Renames: "deleted+created"}
 
 // Change is one file an operation changed.
 type Change struct {
@@ -217,7 +217,7 @@ func netChange(steps []Change) (Change, bool) {
 	c := last
 	switch {
 	case !existed && !exists:
-		return Change{}, false
+		return Change{Path: "", Kind: "", Patch: false, Step: 0}, false
 	case !existed:
 		c.Kind = gitutil.Created
 	case !exists:

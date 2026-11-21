@@ -155,7 +155,7 @@ func field(rec string, n int) string {
 func entryOf(ctx context.Context, path string) (entry, error) {
 	info, err := os.Lstat(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return entry{}, nil
+		return entry{tracked: false, hash: "", executable: false}, nil
 	}
 	if err != nil {
 		return entry{}, fmt.Errorf("stat: %w", err)
@@ -166,13 +166,13 @@ func entryOf(ctx context.Context, path string) (entry, error) {
 		if err != nil {
 			return entry{}, fmt.Errorf("read link: %w", err)
 		}
-		return entry{hash: "link:" + digest.XXH3Of([]byte(target)).Hex()}, nil
+		return entry{tracked: false, executable: false, hash: "link:" + digest.XXH3Of([]byte(target)).Hex()}, nil
 	case info.IsDir():
-		return entry{hash: "dir"}, nil
+		return entry{tracked: false, executable: false, hash: "dir"}, nil
 	case !info.Mode().IsRegular():
 		// A named pipe, a socket or a device is never opened: opening a pipe
 		// waits for a writer.
-		return entry{hash: "special:" + info.Mode().Type().String()}, nil
+		return entry{tracked: false, executable: false, hash: "special:" + info.Mode().Type().String()}, nil
 	}
 	f, err := os.Open(path)
 	if err != nil {
@@ -183,7 +183,7 @@ func entryOf(ctx context.Context, path string) (entry, error) {
 	if err != nil {
 		return entry{}, fmt.Errorf("read: %w", err)
 	}
-	return entry{hash: d.Hex(), executable: info.Mode()&0o111 != 0}, nil
+	return entry{tracked: false, hash: d.Hex(), executable: info.Mode()&0o111 != 0}, nil
 }
 
 // stoppableReader stops reading once stopped says why: a large dirty file

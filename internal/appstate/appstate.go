@@ -193,7 +193,7 @@ func Validate(appName string, metadata *AppMetadata) error {
 
 // ComputeConfigHash includes source identity, integrity pins and a sorted unique selection.
 func ComputeConfigHash(metadata *AppMetadata, selections []string, sources ...releaseprovider.Source) string {
-	source := releaseprovider.Source{Type: "github", URL: "https://github.com"}
+	source := releaseprovider.Source{APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}
 	if len(sources) > 0 {
 		source = sources[0]
 	}

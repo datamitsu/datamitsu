@@ -16,10 +16,10 @@ func TestCalculateConfigHashSpellingStability(t *testing.T) {
 	bare := "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 	binaryPath := "bin/app"
 
-	infoCanonical := BinaryOsArchInfo{URL: "https://example.com/a", Hash: canonical, ContentType: BinContentTypeTarGz, BinaryPath: &binaryPath}
-	infoBare := BinaryOsArchInfo{URL: "https://example.com/a", Hash: bare, ContentType: BinContentTypeTarGz, BinaryPath: &binaryPath}
+	infoCanonical := BinaryOsArchInfo{Auth: nil, ExtractDir: false, URL: "https://example.com/a", Hash: canonical, ContentType: BinContentTypeTarGz, BinaryPath: &binaryPath}
+	infoBare := BinaryOsArchInfo{Auth: nil, ExtractDir: false, URL: "https://example.com/a", Hash: bare, ContentType: BinContentTypeTarGz, BinaryPath: &binaryPath}
 	// An uppercase pin normalized on load must land in the same place too.
-	infoUpper := BinaryOsArchInfo{URL: "https://example.com/a", Hash: "sha256:BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD", ContentType: BinContentTypeTarGz, BinaryPath: &binaryPath}
+	infoUpper := BinaryOsArchInfo{Auth: nil, ExtractDir: false, URL: "https://example.com/a", Hash: "sha256:BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD", ContentType: BinContentTypeTarGz, BinaryPath: &binaryPath}
 
 	resolved := makeResolvedTarget("linux", "amd64", target.LibcGlibc)
 
@@ -40,10 +40,10 @@ func TestHashFilesAndArchivesSpellingStability(t *testing.T) {
 	format := BinContentTypeTarGz
 
 	canonicalHash := HashFilesAndArchives(nil, map[string]*ArchiveSpec{
-		"a": {URL: "https://example.com/a.tar.gz", Hash: canonical, Format: format},
+		"a": {Inline: "", URL: "https://example.com/a.tar.gz", Hash: canonical, Format: format},
 	})
 	bareHash := HashFilesAndArchives(nil, map[string]*ArchiveSpec{
-		"a": {URL: "https://example.com/a.tar.gz", Hash: bare, Format: format},
+		"a": {Inline: "", URL: "https://example.com/a.tar.gz", Hash: bare, Format: format},
 	})
 
 	if canonicalHash == "" || canonicalHash != bareHash {

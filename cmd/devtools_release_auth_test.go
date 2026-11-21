@@ -51,14 +51,14 @@ func TestPullReleasesPrivateAssetsInstallAndVerify(t *testing.T) {
 			return
 		}
 		if strings.Contains(r.URL.Path, "/releases/") {
-			_ = json.NewEncoder(w).Encode(releaseasset.Release{TagName: "v1", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{Name: "tool-linux-amd64", BrowserDownloadURL: base + "/group/tool/releases/download/v1/tool-linux-amd64"}}})
+			_ = json.NewEncoder(w).Encode(releaseasset.Release{Prerelease: false, Draft: false, TagName: "v1", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "tool-linux-amd64", BrowserDownloadURL: base + "/group/tool/releases/download/v1/tool-linux-amd64"}}})
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"description": "tool", "private": true})
 	}))
 	defer srv.Close()
 	base = srv.URL
-	state := &appstate.State{Sources: map[string]releaseprovider.Source{"private": {Type: "forgejo", URL: base, TokenEnv: "TEST_PRIVATE_FORGE_TOKEN"}}, Platforms: []string{"linux/amd64/glibc", "linux/amd64/musl"}, Apps: map[string]*appstate.AppMetadata{"tool": {Source: "private", Repository: "group/tool", Tag: "v1", Hashes: map[string]string{"tool-linux-amd64": hash}}}, Binaries: map[string]*appstate.BinariesEntry{}}
+	state := &appstate.State{Sources: map[string]releaseprovider.Source{"private": {APIURL: "", DownloadAuth: "", Type: "forgejo", URL: base, TokenEnv: "TEST_PRIVATE_FORGE_TOKEN"}}, Platforms: []string{"linux/amd64/glibc", "linux/amd64/musl"}, Apps: map[string]*appstate.AppMetadata{"tool": {Checksums: nil, Source: "private", Repository: "group/tool", Tag: "v1", Hashes: map[string]string{"tool-linux-amd64": hash}}}, Binaries: map[string]*appstate.BinariesEntry{}}
 	path := filepath.Join(t.TempDir(), "binaryApps.json")
 	if err := appstate.Save(path, state); err != nil {
 		t.Fatal(err)
@@ -84,7 +84,7 @@ func TestPullReleasesPrivateAssetsInstallAndVerify(t *testing.T) {
 	if info.Auth == nil || info.Auth.TokenEnv != "TEST_PRIVATE_FORGE_TOKEN" {
 		t.Fatal("credential reference not preserved")
 	}
-	bm := binmanager.NewWithResolver(binmanager.MapOfApps{"tool": {Binary: &binmanager.AppConfigBinary{Binaries: saved.Binaries["tool"].Binaries}}}, nil, nil, target.NewResolver(target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcGlibc}))
+	bm := binmanager.NewWithResolver(binmanager.MapOfApps{"tool": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Version: "", Binaries: saved.Binaries["tool"].Binaries}}}, nil, nil, target.NewResolver(target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcGlibc}))
 	command, err := bm.GetCommandInfo(context.Background(), "tool")
 	if err != nil || command == nil {
 		t.Fatalf("install command=%v err=%v", command, err)

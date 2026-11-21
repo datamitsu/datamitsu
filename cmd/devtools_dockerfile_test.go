@@ -24,7 +24,7 @@ func TestResolveBaseDigest(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("offline skips resolution", func(t *testing.T) {
-		r := &fakeResolver{digest: "sha256:x"}
+		r := &fakeResolver{err: nil, calls: 0, digest: "sha256:x"}
 		digest, reason := resolveBaseDigest(ctx, r, true, "0.0.19", "datamitsu/datamitsu", "0.0.19")
 		if digest != "" {
 			t.Errorf("digest = %q, want empty when offline", digest)
@@ -38,7 +38,7 @@ func TestResolveBaseDigest(t *testing.T) {
 	})
 
 	t.Run("non-release version is not pinned", func(t *testing.T) {
-		r := &fakeResolver{digest: "sha256:x"}
+		r := &fakeResolver{err: nil, calls: 0, digest: "sha256:x"}
 		digest, reason := resolveBaseDigest(ctx, r, false, "dev", "datamitsu/datamitsu", "dev")
 		if digest != "" || r.calls != 0 {
 			t.Errorf("dev version should not resolve: digest=%q calls=%d", digest, r.calls)
@@ -49,7 +49,7 @@ func TestResolveBaseDigest(t *testing.T) {
 	})
 
 	t.Run("resolver error degrades to unpinned", func(t *testing.T) {
-		r := &fakeResolver{err: errors.New("network down")}
+		r := &fakeResolver{digest: "", calls: 0, err: errors.New("network down")}
 		digest, reason := resolveBaseDigest(ctx, r, false, "0.0.19", "datamitsu/datamitsu", "0.0.19")
 		if digest != "" {
 			t.Errorf("digest = %q, want empty on error", digest)
@@ -60,7 +60,7 @@ func TestResolveBaseDigest(t *testing.T) {
 	})
 
 	t.Run("success returns digest", func(t *testing.T) {
-		r := &fakeResolver{digest: "sha256:abc"}
+		r := &fakeResolver{err: nil, calls: 0, digest: "sha256:abc"}
 		digest, reason := resolveBaseDigest(ctx, r, false, "0.0.19", "datamitsu/datamitsu", "0.0.19")
 		if digest != "sha256:abc" {
 			t.Errorf("digest = %q, want sha256:abc", digest)

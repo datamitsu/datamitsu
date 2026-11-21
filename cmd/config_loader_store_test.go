@@ -27,7 +27,7 @@ func brokenGitDir(t *testing.T) {
 func TestLoadConfigGitRootFailureIsFatalForProjectCommands(t *testing.T) {
 	brokenGitDir(t)
 
-	_, _, _, err := loadConfigImpl(context.Background(), nil, false, nil, loadConfigOptions{})
+	_, _, _, err := loadConfigImpl(context.Background(), nil, false, nil, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false})
 	if err == nil {
 		t.Fatal("expected a git-root failure, got nil")
 	}
@@ -41,7 +41,7 @@ func TestLoadConfigGitRootFailureToleratedForStoreCommands(t *testing.T) {
 	logs := swapLoggerWithObserver(t, zapcore.WarnLevel)
 
 	cfg, _, _, err := loadConfigImpl(context.Background(), nil, false, nil,
-		loadConfigOptions{tolerateGitRootFailure: true})
+		loadConfigOptions{skipLockfileValidation: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false, tolerateGitRootFailure: true})
 	if err != nil {
 		t.Fatalf("tolerant load failed: %v", err)
 	}

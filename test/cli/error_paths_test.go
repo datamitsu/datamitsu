@@ -40,7 +40,7 @@ func TestConfigLoadErrorPaths(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 				"--no-auto-config", "--config", tc.path, "config", "show")
 			assertOfflineError(t, res, tc.wantSub)
 			if !strings.Contains(res.Stderr, "failed to load config") {
@@ -66,7 +66,7 @@ func TestConfigUnreadableFile(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(cfg, 0o644) }) // let TempDir cleanup remove it
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "show")
 	assertOfflineError(t, res, "permission denied")
 	if !strings.Contains(res.Stderr, "failed to read config file") {
@@ -78,7 +78,7 @@ func TestConfigUnreadableFile(t *testing.T) {
 // (not the root) is rejected at parse time: exit 2, the usage code, "unknown
 // flag" on stderr, and — because flag errors set SilenceUsage — no usage block.
 func TestSubcommandUnknownFlag(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "config", "show", "--definitely-not-a-flag")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "config", "show", "--definitely-not-a-flag")
 	if res.ExitCode != 2 {
 		t.Fatalf("unknown subcommand flag exit = %d, want 2\nstdout:\n%s", res.ExitCode, res.Stdout)
 	}
@@ -99,7 +99,7 @@ func TestPositionalArgumentUsageError(t *testing.T) {
 	}
 	for _, args := range cases {
 		t.Run(strings.Join(args, "_"), func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{}, args...)
+			res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, args...)
 			if res.ExitCode != 2 {
 				t.Fatalf("`datamitsu %s` exit = %d, want 2\nstderr:\n%s", strings.Join(args, " "), res.ExitCode, res.Stderr)
 			}
@@ -118,7 +118,7 @@ func TestExecListToolsConfigError(t *testing.T) {
 	p := clitest.NewProject(t)
 	missing := p.Dir + "/nope.config.js"
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", missing, "exec")
 	if res.ExitCode != 1 {
 		t.Fatalf("`exec` (bad config) exit = %d, want 1\nstdout:\n%s\nstderr:\n%s",
@@ -154,7 +154,7 @@ func TestInitReadOnlyTargetDir(t *testing.T) {
 	// directory is writable again before teardown tries to remove it.
 	t.Cleanup(func() { _ = os.Chmod(p.Dir, 0o755) })
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "init")
 	if res.ExitCode == 0 {
 		t.Fatalf("read-only `init` exit = 0, want non-zero\nstdout:\n%s", res.Stdout)
@@ -177,7 +177,7 @@ func TestConfigLockfileListAndErrorPaths(t *testing.T) {
 
 	t.Run("no-args-empty-config-lists", func(t *testing.T) {
 		cfg := clitest.WriteMinimalConfig(p)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "config", "lockfile")
 		if res.ExitCode != 0 {
 			t.Fatalf("`config lockfile` (no args) exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -189,14 +189,14 @@ func TestConfigLockfileListAndErrorPaths(t *testing.T) {
 
 	t.Run("unknown-app", func(t *testing.T) {
 		cfg := clitest.WriteMinimalConfig(p)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "config", "lockfile", "ghost")
 		assertOfflineError(t, res, `app "ghost" not found in configuration`)
 	})
 
 	t.Run("binary-app-unsupported", func(t *testing.T) {
 		cfg := p.WriteFile("binary.config.js", lockfileBinaryConfigJS)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "config", "lockfile", "mytool")
 		assertOfflineError(t, res, "does not support lock files")
 	})
@@ -228,7 +228,7 @@ globalThis.getMinVersion = () => "0.0.0";
 // from the CLI. A garbage DATAMITSU_INSTALL_TIMEOUT must therefore NOT abort the
 // process; `config runtime` still succeeds and reports the default (600s).
 func TestRuntimeConfigToleratesBadEnv(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{Env: []string{"DATAMITSU_INSTALL_TIMEOUT=notanumber"}},
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Stdin: "", Timeout: 0, Env: []string{"DATAMITSU_INSTALL_TIMEOUT=notanumber"}},
 		"config", "runtime")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config runtime` with bad env exit = %d, want 0 (Init tolerates bad env)\nstderr:\n%s",

@@ -13,7 +13,7 @@ import (
 func TestInitQuietReportsOnlyManagedChanges(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: t.TempDir()}
+	opts := clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: t.TempDir()}
 	run := func() clitest.Result {
 		t.Helper()
 		return clitest.Run(t, opts, "--no-auto-config", "--config", cfg, "init", "--quiet")
@@ -69,7 +69,7 @@ func TestInitQuietReportsRemovedNestedLink(t *testing.T) {
 });
 globalThis.getMinVersion = () => "0.0.0";
 `)
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: t.TempDir()}
+	opts := clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: t.TempDir()}
 	run := func() clitest.Result {
 		t.Helper()
 		return clitest.Run(t, opts, "--no-auto-config", "--config", cfg, "init", "--quiet")
@@ -115,7 +115,7 @@ globalThis.getMinVersion = () => "0.0.0";
 	args := make([]string, 0, 5)
 	args = append(args, "--no-auto-config", "--config", cfg, "init")
 	cacheDir := t.TempDir()
-	baseOpts := clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir}
+	baseOpts := clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheDir}
 	normal := clitest.Run(t, baseOpts, args...)
 	quiet := clitest.Run(t, baseOpts, append(args, "--quiet")...)
 	if normal.ExitCode == 0 {
@@ -131,7 +131,7 @@ globalThis.getMinVersion = () => "0.0.0";
 
 func TestSourceStatusRejectsQuietFlag(t *testing.T) {
 	p := clitest.NewProject(t)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "source", "status", "--quiet")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "source", "status", "--quiet")
 	if res.ExitCode == 0 {
 		t.Fatalf("source status unexpectedly accepted local-only --quiet\nstdout:\n%s", res.Stdout)
 	}

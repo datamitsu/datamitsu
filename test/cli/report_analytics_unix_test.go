@@ -23,10 +23,10 @@ func TestReportDiffCancelled(t *testing.T) {
 	spec := fixtureSpec
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	waits := clitest.ShellTool("hadolint", `echo started >> "$MARKERS/started"; sleep 30`,
-		clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint"})
+		clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint"})
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, waits))
 
-	proc := clitest.Start(t, clitest.RunOptions{Dir: e.p.Dir, CacheDir: e.cache},
+	proc := clitest.Start(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: e.p.Dir, CacheDir: e.cache},
 		"--no-auto-config", "--config", e.cfg, "lint", "--report", "json=after.json")
 	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 		if ran, _ := e.p.Marker("started"); ran {

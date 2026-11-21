@@ -246,6 +246,8 @@ type BinManager struct {
 // New creates a BinManager for the given apps and bundles using the host target resolver.
 func New(mapOfApps MapOfApps, mapOfBundles MapOfBundles, runtimeManager RuntimeAppManager) *BinManager {
 	return &BinManager{
+		toolCacheRoot:  "",
+		downloadGroup:  singleflight.Group{},
 		mapOfApps:      mapOfApps,
 		mapOfBundles:   mapOfBundles,
 		runtimeManager: runtimeManager,
@@ -256,6 +258,8 @@ func New(mapOfApps MapOfApps, mapOfBundles MapOfBundles, runtimeManager RuntimeA
 // NewWithResolver creates a BinManager with a custom resolver (for testing).
 func NewWithResolver(mapOfApps MapOfApps, mapOfBundles MapOfBundles, runtimeManager RuntimeAppManager, resolver *target.Resolver) *BinManager {
 	return &BinManager{
+		toolCacheRoot:  "",
+		downloadGroup:  singleflight.Group{},
 		mapOfApps:      mapOfApps,
 		mapOfBundles:   mapOfBundles,
 		runtimeManager: runtimeManager,
@@ -706,7 +710,7 @@ func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, er
 		if name == appName {
 			// Only the root's dependency PATH directory is a health path: the dependencies are
 			// reached through it and never run with directories of their own.
-			pathEntries, _, _, err := bm.dependencyPathInfo(appName, &CommandInfo{}, bm.resolveBindingPath, "")
+			pathEntries, _, _, err := bm.dependencyPathInfo(appName, &CommandInfo{Type: "", Command: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil}, bm.resolveBindingPath, "")
 			if err != nil {
 				return nil, false, fmt.Errorf("app %q: %w", appName, err)
 			}
@@ -1076,6 +1080,9 @@ func (bm *BinManager) GetAppsList() []AppInfo {
 // an app that declares no kind.
 func DescribeApp(name string, app App) AppInfo {
 	info := AppInfo{
+		Command:     "",
+		Version:     "",
+		PackageName: "",
 		Name:        name,
 		Type:        "unknown",
 		Description: app.Description,
@@ -1303,13 +1310,13 @@ func (bm *BinManager) resolveRawCommandInfo(appName string) (*CommandInfo, error
 	var cmdInfo *CommandInfo
 	switch {
 	case app.Shell != nil:
-		cmdInfo = &CommandInfo{Type: "shell", Command: app.Shell.Name, Args: app.Shell.Args}
+		cmdInfo = &CommandInfo{Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: app.Shell.Name, Args: app.Shell.Args}
 	case app.Binary != nil:
 		binPath, err := bm.getBinaryPath(appName)
 		if err != nil {
 			return nil, err
 		}
-		cmdInfo = &CommandInfo{Type: "binary", Command: binPath}
+		cmdInfo = &CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: binPath}
 	case app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
 		if bm.runtimeManager == nil {
 			return nil, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
@@ -1342,9 +1349,14 @@ func (bm *BinManager) resolveCommandInfo(appName string) (*CommandInfo, bool, er
 	switch {
 	case app.Shell != nil:
 		cmdInfo = &CommandInfo{
-			Type:    "shell",
-			Command: app.Shell.Name,
-			Args:    app.Shell.Args,
+			Env:            nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "shell",
+			Command:        app.Shell.Name,
+			Args:           app.Shell.Args,
 		}
 		installed = true
 
@@ -1356,8 +1368,14 @@ func (bm *BinManager) resolveCommandInfo(appName string) (*CommandInfo, bool, er
 			return nil, false, err
 		}
 		cmdInfo = &CommandInfo{
-			Type:    "binary",
-			Command: binPath,
+			Args:           nil,
+			Env:            nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "binary",
+			Command:        binPath,
 		}
 		installed = pathExists(binPath)
 
@@ -1439,9 +1457,14 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 	switch {
 	case app.Shell != nil:
 		cmdInfo = &CommandInfo{
-			Type:    "shell",
-			Command: app.Shell.Name,
-			Args:    app.Shell.Args,
+			Env:            nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "shell",
+			Command:        app.Shell.Name,
+			Args:           app.Shell.Args,
 		}
 
 	case app.Binary != nil:
@@ -1450,8 +1473,14 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 			return nil, err
 		}
 		cmdInfo = &CommandInfo{
-			Type:    "binary",
-			Command: binPath,
+			Args:           nil,
+			Env:            nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "binary",
+			Command:        binPath,
 		}
 
 	case app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
@@ -1501,7 +1530,7 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 	// throwaway so the returned cmdInfo keeps the runtime-owned PATH alone.
 	// The barrier caller (materializeDependencyPaths) composes the final
 	// PATH — dependency dir plus inherited tail — exactly once.
-	if _, _, _, err := bm.dependencyPathInfo(appName, &CommandInfo{}, installDependency, ""); err != nil {
+	if _, _, _, err := bm.dependencyPathInfo(appName, &CommandInfo{Type: "", Command: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil}, installDependency, ""); err != nil {
 		return nil, fmt.Errorf("app %q: %w", appName, err)
 	}
 	if cmdInfo.ToolCacheDir != "" {
@@ -1523,7 +1552,7 @@ func (bm *BinManager) materializeDependencyPaths(ctx context.Context, names []st
 	for _, name := range names {
 		info := root
 		if info == nil || name != names[len(names)-1] {
-			info = &CommandInfo{}
+			info = &CommandInfo{Type: "", Command: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil}
 		}
 		if _, err := bm.addDependencyPath(ctx, name, info, bm.resolveBindingPath, true); err != nil {
 			return fmt.Errorf("app %q: %w", name, err)

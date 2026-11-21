@@ -17,7 +17,13 @@ func TestRuntimeInventoryEntryFindsExactName(t *testing.T) {
 	}
 	rm := runtimemanager.New(config.MapOfRuntimes{
 		"go-host": {
-			Kind: config.RuntimeKindGo, Mode: config.RuntimeModeSystem,
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindGo, Mode: config.RuntimeModeSystem,
 			System: &config.RuntimeConfigSystem{Command: executable, SystemVersion: "fixture"},
 			Go:     &config.RuntimeConfigGo{GoVersion: "fixture"},
 		},
@@ -37,7 +43,7 @@ func TestRuntimeRunRequiresSeparatorAndInterpreterArguments(t *testing.T) {
 		{"go-host"},
 		{"go-host", "-c", "print(1)"},
 	} {
-		err := runRuntimeRun(&cobra.Command{}, args)
+		err := runRuntimeRun(&cobra.Command{Use: "", Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0}, args)
 		if err == nil || !strings.Contains(err.Error(), "usage: datamitsu runtime run") {
 			t.Errorf("runRuntimeRun(%v) = %v, want usage error", args, err)
 		}

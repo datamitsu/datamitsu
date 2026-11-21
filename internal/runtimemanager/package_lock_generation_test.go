@@ -24,8 +24,8 @@ func TestPackageLockGenerationIsolatedFromPinnedInstallsAndPeers(t *testing.T) {
 			t.Setenv("DATAMITSU_HELPER_RECORD", filepath.Join(base, "record.json"))
 			command := copyInstallerHelper(t, helper, filepath.Join(base, "bin", "installer"+executableSuffix()))
 			manager := New(config.MapOfRuntimes{
-				"node": {Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: command, SystemVersion: "22"}, Node: &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: "pnpm"}},
-				"bun":  {Kind: config.RuntimeKindBun, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: command, SystemVersion: "1.4"}, Bun: &config.RuntimeConfigBun{BunVersion: "1.4", PNPMRuntime: "pnpm"}},
+				"node": {Managed: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: command, SystemVersion: "22"}, Node: &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: "pnpm"}},
+				"bun":  {Managed: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindBun, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: command, SystemVersion: "1.4"}, Bun: &config.RuntimeConfigBun{BunVersion: "1.4", PNPMRuntime: "pnpm"}},
 				"pnpm": systemPNPMRuntime(command),
 				"uv":   testUVRuntimeConfig(t, command, "3.14.6"),
 			})
@@ -40,11 +40,11 @@ func TestPackageLockGenerationIsolatedFromPinnedInstallsAndPeers(t *testing.T) {
 			makeApp := func(lock string) binmanager.App {
 				switch kind {
 				case "node":
-					return binmanager.App{Node: &binmanager.AppConfigNode{Runtime: "node", PackageName: "probe-pkg", Version: "1.2.3", BinPath: "bin/probe", LockFile: lock}}
+					return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{Dependencies: nil, Runtime: "node", PackageName: "probe-pkg", Version: "1.2.3", BinPath: "bin/probe", LockFile: lock}}
 				case "bun":
-					return binmanager.App{Bun: &binmanager.AppConfigBun{Runtime: "bun", PackageName: "probe-pkg", Version: "1.2.3", BinPath: "bin/probe", LockFile: lock}}
+					return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{Dependencies: nil, Runtime: "bun", PackageName: "probe-pkg", Version: "1.2.3", BinPath: "bin/probe", LockFile: lock}}
 				default:
-					return binmanager.App{Uv: &binmanager.AppConfigUV{Runtime: "uv", PackageName: "probe-pkg", Version: "1.2.3", RequiresPython: ">=3.12", LockFile: lock}}
+					return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{Runtime: "uv", PackageName: "probe-pkg", Version: "1.2.3", RequiresPython: ">=3.12", LockFile: lock}}
 				}
 			}
 			app := makeApp(pinnedLock)

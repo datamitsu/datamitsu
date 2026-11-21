@@ -33,11 +33,20 @@ type RenderOptions struct {
 // wrapper image. Callers set BaseImage/Digest (and may override the rest).
 func DefaultRenderOptions() RenderOptions {
 	return RenderOptions{
-		ConfigSource: "datamitsu.config.js",
-		WorkDir:      "/opt/datamitsu-config",
-		StoreRoot:    "/dm",
-		User:         "datamitsu",
-		Cmd:          []string{"--help"},
+		BaseImage:      "",
+		Digest:         "",
+		UnpinnedReason: "",
+		Labels:         nil,
+		Args:           nil,
+		Env:            nil,
+		BuildArgs:      nil,
+		Entrypoint:     nil,
+		NoVerify:       false,
+		ConfigSource:   "datamitsu.config.js",
+		WorkDir:        "/opt/datamitsu-config",
+		StoreRoot:      "/dm",
+		User:           "datamitsu",
+		Cmd:            []string{"--help"},
 	}
 }
 

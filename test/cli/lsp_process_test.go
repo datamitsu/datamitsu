@@ -46,7 +46,7 @@ func startLsp(t *testing.T, dir string, env []string, args ...string) *lspProces
 	cmd := exec.CommandContext(ctx, bin, append([]string{"lsp"}, args...)...)
 	cmd.Dir = dir
 	cmd.Env = append(clitest.BaseEnv(t.TempDir()), env...)
-	p := &lspProcess{t: t, cmd: cmd, frames: make(chan map[string]json.RawMessage, 16), early: map[string]map[string]json.RawMessage{}}
+	p := &lspProcess{stdin: nil, mu: sync.Mutex{}, stdout: bytes.Buffer{}, stderr: bytes.Buffer{}, t: t, cmd: cmd, frames: make(chan map[string]json.RawMessage, 16), early: map[string]map[string]json.RawMessage{}}
 	cmd.Stderr = lockedWriter{&p.mu, &p.stderr}
 
 	stdin, err := cmd.StdinPipe()

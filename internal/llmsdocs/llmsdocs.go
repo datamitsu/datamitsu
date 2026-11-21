@@ -155,6 +155,7 @@ func (d *Docs) Pages() []Page {
 	out := make([]Page, 0, len(d.manifest.Pages))
 	for _, p := range d.manifest.Pages {
 		out = append(out, Page{
+			Body:        "",
 			Slug:        p.Slug,
 			Aliases:     p.Aliases,
 			URL:         p.URL,

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/releaseprovider"
 
@@ -87,22 +88,26 @@ func TestBuildPlatformTuples_AllHaveLibc(t *testing.T) {
 
 func TestBuildBinariesForApp_NestedStorageStructure(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/tool-linux-amd64.tar.gz", Digest: "sha256:" + testHash1},
-		{Name: "tool-linux-musl-amd64.tar.gz", BrowserDownloadURL: "https://example.com/tool-linux-musl-amd64.tar.gz", Digest: "sha256:" + testHash2},
-		{Name: "tool-darwin-arm64.tar.gz", BrowserDownloadURL: "https://example.com/tool-darwin-arm64.tar.gz", Digest: "sha256:" + testHash3},
-		{Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/tool-darwin-amd64.tar.gz", Digest: "sha256:" + testHash4},
-		{Name: "tool-linux-arm64.tar.gz", BrowserDownloadURL: "https://example.com/tool-linux-arm64.tar.gz", Digest: "sha256:" + testHash5},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/tool-linux-amd64.tar.gz", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-musl-amd64.tar.gz", BrowserDownloadURL: "https://example.com/tool-linux-musl-amd64.tar.gz", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-arm64.tar.gz", BrowserDownloadURL: "https://example.com/tool-darwin-arm64.tar.gz", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/tool-darwin-amd64.tar.gz", Digest: "sha256:" + testHash4},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-arm64.tar.gz", BrowserDownloadURL: "https://example.com/tool-linux-arm64.tar.gz", Digest: "sha256:" + testHash5},
 	}
 
 	release := &github.Release{
-		TagName: "v1.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v1.0.0",
+		Assets:      assets,
 	}
 
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 
 	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash123", state)
@@ -156,20 +161,24 @@ func TestBuildBinariesForApp_DetectorCalledWithLibcType(t *testing.T) {
 	// When both musl and glibc assets exist, the detector should pick the
 	// correct one for each libc tuple
 	assets := []github.Asset{
-		{Name: "app-linux-gnu-amd64.tar.gz", BrowserDownloadURL: "https://example.com/gnu", Digest: "sha256:" + testHash1},
-		{Name: "app-linux-musl-amd64.tar.gz", BrowserDownloadURL: "https://example.com/musl", Digest: "sha256:" + testHash2},
-		{Name: "app-linux-gnu-arm64.tar.gz", BrowserDownloadURL: "https://example.com/gnu-arm", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "app-linux-gnu-amd64.tar.gz", BrowserDownloadURL: "https://example.com/gnu", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "app-linux-musl-amd64.tar.gz", BrowserDownloadURL: "https://example.com/musl", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "app-linux-gnu-arm64.tar.gz", BrowserDownloadURL: "https://example.com/gnu-arm", Digest: "sha256:" + testHash3},
 	}
 
 	release := &github.Release{
-		TagName: "v2.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v2.0.0",
+		Assets:      assets,
 	}
 
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 
 	entry, err := buildBinariesForApp(context.Background(), "app", release, "hash456", state)
@@ -194,18 +203,22 @@ func TestBuildBinariesForApp_DetectorCalledWithLibcType(t *testing.T) {
 
 func TestBuildBinariesForApp_InitializesNestedMaps(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "tool-darwin-arm64.tar.gz", BrowserDownloadURL: "https://example.com/darwin", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-arm64.tar.gz", BrowserDownloadURL: "https://example.com/darwin", Digest: "sha256:" + testHash1},
 	}
 
 	release := &github.Release{
-		TagName: "v1.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v1.0.0",
+		Assets:      assets,
 	}
 
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 
 	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash789", state)
@@ -245,22 +258,22 @@ func TestFormatPlatformLabel(t *testing.T) {
 	}{
 		{
 			"linux with glibc",
-			detectionResult{os: syslist.OsTypeLinux, arch: syslist.ArchTypeAmd64, libc: "glibc"},
+			detectionResult{status: "", assetName: "", contentType: "", binaryPath: nil, err: nil, os: syslist.OsTypeLinux, arch: syslist.ArchTypeAmd64, libc: "glibc"},
 			"linux/amd64/glibc",
 		},
 		{
 			"linux with musl",
-			detectionResult{os: syslist.OsTypeLinux, arch: syslist.ArchTypeArm64, libc: "musl"},
+			detectionResult{status: "", assetName: "", contentType: "", binaryPath: nil, err: nil, os: syslist.OsTypeLinux, arch: syslist.ArchTypeArm64, libc: "musl"},
 			"linux/arm64/musl",
 		},
 		{
 			"darwin with unknown",
-			detectionResult{os: syslist.OsTypeDarwin, arch: syslist.ArchTypeArm64, libc: "unknown"},
+			detectionResult{status: "", assetName: "", contentType: "", binaryPath: nil, err: nil, os: syslist.OsTypeDarwin, arch: syslist.ArchTypeArm64, libc: "unknown"},
 			"darwin/arm64",
 		},
 		{
 			"empty libc",
-			detectionResult{os: syslist.OsTypeWindows, arch: syslist.ArchTypeAmd64, libc: ""},
+			detectionResult{status: "", assetName: "", contentType: "", binaryPath: nil, err: nil, os: syslist.OsTypeWindows, arch: syslist.ArchTypeAmd64, libc: ""},
 			"windows/amd64",
 		},
 	}
@@ -278,18 +291,22 @@ func TestFormatPlatformLabel(t *testing.T) {
 func TestBuildBinariesForApp_MapsExistBeforeWrite(t *testing.T) {
 	// Verify that maps are properly initialized even when state starts nil
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 
 	assets := []github.Asset{
-		{Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/1", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/1", Digest: "sha256:" + testHash1},
 	}
 
 	release := &github.Release{
-		TagName: "v1.0.0",
-		Assets:  assets,
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false,
+		TagName:     "v1.0.0",
+		Assets:      assets,
 	}
 
 	entry, err := buildBinariesForApp(context.Background(), "mytool", release, "hash", state)
@@ -326,16 +343,17 @@ func TestBuildBinariesForApp_MapsExistBeforeWrite(t *testing.T) {
 
 func TestBuildBinariesForApp_ConfigHash(t *testing.T) {
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 
 	assets := []github.Asset{
-		{Name: "tool-darwin-amd64", BrowserDownloadURL: "https://example.com/bin", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-amd64", BrowserDownloadURL: "https://example.com/bin", Digest: "sha256:" + testHash1},
 	}
 
-	release := &github.Release{TagName: "v1.0.0", Assets: assets}
+	release := &github.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0", Assets: assets}
 
 	entry, err := buildBinariesForApp(context.Background(), "tool", release, "myhash", state)
 	if err != nil {
@@ -349,15 +367,16 @@ func TestBuildBinariesForApp_ConfigHash(t *testing.T) {
 
 func TestBuildBinariesForApp_CorrectContentType(t *testing.T) {
 	assets := []github.Asset{
-		{Name: "tool-darwin-arm64.zip", BrowserDownloadURL: "https://example.com/zip", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-arm64.zip", BrowserDownloadURL: "https://example.com/zip", Digest: "sha256:" + testHash1},
 	}
 
-	release := &github.Release{TagName: "v1.0.0", Assets: assets}
+	release := &github.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 
 	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
@@ -374,16 +393,17 @@ func TestBuildBinariesForApp_CorrectContentType(t *testing.T) {
 func TestBuildBinariesForApp_RejectsLibcMismatch(t *testing.T) {
 	// If only musl assets exist, glibc tuple should NOT get the musl asset
 	assets := []github.Asset{
-		{Name: "tool-linux-musl-amd64.tar.gz", BrowserDownloadURL: "https://example.com/musl", Digest: "sha256:" + testHash1},
-		{Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-musl-amd64.tar.gz", BrowserDownloadURL: "https://example.com/musl", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin", Digest: "sha256:" + testHash2},
 	}
 
-	release := &github.Release{TagName: "v1.0.0", Assets: assets}
+	release := &github.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 
 	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
@@ -410,15 +430,16 @@ func TestBuildBinariesForApp_RejectsLibcMismatch(t *testing.T) {
 func TestBuildBinariesForApp_DoesNotMutateStateOnFailure(t *testing.T) {
 	// No matching assets -> should return error without mutating state
 	assets := []github.Asset{
-		{Name: "something-completely-unrelated.txt", BrowserDownloadURL: "https://example.com/txt", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "something-completely-unrelated.txt", BrowserDownloadURL: "https://example.com/txt", Digest: "sha256:" + testHash1},
 	}
 
-	release := &github.Release{TagName: "v1.0.0", Assets: assets}
+	release := &github.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 
 	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
@@ -439,17 +460,18 @@ func TestBuildBinariesForApp_DeduplicatesSingleLinuxBinary(t *testing.T) {
 	// When a single Linux binary has no libc indicator, it gets detected for both
 	// glibc and musl. Deduplication should keep only the glibc entry.
 	assets := []github.Asset{
-		{Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash1},
-		{Name: "tool-linux-arm64.tar.gz", BrowserDownloadURL: "https://example.com/linux-arm64", Digest: "sha256:" + testHash2},
-		{Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin-amd64", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-arm64.tar.gz", BrowserDownloadURL: "https://example.com/linux-arm64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin-amd64", Digest: "sha256:" + testHash3},
 	}
 
-	release := &github.Release{TagName: "v1.0.0", Assets: assets}
+	release := &github.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 
 	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
@@ -480,18 +502,19 @@ func TestBuildBinariesForApp_SeparateMuslBinariesNotDeduplicated(t *testing.T) {
 	// When separate musl binaries exist with different URLs/hashes,
 	// both glibc and musl entries should be created.
 	assets := []github.Asset{
-		{Name: "tool-linux-gnu-amd64.tar.gz", BrowserDownloadURL: "https://example.com/gnu-amd64", Digest: "sha256:" + testHash1},
-		{Name: "tool-linux-musl-amd64.tar.gz", BrowserDownloadURL: "https://example.com/musl-amd64", Digest: "sha256:" + testHash2},
-		{Name: "tool-linux-gnu-arm64.tar.gz", BrowserDownloadURL: "https://example.com/gnu-arm64", Digest: "sha256:" + testHash3},
-		{Name: "tool-linux-musl-arm64.tar.gz", BrowserDownloadURL: "https://example.com/musl-arm64", Digest: "sha256:" + testHash4},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-gnu-amd64.tar.gz", BrowserDownloadURL: "https://example.com/gnu-amd64", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-musl-amd64.tar.gz", BrowserDownloadURL: "https://example.com/musl-amd64", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-gnu-arm64.tar.gz", BrowserDownloadURL: "https://example.com/gnu-arm64", Digest: "sha256:" + testHash3},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-musl-arm64.tar.gz", BrowserDownloadURL: "https://example.com/musl-arm64", Digest: "sha256:" + testHash4},
 	}
 
-	release := &github.Release{TagName: "v1.0.0", Assets: assets}
+	release := &github.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 
 	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
@@ -527,16 +550,17 @@ func TestBuildBinariesForApp_NoDuplicateURLHashPairs(t *testing.T) {
 	// After deduplication, no two entries for the same OS/arch should have
 	// the same URL+hash combination.
 	assets := []github.Asset{
-		{Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux", Digest: "sha256:" + testHash1},
-		{Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin", Digest: "sha256:" + testHash2},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux", Digest: "sha256:" + testHash1},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-amd64.tar.gz", BrowserDownloadURL: "https://example.com/darwin", Digest: "sha256:" + testHash2},
 	}
 
-	release := &github.Release{TagName: "v1.0.0", Assets: assets}
+	release := &github.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1.0.0", Assets: assets}
 
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 
 	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)

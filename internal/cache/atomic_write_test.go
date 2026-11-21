@@ -26,7 +26,7 @@ func TestConcurrentSavesNeverPublishAMix(t *testing.T) {
 
 	writers := make([]*Cache, 2)
 	for i := range writers {
-		c, err := NewCache(dir, project, config.Config{}, nil, zap.NewNop())
+		c, err := NewCache(dir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,9 +35,9 @@ func TestConcurrentSavesNeverPublishAMix(t *testing.T) {
 	}
 	// Sizes differ, so bytes from the two writers cannot line up by accident.
 	for i := range 400 {
-		writers[0].AfterVerdict(fmt.Sprintf("big-%03d", i), VerdictEntry{Tool: "eslint", UnitDir: strings.Repeat("d", 64), InputHash: "h"})
+		writers[0].AfterVerdict(fmt.Sprintf("big-%03d", i), VerdictEntry{Op: "", Members: 0, ValidatedAt: time.Time{}, Tool: "eslint", UnitDir: strings.Repeat("d", 64), InputHash: "h"})
 	}
-	writers[1].AfterVerdict("small", VerdictEntry{Tool: "tsc", InputHash: "h"})
+	writers[1].AfterVerdict("small", VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", InputHash: "h"})
 
 	const rounds = 150
 	path := writers[0].path
@@ -72,7 +72,7 @@ func TestConcurrentSavesNeverPublishAMix(t *testing.T) {
 	for i, c := range writers {
 		writerWG.Go(func() {
 			for n := range rounds {
-				c.AfterVerdict(fmt.Sprintf("w%d-%d", i, n), VerdictEntry{Tool: "t", InputHash: "h"})
+				c.AfterVerdict(fmt.Sprintf("w%d-%d", i, n), VerdictEntry{Op: "", UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "t", InputHash: "h"})
 				if err := c.Save(); err != nil {
 					errs <- err
 				}
@@ -113,7 +113,7 @@ func TestConcurrentSavesNeverPublishAMix(t *testing.T) {
 // ones and leaves alone a write that may still be in flight.
 func TestNewCacheRemovesAbandonedTempFiles(t *testing.T) {
 	cacheDir, project := t.TempDir(), t.TempDir()
-	c, err := NewCache(cacheDir, project, config.Config{}, nil, zap.NewNop())
+	c, err := NewCache(cacheDir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,9 +125,9 @@ func TestNewCacheRemovesAbandonedTempFiles(t *testing.T) {
 		age      time.Duration
 		wantKept bool
 	}{
-		{name: "toolstate-123.tmp", age: 2 * staleTempAge},
-		{name: "toolstate.msgpack.tmp", age: 2 * staleTempAge},
-		{name: "toolstate-456.tmp", wantKept: true},
+		{wantKept: false, name: "toolstate-123.tmp", age: 2 * staleTempAge},
+		{wantKept: false, name: "toolstate.msgpack.tmp", age: 2 * staleTempAge},
+		{age: 0, name: "toolstate-456.tmp", wantKept: true},
 		{name: "unrelated-789.tmp", age: 2 * staleTempAge, wantKept: true},
 	}
 	for _, f := range files {
@@ -141,7 +141,7 @@ func TestNewCacheRemovesAbandonedTempFiles(t *testing.T) {
 		}
 	}
 
-	again, err := NewCache(cacheDir, project, config.Config{}, nil, zap.NewNop())
+	again, err := NewCache(cacheDir, project, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestNewCacheRemovesAbandonedTempFiles(t *testing.T) {
 // Shutdown waits for a debounced save that is already writing: a process that
 // exits as soon as Shutdown returns would otherwise strand its temp file.
 func TestShutdownWaitsForARunningFlush(t *testing.T) {
-	c, err := NewCache(t.TempDir(), t.TempDir(), config.Config{}, nil, zap.NewNop())
+	c, err := NewCache(t.TempDir(), t.TempDir(), config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}

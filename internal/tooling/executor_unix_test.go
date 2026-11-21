@@ -27,7 +27,7 @@ func TestStoppedToolLeavesNoDescendant(t *testing.T) {
 	root := t.TempDir()
 	pidFile := filepath.Join(root, "pid")
 	script := `(trap '' TERM; exec sleep 30 </dev/null >/dev/null 2>&1) & echo $! > ` + pidFile + `; wait`
-	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(script)}}
+	appManager := &mockAppManager{binaries: nil, err: nil, commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(script)}}
 	task := lintTask(t, "alpha", config.ToolScopePerProject, root)
 	e := NewExecutor(root, false, true, appManager, nil)
 

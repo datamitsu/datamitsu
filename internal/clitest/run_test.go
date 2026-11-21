@@ -10,7 +10,7 @@ import (
 )
 
 func TestRunVersionExitZero(t *testing.T) {
-	res := Run(t, RunOptions{}, "version")
+	res := Run(t, RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "version")
 	if res.ExitCode != 0 {
 		t.Fatalf("version exit = %d, want 0 (stderr: %q)", res.ExitCode, res.Stderr)
 	}
@@ -25,7 +25,7 @@ func TestRunVersionExitZero(t *testing.T) {
 }
 
 func TestRunUnknownCommandFails(t *testing.T) {
-	res := Run(t, RunOptions{}, "definitely-not-a-command")
+	res := Run(t, RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "definitely-not-a-command")
 	if res.ExitCode == 0 {
 		t.Fatalf("unknown command exit = 0, want non-zero")
 	}
@@ -41,11 +41,11 @@ func TestRunUnknownCommandFails(t *testing.T) {
 func TestRunSeparatesStreams(t *testing.T) {
 	// version writes only to stdout; an unknown command writes only to stderr.
 	// Proving both directions confirms the two streams are captured separately.
-	ok := Run(t, RunOptions{}, "version")
+	ok := Run(t, RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "version")
 	if ok.Stdout == "" || strings.TrimSpace(ok.Stderr) != "" {
 		t.Fatalf("expected stdout-only for version, got stdout=%q stderr=%q", ok.Stdout, ok.Stderr)
 	}
-	bad := Run(t, RunOptions{}, "definitely-not-a-command")
+	bad := Run(t, RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "definitely-not-a-command")
 	if strings.TrimSpace(bad.Stdout) != "" || bad.Stderr == "" {
 		t.Fatalf("expected stderr-only for bad command, got stdout=%q stderr=%q", bad.Stdout, bad.Stderr)
 	}
@@ -55,7 +55,7 @@ func TestRunStdinAndDir(t *testing.T) {
 	// A run in an explicit working directory still succeeds; stdin is accepted
 	// even when the command ignores it. This exercises the Dir/Stdin plumbing.
 	dir := t.TempDir()
-	res := Run(t, RunOptions{Dir: dir, Stdin: "ignored input\n"}, "version")
+	res := Run(t, RunOptions{CacheDir: "", Env: nil, Timeout: 0, Dir: dir, Stdin: "ignored input\n"}, "version")
 	if res.ExitCode != 0 {
 		t.Fatalf("version in dir exit = %d, want 0 (stderr: %q)", res.ExitCode, res.Stderr)
 	}

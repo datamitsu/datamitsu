@@ -169,7 +169,7 @@ func TestReleasedV1UnknownToolYieldsNothing(t *testing.T) {
 func TestReleasedV1PoolsAndResets(t *testing.T) {
 	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
 	t.Setenv("DATAMITSU_OFFLINE", "1")
-	decl := config.Parser{URL: "https://parsers.example.invalid/released.wasm", Hash: releasedV1SHA256}
+	decl := config.Parser{OCI: nil, URL: "https://parsers.example.invalid/released.wasm", Hash: releasedV1SHA256}
 	dir := moduleDir("released", decl)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)

@@ -267,6 +267,7 @@ func SystemLookPath(farmDir string) LookPathFunc {
 // means shadow detection is skipped.
 func BuildPlan(root, farmDir string, apps binmanager.MapOfApps, resolve Resolver, lookPath LookPathFunc) Plan {
 	plan := Plan{
+		Shadowed: nil,
 		Root:     root,
 		FarmDir:  farmDir,
 		Entries:  make([]Entry, 0, len(apps)),
@@ -288,7 +289,7 @@ func BuildPlan(root, farmDir string, apps binmanager.MapOfApps, resolve Resolver
 			continue
 		}
 
-		entry := Entry{Name: name, Kind: kind, Strategy: StrategyShim}
+		entry := Entry{Provider: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false, Name: name, Kind: kind, Strategy: StrategyShim}
 		if resolve != nil {
 			// A resolve error is not an exclusion: see the D4 note on BuildPlan.
 			// The entry stays, minus everything the resolver would have filled in.

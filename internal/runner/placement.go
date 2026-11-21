@@ -62,18 +62,24 @@ func (sc *sharedContext) checkConfigPlacement(violations []string) {
 	diags := make([]diagnostic.Diagnostic, 0, len(violations))
 	for _, v := range violations {
 		diags = append(diags, diagnostic.Diagnostic{
-			File: v, Row: 1, Col: 1,
+			EndRow:    0,
+			EndCol:    0,
+			URL:       "",
+			Reported:  false,
+			Gates:     false,
+			Baselined: false,
+			File:      v, Row: 1, Col: 1,
 			Severity: diagnostic.SeverityError,
 			Source:   placementTool, Code: placementCode,
 			Message: placementMessage,
 			// Row basis, no line read: the artifact may be a directory, and
 			// placement identity must not move when content does.
-			Anchor: &diagnostic.Anchor{Basis: report.BasisRow, LineHash: report.RowHash(1), Precision: textpos.Unknown},
+			Anchor: &diagnostic.Anchor{Fingerprint: "", Chars: nil, Bytes: nil, UTF16: nil, Basis: report.BasisRow, LineHash: report.RowHash(1), Precision: textpos.Unknown},
 		})
 	}
 	if sc.baselineMatcher != nil {
-		task := tooling.Task{ToolName: placementTool, Operation: config.OpLint}
-		proc := &tooling.ProcessResult{Diagnostics: diags}
+		task := tooling.Task{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: placementTool, Operation: config.OpLint}
+		proc := &tooling.ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, Diagnostics: diags}
 		sc.baselineMatcher.Mark(task, proc)
 	}
 	for i := range diags {

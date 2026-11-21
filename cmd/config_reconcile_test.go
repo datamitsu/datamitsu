@@ -26,23 +26,25 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 		check    func(t *testing.T, results []install.InstallResult)
 	}{
 		{
+			check:    nil,
 			name:     "empty input",
 			input:    []install.InstallResult{},
 			expected: 0,
 		},
 		{
-			name: "single result not deduplicated",
+			check: nil,
+			name:  "single result not deduplicated",
 			input: []install.InstallResult{
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
 			},
 			expected: 1,
 		},
 		{
 			name: "multiple git-root results with same path deduplicated to one",
 			input: []install.InstallResult{
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
 			},
 			expected: 1,
 			check: func(t *testing.T, results []install.InstallResult) {
@@ -53,37 +55,40 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			},
 		},
 		{
-			name: "non-git-root results with same path not deduplicated",
+			check: nil,
+			name:  "non-git-root results with same path not deduplicated",
 			input: []install.InstallResult{
-				{ConfigName: "tsconfig.json", FilePath: "/repo/packages/a/tsconfig.json", Action: "created"},
-				{ConfigName: "tsconfig.json", FilePath: "/repo/packages/a/tsconfig.json", Action: "created"},
+				{DeletedFiles: nil, Scope: "", LinkTarget: "", Error: nil, ConfigName: "tsconfig.json", FilePath: "/repo/packages/a/tsconfig.json", Action: "created"},
+				{DeletedFiles: nil, Scope: "", LinkTarget: "", Error: nil, ConfigName: "tsconfig.json", FilePath: "/repo/packages/a/tsconfig.json", Action: "created"},
 			},
 			expected: 2,
 		},
 		{
-			name: "mixed git-root and project scope with same path not deduplicated",
+			check: nil,
+			name:  "mixed git-root and project scope with same path not deduplicated",
 			input: []install.InstallResult{
-				{ConfigName: "config.yml", FilePath: "/repo/config.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "config.yml", FilePath: "/repo/config.yml", Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "config.yml", FilePath: "/repo/config.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, Scope: "", LinkTarget: "", Error: nil, ConfigName: "config.yml", FilePath: "/repo/config.yml", Action: "created"},
 			},
 			expected: 2,
 		},
 		{
-			name: "different paths not deduplicated",
+			check: nil,
+			name:  "different paths not deduplicated",
 			input: []install.InstallResult{
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "tsconfig.json", FilePath: "/repo/tsconfig.json", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "tsconfig.json", FilePath: "/repo/tsconfig.json", Scope: config.ScopeGitRoot, Action: "created"},
 			},
 			expected: 2,
 		},
 		{
 			name: "mixed scenario: git-root duplicates and unique entries",
 			input: []install.InstallResult{
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "tsconfig.json", FilePath: "/repo/packages/a/tsconfig.json", Action: "created"},
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "tsconfig.json", FilePath: "/repo/packages/b/tsconfig.json", Action: "created"},
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, Scope: "", LinkTarget: "", Error: nil, ConfigName: "tsconfig.json", FilePath: "/repo/packages/a/tsconfig.json", Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, Scope: "", LinkTarget: "", Error: nil, ConfigName: "tsconfig.json", FilePath: "/repo/packages/b/tsconfig.json", Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
 			},
 			expected: 3,
 			check: func(t *testing.T, results []install.InstallResult) {
@@ -100,19 +105,20 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 			},
 		},
 		{
-			name: "skipped results preserved",
+			check: nil,
+			name:  "skipped results preserved",
 			input: []install.InstallResult{
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "skipped"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "skipped"},
 			},
 			expected: 1,
 		},
 		{
 			name: "preserves order of first occurrence",
 			input: []install.InstallResult{
-				{ConfigName: "a.yml", FilePath: "/repo/a.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "b.yml", FilePath: "/repo/b.yml", Action: "created"},
-				{ConfigName: "a.yml", FilePath: "/repo/a.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "a.yml", FilePath: "/repo/a.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, Scope: "", LinkTarget: "", Error: nil, ConfigName: "b.yml", FilePath: "/repo/b.yml", Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "a.yml", FilePath: "/repo/a.yml", Scope: config.ScopeGitRoot, Action: "created"},
 			},
 			expected: 2,
 			check: func(t *testing.T, results []install.InstallResult) {
@@ -128,9 +134,9 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 		{
 			name: "dedup prefers error result over success",
 			input: []install.InstallResult{
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created", Error: errors.New("content generation failed")},
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created", Error: errors.New("content generation failed")},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
 			},
 			expected: 1,
 			check: func(t *testing.T, results []install.InstallResult) {
@@ -143,8 +149,8 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 		{
 			name: "dedup keeps first when no errors",
 			input: []install.InstallResult{
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
-				{ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "patched"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "created"},
+				{DeletedFiles: nil, LinkTarget: "", Error: nil, ConfigName: "lefthook.yml", FilePath: "/repo/lefthook.yml", Scope: config.ScopeGitRoot, Action: "patched"},
 			},
 			expected: 1,
 			check: func(t *testing.T, results []install.InstallResult) {
@@ -171,11 +177,11 @@ func TestDeduplicateGitRootResults(t *testing.T) {
 
 func TestBuildOptInIgnoreContent(t *testing.T) {
 	tools := config.MapOfTools{
-		"prettier":      {Name: "prettier"},
-		"eslint":        {Name: "eslint"},
-		"golangci-lint": {Name: "golangci-lint"},
-		"hadolint":      {Name: "hadolint"},
-		"shellcheck":    {Name: "shellcheck"},
+		"prettier":      {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "prettier"},
+		"eslint":        {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "eslint"},
+		"golangci-lint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"},
+		"hadolint":      {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "hadolint"},
+		"shellcheck":    {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "shellcheck"},
 	}
 
 	content, count := buildOptInIgnoreContent(tools)
@@ -231,9 +237,9 @@ func TestBuildOptInIgnoreContentEmpty(t *testing.T) {
 
 func TestBuildOptInIgnoreContentParses(t *testing.T) {
 	tools := config.MapOfTools{
-		"prettier": {Name: "prettier"},
-		"eslint":   {Name: "eslint"},
-		"hadolint": {Name: "hadolint"},
+		"prettier": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "prettier"},
+		"eslint":   {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "eslint"},
+		"hadolint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "hadolint"},
 	}
 
 	content, _ := buildOptInIgnoreContent(tools)
@@ -265,11 +271,11 @@ func TestBuildOptInIgnoreContentCanonical(t *testing.T) {
 	// `datamitsu fix` is a no-op (does not rewrite it). Round-trip the content
 	// through the bundled fixer and assert it is byte-for-byte unchanged.
 	tools := config.MapOfTools{
-		"prettier":      {Name: "prettier"},
-		"eslint":        {Name: "eslint"},
-		"golangci-lint": {Name: "golangci-lint"},
-		"hadolint":      {Name: "hadolint"},
-		"shellcheck":    {Name: "shellcheck"},
+		"prettier":      {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "prettier"},
+		"eslint":        {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "eslint"},
+		"golangci-lint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"},
+		"hadolint":      {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "hadolint"},
+		"shellcheck":    {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "shellcheck"},
 	}
 
 	content, _ := buildOptInIgnoreContent(tools)
@@ -319,8 +325,8 @@ func TestEnsureNoExistingIgnore(t *testing.T) {
 
 func TestWriteOptInIgnore(t *testing.T) {
 	tools := config.MapOfTools{
-		"prettier": {Name: "prettier"},
-		"eslint":   {Name: "eslint"},
+		"prettier": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "prettier"},
+		"eslint":   {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "eslint"},
 	}
 
 	t.Run("real mode writes file with expected content", func(t *testing.T) {
@@ -447,14 +453,18 @@ func TestConfigReconcilePassesLayerMapToNewInstaller(t *testing.T) {
 	content := "generated content"
 	layerMap := &config.ManagedConfigLayerMap{
 		".editorconfig": &config.ManagedConfigLayerHistory{
-			FileName: ".editorconfig",
+			OriginalContent: nil,
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
+			FileName:        ".editorconfig",
 			Layers: []config.ManagedConfigLayerEntry{
 				{
 					LayerName:        "default",
 					GeneratedContent: &content,
 				},
 			},
-			FinalConfig: config.ManagedConfig{},
+			FinalConfig: config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
 		},
 	}
 
@@ -479,19 +489,23 @@ func TestDryRunModeLayerHistoryStillBuilt(t *testing.T) {
 	content := "generated in load phase"
 	layerMap := &config.ManagedConfigLayerMap{
 		".editorconfig": &config.ManagedConfigLayerHistory{
-			FileName: ".editorconfig",
+			OriginalContent: nil,
+			PristineContent: nil,
+			RenderFailed:    false,
+			SourceLayers:    nil,
+			FileName:        ".editorconfig",
 			Layers: []config.ManagedConfigLayerEntry{
 				{
 					LayerName:        "default",
 					GeneratedContent: &content,
 				},
 			},
-			FinalConfig: config.ManagedConfig{Scope: config.ScopeGitRoot},
+			FinalConfig: config.ManagedConfig{ProjectTypes: nil, Tools: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Scope: config.ScopeGitRoot},
 		},
 	}
 
 	configs := config.MapOfManagedConfigs{
-		".editorconfig": config.ManagedConfig{Scope: config.ScopeGitRoot},
+		".editorconfig": config.ManagedConfig{ProjectTypes: nil, Tools: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Scope: config.ScopeGitRoot},
 	}
 
 	// In dry-run mode, the installer is still created with the layerMap
@@ -536,8 +550,8 @@ func TestParseSelectedTools(t *testing.T) {
 
 func TestValidateSelectedTools(t *testing.T) {
 	tools := config.MapOfTools{
-		"golangci-lint": {Name: "golangci-lint"},
-		"prettier":      {Name: "prettier"},
+		"golangci-lint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"},
+		"prettier":      {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "prettier"},
 	}
 
 	t.Run("empty selection is nil", func(t *testing.T) {
@@ -573,16 +587,16 @@ func TestValidateSelectedTools(t *testing.T) {
 
 func TestToolsWithoutGeneratedConfig(t *testing.T) {
 	configs := config.MapOfManagedConfigs{
-		".golangci.yml": {Tools: []string{"golangci-lint"}},
-		".prettierrc":   {Tools: []string{"prettier"}},
-		".gitignore":    {}, // infra, no tools
+		".golangci.yml": {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"golangci-lint"}},
+		".prettierrc":   {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"prettier"}},
+		".gitignore":    {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil}, // infra, no tools
 	}
 
 	created := func(name string) install.InstallResult {
-		return install.InstallResult{ConfigName: name, Action: "created"}
+		return install.InstallResult{FilePath: "", DeletedFiles: nil, Scope: "", LinkTarget: "", Error: nil, ConfigName: name, Action: "created"}
 	}
 	skipped := func(name string) install.InstallResult {
-		return install.InstallResult{ConfigName: name, Action: "skipped"}
+		return install.InstallResult{FilePath: "", DeletedFiles: nil, Scope: "", LinkTarget: "", Error: nil, ConfigName: name, Action: "skipped"}
 	}
 
 	tests := []struct {

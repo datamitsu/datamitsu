@@ -11,20 +11,48 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 func TestFailureReasonIndependent_GetCommandInfoError(t *testing.T) {
 	appManager := &mockAppManager{
-		err: errors.New("binary not found"),
+		binaries: nil,
+		commands: nil,
+		err:      errors.New("binary not found"),
 	}
 	executor := NewExecutor("/root", false, false, appManager, nil)
 
 	task := Task{
-		ToolName:  "missing-tool",
-		Operation: config.OpLint,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Files:        nil,
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "missing-tool",
+		Operation:    config.OpLint,
 		OpConfig: config.ToolOperation{
-			App:   "missing-tool",
-			Scope: config.ToolScopeRepository,
+			Args:              nil,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "missing-tool",
+			Scope:             config.ToolScopeRepository,
 		},
 	}
 
@@ -48,6 +76,8 @@ func TestFailureReasonIndependent_ToolExitError(t *testing.T) {
 	}
 
 	appManager := &mockAppManager{
+		err:      nil,
+		commands: nil,
 		binaries: map[string]string{
 			"failing-tool": scriptPath,
 		},
@@ -55,12 +85,36 @@ func TestFailureReasonIndependent_ToolExitError(t *testing.T) {
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 	task := Task{
-		ToolName:  "failing-tool",
-		Operation: config.OpLint,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Files:        nil,
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "failing-tool",
+		Operation:    config.OpLint,
 		OpConfig: config.ToolOperation{
-			App:   "failing-tool",
-			Args:  []string{},
-			Scope: config.ToolScopeRepository,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "failing-tool",
+			Args:              []string{},
+			Scope:             config.ToolScopeRepository,
 		},
 	}
 
@@ -94,6 +148,8 @@ func TestFailureReasonCancelled_ParallelTaskSkipped(t *testing.T) {
 			cancel(tt.cause)
 
 			appManager := &mockAppManager{
+				err:      nil,
+				commands: nil,
 				binaries: map[string]string{
 					"tool1": "/bin/true",
 				},
@@ -102,12 +158,36 @@ func TestFailureReasonCancelled_ParallelTaskSkipped(t *testing.T) {
 
 			tasks := []Task{
 				{
-					ToolName:    "tool1",
-					Operation:   config.OpLint,
-					ProjectPath: filepath.Join("/root", "pkg", "a"),
+					perFileCache: "",
+					inherited:    zerovalue_toolenv.Inherited{},
+					ID:           "",
+					Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+					Files:        nil,
+					UnitDir:      "",
+					UnitMembers:  nil,
+					UnitGuards:   nil,
+					Coverage:     "",
+					ToolName:     "tool1",
+					Operation:    config.OpLint,
+					ProjectPath:  filepath.Join("/root", "pkg", "a"),
 					OpConfig: config.ToolOperation{
-						App:   "tool1",
-						Scope: config.ToolScopePerProject,
+						Args:              nil,
+						Arity:             "",
+						Granularity:       "",
+						Globs:             nil,
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						Env:               nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						App:               "tool1",
+						Scope:             config.ToolScopePerProject,
 					},
 				},
 			}
@@ -154,6 +234,8 @@ func TestFailureReasonCancelled_PerFileCancellation(t *testing.T) {
 	}
 
 	appManager := &mockAppManager{
+		err:      nil,
+		commands: nil,
 		binaries: map[string]string{
 			"slow-tool": scriptPath,
 		},
@@ -168,12 +250,35 @@ func TestFailureReasonCancelled_PerFileCancellation(t *testing.T) {
 	}()
 
 	task := Task{
-		ToolName:  "slow-tool",
-		Operation: config.OpLint,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "slow-tool",
+		Operation:    config.OpLint,
 		OpConfig: config.ToolOperation{
-			App:   "slow-tool",
-			Args:  []string{"{file}"},
-			Scope: config.ToolScopePerFile,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "slow-tool",
+			Args:              []string{"{file}"},
+			Scope:             config.ToolScopePerFile,
 		},
 		Files: []string{
 			filepath.Join(tmpDir, "a.js"),
@@ -205,6 +310,8 @@ func TestFailureReasonNone_Success(t *testing.T) {
 	}
 
 	appManager := &mockAppManager{
+		err:      nil,
+		commands: nil,
 		binaries: map[string]string{
 			"good-tool": scriptPath,
 		},
@@ -212,12 +319,36 @@ func TestFailureReasonNone_Success(t *testing.T) {
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 	task := Task{
-		ToolName:  "good-tool",
-		Operation: config.OpLint,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Files:        nil,
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "good-tool",
+		Operation:    config.OpLint,
 		OpConfig: config.ToolOperation{
-			App:   "good-tool",
-			Args:  []string{},
-			Scope: config.ToolScopeRepository,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "good-tool",
+			Args:              []string{},
+			Scope:             config.ToolScopeRepository,
 		},
 	}
 
@@ -247,38 +378,87 @@ func TestFailureReasonCancelled_ExecuteFailFast(t *testing.T) {
 	}
 
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
-			"fail-tool": {Type: "binary", Command: failScript},
-			"slow-tool": {Type: "binary", Command: slowScript},
+			"fail-tool": {Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: failScript},
+			"slow-tool": {Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: slowScript},
 		},
 	}
 
 	executor := NewExecutor(tmpDir, false, true, appManager, nil) // failFast=true
 
 	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil,
 		Groups: []TaskGroup{
 			{
 				Priority: 10,
 				Tasks: []Task{
 					{
-						ToolName:  "fail-tool",
-						Operation: config.OpLint,
+						perFileCache: "",
+						inherited:    zerovalue_toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "fail-tool",
+						Operation:    config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:   "fail-tool",
-							Args:  []string{},
-							Scope: config.ToolScopePerFile,
-							Globs: []string{"*.go"},
+							Arity:             "",
+							Granularity:       "",
+							ExcludeGlobs:      nil,
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "fail-tool",
+							Args:              []string{},
+							Scope:             config.ToolScopePerFile,
+							Globs:             []string{"*.go"},
 						},
 						Files: []string{filepath.Join(tmpDir, "a.go")},
 					},
 					{
-						ToolName:  "slow-tool",
-						Operation: config.OpLint,
+						perFileCache: "",
+						inherited:    zerovalue_toolenv.Inherited{},
+						ID:           "",
+						Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+						ProjectPath:  "",
+						UnitDir:      "",
+						UnitMembers:  nil,
+						UnitGuards:   nil,
+						Coverage:     "",
+						ToolName:     "slow-tool",
+						Operation:    config.OpLint,
 						OpConfig: config.ToolOperation{
-							App:   "slow-tool",
-							Args:  []string{},
-							Scope: config.ToolScopePerFile,
-							Globs: []string{"*.ts"},
+							Arity:             "",
+							Granularity:       "",
+							ExcludeGlobs:      nil,
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "slow-tool",
+							Args:              []string{},
+							Scope:             config.ToolScopePerFile,
+							Globs:             []string{"*.ts"},
 						},
 						Files: []string{filepath.Join(tmpDir, "b.ts")},
 					},

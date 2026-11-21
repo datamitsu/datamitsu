@@ -57,7 +57,7 @@ func TestExecListEmpty(t *testing.T) {
 	cfg := clitest.WriteMinimalConfig(p)
 	norm := clitest.NewNormalizer()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "exec")
 	if res.ExitCode != 0 {
 		t.Fatalf("`exec` (empty) exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -77,7 +77,7 @@ func TestExecListGrouped(t *testing.T) {
 	cfg := p.WriteFile("tools.config.js", execToolsConfigJS)
 	norm := clitest.NewNormalizer()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "exec")
 	if res.ExitCode != 0 {
 		t.Fatalf("`exec` (grouped) exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -95,7 +95,7 @@ func TestExecUnknownApp(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "exec", "nonesuch")
 	if res.ExitCode != 1 {
 		t.Fatalf("`exec nonesuch` exit = %d, want 1\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
@@ -119,7 +119,7 @@ func TestExecArgPassthrough(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := p.WriteFile("tools.config.js", execToolsConfigJS)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "exec", "hello-shell", "--", "--flag", "value")
 	if res.ExitCode != 0 {
 		t.Fatalf("`exec hello-shell -- --flag value` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -137,7 +137,7 @@ func TestExecFlagsBeforeSeparatorRejected(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := p.WriteFile("tools.config.js", execToolsConfigJS)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "exec", "hello-shell", "--flag", "value")
 	if res.ExitCode == 0 {
 		t.Fatalf("`exec hello-shell --flag value` (no separator) exit = 0, want non-zero\nstdout:\n%s", res.Stdout)

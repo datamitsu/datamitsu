@@ -45,7 +45,7 @@ func TestIsApplicableInitCommand(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ic := config.InitCommand{ProjectTypes: tc.cmdTypes}
+			ic := config.InitCommand{Command: "", Args: nil, Description: "", When: "", ProjectTypes: tc.cmdTypes}
 			if got := isApplicableInitCommand(ic, tc.project); got != tc.want {
 				t.Errorf("isApplicableInitCommand = %v, want %v", got, tc.want)
 			}
@@ -94,11 +94,11 @@ func TestSkipRowsWithReason(t *testing.T) {
 // skips nil bundle entries.
 func TestBuildConfigLinksRegistry(t *testing.T) {
 	apps := binmanager.MapOfApps{
-		"ruff": {Links: map[string]string{"ruff": "bin/ruff"}},
-		"node": {Links: map[string]string{"node": "bin/node", "npx": "bin/npx"}},
+		"ruff": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Links: map[string]string{"ruff": "bin/ruff"}},
+		"node": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Links: map[string]string{"node": "bin/node", "npx": "bin/npx"}},
 	}
 	bundles := binmanager.MapOfBundles{
-		"core": {Links: map[string]string{"task": "bin/task"}},
+		"core": {Version: "", Files: nil, Archives: nil, Links: map[string]string{"task": "bin/task"}},
 		"nil":  nil,
 	}
 
@@ -180,14 +180,19 @@ func TestPrintDockerfileSummary(t *testing.T) {
 	t.Cleanup(func() { dockerfileOutput = origOutput })
 	dockerfileOutput = "Dockerfile"
 	plan := dockerfile.Plan{
-		RuntimeStages:    []dockerfile.RuntimeStage{{Name: "node"}},
-		RuntimeAppStages: []dockerfile.RuntimeAppStage{{App: "slidev"}},
-		BinaryStages:     []dockerfile.BinaryStage{{App: "ruff"}},
+		ParserStages:           nil,
+		Skipped:                nil,
+		LibcExcluded:           nil,
+		RegistrySourcedParsers: nil,
+		PreparedApps:           nil,
+		RuntimeStages:          []dockerfile.RuntimeStage{{Kind: "", PNPMRuntime: "", Name: "node"}},
+		RuntimeAppStages:       []dockerfile.RuntimeAppStage{{Kind: "", Runtime: "", App: "slidev"}},
+		BinaryStages:           []dockerfile.BinaryStage{{App: "ruff"}},
 	}
 
 	t.Run("pinned", func(t *testing.T) {
 		var buf bytes.Buffer
-		cmd := &cobra.Command{}
+		cmd := &cobra.Command{Use: "", Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0}
 		cmd.SetOut(&buf)
 		printDockerfileSummary(cmd, plan, "sha256:abc", "")
 		out := buf.String()
@@ -198,7 +203,7 @@ func TestPrintDockerfileSummary(t *testing.T) {
 
 	t.Run("unpinned-with-skipped", func(t *testing.T) {
 		var buf bytes.Buffer
-		cmd := &cobra.Command{}
+		cmd := &cobra.Command{Use: "", Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0}
 		cmd.SetOut(&buf)
 		p := plan
 		p.Skipped = []string{"prettier", "eslint"}
@@ -217,9 +222,9 @@ func TestPrintDockerfileSummary(t *testing.T) {
 // LockFile fields without mutating the original, and handles a missing app.
 func TestClearAppLockFile(t *testing.T) {
 	apps := binmanager.MapOfApps{
-		"n": {Node: &binmanager.AppConfigNode{LockFile: "keep-node"}},
-		"u": {Uv: &binmanager.AppConfigUV{LockFile: "keep-uv"}},
-		"g": {Go: &binmanager.AppConfigGo{LockFile: "keep-go"}},
+		"n": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", Runtime: "", Dependencies: nil, LockFile: "keep-node"}},
+		"u": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{PackageName: "", Version: "", Runtime: "", RequiresPython: "", LockFile: "keep-uv"}},
+		"g": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{PackageName: "", Version: "", Runtime: "", LockFile: "keep-go"}},
 	}
 
 	for _, name := range []string{"n", "u", "g"} {
@@ -276,13 +281,13 @@ func TestDevtoolsAppsJSONTempFileErrors(t *testing.T) {
 		}
 	})
 	t.Run("writeNode", func(t *testing.T) {
-		if err := writeNodeAppsJSON(path, nodeAppsJSON{"x": {PackageName: "x", Version: "1"}}); err == nil ||
+		if err := writeNodeAppsJSON(path, nodeAppsJSON{"x": {Description: "", PackageName: "x", Version: "1"}}); err == nil ||
 			!strings.Contains(err.Error(), "creating temp file") {
 			t.Fatalf("writeNodeAppsJSON err = %v", err)
 		}
 	})
 	t.Run("writeUV", func(t *testing.T) {
-		if err := writeUVAppsJSON(path, uvAppsJSON{"x": {PackageName: "x", Version: "1"}}); err == nil ||
+		if err := writeUVAppsJSON(path, uvAppsJSON{"x": {Description: "", PackageName: "x", Version: "1"}}); err == nil ||
 			!strings.Contains(err.Error(), "creating temp file") {
 			t.Fatalf("writeUVAppsJSON err = %v", err)
 		}

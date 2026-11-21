@@ -83,7 +83,7 @@ type conn struct {
 }
 
 func newConn(r io.Reader, w io.Writer) *conn {
-	return &conn{r: bufio.NewReader(r), w: w}
+	return &conn{wmu: sync.Mutex{}, r: bufio.NewReader(r), w: w}
 }
 
 // readFrame returns the next framed message body, or io.EOF when the stream

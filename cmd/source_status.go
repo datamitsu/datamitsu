@@ -107,8 +107,39 @@ type SourceManifestStatus struct {
 var sourceStatusJSON bool
 
 var sourceStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show what source mode makes available in this project",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "status",
+	Short:                      "Show what source mode makes available in this project",
 	Long: `Reports the farm for the current project: its root and directory, whether the
 baked manifest still matches the tree, every tool the farm provides with how it
 is materialized and whether it has been downloaded, every declared name that was
@@ -167,6 +198,7 @@ func runSourceStatus(cmd *cobra.Command) error {
 // a farm that is otherwise perfectly fresh.
 func buildSourceStatus(plan sourcefarm.Plan, target sourceTarget) SourceStatus {
 	status := SourceStatus{
+		Manifest:    SourceManifestStatus{Path: "", Exists: false, Fresh: false, State: "", Error: ""},
 		Origin:      target.Origin,
 		Root:        plan.Root,
 		ConfigPaths: target.ConfigPaths,
@@ -183,7 +215,7 @@ func buildSourceStatus(plan sourcefarm.Plan, target sourceTarget) SourceStatus {
 	}
 
 	if target.ManifestPath == "" {
-		status.Manifest = SourceManifestStatus{State: ManifestMissing}
+		status.Manifest = SourceManifestStatus{Path: "", Exists: false, Fresh: false, Error: "", State: ManifestMissing}
 		return status
 	}
 	status.Manifest = manifestStatus(target.ManifestPath, target)
@@ -192,7 +224,7 @@ func buildSourceStatus(plan sourcefarm.Plan, target sourceTarget) SourceStatus {
 
 // manifestStatus reads one manifest and classifies it.
 func manifestStatus(path string, target sourceTarget) SourceManifestStatus {
-	s := SourceManifestStatus{Path: path}
+	s := SourceManifestStatus{Exists: false, Fresh: false, State: "", Error: "", Path: path}
 	if _, err := os.Stat(path); err != nil {
 		s.State = ManifestMissing
 		return s

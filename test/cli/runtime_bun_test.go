@@ -31,7 +31,7 @@ globalThis.getConfig = () => ({version:"fixture",apps:{},tools:{},managedConfigs
 globalThis.getMinVersion = () => "0.0.0";`, command))
 	record := filepath.Join(project.Dir, "bun-arguments.json")
 	args := []string{"--record", record, "--exit", "37", "script with space", ""}
-	result := clitest.Run(t, clitest.RunOptions{Dir: project.Dir, CacheDir: t.TempDir(), Stdin: "Bun stdin"}, runtimeArgs(project, cfg, append([]string{"run", "bun", "--"}, args...)...)...)
+	result := clitest.Run(t, clitest.RunOptions{Env: nil, Timeout: 0, Dir: project.Dir, CacheDir: t.TempDir(), Stdin: "Bun stdin"}, runtimeArgs(project, cfg, append([]string{"run", "bun", "--"}, args...)...)...)
 	if result.ExitCode != 37 || result.Stdout != "probe stdout\n" || result.Stderr != "probe stderr\n" {
 		t.Fatalf("Bun handoff: %+v", result)
 	}
@@ -80,7 +80,7 @@ globalThis.getConfig = () => ({version:"fixture",apps:{},tools:{},managedConfigs
 }});
 globalThis.getMinVersion = () => "0.0.0";`, server.URL, digest.SHA256Of(payload).String(), "probe"+exeSuffix(), runtime.GOOS, runtime.GOARCH, libcs, foreignOS, runtime.GOARCH))
 	cache := t.TempDir()
-	options := clitest.RunOptions{Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="}}
+	options := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="}}
 	args := runtimeArgs(project, cfg, "run", "bun", "--", "--exit", "37")
 	first := clitest.Run(t, options, args...)
 	if first.ExitCode != 37 || first.Stdout != "probe stdout\n" {

@@ -15,8 +15,10 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/digest"
+	zerovalue_singleflight "golang.org/x/sync/singleflight"
 
 	"github.com/datamitsu/datamitsu/internal/syslist"
 )
@@ -63,10 +65,23 @@ func cpTarGzBytes(t *testing.T, files map[string]string) []byte {
 	tw := tar.NewWriter(gw)
 	for name, content := range files {
 		if err := tw.WriteHeader(&tar.Header{
-			Name:     name,
-			Typeflag: tar.TypeReg,
-			Mode:     0o755,
-			Size:     int64(len(content)),
+			Linkname:   "",
+			Uid:        0,
+			Gid:        0,
+			Uname:      "",
+			Gname:      "",
+			ModTime:    zerovalue_time.Time{},
+			AccessTime: zerovalue_time.Time{},
+			ChangeTime: zerovalue_time.Time{},
+			Devmajor:   0,
+			Devminor:   0,
+
+			PAXRecords: nil,
+			Format:     0,
+			Name:       name,
+			Typeflag:   tar.TypeReg,
+			Mode:       0o755,
+			Size:       int64(len(content)),
 		}); err != nil {
 			t.Fatalf("tar header %q: %v", name, err)
 		}
@@ -259,14 +274,14 @@ func TestDownloadAndExtractExternalArchive(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("missing hash is rejected", func(t *testing.T) {
-		err := downloadAndExtractExternalArchive(ctx, "app", &ArchiveSpec{URL: "http://x", Format: BinContentTypeTarGz}, t.TempDir())
+		err := downloadAndExtractExternalArchive(ctx, "app", &ArchiveSpec{Inline: "", Hash: "", URL: "http://x", Format: BinContentTypeTarGz}, t.TempDir())
 		if err == nil || !strings.Contains(err.Error(), "must have hash") {
 			t.Fatalf("missing hash = %v, want hash error", err)
 		}
 	})
 
 	t.Run("missing format is rejected", func(t *testing.T) {
-		err := downloadAndExtractExternalArchive(ctx, "app", &ArchiveSpec{URL: "http://x", Hash: strings.Repeat("0", 64)}, t.TempDir())
+		err := downloadAndExtractExternalArchive(ctx, "app", &ArchiveSpec{Inline: "", Format: "", URL: "http://x", Hash: strings.Repeat("0", 64)}, t.TempDir())
 		if err == nil || !strings.Contains(err.Error(), "must have format") {
 			t.Fatalf("missing format = %v, want format error", err)
 		}
@@ -276,7 +291,7 @@ func TestDownloadAndExtractExternalArchive(t *testing.T) {
 		archive := cpTarGzBytes(t, map[string]string{"bin/tool": "payload"})
 		srv := cpServeBytes(t, archive)
 		err := downloadAndExtractExternalArchive(ctx, "app",
-			&ArchiveSpec{URL: srv.URL, Hash: strings.Repeat("0", 64), Format: BinContentTypeTarGz}, t.TempDir())
+			&ArchiveSpec{Inline: "", URL: srv.URL, Hash: strings.Repeat("0", 64), Format: BinContentTypeTarGz}, t.TempDir())
 		if err == nil || !strings.Contains(err.Error(), "hash verification failed") {
 			t.Fatalf("hash mismatch = %v, want verification error", err)
 		}
@@ -287,7 +302,7 @@ func TestDownloadAndExtractExternalArchive(t *testing.T) {
 		srv := cpServeBytes(t, archive)
 		install := t.TempDir()
 		err := downloadAndExtractExternalArchive(ctx, "app",
-			&ArchiveSpec{URL: srv.URL, Hash: cpSHA256Hex(archive), Format: BinContentTypeTarGz}, install)
+			&ArchiveSpec{Inline: "", URL: srv.URL, Hash: cpSHA256Hex(archive), Format: BinContentTypeTarGz}, install)
 		if err != nil {
 			t.Fatalf("downloadAndExtractExternalArchive() error = %v", err)
 		}
@@ -453,11 +468,37 @@ func TestExtractZipToDir_Branches(t *testing.T) {
 func TestResolvedBinaryInfo(t *testing.T) {
 	t.Run("returns info for a registered binary", func(t *testing.T) {
 		bm := New(MapOfApps{
-			"tool": App{Binary: &AppConfigBinary{Binaries: cpHostBinaries(t, BinaryOsArchInfo{
-				URL:         "http://example/tool",
-				Hash:        strings.Repeat("a", 64),
-				ContentType: BinContentTypeBinary,
-			})}},
+			"tool": App{
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Links:              nil,
+				Archives:           nil,
+				Prepare:            nil, Binary: &AppConfigBinary{
+					Version: "", Binaries: cpHostBinaries(t, BinaryOsArchInfo{
+						Auth:        nil,
+						BinaryPath:  nil,
+						ExtractDir:  false,
+						URL:         "http://example/tool",
+						Hash:        strings.Repeat("a", 64),
+						ContentType: BinContentTypeBinary,
+					}),
+				},
+			},
 		}, nil, nil)
 		info, err := bm.ResolvedBinaryInfo("tool")
 		if err != nil {
@@ -476,7 +517,7 @@ func TestResolvedBinaryInfo(t *testing.T) {
 	})
 
 	t.Run("non-binary app errors", func(t *testing.T) {
-		bm := New(MapOfApps{"svc": App{Uv: &AppConfigUV{PackageName: "svc", Version: "1.0.0"}}}, nil, nil)
+		bm := New(MapOfApps{"svc": App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "svc", Version: "1.0.0"}}}, nil, nil)
 		if _, err := bm.ResolvedBinaryInfo("svc"); err == nil {
 			t.Error("ResolvedBinaryInfo(non-binary) = nil, want error")
 		}
@@ -484,7 +525,7 @@ func TestResolvedBinaryInfo(t *testing.T) {
 }
 
 func TestGetBundles(t *testing.T) {
-	bundles := MapOfBundles{"b": {Version: "1.0", Files: map[string]string{"a.txt": "x"}}}
+	bundles := MapOfBundles{"b": {Archives: nil, Links: nil, Version: "1.0", Files: map[string]string{"a.txt": "x"}}}
 	bm := New(MapOfApps{}, bundles, nil)
 	got := bm.GetBundles()
 	if len(got) != 1 || got["b"] == nil {
@@ -496,7 +537,7 @@ func TestInstallBundleByName(t *testing.T) {
 	t.Run("installs a registered bundle", func(t *testing.T) {
 		t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 		bm := New(MapOfApps{}, MapOfBundles{
-			"b": {Version: "1.0", Files: map[string]string{"a.txt": "hi"}},
+			"b": {Archives: nil, Links: nil, Version: "1.0", Files: map[string]string{"a.txt": "hi"}},
 		}, nil)
 		if err := bm.InstallBundleByName(context.Background(), "b"); err != nil {
 			t.Fatalf("InstallBundleByName() error = %v", err)
@@ -521,10 +562,13 @@ func TestInstallBundleByName(t *testing.T) {
 func TestInstallBundles_AlreadyCachedBranch(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	bm := New(MapOfApps{}, MapOfBundles{
-		"local": {Version: "1.0", Files: map[string]string{"a.txt": "local"}},
-		"external": {Version: "1.0", Archives: map[string]*ArchiveSpec{
-			"x": {URL: "https://example/x.tar.gz", Hash: strings.Repeat("a", 64), Format: BinContentTypeTarGz},
-		}},
+		"local": {Archives: nil, Links: nil, Version: "1.0", Files: map[string]string{"a.txt": "local"}},
+		"external": {
+			Files: nil,
+			Links: nil, Version: "1.0", Archives: map[string]*ArchiveSpec{
+				"x": {Inline: "", URL: "https://example/x.tar.gz", Hash: strings.Repeat("a", 64), Format: BinContentTypeTarGz},
+			},
+		},
 	}, nil)
 
 	stats, err := bm.InstallBundles(context.Background(), true)
@@ -574,21 +618,21 @@ func TestExtractArchiveToPath_Branches(t *testing.T) {
 	t.Run("extracts tarData with dir, file and relative symlink", func(t *testing.T) {
 		var buf bytes.Buffer
 		tw := tar.NewWriter(&buf)
-		if err := tw.WriteHeader(&tar.Header{Name: "d/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
+		if err := tw.WriteHeader(&tar.Header{Linkname: "", Size: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "d/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
 			t.Fatal(err)
 		}
 		content := "binary"
-		if err := tw.WriteHeader(&tar.Header{Name: "d/file", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(content))}); err != nil {
+		if err := tw.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "d/file", Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(content))}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := tw.Write([]byte(content)); err != nil {
 			t.Fatal(err)
 		}
-		if err := tw.WriteHeader(&tar.Header{Name: "d/link", Typeflag: tar.TypeSymlink, Linkname: "file"}); err != nil {
+		if err := tw.WriteHeader(&tar.Header{Size: 0, Mode: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "d/link", Typeflag: tar.TypeSymlink, Linkname: "file"}); err != nil {
 			t.Fatal(err)
 		}
 		// Absolute symlink — must be skipped.
-		if err := tw.WriteHeader(&tar.Header{Name: "d/abs", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"}); err != nil {
+		if err := tw.WriteHeader(&tar.Header{Size: 0, Mode: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "d/abs", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"}); err != nil {
 			t.Fatal(err)
 		}
 		if err := tw.Close(); err != nil {
@@ -630,7 +674,7 @@ func TestDownloadResultJSONPreservesFailure(t *testing.T) {
 }
 
 func TestWithInstalledBinarySourceRejectsInvalidRequests(t *testing.T) {
-	bm := &BinManager{}
+	bm := &BinManager{mapOfApps: nil, mapOfBundles: nil, runtimeManager: nil, resolver: nil, toolCacheRoot: "", downloadGroup: zerovalue_singleflight.Group{}}
 	if err := bm.WithInstalledBinarySource(context.Background(), "", nil); err == nil {
 		t.Fatal("nil callback accepted")
 	}

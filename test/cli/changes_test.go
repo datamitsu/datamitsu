@@ -34,7 +34,7 @@ func commitAll(t *testing.T, dir string) {
 // b.txt, and restores dirty.txt to what the commit holds.
 var rewriter = clitest.ShellTool("rewriter",
 	settle+clitest.RecordRun+`; printf 'A\n' > a.txt; printf 'B\n' > b.txt; printf 'committed\n' > dirty.txt`,
-	clitest.ToolOpSpec{Operation: "fix"})
+	clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix"})
 
 // changesProject is a committed repository whose dirty.txt was then edited,
 // with the rewriter as its fix tool.
@@ -131,7 +131,7 @@ func TestFixChanges(t *testing.T) {
 	// check's lint holds no fix task: nothing is observed for it, and the
 	// report says why.
 	t.Run("check", func(t *testing.T) {
-		e := changesProject(t, rewriter, clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+		e := changesProject(t, rewriter, clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		e.wantExit(e.run("", nil, "check", "--report", "json=out/run.json"), 0)
 		ops := e.operations("out/run.json")
 		if len(ops) != 2 || !ops[0].ChangesObserved || ops[1].ChangesObserved || ops[1].ChangesReason != "no-fix-task" {
@@ -172,7 +172,14 @@ func TestFixChanges(t *testing.T) {
 func TestFixPatch(t *testing.T) {
 	upper := func(name, from, to string, priority int) string {
 		return clitest.ShellTool(name, "sed 's/"+from+"/"+to+"/'", clitest.ToolOpSpec{
-			Operation: "fix", Scope: "per-file", Globs: []string{"**/x.txt"}, Input: "stdin", Output: "stdout", Priority: priority,
+			Args:         nil,
+			ProjectTypes: nil,
+			Parser:       "",
+			ParserModule: "",
+			Env:          nil,
+			InheritEnv:   nil,
+			FailOn:       "",
+			Operation:    "fix", Scope: "per-file", Globs: []string{"**/x.txt"}, Input: "stdin", Output: "stdout", Priority: priority,
 		})
 	}
 	e := newExecProject(t, map[string]string{"fixture.marker": "", "x.txt": "one\ntwo\n"}, fixtureSpec,

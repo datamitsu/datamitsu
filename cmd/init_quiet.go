@@ -62,9 +62,9 @@ func linkState(root, rel string) artifactState {
 	path := filepath.Join(root, ".datamitsu", filepath.Clean(rel))
 	info, err := os.Lstat(path)
 	if err != nil {
-		return artifactState{}
+		return artifactState{exists: false, mode: 0, link: "", data: ""}
 	}
-	state := artifactState{exists: true, mode: info.Mode()}
+	state := artifactState{link: "", data: "", exists: true, mode: info.Mode()}
 	if info.Mode()&os.ModeSymlink != 0 {
 		state.link, _ = os.Readlink(path)
 	} else if info.Mode().IsRegular() {

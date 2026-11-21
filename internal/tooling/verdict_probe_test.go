@@ -302,7 +302,7 @@ func TestRecordVerdictFixStillRehashesEverything(t *testing.T) {
 	e, root := newVerdictExecutor(t)
 	task := unitTask(root)
 	task.Operation = config.OpFix
-	task.OpConfig = config.ToolOperation{App: "tsc", Args: []string{"--write"}, Scope: config.ToolScopePerProject}
+	task.OpConfig = config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "tsc", Args: []string{"--write"}, Scope: config.ToolScopePerProject}
 	member := task.UnitMembers[0]
 	writeUnder(t, member, "aaaa")
 	backdate(t, member)

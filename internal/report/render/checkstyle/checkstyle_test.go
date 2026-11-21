@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/textpos"
@@ -32,8 +33,16 @@ type xmlError struct {
 
 func finding(path string, row int, severity, code, msg string) report.Finding {
 	return report.Finding{
-		Tool: "eslint", Source: "eslint", Code: code, Severity: severity, Kind: "issue", Message: msg,
-		Location: report.Location{Path: path, Row: row, EndRow: row, Chars: &textpos.Span{Start: 7, End: 9}, Precision: "exact"},
+		Fingerprint:      "",
+		FingerprintBasis: "",
+		RuleURL:          "",
+		Reported:         false,
+		Gates:            false,
+		Shown:            false,
+		Baselined:        false,
+		Provenance:       "",
+		Tool:             "eslint", Source: "eslint", Code: code, Severity: severity, Kind: "issue", Message: msg,
+		Location: report.Location{Col: 0, EndCol: 0, Unit: "", Bytes: nil, Utf16: nil, Path: path, Row: row, EndRow: row, Chars: &textpos.Span{Start: 7, End: 9}, Precision: "exact"},
 	}
 }
 
@@ -41,18 +50,100 @@ func TestRender(t *testing.T) {
 	imprecise := finding("src/a.ts", 9, "hint", "", "no rule")
 	imprecise.Location.Chars, imprecise.Location.Precision = nil, "unknown"
 	run := &report.Run{
-		Datamitsu: report.Producer{Version: "1.2.3"},
+		Schema:      "",
+		Fingerprint: "",
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		Selection:   report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:    false,
+		Complete:    false,
+		Incomplete:  nil,
+		Exports:     nil,
+		CI:          report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		Datamitsu:   report.Producer{Configuration: "", Version: "1.2.3"},
 		Operations: []report.Operation{
-			{Name: "fix", Ran: true, Tools: []report.ToolRun{{Name: "prettier", Invocations: []report.Invocation{{Findings: []report.Finding{finding("x.md", 1, "error", "c", "fix")}}}}}},
-			{Name: "lint", Ran: true, Tools: []report.ToolRun{
-				{Name: "eslint", Complete: true, Invocations: []report.Invocation{{Findings: []report.Finding{
-					imprecise, finding("src/a.ts", 3, "error", "no-var", `say "<no>" & go`), finding("/elsewhere/b.ts", 1, "info", "x", "outside"),
-				}}}},
-				{Name: "tsc", Incomplete: []report.Reason{"no-extraction"}, Invocations: []report.Invocation{{Findings: []report.Finding{{
-					Tool: "tsc", Source: "tsc", Severity: "error", Gates: true, Kind: "synthetic",
-					Message: "tsc exited 2 without parsable findings", Location: report.Location{Precision: "unknown"},
-				}}}}},
-			}},
+			{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "fix", Ran: true, Tools: []report.ToolRun{{App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Name: "prettier", Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", Findings: []report.Finding{finding("x.md", 1, "error", "c", "fix")}}}}}},
+			{
+				Success:         false,
+				Duration:        0,
+				Skipped:         nil,
+				Cancelled:       nil,
+				ChangesObserved: false,
+				ChangesReason:   "",
+				ChangesDetail:   "",
+				ChangesScope:    nil,
+				Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{
+					{
+						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+						Parser:     nil,
+						FailOn:     "",
+						GateActive: false,
+						Category:   "",
+						Incomplete: nil, Name: "eslint", Complete: true, Invocations: []report.Invocation{{
+							ID:          "",
+							TaskID:      "",
+							Dir:         "",
+							Scope:       "",
+							Granularity: "",
+							Arity:       "",
+							Coverage:    "",
+							WholeUnit:   false,
+							State:       "",
+							ExitCode:    nil,
+							Success:     false,
+							FailureKind: "",
+							Duration:    0,
+							Extraction:  "",
+							Provenance:  "",
+							Files:       nil,
+							Step:        0,
+							Changes:     nil,
+							OutputTail:  "", Findings: []report.Finding{
+								imprecise, finding("src/a.ts", 3, "error", "no-var", `say "<no>" & go`), finding("/elsewhere/b.ts", 1, "info", "x", "outside"),
+							},
+						}},
+					},
+					{
+						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+						Parser:     nil,
+						FailOn:     "",
+						GateActive: false,
+						Category:   "",
+						Complete:   false, Name: "tsc", Incomplete: []report.Reason{"no-extraction"}, Invocations: []report.Invocation{{
+							ID:          "",
+							TaskID:      "",
+							Dir:         "",
+							Scope:       "",
+							Granularity: "",
+							Arity:       "",
+							Coverage:    "",
+							WholeUnit:   false,
+							State:       "",
+							ExitCode:    nil,
+							Success:     false,
+							FailureKind: "",
+							Duration:    0,
+							Extraction:  "",
+							Provenance:  "",
+							Files:       nil,
+							Step:        0,
+							Changes:     nil,
+							OutputTail:  "", Findings: []report.Finding{{
+								Fingerprint:      "",
+								FingerprintBasis: "",
+								Code:             "",
+								RuleURL:          "",
+								Reported:         false,
+								Shown:            false,
+								Baselined:        false,
+								Provenance:       "",
+								Tool:             "tsc", Source: "tsc", Severity: "error", Gates: true, Kind: "synthetic",
+								Message: "tsc exited 2 without parsable findings", Location: report.Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "unknown"},
+							}},
+						}},
+					},
+				},
+			},
 		},
 	}
 	var b bytes.Buffer
@@ -64,15 +155,15 @@ func TestRender(t *testing.T) {
 		t.Fatalf("not well-formed XML: %v\n%s", err, b.String())
 	}
 	want := xmlCheckstyle{
-		XMLName: xml.Name{Local: "checkstyle"},
+		XMLName: xml.Name{Space: "", Local: "checkstyle"},
 		Version: "datamitsu-1.2.3",
 		Files: []xmlFile{
 			{Name: "/elsewhere/b.ts", Errors: []xmlError{{Line: "1", Column: "7", Severity: "info", Message: "outside", Source: "eslint/x"}}},
 			{Name: "src/a.ts", Errors: []xmlError{
 				{Line: "3", Column: "7", Severity: "error", Message: `say "<no>" & go`, Source: "eslint/no-var"},
-				{Line: "9", Severity: "info", Message: "no rule", Source: "eslint"},
+				{Column: "", Line: "9", Severity: "info", Message: "no rule", Source: "eslint"},
 			}},
-			{Name: "", Errors: []xmlError{{Severity: "error", Message: "tsc exited 2 without parsable findings", Source: "tsc"}}},
+			{Name: "", Errors: []xmlError{{Line: "", Column: "", Severity: "error", Message: "tsc exited 2 without parsable findings", Source: "tsc"}}},
 		},
 	}
 	if !reflect.DeepEqual(doc, want) {
@@ -90,7 +181,7 @@ func TestRender(t *testing.T) {
 
 func TestEmpty(t *testing.T) {
 	var b bytes.Buffer
-	if err := (Renderer{}).Render(&b, &report.Run{}, nil); err != nil {
+	if err := (Renderer{}).Render(&b, &report.Run{Schema: "", Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if want := `<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<checkstyle version="datamitsu-">` + "\n</checkstyle>\n"; b.String() != want {

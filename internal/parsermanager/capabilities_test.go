@@ -31,11 +31,13 @@ func TestDescribeLocal_Fixture(t *testing.T) {
 
 func TestCatalogFromCapabilities_FlattensSortsAndAttributes(t *testing.T) {
 	caps := Capabilities{
-		Module:  "m",
-		Version: "9",
+		SchemaVersion: 0,
+		ABI:           0,
+		Module:        "m",
+		Version:       "9",
 		Tools: []ToolCapability{
-			{Name: "zeta"},
-			{Name: "alpha", Operations: map[string]OperationRecipe{"lint": {Args: []string{"-x"}}}},
+			{Description: "", URL: "", Operations: nil, Severities: nil, ColumnUnit: "", Category: "", Kind: "", Name: "zeta"},
+			{Description: "", URL: "", Severities: nil, ColumnUnit: "", Category: "", Kind: "", Name: "alpha", Operations: map[string]OperationRecipe{"lint": {Stdin: false, Args: []string{"-x"}}}},
 		},
 	}
 	cat := CatalogFromCapabilities("p", caps)
@@ -63,8 +65,8 @@ func TestListCapabilities_DeduplicatesSharedModule(t *testing.T) {
 	hash := sha256Hex(wasm)
 
 	m := New(config.MapOfParsers{
-		"echo":  {URL: srv.URL, Hash: hash},
-		"echo2": {URL: srv.URL, Hash: hash},
+		"echo":  {OCI: nil, URL: srv.URL, Hash: hash},
+		"echo2": {OCI: nil, URL: srv.URL, Hash: hash},
 	})
 
 	cat, err := m.ListCapabilities(ctx)

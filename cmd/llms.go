@@ -31,8 +31,40 @@ var (
 )
 
 var llmsCmd = &cobra.Command{
-	Use:   "llms [page]",
-	Short: "Print project documentation as LLM-friendly markdown",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	Args:                       nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "llms [page]",
+	Short:                      "Print project documentation as LLM-friendly markdown",
 	Long: `Print the project documentation embedded in this binary, as plain markdown.
 
 With no arguments it prints an index of every available page, where each entry is
@@ -103,6 +135,7 @@ func printLlmsRoot(docs *llmsdocs.Docs) error {
 		PageSetHash   string `json:"pageSetHash"`
 		Note          string `json:"note,omitempty"`
 	}{
+		Note:          "",
 		BinaryVersion: ldflags.Version,
 		ImageTag:      ldflags.ImageTag,
 		SchemaVersion: m.SchemaVersion,

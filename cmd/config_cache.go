@@ -159,6 +159,7 @@ func configCacheInputs(ctx context.Context, p configCacheParams) (configcache.In
 
 	chain := hashConfigChain(p.sources)
 	return configcache.Inputs{
+		RemoteConfigs:        nil,
 		FormatVersion:        configcache.FormatVersion,
 		Version:              ldflags.Version,
 		BinaryIdentity:       binaryIdentity(),

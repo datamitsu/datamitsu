@@ -11,8 +11,14 @@ import (
 
 func anchored(col int, message string) diagnostic.Diagnostic {
 	return diagnostic.Diagnostic{
-		File: abs("a.ts"), Row: 3, Col: col, Code: "R", Source: "eslint", Message: message,
-		Severity: diagnostic.SeverityError, Anchor: &diagnostic.Anchor{LineHash: "h"},
+		EndRow:    0,
+		EndCol:    0,
+		URL:       "",
+		Reported:  false,
+		Gates:     false,
+		Baselined: false,
+		File:      abs("a.ts"), Row: 3, Col: col, Code: "R", Source: "eslint", Message: message,
+		Severity: diagnostic.SeverityError, Anchor: &diagnostic.Anchor{Fingerprint: "", Basis: "", Chars: nil, Bytes: nil, UTF16: nil, Precision: "", LineHash: "h"},
 	}
 }
 
@@ -29,15 +35,15 @@ func marks(proc *tooling.ProcessResult) []bool {
 // the tool reports it and in whichever order the processes are judged.
 func TestBaselineMatcherCountsALine(t *testing.T) {
 	set := BaselineSet{Fingerprint("eslint", "R", "a.ts", "h", 0): true}
-	lint := tooling.Task{ToolName: "eslint", Operation: config.OpLint}
-	fix := tooling.Task{ToolName: "eslint", Operation: config.OpFix}
+	lint := tooling.Task{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "eslint", Operation: config.OpLint}
+	fix := tooling.Task{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "eslint", Operation: config.OpFix}
 
 	t.Run("two processes", func(t *testing.T) {
 		for _, order := range [][2]int{{0, 1}, {1, 0}} {
 			m := NewBaselineMatcher(set, root)
 			processes := []*tooling.ProcessResult{
-				{Diagnostics: []diagnostic.Diagnostic{anchored(1, "old")}},
-				{Diagnostics: []diagnostic.Diagnostic{anchored(5, "new")}},
+				{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, Diagnostics: []diagnostic.Diagnostic{anchored(1, "old")}},
+				{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, Diagnostics: []diagnostic.Diagnostic{anchored(5, "new")}},
 			}
 			for _, i := range order {
 				m.Mark(lint, processes[i])
@@ -50,7 +56,7 @@ func TestBaselineMatcherCountsALine(t *testing.T) {
 
 	t.Run("one process, in ordinal order", func(t *testing.T) {
 		m := NewBaselineMatcher(set, root)
-		proc := &tooling.ProcessResult{Diagnostics: []diagnostic.Diagnostic{anchored(9, "later"), anchored(1, "first")}}
+		proc := &tooling.ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, Diagnostics: []diagnostic.Diagnostic{anchored(9, "later"), anchored(1, "first")}}
 		m.Mark(lint, proc)
 		if got := marks(proc); !reflect.DeepEqual(got, []bool{false, true}) {
 			t.Errorf("marks = %v, want the first finding of the line marked", got)
@@ -59,8 +65,8 @@ func TestBaselineMatcherCountsALine(t *testing.T) {
 
 	t.Run("a finding two processes report is one", func(t *testing.T) {
 		m := NewBaselineMatcher(set, root)
-		a := &tooling.ProcessResult{Diagnostics: []diagnostic.Diagnostic{anchored(1, "old")}}
-		b := &tooling.ProcessResult{Diagnostics: []diagnostic.Diagnostic{anchored(1, "old")}}
+		a := &tooling.ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, Diagnostics: []diagnostic.Diagnostic{anchored(1, "old")}}
+		b := &tooling.ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, Diagnostics: []diagnostic.Diagnostic{anchored(1, "old")}}
 		m.Mark(lint, a)
 		m.Mark(lint, b)
 		if !a.Diagnostics[0].Baselined || !b.Diagnostics[0].Baselined {
@@ -70,8 +76,8 @@ func TestBaselineMatcherCountsALine(t *testing.T) {
 
 	t.Run("each operation", func(t *testing.T) {
 		m := NewBaselineMatcher(set, root)
-		f := &tooling.ProcessResult{Diagnostics: []diagnostic.Diagnostic{anchored(1, "old")}}
-		l := &tooling.ProcessResult{Diagnostics: []diagnostic.Diagnostic{anchored(1, "old")}}
+		f := &tooling.ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, Diagnostics: []diagnostic.Diagnostic{anchored(1, "old")}}
+		l := &tooling.ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, Diagnostics: []diagnostic.Diagnostic{anchored(1, "old")}}
 		m.Mark(fix, f)
 		m.Mark(lint, l)
 		if !f.Diagnostics[0].Baselined || !l.Diagnostics[0].Baselined {
@@ -83,7 +89,7 @@ func TestBaselineMatcherCountsALine(t *testing.T) {
 		m := NewBaselineMatcher(set, root)
 		other := anchored(1, "other rule")
 		other.Code = "S"
-		proc := &tooling.ProcessResult{Diagnostics: []diagnostic.Diagnostic{other}}
+		proc := &tooling.ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, Diagnostics: []diagnostic.Diagnostic{other}}
 		m.Mark(lint, proc)
 		if proc.Diagnostics[0].Baselined {
 			t.Error("a finding of another rule was marked")
@@ -91,7 +97,7 @@ func TestBaselineMatcherCountsALine(t *testing.T) {
 	})
 
 	var nilMatcher *BaselineMatcher
-	nilMatcher.Mark(lint, &tooling.ProcessResult{Diagnostics: []diagnostic.Diagnostic{anchored(1, "x")}})
+	nilMatcher.Mark(lint, &tooling.ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, Diagnostics: []diagnostic.Diagnostic{anchored(1, "x")}})
 }
 
 func filter(lists ...[]bool) []bool {

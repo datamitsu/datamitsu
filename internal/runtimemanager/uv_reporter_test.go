@@ -11,7 +11,7 @@ import (
 // ignored. A nil *ui.Spinner is safe (SetLabel guards a nil receiver).
 func TestUVReporterPhaseLines(t *testing.T) {
 	var sp *ui.Spinner
-	rep := &uvReporter{sp: sp}
+	rep := &uvReporter{resolved: 0, prepared: 0, sp: sp}
 
 	for _, l := range []string{
 		"Using CPython 3.12.3 interpreter at: /usr/bin/python3",

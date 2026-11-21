@@ -14,7 +14,7 @@ var stopGrace = 5 * time.Second
 
 func setupProcessGroupCleanup(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
+		cmd.SysProcAttr = &syscall.SysProcAttr{Chroot: "", Credential: nil, Ptrace: false, Setsid: false, Setpgid: false, Setctty: false, Noctty: false, Ctty: 0, Foreground: false, Pgid: 0}
 	}
 	cmd.SysProcAttr.Setpgid = true
 	cmd.SysProcAttr.Pgid = 0

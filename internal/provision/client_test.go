@@ -34,8 +34,8 @@ func TestServeRejectsInvalidRequestEnvelope(t *testing.T) {
 		name string
 		req  Request
 	}{
-		{"version", Request{Version: ProtocolVersion + 1, ID: 1, Method: "run"}},
-		{"id", Request{Version: ProtocolVersion, Method: "run"}},
+		{"version", Request{Kind: "", Params: nil, CancelID: 0, Version: ProtocolVersion + 1, ID: 1, Method: "run"}},
+		{"id", Request{ID: 0, Kind: "", Params: nil, CancelID: 0, Version: ProtocolVersion, Method: "run"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			client, server := net.Pipe()
@@ -61,7 +61,7 @@ func TestClientCallReturnsRemoteError(t *testing.T) {
 	go func() {
 		var req Request
 		if readFrame(serverConn, &req) == nil {
-			_ = writeFrame(serverConn, Response{Version: ProtocolVersion, ID: req.ID, Kind: "response", Error: &RemoteError{Code: "denied", Message: "not allowed"}})
+			_ = writeFrame(serverConn, Response{Result: nil, Event: nil, Version: ProtocolVersion, ID: req.ID, Kind: "response", Error: &RemoteError{Code: "denied", Message: "not allowed"}})
 		}
 	}()
 	err := client.Call(context.Background(), "run", nil, nil)
@@ -85,7 +85,7 @@ func TestServeContextCancellationWaitsForHandlers(t *testing.T) {
 			return nil, ctx.Err()
 		})
 	}()
-	if err := writeFrame(clientConn, Request{Version: ProtocolVersion, ID: 1, Method: "wait"}); err != nil {
+	if err := writeFrame(clientConn, Request{Kind: "", Params: nil, CancelID: 0, Version: ProtocolVersion, ID: 1, Method: "wait"}); err != nil {
 		t.Fatal(err)
 	}
 	<-started
@@ -115,14 +115,14 @@ func TestServeRejectsNonMonotonicRequestIDs(t *testing.T) {
 	go func() {
 		serveDone <- Serve(server, func(context.Context, string, json.RawMessage) (any, error) { return struct{}{}, nil })
 	}()
-	if err := writeFrame(client, Request{Version: ProtocolVersion, ID: 2, Method: "first"}); err != nil {
+	if err := writeFrame(client, Request{Kind: "", Params: nil, CancelID: 0, Version: ProtocolVersion, ID: 2, Method: "first"}); err != nil {
 		t.Fatal(err)
 	}
 	var response Response
 	if err := readFrame(client, &response); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeFrame(client, Request{Version: ProtocolVersion, ID: 1, Method: "second"}); err != nil {
+	if err := writeFrame(client, Request{Kind: "", Params: nil, CancelID: 0, Version: ProtocolVersion, ID: 1, Method: "second"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-serveDone; !errors.Is(err, ErrProtocol) {
@@ -177,11 +177,11 @@ func TestProtocolFailureCancelsAndJoinsActiveOperation(t *testing.T) {
 			return nil, ctx.Err()
 		})
 	}()
-	if err := writeFrame(client, Request{Version: ProtocolVersion, ID: 1, Method: "active"}); err != nil {
+	if err := writeFrame(client, Request{Kind: "", Params: nil, CancelID: 0, Version: ProtocolVersion, ID: 1, Method: "active"}); err != nil {
 		t.Fatal(err)
 	}
 	<-started
-	if err := writeFrame(client, Request{Version: ProtocolVersion + 1, ID: 2, Method: "invalid"}); err != nil {
+	if err := writeFrame(client, Request{Kind: "", Params: nil, CancelID: 0, Version: ProtocolVersion + 1, ID: 2, Method: "invalid"}); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -212,7 +212,7 @@ func TestClientRejectsUncorrelatedWorkerFrames(t *testing.T) {
 				if err := readFrame(serverConn, &request); err != nil {
 					return
 				}
-				_ = writeFrame(serverConn, Response{Version: ProtocolVersion, ID: request.ID + 1, Kind: kind, Event: json.RawMessage(`{}`)})
+				_ = writeFrame(serverConn, Response{Result: nil, Error: nil, Version: ProtocolVersion, ID: request.ID + 1, Kind: kind, Event: json.RawMessage(`{}`)})
 			}()
 			if err := client.Call(context.Background(), "active", nil, nil); !errors.Is(err, ErrProtocol) {
 				t.Fatalf("uncorrelated %s frame: %v", kind, err)
@@ -291,7 +291,7 @@ func TestClientRejectsMalformedResponseVersion(t *testing.T) {
 		defer func() { _ = serverConn.Close() }()
 		var request Request
 		if readFrame(serverConn, &request) == nil {
-			_ = writeFrame(serverConn, Response{Version: ProtocolVersion + 1, ID: request.ID, Kind: "response"})
+			_ = writeFrame(serverConn, Response{Result: nil, Error: nil, Event: nil, Version: ProtocolVersion + 1, ID: request.ID, Kind: "response"})
 		}
 	}()
 	if err := client.Call(context.Background(), "version-test", nil, nil); !errors.Is(err, ErrProtocol) {
@@ -318,7 +318,7 @@ func TestServeReturnsProgressEncodingFailure(t *testing.T) {
 			return nil, Progress(ctx, make(chan int))
 		})
 	}()
-	if err := writeFrame(client, Request{Version: ProtocolVersion, ID: 1, Kind: "request", Method: "progress-error"}); err != nil {
+	if err := writeFrame(client, Request{Params: nil, CancelID: 0, Version: ProtocolVersion, ID: 1, Kind: "request", Method: "progress-error"}); err != nil {
 		t.Fatal(err)
 	}
 	var response Response
@@ -369,9 +369,9 @@ func TestServeRejectsNilHandlerAndInvalidRequestKinds(t *testing.T) {
 	_ = server.Close()
 	_ = client.Close()
 	for _, req := range []Request{
-		{Version: ProtocolVersion, ID: 1, Kind: "unexpected", Method: "run"},
-		{Version: ProtocolVersion, ID: 1, Kind: "cancel", CancelID: 1, Method: "extra"},
-		{Version: ProtocolVersion, ID: 1, Kind: "cancel", CancelID: 0},
+		{Params: nil, CancelID: 0, Version: ProtocolVersion, ID: 1, Kind: "unexpected", Method: "run"},
+		{Params: nil, Version: ProtocolVersion, ID: 1, Kind: "cancel", CancelID: 1, Method: "extra"},
+		{Method: "", Params: nil, Version: ProtocolVersion, ID: 1, Kind: "cancel", CancelID: 0},
 	} {
 		client, server := net.Pipe()
 		go func() { _ = writeFrame(client, req); _ = client.Close() }()
@@ -402,7 +402,7 @@ func TestClientRejectsMalformedTypedResponse(t *testing.T) {
 		defer func() { _ = serverConn.Close() }()
 		var req Request
 		if readFrame(serverConn, &req) == nil {
-			_ = writeFrame(serverConn, Response{Version: ProtocolVersion, ID: req.ID, Kind: "response", Result: json.RawMessage(`[]`)})
+			_ = writeFrame(serverConn, Response{Error: nil, Event: nil, Version: ProtocolVersion, ID: req.ID, Kind: "response", Result: json.RawMessage(`[]`)})
 		}
 	}()
 	var result struct {

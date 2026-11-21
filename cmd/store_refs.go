@@ -19,8 +19,39 @@ var (
 )
 
 var storeRefsCmd = &cobra.Command{
-	Use:   "refs",
-	Short: "List every external artifact the effective config pins",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "refs",
+	Short:                      "List every external artifact the effective config pins",
 	Long: `List every artifact this config fetches from outside the machine: OCI
 references (the bundle and any registry-sourced parser modules) and, unless
 --oci-only is passed, the hash-pinned https downloads.
@@ -97,7 +128,10 @@ func collectStoreRefs(cfg *config.Config) storeRefs {
 
 	if cfg.OCI != nil {
 		refs.OCI = append(refs.OCI, storeRefEntry{
-			Kind: "bundle", Name: "oci", Ref: cfg.OCI.Ref, Digest: cfg.OCI.Digest,
+			URL:      "",
+			Hash:     "",
+			Platform: "",
+			Kind:     "bundle", Name: "oci", Ref: cfg.OCI.Ref, Digest: cfg.OCI.Digest,
 		})
 	}
 
@@ -106,11 +140,17 @@ func collectStoreRefs(cfg *config.Config) storeRefs {
 		switch {
 		case p.OCI != nil:
 			refs.OCI = append(refs.OCI, storeRefEntry{
-				Kind: "parser", Name: name, Ref: p.OCI.Ref, Digest: p.OCI.Digest,
+				URL:      "",
+				Hash:     "",
+				Platform: "",
+				Kind:     "parser", Name: name, Ref: p.OCI.Ref, Digest: p.OCI.Digest,
 			})
 		case p.URL != "":
 			refs.HTTPS = append(refs.HTTPS, storeRefEntry{
-				Kind: "parser", Name: name, URL: p.URL, Hash: p.Hash,
+				Ref:      "",
+				Digest:   "",
+				Platform: "",
+				Kind:     "parser", Name: name, URL: p.URL, Hash: p.Hash,
 			})
 		}
 	}
@@ -159,7 +199,9 @@ func binaryEntries(kind, name string, binaries binmanager.MapOfBinaries) []store
 					platform += "/" + libc
 				}
 				out = append(out, storeRefEntry{
-					Kind: kind, Name: name, URL: info.URL, Hash: info.Hash, Platform: platform,
+					Ref:    "",
+					Digest: "",
+					Kind:   kind, Name: name, URL: info.URL, Hash: info.Hash, Platform: platform,
 				})
 			}
 		}
@@ -177,7 +219,10 @@ func archiveEntries(kind, name string, archives map[string]*binmanager.ArchiveSp
 			continue
 		}
 		out = append(out, storeRefEntry{
-			Kind: kind, Name: name + ":" + archiveName, URL: spec.URL, Hash: spec.Hash,
+			Ref:      "",
+			Digest:   "",
+			Platform: "",
+			Kind:     kind, Name: name + ":" + archiveName, URL: spec.URL, Hash: spec.Hash,
 		})
 	}
 	return out

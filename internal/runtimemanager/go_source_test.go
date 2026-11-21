@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -30,9 +31,16 @@ func systemGoRuntimes(t *testing.T) config.MapOfRuntimes {
 	}
 	return config.MapOfRuntimes{
 		"go": {
-			Kind:   config.RuntimeKindGo,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: abs},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindGo,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: abs},
 		},
 	}
 }
@@ -46,7 +54,7 @@ func sourceModuleTar(t *testing.T, modulePath, name, message string) []byte {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	write := func(path, body string) {
-		if err := tw.WriteHeader(&tar.Header{Name: path, Mode: 0o644, Size: int64(len(body))}); err != nil {
+		if err := tw.WriteHeader(&tar.Header{Typeflag: 0, Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: path, Mode: 0o644, Size: int64(len(body))}); err != nil {
 			t.Fatalf("tar header %q: %v", path, err)
 		}
 		if _, err := tw.Write([]byte(body)); err != nil {
@@ -98,7 +106,7 @@ func TestInstallGoApp_FromInlineArchive(t *testing.T) {
 		Runtime:     "go",
 		LockFile:    lock,
 	}
-	archives := map[string]*binmanager.ArchiveSpec{"main": {Inline: inline}}
+	archives := map[string]*binmanager.ArchiveSpec{"main": {URL: "", Hash: "", Format: "", Inline: inline}}
 
 	if err := rm.InstallGoApp(context.Background(), "my-gen", appConfig, nil, nil, archives); err != nil {
 		t.Fatalf("InstallGoApp from inline archive: %v", err)
@@ -142,11 +150,11 @@ func TestInstallGoApp_ArchiveChangeChangesInstallPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p1, err := rm.GetGoAppPath("my-gen", appConfig, nil, map[string]*binmanager.ArchiveSpec{"main": {Inline: inline1}}, "go")
+	p1, err := rm.GetGoAppPath("my-gen", appConfig, nil, map[string]*binmanager.ArchiveSpec{"main": {URL: "", Hash: "", Format: "", Inline: inline1}}, "go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p2, err := rm.GetGoAppPath("my-gen", appConfig, nil, map[string]*binmanager.ArchiveSpec{"main": {Inline: inline2}}, "go")
+	p2, err := rm.GetGoAppPath("my-gen", appConfig, nil, map[string]*binmanager.ArchiveSpec{"main": {URL: "", Hash: "", Format: "", Inline: inline2}}, "go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,11 +179,12 @@ func TestGenerateGoLockFiles_FromSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	appConfig := &binmanager.AppConfigGo{
+		LockFile:    "",
 		PackageName: "example.com/mygen2/cmd/mygen2",
 		Version:     "v0.1.0",
 		Runtime:     "go",
 	}
-	archives := map[string]*binmanager.ArchiveSpec{"main": {Inline: inline}}
+	archives := map[string]*binmanager.ArchiveSpec{"main": {URL: "", Hash: "", Format: "", Inline: inline}}
 
 	workDir := t.TempDir()
 	if err := rm.GenerateGoLockFilesFromSource(context.Background(), "my-gen2", appConfig, nil, archives, workDir, 0); err != nil {
@@ -242,7 +251,7 @@ func TestGenerateGoLockFiles_FromSourceRequiresGoMod(t *testing.T) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	body := "package main\nfunc main() {}\n"
-	if err := tw.WriteHeader(&tar.Header{Name: "main.go", Mode: 0o644, Size: int64(len(body))}); err != nil {
+	if err := tw.WriteHeader(&tar.Header{Typeflag: 0, Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "main.go", Mode: 0o644, Size: int64(len(body))}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tw.Write([]byte(body)); err != nil {
@@ -257,12 +266,13 @@ func TestGenerateGoLockFiles_FromSourceRequiresGoMod(t *testing.T) {
 	}
 
 	appConfig := &binmanager.AppConfigGo{
+		LockFile:    "",
 		PackageName: "example.com/x/cmd/x",
 		Version:     "v0.1.0",
 		Runtime:     "go",
 	}
 	err = rm.GenerateGoLockFilesFromSource(context.Background(), "x", appConfig, nil,
-		map[string]*binmanager.ArchiveSpec{"main": {Inline: inline}}, t.TempDir(), 0)
+		map[string]*binmanager.ArchiveSpec{"main": {URL: "", Hash: "", Format: "", Inline: inline}}, t.TempDir(), 0)
 	if err == nil || !strings.Contains(err.Error(), "go.mod") {
 		t.Fatalf("err = %v, want the missing-go.mod refusal", err)
 	}
@@ -277,7 +287,7 @@ func depTar(t *testing.T, extra ...tarEntry) string {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	write := func(path, body string) {
-		if err := tw.WriteHeader(&tar.Header{Name: path, Mode: 0o644, Size: int64(len(body))}); err != nil {
+		if err := tw.WriteHeader(&tar.Header{Typeflag: 0, Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: path, Mode: 0o644, Size: int64(len(body))}); err != nil {
 			t.Fatalf("tar header %q: %v", path, err)
 		}
 		if _, err := tw.Write([]byte(body)); err != nil {
@@ -287,7 +297,7 @@ func depTar(t *testing.T, extra ...tarEntry) string {
 	write("go.mod", "module example.com/needsdep\n\ngo 1.22\n\nrequire golang.org/x/mod v0.17.0\n")
 	write("main.go", "package main\n\nimport _ \"golang.org/x/mod/semver\"\n\nfunc main() {}\n")
 	for _, e := range extra {
-		if err := tw.WriteHeader(&tar.Header{Name: e.name, Mode: 0o644, Size: int64(len(e.body))}); err != nil {
+		if err := tw.WriteHeader(&tar.Header{Typeflag: 0, Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: e.name, Mode: 0o644, Size: int64(len(e.body))}); err != nil {
 			t.Fatalf("tar header %q: %v", e.name, err)
 		}
 		if _, err := tw.Write([]byte(e.body)); err != nil {
@@ -313,11 +323,12 @@ type tarEntry struct{ name, body string }
 func refuseInstallWithEmptySum(t *testing.T, rm *RuntimeManager, inline string) {
 	t.Helper()
 	appConfig := &binmanager.AppConfigGo{
+		LockFile:    "",
 		PackageName: "example.com/needsdep",
 		Version:     "v0.1.0",
 		Runtime:     "go",
 	}
-	archives := map[string]*binmanager.ArchiveSpec{"main": {Inline: inline}}
+	archives := map[string]*binmanager.ArchiveSpec{"main": {URL: "", Hash: "", Format: "", Inline: inline}}
 
 	// Warm the module cache under a shared cache dir via a real generation;
 	// the generated go.sum is thrown away — the install gets an empty one.

@@ -65,7 +65,7 @@ func TestEnsurePythonRejectsMalformedConfiguredCatalogBeforeMutation(t *testing.
 	base := t.TempDir()
 	t.Setenv("DATAMITSU_CACHE_DIR", base)
 	rc := testUVRuntimeConfig(t, "must-not-run", "3.14.6")
-	rc.UV.PythonDownloads["host"] = config.PythonDownload{}
+	rc.UV.PythonDownloads["host"] = config.PythonDownload{Name: "", Arch: config.PythonDownloadArch{Family: "", Variant: ""}, OS: "", LibC: "", Major: 0, Minor: 0, Patch: 0, Prerelease: "", URL: "", Variant: "", Build: "", Hash: ""}
 	rm := New(config.MapOfRuntimes{"test-uv": rc})
 	if _, err := rm.EnsurePython(context.Background(), "test-uv"); err == nil {
 		t.Fatal("invalid catalog entry accepted")
@@ -111,12 +111,12 @@ func TestSelectPythonDownloadRequiresOneExactHostEntry(t *testing.T) {
 	case "arm64":
 		arch = "aarch64"
 	}
-	entry := config.PythonDownload{Name: "cpython", Arch: config.PythonDownloadArch{Family: arch}, OS: runtime.GOOS, LibC: libc, Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst", Hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
+	entry := config.PythonDownload{Prerelease: "", Variant: "", Build: "", Name: "cpython", Arch: config.PythonDownloadArch{Variant: "", Family: arch}, OS: runtime.GOOS, LibC: libc, Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst", Hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
 	if runtime.GOOS == "linux" && host.Libc != target.LibcGlibc && host.Libc != target.LibcMusl {
 		t.Skip("host libc cannot be mapped to an upstream catalog target")
 	}
 	t.Run("missing catalog", func(t *testing.T) {
-		_, err := selectPythonDownload(rm, &config.RuntimeConfigUV{PythonVersion: "3.14.6"})
+		_, err := selectPythonDownload(rm, &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.14.6"})
 		if err == nil || !strings.Contains(err.Error(), "pythonDownloads with SHA-256 pins is required") {
 			t.Fatalf("expected actionable missing-catalog error, got %v", err)
 		}
@@ -170,7 +170,7 @@ func TestSelectPythonDownloadRejectsInvalidMatchingEntry(t *testing.T) {
 func TestEnsurePythonRejectsNonUVBeforeProvisioning(t *testing.T) {
 	base := t.TempDir()
 	t.Setenv("DATAMITSU_CACHE_DIR", base)
-	rm := New(config.MapOfRuntimes{"node": {Kind: config.RuntimeKindNode}})
+	rm := New(config.MapOfRuntimes{"node": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode}})
 	if _, err := rm.EnsurePython(context.Background(), "node"); err == nil || !strings.Contains(err.Error(), "not a configured uv runtime") {
 		t.Fatalf("EnsurePython error = %v, want kind rejection", err)
 	}
@@ -250,12 +250,12 @@ func TestPythonCatalogTargetMapsSupportedAndRejectsUnknownPlatforms(t *testing.T
 		name, os, arch, libc, wantOS, wantArch, wantLibc string
 		wantErr                                          bool
 	}{
-		{name: "glibc", os: "linux", arch: "amd64", libc: "glibc", wantOS: "linux", wantArch: "x86_64", wantLibc: "gnu"},
-		{name: "musl", os: "linux", arch: "arm64", libc: "musl", wantOS: "linux", wantArch: "aarch64", wantLibc: "musl"},
-		{name: "darwin", os: "darwin", arch: "arm64", libc: "glibc", wantOS: "darwin", wantArch: "aarch64", wantLibc: "none"},
-		{name: "unknown libc", os: "linux", arch: "amd64", libc: "other", wantErr: true},
-		{name: "unknown architecture", os: "linux", arch: "ppc64", libc: "glibc", wantErr: true},
-		{name: "unknown OS", os: "freebsd", arch: "amd64", libc: "none", wantErr: true},
+		{wantErr: false, name: "glibc", os: "linux", arch: "amd64", libc: "glibc", wantOS: "linux", wantArch: "x86_64", wantLibc: "gnu"},
+		{wantErr: false, name: "musl", os: "linux", arch: "arm64", libc: "musl", wantOS: "linux", wantArch: "aarch64", wantLibc: "musl"},
+		{wantErr: false, name: "darwin", os: "darwin", arch: "arm64", libc: "glibc", wantOS: "darwin", wantArch: "aarch64", wantLibc: "none"},
+		{wantOS: "", wantArch: "", wantLibc: "", name: "unknown libc", os: "linux", arch: "amd64", libc: "other", wantErr: true},
+		{wantOS: "", wantArch: "", wantLibc: "", name: "unknown architecture", os: "linux", arch: "ppc64", libc: "glibc", wantErr: true},
+		{wantOS: "", wantArch: "", wantLibc: "", name: "unknown OS", os: "freebsd", arch: "amd64", libc: "none", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -334,7 +334,7 @@ exit 42
 		t.Fatal(err)
 	}
 	runtimeConfig := entry
-	runtimeConfig.System = &config.RuntimeConfigSystem{Command: uvPath}
+	runtimeConfig.System = &config.RuntimeConfigSystem{SystemVersion: "", Command: uvPath}
 	runtimeConfig.UV.PythonDownloads = map[string]config.PythonDownload{"host": runtimeConfig.UV.PythonDownloads["test-cpython-host"]}
 	rm := New(config.MapOfRuntimes{"python": runtimeConfig})
 	execution, err := rm.EnsureExecution(context.Background(), "python")
@@ -405,7 +405,7 @@ func TestWritePrivateAtomicRenameFailurePreservesExistingDirectory(t *testing.T)
 }
 
 func TestValidatePythonDownloadRequiresCanonicalSHA256AndHTTPURL(t *testing.T) {
-	entry := config.PythonDownload{Name: "cpython", Arch: config.PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu", Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/cpython.tar.zst", Hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
+	entry := config.PythonDownload{Prerelease: "", Variant: "", Build: "", Name: "cpython", Arch: config.PythonDownloadArch{Variant: "", Family: "x86_64"}, OS: "linux", LibC: "gnu", Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/cpython.tar.zst", Hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
 	if err := validatePythonDownload(entry); err != nil {
 		t.Fatalf("valid pinned download rejected: %v", err)
 	}
@@ -533,7 +533,9 @@ func TestPythonProvisionEnvRemovesInheritedSelectionOverrides(t *testing.T) {
 
 func TestMarshalPythonCatalogPreservesUpstreamKeyAndOmitsEmptyVariants(t *testing.T) {
 	selected := selectedPythonDownload{Key: "cpython-3.14.6-x86_64-unknown-linux-gnu", Entry: config.PythonDownload{
-		Name: "cpython", Arch: config.PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+		Prerelease: "",
+		Variant:    "",
+		Name:       "cpython", Arch: config.PythonDownloadArch{Variant: "", Family: "x86_64"}, OS: "linux", LibC: "gnu",
 		Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/cpython.tar.zst", Build: "build", Hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}}
 	var got uvPythonCatalog
@@ -575,16 +577,25 @@ func TestEnsurePythonOfflineDoesNotAcquireOrMutate(t *testing.T) {
 		arch = "aarch64"
 	}
 	entry := config.PythonDownload{
-		Name: "cpython", Arch: config.PythonDownloadArch{Family: arch}, OS: runtime.GOOS, LibC: libc,
+		Prerelease: "",
+		Variant:    "",
+		Build:      "",
+		Name:       "cpython", Arch: config.PythonDownloadArch{Variant: "", Family: arch}, OS: runtime.GOOS, LibC: libc,
 		Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst",
 		Hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}
 	rm := New(config.MapOfRuntimes{
 		"isolated-uv": {
-			Kind:   config.RuntimeKindUV,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: "must-not-be-looked-up"},
-			UV:     &config.RuntimeConfigUV{PythonVersion: "3.14.6", PythonDownloads: map[string]config.PythonDownload{"host": entry}},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: "must-not-be-looked-up"},
+			UV:      &config.RuntimeConfigUV{PythonVersion: "3.14.6", PythonDownloads: map[string]config.PythonDownload{"host": entry}},
 		},
 	})
 	if runtime.GOOS == "linux" && host.Libc != target.LibcGlibc && host.Libc != target.LibcMusl {
@@ -643,7 +654,7 @@ func TestEnsurePythonRepairsUnmarkedPayload(t *testing.T) {
 	if err := os.WriteFile(uvPath, []byte("#!/bin/sh\nset -eu\nif [ \"$2\" = install ]; then\n root=\"$7\"; mkdir -p \"$root/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$root/bin/python\"; chmod 755 \"$root/bin/python\"; echo \"$root/bin/python\" > \"$DATAMITSU_CACHE_DIR/python.path\"; exit 0; fi\nif [ \"$2\" = find ]; then cat \"$DATAMITSU_CACHE_DIR/python.path\"; exit 0; fi\nexit 41\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	rc.System = &config.RuntimeConfigSystem{Command: uvPath}
+	rc.System = &config.RuntimeConfigSystem{SystemVersion: "", Command: uvPath}
 	rm := New(config.MapOfRuntimes{"python": rc})
 	identity, err := rm.runtimeDataIdentity("python", rc)
 	if err != nil {
@@ -730,13 +741,22 @@ func testUVRuntimeConfig(t *testing.T, command, version string) config.RuntimeCo
 		t.Fatalf("invalid test Python patch version %q: %v", parts[2], err)
 	}
 	entry := config.PythonDownload{
-		Name: "cpython", Arch: config.PythonDownloadArch{Family: archName}, OS: osName, LibC: catalogLibc,
+		Prerelease: "",
+		Variant:    "",
+		Build:      "",
+		Name:       "cpython", Arch: config.PythonDownloadArch{Variant: "", Family: archName}, OS: osName, LibC: catalogLibc,
 		Major: major, Minor: minor, Patch: patch, URL: "https://example.invalid/test-cpython.tar.zst",
 		Hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}
 	return config.RuntimeConfig{
-		Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem,
-		System: &config.RuntimeConfigSystem{Command: command},
+		Managed: nil,
+		Bun:     nil,
+		Node:    nil,
+		JVM:     nil,
+		Go:      nil,
+		PNPM:    nil,
+		Kind:    config.RuntimeKindUV, Mode: config.RuntimeModeSystem,
+		System: &config.RuntimeConfigSystem{SystemVersion: "", Command: command},
 		UV:     &config.RuntimeConfigUV{PythonVersion: version, PythonDownloads: map[string]config.PythonDownload{"test-cpython-host": entry}},
 	}
 }

@@ -33,7 +33,7 @@ func TestLintConfigPlacementGolden(t *testing.T) {
 	p.WriteFile("deep/nest/.datamitsuignore", "*.ts: eslint\n")
 
 	norm := clitest.NewNormalizer()
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "lint")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "lint")
 	if res.ExitCode != 1 {
 		t.Fatalf("lint exit = %d, want 1\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
 	}
@@ -58,7 +58,7 @@ func TestLintConfigPlacementCleanGolden(t *testing.T) {
 	p.WriteFile("main.go", "package main\n")
 
 	norm := clitest.NewNormalizer()
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "lint")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "lint")
 	if res.ExitCode != 0 {
 		t.Fatalf("lint exit = %d, want 0\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
 	}

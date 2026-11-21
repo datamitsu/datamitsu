@@ -224,7 +224,7 @@ func loadConfig() (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime,
 // commands keep their detection-free, walk-free config load.
 func loadConfigForReconcile(ctx context.Context) (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime, error) {
 	return loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths,
-		loadConfigOptions{detectProjectLocations: true, evaluateManagedConfigContent: true, requireVM: true, retainManagedConfigLayers: reconcileForce})
+		loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: true, evaluateManagedConfigContent: true, requireVM: true, retainManagedConfigLayers: reconcileForce})
 }
 
 // loadConfigForChainHash loads config with managed config content evaluated,
@@ -232,13 +232,13 @@ func loadConfigForReconcile(ctx context.Context) (*config.Config, *config.Manage
 // needs the layer map.
 func loadConfigForChainHash() (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime, error) {
 	return loadConfigImpl(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths,
-		loadConfigOptions{evaluateManagedConfigContent: true})
+		loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, retainManagedConfigLayers: false, requireVM: false, evaluateManagedConfigContent: true})
 }
 
 // loadConfigForLockfileGen loads config without enforcing lockfile constraints.
 // Used by config lockfile to allow bootstrapping lockfiles for apps that don't have one yet.
 func loadConfigForLockfileGen() (*config.Config, *config.ManagedConfigLayerMap, *goja.Runtime, error) {
-	return loadConfigImpl(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths, loadConfigOptions{skipLockfileValidation: true})
+	return loadConfigImpl(context.Background(), BeforeConfigPaths, NoAutoConfig, ConfigPaths, loadConfigOptions{tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false, skipLockfileValidation: true})
 }
 
 // loadConfigForStore loads the config for store-level commands (seed/status/
@@ -247,7 +247,7 @@ func loadConfigForLockfileGen() (*config.Config, *config.ManagedConfigLayerMap, 
 // containers) must not be fatal — the auto-discovered project config is
 // simply skipped with a warning.
 func loadConfigForStore(ctx context.Context) (*config.Config, error) {
-	cfg, _, _, err := loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths, loadConfigOptions{tolerateGitRootFailure: true})
+	cfg, _, _, err := loadConfigImpl(ctx, BeforeConfigPaths, NoAutoConfig, ConfigPaths, loadConfigOptions{skipLockfileValidation: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false, tolerateGitRootFailure: true})
 	return cfg, err
 }
 
@@ -256,7 +256,7 @@ func loadConfigForStore(ctx context.Context) (*config.Config, error) {
 // Each config file is loaded in a separate VM and receives the previous config as input.
 // Remote configs declared via getRemoteConfigs() are resolved depth-first.
 func loadConfigWithPaths(ctx context.Context, beforeConfigPaths []string, noAutoConfig bool, configPaths []string) (cfg *config.Config, layerMap *config.ManagedConfigLayerMap, vm *goja.Runtime, err error) {
-	return loadConfigImpl(ctx, beforeConfigPaths, noAutoConfig, configPaths, loadConfigOptions{})
+	return loadConfigImpl(ctx, beforeConfigPaths, noAutoConfig, configPaths, loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false})
 }
 
 // loadConfigOptions tweaks config loading for special-purpose commands.
@@ -390,7 +390,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// stack: tracks URLs in the current recursion path (for cycle detection).
 	var currentConfig *config.Config
 	var lastVM *goja.Runtime
-	obs := &chainObservations{}
+	obs := &chainObservations{nonDeterminism: "", warnings: nil, engines: nil}
 	// Until the chain has finished evaluating, the verdict is "not cacheable":
 	// an early failure must never leave the previous load's verdict standing.
 	obs.markIncomplete()
@@ -636,11 +636,11 @@ func projectLocationsToConfig(rootPath string, locs []project.ProjectLocation) (
 // with the whole chain, the missing file included.
 func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoConfigPath string, configPaths []string) ([]configSource, error) {
 	var sources []configSource
-	sources = append(sources, configSource{name: "default", isDefault: true})
+	sources = append(sources, configSource{path: "", content: "", isRemote: false, name: "default", isDefault: true})
 
 	// --before-config flag paths (for wrappers/libraries, before auto-discovery).
 	for _, p := range beforeConfigPaths {
-		sources = append(sources, configSource{name: p, path: p})
+		sources = append(sources, configSource{content: "", isDefault: false, isRemote: false, name: p, path: p})
 	}
 
 	// Record the substitution rather than performing it silently: when the flag
@@ -668,18 +668,18 @@ func buildConfigSources(ctx context.Context, beforeConfigPaths []string, autoCon
 		}
 		missing = err
 		for _, p := range declared {
-			sources = append(sources, configSource{name: p, path: p})
+			sources = append(sources, configSource{content: "", isDefault: false, isRemote: false, name: p, path: p})
 		}
 	}
 
 	// Auto-discovered git-root config.
 	if autoConfigPath != "" {
-		sources = append(sources, configSource{name: "auto", path: autoConfigPath})
+		sources = append(sources, configSource{content: "", isDefault: false, isRemote: false, name: "auto", path: autoConfigPath})
 	}
 
 	// Explicit --config paths.
 	for _, p := range configPaths {
-		sources = append(sources, configSource{name: p, path: p})
+		sources = append(sources, configSource{content: "", isDefault: false, isRemote: false, name: p, path: p})
 	}
 
 	return sources, missing
@@ -808,9 +808,11 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 				}
 
 				remoteResult, _, remoteErr := processConfigSource(ctx, chainedInput, configSource{
-					name:     entry.URL,
-					content:  content,
-					isRemote: true,
+					path:      "",
+					isDefault: false,
+					name:      entry.URL,
+					content:   content,
+					isRemote:  true,
 				}, resolved, stack, opts, obs, declaredMinVersion)
 				delete(stack, entry.URL)
 				if remoteErr != nil {
@@ -969,7 +971,7 @@ func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, 
 		return nil, fmt.Errorf("failed to export config: %w", err)
 	}
 
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	if err := vm.ExportTo(resultVal, cfg); err != nil {
 		return nil, fmt.Errorf("failed to export config: %w", err)

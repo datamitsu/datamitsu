@@ -13,7 +13,7 @@ func TestPythonDownloadCatalogFallbackStaysOnPinnedRelease(t *testing.T) {
 	for _, scenario := range []string{"legacy layout", "missing catalog", "forbidden catalog"} {
 		t.Run(scenario, func(t *testing.T) {
 			var legacyRequests atomic.Int32
-			entry := UVPythonDownload{Name: "cpython", Arch: UVPythonArch{Family: "x86_64"}, OS: "linux", Libc: "gnu", Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst", SHA256: strings.Repeat("a", 64)}
+			entry := UVPythonDownload{Prerelease: "", Variant: "", Build: "", Name: "cpython", Arch: UVPythonArch{Variant: "", Family: "x86_64"}, OS: "linux", Libc: "gnu", Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst", SHA256: strings.Repeat("a", 64)}
 			base := serveMetadata(t, func(w http.ResponseWriter, r *http.Request) {
 				if !strings.HasPrefix(r.URL.Path, "/0.13.6/") {
 					http.NotFound(w, r)

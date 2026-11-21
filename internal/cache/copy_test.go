@@ -27,7 +27,7 @@ func newWarmCache(t *testing.T, cacheDir, root string, files map[string]string, 
 			t.Fatal(err)
 		}
 	}
-	c, err := NewCache(cacheDir, root, config.Config{}, nil, zap.NewNop())
+	c, err := NewCache(cacheDir, root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func newWarmCache(t *testing.T, cacheDir, root string, files map[string]string, 
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := c.AfterLint(abs, tool, Seen{Hash: h}, true, true); err != nil {
+		if err := c.AfterLint(abs, tool, Seen{Size: 0, ModTime: time.Time{}, Identity: FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, At: time.Time{}, Hash: h}, true, true); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -84,7 +84,7 @@ func TestCopyProjectWarmsEmptyDestination(t *testing.T) {
 
 	src := newWarmCache(t, cacheDir, srcRoot, files, "tool-a")
 
-	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{})
+	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestCopyProjectWarmsEmptyDestination(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	dst, err := NewCache(cacheDir, dstRoot, config.Config{}, nil, zap.NewNop())
+	dst, err := NewCache(cacheDir, dstRoot, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestCopyProjectWarmsEmptyDestination(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if dst.Check(filepath.Join(dstRoot, rel), "tool-a", OperationLint, Seen{Hash: h}, true) {
+		if dst.Check(filepath.Join(dstRoot, rel), "tool-a", OperationLint, Seen{Size: 0, ModTime: time.Time{}, Identity: FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, At: time.Time{}, Hash: h}, true) {
 			t.Errorf("%s: the destination must not re-run after the copy", rel)
 		}
 	}
@@ -134,25 +134,30 @@ func TestCopyProjectMergePolicy(t *testing.T) {
 	dstRoot := t.TempDir()
 
 	writeState(t, statePath(cacheDir, srcRoot), &File{
+		Version:         "",
+		LastPruned:      time.Time{},
+		Verdicts:        nil,
 		InvalidationKey: "k",
 		ProjectPath:     srcRoot,
 		Entries: map[string]FileEntry{
 			"same.txt":  {ContentHash: "hash-a", Lint: []string{"t1"}, Fix: []string{"tf"}},
-			"other.txt": {ContentHash: "hash-c", Lint: []string{"t9"}},
-			"gone.txt":  {ContentHash: "hash-d", Lint: []string{"t1"}},
+			"other.txt": {Fix: nil, ContentHash: "hash-c", Lint: []string{"t9"}},
+			"gone.txt":  {Fix: nil, ContentHash: "hash-d", Lint: []string{"t1"}},
 		},
 	})
 	writeState(t, statePath(cacheDir, dstRoot), &File{
+		LastPruned:      time.Time{},
+		Verdicts:        nil,
 		InvalidationKey: "k",
 		ProjectPath:     dstRoot,
 		Version:         "v-dst",
 		Entries: map[string]FileEntry{
-			"same.txt":  {ContentHash: "hash-a", Lint: []string{"t2"}},
-			"other.txt": {ContentHash: "hash-b", Lint: []string{"t2"}},
+			"same.txt":  {Fix: nil, ContentHash: "hash-a", Lint: []string{"t2"}},
+			"other.txt": {Fix: nil, ContentHash: "hash-b", Lint: []string{"t2"}},
 		},
 	})
 
-	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{})
+	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,12 +198,15 @@ func TestCopyProjectResurrectedEntryCannotHit(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeState(t, statePath(cacheDir, dstRoot), &File{
+		Version:         "",
+		LastPruned:      time.Time{},
+		Verdicts:        nil,
 		InvalidationKey: src.InvalidationKey(),
 		ProjectPath:     dstRoot,
 		Entries:         map[string]FileEntry{},
 	})
 
-	if _, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{}); err != nil {
+	if _, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: false}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -206,7 +214,7 @@ func TestCopyProjectResurrectedEntryCannotHit(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dstRoot, "a.txt"), []byte("two\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	dst, err := NewCache(cacheDir, dstRoot, config.Config{}, nil, zap.NewNop())
+	dst, err := NewCache(cacheDir, dstRoot, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +222,7 @@ func TestCopyProjectResurrectedEntryCannotHit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !dst.Check(filepath.Join(dstRoot, "a.txt"), "tool-a", OperationLint, Seen{Hash: h}, true) {
+	if !dst.Check(filepath.Join(dstRoot, "a.txt"), "tool-a", OperationLint, Seen{Size: 0, ModTime: time.Time{}, Identity: FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, At: time.Time{}, Hash: h}, true) {
 		t.Error("a resurrected entry must not hit over different content")
 	}
 }
@@ -230,7 +238,7 @@ func TestCopyProjectVerdictPolicy(t *testing.T) {
 	// The destination first saves a real toolstate, so the file on disk carries
 	// the invalidation key a NewCache in this process computes; hand-written
 	// keys would make every later Load reset the file.
-	dstWarm, err := NewCache(cacheDir, dstRoot, config.Config{}, nil, zap.NewNop())
+	dstWarm, err := NewCache(cacheDir, dstRoot, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,20 +248,23 @@ func TestCopyProjectVerdictPolicy(t *testing.T) {
 	dstState := mustReadState(t, statePath(cacheDir, dstRoot))
 
 	writeState(t, statePath(cacheDir, srcRoot), &File{
+		Version:         "",
+		ProjectPath:     "",
+		LastPruned:      time.Time{},
 		InvalidationKey: dstState.InvalidationKey,
 		Entries:         map[string]FileEntry{},
 		Verdicts: map[string]VerdictEntry{
-			"collide": {Tool: "t", Op: "lint", InputHash: "in", ValidatedAt: now.Add(-2 * time.Hour)},
-			"expired": {Tool: "t", Op: "lint", InputHash: "in", ValidatedAt: now.Add(-48 * time.Hour)},
-			"fresh":   {Tool: "t", Op: "lint", InputHash: "in", ValidatedAt: now.Add(-1 * time.Minute)},
+			"collide": {UnitDir: "", Members: 0, Tool: "t", Op: "lint", InputHash: "in", ValidatedAt: now.Add(-2 * time.Hour)},
+			"expired": {UnitDir: "", Members: 0, Tool: "t", Op: "lint", InputHash: "in", ValidatedAt: now.Add(-48 * time.Hour)},
+			"fresh":   {UnitDir: "", Members: 0, Tool: "t", Op: "lint", InputHash: "in", ValidatedAt: now.Add(-1 * time.Minute)},
 		},
 	})
 	dstState.Verdicts = map[string]VerdictEntry{
-		"collide": {Tool: "t", Op: "lint", InputHash: "in", ValidatedAt: now.Add(-1 * time.Hour)},
+		"collide": {UnitDir: "", Members: 0, Tool: "t", Op: "lint", InputHash: "in", ValidatedAt: now.Add(-1 * time.Hour)},
 	}
 	writeState(t, statePath(cacheDir, dstRoot), &dstState)
 
-	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{})
+	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +277,7 @@ func TestCopyProjectVerdictPolicy(t *testing.T) {
 		t.Error("a verdict collision must keep the more recent validation")
 	}
 
-	dst, err := NewCache(cacheDir, dstRoot, config.Config{}, nil, zap.NewNop())
+	dst, err := NewCache(cacheDir, dstRoot, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,16 +299,19 @@ func TestCopyProjectKeepsIncompatibleDestination(t *testing.T) {
 
 	newWarmCache(t, cacheDir, srcRoot, map[string]string{"a.txt": "one\n"}, "tool-a")
 	writeState(t, statePath(cacheDir, dstRoot), &File{
+		Version:         "",
+		LastPruned:      time.Time{},
+		Verdicts:        nil,
 		InvalidationKey: "a-different-configuration",
 		ProjectPath:     dstRoot,
-		Entries:         map[string]FileEntry{"kept.txt": {ContentHash: "h", Lint: []string{"t"}}},
+		Entries:         map[string]FileEntry{"kept.txt": {Fix: nil, ContentHash: "h", Lint: []string{"t"}}},
 	})
 	before, err := os.ReadFile(statePath(cacheDir, dstRoot))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{})
+	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +340,7 @@ func TestCopyProjectSkipsUnreadableSource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{})
+	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: false})
 	if err != nil {
 		t.Fatalf("an unreadable source is a report, not an error: %v", err)
 	}
@@ -355,7 +369,7 @@ func TestCopyProjectReplacesUnreadableDestination(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{})
+	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,12 +388,12 @@ func TestCopyProjectErrors(t *testing.T) {
 	cacheDir := t.TempDir()
 	root := t.TempDir()
 
-	if _, err := CopyProject(cacheDir, root, root, CopyOptions{}); !errors.Is(err, ErrSameProject) {
+	if _, err := CopyProject(cacheDir, root, root, CopyOptions{DryRun: false, ToolCaches: false}); !errors.Is(err, ErrSameProject) {
 		t.Fatalf("error = %v, want ErrSameProject", err)
 	}
 
 	empty := t.TempDir()
-	if _, err := CopyProject(cacheDir, empty, root, CopyOptions{}); !errors.Is(err, ErrNoSourceCache) {
+	if _, err := CopyProject(cacheDir, empty, root, CopyOptions{DryRun: false, ToolCaches: false}); !errors.Is(err, ErrNoSourceCache) {
 		t.Fatalf("error = %v, want ErrNoSourceCache", err)
 	}
 
@@ -395,11 +409,11 @@ func TestCopyProjectErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{}); !errors.Is(err, ErrNoSourceCache) {
+	if _, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: false}); !errors.Is(err, ErrNoSourceCache) {
 		t.Fatalf("error = %v, want ErrNoSourceCache without tool caches", err)
 	}
 
-	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{ToolCaches: true})
+	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -472,7 +486,7 @@ func TestCopyProjectToolCaches(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
-	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{ToolCaches: true})
+	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -512,7 +526,7 @@ func TestCopyProjectToolCaches(t *testing.T) {
 	}
 
 	// A re-run converges: everything now exists, nothing is replaced.
-	again, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{ToolCaches: true})
+	again, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -524,7 +538,7 @@ func TestCopyProjectToolCaches(t *testing.T) {
 	if err := os.Remove(filepath.Join(dstCache, "tool2", "g.txt")); err != nil {
 		t.Fatal(err)
 	}
-	resume, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{ToolCaches: true})
+	resume, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +574,7 @@ func TestCopyProjectDryRunDecidesWithoutWriting(t *testing.T) {
 		t.Error("a dry run must not create the destination namespace")
 	}
 
-	actual, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{ToolCaches: true})
+	actual, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -595,7 +609,7 @@ func TestCopyProjectRefusesSymlinkedCacheRoot(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
-	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{ToolCaches: true})
+	report, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -637,7 +651,7 @@ func TestCopyProjectRefusesSymlinkedNamespace(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
-	if _, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{}); err == nil ||
+	if _, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: false}); err == nil ||
 		errors.Is(err, ErrNoSourceCache) || errors.Is(err, ErrSameProject) {
 		t.Fatalf("error = %v, want a refusal to write through the aliased namespace", err)
 	}
@@ -689,7 +703,7 @@ func TestCopyProjectDryRunMatchesAwkwardTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	actual, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{ToolCaches: true})
+	actual, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -727,7 +741,7 @@ func TestCopyProjectUnreadableSourceNamespace(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(srcNs, 0o755) })
 
-	if _, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{}); err == nil || errors.Is(err, ErrNoSourceCache) {
+	if _, err := CopyProject(cacheDir, srcRoot, dstRoot, CopyOptions{DryRun: false, ToolCaches: false}); err == nil || errors.Is(err, ErrNoSourceCache) {
 		t.Fatalf("error = %v, want a filesystem error rather than a missing cache", err)
 	}
 }

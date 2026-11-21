@@ -182,7 +182,7 @@ func Notes(run *report.Run, specs []Spec) []string {
 	at := func(op, tool string) *note {
 		k := key{op, tool}
 		if notes[k] == nil {
-			notes[k] = &note{}
+			notes[k] = &note{reasons: nil, omittedBy: nil, flaggedBy: nil, unflaggedBy: nil, tooManyResultIn: nil}
 		}
 		return notes[k]
 	}

@@ -63,7 +63,7 @@ func TestHelpSemanticContracts(t *testing.T) {
 
 func assertHelpContract(t *testing.T, want helpContract, args []string) {
 	t.Helper()
-	res := clitest.Run(t, clitest.RunOptions{}, args...)
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, args...)
 	if res.ExitCode != 0 || res.Stderr != "" {
 		t.Fatalf("%v: exit/stderr = %d/%q, want 0/empty", args, res.ExitCode, res.Stderr)
 	}
@@ -81,7 +81,7 @@ func assertHelpContract(t *testing.T, want helpContract, args []string) {
 
 func parseHelpContract(t *testing.T, text string) helpContract {
 	t.Helper()
-	contract := helpContract{Commands: []string{}, Flags: []string{}, GlobalFlags: []string{}}
+	contract := helpContract{Path: nil, Usage: "", Commands: []string{}, Flags: []string{}, GlobalFlags: []string{}}
 	section := ""
 	for line := range strings.SplitSeq(text, "\n") {
 		line = strings.TrimSpace(line)

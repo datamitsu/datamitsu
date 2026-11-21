@@ -85,6 +85,7 @@ func NewResolver() *Resolver {
 // than DATAMITSU_OCI_REGISTRY.
 func NewResolverForHost(host string) *Resolver {
 	return &Resolver{
+		bearerMu:     sync.Mutex{},
 		httpClient:   httpx.NewHardenedClient(defaultTimeout),
 		blobClient:   httpx.NewHardenedClient(0), // no overall deadline; see field doc
 		registry:     host,

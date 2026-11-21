@@ -16,6 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 
 	"go.uber.org/zap"
 )
@@ -33,24 +34,35 @@ func resultsProject(t *testing.T, failFast bool, script string, names ...string)
 		}
 		files = append(files, path)
 	}
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(c.Shutdown)
-	e := NewExecutor(root, false, failFast, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"tool": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", script, "tool"}},
-	}}, c)
+	e := NewExecutor(root, false, failFast, &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"tool": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", script, "tool"}},
+		},
+	}, c)
 	return e, c, root, files
 }
 
 func loopTask(root string, files []string) Task {
 	return Task{
-		ToolName:    "tool",
-		Operation:   config.OpLint,
-		OpConfig:    config.ToolOperation{App: "tool", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
-		Files:       files,
-		ProjectPath: root,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "tool",
+		Operation:    config.OpLint,
+		OpConfig:     config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "tool", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
+		Files:        files,
+		ProjectPath:  root,
 	}
 }
 
@@ -66,7 +78,7 @@ func TestPerFileProcessesCarryTheirOwnOutcome(t *testing.T) {
 	e, _, root, files := resultsProject(t, false, `case "$1" in *bad*) echo finding; exit 1;; esac`, "good.txt", "bad.txt")
 	e.SetParser(fileParser{findings: func(stdout string) []diagnostic.Diagnostic {
 		if stdout == "finding" {
-			return []diagnostic.Diagnostic{{Message: "m"}}
+			return []diagnostic.Diagnostic{{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m"}}
 		}
 		return nil
 	}})
@@ -147,9 +159,12 @@ func TestFileResultsOfAProcessThatCouldNotStart(t *testing.T) {
 	if err := os.WriteFile(file, []byte("a\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	e := NewExecutor(root, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"tool": {Type: "shell", Command: filepath.Join(root, "no-such-command")},
-	}}, nil)
+	e := NewExecutor(root, false, false, &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"tool": {Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: filepath.Join(root, "no-such-command")},
+		},
+	}, nil)
 	stdinMissing := loopTask(root, []string{filepath.Join(root, "missing.txt")})
 	stdinMissing.OpConfig.Input = config.ToolInputStdin
 
@@ -169,7 +184,7 @@ func TestFileResultsOfAProcessThatCouldNotStart(t *testing.T) {
 	}
 
 	t.Run("the command cannot be resolved", func(t *testing.T) {
-		broken := NewExecutor(root, false, false, &mockAppManager{err: os.ErrNotExist}, nil)
+		broken := NewExecutor(root, false, false, &mockAppManager{binaries: nil, commands: nil, err: os.ErrNotExist}, nil)
 		result := broken.executeTask(context.Background(), loopTask(root, []string{file}))
 		if got := fileStates(result); !equalStates(got, []FileState{FileSetupFailed}) {
 			t.Errorf("file states = %v", got)
@@ -286,10 +301,14 @@ func TestTaskIdentity(t *testing.T) {
 	if err := os.MkdirAll(pkg, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	plan := &ExecutionPlan{Groups: []TaskGroup{
-		{Priority: 1, Tasks: []Task{loopTask(root, files[:1])}},
-		{Priority: 2, Tasks: []Task{loopTask(root, files[1:]), loopTask(pkg, files[:1])}},
-	}}
+	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []TaskGroup{
+			{Priority: 1, Tasks: []Task{loopTask(root, files[:1])}},
+			{Priority: 2, Tasks: []Task{loopTask(root, files[1:]), loopTask(pkg, files[:1])}},
+		},
+	}
 
 	var mu sync.Mutex
 	started := map[string]string{}
@@ -418,7 +437,7 @@ func TestChunkWithoutFindingsKeepsItsOutput(t *testing.T) {
 	e, _, root, files := resultsProject(t, false, `case "$1" in *found*) echo finding; exit 1;; *) echo crashed; exit 2;; esac`, "found.txt", "crash.txt")
 	e.SetParser(fileParser{findings: func(stdout string) []diagnostic.Diagnostic {
 		if stdout == "finding" {
-			return []diagnostic.Diagnostic{{Message: "m"}}
+			return []diagnostic.Diagnostic{{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m"}}
 		}
 		return nil
 	}})
@@ -443,9 +462,12 @@ func TestDryRunSpawnsNothing(t *testing.T) {
 	for _, scope := range []config.ToolScope{config.ToolScopePerFile, config.ToolScopeRepository} {
 		t.Run(string(scope), func(t *testing.T) {
 			_, c, root, files := resultsProject(t, false, `exit 0`, "a.txt")
-			e := NewExecutor(root, true, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-				"tool": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "exit 0", "tool"}},
-			}}, c)
+			e := NewExecutor(root, true, false, &mockAppManager{
+				binaries: nil,
+				err:      nil, commands: map[string]*binmanager.CommandInfo{
+					"tool": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", "exit 0", "tool"}},
+				},
+			}, c)
 			task := loopTask(root, files)
 			task.OpConfig.Scope = scope
 			if scope == config.ToolScopeRepository {

@@ -32,8 +32,8 @@ func statusPlan(t *testing.T) sourcefarm.Plan {
 		Root:    "/repo",
 		FarmDir: "/cache/projects/abc/bin",
 		Entries: []sourcefarm.Entry{
-			{Name: "tflint", Kind: "binary", Strategy: sourcefarm.StrategyShim, Installed: false},
-			{Name: "tofu", Kind: "binary", Strategy: sourcefarm.StrategySymlink, Command: "/store/.bin/tofu/deadbeef", Installed: true},
+			{Provider: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tflint", Kind: "binary", Strategy: sourcefarm.StrategyShim, Installed: false},
+			{Provider: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Kind: "binary", Strategy: sourcefarm.StrategySymlink, Command: "/store/.bin/tofu/deadbeef", Installed: true},
 		},
 		Excluded: []sourcefarm.Excluded{
 			{Name: "echo", Reason: sourcefarm.ReasonShellApp},
@@ -230,7 +230,7 @@ func TestManifestStatusStates(t *testing.T) {
 	// A manifest from a format version this build does not know is stale, not
 	// an error: an old datamitsu meeting a newer farm must re-bake.
 	future := filepath.Join(dir, "future.json")
-	data, err := sourcefarm.Encode(sourcefarm.Manifest{FormatVersion: sourcefarm.ManifestFormatVersion + 1})
+	data, err := sourcefarm.Encode(sourcefarm.Manifest{Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil, FormatVersion: sourcefarm.ManifestFormatVersion + 1})
 	if err != nil {
 		t.Fatalf("encode manifest: %v", err)
 	}
@@ -267,7 +267,7 @@ func TestManifestStatusDemotesAFarmThatIsNotThere(t *testing.T) {
 	}
 	writeFarmEntries(t, farm, "tofu")
 
-	plan := sourcefarm.Plan{Root: root, FarmDir: farm, Entries: []sourcefarm.Entry{{Name: "tofu"}}}
+	plan := sourcefarm.Plan{Excluded: nil, Shadowed: nil, Root: root, FarmDir: farm, Entries: []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false, Name: "tofu"}}}
 	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchSet(sourcefarm.WatchPaths(root, nil)))
 	data, err := sourcefarm.Encode(m)
 	if err != nil {
@@ -307,7 +307,7 @@ func TestManifestStatusDemotesAFarmThatIsNotThere(t *testing.T) {
 // half of D4's mitigation a person actually reads.
 func TestRenderSourceStatusReportsEverything(t *testing.T) {
 	s := buildSourceStatus(statusPlan(t), gitRootTarget(t, "/repo"))
-	s.Manifest = SourceManifestStatus{Path: "/cache/projects/abc/manifest.json", Exists: true, Fresh: true, State: ManifestFresh}
+	s.Manifest = SourceManifestStatus{Error: "", Path: "/cache/projects/abc/manifest.json", Exists: true, Fresh: true, State: ManifestFresh}
 
 	var buf bytes.Buffer
 	if err := renderSourceStatus(&buf, s); err != nil {
@@ -345,7 +345,7 @@ func TestRenderSourceStatusReportsEverything(t *testing.T) {
 func TestRenderSourceStatusEmptyFarm(t *testing.T) {
 	isolateCache(t)
 	var buf bytes.Buffer
-	if err := renderSourceStatus(&buf, buildSourceStatus(sourcefarm.Plan{Root: "/repo", FarmDir: "/farm"}, gitRootTarget(t, "/repo"))); err != nil {
+	if err := renderSourceStatus(&buf, buildSourceStatus(sourcefarm.Plan{Entries: nil, Excluded: nil, Shadowed: nil, Root: "/repo", FarmDir: "/farm"}, gitRootTarget(t, "/repo"))); err != nil {
 		t.Fatalf("renderSourceStatus() error = %v", err)
 	}
 	if n := strings.Count(buf.String(), "  none\n"); n != 3 {

@@ -26,21 +26,51 @@ func binaryAppFixture(t *testing.T, name string) MapOfApps {
 	}
 	return MapOfApps{
 		name: App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					osType: {
 						archType: {
 							"unknown": BinaryOsArchInfo{
+								Auth:        nil,
+								BinaryPath:  nil,
+								ExtractDir:  false,
 								URL:         "http://127.0.0.1:1/never-reachable",
 								Hash:        "0000000000000000000000000000000000000000000000000000000000000000",
 								ContentType: BinContentTypeBinary,
 							},
 							"glibc": BinaryOsArchInfo{
+								Auth:        nil,
+								BinaryPath:  nil,
+								ExtractDir:  false,
 								URL:         "http://127.0.0.1:1/never-reachable",
 								Hash:        "0000000000000000000000000000000000000000000000000000000000000000",
 								ContentType: BinContentTypeBinary,
 							},
 							"musl": BinaryOsArchInfo{
+								Auth:        nil,
+								BinaryPath:  nil,
+								ExtractDir:  false,
 								URL:         "http://127.0.0.1:1/never-reachable",
 								Hash:        "0000000000000000000000000000000000000000000000000000000000000000",
 								ContentType: BinContentTypeBinary,
@@ -130,7 +160,7 @@ func TestResolveCommandInfo_ShellApp(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
 	bm := New(MapOfApps{
-		"echo": App{Shell: &AppConfigShell{Name: "echo", Args: []string{"-n"}}},
+		"echo": App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &AppConfigShell{Name: "echo", Args: []string{"-n"}}},
 	}, nil, nil)
 
 	info, installed, err := bm.ResolveCommandInfo("echo")
@@ -178,11 +208,17 @@ func TestResolveCommandInfo_MergesAppEnv(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
 	mock := &mockRuntimeAppManager{
+		getCommandInfoFunc: nil,
 		resolveCommandInfoFunc: func(appName string, _ App) (*CommandInfo, error) {
 			return &CommandInfo{
-				Type:    "uv",
-				Command: "/nonexistent/store/" + appName,
-				Env:     map[string]string{"UV_CACHE_DIR": "/reserved"},
+				Args:           nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "uv",
+				Command:        "/nonexistent/store/" + appName,
+				Env:            map[string]string{"UV_CACHE_DIR": "/reserved"},
 			}, nil
 		},
 		computeAppPathFunc: func(appName string, _ App) (string, error) {
@@ -192,8 +228,27 @@ func TestResolveCommandInfo_MergesAppEnv(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"yamllint": App{
-			Uv:  &AppConfigUV{PackageName: "yamllint", Version: "1.38.0"},
-			Env: map[string]string{"CUSTOM": "${APP_DIR}/x", "UV_CACHE_DIR": "/hijack"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Uv:                 &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.38.0"},
+			Env:                map[string]string{"CUSTOM": "${APP_DIR}/x", "UV_CACHE_DIR": "/hijack"},
 		},
 	}, nil, mock)
 
@@ -232,12 +287,14 @@ func TestResolveCommandInfo_RequiredPathsDecideInstalled(t *testing.T) {
 	}
 
 	mock := &mockRuntimeAppManager{
+		getCommandInfoFunc: nil,
+		computeAppPathFunc: nil,
 		resolveCommandInfoFunc: func(string, App) (*CommandInfo, error) {
-			return &CommandInfo{Type: "uv", Command: command, RequiredPaths: []string{interpreter}}, nil
+			return &CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, Type: "uv", Command: command, RequiredPaths: []string{interpreter}}, nil
 		},
 	}
 	bm := New(MapOfApps{
-		"yamllint": App{Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.38.0"}},
+		"yamllint": App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.38.0"}},
 	}, nil, mock)
 
 	if _, installed, err := bm.ResolveCommandInfo("yamllint"); err != nil {
@@ -262,7 +319,7 @@ func TestResolveCommandInfo_NoRuntimeManager(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
 	bm := New(MapOfApps{
-		"yamllint": App{Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.38.0"}},
+		"yamllint": App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.38.0"}},
 	}, nil, nil)
 
 	if _, _, err := bm.ResolveCommandInfo("yamllint"); err == nil {
@@ -277,12 +334,14 @@ func TestResolveCommandInfo_RuntimeResolverError(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
 	mock := &mockRuntimeAppManager{
+		getCommandInfoFunc: nil,
+		computeAppPathFunc: nil,
 		resolveCommandInfoFunc: func(string, App) (*CommandInfo, error) {
 			return nil, errors.New("boom")
 		},
 	}
 	bm := New(MapOfApps{
-		"yamllint": App{Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.38.0"}},
+		"yamllint": App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.38.0"}},
 	}, nil, mock)
 
 	if _, _, err := bm.ResolveCommandInfo("yamllint"); err == nil {
@@ -295,7 +354,7 @@ func TestResolveCommandInfo_RuntimeResolverError(t *testing.T) {
 func TestResolveCommandInfo_NoConfiguration(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 
-	bm := New(MapOfApps{"empty": App{}}, nil, nil)
+	bm := New(MapOfApps{"empty": App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil}}, nil, nil)
 
 	_, _, resolveErr := bm.ResolveCommandInfo("empty")
 	if resolveErr == nil {

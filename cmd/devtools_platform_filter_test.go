@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	zerovalue_sync "sync"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/releaseprovider"
 
@@ -22,16 +24,20 @@ func TestSelectedPlatformBinaries(t *testing.T) {
 	old := verifyExtractionFlag
 	verifyExtractionFlag = false
 	t.Cleanup(func() { verifyExtractionFlag = old })
-	release := &github.Release{TagName: "v1", Assets: []github.Asset{
-		pickAsset("tool-linux-amd64"), pickAsset("tool-darwin-arm64"),
-		{Name: "tool-windows-arm64.exe", BrowserDownloadURL: "https://example.test/no-digest"},
-	}}
+	release := &github.Release{
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false, TagName: "v1", Assets: []github.Asset{
+			pickAsset("tool-linux-amd64"), pickAsset("tool-darwin-arm64"),
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "tool-windows-arm64.exe", BrowserDownloadURL: "https://example.test/no-digest"},
+		},
+	}
 	for _, selection := range [][]string{
 		{"darwin/arm64"},
 		{"linux/amd64/musl"},
 		{"linux/amd64/glibc", "linux/amd64/musl", "darwin/arm64", "darwin/arm64"},
 	} {
-		state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: selection}
+		state := &appstate.State{Apps: nil, Binaries: nil, Sources: map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}}, Platforms: selection}
 		entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", state)
 		if err != nil {
 			t.Fatal(err)
@@ -47,7 +53,7 @@ func TestSelectedPlatformBinaries(t *testing.T) {
 		}
 	}
 	for _, selection := range [][]string{{"windows/arm64"}, {"freebsd/arm64"}} {
-		entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: selection})
+		entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Apps: nil, Binaries: nil, Sources: map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}}, Platforms: selection})
 		if err == nil || entry != nil {
 			t.Fatalf("selection %v must fail without partial entry", selection)
 		}
@@ -65,7 +71,7 @@ func TestPullGithubPlatformTransitions(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		if strings.Contains(r.URL.Path, "/releases/") {
-			_ = json.NewEncoder(w).Encode(&github.Release{TagName: "v1", Assets: []github.Asset{pickAsset("tool-linux-amd64"), pickAsset("tool-darwin-arm64")}})
+			_ = json.NewEncoder(w).Encode(&github.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1", Assets: []github.Asset{pickAsset("tool-linux-amd64"), pickAsset("tool-darwin-arm64")}})
 		} else {
 			_ = json.NewEncoder(w).Encode(map[string]any{"description": "tool", "private": false})
 		}
@@ -73,7 +79,7 @@ func TestPullGithubPlatformTransitions(t *testing.T) {
 	defer srv.Close()
 	githubBaseURL = srv.URL
 	path := filepath.Join(t.TempDir(), "apps.json")
-	state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Apps: map[string]*appstate.AppMetadata{"tool": {Source: "github", Repository: "o/r", Tag: "v1"}}, Binaries: map[string]*appstate.BinariesEntry{}}
+	state := &appstate.State{Platforms: nil, Sources: map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}}, Apps: map[string]*appstate.AppMetadata{"tool": {Hashes: nil, Checksums: nil, Source: "github", Repository: "o/r", Tag: "v1"}}, Binaries: map[string]*appstate.BinariesEntry{}}
 	run := func() {
 		t.Helper()
 		if err := appstate.Save(path, state); err != nil {
@@ -123,9 +129,9 @@ func TestPlatformPruningSurvivesPullFailureAndSkip(t *testing.T) {
 	githubBaseURL = srv.URL
 	for _, scenario := range []string{"failure", "skip", "no-apps"} {
 		t.Run(scenario, func(t *testing.T) {
-			metadata := &appstate.AppMetadata{Source: "github", Repository: "o/r", Tag: "v1"}
-			state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: []string{"darwin/arm64"}, Apps: map[string]*appstate.AppMetadata{}, Binaries: map[string]*appstate.BinariesEntry{
-				"tool": {ConfigHash: "old", Binaries: binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": {URL: "old"}}}, "darwin": {"arm64": {"unknown": {URL: "keep"}}}}},
+			metadata := &appstate.AppMetadata{Hashes: nil, Checksums: nil, Source: "github", Repository: "o/r", Tag: "v1"}
+			state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}}, Platforms: []string{"darwin/arm64"}, Apps: map[string]*appstate.AppMetadata{}, Binaries: map[string]*appstate.BinariesEntry{
+				"tool": {Source: nil, Description: "", ConfigHash: "old", Binaries: binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": {Auth: nil, Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "old"}}}, "darwin": {"arm64": {"unknown": {Auth: nil, Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "keep"}}}}},
 			}}
 			if scenario != "no-apps" {
 				state.Apps["tool"] = metadata
@@ -188,11 +194,15 @@ func TestSelectedPlatformsOnlyDownloadChosenAssets(t *testing.T) {
 		_, _ = w.Write(archive)
 	}))
 	defer assets.Close()
-	release := &github.Release{TagName: "v1", Assets: []github.Asset{
-		{Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: assets.URL + "/tool-linux-amd64.tar.gz", Digest: "sha256:" + vcSHA256Hex(archive)},
-		{Name: "tool-darwin-arm64.tar.gz", BrowserDownloadURL: assets.URL + "/tool-darwin-arm64.tar.gz", Digest: "sha256:" + vcSHA256Hex(archive)},
-	}}
-	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: []string{"linux/amd64/glibc", "linux/amd64/musl"}})
+	release := &github.Release{
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false, TagName: "v1", Assets: []github.Asset{
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: assets.URL + "/tool-linux-amd64.tar.gz", Digest: "sha256:" + vcSHA256Hex(archive)},
+			{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-darwin-arm64.tar.gz", BrowserDownloadURL: assets.URL + "/tool-darwin-arm64.tar.gz", Digest: "sha256:" + vcSHA256Hex(archive)},
+		},
+	}
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Apps: nil, Binaries: nil, Sources: map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}}, Platforms: []string{"linux/amd64/glibc", "linux/amd64/musl"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,15 +221,18 @@ func TestRemovingPlatformsAfterFailedPullRestoresDefault(t *testing.T) {
 	oldUpdate, oldURL := updateFlag, githubBaseURL
 	updateFlag = false
 	t.Cleanup(func() { updateFlag, githubBaseURL = oldUpdate, oldURL })
-	api := &fakeGitHub{attempts: map[string]int{}, handle: func(_ string, _ int, w http.ResponseWriter) { releaseJSON(w, "v1", true) }}
+	api := &fakeGitHub{mu: zerovalue_sync.Mutex{}, attempts: map[string]int{}, handle: func(_ string, _ int, w http.ResponseWriter) { releaseJSON(w, "v1", true) }}
 	srv := httptest.NewServer(api)
 	defer srv.Close()
 	githubBaseURL = srv.URL
-	metadata := &appstate.AppMetadata{Source: "github", Repository: "o/tool", Tag: "v1"}
-	state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: []string{"darwin/arm64"}, Apps: map[string]*appstate.AppMetadata{"tool": metadata}, Binaries: map[string]*appstate.BinariesEntry{
-		"tool": {ConfigHash: appstate.ComputeConfigHash(metadata, nil), Binaries: binmanager.MapOfBinaries{
-			"linux": {"amd64": {"glibc": {URL: "old"}}}, "darwin": {"arm64": {"unknown": {URL: "keep"}}},
-		}},
+	metadata := &appstate.AppMetadata{Hashes: nil, Checksums: nil, Source: "github", Repository: "o/tool", Tag: "v1"}
+	state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}}, Platforms: []string{"darwin/arm64"}, Apps: map[string]*appstate.AppMetadata{"tool": metadata}, Binaries: map[string]*appstate.BinariesEntry{
+		"tool": {
+			Source:      nil,
+			Description: "", ConfigHash: appstate.ComputeConfigHash(metadata, nil), Binaries: binmanager.MapOfBinaries{
+				"linux": {"amd64": {"glibc": {Auth: nil, Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "old"}}}, "darwin": {"arm64": {"unknown": {Auth: nil, Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "keep"}}},
+			},
+		},
 	}}
 	path := filepath.Join(t.TempDir(), "apps.json")
 	if err := appstate.Save(path, state); err != nil {
@@ -258,15 +271,21 @@ func TestPlatformPruningPreservesBinaryPathHistory(t *testing.T) {
 	oldUpdate, oldVerify, oldURL := updateFlag, verifyExtractionFlag, githubBaseURL
 	updateFlag, verifyExtractionFlag = false, false
 	t.Cleanup(func() { updateFlag, verifyExtractionFlag, githubBaseURL = oldUpdate, oldVerify, oldURL })
-	api := &fakeGitHub{attempts: map[string]int{}, handle: func(_ string, _ int, w http.ResponseWriter) { releaseJSON(w, "v1", true) }}
+	api := &fakeGitHub{mu: zerovalue_sync.Mutex{}, attempts: map[string]int{}, handle: func(_ string, _ int, w http.ResponseWriter) { releaseJSON(w, "v1", true) }}
 	srv := httptest.NewServer(api)
 	defer srv.Close()
 	githubBaseURL = srv.URL
 	binaryPath := "custom/bin/tool"
-	state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: []string{"linux/amd64/musl"}, Apps: map[string]*appstate.AppMetadata{"tool": {Source: "github", Repository: "o/tool", Tag: "v1"}}, Binaries: map[string]*appstate.BinariesEntry{
-		"tool": {Binaries: binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": {
-			URL: "https://example.test/v1/tool-linux-amd64.tar.gz", Hash: testHash1, ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &binaryPath,
-		}}}}},
+	state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}}, Platforms: []string{"linux/amd64/musl"}, Apps: map[string]*appstate.AppMetadata{"tool": {Hashes: nil, Checksums: nil, Source: "github", Repository: "o/tool", Tag: "v1"}}, Binaries: map[string]*appstate.BinariesEntry{
+		"tool": {
+			Source:      nil,
+			ConfigHash:  "",
+			Description: "", Binaries: binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": {
+				Auth:       nil,
+				ExtractDir: false,
+				URL:        "https://example.test/v1/tool-linux-amd64.tar.gz", Hash: testHash1, ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &binaryPath,
+			}}}},
+		},
 	}}
 	path := filepath.Join(t.TempDir(), "apps.json")
 	if err := appstate.Save(path, state); err != nil {
@@ -289,17 +308,21 @@ func TestPlatformSelectionFiltersAvailableTargets(t *testing.T) {
 	old := verifyExtractionFlag
 	verifyExtractionFlag = false
 	t.Cleanup(func() { verifyExtractionFlag = old })
-	release := &github.Release{TagName: "v1", Assets: []github.Asset{
-		pickAsset("tool-aarch64-apple-darwin.tar.xz"),
-		pickAsset("tool-x86_64-unknown-linux-musl.tar.xz"),
-	}}
+	release := &github.Release{
+		PublishedAt: zerovalue_time.Time{},
+		Prerelease:  false,
+		Draft:       false, TagName: "v1", Assets: []github.Asset{
+			pickAsset("tool-aarch64-apple-darwin.tar.xz"),
+			pickAsset("tool-x86_64-unknown-linux-musl.tar.xz"),
+		},
+	}
 	for _, selection := range [][]string{
 		{"darwin/arm64", "linux/amd64/glibc"},
 		{"darwin/arm64", "linux/amd64/glibc", "linux/amd64/musl"},
 		{"linux/amd64/glibc", "linux/amd64/musl"},
 	} {
 		t.Run(strings.Join(selection, ","), func(t *testing.T) {
-			entry, err := buildBinariesForApp(context.Background(), "tool", release, "selected", &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: selection})
+			entry, err := buildBinariesForApp(context.Background(), "tool", release, "selected", &appstate.State{Apps: nil, Binaries: nil, Sources: map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}}, Platforms: selection})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -319,7 +342,7 @@ func TestPlatformSelectionFiltersAvailableTargets(t *testing.T) {
 			}
 		})
 	}
-	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Platforms: []string{"linux/amd64/glibc"}})
+	entry, err := buildBinariesForApp(context.Background(), "tool", release, "hash", &appstate.State{Apps: nil, Binaries: nil, Sources: map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}}, Platforms: []string{"linux/amd64/glibc"}})
 	if err == nil || entry != nil {
 		t.Fatal("no available selected platform must fail")
 	}

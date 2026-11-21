@@ -9,6 +9,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 func newTestExecutor(rootPath string) *Executor {
@@ -66,25 +67,25 @@ func TestExecutorFormatCommandString(t *testing.T) {
 	}{
 		{
 			name:    "binary type ignores cmdInfo.Args",
-			cmdInfo: &binmanager.CommandInfo{Type: "binary", Command: "gofmt", Args: []string{"-l"}},
+			cmdInfo: &binmanager.CommandInfo{Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "gofmt", Args: []string{"-l"}},
 			args:    []string{"-w", "."},
 			want:    "gofmt -w .",
 		},
 		{
 			name:    "shell type prepends cmdInfo.Args",
-			cmdInfo: &binmanager.CommandInfo{Type: "shell", Command: "sh", Args: []string{"-c", "echo"}},
+			cmdInfo: &binmanager.CommandInfo{Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "sh", Args: []string{"-c", "echo"}},
 			args:    []string{"hi"},
 			want:    "sh -c echo hi",
 		},
 		{
 			name:    "node type prepends cmdInfo.Args",
-			cmdInfo: &binmanager.CommandInfo{Type: "node", Command: "node", Args: []string{"cli.js"}},
+			cmdInfo: &binmanager.CommandInfo{Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "node", Command: "node", Args: []string{"cli.js"}},
 			args:    []string{"--fix"},
 			want:    "node cli.js --fix",
 		},
 		{
 			name:    "bun type prepends cmdInfo.Args",
-			cmdInfo: &binmanager.CommandInfo{Type: "bun", Command: "bun", Args: []string{"--no-install", "cli.js"}},
+			cmdInfo: &binmanager.CommandInfo{Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "bun", Command: "bun", Args: []string{"--no-install", "cli.js"}},
 			args:    []string{"--fix"},
 			want:    "bun --no-install cli.js --fix",
 		},
@@ -100,7 +101,7 @@ func TestExecutorFormatCommandString(t *testing.T) {
 
 func TestExecutorChunkFilesByCommandLength(t *testing.T) {
 	e := newTestExecutor("/repo")
-	cmdInfo := &binmanager.CommandInfo{Type: "binary", Command: "tool"}
+	cmdInfo := &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "tool"}
 
 	t.Run("empty files yields nil", func(t *testing.T) {
 		if got := e.chunkFilesByCommandLength(nil, []string{"--check"}, cmdInfo); got != nil {
@@ -141,9 +142,19 @@ func TestExecutorChunkFilesByCommandLength(t *testing.T) {
 func TestExecutorFilterFilesByCacheNilCache(t *testing.T) {
 	e := newTestExecutor("/repo")
 	task := Task{
-		ToolName: "gofmt",
-		Files:    []string{"/repo/a.go", "/repo/b.go"},
-		OpConfig: config.ToolOperation{Scope: config.ToolScopePerFile},
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Operation:    "",
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "gofmt",
+		Files:        []string{"/repo/a.go", "/repo/b.go"},
+		OpConfig:     config.ToolOperation{App: "", Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile},
 	}
 	// With no cache, every file passes through unchanged.
 	got, _ := e.filterFilesByCache(task)
@@ -182,7 +193,7 @@ func TestGetExitCode(t *testing.T) {
 func TestExecutorFormatCommandStringUnknownTypeFallback(t *testing.T) {
 	e := newTestExecutor("/repo")
 	// An empty/unknown type hits the default branch (args only, no cmdInfo.Args).
-	cmdInfo := &binmanager.CommandInfo{Command: "x", Args: []string{"ignored"}}
+	cmdInfo := &binmanager.CommandInfo{Type: "", Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Command: "x", Args: []string{"ignored"}}
 	got := e.formatCommandString(cmdInfo, []string{"-a", "-b"})
 	if !strings.Contains(got, "x -a -b") || strings.Contains(got, "ignored") {
 		t.Errorf("default-branch format = %q, want 'x -a -b' without cmdInfo.Args", got)

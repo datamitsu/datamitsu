@@ -89,7 +89,7 @@ type Facts struct {
 // FactsFrom projects the JS-visible fields out of collected facts.
 func FactsFrom(f *facts.Facts) Facts {
 	if f == nil {
-		return Facts{}
+		return Facts{BinaryCommand: "", BinaryPath: "", PackageName: "", Version: "", OS: "", Arch: "", Libc: "", IsInGitRepo: false, IsMonorepo: false}
 	}
 	return Facts{
 		BinaryCommand: f.BinaryCommand,
@@ -244,12 +244,12 @@ func Key(in Inputs) string {
 func HashChainFile(path string) ChainFile {
 	f, err := os.Open(path)
 	if err != nil {
-		return ChainFile{Path: path, Exists: false}
+		return ChainFile{ContentHash: "", Path: path, Exists: false}
 	}
 	defer func() { _ = f.Close() }()
 	d, err := digest.XXH3Reader(f)
 	if err != nil {
-		return ChainFile{Path: path, Exists: false}
+		return ChainFile{ContentHash: "", Path: path, Exists: false}
 	}
 	return ChainFile{Path: path, ContentHash: d.Hex(), Exists: true}
 }

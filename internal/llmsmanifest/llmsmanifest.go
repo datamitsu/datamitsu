@@ -97,7 +97,7 @@ func (m *Manifest) Find(slug string) (Page, bool) {
 			return p, true
 		}
 	}
-	return Page{}, false
+	return Page{Slug: "", Aliases: nil, URL: "", Title: "", Description: "", Bytes: 0, ContentHash: ""}, false
 }
 
 // Validate checks the structural invariants every snapshot must satisfy,

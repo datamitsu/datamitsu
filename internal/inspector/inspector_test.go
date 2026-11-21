@@ -17,10 +17,22 @@ import (
 
 func TestSnapshotPortableMetadata(t *testing.T) {
 	cfg := &config.Config{
-		Apps:           binmanager.MapOfApps{"z": {Node: &binmanager.AppConfigNode{Version: "1.2.3", LockFile: "private-lock"}, Env: map[string]string{"TOKEN": "secret-env"}, Files: map[string]string{"private": "secret-file"}}, "a": {Shell: &binmanager.AppConfigShell{Name: "echo"}, DependsOn: edges("z")}},
-		Tools:          config.MapOfTools{"check": {Name: "Check", Skip: true, SkipReason: "CI only", Operations: map[config.OperationType]config.ToolOperation{config.OpLint: {App: "z", Args: []string{"secret-argument"}, Env: map[string]string{"TOKEN": "secret-operation"}, Globs: []string{"**/*.ts"}, ExcludeGlobs: []string{"**/vendor/**"}, Priority: 9}}}},
-		ManagedConfigs: config.MapOfManagedConfigs{"tool.js": {Tools: []string{"check"}, DeleteOnly: true, Content: "secret-content"}},
-		ProjectTypes:   config.MapOfProjectTypes{"typescript": {Markers: []string{"tsconfig.json"}}},
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		EjectConfigs:   nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
+		Apps:           binmanager.MapOfApps{"z": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, RuntimeEnv: nil, Caches: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", BinPath: "", Runtime: "", Dependencies: nil, Version: "1.2.3", LockFile: "private-lock"}, Env: map[string]string{"TOKEN": "secret-env"}, Files: map[string]string{"private": "secret-file"}}, "a": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "echo"}, DependsOn: edges("z")}},
+		Tools:          config.MapOfTools{"check": {ProjectTypes: nil, OutputParser: nil, Name: "Check", Skip: true, SkipReason: "CI only", Operations: map[config.OperationType]config.ToolOperation{config.OpLint: {Scope: "", Arity: "", Granularity: "", Cache: nil, InvalidateOn: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "z", Args: []string{"secret-argument"}, Env: map[string]string{"TOKEN": "secret-operation"}, Globs: []string{"**/*.ts"}, ExcludeGlobs: []string{"**/vendor/**"}, Priority: 9}}}},
+		ManagedConfigs: config.MapOfManagedConfigs{"tool.js": {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Tools: []string{"check"}, DeleteOnly: true, Content: "secret-content"}},
+		ProjectTypes:   config.MapOfProjectTypes{"typescript": {Description: "", Markers: []string{"tsconfig.json"}}},
 	}
 	m := Snapshot(cfg, "test")
 	if m.Apps[0].Name != "a" || m.Apps[1].Runtime != "node" || m.Apps[1].Version != "1.2.3" {
@@ -49,19 +61,35 @@ func TestSnapshotPortableMetadata(t *testing.T) {
 }
 
 func TestSnapshotCarriesTheConfigurationName(t *testing.T) {
-	if got := Snapshot(&config.Config{}, "test").Name; got != config.DefaultName {
+	if got := Snapshot(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, "test").Name; got != config.DefaultName {
 		t.Fatalf("unnamed config exported as %q, want %q", got, config.DefaultName)
 	}
-	if got := Snapshot(&config.Config{Name: "@acme/config"}, "test").Name; got != "@acme/config" {
+	if got := Snapshot(&config.Config{Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Name: "@acme/config"}, "test").Name; got != "@acme/config" {
 		t.Fatalf("named config exported as %q", got)
 	}
 }
 
 func TestSnapshotReportsPlacementOfEjectableConfigsOnly(t *testing.T) {
-	cfg := &config.Config{ManagedConfigs: config.MapOfManagedConfigs{
-		".gitleaks.toml": {Ejectable: true, Placement: config.PlacementInternal, Render: &config.ManagedConfigRender{Content: "secret-render"}},
-		"lefthook.yaml":  {Placement: config.PlacementRepo},
-	}}
+	cfg := &config.Config{
+		Name:          "",
+		Version:       "",
+		Apps:          nil,
+		Bundles:       nil,
+		Runtimes:      nil,
+		EjectConfigs:  nil,
+		ProjectTypes:  nil,
+		Tools:         nil,
+		Execution:     nil,
+		InitCommands:  nil,
+		IgnoreRules:   nil,
+		SharedStorage: nil,
+		OCI:           nil,
+		Parsers:       nil,
+		Lsp:           nil, ManagedConfigs: config.MapOfManagedConfigs{
+			".gitleaks.toml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Content: nil, Ejectable: true, Placement: config.PlacementInternal, Render: &config.ManagedConfigRender{Hash: "", Content: "secret-render"}},
+			"lefthook.yaml":  {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Render: nil, Content: nil, Placement: config.PlacementRepo},
+		},
+	}
 	m := Snapshot(cfg, "test")
 	if got := m.ManagedConfigs[0]; !got.Ejectable || got.Placement != "internal" {
 		t.Errorf("ejectable entry = %+v", got)
@@ -79,9 +107,9 @@ func TestSnapshotReportsPlacementOfEjectableConfigsOnly(t *testing.T) {
 }
 
 func TestRenderEscapesScriptTermination(t *testing.T) {
-	m := Snapshot(&config.Config{}, "test")
+	m := Snapshot(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, "test")
 	hostile := "</script><script>globalThis.pwned=true</script>\u2028&<>"
-	m.Tools = append(m.Tools, Tool{ID: "hostile", Name: hostile})
+	m.Tools = append(m.Tools, Tool{ProjectTypes: nil, Skipped: false, SkipReason: "", Operations: nil, ID: "hostile", Name: hostile})
 	theme, err := DefaultTheme()
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +178,7 @@ func TestServeCancellation(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- Serve(ctx, listener, []byte("snapshot")) }()
-	client := &http.Client{Timeout: time.Second}
+	client := &http.Client{Transport: nil, CheckRedirect: nil, Jar: nil, Timeout: time.Second}
 	response, err := client.Get("http://" + listener.Addr().String() + "/")
 	if err != nil {
 		t.Fatal(err)

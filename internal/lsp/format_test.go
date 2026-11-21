@@ -52,23 +52,35 @@ func (r *recordingSink) ofType(typ uievent.Type) []uievent.Event {
 
 func captureEvents(t *testing.T) *recordingSink {
 	t.Helper()
-	sink := &recordingSink{}
+	sink := &recordingSink{mu: sync.Mutex{}, events: nil}
 	ui.SetEventSink(sink, true)
 	t.Cleanup(func() { ui.SetEventSink(nil, false) })
 	return sink
 }
 
 func shellApp(script string) binmanager.App {
-	return binmanager.App{Shell: &binmanager.AppConfigShell{Name: "sh", Args: []string{"-c", script, "sh"}}}
+	return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Name: "sh", Args: []string{"-c", script, "sh"}}}
 }
 
 func fixOp(app string, priority int) map[config.OperationType]config.ToolOperation {
 	return map[config.OperationType]config.ToolOperation{config.OpFix: {
-		App:      app,
-		Scope:    config.ToolScopePerFile,
-		Args:     []string{"{file}"},
-		Globs:    []string{"**/*.txt"},
-		Priority: priority,
+		Arity:             "",
+		Granularity:       "",
+		ExcludeGlobs:      nil,
+		Cache:             nil,
+		InvalidateOn:      nil,
+		Env:               nil,
+		InheritEnv:        nil,
+		FailOn:            "",
+		Input:             "",
+		LSP:               nil,
+		Output:            "",
+		ManagedConfigRefs: nil,
+		App:               app,
+		Scope:             config.ToolScopePerFile,
+		Args:              []string{"{file}"},
+		Globs:             []string{"**/*.txt"},
+		Priority:          priority,
 	}}
 }
 
@@ -81,6 +93,20 @@ func formatConfig() *config.Config {
 	vetoed[config.OpFix] = op
 
 	return &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Apps: binmanager.MapOfApps{
 			"append-1": shellApp(`printf 1 >> "$1"`),
 			"append-2": shellApp(`printf 2 >> "$1"`),
@@ -88,10 +114,10 @@ func formatConfig() *config.Config {
 			"boom":     shellApp(`echo "cannot format $1" >&2; exit 3`),
 		},
 		Tools: config.MapOfTools{
-			"first":   {Name: "first", Operations: fixOp("append-1", 0)},
-			"failing": {Name: "failing", Operations: fixOp("boom", 1)},
-			"vetoed":  {Name: "vetoed", Operations: vetoed},
-			"last":    {Name: "last", Operations: fixOp("append-3", 2)},
+			"first":   {ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Name: "first", Operations: fixOp("append-1", 0)},
+			"failing": {ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Name: "failing", Operations: fixOp("boom", 1)},
+			"vetoed":  {ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Name: "vetoed", Operations: vetoed},
+			"last":    {ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Name: "last", Operations: fixOp("append-3", 2)},
 		},
 	}
 }
@@ -238,11 +264,28 @@ func TestFormatFileWatchdog(t *testing.T) {
 // project marked by marker.mod, under the project's own fix policy.
 func unitFixConfig(project config.WidenTo, globs []string) *config.Config {
 	return &config.Config{
-		Apps:         binmanager.MapOfApps{"append-u": shellApp(`printf U >> a.txt`)},
-		ProjectTypes: config.MapOfProjectTypes{"marked": {Markers: []string{"**/marker.mod"}}},
-		Tools: config.MapOfTools{"unit-fmt": {Name: "unit-fmt", Operations: map[config.OperationType]config.ToolOperation{
-			config.OpFix: {App: "append-u", Scope: config.ToolScopePerProject, Globs: globs},
-		}}},
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
+		Apps:           binmanager.MapOfApps{"append-u": shellApp(`printf U >> a.txt`)},
+		ProjectTypes:   config.MapOfProjectTypes{"marked": {Description: "", Markers: []string{"**/marker.mod"}}},
+		Tools: config.MapOfTools{"unit-fmt": {
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil, Name: "unit-fmt", Operations: map[config.OperationType]config.ToolOperation{
+				config.OpFix: {Args: nil, Arity: "", Granularity: "", ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "append-u", Scope: config.ToolScopePerProject, Globs: globs},
+			},
+		}},
 		Execution: &config.Execution{WidenTo: map[config.OperationType]config.WidenTo{config.OpFix: project}},
 	}
 }
@@ -262,14 +305,15 @@ func TestFormatFileReportsWhatTheProjectPolicyLeavesOut(t *testing.T) {
 		wantRuns   int
 		wantReason string
 	}{
-		{name: "project target", project: config.WidenToTarget, globs: txtGlobs, wantFile: "x", wantReason: reasonProjectTarget},
+		{tools: nil, wantRuns: 0, name: "project target", project: config.WidenToTarget, globs: txtGlobs, wantFile: "x", wantReason: reasonProjectTarget},
 		{
-			name: "project target beats the user's opt-in", project: config.WidenToTarget, globs: txtGlobs,
+			wantRuns: 0,
+			name:     "project target beats the user's opt-in", project: config.WidenToTarget, globs: txtGlobs,
 			tools: map[string]bool{"unit-fmt": true}, wantFile: "x", wantReason: reasonProjectTarget,
 		},
-		{name: "no globs under project target", project: config.WidenToTarget, wantFile: "x", wantReason: reasonNoGlobs},
-		{name: "project unit runs it", project: config.WidenToUnit, globs: txtGlobs, wantFile: "xU", wantRuns: 1},
-		{name: "project repo still stops at the unit", project: config.WidenToRepo, globs: txtGlobs, wantFile: "xU", wantRuns: 1},
+		{globs: nil, tools: nil, wantRuns: 0, name: "no globs under project target", project: config.WidenToTarget, wantFile: "x", wantReason: reasonNoGlobs},
+		{tools: nil, wantReason: "", name: "project unit runs it", project: config.WidenToUnit, globs: txtGlobs, wantFile: "xU", wantRuns: 1},
+		{tools: nil, wantReason: "", name: "project repo still stops at the unit", project: config.WidenToRepo, globs: txtGlobs, wantFile: "xU", wantRuns: 1},
 	}
 
 	for _, tt := range tests {
@@ -291,7 +335,7 @@ func TestFormatFileReportsWhatTheProjectPolicyLeavesOut(t *testing.T) {
 				}
 			}
 			s := newConfiguredServer(t, unitFixConfig(tt.project, tt.globs), root)
-			s.policy = formatPolicy{WidenTo: config.WidenToUnit, Tools: tt.tools}
+			s.policy = formatPolicy{TimeoutMs: 0, WidenTo: config.WidenToUnit, Tools: tt.tools}
 
 			if _, err := s.FormatFile(context.Background(), file, []byte("x")); err != nil {
 				t.Fatalf("FormatFile: %v", err)

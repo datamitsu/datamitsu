@@ -4,7 +4,7 @@
 # digest pins the image, and embedded.lock repeats both so a build can check
 # that the three agree.
 ARG RUST_VERSION
-FROM rust:${RUST_VERSION}-slim@sha256:7eab7ce19273ce785e0ca7578bdf7bc1fcbae621775a8197379a04c9f6e03cd5
+FROM rust:${RUST_VERSION}-slim@sha256:4b68057dc8c103af4fa66b5cd29f21b18afec79fadfcd8fb91e295e939f0690c
 ARG RUST_VERSION
 
 # The digest pins the image, not the release its tag names: an image of

@@ -54,7 +54,7 @@ func (p *ejectProject) setEject(list string) {
 }
 
 func (p *ejectProject) run(args ...string) clitest.Result {
-	return clitest.Run(p.t, clitest.RunOptions{Dir: p.Dir}, args...)
+	return clitest.Run(p.t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, args...)
 }
 
 func (p *ejectProject) mustRun(args ...string) clitest.Result {

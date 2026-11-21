@@ -20,10 +20,10 @@ func TestExpectedSubtreesAppDependencies(t *testing.T) {
 			root.DependsOn = edges("middle")
 			if kind == "shell" {
 				root.Binary = nil
-				root.Shell = &binmanager.AppConfigShell{Name: "echo"}
+				root.Shell = &binmanager.AppConfigShell{Args: nil, Name: "echo"}
 			}
 			cfg.Apps["root"] = root
-			cfg.Apps["middle"] = binmanager.App{Binary: binaryReVerifyConfig(t).Apps["tool"].Binary, DependsOn: edges("mytool")}
+			cfg.Apps["middle"] = binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: binaryReVerifyConfig(t).Apps["tool"].Binary, DependsOn: edges("mytool")}
 			dep := cfg.Apps["mytool"]
 			dep.Required = false
 			dep.Lazy = true
@@ -48,7 +48,7 @@ func TestExpectedSubtreesAppDependencies(t *testing.T) {
 func TestSeedAppDependencyClosure(t *testing.T) {
 	storeRoot := testStore(t)
 	cfg, expected := testUVConfig(t)
-	cfg.Apps["root"] = binmanager.App{Shell: &binmanager.AppConfigShell{Name: "echo"}, DependsOn: edges("mytool")}
+	cfg.Apps["root"] = binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "echo"}, DependsOn: edges("mytool")}
 	src := newFakeSource()
 	layers := make([]ocispec.Descriptor, 0, len(expected))
 	for subtree := range expected {
@@ -65,7 +65,7 @@ func TestSeedAppDependencyClosure(t *testing.T) {
 		layers = append(layers, src.addLayer(layer, subtree))
 	}
 	digest := src.addManifest(t, layers, nil)
-	if _, err := seedFromChanged(t.Context(), cfg, src, "test/bundle", digest, nil, Options{Needed: []string{"root"}}); err != nil {
+	if _, err := seedFromChanged(t.Context(), cfg, src, "test/bundle", digest, nil, Options{NeededRuntimes: nil, RequireRequested: false, Needed: []string{"root"}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := expectedSubtrees(cfg, storeRoot, []string{"root"}, nil); !maps.Equal(got, expected) {

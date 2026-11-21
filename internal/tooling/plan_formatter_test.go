@@ -7,6 +7,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 func TestMakeRelativePath(t *testing.T) {
@@ -40,12 +41,12 @@ func TestBuildCommandTemplate(t *testing.T) {
 	}{
 		{
 			name: "app with args",
-			task: Task{OpConfig: config.ToolOperation{App: "eslint", Args: []string{"--fix", "."}}},
+			task: Task{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", OpConfig: config.ToolOperation{Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "eslint", Args: []string{"--fix", "."}}},
 			want: "eslint --fix .",
 		},
 		{
 			name: "app without args",
-			task: Task{OpConfig: config.ToolOperation{App: "gofmt"}},
+			task: Task{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", OpConfig: config.ToolOperation{Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "gofmt"}},
 			want: "gofmt",
 		},
 	}
@@ -60,13 +61,13 @@ func TestBuildCommandTemplate(t *testing.T) {
 
 func TestGetWorkingDirForTask(t *testing.T) {
 	t.Run("uses ProjectPath when set", func(t *testing.T) {
-		task := Task{ProjectPath: "/repo/pkg"}
+		task := Task{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ProjectPath: "/repo/pkg"}
 		if got := getWorkingDirForTask(task, "/repo"); got != "/repo/pkg" {
 			t.Errorf("getWorkingDirForTask() = %q, want %q", got, "/repo/pkg")
 		}
 	})
 	t.Run("falls back to rootPath when empty", func(t *testing.T) {
-		task := Task{}
+		task := Task{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: ""}
 		if got := getWorkingDirForTask(task, "/repo"); got != "/repo" {
 			t.Errorf("getWorkingDirForTask() = %q, want %q", got, "/repo")
 		}
@@ -77,36 +78,85 @@ func TestGetWorkingDirForTask(t *testing.T) {
 // distinct files don't overlap (HasOverlap short-circuits on per-file + 1 file).
 func perFileTask(name, file string) Task {
 	return Task{
-		ToolName: name,
-		Files:    []string{file},
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Operation:    "",
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     name,
+		Files:        []string{file},
 		OpConfig: config.ToolOperation{
-			App:   name,
-			Args:  []string{"--check"},
-			Scope: config.ToolScopePerFile,
-			Globs: []string{"**/*.go"},
+			Arity:             "",
+			Granularity:       "",
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               name,
+			Args:              []string{"--check"},
+			Scope:             config.ToolScopePerFile,
+			Globs:             []string{"**/*.go"},
 		},
 	}
 }
 
 func repoTask(name string) Task {
 	return Task{
-		ToolName: name,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Operation:    "",
+		Files:        nil,
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     name,
 		OpConfig: config.ToolOperation{
-			App:   name,
-			Scope: config.ToolScopeRepository,
+			Args:              nil,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               name,
+			Scope:             config.ToolScopeRepository,
 		},
 	}
 }
 
 func TestSummaryFormatter_EmptyPlan(t *testing.T) {
-	out := NewSummaryFormatter().Format(&ExecutionPlan{}, "/repo", "/repo", config.OpLint)
+	out := NewSummaryFormatter().Format(&ExecutionPlan{ConfigName: "", FailOn: "", Groups: nil, Skipped: nil}, "/repo", "/repo", config.OpLint)
 	if !strings.Contains(out, "No applicable tools found") {
 		t.Errorf("empty plan summary missing notice: %q", out)
 	}
 }
 
 func TestSummaryFormatter_SingleTask(t *testing.T) {
-	plan := &ExecutionPlan{Groups: []TaskGroup{{Priority: 10, Tasks: []Task{repoTask("golangci-lint")}}}}
+	plan := &ExecutionPlan{ConfigName: "", FailOn: "", Skipped: nil, Groups: []TaskGroup{{Priority: 10, Tasks: []Task{repoTask("golangci-lint")}}}}
 	out := NewSummaryFormatter().Format(plan, "/repo", "/repo", config.OpLint)
 	for _, want := range []string{
 		"Execution Plan for 'lint' operation",
@@ -123,10 +173,16 @@ func TestSummaryFormatter_SingleTask(t *testing.T) {
 
 func TestSummaryFormatter_AllParallel(t *testing.T) {
 	// Two per-file tasks on different files → no overlap → one parallel group.
-	plan := &ExecutionPlan{Groups: []TaskGroup{{Tasks: []Task{
-		perFileTask("a", "/repo/x.go"),
-		perFileTask("b", "/repo/y.go"),
-	}}}}
+	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []TaskGroup{{
+			Priority: 0, Tasks: []Task{
+				perFileTask("a", "/repo/x.go"),
+				perFileTask("b", "/repo/y.go"),
+			},
+		}},
+	}
 	out := NewSummaryFormatter().Format(plan, "/repo", "/repo", config.OpLint)
 	if !strings.Contains(out, "All 2 tasks can run in parallel") {
 		t.Errorf("expected all-parallel line, got:\n%s", out)
@@ -138,10 +194,16 @@ func TestSummaryFormatter_AllParallel(t *testing.T) {
 
 func TestSummaryFormatter_MultipleParallelGroups(t *testing.T) {
 	// Two repository-scoped tasks always overlap → two parallel groups.
-	plan := &ExecutionPlan{Groups: []TaskGroup{{Tasks: []Task{
-		repoTask("a"),
-		repoTask("b"),
-	}}}}
+	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []TaskGroup{{
+			Priority: 0, Tasks: []Task{
+				repoTask("a"),
+				repoTask("b"),
+			},
+		}},
+	}
 	out := NewSummaryFormatter().Format(plan, "/repo", "/repo", config.OpLint)
 	if !strings.Contains(out, "2 parallel groups") {
 		t.Errorf("expected multi-group line, got:\n%s", out)
@@ -154,7 +216,7 @@ func TestSummaryFormatter_WorkerPoolLimit(t *testing.T) {
 	for i := 0; i <= maxWorkers; i++ {
 		tasks = append(tasks, perFileTask("t", "/repo/file"+string(rune('a'+i))+".go"))
 	}
-	plan := &ExecutionPlan{Groups: []TaskGroup{{Tasks: tasks}}}
+	plan := &ExecutionPlan{ConfigName: "", FailOn: "", Skipped: nil, Groups: []TaskGroup{{Priority: 0, Tasks: tasks}}}
 	out := NewSummaryFormatter().Format(plan, "/repo", "/repo", config.OpLint)
 	if !strings.Contains(out, "Worker Pool Limit") {
 		t.Errorf("expected worker-pool-limit line with %d tasks, got:\n%s", len(tasks), out)
@@ -162,13 +224,29 @@ func TestSummaryFormatter_WorkerPoolLimit(t *testing.T) {
 }
 
 func TestDetailedFormatter_FileLists(t *testing.T) {
-	plan := &ExecutionPlan{Groups: []TaskGroup{{Tasks: []Task{
-		{
-			ToolName: "gofmt",
-			Files:    []string{"/repo/pkg/a.go", "/repo/pkg/b.go"},
-			OpConfig: config.ToolOperation{App: "gofmt", Scope: config.ToolScopePerFile, Globs: []string{"**/*.go"}},
-		},
-	}}}}
+	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []TaskGroup{{
+			Priority: 0, Tasks: []Task{
+				{
+					perFileCache: "",
+					inherited:    zerovalue_toolenv.Inherited{},
+					ID:           "",
+					Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+					Operation:    "",
+					ProjectPath:  "",
+					UnitDir:      "",
+					UnitMembers:  nil,
+					UnitGuards:   nil,
+					Coverage:     "",
+					ToolName:     "gofmt",
+					Files:        []string{"/repo/pkg/a.go", "/repo/pkg/b.go"},
+					OpConfig:     config.ToolOperation{Args: nil, Arity: "", Granularity: "", ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "gofmt", Scope: config.ToolScopePerFile, Globs: []string{"**/*.go"}},
+				},
+			},
+		}},
+	}
 	out := NewDetailedFormatter().Format(plan, "/repo", "/repo", config.OpFix)
 	for _, want := range []string{
 		"Files (2):",
@@ -183,12 +261,12 @@ func TestDetailedFormatter_FileLists(t *testing.T) {
 }
 
 func TestDetailedFormatter_EmptyAndWholeProject(t *testing.T) {
-	empty := NewDetailedFormatter().Format(&ExecutionPlan{}, "/repo", "/repo", config.OpLint)
+	empty := NewDetailedFormatter().Format(&ExecutionPlan{ConfigName: "", FailOn: "", Groups: nil, Skipped: nil}, "/repo", "/repo", config.OpLint)
 	if !strings.Contains(empty, "No applicable tools found") {
 		t.Errorf("empty detailed plan missing notice: %q", empty)
 	}
 
-	plan := &ExecutionPlan{Groups: []TaskGroup{{Tasks: []Task{repoTask("golangci-lint")}}}}
+	plan := &ExecutionPlan{ConfigName: "", FailOn: "", Skipped: nil, Groups: []TaskGroup{{Priority: 0, Tasks: []Task{repoTask("golangci-lint")}}}}
 	out := NewDetailedFormatter().Format(plan, "/repo", "/repo", config.OpLint)
 	if !strings.Contains(out, "Files: whole project") {
 		t.Errorf("expected whole-project line, got:\n%s", out)
@@ -200,12 +278,15 @@ func TestDetailedFormatter_EmptyAndWholeProject(t *testing.T) {
 // the human ones only when it is not the default.
 func TestFormatters_EchoTheEffectiveFailOn(t *testing.T) {
 	task := func(name string, failOn config.Severity) Task {
-		return Task{ToolName: name, OpConfig: config.ToolOperation{App: name, Scope: config.ToolScopeRepository, FailOn: failOn}}
+		return Task{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: name, OpConfig: config.ToolOperation{Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: name, Scope: config.ToolScopeRepository, FailOn: failOn}}
 	}
 	plan := func(global config.Severity) *ExecutionPlan {
-		return &ExecutionPlan{FailOn: global, Groups: []TaskGroup{{Priority: 1, Tasks: []Task{
-			task("plain", ""), task("strict", config.SeverityWarning), task("hinted", config.SeverityHint),
-		}}}}
+		return &ExecutionPlan{
+			ConfigName: "",
+			Skipped:    nil, FailOn: global, Groups: []TaskGroup{{Priority: 1, Tasks: []Task{
+				task("plain", ""), task("strict", config.SeverityWarning), task("hinted", config.SeverityHint),
+			}}},
+		}
 	}
 	cases := []struct {
 		global config.Severity
@@ -243,16 +324,39 @@ func TestFormatters_EchoTheEffectiveFailOn(t *testing.T) {
 }
 
 func TestJSONFormatter_ReportsGranularityArityCoverage(t *testing.T) {
-	plan := &ExecutionPlan{Groups: []TaskGroup{{Priority: 5, Tasks: []Task{
-		{
-			ToolName: "oxfmt", Files: []string{"/repo/a.json"}, Coverage: CoverageComplete,
-			OpConfig: config.ToolOperation{App: "oxfmt", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
-		},
-		{
-			ToolName: "tsc", Coverage: CoveragePartial,
-			OpConfig: config.ToolOperation{App: "tsc", Scope: config.ToolScopePerProject, Args: []string{"--noEmit"}},
-		},
-	}}}}
+	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []TaskGroup{{Priority: 5, Tasks: []Task{
+			{
+				perFileCache: "",
+				inherited:    zerovalue_toolenv.Inherited{},
+				ID:           "",
+				Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+				Operation:    "",
+				ProjectPath:  "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				ToolName:     "oxfmt", Files: []string{"/repo/a.json"}, Coverage: CoverageComplete,
+				OpConfig: config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "oxfmt", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
+			},
+			{
+				perFileCache: "",
+				inherited:    zerovalue_toolenv.Inherited{},
+				ID:           "",
+				Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+				Operation:    "",
+				Files:        nil,
+				ProjectPath:  "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				ToolName:     "tsc", Coverage: CoveragePartial,
+				OpConfig: config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "tsc", Scope: config.ToolScopePerProject, Args: []string{"--noEmit"}},
+			},
+		}}},
+	}
 
 	out := NewJSONFormatter().Format(plan, "/repo", "/cwd", config.OpLint)
 	var parsed PlanJSON

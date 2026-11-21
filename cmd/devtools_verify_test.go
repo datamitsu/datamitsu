@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -149,37 +150,37 @@ func TestGetAppVersion(t *testing.T) {
 	}{
 		{
 			name:     "binary app",
-			app:      binmanager.App{Binary: &binmanager.AppConfigBinary{Version: "1.2.3"}},
+			app:      binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: "1.2.3"}},
 			expected: "1.2.3",
 		},
 		{
 			name:     "uv app",
-			app:      binmanager.App{Uv: &binmanager.AppConfigUV{Version: "2.0.0"}},
+			app:      binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{PackageName: "", Runtime: "", LockFile: "", RequiresPython: "", Version: "2.0.0"}},
 			expected: "2.0.0",
 		},
 		{
 			name:     "node app",
-			app:      binmanager.App{Node: &binmanager.AppConfigNode{Version: "3.1.0"}},
+			app:      binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, Version: "3.1.0"}},
 			expected: "3.1.0",
 		},
 		{
 			name:     "jvm app",
-			app:      binmanager.App{Jvm: &binmanager.AppConfigJVM{Version: "7.20.0"}},
+			app:      binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{JarURL: "", JarHash: "", Runtime: "", MainClass: "", Version: "7.20.0"}},
 			expected: "7.20.0",
 		},
 		{
 			name:     "go app",
-			app:      binmanager.App{Go: &binmanager.AppConfigGo{Version: "v1.3.0"}},
+			app:      binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{PackageName: "", Runtime: "", LockFile: "", Version: "v1.3.0"}},
 			expected: "v1.3.0",
 		},
 		{
 			name:     "shell app",
-			app:      binmanager.App{Shell: &binmanager.AppConfigShell{Name: "echo"}},
+			app:      binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "echo"}},
 			expected: "",
 		},
 		{
 			name:     "empty app",
-			app:      binmanager.App{},
+			app:      binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil},
 			expected: "",
 		},
 	}
@@ -204,67 +205,79 @@ func TestComputeSummary(t *testing.T) {
 		expected          jsonSummary
 	}{
 		{
-			name:     "empty inputs",
-			expected: jsonSummary{},
+			binaryResults:     nil,
+			runtimeResults:    nil,
+			runtimeAppResults: nil,
+			versionResults:    nil,
+			name:              "empty inputs",
+			expected:          jsonSummary{BinaryDownloads: jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0}, RuntimeDownloads: jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0}, RuntimeInstalls: jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0}, BundleInstalls: jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0}, VersionChecks: jsonCountVersionChecks{Ok: 0, Mismatch: 0, Skipped: 0, ExecFailed: 0, ParseFailed: 0, Cached: 0}},
 		},
 		{
 			name: "all ok",
 			binaryResults: []binaryVerifyResult{
-				{AppName: "a", Status: "ok"},
-				{AppName: "b", Status: "ok"},
+				{Version: "", Os: "", Arch: "", Libc: "", ErrorMsg: "", AppName: "a", Status: "ok"},
+				{Version: "", Os: "", Arch: "", Libc: "", ErrorMsg: "", AppName: "b", Status: "ok"},
 			},
 			runtimeResults: []runtimeVerifyResult{
-				{RuntimeName: "uv", Status: "ok"},
+				{Os: "", Arch: "", Libc: "", ErrorMsg: "", RuntimeName: "uv", Status: "ok"},
 			},
 			runtimeAppResults: []runtimeAppResult{
-				{AppName: "c", Status: "ok"},
+				{Kind: "", Version: "", ErrorMsg: "", AppName: "c", Status: "ok"},
 			},
 			versionResults: []versionCheckResult{
-				{AppName: "a", Status: "ok"},
-				{AppName: "b", Status: "ok"},
+				{Args: nil, Expected: "", Actual: "", ErrorMsg: "", AppName: "a", Status: "ok"},
+				{Args: nil, Expected: "", Actual: "", ErrorMsg: "", AppName: "b", Status: "ok"},
 			},
 			expected: jsonSummary{
-				BinaryDownloads:  jsonCountOkFailed{Ok: 2},
-				RuntimeDownloads: jsonCountOkFailed{Ok: 1},
-				RuntimeInstalls:  jsonCountOkFailed{Ok: 1},
-				VersionChecks:    jsonCountVersionChecks{Ok: 2},
+				BundleInstalls:   jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
+				BinaryDownloads:  jsonCountOkFailed{Failed: 0, Cached: 0, Ok: 2},
+				RuntimeDownloads: jsonCountOkFailed{Failed: 0, Cached: 0, Ok: 1},
+				RuntimeInstalls:  jsonCountOkFailed{Failed: 0, Cached: 0, Ok: 1},
+				VersionChecks:    jsonCountVersionChecks{Mismatch: 0, Skipped: 0, ExecFailed: 0, ParseFailed: 0, Cached: 0, Ok: 2},
 			},
 		},
 		{
 			name: "mixed statuses",
 			binaryResults: []binaryVerifyResult{
-				{AppName: "a", Status: "ok"},
-				{AppName: "b", Status: "failed"},
+				{Version: "", Os: "", Arch: "", Libc: "", ErrorMsg: "", AppName: "a", Status: "ok"},
+				{Version: "", Os: "", Arch: "", Libc: "", ErrorMsg: "", AppName: "b", Status: "failed"},
 			},
 			runtimeResults: []runtimeVerifyResult{
-				{RuntimeName: "uv", Status: "failed"},
+				{Os: "", Arch: "", Libc: "", ErrorMsg: "", RuntimeName: "uv", Status: "failed"},
 			},
 			runtimeAppResults: []runtimeAppResult{
-				{AppName: "c", Status: "ok"},
-				{AppName: "d", Status: "failed"},
+				{Kind: "", Version: "", ErrorMsg: "", AppName: "c", Status: "ok"},
+				{Kind: "", Version: "", ErrorMsg: "", AppName: "d", Status: "failed"},
 			},
 			versionResults: []versionCheckResult{
-				{AppName: "a", Status: "ok"},
-				{AppName: "b", Status: "mismatch"},
-				{AppName: "c", Status: "skipped"},
-				{AppName: "d", Status: "exec_failed"},
-				{AppName: "e", Status: "parse_failed"},
+				{Args: nil, Expected: "", Actual: "", ErrorMsg: "", AppName: "a", Status: "ok"},
+				{Args: nil, Expected: "", Actual: "", ErrorMsg: "", AppName: "b", Status: "mismatch"},
+				{Args: nil, Expected: "", Actual: "", ErrorMsg: "", AppName: "c", Status: "skipped"},
+				{Args: nil, Expected: "", Actual: "", ErrorMsg: "", AppName: "d", Status: "exec_failed"},
+				{Args: nil, Expected: "", Actual: "", ErrorMsg: "", AppName: "e", Status: "parse_failed"},
 			},
 			expected: jsonSummary{
-				BinaryDownloads:  jsonCountOkFailed{Ok: 1, Failed: 1},
-				RuntimeDownloads: jsonCountOkFailed{Failed: 1},
-				RuntimeInstalls:  jsonCountOkFailed{Ok: 1, Failed: 1},
-				VersionChecks:    jsonCountVersionChecks{Ok: 1, Mismatch: 1, Skipped: 1, ExecFailed: 1, ParseFailed: 1},
+				BundleInstalls:   jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
+				BinaryDownloads:  jsonCountOkFailed{Cached: 0, Ok: 1, Failed: 1},
+				RuntimeDownloads: jsonCountOkFailed{Ok: 0, Cached: 0, Failed: 1},
+				RuntimeInstalls:  jsonCountOkFailed{Cached: 0, Ok: 1, Failed: 1},
+				VersionChecks:    jsonCountVersionChecks{Cached: 0, Ok: 1, Mismatch: 1, Skipped: 1, ExecFailed: 1, ParseFailed: 1},
 			},
 		},
 		{
-			name: "nil version results",
+			runtimeResults:    nil,
+			runtimeAppResults: nil,
+			name:              "nil version results",
 			binaryResults: []binaryVerifyResult{
-				{AppName: "a", Status: "ok"},
+				{Version: "", Os: "", Arch: "", Libc: "", ErrorMsg: "", AppName: "a", Status: "ok"},
 			},
 			versionResults: nil,
 			expected: jsonSummary{
-				BinaryDownloads: jsonCountOkFailed{Ok: 1},
+				RuntimeDownloads: jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
+				RuntimeInstalls:  jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
+				BundleInstalls:   jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
+				VersionChecks:    jsonCountVersionChecks{Ok: 0, Mismatch: 0, Skipped: 0, ExecFailed: 0, ParseFailed: 0, Cached: 0},
+				BinaryDownloads:  jsonCountOkFailed{Failed: 0, Cached: 0, Ok: 1},
 			},
 		},
 	}
@@ -281,18 +294,18 @@ func TestComputeSummary(t *testing.T) {
 
 func TestBuildJSONOutput(t *testing.T) {
 	binaryResults := []binaryVerifyResult{
-		{AppName: "tool-b", Version: "1.0", Os: syslist.OsTypeLinux, Arch: syslist.ArchTypeAmd64, Status: "ok"},
-		{AppName: "tool-a", Version: "2.0", Os: syslist.OsTypeLinux, Arch: syslist.ArchTypeAmd64, Status: "ok"},
-		{AppName: "tool-a", Version: "2.0", Os: syslist.OsTypeDarwin, Arch: syslist.ArchTypeArm64, Status: "failed", ErrorMsg: "hash mismatch"},
+		{Libc: "", ErrorMsg: "", AppName: "tool-b", Version: "1.0", Os: syslist.OsTypeLinux, Arch: syslist.ArchTypeAmd64, Status: "ok"},
+		{Libc: "", ErrorMsg: "", AppName: "tool-a", Version: "2.0", Os: syslist.OsTypeLinux, Arch: syslist.ArchTypeAmd64, Status: "ok"},
+		{Libc: "", AppName: "tool-a", Version: "2.0", Os: syslist.OsTypeDarwin, Arch: syslist.ArchTypeArm64, Status: "failed", ErrorMsg: "hash mismatch"},
 	}
 	runtimeResults := []runtimeVerifyResult{
-		{RuntimeName: "uv", Os: syslist.OsTypeLinux, Arch: syslist.ArchTypeAmd64, Status: "ok"},
+		{Libc: "", ErrorMsg: "", RuntimeName: "uv", Os: syslist.OsTypeLinux, Arch: syslist.ArchTypeAmd64, Status: "ok"},
 	}
 	runtimeAppResults := []runtimeAppResult{
-		{AppName: "yamllint", Kind: "uv", Version: "1.0", Status: "ok"},
+		{ErrorMsg: "", AppName: "yamllint", Kind: "uv", Version: "1.0", Status: "ok"},
 	}
 	versionResults := []versionCheckResult{
-		{AppName: "tool-a", Args: []string{"--version"}, Expected: "2.0", Actual: "2.0", Status: "ok"},
+		{ErrorMsg: "", AppName: "tool-a", Args: []string{"--version"}, Expected: "2.0", Actual: "2.0", Status: "ok"},
 	}
 	summary := computeSummary(binaryResults, runtimeResults, runtimeAppResults, nil, versionResults)
 
@@ -331,25 +344,28 @@ func TestFilterSkippedBinaryJobs(t *testing.T) {
 	binaryPath := "bin/tool"
 	jobs := []binaryVerifyJob{
 		{
+			libc:    "",
 			appName: "tool-a",
 			version: "1.0",
 			os:      syslist.OsTypeLinux,
 			arch:    syslist.ArchTypeAmd64,
-			info:    binmanager.BinaryOsArchInfo{URL: "https://example.com/a", Hash: "abc", ContentType: "tar.gz", BinaryPath: &binaryPath},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, ExtractDir: false, URL: "https://example.com/a", Hash: "abc", ContentType: "tar.gz", BinaryPath: &binaryPath},
 		},
 		{
+			libc:    "",
 			appName: "tool-b",
 			version: "2.0",
 			os:      syslist.OsTypeLinux,
 			arch:    syslist.ArchTypeAmd64,
-			info:    binmanager.BinaryOsArchInfo{URL: "https://example.com/b", Hash: "def", ContentType: "tar.gz", BinaryPath: &binaryPath},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, ExtractDir: false, URL: "https://example.com/b", Hash: "def", ContentType: "tar.gz", BinaryPath: &binaryPath},
 		},
 		{
+			libc:    "",
 			appName: "tool-c",
 			version: "3.0",
 			os:      syslist.OsTypeDarwin,
 			arch:    syslist.ArchTypeArm64,
-			info:    binmanager.BinaryOsArchInfo{URL: "https://example.com/c", Hash: "ghi", ContentType: "tar.gz"},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/c", Hash: "ghi", ContentType: "tar.gz"},
 		},
 	}
 
@@ -357,10 +373,12 @@ func TestFilterSkippedBinaryJobs(t *testing.T) {
 	cKey, cFP := binaryJobKeyAndFP(jobs[2])
 
 	sm := verifycache.NewStateManager(&verifycache.VerifyState{
+		CWD:     "",
+		LastRun: zerovalue_time.Time{},
 		Version: 1,
 		Entries: map[string]verifycache.VerifyEntry{
-			aKey: {Fingerprint: aFP, Status: "ok"},
-			cKey: {Fingerprint: cFP, Status: "ok"},
+			aKey: {Timestamp: zerovalue_time.Time{}, Error: "", Fingerprint: aFP, Status: "ok"},
+			cKey: {Timestamp: zerovalue_time.Time{}, Error: "", Fingerprint: cFP, Status: "ok"},
 		},
 	}, "")
 
@@ -379,11 +397,12 @@ func TestFilterSkippedBinaryJobs(t *testing.T) {
 
 	t.Run("changed URL not skipped", func(t *testing.T) {
 		modifiedJobs := []binaryVerifyJob{{
+			libc:    "",
 			appName: "tool-a",
 			version: "1.0",
 			os:      syslist.OsTypeLinux,
 			arch:    syslist.ArchTypeAmd64,
-			info:    binmanager.BinaryOsArchInfo{URL: "https://example.com/a-v2", Hash: "abc", ContentType: "tar.gz", BinaryPath: &binaryPath},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, ExtractDir: false, URL: "https://example.com/a-v2", Hash: "abc", ContentType: "tar.gz", BinaryPath: &binaryPath},
 		}}
 		toRun, skipped := filterSkippedBinaryJobs(modifiedJobs, sm)
 		if len(toRun) != 1 {
@@ -397,9 +416,11 @@ func TestFilterSkippedBinaryJobs(t *testing.T) {
 	t.Run("failed status not skipped", func(t *testing.T) {
 		bKey, bFP := binaryJobKeyAndFP(jobs[1])
 		smFailed := verifycache.NewStateManager(&verifycache.VerifyState{
+			CWD:     "",
+			LastRun: zerovalue_time.Time{},
 			Version: 1,
 			Entries: map[string]verifycache.VerifyEntry{
-				bKey: {Fingerprint: bFP, Status: "failed"},
+				bKey: {Timestamp: zerovalue_time.Time{}, Error: "", Fingerprint: bFP, Status: "failed"},
 			},
 		}, "")
 		toRun, skipped := filterSkippedBinaryJobs(jobs[1:2], smFailed)
@@ -423,25 +444,29 @@ func TestFilterSkippedRuntimeJobs(t *testing.T) {
 	binaryPath := "bin/rt"
 	jobs := []runtimeVerifyJob{
 		{
+			libc:        "",
 			runtimeName: "uv",
 			os:          syslist.OsTypeLinux,
 			arch:        syslist.ArchTypeAmd64,
-			info:        binmanager.BinaryOsArchInfo{URL: "https://example.com/uv", Hash: "uvhash", ContentType: "tar.gz", BinaryPath: &binaryPath},
+			info:        binmanager.BinaryOsArchInfo{Auth: nil, ExtractDir: false, URL: "https://example.com/uv", Hash: "uvhash", ContentType: "tar.gz", BinaryPath: &binaryPath},
 		},
 		{
+			libc:        "",
 			runtimeName: "node",
 			os:          syslist.OsTypeLinux,
 			arch:        syslist.ArchTypeAmd64,
-			info:        binmanager.BinaryOsArchInfo{URL: "https://example.com/node", Hash: "node-hash", ContentType: "tar.gz", BinaryPath: &binaryPath},
+			info:        binmanager.BinaryOsArchInfo{Auth: nil, ExtractDir: false, URL: "https://example.com/node", Hash: "node-hash", ContentType: "tar.gz", BinaryPath: &binaryPath},
 		},
 	}
 
 	uvKey, uvFP := runtimeJobKeyAndFP(jobs[0])
 
 	sm := verifycache.NewStateManager(&verifycache.VerifyState{
+		CWD:     "",
+		LastRun: zerovalue_time.Time{},
 		Version: 1,
 		Entries: map[string]verifycache.VerifyEntry{
-			uvKey: {Fingerprint: uvFP, Status: "ok"},
+			uvKey: {Timestamp: zerovalue_time.Time{}, Error: "", Fingerprint: uvFP, Status: "ok"},
 		},
 	}, "")
 
@@ -471,18 +496,18 @@ func TestFilterSkippedRuntimeJobs(t *testing.T) {
 
 func TestFilterSkippedRuntimeAppEntries(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
-		"uv-rt": {Kind: "uv"},
+		"uv-rt": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: "uv"},
 	}
 
 	entries := []runtimeAppEntry{
 		{
 			name: "yamllint",
-			app:  binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.35.0", Runtime: "uv-rt"}},
+			app:  binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.35.0", Runtime: "uv-rt"}},
 			kind: "uv",
 		},
 		{
 			name: "ruff",
-			app:  binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "ruff", Version: "0.5.0", Runtime: "uv-rt"}},
+			app:  binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "ruff", Version: "0.5.0", Runtime: "uv-rt"}},
 			kind: "uv",
 		},
 	}
@@ -490,9 +515,11 @@ func TestFilterSkippedRuntimeAppEntries(t *testing.T) {
 	yKey, yFP := runtimeAppKeyAndFP(entries[0], runtimes, "linux", "amd64")
 
 	sm := verifycache.NewStateManager(&verifycache.VerifyState{
+		CWD:     "",
+		LastRun: zerovalue_time.Time{},
 		Version: 1,
 		Entries: map[string]verifycache.VerifyEntry{
-			yKey: {Fingerprint: yFP, Status: "ok"},
+			yKey: {Timestamp: zerovalue_time.Time{}, Error: "", Fingerprint: yFP, Status: "ok"},
 		},
 	}, "")
 
@@ -515,7 +542,7 @@ func TestFilterSkippedRuntimeAppEntries(t *testing.T) {
 	t.Run("changed version not skipped", func(t *testing.T) {
 		modified := []runtimeAppEntry{{
 			name: "yamllint",
-			app:  binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.36.0", Runtime: "uv-rt"}},
+			app:  binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.36.0", Runtime: "uv-rt"}},
 			kind: "uv",
 		}}
 		toRun, skipped := filterSkippedRuntimeAppEntries(modified, sm, runtimes, "linux", "amd64")
@@ -530,14 +557,14 @@ func TestFilterSkippedRuntimeAppEntries(t *testing.T) {
 
 func TestRuntimeAppKeyAndFP_Go(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
-		"go-rt": {Kind: config.RuntimeKindGo},
+		"go-rt": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindGo},
 	}
 
 	// Explicit runtime ref: fingerprint must reflect the Go app config and
 	// resolve to the referenced runtime (kind "go" branch must be wired).
 	entry := runtimeAppEntry{
 		name: "govulncheck",
-		app:  binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.3.0", Runtime: "go-rt"}},
+		app:  binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.3.0", Runtime: "go-rt"}},
 		kind: "go",
 	}
 	key, fp := runtimeAppKeyAndFP(entry, runtimes, "linux", "amd64")
@@ -551,7 +578,7 @@ func TestRuntimeAppKeyAndFP_Go(t *testing.T) {
 	// Changing the Go version must change the fingerprint, proving the Go
 	// config is actually folded into it.
 	entry2 := entry
-	entry2.app = binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.4.0", Runtime: "go-rt"}}
+	entry2.app = binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.4.0", Runtime: "go-rt"}}
 	_, fp2 := runtimeAppKeyAndFP(entry2, runtimes, "linux", "amd64")
 	if fp == fp2 {
 		t.Error("expected different fingerprint when Go version changes")
@@ -561,7 +588,7 @@ func TestRuntimeAppKeyAndFP_Go(t *testing.T) {
 	// runtime config still contributes to the fingerprint.
 	entryNoRef := runtimeAppEntry{
 		name: "govulncheck",
-		app:  binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.3.0"}},
+		app:  binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{Runtime: "", LockFile: "", PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.3.0"}},
 		kind: "go",
 	}
 	if got := resolveDefaultRuntimeName(runtimes, "go"); got != "go-rt" {
@@ -577,13 +604,13 @@ func TestRuntimeAppKeyAndFP_Go(t *testing.T) {
 func TestRuntimeAppKeyAndFP_NodeFoldsPNPMRuntime(t *testing.T) {
 	runtimesWith := func(pnpmVersion string) config.MapOfRuntimes {
 		return config.MapOfRuntimes{
-			"node": {Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: "pnpm"}},
-			"pnpm": {Kind: config.RuntimeKindPNPM, PNPM: &config.RuntimeConfigPNPM{PNPMVersion: pnpmVersion}},
+			"node": {Mode: "", Managed: nil, System: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: "pnpm"}},
+			"pnpm": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, Kind: config.RuntimeKindPNPM, PNPM: &config.RuntimeConfigPNPM{PNPMVersion: pnpmVersion}},
 		}
 	}
 	entry := runtimeAppEntry{
 		name: "semver",
-		app:  binmanager.App{Node: &binmanager.AppConfigNode{PackageName: "semver", Version: "7.7.2", BinPath: "node_modules/.bin/semver"}},
+		app:  binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{Runtime: "", LockFile: "", Dependencies: nil, PackageName: "semver", Version: "7.7.2", BinPath: "node_modules/.bin/semver"}},
 		kind: "node",
 	}
 
@@ -598,17 +625,36 @@ func TestFilterSkippedVersionCheckEntries(t *testing.T) {
 	entries := []versionCheckEntry{
 		{
 			name: "tool-a",
-			app:  binmanager.App{Binary: &binmanager.AppConfigBinary{Version: "1.0.0"}},
+			app:  binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: "1.0.0"}},
 		},
 		{
 			name: "tool-b",
-			app:  binmanager.App{Binary: &binmanager.AppConfigBinary{Version: "2.0.0"}},
+			app:  binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: "2.0.0"}},
 		},
 		{
 			name: "tool-disabled",
 			app: binmanager.App{
-				Binary:       &binmanager.AppConfigBinary{Version: "3.0.0"},
-				VersionCheck: &binmanager.AppVersionCheck{Disabled: true},
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Links:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Binary:             &binmanager.AppConfigBinary{Binaries: nil, Version: "3.0.0"},
+				VersionCheck:       &binmanager.AppVersionCheck{Args: nil, Disabled: true},
 			},
 		},
 	}
@@ -616,9 +662,11 @@ func TestFilterSkippedVersionCheckEntries(t *testing.T) {
 	aKey, aFP := versionCheckKeyAndFP(entries[0], "linux", "amd64", "glibc")
 
 	sm := verifycache.NewStateManager(&verifycache.VerifyState{
+		CWD:     "",
+		LastRun: zerovalue_time.Time{},
 		Version: 1,
 		Entries: map[string]verifycache.VerifyEntry{
-			aKey: {Fingerprint: aFP, Status: "ok"},
+			aKey: {Timestamp: zerovalue_time.Time{}, Error: "", Fingerprint: aFP, Status: "ok"},
 		},
 	}, "")
 
@@ -638,9 +686,11 @@ func TestFilterSkippedVersionCheckEntries(t *testing.T) {
 	t.Run("disabled entries always run", func(t *testing.T) {
 		disabledKey, disabledFP := versionCheckKeyAndFP(entries[2], "linux", "amd64", "glibc")
 		smWithDisabled := verifycache.NewStateManager(&verifycache.VerifyState{
+			CWD:     "",
+			LastRun: zerovalue_time.Time{},
 			Version: 1,
 			Entries: map[string]verifycache.VerifyEntry{
-				disabledKey: {Fingerprint: disabledFP, Status: "ok"},
+				disabledKey: {Timestamp: zerovalue_time.Time{}, Error: "", Fingerprint: disabledFP, Status: "ok"},
 			},
 		}, "")
 		toRun, _ := filterSkippedVersionCheckEntries(entries[2:3], smWithDisabled, "linux", "amd64", "glibc")
@@ -665,50 +715,52 @@ func TestComputeSummaryWithCachedEntries(t *testing.T) {
 		{
 			name: "all cached",
 			binaryResults: []binaryVerifyResult{
-				{AppName: "a", Status: "cached"},
-				{AppName: "b", Status: "cached"},
+				{Version: "", Os: "", Arch: "", Libc: "", ErrorMsg: "", AppName: "a", Status: "cached"},
+				{Version: "", Os: "", Arch: "", Libc: "", ErrorMsg: "", AppName: "b", Status: "cached"},
 			},
 			runtimeResults: []runtimeVerifyResult{
-				{RuntimeName: "uv", Status: "cached"},
+				{Os: "", Arch: "", Libc: "", ErrorMsg: "", RuntimeName: "uv", Status: "cached"},
 			},
 			runtimeAppResults: []runtimeAppResult{
-				{AppName: "c", Status: "cached"},
+				{Kind: "", Version: "", ErrorMsg: "", AppName: "c", Status: "cached"},
 			},
 			versionResults: []versionCheckResult{
-				{AppName: "a", Status: "cached"},
+				{Args: nil, Expected: "", Actual: "", ErrorMsg: "", AppName: "a", Status: "cached"},
 			},
 			expected: jsonSummary{
-				BinaryDownloads:  jsonCountOkFailed{Cached: 2},
-				RuntimeDownloads: jsonCountOkFailed{Cached: 1},
-				RuntimeInstalls:  jsonCountOkFailed{Cached: 1},
-				VersionChecks:    jsonCountVersionChecks{Cached: 1},
+				BundleInstalls:   jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
+				BinaryDownloads:  jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 2},
+				RuntimeDownloads: jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 1},
+				RuntimeInstalls:  jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 1},
+				VersionChecks:    jsonCountVersionChecks{Ok: 0, Mismatch: 0, Skipped: 0, ExecFailed: 0, ParseFailed: 0, Cached: 1},
 			},
 		},
 		{
 			name: "mixed ok, failed, and cached",
 			binaryResults: []binaryVerifyResult{
-				{AppName: "a", Status: "ok"},
-				{AppName: "b", Status: "cached"},
-				{AppName: "c", Status: "failed"},
+				{Version: "", Os: "", Arch: "", Libc: "", ErrorMsg: "", AppName: "a", Status: "ok"},
+				{Version: "", Os: "", Arch: "", Libc: "", ErrorMsg: "", AppName: "b", Status: "cached"},
+				{Version: "", Os: "", Arch: "", Libc: "", ErrorMsg: "", AppName: "c", Status: "failed"},
 			},
 			runtimeResults: []runtimeVerifyResult{
-				{RuntimeName: "uv", Status: "ok"},
-				{RuntimeName: "node", Status: "cached"},
+				{Os: "", Arch: "", Libc: "", ErrorMsg: "", RuntimeName: "uv", Status: "ok"},
+				{Os: "", Arch: "", Libc: "", ErrorMsg: "", RuntimeName: "node", Status: "cached"},
 			},
 			runtimeAppResults: []runtimeAppResult{
-				{AppName: "d", Status: "cached"},
-				{AppName: "e", Status: "ok"},
+				{Kind: "", Version: "", ErrorMsg: "", AppName: "d", Status: "cached"},
+				{Kind: "", Version: "", ErrorMsg: "", AppName: "e", Status: "ok"},
 			},
 			versionResults: []versionCheckResult{
-				{AppName: "a", Status: "ok"},
-				{AppName: "b", Status: "cached"},
-				{AppName: "c", Status: "mismatch"},
+				{Args: nil, Expected: "", Actual: "", ErrorMsg: "", AppName: "a", Status: "ok"},
+				{Args: nil, Expected: "", Actual: "", ErrorMsg: "", AppName: "b", Status: "cached"},
+				{Args: nil, Expected: "", Actual: "", ErrorMsg: "", AppName: "c", Status: "mismatch"},
 			},
 			expected: jsonSummary{
+				BundleInstalls:   jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
 				BinaryDownloads:  jsonCountOkFailed{Ok: 1, Failed: 1, Cached: 1},
-				RuntimeDownloads: jsonCountOkFailed{Ok: 1, Cached: 1},
-				RuntimeInstalls:  jsonCountOkFailed{Ok: 1, Cached: 1},
-				VersionChecks:    jsonCountVersionChecks{Ok: 1, Mismatch: 1, Cached: 1},
+				RuntimeDownloads: jsonCountOkFailed{Failed: 0, Ok: 1, Cached: 1},
+				RuntimeInstalls:  jsonCountOkFailed{Failed: 0, Ok: 1, Cached: 1},
+				VersionChecks:    jsonCountVersionChecks{Skipped: 0, ExecFailed: 0, ParseFailed: 0, Ok: 1, Mismatch: 1, Cached: 1},
 			},
 		},
 	}
@@ -740,11 +792,13 @@ func captureStdout(fn func()) string {
 
 func TestPrintBinaryResultCached(t *testing.T) {
 	r := binaryVerifyResult{
-		AppName: "lefthook",
-		Version: "1.11.0",
-		Os:      syslist.OsTypeDarwin,
-		Arch:    syslist.ArchTypeArm64,
-		Status:  "cached",
+		Libc:     "",
+		ErrorMsg: "",
+		AppName:  "lefthook",
+		Version:  "1.11.0",
+		Os:       syslist.OsTypeDarwin,
+		Arch:     syslist.ArchTypeArm64,
+		Status:   "cached",
 	}
 
 	output := captureStdout(func() {
@@ -764,6 +818,8 @@ func TestPrintBinaryResultCached(t *testing.T) {
 
 func TestPrintRuntimeResultCached(t *testing.T) {
 	r := runtimeVerifyResult{
+		Libc:        "",
+		ErrorMsg:    "",
 		RuntimeName: "uv",
 		Os:          syslist.OsTypeLinux,
 		Arch:        syslist.ArchTypeAmd64,
@@ -784,10 +840,11 @@ func TestPrintRuntimeResultCached(t *testing.T) {
 
 func TestPrintRuntimeAppResultCached(t *testing.T) {
 	r := runtimeAppResult{
-		AppName: "yamllint",
-		Kind:    "uv",
-		Version: "1.35.0",
-		Status:  "cached",
+		ErrorMsg: "",
+		AppName:  "yamllint",
+		Kind:     "uv",
+		Version:  "1.35.0",
+		Status:   "cached",
 	}
 
 	output := captureStdout(func() {
@@ -804,9 +861,12 @@ func TestPrintRuntimeAppResultCached(t *testing.T) {
 
 func TestPrintVersionCheckResultCached(t *testing.T) {
 	r := versionCheckResult{
-		AppName: "tool-a",
-		Args:    []string{"--version"},
-		Status:  "cached",
+		Expected: "",
+		Actual:   "",
+		ErrorMsg: "",
+		AppName:  "tool-a",
+		Args:     []string{"--version"},
+		Status:   "cached",
 	}
 
 	output := captureStdout(func() {
@@ -823,10 +883,11 @@ func TestPrintVersionCheckResultCached(t *testing.T) {
 
 func TestPrintSummaryWithCached(t *testing.T) {
 	s := jsonSummary{
+		BundleInstalls:   jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
 		BinaryDownloads:  jsonCountOkFailed{Ok: 10, Failed: 1, Cached: 5},
-		RuntimeDownloads: jsonCountOkFailed{Ok: 3, Cached: 2},
+		RuntimeDownloads: jsonCountOkFailed{Failed: 0, Ok: 3, Cached: 2},
 		RuntimeInstalls:  jsonCountOkFailed{Ok: 4, Failed: 1, Cached: 3},
-		VersionChecks:    jsonCountVersionChecks{Ok: 8, Mismatch: 1, Cached: 4},
+		VersionChecks:    jsonCountVersionChecks{Skipped: 0, ExecFailed: 0, ParseFailed: 0, Ok: 8, Mismatch: 1, Cached: 4},
 	}
 
 	output := captureStdout(func() {
@@ -849,10 +910,11 @@ func TestPrintSummaryWithCached(t *testing.T) {
 
 func TestPrintSummaryWithoutCached(t *testing.T) {
 	s := jsonSummary{
-		BinaryDownloads:  jsonCountOkFailed{Ok: 10, Failed: 1},
-		RuntimeDownloads: jsonCountOkFailed{Ok: 3},
-		RuntimeInstalls:  jsonCountOkFailed{Ok: 4},
-		VersionChecks:    jsonCountVersionChecks{Ok: 8},
+		BundleInstalls:   jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
+		BinaryDownloads:  jsonCountOkFailed{Cached: 0, Ok: 10, Failed: 1},
+		RuntimeDownloads: jsonCountOkFailed{Failed: 0, Cached: 0, Ok: 3},
+		RuntimeInstalls:  jsonCountOkFailed{Failed: 0, Cached: 0, Ok: 4},
+		VersionChecks:    jsonCountVersionChecks{Mismatch: 0, Skipped: 0, ExecFailed: 0, ParseFailed: 0, Cached: 0, Ok: 8},
 	}
 
 	output := captureStdout(func() {
@@ -866,17 +928,17 @@ func TestPrintSummaryWithoutCached(t *testing.T) {
 
 func TestBuildJSONOutputWithCached(t *testing.T) {
 	binaryResults := []binaryVerifyResult{
-		{AppName: "tool-a", Version: "1.0", Os: syslist.OsTypeLinux, Arch: syslist.ArchTypeAmd64, Status: "ok"},
-		{AppName: "tool-a", Version: "1.0", Os: syslist.OsTypeDarwin, Arch: syslist.ArchTypeArm64, Status: "cached"},
+		{Libc: "", ErrorMsg: "", AppName: "tool-a", Version: "1.0", Os: syslist.OsTypeLinux, Arch: syslist.ArchTypeAmd64, Status: "ok"},
+		{Libc: "", ErrorMsg: "", AppName: "tool-a", Version: "1.0", Os: syslist.OsTypeDarwin, Arch: syslist.ArchTypeArm64, Status: "cached"},
 	}
 	runtimeResults := []runtimeVerifyResult{
-		{RuntimeName: "uv", Os: syslist.OsTypeLinux, Arch: syslist.ArchTypeAmd64, Status: "cached"},
+		{Libc: "", ErrorMsg: "", RuntimeName: "uv", Os: syslist.OsTypeLinux, Arch: syslist.ArchTypeAmd64, Status: "cached"},
 	}
 	runtimeAppResults := []runtimeAppResult{
-		{AppName: "yamllint", Kind: "uv", Version: "1.0", Status: "cached"},
+		{ErrorMsg: "", AppName: "yamllint", Kind: "uv", Version: "1.0", Status: "cached"},
 	}
 	versionResults := []versionCheckResult{
-		{AppName: "tool-a", Args: []string{"--version"}, Status: "cached"},
+		{Expected: "", Actual: "", ErrorMsg: "", AppName: "tool-a", Args: []string{"--version"}, Status: "cached"},
 	}
 	summary := computeSummary(binaryResults, runtimeResults, runtimeAppResults, nil, versionResults)
 
@@ -927,17 +989,19 @@ func TestRecordAfterBinaryResult(t *testing.T) {
 		tmpDir := t.TempDir()
 		path := filepath.Join(tmpDir, "state.json")
 		sm := verifycache.NewStateManager(&verifycache.VerifyState{
+			LastRun: zerovalue_time.Time{},
 			Version: 1,
 			CWD:     "/test",
 			Entries: map[string]verifycache.VerifyEntry{},
 		}, path)
 
 		j := binaryVerifyJob{
+			libc:    "",
 			appName: "tool-a",
 			version: "1.0",
 			os:      syslist.OsTypeLinux,
 			arch:    syslist.ArchTypeAmd64,
-			info:    binmanager.BinaryOsArchInfo{URL: "https://example.com/a", Hash: "abc", ContentType: "tar.gz", BinaryPath: &binaryPath},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, ExtractDir: false, URL: "https://example.com/a", Hash: "abc", ContentType: "tar.gz", BinaryPath: &binaryPath},
 		}
 		key, fp := binaryJobKeyAndFP(j)
 
@@ -970,17 +1034,19 @@ func TestRecordAfterBinaryResult(t *testing.T) {
 		tmpDir := t.TempDir()
 		path := filepath.Join(tmpDir, "state.json")
 		sm := verifycache.NewStateManager(&verifycache.VerifyState{
+			LastRun: zerovalue_time.Time{},
 			Version: 1,
 			CWD:     "/test",
 			Entries: map[string]verifycache.VerifyEntry{},
 		}, path)
 
 		j := binaryVerifyJob{
+			libc:    "",
 			appName: "tool-b",
 			version: "2.0",
 			os:      syslist.OsTypeLinux,
 			arch:    syslist.ArchTypeAmd64,
-			info:    binmanager.BinaryOsArchInfo{URL: "https://example.com/b", Hash: "def", ContentType: "tar.gz"},
+			info:    binmanager.BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/b", Hash: "def", ContentType: "tar.gz"},
 		}
 		key, fp := binaryJobKeyAndFP(j)
 
@@ -1008,8 +1074,10 @@ func TestBundleKeyAndFP(t *testing.T) {
 	entry := bundleVerifyEntry{
 		name: "agent-skills",
 		bundle: &binmanager.Bundle{
-			Version: "1.0",
-			Files:   map[string]string{"agents.md": "content"},
+			Archives: nil,
+			Links:    nil,
+			Version:  "1.0",
+			Files:    map[string]string{"agents.md": "content"},
 		},
 	}
 
@@ -1032,8 +1100,10 @@ func TestBundleKeyAndFP(t *testing.T) {
 	entry2 := bundleVerifyEntry{
 		name: "agent-skills",
 		bundle: &binmanager.Bundle{
-			Version: "2.0",
-			Files:   map[string]string{"agents.md": "content"},
+			Archives: nil,
+			Links:    nil,
+			Version:  "2.0",
+			Files:    map[string]string{"agents.md": "content"},
 		},
 	}
 	_, fp3 := bundleKeyAndFP(entry2)
@@ -1046,20 +1116,22 @@ func TestFilterSkippedBundleEntries(t *testing.T) {
 	entries := []bundleVerifyEntry{
 		{
 			name:   "bundle-a",
-			bundle: &binmanager.Bundle{Version: "1.0", Files: map[string]string{"a.txt": "a"}},
+			bundle: &binmanager.Bundle{Archives: nil, Links: nil, Version: "1.0", Files: map[string]string{"a.txt": "a"}},
 		},
 		{
 			name:   "bundle-b",
-			bundle: &binmanager.Bundle{Version: "2.0", Files: map[string]string{"b.txt": "b"}},
+			bundle: &binmanager.Bundle{Archives: nil, Links: nil, Version: "2.0", Files: map[string]string{"b.txt": "b"}},
 		},
 	}
 
 	aKey, aFP := bundleKeyAndFP(entries[0])
 
 	sm := verifycache.NewStateManager(&verifycache.VerifyState{
+		CWD:     "",
+		LastRun: zerovalue_time.Time{},
 		Version: 1,
 		Entries: map[string]verifycache.VerifyEntry{
-			aKey: {Fingerprint: aFP, Status: "ok"},
+			aKey: {Timestamp: zerovalue_time.Time{}, Error: "", Fingerprint: aFP, Status: "ok"},
 		},
 	}, "")
 
@@ -1089,9 +1161,9 @@ func TestFilterSkippedBundleEntries(t *testing.T) {
 
 func TestComputeSummaryWithBundles(t *testing.T) {
 	bundleResults := []bundleVerifyResult{
-		{BundleName: "a", Status: "ok"},
-		{BundleName: "b", Status: "failed"},
-		{BundleName: "c", Status: "cached"},
+		{Version: "", ErrorMsg: "", BundleName: "a", Status: "ok"},
+		{Version: "", ErrorMsg: "", BundleName: "b", Status: "failed"},
+		{Version: "", ErrorMsg: "", BundleName: "c", Status: "cached"},
 	}
 
 	got := computeSummary(nil, nil, nil, bundleResults, nil)
@@ -1108,7 +1180,7 @@ func TestComputeSummaryWithBundles(t *testing.T) {
 
 func TestBuildJSONOutputWithBundles(t *testing.T) {
 	bundleResults := []bundleVerifyResult{
-		{BundleName: "agent-skills", Version: "1.0", Status: "ok"},
+		{ErrorMsg: "", BundleName: "agent-skills", Version: "1.0", Status: "ok"},
 		{BundleName: "docs", Version: "2.0", Status: "failed", ErrorMsg: "install error"},
 	}
 
@@ -1137,7 +1209,7 @@ func TestBuildJSONOutputWithBundles(t *testing.T) {
 
 func TestPrintBundleResult(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
-		r := bundleVerifyResult{BundleName: "agent-skills", Version: "1.0", Status: "ok"}
+		r := bundleVerifyResult{ErrorMsg: "", BundleName: "agent-skills", Version: "1.0", Status: "ok"}
 		output := captureStdout(func() { printBundleResult(r) })
 		if !strings.Contains(output, "agent-skills") {
 			t.Errorf("expected output to contain bundle name, got: %s", output)
@@ -1148,7 +1220,7 @@ func TestPrintBundleResult(t *testing.T) {
 	})
 
 	t.Run("cached", func(t *testing.T) {
-		r := bundleVerifyResult{BundleName: "docs", Version: "2.0", Status: "cached"}
+		r := bundleVerifyResult{ErrorMsg: "", BundleName: "docs", Version: "2.0", Status: "cached"}
 		output := captureStdout(func() { printBundleResult(r) })
 		if !strings.Contains(output, "CACHED") {
 			t.Errorf("expected output to contain CACHED, got: %s", output)
@@ -1166,7 +1238,11 @@ func TestPrintBundleResult(t *testing.T) {
 
 func TestPrintSummaryWithBundles(t *testing.T) {
 	s := jsonSummary{
-		BundleInstalls: jsonCountOkFailed{Ok: 3, Failed: 1, Cached: 2},
+		BinaryDownloads:  jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
+		RuntimeDownloads: jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
+		RuntimeInstalls:  jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0},
+		VersionChecks:    jsonCountVersionChecks{Ok: 0, Mismatch: 0, Skipped: 0, ExecFailed: 0, ParseFailed: 0, Cached: 0},
+		BundleInstalls:   jsonCountOkFailed{Ok: 3, Failed: 1, Cached: 2},
 	}
 
 	output := captureStdout(func() { printSummary(s) })

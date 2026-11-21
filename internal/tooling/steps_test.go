@@ -22,20 +22,27 @@ func TestStepCallback(t *testing.T) {
 		t.Skip("the tools are sh scripts")
 	}
 	root := t.TempDir()
-	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"fails":   shellApp("exit 1"),
-		"passes":  shellApp("exit 0"),
-		"overlap": shellApp("exit 0"),
-		"later":   shellApp("exit 0"),
-	}}
-	plan := &ExecutionPlan{Groups: []TaskGroup{
-		{Priority: 10, Tasks: []Task{
-			lintTask(t, "fails", config.ToolScopePerProject, filepath.Join(root, "a")),
-			lintTask(t, "passes", config.ToolScopePerProject, filepath.Join(root, "b")),
-			lintTask(t, "overlap", config.ToolScopeRepository, ""),
-		}},
-		{Priority: 20, Tasks: []Task{lintTask(t, "later", config.ToolScopeRepository, "")}},
-	}}
+	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"fails":   shellApp("exit 1"),
+			"passes":  shellApp("exit 0"),
+			"overlap": shellApp("exit 0"),
+			"later":   shellApp("exit 0"),
+		},
+	}
+	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []TaskGroup{
+			{Priority: 10, Tasks: []Task{
+				lintTask(t, "fails", config.ToolScopePerProject, filepath.Join(root, "a")),
+				lintTask(t, "passes", config.ToolScopePerProject, filepath.Join(root, "b")),
+				lintTask(t, "overlap", config.ToolScopeRepository, ""),
+			}},
+			{Priority: 20, Tasks: []Task{lintTask(t, "later", config.ToolScopeRepository, "")}},
+		},
+	}
 	tests := []struct {
 		failFast bool
 		want     []string

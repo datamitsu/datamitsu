@@ -11,7 +11,7 @@ import (
 var expectedToolsSubcommands = []string{"inspect", "list"}
 
 func TestDevtoolsToolsCommandSetDrift(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "devtools", "tools", "--help")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "devtools", "tools", "--help")
 	if res.ExitCode != 0 {
 		t.Fatalf("`devtools tools --help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -39,7 +39,7 @@ func TestDevtoolsToolsList(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		p := clitest.NewProject(t)
 		cfg := clitest.WriteMinimalConfig(p)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "devtools", "tools", "list")
 		if res.ExitCode != 0 {
 			t.Fatalf("`devtools tools list` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -52,7 +52,7 @@ func TestDevtoolsToolsList(t *testing.T) {
 	t.Run("populated", func(t *testing.T) {
 		p := clitest.NewProject(t)
 		cfg := p.WriteFile("tools.config.js", toolsListConfigJS)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "devtools", "tools", "list")
 		if res.ExitCode != 0 {
 			t.Fatalf("`devtools tools list` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -65,7 +65,7 @@ func TestDevtoolsToolsInspect(t *testing.T) {
 	t.Run("unknown", func(t *testing.T) {
 		p := clitest.NewProject(t)
 		cfg := clitest.WriteMinimalConfig(p)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "devtools", "tools", "inspect", "nonesuch")
 		assertOfflineError(t, res, "is not declared in config")
 	})
@@ -73,7 +73,7 @@ func TestDevtoolsToolsInspect(t *testing.T) {
 	t.Run("known", func(t *testing.T) {
 		p := clitest.NewProject(t)
 		cfg := p.WriteFile("tools.config.js", toolsListConfigJS)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "devtools", "tools", "inspect", "alpha")
 		if res.ExitCode != 0 {
 			t.Fatalf("`devtools tools inspect alpha` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)

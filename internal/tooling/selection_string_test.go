@@ -12,11 +12,11 @@ func TestSelectionString(t *testing.T) {
 		sel  Selection
 		want string
 	}{
-		{Selection{Mode: SelectionAll}, "all"},
-		{Selection{Mode: SelectionSubtree, Dir: "/repo/pkg"}, "subtree"},
-		{Selection{Mode: SelectionPaths, Paths: []string{"/repo/a.ts"}}, "paths"},
-		{Selection{Mode: SelectionEmpty}, "empty"},
-		{Selection{Mode: SelectionMode(99)}, "all"},
+		{Selection{Dir: "", Paths: nil, Mode: SelectionAll}, "all"},
+		{Selection{Paths: nil, Mode: SelectionSubtree, Dir: "/repo/pkg"}, "subtree"},
+		{Selection{Dir: "", Mode: SelectionPaths, Paths: []string{"/repo/a.ts"}}, "paths"},
+		{Selection{Dir: "", Paths: nil, Mode: SelectionEmpty}, "empty"},
+		{Selection{Dir: "", Paths: nil, Mode: SelectionMode(99)}, "all"},
 	}
 
 	for _, tt := range tests {
@@ -43,21 +43,21 @@ func TestSkipReasonStrings(t *testing.T) {
 		if got := tt.reason.String(); got != tt.key {
 			t.Errorf("SkipReason(%d).String() = %q, want %q", tt.reason, got, tt.key)
 		}
-		got := SkippedTool{Reason: tt.reason}.ReasonText()
+		got := SkippedTool{ToolName: "", Operation: "", Detail: "", Reason: tt.reason}.ReasonText()
 		if !strings.Contains(got, tt.textPart) {
 			t.Errorf("ReasonText() = %q, want it to mention %q", got, tt.textPart)
 		}
 	}
 
 	t.Run("detail is preferred when present", func(t *testing.T) {
-		got := SkippedTool{Reason: SkipReasonUnsupportedPlatform, Detail: "linux/riscv64"}.ReasonText()
+		got := SkippedTool{ToolName: "", Operation: "", Reason: SkipReasonUnsupportedPlatform, Detail: "linux/riscv64"}.ReasonText()
 		if !strings.Contains(got, "linux/riscv64") {
 			t.Errorf("ReasonText() = %q, want it to name the platform", got)
 		}
 	})
 
 	t.Run("config skip shows its configured reason", func(t *testing.T) {
-		got := SkippedTool{Reason: SkipReasonConfig, Detail: "runs in CI only"}.ReasonText()
+		got := SkippedTool{ToolName: "", Operation: "", Reason: SkipReasonConfig, Detail: "runs in CI only"}.ReasonText()
 		if !strings.Contains(got, "runs in CI only") {
 			t.Errorf("ReasonText() = %q, want the configured reason", got)
 		}

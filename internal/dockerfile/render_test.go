@@ -9,10 +9,15 @@ import (
 
 func samplePlan() Plan {
 	return Plan{
+		ParserStages:           nil,
+		Skipped:                nil,
+		LibcExcluded:           nil,
+		RegistrySourcedParsers: nil,
+		PreparedApps:           nil,
 		RuntimeStages: []RuntimeStage{
 			{Name: "node", Kind: config.RuntimeKindNode, PNPMRuntime: "pnpm"},
-			{Name: "uv", Kind: config.RuntimeKindUV},
-			{Name: "go", Kind: config.RuntimeKindGo},
+			{PNPMRuntime: "", Name: "uv", Kind: config.RuntimeKindUV},
+			{PNPMRuntime: "", Name: "go", Kind: config.RuntimeKindGo},
 		},
 		RuntimeAppStages: []RuntimeAppStage{
 			{App: "prettier", Kind: config.RuntimeKindNode, Runtime: "node"},

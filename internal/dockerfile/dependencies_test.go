@@ -18,7 +18,7 @@ func TestDependencySlices(t *testing.T) {
 			apps["eslint"].Bun.LockFile = "locked"
 			apps["ruff"].Uv.LockFile = "locked"
 			apps["go-tool"].Go.LockFile = "locked"
-			apps["dm-internal-upstream"] = binmanager.App{Binary: &binmanager.AppConfigBinary{}, Lazy: true}
+			apps["dm-internal-upstream"] = binmanager.App{Required: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}, Lazy: true}
 			edgeMap := map[string][]string{root: {"eslint", "ruff", "ktlint", "go-tool"}, "eslint": {"dm-internal-upstream"}, "ruff": {"dm-internal-upstream"}}
 			for name, deps := range edgeMap {
 				app := apps[name]
@@ -28,7 +28,7 @@ func TestDependencySlices(t *testing.T) {
 				}
 				apps[name] = app
 			}
-			plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: parsers})
+			plan := BuildPlan(apps, runtimes, PlanOptions{TargetLibc: "", ForceInclude: nil, Parsers: parsers})
 			all := mustBuildSlices(t, plan, apps, runtimes, parsers)
 			for _, slice := range all {
 				if _, err := config.ValidateApps(slice.Config.Apps, slice.Config.Runtimes); err != nil {
@@ -78,7 +78,7 @@ func TestDependencySlices(t *testing.T) {
 				t.Fatal(err)
 			}
 			dep := apps["dm-internal-upstream"]
-			dep.Binary = &binmanager.AppConfigBinary{Version: "2"}
+			dep.Binary = &binmanager.AppConfigBinary{Binaries: nil, Version: "2"}
 			apps["dm-internal-upstream"] = dep
 			updated := mustBuildSlices(t, plan, apps, runtimes, parsers)
 			after, err := RenderSlice(findSlice(updated, slice.FileName).Config)
@@ -99,21 +99,21 @@ func TestPlanDependencyAvailability(t *testing.T) {
 		force      map[string]bool
 		wantErr    string
 	}{
-		{name: "supported", dependency: linuxBin(map[syslist.ArchType][]string{"amd64": {"musl"}, "arm64": {"musl"}})},
-		{name: "glibc only", dependency: linuxBin(map[syslist.ArchType][]string{"amd64": {"glibc"}}), wantErr: `dockerfile app "a-proxy" requires dependency "upstream": binary unavailable for the target Linux/libc variant`},
-		{name: "one architecture lacks libc", dependency: linuxBin(map[syslist.ArchType][]string{"amd64": {"musl"}, "arm64": {"glibc"}}), wantErr: "upstream"},
-		{name: "no linux", dependency: &binmanager.AppConfigBinary{}, wantErr: "target Linux/libc variant"},
-		{name: "forcing root cannot hide missing dep", dependency: &binmanager.AppConfigBinary{}, force: map[string]bool{"a-proxy": true}, wantErr: "upstream"},
-		{name: "explicit universal override", dependency: linuxBin(map[syslist.ArchType][]string{"amd64": {"glibc"}}), force: map[string]bool{"upstream": true}},
+		{force: nil, wantErr: "", name: "supported", dependency: linuxBin(map[syslist.ArchType][]string{"amd64": {"musl"}, "arm64": {"musl"}})},
+		{force: nil, name: "glibc only", dependency: linuxBin(map[syslist.ArchType][]string{"amd64": {"glibc"}}), wantErr: `dockerfile app "a-proxy" requires dependency "upstream": binary unavailable for the target Linux/libc variant`},
+		{force: nil, name: "one architecture lacks libc", dependency: linuxBin(map[syslist.ArchType][]string{"amd64": {"musl"}, "arm64": {"glibc"}}), wantErr: "upstream"},
+		{force: nil, name: "no linux", dependency: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}, wantErr: "target Linux/libc variant"},
+		{name: "forcing root cannot hide missing dep", dependency: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}, force: map[string]bool{"a-proxy": true}, wantErr: "upstream"},
+		{wantErr: "", name: "explicit universal override", dependency: linuxBin(map[syslist.ArchType][]string{"amd64": {"glibc"}}), force: map[string]bool{"upstream": true}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{
-				"a-proxy":  {Node: &binmanager.AppConfigNode{Runtime: "node"}, DependsOn: edges("middle")},
-				"middle":   {Binary: linuxBin(map[syslist.ArchType][]string{"amd64": {"musl"}}), DependsOn: edges("upstream")},
-				"upstream": {Binary: tt.dependency},
+				"a-proxy":  {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", LockFile: "", Dependencies: nil, Runtime: "node"}, DependsOn: edges("middle")},
+				"middle":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: linuxBin(map[syslist.ArchType][]string{"amd64": {"musl"}}), DependsOn: edges("upstream")},
+				"upstream": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: tt.dependency},
 			}
-			runtimes := config.MapOfRuntimes{"node": {Kind: config.RuntimeKindNode}}
-			plan := BuildPlan(apps, runtimes, PlanOptions{TargetLibc: "musl", ForceInclude: tt.force})
+			runtimes := config.MapOfRuntimes{"node": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode}}
+			plan := BuildPlan(apps, runtimes, PlanOptions{Parsers: nil, TargetLibc: "musl", ForceInclude: tt.force})
 			err := plan.ValidateDependencies(apps)
 			want := tt.wantErr
 			if want == "" {
@@ -125,7 +125,7 @@ func TestPlanDependencyAvailability(t *testing.T) {
 				if err == nil || !strings.Contains(err.Error(), want) {
 					t.Fatalf("error = %v, want %q", err, want)
 				}
-				if _, err := BuildSlices(&config.Config{}, plan, apps, runtimes, nil); err == nil {
+				if _, err := BuildSlices(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, plan, apps, runtimes, nil); err == nil {
 					t.Fatal("incomplete plan produced slices")
 				}
 			}
@@ -134,8 +134,8 @@ func TestPlanDependencyAvailability(t *testing.T) {
 }
 
 func TestSlicesRejectUnknownDependency(t *testing.T) {
-	apps := binmanager.MapOfApps{"root": {Binary: &binmanager.AppConfigBinary{}, DependsOn: edges("typo")}}
-	_, err := BuildSlices(&config.Config{}, BuildPlan(apps, nil), apps, nil, nil)
+	apps := binmanager.MapOfApps{"root": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}, DependsOn: edges("typo")}}
+	_, err := BuildSlices(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, BuildPlan(apps, nil), apps, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "typo") {
 		t.Fatalf("error = %v", err)
 	}

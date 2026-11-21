@@ -40,7 +40,7 @@ func TestGetTemurinMajorVersions(t *testing.T) {
 
 	t.Run("empty releases is an error", func(t *testing.T) {
 		url := serveTemurin(t, func(w http.ResponseWriter, _ *http.Request) {
-			_ = json.NewEncoder(w).Encode(temurinReleaseVersions{})
+			_ = json.NewEncoder(w).Encode(temurinReleaseVersions{MostRecentFeatureRelease: 0, AvailableReleases: nil})
 		})
 
 		versions, err := getTemurinMajorVersionsFromURL(context.Background(), url)
@@ -98,7 +98,7 @@ func TestExtractMajorVersions(t *testing.T) {
 		},
 		{
 			name:     "orders the list without a most recent release",
-			releases: temurinReleaseVersions{AvailableReleases: []int{17, 24, 21}},
+			releases: temurinReleaseVersions{MostRecentFeatureRelease: 0, AvailableReleases: []int{17, 24, 21}},
 			want:     "24,21,17",
 		},
 		{
@@ -112,8 +112,9 @@ func TestExtractMajorVersions(t *testing.T) {
 			want:     "25,21",
 		},
 		{
-			name: "empty is empty",
-			want: "",
+			releases: temurinReleaseVersions{MostRecentFeatureRelease: 0, AvailableReleases: nil},
+			name:     "empty is empty",
+			want:     "",
 		},
 	}
 	for _, tt := range tests {

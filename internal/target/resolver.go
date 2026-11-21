@@ -60,7 +60,9 @@ func (r *Resolver) Resolve(name string, candidates []Candidate) (*ResolvedTarget
 
 	best := scoredCandidates[0]
 	resolved := &ResolvedTarget{
-		Target: best.candidate.Target,
+		Source:       0,
+		FallbackInfo: nil,
+		Target:       best.candidate.Target,
 	}
 
 	if r.isExactMatch(best.candidate.Target) {

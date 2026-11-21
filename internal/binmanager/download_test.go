@@ -270,6 +270,8 @@ func TestRedirectPolicy(t *testing.T) {
 		// httpClient uses its own Transport, so we create a test-specific client
 		// that shares our CheckRedirect policy but trusts the test TLS cert.
 		tlsClient := &http.Client{
+			Jar:           nil,
+			Timeout:       0,
 			Transport:     httpsServer.Client().Transport,
 			CheckRedirect: httpClient.CheckRedirect,
 		}

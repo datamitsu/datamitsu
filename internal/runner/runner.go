@@ -200,6 +200,32 @@ func initSharedContext(
 ) (*sharedContext, error) {
 	ctx := context.Background()
 	sc := &sharedContext{
+		cfg:             nil,
+		rootPath:        "",
+		cwdPath:         "",
+		selection:       tooling.Selection{Mode: 0, Dir: "", Paths: nil},
+		files:           nil,
+		selectedTools:   nil,
+		explainLevel:    "",
+		planner:         nil,
+		projectCache:    nil,
+		executor:        nil,
+		binMgr:          nil,
+		parserMgr:       nil,
+		parseProblems:   nil,
+		ignoredFailOn:   nil,
+		nameWidth:       0,
+		afterFailedFix:  false,
+		summaries:       nil,
+		report:          nil,
+		secrets:         nil,
+		annotator:       nil,
+		baselineMatcher: nil,
+		placement:       nil,
+		placementGated:  false,
+		ci:              cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:       cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations:     annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
 		timings:         timing.New(),
 		opts:            opts,
 		failOnSkip:      failOnSkip,
@@ -348,7 +374,7 @@ func initSharedContext(
 	executor.SetParser(newDiagnosticParser(sc.parserMgr, sc.parseProblems))
 	executor.SetCapturePatches(slices.ContainsFunc(opts.Reports, func(s render.Spec) bool { return s.Format == patch.Name }))
 	sc.executor = executor
-	sc.ignoredFailOn = &toolSet{}
+	sc.ignoredFailOn = &toolSet{mu: sync.Mutex{}, tools: nil}
 	sc.startReport()
 	sc.executor.SetGate(sc.gate())
 
@@ -469,7 +495,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// any explicit skips — recording unsupported-platform ones for --fail-on-skip
 	// — instead of leaving them invisible.
 	if len(projectTypes) == 0 || len(plan.Groups) == 0 {
-		summary := opSummary{op: operation, skipped: len(plan.Skipped)}
+		summary := opSummary{tools: 0, runs: 0, failed: 0, cancelled: 0, partial: 0, durationMs: 0, op: operation, skipped: len(plan.Skipped)}
 		if placementHere {
 			summary.tools = 1
 			if sc.placementGated {
@@ -478,7 +504,7 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		}
 		sc.recordOp(summary)
 		if sc.agentOutput() {
-			sc.printAgentOperation(agentOperation{op: operation, record: opRecord, summary: summary, note: sc.footerNote(operation)})
+			sc.printAgentOperation(agentOperation{cause: "", op: operation, record: opRecord, summary: summary, note: sc.footerNote(operation)})
 		}
 		if len(plan.Skipped) > 0 {
 			renderSkipOnlyBlock(string(operation), sc.targetLine(), plan.Skipped, sc.nameWidth, sc.footerNote(operation))
@@ -555,10 +581,52 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// by the executor callbacks below.
 	runOpID := uievent.NextOpID("run")
 	ui.Emit(uievent.Event{
-		Type:   uievent.TypePhase,
-		OpID:   runOpID,
-		Status: uievent.StatusStart,
-		Op:     string(operation),
+		TS:              0,
+		Tool:            "",
+		Dir:             "",
+		Name:            "",
+		BytesDone:       0,
+		BytesTotal:      0,
+		Percent:         0,
+		Index:           0,
+		Total:           0,
+		Success:         nil,
+		DurationMs:      0,
+		Msg:             "",
+		Level:           "",
+		Tools:           0,
+		Runs:            0,
+		Failed:          0,
+		Skipped:         0,
+		Cancelled:       nil,
+		Complete:        nil,
+		Format:          "",
+		Path:            "",
+		File:            "",
+		Row:             0,
+		Col:             0,
+		EndRow:          0,
+		EndCol:          0,
+		Severity:        "",
+		Code:            "",
+		Source:          "",
+		Fingerprint:     "",
+		Provenance:      "",
+		Reported:        nil,
+		Gates:           nil,
+		Baselined:       false,
+		FindingsError:   nil,
+		FindingsWarning: nil,
+		FindingsInfo:    nil,
+		FindingsHint:    nil,
+		Cached:          nil,
+		Schema:          "",
+		Events:          "",
+		Annotations:     "",
+		Type:            uievent.TypePhase,
+		OpID:            runOpID,
+		Status:          uievent.StatusStart,
+		Op:              string(operation),
 	})
 	sc.emitDiagnostics(runOpID, placementEvents)
 
@@ -601,6 +669,16 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		for _, task := range group.Tasks {
 			if _, exists := progressTracker[task.ToolName]; !exists {
 				progressTracker[task.ToolName] = &toolExecutionGroup{
+					scope:          "",
+					totalRuns:      0,
+					succeededRuns:  0,
+					failedRuns:     0,
+					totalTime:      0,
+					wallTime:       0,
+					minDir:         "",
+					maxDir:         "",
+					wallStart:      time.Time{},
+					wallEnd:        time.Time{},
 					toolName:       task.ToolName,
 					executions:     []executionInstance{},
 					firstSeenIndex: toolOrder,
@@ -654,11 +732,52 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	// Set up task start callback
 	sc.executor.SetTaskStartCallback(func(taskID, toolName, relativeDir string) {
 		ui.Emit(uievent.Event{
-			Type:   uievent.TypeToolRun,
-			OpID:   toolOpID(runOpID, taskID),
-			Status: uievent.StatusStart,
-			Tool:   toolName,
-			Dir:    relativeDir,
+			TS:              0,
+			Op:              "",
+			Name:            "",
+			BytesDone:       0,
+			BytesTotal:      0,
+			Percent:         0,
+			Index:           0,
+			Total:           0,
+			Success:         nil,
+			DurationMs:      0,
+			Msg:             "",
+			Level:           "",
+			Tools:           0,
+			Runs:            0,
+			Failed:          0,
+			Skipped:         0,
+			Cancelled:       nil,
+			Complete:        nil,
+			Format:          "",
+			Path:            "",
+			File:            "",
+			Row:             0,
+			Col:             0,
+			EndRow:          0,
+			EndCol:          0,
+			Severity:        "",
+			Code:            "",
+			Source:          "",
+			Fingerprint:     "",
+			Provenance:      "",
+			Reported:        nil,
+			Gates:           nil,
+			Baselined:       false,
+			FindingsError:   nil,
+			FindingsWarning: nil,
+			FindingsInfo:    nil,
+			FindingsHint:    nil,
+			Cached:          nil,
+			Schema:          "",
+			Events:          "",
+			Annotations:     "",
+			Type:            uievent.TypeToolRun,
+			OpID:            toolOpID(runOpID, taskID),
+			Status:          uievent.StatusStart,
+			Tool:            toolName,
+			Dir:             relativeDir,
 		})
 
 		progressMu.Lock()
@@ -682,14 +801,52 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 		progressMu.Unlock()
 
 		ui.Emit(uievent.Event{
-			Type:    uievent.TypeChunk,
-			OpID:    toolOpID(runOpID, taskID),
-			Status:  chunkStatus(fileIndex, totalFiles),
-			Tool:    toolName,
-			Dir:     dir,
-			Index:   fileIndex,
-			Total:   totalFiles,
-			Success: new(success),
+			TS:              0,
+			Op:              "",
+			Name:            "",
+			BytesDone:       0,
+			BytesTotal:      0,
+			Percent:         0,
+			DurationMs:      0,
+			Msg:             "",
+			Level:           "",
+			Tools:           0,
+			Runs:            0,
+			Failed:          0,
+			Skipped:         0,
+			Cancelled:       nil,
+			Complete:        nil,
+			Format:          "",
+			Path:            "",
+			File:            "",
+			Row:             0,
+			Col:             0,
+			EndRow:          0,
+			EndCol:          0,
+			Severity:        "",
+			Code:            "",
+			Source:          "",
+			Fingerprint:     "",
+			Provenance:      "",
+			Reported:        nil,
+			Gates:           nil,
+			Baselined:       false,
+			FindingsError:   nil,
+			FindingsWarning: nil,
+			FindingsInfo:    nil,
+			FindingsHint:    nil,
+			Cached:          nil,
+			Schema:          "",
+			Events:          "",
+			Annotations:     "",
+			Type:            uievent.TypeChunk,
+			OpID:            toolOpID(runOpID, taskID),
+			Status:          chunkStatus(fileIndex, totalFiles),
+			Tool:            toolName,
+			Dir:             dir,
+			Index:           fileIndex,
+			Total:           totalFiles,
+			Success:         new(success),
 		})
 
 		if dir != "" {
@@ -721,6 +878,40 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 				levels.add(d.Severity)
 			}
 			ui.Emit(uievent.Event{
+				TS:              0,
+				Op:              "",
+				Name:            "",
+				BytesDone:       0,
+				BytesTotal:      0,
+				Percent:         0,
+				Index:           0,
+				Total:           0,
+				Msg:             "",
+				Level:           "",
+				Tools:           0,
+				Runs:            0,
+				Failed:          0,
+				Skipped:         0,
+				Cancelled:       nil,
+				Complete:        nil,
+				Format:          "",
+				Path:            "",
+				File:            "",
+				Row:             0,
+				Col:             0,
+				EndRow:          0,
+				EndCol:          0,
+				Severity:        "",
+				Code:            "",
+				Source:          "",
+				Fingerprint:     "",
+				Provenance:      "",
+				Reported:        nil,
+				Gates:           nil,
+				Baselined:       false,
+				Schema:          "",
+				Events:          "",
+				Annotations:     "",
 				Type:            uievent.TypeToolRun,
 				OpID:            opID,
 				Status:          doneStatus(result.Success),
@@ -736,11 +927,52 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 			})
 			if !result.Success {
 				ui.Emit(uievent.Event{
-					Type: uievent.TypeError,
-					OpID: opID,
-					Tool: result.ToolName,
-					Dir:  result.RelativeDir,
-					Msg:  resultErrorMessage(result),
+					TS:              0,
+					Status:          "",
+					Op:              "",
+					Name:            "",
+					BytesDone:       0,
+					BytesTotal:      0,
+					Percent:         0,
+					Index:           0,
+					Total:           0,
+					Success:         nil,
+					DurationMs:      0,
+					Level:           "",
+					Tools:           0,
+					Runs:            0,
+					Failed:          0,
+					Skipped:         0,
+					Cancelled:       nil,
+					Complete:        nil,
+					Format:          "",
+					Path:            "",
+					File:            "",
+					Row:             0,
+					Col:             0,
+					EndRow:          0,
+					EndCol:          0,
+					Severity:        "",
+					Code:            "",
+					Source:          "",
+					Fingerprint:     "",
+					Provenance:      "",
+					Reported:        nil,
+					Gates:           nil,
+					Baselined:       false,
+					FindingsError:   nil,
+					FindingsWarning: nil,
+					FindingsInfo:    nil,
+					FindingsHint:    nil,
+					Cached:          nil,
+					Schema:          "",
+					Events:          "",
+					Annotations:     "",
+					Type:            uievent.TypeError,
+					OpID:            opID,
+					Tool:            result.ToolName,
+					Dir:             result.RelativeDir,
+					Msg:             resultErrorMessage(result),
 				})
 			}
 		}
@@ -780,10 +1012,52 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 				sc.printAgentLine(string(operation) + ": setup failed")
 			}
 			ui.Emit(uievent.Event{
-				Type:   uievent.TypeDone,
-				OpID:   runOpID,
-				Status: uievent.StatusFail,
-				Op:     string(operation),
+				TS:              0,
+				Tool:            "",
+				Dir:             "",
+				Name:            "",
+				BytesDone:       0,
+				BytesTotal:      0,
+				Percent:         0,
+				Index:           0,
+				Total:           0,
+				Success:         nil,
+				DurationMs:      0,
+				Msg:             "",
+				Level:           "",
+				Tools:           0,
+				Runs:            0,
+				Failed:          0,
+				Skipped:         0,
+				Cancelled:       nil,
+				Complete:        nil,
+				Format:          "",
+				Path:            "",
+				File:            "",
+				Row:             0,
+				Col:             0,
+				EndRow:          0,
+				EndCol:          0,
+				Severity:        "",
+				Code:            "",
+				Source:          "",
+				Fingerprint:     "",
+				Provenance:      "",
+				Reported:        nil,
+				Gates:           nil,
+				Baselined:       false,
+				FindingsError:   nil,
+				FindingsWarning: nil,
+				FindingsInfo:    nil,
+				FindingsHint:    nil,
+				Cached:          nil,
+				Schema:          "",
+				Events:          "",
+				Annotations:     "",
+				Type:            uievent.TypeDone,
+				OpID:            runOpID,
+				Status:          uievent.StatusFail,
+				Op:              string(operation),
 			})
 			return fmt.Errorf("failed to pre-install tools: %w", err)
 		}
@@ -868,16 +1142,52 @@ func runSingleOperation(ctx context.Context, sc *sharedContext, operation config
 	totalTools := len(toolGroups) + placementTools
 	failedTools += placementFailed
 	ui.Emit(uievent.Event{
-		Type:       uievent.TypeDone,
-		OpID:       runOpID,
-		Status:     doneStatus(!hasFailures),
-		Op:         string(operation),
-		Tools:      totalTools,
-		Runs:       totalRuns,
-		Failed:     failedTools,
-		Skipped:    len(plan.Skipped),
-		Cancelled:  nonZero(len(stopped)),
-		DurationMs: totalWallClockTime,
+		TS:              0,
+		Tool:            "",
+		Dir:             "",
+		Name:            "",
+		BytesDone:       0,
+		BytesTotal:      0,
+		Percent:         0,
+		Index:           0,
+		Total:           0,
+		Success:         nil,
+		Msg:             "",
+		Level:           "",
+		Complete:        nil,
+		Format:          "",
+		Path:            "",
+		File:            "",
+		Row:             0,
+		Col:             0,
+		EndRow:          0,
+		EndCol:          0,
+		Severity:        "",
+		Code:            "",
+		Source:          "",
+		Fingerprint:     "",
+		Provenance:      "",
+		Reported:        nil,
+		Gates:           nil,
+		Baselined:       false,
+		FindingsError:   nil,
+		FindingsWarning: nil,
+		FindingsInfo:    nil,
+		FindingsHint:    nil,
+		Cached:          nil,
+		Schema:          "",
+		Events:          "",
+		Annotations:     "",
+		Type:            uievent.TypeDone,
+		OpID:            runOpID,
+		Status:          doneStatus(!hasFailures),
+		Op:              string(operation),
+		Tools:           totalTools,
+		Runs:            totalRuns,
+		Failed:          failedTools,
+		Skipped:         len(plan.Skipped),
+		Cancelled:       nonZero(len(stopped)),
+		DurationMs:      totalWallClockTime,
 	})
 	opDuration = totalWallClockTime
 	summary := opSummary{
@@ -1156,7 +1466,7 @@ func RunContinuation(
 ) error {
 	// Continuations (e.g. config reconcile's post-fix) never harden on skips,
 	// and belong to their command: no banner, no run-level report.
-	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, "", false, Options{})
+	return runSequential([]config.OperationType{operation}, args, explainMode, fileScoped, selectedToolsFlag, loadConfigFunc, "", false, Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil})
 }
 
 func runSequential(
@@ -1187,10 +1497,10 @@ func runSequential(
 		if _, usage := errors.AsType[exitcode.UsageError](err); command != "" && explainMode == "" && !usage {
 			elapsedMs := time.Since(started).Milliseconds()
 			if len(operations) > 1 {
-				(&sharedContext{opts: opts}).printRunClosing(command, operations, elapsedMs)
+				(&sharedContext{cfg: nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, placementGated: false, startedAt: time.Time{}, ci: cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, opts: opts}).printRunClosing(command, operations, elapsedMs)
 			}
 			omitReports(opts.Reports, err)
-			(&sharedContext{}).emitRunDone(command, operations, elapsedMs, false)
+			(&sharedContext{cfg: nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, placementGated: false, startedAt: time.Time{}, ci: cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}}).emitRunDone(command, operations, elapsedMs, false)
 		}
 		return err
 	}
@@ -1485,6 +1795,15 @@ func groupResultsByTool(groupResults []tooling.GroupExecutionResult) []toolExecu
 			}
 			if _, exists := toolMap[result.ToolName]; !exists {
 				toolMap[result.ToolName] = &toolExecutionGroup{
+					totalRuns:      0,
+					succeededRuns:  0,
+					failedRuns:     0,
+					totalTime:      0,
+					wallTime:       0,
+					minDir:         "",
+					maxDir:         "",
+					wallStart:      time.Time{},
+					wallEnd:        time.Time{},
 					toolName:       result.ToolName,
 					scope:          result.Scope,
 					executions:     []executionInstance{},

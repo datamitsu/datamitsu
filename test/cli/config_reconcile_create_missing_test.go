@@ -52,7 +52,7 @@ func TestConfigReconcileCreateMissingCreatesOnlyMissing(t *testing.T) {
 	cfg, customToolConfig := newCreateMissingProject(t)
 	norm := clitest.NewNormalizer()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: filepath.Dir(cfg)},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: filepath.Dir(cfg)},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--create-missing")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config reconcile --create-missing` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -74,7 +74,7 @@ func TestConfigReconcileCreateMissingCreatesOnlyMissing(t *testing.T) {
 	}
 
 	// A second run changes nothing: every file is reported as existing.
-	res2 := clitest.Run(t, clitest.RunOptions{Dir: filepath.Dir(cfg)},
+	res2 := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: filepath.Dir(cfg)},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--create-missing")
 	if res2.ExitCode != 0 {
 		t.Fatalf("second run exit = %d, want 0\nstderr:\n%s", res2.ExitCode, res2.Stderr)
@@ -95,7 +95,7 @@ func TestConfigReconcileCreateMissingJSON(t *testing.T) {
 	cfg, _ := newCreateMissingProject(t)
 
 	// --json is a document and nothing else: stdout must parse as a whole.
-	res := clitest.Run(t, clitest.RunOptions{Dir: filepath.Dir(cfg)},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: filepath.Dir(cfg)},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--create-missing", "--json")
 	if res.ExitCode != 0 {
 		t.Fatalf("exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -141,7 +141,7 @@ func TestConfigReconcileCreateMissingVariantPreserved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: root},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: root},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--create-missing")
 	if res.ExitCode != 0 {
 		t.Fatalf("exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -163,7 +163,7 @@ func TestConfigReconcileCreateMissingCollision(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: root},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: root},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--create-missing")
 	if res.ExitCode != 1 {
 		t.Fatalf("exit = %d, want 1\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -176,7 +176,7 @@ func TestConfigReconcileCreateMissingCollision(t *testing.T) {
 func TestConfigReconcileCreateMissingForceUsage(t *testing.T) {
 	cfg, _ := newCreateMissingProject(t)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: filepath.Dir(cfg)},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: filepath.Dir(cfg)},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--create-missing", "--force")
 	if res.ExitCode != 2 {
 		t.Fatalf("exit = %d, want 2\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -208,7 +208,7 @@ globalThis.getMinVersion = () => "0.0.0";
 `)
 	p.WriteFile("packages/a/fixture.marker", "a\n")
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "reconcile", "--create-missing", "--json")
 	if res.ExitCode != 1 {
 		t.Fatalf("exit = %d, want 1\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -235,7 +235,7 @@ func TestInitWritesLauncherMarker(t *testing.T) {
 	cfg := clitest.WriteMinimalConfig(p)
 	home := t.TempDir()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Env: []string{"HOME=" + home}},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Stdin: "", Timeout: 0, Dir: p.Dir, Env: []string{"HOME=" + home}},
 		"--no-auto-config", "--config", cfg, "init")
 	if res.ExitCode != 0 {
 		t.Fatalf("`init` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)

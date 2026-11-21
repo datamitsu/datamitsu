@@ -9,8 +9,6 @@ linters:
     - cyclop
     - dupl
     - err113
-    - exhaustruct
-    - exhaustruct_v5
     - funlen
     - gochecknoglobals
     - gochecknoinits
@@ -55,6 +53,7 @@ linters:
     - errname
     - errorlint
     - exhaustive
+    - exhaustruct_v5
     - exptostd
     - fatcontext
     - forbidigo
@@ -122,6 +121,21 @@ linters:
     - zerologlint
   exclusions:
     rules:
+      - linters:
+          - exhaustruct_v5
+        text: "^tar\\.Header is missing field Xattrs$"
+      - linters:
+          - exhaustruct_v5
+        text: "^http\\.Transport is missing fields Dial, DialTLS$"
+      - linters:
+          - exhaustruct_v5
+        text: "^net\\.Dialer is missing fields DualStack, Cancel$"
+      - linters:
+          - exhaustruct_v5
+        text: "^http\\.Request is missing field Cancel$"
+      - linters:
+          - exhaustruct_v5
+        text: "^zip\\.FileHeader is missing fields ModifiedTime, ModifiedDate, CompressedSize, UncompressedSize$"
       - linters:
           - forbidigo
         path: internal/env/

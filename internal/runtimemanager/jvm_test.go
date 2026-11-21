@@ -82,8 +82,8 @@ func TestInstallJVMAppReadyStateAndFailedDownloadCleanup(t *testing.T) {
 	if err := os.WriteFile(java, []byte("java"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	rm := New(config.MapOfRuntimes{"jdk": {Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: java}}})
-	app := &binmanager.AppConfigJVM{Runtime: "jdk", Version: "1", JarURL: server.URL, JarHash: pin}
+	rm := New(config.MapOfRuntimes{"jdk": {Managed: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{SystemVersion: "", Command: java}}})
+	app := &binmanager.AppConfigJVM{MainClass: "", Runtime: "jdk", Version: "1", JarURL: server.URL, JarHash: pin}
 	if err := rm.InstallJVMApp(context.Background(), "tool", app, nil, nil); err != nil {
 		t.Fatal(err)
 	}

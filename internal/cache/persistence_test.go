@@ -16,7 +16,7 @@ import (
 // against what survives on disk.
 func reopen(t *testing.T, cacheDir, projectPath string) *Cache {
 	t.Helper()
-	c, err := NewCache(cacheDir, projectPath, config.Config{Tools: config.MapOfTools{}}, nil, zap.NewNop())
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
@@ -39,7 +39,7 @@ func seededCache(t *testing.T) (c *Cache, cacheDir, projectPath, tracked string)
 	if err := c.AfterLint(tracked, "eslint", observeFile(tracked), true, true); err != nil {
 		t.Fatalf("AfterLint: %v", err)
 	}
-	c.AfterVerdict("k", VerdictEntry{Tool: "tsc", Op: "lint", InputHash: "h"})
+	c.AfterVerdict("k", VerdictEntry{UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", Op: "lint", InputHash: "h"})
 	if err := c.Save(); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestPruneVerdictsSurvivesReload(t *testing.T) {
 	// expired. Backdating after a save would not survive: the merge keeps the
 	// newer of the two timestamps and would restore the fresh disk copy.
 	seed := reopen(t, cacheDir, projectPath)
-	seed.AfterVerdict("k", VerdictEntry{Tool: "tsc", Op: "lint", InputHash: "h"})
+	seed.AfterVerdict("k", VerdictEntry{UnitDir: "", Members: 0, ValidatedAt: time.Time{}, Tool: "tsc", Op: "lint", InputHash: "h"})
 	stale := seed.data.Verdicts["k"]
 	stale.ValidatedAt = time.Now().Add(-2 * verdictPruneTTL)
 	seed.data.Verdicts["k"] = stale

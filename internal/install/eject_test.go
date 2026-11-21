@@ -14,6 +14,12 @@ import (
 
 func ejectableEntry(placement config.ManagedConfigPlacement) config.ManagedConfig {
 	return config.ManagedConfig{
+		ProjectTypes:      nil,
+		DeleteOnly:        false,
+		LinkTarget:        "",
+		ExpectChainHash:   "",
+		Render:            nil,
+		Content:           nil,
 		Tools:             []string{"gitleaks"},
 		Scope:             config.ScopeGitRoot,
 		Ejectable:         true,
@@ -24,7 +30,7 @@ func ejectableEntry(placement config.ManagedConfigPlacement) config.ManagedConfi
 
 func installerWithPristine(root string, configs config.MapOfManagedConfigs, pristine string) *Installer {
 	layerMap := config.ManagedConfigLayerMap{
-		".gitleaks.toml": {FileName: ".gitleaks.toml", PristineContent: &pristine},
+		".gitleaks.toml": {OriginalContent: nil, Layers: nil, FinalConfig: config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil}, RenderFailed: false, SourceLayers: nil, FileName: ".gitleaks.toml", PristineContent: &pristine},
 	}
 	return NewInstaller(root, root, nil, nil, configs, nil, &layerMap)
 }
@@ -122,7 +128,7 @@ func TestEjectConflictsHonourToolSelection(t *testing.T) {
 	root := t.TempDir()
 	writeRepoFile(t, root, ".gitleaks.toml", "custom")
 	pristine := "pristine"
-	layerMap := config.ManagedConfigLayerMap{".gitleaks.toml": {PristineContent: &pristine}}
+	layerMap := config.ManagedConfigLayerMap{".gitleaks.toml": {FileName: "", OriginalContent: nil, Layers: nil, FinalConfig: config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil}, RenderFailed: false, SourceLayers: nil, PristineContent: &pristine}}
 	installer := NewInstaller(root, root, nil, []string{"yamlfmt"}, config.MapOfManagedConfigs{".gitleaks.toml": ejectableEntry(config.PlacementInternal)}, nil, &layerMap)
 	if conflicts := installer.EjectConflicts(); len(conflicts) != 0 {
 		t.Fatalf("an unselected tool's file was checked: %v", conflicts)
@@ -148,6 +154,9 @@ func TestFormattedButUnchangedFileIsNotAConflict(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			original, rerendered, pristineCopy := disk, tt.rerendered, pristine
 			layerMap := config.ManagedConfigLayerMap{".gitleaks.toml": {
+				FileName:        "",
+				FinalConfig:     config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+				SourceLayers:    nil,
 				OriginalContent: &original,
 				Layers:          []config.ManagedConfigLayerEntry{{LayerName: "base", GeneratedContent: &rerendered}},
 				PristineContent: &pristineCopy,
@@ -185,7 +194,13 @@ func TestEjectedGitRootEntryAppliesThroughTypesElsewhereInTheRepository(t *testi
 
 	rendered := "rendered\n"
 	layerMap := config.ManagedConfigLayerMap{".gitleaks.toml": {
-		Layers: []config.ManagedConfigLayerEntry{{LayerName: "base", GeneratedContent: &rendered}},
+		FileName:        "",
+		OriginalContent: nil,
+		FinalConfig:     config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
+		PristineContent: nil,
+		RenderFailed:    false,
+		SourceLayers:    nil,
+		Layers:          []config.ManagedConfigLayerEntry{{LayerName: "base", GeneratedContent: &rendered}},
 	}}
 
 	withoutRepoTypes := NewInstaller(root, root, []string{"npm-package"}, nil, configs, nil, &layerMap)

@@ -68,7 +68,7 @@ func runExplain(t *testing.T, cmd, mode string) string {
 	cfg := p.WriteFile("tools.config.js", explainToolsConfigJS)
 	norm := clitest.NewNormalizer().MaskPath(p.Dir, "<TMP>")
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, cmd, "--explain="+mode)
 	if res.ExitCode != 0 {
 		t.Fatalf("`%s --explain=%s` exit = %d, want 0\nstderr:\n%s", cmd, mode, res.ExitCode, res.Stderr)
@@ -141,7 +141,7 @@ func TestExplainToolsSelection(t *testing.T) {
 	cfg := p.WriteFile("tools.config.js", explainToolsConfigJS)
 	norm := clitest.NewNormalizer().MaskPath(p.Dir, "<TMP>")
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "lint", "--tools", "alpha", "--explain=json")
 	if res.ExitCode != 0 {
 		t.Fatalf("`lint --tools alpha --explain=json` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -185,7 +185,7 @@ func TestExplainFlagMatrix(t *testing.T) {
 			p.WriteFile("README.md", "# test\n")
 
 			args := append([]string{"--no-auto-config", "--config", cfg}, tc.args...)
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, args...)
 			if res.ExitCode != 0 {
 				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s", strings.Join(tc.args, " "), res.ExitCode, res.Stderr)
 			}
@@ -206,7 +206,7 @@ func TestExplainErrorPaths(t *testing.T) {
 			p := clitest.NewProject(t)
 			cfg := p.WriteFile("tools.config.js", explainToolsConfigJS)
 
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 				"--no-auto-config", "--config", cfg, cmd, "--tools", "nonesuch", "--explain=summary")
 			if res.ExitCode == 0 {
 				t.Fatalf("`%s --tools nonesuch` exit = 0, want non-zero\nstdout:\n%s", cmd, res.Stdout)
@@ -223,7 +223,7 @@ func TestExplainErrorPaths(t *testing.T) {
 			p := clitest.NewProject(t)
 			cfg := p.WriteFile("tools.config.js", explainToolsConfigJS)
 
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 				"--no-auto-config", "--config", cfg, cmd, "--explain=bogus")
 			if res.ExitCode == 0 {
 				t.Fatalf("`%s --explain=bogus` exit = 0, want non-zero\nstdout:\n%s", cmd, res.Stdout)

@@ -115,6 +115,7 @@ func (t *MonorepoTraverser) Walk(ctx context.Context) error {
 	// })
 
 	w := Walker{
+		onDir:    nil,
 		rootPath: t.rootPath,
 		path:     t.cwdPath,
 		git:      t.git,

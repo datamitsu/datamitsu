@@ -15,12 +15,12 @@ import (
 func statIdentity(path string) (dirIdentity, bool) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return dirIdentity{}, false
+		return dirIdentity{uid: 0, device: 0}, false
 	}
 
 	st, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
-		return dirIdentity{}, false
+		return dirIdentity{uid: 0, device: 0}, false
 	}
 
 	return dirIdentity{uid: widenID(st.Uid), device: widenID(st.Dev)}, true

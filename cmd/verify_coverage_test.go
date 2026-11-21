@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/digest"
 
@@ -40,7 +41,7 @@ func vcHostOsArch(t *testing.T) (syslist.OsType, syslist.ArchType) {
 func vcStateManager(t *testing.T) *verifycache.StateManager {
 	t.Helper()
 	return verifycache.NewStateManager(
-		&verifycache.VerifyState{Entries: map[string]verifycache.VerifyEntry{}},
+		&verifycache.VerifyState{Version: 0, CWD: "", LastRun: zerovalue_time.Time{}, Entries: map[string]verifycache.VerifyEntry{}},
 		filepath.Join(t.TempDir(), "verify-state.json"),
 	)
 }
@@ -59,10 +60,23 @@ func vcTarGz(t *testing.T, files map[string]string) []byte {
 	tw := tar.NewWriter(gw)
 	for name, content := range files {
 		if err := tw.WriteHeader(&tar.Header{
-			Name:     name,
-			Typeflag: tar.TypeReg,
-			Mode:     0o755,
-			Size:     int64(len(content)),
+			Linkname:   "",
+			Uid:        0,
+			Gid:        0,
+			Uname:      "",
+			Gname:      "",
+			ModTime:    zerovalue_time.Time{},
+			AccessTime: zerovalue_time.Time{},
+			ChangeTime: zerovalue_time.Time{},
+			Devmajor:   0,
+			Devminor:   0,
+
+			PAXRecords: nil,
+			Format:     0,
+			Name:       name,
+			Typeflag:   tar.TypeReg,
+			Mode:       0o755,
+			Size:       int64(len(content)),
 		}); err != nil {
 			t.Fatalf("tar header %q: %v", name, err)
 		}
@@ -98,6 +112,9 @@ func TestVerifyBinaryOrDir(t *testing.T) {
 		body := []byte("#!/bin/sh\necho ok\n")
 		srv := vcServe(t, body)
 		info := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
+			ExtractDir:  false,
 			URL:         srv.URL,
 			Hash:        vcSHA256Hex(body),
 			ContentType: binmanager.BinContentTypeBinary,
@@ -111,6 +128,8 @@ func TestVerifyBinaryOrDir(t *testing.T) {
 		archive := vcTarGz(t, map[string]string{"bin/tool": "payload", "lib/data": "more"})
 		srv := vcServe(t, archive)
 		info := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
 			URL:         srv.URL,
 			Hash:        vcSHA256Hex(archive),
 			ContentType: binmanager.BinContentTypeTarGz,
@@ -123,6 +142,8 @@ func TestVerifyBinaryOrDir(t *testing.T) {
 
 	t.Run("extract-dir download failure is reported", func(t *testing.T) {
 		info := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
 			URL:         "http://127.0.0.1:0/never",
 			Hash:        strings.Repeat("0", 64),
 			ContentType: binmanager.BinContentTypeTarGz,
@@ -137,6 +158,8 @@ func TestVerifyBinaryOrDir(t *testing.T) {
 		archive := vcTarGz(t, map[string]string{"bin/tool": "payload"})
 		srv := vcServe(t, archive)
 		info := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
 			URL:         srv.URL,
 			Hash:        "",
 			ContentType: binmanager.BinContentTypeTarGz,
@@ -151,6 +174,8 @@ func TestVerifyBinaryOrDir(t *testing.T) {
 		archive := vcTarGz(t, map[string]string{"bin/tool": "payload"})
 		srv := vcServe(t, archive)
 		info := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
 			URL:         srv.URL,
 			Hash:        strings.Repeat("0", 64),
 			ContentType: binmanager.BinContentTypeTarGz,
@@ -166,6 +191,8 @@ func TestVerifyBinaryOrDir(t *testing.T) {
 		body := []byte("not a gzip archive")
 		srv := vcServe(t, body)
 		info := binmanager.BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
 			URL:         srv.URL,
 			Hash:        vcSHA256Hex(body),
 			ContentType: binmanager.BinContentTypeTarGz,
@@ -188,12 +215,50 @@ func TestRunPhase1BinaryApps(t *testing.T) {
 	srv := vcServe(t, body)
 
 	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Apps: binmanager.MapOfApps{
 			"tool": binmanager.App{
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Links:              nil,
+				Archives:           nil,
+				Prepare:            nil,
 				Binary: &binmanager.AppConfigBinary{
 					Version: "1.2.3",
 					Binaries: binmanager.MapOfBinaries{
 						osType: {archType: {"unknown": {
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         srv.URL,
 							Hash:        vcSHA256Hex(body),
 							ContentType: binmanager.BinContentTypeBinary,
@@ -202,7 +267,7 @@ func TestRunPhase1BinaryApps(t *testing.T) {
 				},
 			},
 			// A non-binary (runtime) app is skipped by phase 1.
-			"node-tool": binmanager.App{Node: &binmanager.AppConfigNode{Version: "1.0.0"}},
+			"node-tool": binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, Version: "1.0.0"}},
 		},
 	}
 
@@ -223,13 +288,50 @@ func TestRunPhase5VersionChecks_Disabled(t *testing.T) {
 	osType, archType := vcHostOsArch(t)
 
 	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Apps: binmanager.MapOfApps{
 			"tool": binmanager.App{
-				VersionCheck: &binmanager.AppVersionCheck{Disabled: true},
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Links:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				VersionCheck:       &binmanager.AppVersionCheck{Args: nil, Disabled: true},
 				Binary: &binmanager.AppConfigBinary{
 					Version: "1.0.0",
 					Binaries: binmanager.MapOfBinaries{
 						osType: {archType: {"unknown": {
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         "http://127.0.0.1:0/never",
 							Hash:        strings.Repeat("0", 64),
 							ContentType: binmanager.BinContentTypeBinary,
@@ -325,7 +427,10 @@ func TestPrintVerifyResults(t *testing.T) {
 		// exec_failed with an empty ErrorMsg skips the trailing detail line.
 		out := captureStdout(func() {
 			printVersionCheckResult(versionCheckResult{
-				AppName: "tool", Args: []string{"--version"}, Status: "exec_failed",
+				Expected: "",
+				Actual:   "",
+				ErrorMsg: "",
+				AppName:  "tool", Args: []string{"--version"}, Status: "exec_failed",
 			})
 		})
 		if !strings.Contains(out, "EXEC_FAILED") {

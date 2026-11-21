@@ -14,8 +14,39 @@ import (
 var splitConfigOutput string
 
 var splitConfigCmd = &cobra.Command{
-	Use:   "split-config",
-	Short: "Write one minimal per-stage config slice per app/runtime for layered builds",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "split-config",
+	Short:                      "Write one minimal per-stage config slice per app/runtime for layered builds",
 	Long: `Write one minimal config slice per app and per runtime into a directory.
 
 Each slice is a self-contained config that defines exactly one stage's target —
@@ -49,7 +80,7 @@ func runSplitConfig(ctx context.Context) error {
 		return fmt.Errorf("create output directory: %w", err)
 	}
 
-	plan := dockerfile.BuildPlan(cfg.Apps, cfg.Runtimes, dockerfile.PlanOptions{Parsers: cfg.Parsers})
+	plan := dockerfile.BuildPlan(cfg.Apps, cfg.Runtimes, dockerfile.PlanOptions{TargetLibc: "", ForceInclude: nil, Parsers: cfg.Parsers})
 	slices, err := dockerfile.BuildSlices(cfg, plan, cfg.Apps, cfg.Runtimes, cfg.Parsers)
 	if err != nil {
 		return err

@@ -25,7 +25,7 @@ func TestDownloadInternalRejectsUnsafeStoreParents(t *testing.T) {
 		t.Run(tc, func(t *testing.T) {
 			cache := filepath.Join(t.TempDir(), "cache")
 			store := filepath.Join(cache, "store")
-			bm := New(MapOfApps{"tool": {Required: true, Binary: &AppConfigBinary{Binaries: MapOfBinaries{osType: {archType: {"none": {URL: server.URL, Hash: digest.SHA256Of(payload).String(), ContentType: BinContentTypeBinary}}}}}}}, nil, nil)
+			bm := New(MapOfApps{"tool": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Binary: &AppConfigBinary{Version: "", Binaries: MapOfBinaries{osType: {archType: {"none": {Auth: nil, BinaryPath: nil, ExtractDir: false, URL: server.URL, Hash: digest.SHA256Of(payload).String(), ContentType: BinContentTypeBinary}}}}}}}, nil, nil)
 			install, err := bm.getInstallPath("tool")
 			if err != nil {
 				t.Fatal(err)
@@ -71,7 +71,7 @@ func TestWithInstalledBinarySourcePreservesPayloadOnReadAndCallbackFailure(t *te
 	t.Setenv("DATAMITSU_CACHE_DIR", cache)
 	osType, _ := syslist.GetOsTypeFromString(runtime.GOOS)
 	archType, _ := syslist.GetArchTypeFromString(runtime.GOARCH)
-	bm := New(MapOfApps{"tool": {Required: true, Binary: &AppConfigBinary{Binaries: MapOfBinaries{osType: {archType: {"none": {URL: "unused", Hash: "00", ContentType: BinContentTypeBinary}}}}}}}, nil, nil)
+	bm := New(MapOfApps{"tool": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Binary: &AppConfigBinary{Version: "", Binaries: MapOfBinaries{osType: {archType: {"none": {Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "unused", Hash: "00", ContentType: BinContentTypeBinary}}}}}}}, nil, nil)
 	install, err := bm.getInstallPath("tool")
 	if err != nil {
 		t.Fatal(err)
@@ -113,8 +113,8 @@ func TestDownloadInternalMalformedStoreRootDoesNotReplaceExistingPayload(t *test
 	defer server.Close()
 	osType, _ := syslist.GetOsTypeFromString(runtime.GOOS)
 	archType, _ := syslist.GetArchTypeFromString(runtime.GOARCH)
-	info := BinaryOsArchInfo{URL: server.URL, Hash: digest.SHA256Of(payload).String(), ContentType: BinContentTypeBinary}
-	bm := New(MapOfApps{"tool": {Required: true, Binary: &AppConfigBinary{Binaries: MapOfBinaries{osType: {archType: {"none": info}}}}}}, nil, nil)
+	info := BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: server.URL, Hash: digest.SHA256Of(payload).String(), ContentType: BinContentTypeBinary}
+	bm := New(MapOfApps{"tool": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Binary: &AppConfigBinary{Version: "", Binaries: MapOfBinaries{osType: {archType: {"none": info}}}}}}, nil, nil)
 	install, _ := bm.getInstallPath("tool")
 	if err := os.MkdirAll(filepath.Dir(install), 0o755); err != nil {
 		t.Fatal(err)

@@ -9,6 +9,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/logger"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 func TestExecutorCacheFilterRoundTrip(t *testing.T) {
@@ -22,17 +23,26 @@ func TestExecutorCacheFilterRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := cache.NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
+	c, err := cache.NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
 	e := NewExecutor(projectPath, false, false, nil, c)
 
 	task := Task{
-		ToolName:  "gofmt",
-		Operation: config.OpLint,
-		Files:     []string{file},
-		OpConfig:  config.ToolOperation{Scope: config.ToolScopePerFile},
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "gofmt",
+		Operation:    config.OpLint,
+		Files:        []string{file},
+		OpConfig:     config.ToolOperation{App: "", Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile},
 	}
 
 	// Nothing cached yet → the file is returned for processing.
@@ -66,10 +76,14 @@ func TestToolNotFoundErrorMessage(t *testing.T) {
 }
 
 func TestExecutionPlanGetToolNames(t *testing.T) {
-	plan := &ExecutionPlan{Groups: []TaskGroup{
-		{Tasks: []Task{{ToolName: "beta"}, {ToolName: "alpha"}}},
-		{Tasks: []Task{{ToolName: "alpha"}, {ToolName: "gamma"}}}, // duplicate alpha
-	}}
+	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []TaskGroup{
+			{Priority: 0, Tasks: []Task{{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "beta"}, {perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "alpha"}}},
+			{Priority: 0, Tasks: []Task{{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "alpha"}, {perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "gamma"}}}, // duplicate alpha
+		},
+	}
 	got := plan.GetToolNames()
 	want := []string{"alpha", "beta", "gamma"}
 	if len(got) != len(want) {
@@ -84,7 +98,7 @@ func TestExecutionPlanGetToolNames(t *testing.T) {
 
 func TestDetailedFormatterParallelizationBranches(t *testing.T) {
 	// Two repository-scoped tasks always overlap → multi-group line.
-	plan := &ExecutionPlan{Groups: []TaskGroup{{Tasks: []Task{repoTask("a"), repoTask("b")}}}}
+	plan := &ExecutionPlan{ConfigName: "", FailOn: "", Skipped: nil, Groups: []TaskGroup{{Priority: 0, Tasks: []Task{repoTask("a"), repoTask("b")}}}}
 	out := NewDetailedFormatter().Format(plan, "/repo", "/repo", config.OpLint)
 	if !strings.Contains(out, "2 parallel groups") {
 		t.Errorf("detailed multi-group line missing: %s", out)

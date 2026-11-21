@@ -11,7 +11,7 @@ import (
 )
 
 func TestResolveMinAge(t *testing.T) {
-	eff := runtimeconfig.Effective{MinimumReleaseAgeMinutes: 10080}
+	eff := runtimeconfig.Effective{AllowPartial: "", Annotations: "", Concurrency: 0, ConfigCache: false, Events: "", FailFast: false, FailFastSource: "", FailOn: "", ForceGitSubprocess: false, InstallTimeoutSeconds: 0, Libc: "", LogFormat: "", LspFormatTimeoutMs: 0, LspFormatWidenTo: "", LogLevel: "", MaxCmdLength: 0, MaxErrorCmdDisplay: 0, MaxFindingsPerProcess: 0, MaxParallelWorkers: 0, MaxParseInputBytes: 0, NoOCI: false, OCIRegistry: "", Offline: false, Output: "", Report: "", StartupTimings: false, Timings: false, Trace: false, TraceDir: "", UnitCacheTTLMinutes: 0, MinimumReleaseAgeMinutes: 10080}
 
 	tests := []struct {
 		name      string
@@ -34,7 +34,7 @@ func TestResolveMinAge(t *testing.T) {
 }
 
 func TestAddMinAgeFlag(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := &cobra.Command{Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0, Use: "test"}
 	p := addMinAgeFlag(cmd)
 	if p == nil {
 		t.Fatal("addMinAgeFlag returned nil pointer")

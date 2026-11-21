@@ -24,24 +24,38 @@ func TestInitDependencySets(t *testing.T) {
 		root  binmanager.App
 		smart bool
 	}{
-		{"required binary", binmanager.App{Binary: &binmanager.AppConfigBinary{}, Required: true}, false},
-		{"eager link app", binmanager.App{Node: &binmanager.AppConfigNode{}, Links: map[string]string{"config": "config.js"}}, true},
-		{"referenced lazy link app", binmanager.App{Bun: &binmanager.AppConfigBun{}, Links: map[string]string{"config": "config.js"}, Lazy: true}, true},
+		{"required binary", binmanager.App{Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}, Required: true}, false},
+		{"eager link app", binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil}, Links: map[string]string{"config": "config.js"}}, true},
+		{"referenced lazy link app", binmanager.App{Required: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{PackageName: "", Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil}, Links: map[string]string{"config": "config.js"}, Lazy: true}, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			root := tt.root
 			root.DependsOn = edges("dep")
-			cfg := &config.Config{Apps: binmanager.MapOfApps{
-				"root":   root,
-				"dep":    {Node: &binmanager.AppConfigNode{Runtime: "node"}, Lazy: true, DependsOn: edges("leaf")},
-				"leaf":   {Binary: &binmanager.AppConfigBinary{}, Lazy: true},
-				"unused": {Node: &binmanager.AppConfigNode{Runtime: "unused"}, Lazy: true},
-			}, Runtimes: config.MapOfRuntimes{
-				"node":   {Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{PNPMRuntime: "pnpm"}},
-				"pnpm":   {Kind: config.RuntimeKindPNPM},
-				"unused": {Kind: config.RuntimeKindNode},
-				"bun":    {Kind: config.RuntimeKindBun},
-			}, Tools: config.MapOfTools{"tool": {Operations: map[config.OperationType]config.ToolOperation{"lint": {App: "root"}}}}}
+			cfg := &config.Config{
+				Name:           "",
+				Version:        "",
+				Bundles:        nil,
+				ManagedConfigs: nil,
+				EjectConfigs:   nil,
+				ProjectTypes:   nil,
+				Execution:      nil,
+				InitCommands:   nil,
+				IgnoreRules:    nil,
+				SharedStorage:  nil,
+				OCI:            nil,
+				Parsers:        nil,
+				Lsp:            nil, Apps: binmanager.MapOfApps{
+					"root":   root,
+					"dep":    {Required: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", LockFile: "", Dependencies: nil, Runtime: "node"}, Lazy: true, DependsOn: edges("leaf")},
+					"leaf":   {Required: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}, Lazy: true},
+					"unused": {Required: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", LockFile: "", Dependencies: nil, Runtime: "unused"}, Lazy: true},
+				}, Runtimes: config.MapOfRuntimes{
+					"node":   {Mode: "", Managed: nil, System: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode, Node: &config.RuntimeConfigNode{NodeVersion: "", PNPMRuntime: "pnpm"}},
+					"pnpm":   {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindPNPM},
+					"unused": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode},
+					"bun":    {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindBun},
+				}, Tools: config.MapOfTools{"tool": {Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{"lint": {Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "root"}}}},
+			}
 			want := []string{"leaf", "dep", "root"}
 			for _, all := range []bool{false, true} {
 				got, err := initInstallAppNames(cfg, all)
@@ -63,7 +77,7 @@ func TestInitDependencySets(t *testing.T) {
 					if !slices.Equal(got, want) {
 						t.Fatalf("smart set = %v, want %v", got, want)
 					}
-					mock := &mockCommandInfoGetter{}
+					mock := &mockCommandInfoGetter{calls: nil, err: nil}
 					if err := installSmartInitApps(t.Context(), mock, got); err != nil {
 						t.Fatal(err)
 					}
@@ -107,15 +121,38 @@ func TestReportToolsCountsRuntimeDependencies(t *testing.T) {
 			host := target.HostTarget()
 			apps := binmanager.MapOfApps{
 				"root": {
-					Required:  true,
-					DependsOn: edges("dep"),
-					Binary: &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{
-						syslist.OsType(host.OS): {syslist.ArchType(host.Arch): {string(host.Libc): {
-							URL: "https://example.invalid/root", Hash: strings.Repeat("a", 64), ContentType: binmanager.BinContentTypeBinary,
-						}}},
-					}},
+					Lazy:               false,
+					Description:        "",
+					VersionCheck:       nil,
+					OfficialURL:        "",
+					OfficialURLDerived: false,
+					Bun:                nil,
+					Uv:                 nil,
+					Node:               nil,
+					Jvm:                nil,
+					Go:                 nil,
+					Shell:              nil,
+					Env:                nil,
+					RuntimeEnv:         nil,
+					Caches:             nil,
+					Files:              nil,
+					Links:              nil,
+					Archives:           nil,
+					Prepare:            nil,
+					Required:           true,
+					DependsOn:          edges("dep"),
+					Binary: &binmanager.AppConfigBinary{
+						Version: "", Binaries: binmanager.MapOfBinaries{
+							syslist.OsType(host.OS): {syslist.ArchType(host.Arch): {string(host.Libc): {
+								Auth:       nil,
+								BinaryPath: nil,
+								ExtractDir: false,
+								URL:        "https://example.invalid/root", Hash: strings.Repeat("a", 64), ContentType: binmanager.BinContentTypeBinary,
+							}}},
+						},
+					},
 				},
-				"dep": {Uv: &binmanager.AppConfigUV{}, Lazy: true},
+				"dep": {Required: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{PackageName: "", Version: "", Runtime: "", LockFile: "", RequiresPython: ""}, Lazy: true},
 			}
 			manager := &statsRuntimeManager{path: filepath.Join(t.TempDir(), "dep"), installErr: tt.installErr}
 			if tt.cached {
@@ -140,7 +177,7 @@ func TestReportToolsCountsRuntimeDependencies(t *testing.T) {
 				disp := ui.New(term.Plain)
 				defer disp.Close()
 				count, failed, err = reportTools(t.Context(), disp, bm)
-				printInitFooter(disp, initFooterCounts{tools: count, failed: failed, dur: "0s"})
+				printInitFooter(disp, initFooterCounts{types: 0, runtimes: 0, bundles: 0, prepared: 0, links: 0, dryRun: false, hadError: false, tools: count, failed: failed, dur: "0s"})
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -177,11 +214,11 @@ func (m *statsRuntimeManager) GetCommandInfo(_ context.Context, _ string, _ binm
 	if err := os.WriteFile(m.path, []byte("installed"), 0o600); err != nil {
 		return nil, err
 	}
-	return &binmanager.CommandInfo{Type: "uv", Command: m.path}, nil
+	return &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "uv", Command: m.path}, nil
 }
 
 func (m *statsRuntimeManager) ResolveCommandInfo(string, binmanager.App) (*binmanager.CommandInfo, error) {
-	return &binmanager.CommandInfo{Type: "uv", Command: m.path}, nil
+	return &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "uv", Command: m.path}, nil
 }
 
 func (m *statsRuntimeManager) ComputeAppPath(string, binmanager.App) (string, error) {

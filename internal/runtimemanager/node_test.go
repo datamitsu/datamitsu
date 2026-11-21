@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/digest"
 
@@ -43,14 +44,14 @@ func makeNodeTarXzBytes(t *testing.T) ([]byte, string) {
 	}
 	tarWriter := tar.NewWriter(xzWriter)
 
-	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveTopDir + "/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
+	if err := tarWriter.WriteHeader(&tar.Header{Linkname: "", Size: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: nodeArchiveTopDir + "/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
 		t.Fatalf("write dir header: %v", err)
 	}
-	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveTopDir + "/bin/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
+	if err := tarWriter.WriteHeader(&tar.Header{Linkname: "", Size: 0, Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: nodeArchiveTopDir + "/bin/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
 		t.Fatalf("write bin dir header: %v", err)
 	}
 	content := []byte(nodeStubContent)
-	if err := tarWriter.WriteHeader(&tar.Header{Name: nodeArchiveBinaryPath, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(content))}); err != nil {
+	if err := tarWriter.WriteHeader(&tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: nodeArchiveBinaryPath, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(content))}); err != nil {
 		t.Fatalf("write node header: %v", err)
 	}
 	if _, err := tarWriter.Write(content); err != nil {
@@ -84,6 +85,7 @@ func nodeRuntimeWith(t *testing.T, url, hash string, libcKeys ...string) config.
 	libcMap := map[string]binmanager.BinaryOsArchInfo{}
 	for _, k := range libcKeys {
 		libcMap[k] = binmanager.BinaryOsArchInfo{
+			Auth:        nil,
 			URL:         url,
 			Hash:        hash,
 			ContentType: binmanager.BinContentTypeTarXz,
@@ -94,8 +96,14 @@ func nodeRuntimeWith(t *testing.T, url, hash string, libcKeys ...string) config.
 
 	return config.MapOfRuntimes{
 		"node": {
-			Kind: config.RuntimeKindNode,
-			Mode: config.RuntimeModeManaged,
+			System: nil,
+			Bun:    nil,
+			UV:     nil,
+			JVM:    nil,
+			Go:     nil,
+			PNPM:   nil,
+			Kind:   config.RuntimeKindNode,
+			Mode:   config.RuntimeModeManaged,
 			Node: &config.RuntimeConfigNode{
 				NodeVersion: "26.2.0",
 				PNPMRuntime: testPNPMRuntimeName,
@@ -142,11 +150,33 @@ func TestComputeAppPathNode(t *testing.T) {
 
 	nodeApp := func(version string) binmanager.App {
 		return binmanager.App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Node: &binmanager.AppConfigNode{
-				PackageName: "eslint",
-				Version:     version,
-				BinPath:     "node_modules/.bin/eslint",
-				Runtime:     "node",
+				LockFile:     "",
+				Dependencies: nil,
+				PackageName:  "eslint",
+				Version:      version,
+				BinPath:      "node_modules/.bin/eslint",
+				Runtime:      "node",
 			},
 		}
 	}
@@ -198,11 +228,33 @@ func TestGetCommandInfoNode(t *testing.T) {
 	rm := New(runtimes)
 
 	app := binmanager.App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
 		Node: &binmanager.AppConfigNode{
-			PackageName: "eslint",
-			Version:     "9.0.0",
-			BinPath:     "node_modules/.bin/eslint",
-			Runtime:     "node",
+			LockFile:     "",
+			Dependencies: nil,
+			PackageName:  "eslint",
+			Version:      "9.0.0",
+			BinPath:      "node_modules/.bin/eslint",
+			Runtime:      "node",
 		},
 	}
 
@@ -225,25 +277,61 @@ func TestGetCommandInfoNode(t *testing.T) {
 func TestCollectRequiredRuntimesNode(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
 		"uv": {
-			Kind: config.RuntimeKindUV,
-			Mode: config.RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV,
+			Mode:    config.RuntimeModeManaged,
 		},
 		"node": {
-			Kind: config.RuntimeKindNode,
-			Mode: config.RuntimeModeManaged,
-			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindNode,
+			Mode:    config.RuntimeModeManaged,
+			Node:    &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
 		},
 		testPNPMRuntimeName: testPNPMRuntime(),
 	}
 
 	nodeApp := func(required bool, runtimeRef string) binmanager.App {
 		return binmanager.App{
-			Required: required,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           required,
 			Node: &binmanager.AppConfigNode{
-				PackageName: "eslint",
-				Version:     "9.0.0",
-				BinPath:     "node_modules/.bin/eslint",
-				Runtime:     runtimeRef,
+				LockFile:     "",
+				Dependencies: nil,
+				PackageName:  "eslint",
+				Version:      "9.0.0",
+				BinPath:      "node_modules/.bin/eslint",
+				Runtime:      runtimeRef,
 			},
 		}
 	}
@@ -284,7 +372,7 @@ func TestCollectRequiredRuntimesNode(t *testing.T) {
 
 	t.Run("mixed uv and node apps", func(t *testing.T) {
 		apps := binmanager.MapOfApps{
-			"yamllint": {Required: true, Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.37.0", Runtime: "uv"}},
+			"yamllint": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.37.0", Runtime: "uv"}},
 			"eslint":   nodeApp(true, "node"),
 		}
 		result, err := CollectRequiredRuntimes(apps, runtimes, false)
@@ -416,11 +504,13 @@ func TestInstallNode_CacheHitNoRefetch(t *testing.T) {
 // the real host libc and so cannot exercise musl selection on a glibc CI host.
 func TestNodeLibcSelection(t *testing.T) {
 	musl := binmanager.BinaryOsArchInfo{
-		URL: "https://unofficial-builds.nodejs.org/node-musl.tar.xz", Hash: "musl",
+		Auth: nil,
+		URL:  "https://unofficial-builds.nodejs.org/node-musl.tar.xz", Hash: "musl",
 		ContentType: binmanager.BinContentTypeTarXz, BinaryPath: new(nodeArchiveBinaryPath), ExtractDir: true,
 	}
 	glibc := binmanager.BinaryOsArchInfo{
-		URL: "https://nodejs.org/dist/node.tar.xz", Hash: "glibc",
+		Auth: nil,
+		URL:  "https://nodejs.org/dist/node.tar.xz", Hash: "glibc",
 		ContentType: binmanager.BinContentTypeTarXz, BinaryPath: new(nodeArchiveBinaryPath), ExtractDir: true,
 	}
 
@@ -489,10 +579,12 @@ func TestInstallNode_UnknownRuntime(t *testing.T) {
 func TestInstallNodeApp_InvalidRuntime(t *testing.T) {
 	rm := New(config.MapOfRuntimes{})
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "nonexistent",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "nonexistent",
 	}
 	if err := rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, nil, nil); err == nil {
 		t.Error("expected error for nonexistent runtime, got nil")
@@ -502,10 +594,12 @@ func TestInstallNodeApp_InvalidRuntime(t *testing.T) {
 func TestGetNodeCommandInfo_InvalidRuntime(t *testing.T) {
 	rm := New(config.MapOfRuntimes{})
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "nonexistent",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "nonexistent",
 	}
 	if _, err := rm.GetNodeCommandInfo(context.Background(), "eslint", appConfig, nil, nil); err == nil {
 		t.Error("expected error for nonexistent runtime, got nil")
@@ -519,12 +613,20 @@ func TestGetNodeCommandInfo_MissingNodeConfig(t *testing.T) {
 	archType, _ := syslist.GetArchTypeFromString(runtime.GOARCH)
 	runtimes := config.MapOfRuntimes{
 		"node": {
-			Kind: config.RuntimeKindNode,
-			Mode: config.RuntimeModeManaged,
+			System: nil,
+			Bun:    nil,
+			Node:   nil,
+			UV:     nil,
+			JVM:    nil,
+			Go:     nil,
+			PNPM:   nil,
+			Kind:   config.RuntimeKindNode,
+			Mode:   config.RuntimeModeManaged,
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{
 					osType: {
 						archType: {testLibc: binmanager.BinaryOsArchInfo{
+							Auth:        nil,
 							URL:         "https://example.com/node.tar.xz",
 							Hash:        "abc",
 							ContentType: binmanager.BinContentTypeTarXz,
@@ -538,10 +640,12 @@ func TestGetNodeCommandInfo_MissingNodeConfig(t *testing.T) {
 	}
 	rm := New(runtimes)
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
 	if _, err := rm.GetNodeCommandInfo(context.Background(), "eslint", appConfig, nil, nil); err == nil {
 		t.Error("expected error when runtime has no node config, got nil")
@@ -556,13 +660,20 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
 		testPNPMRuntimeName: testPNPMRuntime(),
 		"node": {
-			Kind: config.RuntimeKindNode,
-			Mode: config.RuntimeModeManaged,
-			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
+			System: nil,
+			Bun:    nil,
+			UV:     nil,
+			JVM:    nil,
+			Go:     nil,
+			PNPM:   nil,
+			Kind:   config.RuntimeKindNode,
+			Mode:   config.RuntimeModeManaged,
+			Node:   &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{
 					osType: {
 						archType: {testLibc: binmanager.BinaryOsArchInfo{
+							Auth:        nil,
 							URL:         "https://example.com/node.tar.xz",
 							Hash:        "abc",
 							ContentType: binmanager.BinContentTypeTarXz,
@@ -577,10 +688,12 @@ func TestInstallNodeApp_AlreadyInstalled(t *testing.T) {
 	rm := New(runtimes)
 
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
 
 	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
@@ -625,13 +738,20 @@ func nodeReinstallRuntimes(t *testing.T, url, hash string) config.MapOfRuntimes 
 	return config.MapOfRuntimes{
 		testPNPMRuntimeName: testPNPMRuntime(),
 		"node": {
-			Kind: config.RuntimeKindNode,
-			Mode: config.RuntimeModeManaged,
-			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
+			System: nil,
+			Bun:    nil,
+			UV:     nil,
+			JVM:    nil,
+			Go:     nil,
+			PNPM:   nil,
+			Kind:   config.RuntimeKindNode,
+			Mode:   config.RuntimeModeManaged,
+			Node:   &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{
 					osType: {
 						archType: {testLibc: binmanager.BinaryOsArchInfo{
+							Auth:        nil,
 							URL:         url,
 							Hash:        hash,
 							ContentType: binmanager.BinContentTypeTarXz,
@@ -669,10 +789,12 @@ func TestInstallNodeApp_RemoveAllFailureAborts(t *testing.T) {
 	rm := New(nodeReinstallRuntimes(t, "https://example.com/node.tar.xz", strings.Repeat("a", 64)))
 	seedRuntimeTargets(t, rm, "node", testPNPMRuntimeName)
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
 
 	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
@@ -713,10 +835,12 @@ func TestInstallNodeApp_RemoveAllSuccessProceeds(t *testing.T) {
 	rm := New(nodeReinstallRuntimes(t, "https://example.com/node.tar.xz", strings.Repeat("a", 64)))
 	seedRuntimeTargets(t, rm, "node", testPNPMRuntimeName)
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
 
 	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, nil, nil)
@@ -785,22 +909,30 @@ func TestGetCommandInfoNode_MergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
 		testPNPMRuntimeName: testPNPMRuntime(),
 		"node": {
-			Kind:   config.RuntimeKindNode,
-			Mode:   config.RuntimeModeSystem,
-			Node:   &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
-			System: &config.RuntimeConfigSystem{Command: filepath.Join(t.TempDir(), "bin", "node")},
+			Managed: nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindNode,
+			Mode:    config.RuntimeModeSystem,
+			Node:    &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: testPNPMRuntimeName},
+			System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: filepath.Join(t.TempDir(), "bin", "node")},
 		},
 	}
 	rm := New(runtimes)
 	seedRuntimeTargets(t, rm, testPNPMRuntimeName)
 
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
-	app := binmanager.App{Node: appConfig}
+	app := binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: appConfig}
 
 	appEnvPath, err := rm.resolveNodeAppEnvPath("eslint", appConfig, app.Files, app.Archives)
 	if err != nil {
@@ -840,10 +972,12 @@ func invalidWorkspaceFiles() map[string]string {
 func TestResolveNodeAppEnvPath_WorkspaceYAMLError(t *testing.T) {
 	rm := New(nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc))
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
 
 	_, err := rm.resolveNodeAppEnvPath("eslint", appConfig, invalidWorkspaceFiles(), nil)
@@ -861,10 +995,12 @@ func TestResolveNodeAppEnvPath_WorkspaceYAMLError(t *testing.T) {
 func TestInstallNodeApp_WorkspaceYAMLError(t *testing.T) {
 	rm := New(nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc))
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
 
 	err := rm.InstallNodeApp(context.Background(), "eslint", appConfig, nil, invalidWorkspaceFiles(), nil)
@@ -882,10 +1018,12 @@ func TestInstallNodeApp_WorkspaceYAMLError(t *testing.T) {
 func TestGetNodeCommandInfo_WorkspaceYAMLError(t *testing.T) {
 	rm := New(nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc))
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
 
 	_, err := rm.GetNodeCommandInfo(context.Background(), "eslint", appConfig, invalidWorkspaceFiles(), nil)
@@ -905,10 +1043,12 @@ func TestResolveNodeAppEnvPath_CacheKeyUnchanged(t *testing.T) {
 	runtimes := nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc)
 	rm := New(runtimes)
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
 
 	cases := []struct {
@@ -954,10 +1094,12 @@ func TestResolveNodeAppEnvPath_CacheKeyUnchanged(t *testing.T) {
 func TestResolveNodeAppEnvPath_RelocatableAcrossStoreRoots(t *testing.T) {
 	runtimes := nodeRuntimeWith(t, "https://example.com/node.tar.xz", "abc", testLibc)
 	appConfig := &binmanager.AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
-		Runtime:     "node",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
+		Runtime:      "node",
 	}
 
 	pathUnder := func(root string) string {

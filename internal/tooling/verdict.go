@@ -198,7 +198,7 @@ func verdictSnapshotOf(members, guards []string, root string) (*verdictSnapshot,
 // verdictSnapshotMode is verdictSnapshotOf against an explicit memo and memo
 // mode; a nil memo reads every path.
 func verdictSnapshotMode(members, guards []string, root string, memo *hashMemo, mode memoMode) (*verdictSnapshot, int64) {
-	snap := &verdictSnapshot{root: root, taken: time.Now()}
+	snap := &verdictSnapshot{inputs: "", members: nil, guards: nil, root: root, taken: time.Now()}
 	memberStates, memberBytes := hashedStates(members, root, memo, mode)
 	guardStates, guardBytes := hashedStates(guards, root, memo, mode)
 	snap.members, snap.guards = memberStates, guardStates
@@ -340,7 +340,7 @@ func hashedState(p, root string, memo *hashMemo, mode memoMode) (pathState, int6
 // is in lookup. In memoRewrite mode the bytes are always read, and what they
 // hash to replaces whatever the memo held for that path.
 func contentHash(p string, memo *hashMemo, mode memoMode) (pathState, int64) {
-	st := pathState{path: p}
+	st := pathState{entry: "", hash: "", size: 0, mod: time.Time{}, ident: cache.FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, read: false, path: p}
 
 	if memo != nil && mode == memoShared {
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
@@ -713,11 +713,12 @@ func (e *Executor) recordVerdict(task Task, key string, snap *verdictSnapshot, o
 		inputs = after
 	}
 	e.cache.AfterVerdict(key, cache.VerdictEntry{
-		Tool:      task.ToolName,
-		Op:        string(task.Operation),
-		UnitDir:   task.UnitDir,
-		InputHash: inputs,
-		Members:   len(task.UnitMembers),
+		ValidatedAt: time.Time{},
+		Tool:        task.ToolName,
+		Op:          string(task.Operation),
+		UnitDir:     task.UnitDir,
+		InputHash:   inputs,
+		Members:     len(task.UnitMembers),
 	})
 	// A fix that rewrote files makes the matching lint verdict unsound. Only that
 	// sibling: dropping every verdict for the tool would delete the one just

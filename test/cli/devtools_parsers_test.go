@@ -15,7 +15,7 @@ var expectedParsersSubcommands = []string{"inspect", "list", "prefetch", "run", 
 // TestDevtoolsParsersCommandSetDrift asserts the parsers subcommand set is exactly
 // {inspect, list, prefetch, run, sniff}.
 func TestDevtoolsParsersCommandSetDrift(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "devtools", "parsers", "--help")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "devtools", "parsers", "--help")
 	if res.ExitCode != 0 {
 		t.Fatalf("`devtools parsers --help` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -30,7 +30,7 @@ func TestDevtoolsParsersCommandSetDrift(t *testing.T) {
 func TestDevtoolsParsersList(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "devtools", "parsers", "list")
 	if res.ExitCode != 0 {
 		t.Fatalf("`devtools parsers list` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -46,7 +46,7 @@ func TestDevtoolsParsersList(t *testing.T) {
 func TestDevtoolsParsersListJSONEmpty(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "devtools", "parsers", "list", "--json")
 	if res.ExitCode != 0 {
 		t.Fatalf("`devtools parsers list --json` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -62,7 +62,7 @@ func TestDevtoolsParsersListJSONEmpty(t *testing.T) {
 func TestDevtoolsParsersInspect(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "devtools", "parsers", "inspect", "ghost")
 	assertOfflineError(t, res, "not provided by any configured parser")
 }
@@ -84,7 +84,7 @@ func TestDevtoolsParsersRun(t *testing.T) {
 
 	eslintJSON := `[{"filePath":"a.js","messages":[` +
 		`{"ruleId":"semi","severity":1,"message":"Missing semicolon.","line":2,"column":3,"endLine":2,"endColumn":4}]}]`
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Stdin: eslintJSON},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Timeout: 0, Dir: p.Dir, Stdin: eslintJSON},
 		"devtools", "parsers", "run", "eslint", "--wasm", wasmPath, "--exit-code", "1")
 	if res.ExitCode != 0 {
 		t.Fatalf("`parsers run` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -107,13 +107,13 @@ func TestDevtoolsParsersSniff(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(p.Dir, "out.sarif"), []byte(sarif), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "parsers", "sniff", "out.sarif")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "devtools", "parsers", "sniff", "out.sarif")
 	if res.ExitCode != 0 {
 		t.Fatalf("`parsers sniff` exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
 	clitest.AssertGolden(t, "devtools_parsers_sniff_sarif", res.Stdout)
 
-	res = clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Stdin: "src/b.sh:3:1: warning: x appears unused [SC2034]\n"},
+	res = clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Timeout: 0, Dir: p.Dir, Stdin: "src/b.sh:3:1: warning: x appears unused [SC2034]\n"},
 		"devtools", "parsers", "sniff", "--exit-code", "1", "--json")
 	if res.ExitCode != 0 {
 		t.Fatalf("`parsers sniff --json` exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -124,7 +124,7 @@ func TestDevtoolsParsersSniff(t *testing.T) {
 		}
 	}
 
-	res = clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Stdin: "All checks passed!\n"}, "devtools", "parsers", "sniff", "-")
+	res = clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Timeout: 0, Dir: p.Dir, Stdin: "All checks passed!\n"}, "devtools", "parsers", "sniff", "-")
 	if res.ExitCode != 0 || res.Stdout != "no standard format recognized\n" {
 		t.Errorf("`parsers sniff -` on prose: exit %d, stdout %q", res.ExitCode, res.Stdout)
 	}
@@ -134,7 +134,7 @@ func TestDevtoolsParsersSniff(t *testing.T) {
 // built into the binary: format parsers only, and no config needed.
 func TestDevtoolsParsersEmbedded(t *testing.T) {
 	p := clitest.NewProject(t)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "parsers", "list", "--embedded")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "devtools", "parsers", "list", "--embedded")
 	if res.ExitCode != 0 {
 		t.Fatalf("`parsers list --embedded` exit = %d\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -147,18 +147,18 @@ func TestDevtoolsParsersEmbedded(t *testing.T) {
 		t.Errorf("`parsers list --embedded` lists a tool parser:\n%s", res.Stdout)
 	}
 
-	res = clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "parsers", "inspect", "fallback", "--embedded")
+	res = clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "devtools", "parsers", "inspect", "fallback", "--embedded")
 	if res.ExitCode != 0 || !strings.Contains(res.Stdout, "parser:   (embedded)") {
 		t.Errorf("`parsers inspect fallback --embedded`: exit %d\n%s%s", res.ExitCode, res.Stdout, res.Stderr)
 	}
 
-	res = clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Stdin: "<checkstyle version=\"4.3\"/>"},
+	res = clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Timeout: 0, Dir: p.Dir, Stdin: "<checkstyle version=\"4.3\"/>"},
 		"devtools", "parsers", "run", "checkstyle-xml", "--embedded")
 	if res.ExitCode != 0 || !strings.Contains(res.Stdout, `"recognized": true`) {
 		t.Errorf("`parsers run checkstyle-xml --embedded`: exit %d\n%s%s", res.ExitCode, res.Stdout, res.Stderr)
 	}
 
-	res = clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "parsers", "list", "--embedded", "--wasm", "x.wasm")
+	res = clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "devtools", "parsers", "list", "--embedded", "--wasm", "x.wasm")
 	if res.ExitCode == 0 {
 		t.Errorf("`--embedded` with `--wasm` was accepted:\n%s", res.Stdout)
 	}
@@ -173,7 +173,7 @@ function getConfig(config) {
   return { ...config, version: "1.0.0", parsers: { embedded: { url: "https://example.test/m.wasm", hash: "sha256:`+strings.Repeat("ab", 32)+`" } } };
 }
 `)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--config", cfg, "config", "show")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "--no-auto-config", "--config", cfg, "config", "show")
 	assertOfflineError(t, res, `parser "embedded": the name is reserved for the fallback parser module built into datamitsu`)
 }
 
@@ -182,7 +182,7 @@ function getConfig(config) {
 func TestDevtoolsParsersPrefetch(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "devtools", "parsers", "prefetch")
 	if res.ExitCode != 0 {
 		t.Fatalf("`devtools parsers prefetch` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)

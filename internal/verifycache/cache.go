@@ -43,6 +43,8 @@ func LoadState(path string) (*VerifyState, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &VerifyState{
+				CWD:     "",
+				LastRun: time.Time{},
 				Version: 1,
 				Entries: map[string]VerifyEntry{},
 			}, nil
@@ -108,6 +110,7 @@ type StateManager struct {
 // NewStateManager wraps state with a manager that persists to path.
 func NewStateManager(state *VerifyState, path string) *StateManager {
 	return &StateManager{
+		mu:    sync.RWMutex{},
 		state: state,
 		path:  path,
 	}

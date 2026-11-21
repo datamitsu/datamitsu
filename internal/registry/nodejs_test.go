@@ -180,9 +180,9 @@ func TestGetLatestNodeLTSVersion(t *testing.T) {
 func TestFilterLatestLTS(t *testing.T) {
 	t.Run("returns first LTS version", func(t *testing.T) {
 		releases := []nodejsRelease{
-			{Cycle: "25", Latest: "25.1.0", LTS: false},
-			{Cycle: "24", Latest: "24.14.0", LTS: "Nomad"},
-			{Cycle: "22", Latest: "22.16.0", LTS: "Jod"},
+			{EOL: nil, Cycle: "25", Latest: "25.1.0", LTS: false},
+			{EOL: nil, Cycle: "24", Latest: "24.14.0", LTS: "Nomad"},
+			{EOL: nil, Cycle: "22", Latest: "22.16.0", LTS: "Jod"},
 		}
 		got := filterLatestLTS(releases)
 		if got != "24.14.0" {
@@ -199,8 +199,8 @@ func TestFilterLatestLTS(t *testing.T) {
 
 	t.Run("all non-LTS returns empty", func(t *testing.T) {
 		releases := []nodejsRelease{
-			{Cycle: "25", Latest: "25.1.0", LTS: false},
-			{Cycle: "23", Latest: "23.11.0", LTS: false},
+			{EOL: nil, Cycle: "25", Latest: "25.1.0", LTS: false},
+			{EOL: nil, Cycle: "23", Latest: "23.11.0", LTS: false},
 		}
 		got := filterLatestLTS(releases)
 		if got != "" {
@@ -258,7 +258,7 @@ func TestIsLTS(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := nodejsRelease{LTS: tt.lts}
+			r := nodejsRelease{Cycle: "", Latest: "", EOL: nil, LTS: tt.lts}
 			got := isLTS(r)
 			if got != tt.want {
 				t.Errorf("isLTS(%v) = %v, want %v", tt.lts, got, tt.want)

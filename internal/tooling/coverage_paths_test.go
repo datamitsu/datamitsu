@@ -8,12 +8,14 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	zerovalue_sync "sync"
 	"testing"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/project"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 // TestPlannerGetTimings pins that a freshly constructed planner exposes a
@@ -50,16 +52,16 @@ func TestSkipReasonStringDefault(t *testing.T) {
 // selected subset) and the ToolNotFoundError path (unknown tool name).
 func TestFilterTasksBySelectedTools(t *testing.T) {
 	tools := config.MapOfTools{
-		"eslint":     {Name: "eslint"},
-		"gofmt":      {Name: "gofmt"},
-		"shellcheck": {Name: "shellcheck"},
+		"eslint":     {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "eslint"},
+		"gofmt":      {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "gofmt"},
+		"shellcheck": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "shellcheck"},
 	}
 	planner := NewPlanner("/repo", "/repo", nil, tools, config.MapOfProjectTypes{}, nil)
 
 	tasks := []Task{
-		{ToolName: "eslint"},
-		{ToolName: "gofmt"},
-		{ToolName: "shellcheck"},
+		{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "eslint"},
+		{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "gofmt"},
+		{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "shellcheck"},
 	}
 
 	t.Run("filters to selected subset", func(t *testing.T) {
@@ -102,8 +104,25 @@ func TestFilterTasksBySelectedTools(t *testing.T) {
 func TestFindFilesByGlobs(t *testing.T) {
 	t.Run("cached path filters cachedFiles by glob", func(t *testing.T) {
 		planner := &Planner{
-			rootPath: "/repo",
-			cwdPath:  "/repo",
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			seedFiles:          nil,
+			globCacheMu:        zerovalue_sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        zerovalue_sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo",
 			cachedFiles: []string{
 				"/repo/main.go",
 				"/repo/pkg/util.go",
@@ -127,9 +146,27 @@ func TestFindFilesByGlobs(t *testing.T) {
 		writeFile(t, filepath.Join(root, "pkg", "util.go"), "package pkg")
 
 		planner := &Planner{
-			rootPath:         root,
-			cwdPath:          root,
-			cacheInitialized: false,
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			seedFiles:          nil,
+			globCacheMu:        zerovalue_sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        zerovalue_sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           root,
+			cwdPath:            root,
+			cacheInitialized:   false,
 		}
 		got := planner.findFilesByGlobs(context.Background(), []string{"**/*.go"})
 		relPaths := make([]string, 0, len(got))
@@ -157,14 +194,42 @@ func TestCreatePerProjectTasksWithFiles(t *testing.T) {
 
 	t.Run("filters projects by tool projectTypes and groups files", func(t *testing.T) {
 		planner := &Planner{
-			rootPath:         "/repo",
-			cwdPath:          "/repo",
-			cachedProjects:   projects,
-			cacheInitialized: true,
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			seedFiles:          nil,
+			globCacheMu:        zerovalue_sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        zerovalue_sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo",
+			cachedProjects:     projects,
+			cacheInitialized:   true,
 		}
 		base := Task{
-			ToolName: "eslint",
-			Tool:     config.Tool{Name: "eslint", ProjectTypes: []string{"node"}},
+			perFileCache: "",
+			inherited:    zerovalue_toolenv.Inherited{},
+			ID:           "",
+			Operation:    "",
+			OpConfig:     config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil},
+			Files:        nil,
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "eslint",
+			Tool:         config.Tool{Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "eslint", ProjectTypes: []string{"node"}},
 		}
 		// Both files live under the node project, so the projectTypes filter
 		// keeps a single /repo/web task with both files grouped to it.
@@ -184,14 +249,42 @@ func TestCreatePerProjectTasksWithFiles(t *testing.T) {
 
 	t.Run("no files runs once per matching project", func(t *testing.T) {
 		planner := &Planner{
-			rootPath:         "/repo",
-			cwdPath:          "/repo",
-			cachedProjects:   projects,
-			cacheInitialized: true,
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			seedFiles:          nil,
+			globCacheMu:        zerovalue_sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        zerovalue_sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo",
+			cachedProjects:     projects,
+			cacheInitialized:   true,
 		}
 		base := Task{
-			ToolName: "golangci",
-			Tool:     config.Tool{Name: "golangci", ProjectTypes: []string{"go"}},
+			perFileCache: "",
+			inherited:    zerovalue_toolenv.Inherited{},
+			ID:           "",
+			Operation:    "",
+			OpConfig:     config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil},
+			Files:        nil,
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "golangci",
+			Tool:         config.Tool{Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci", ProjectTypes: []string{"go"}},
 		}
 		tasks := planner.createPerProjectTasksWithFiles(context.Background(), base, nil)
 		paths := make([]string, 0, len(tasks))
@@ -207,12 +300,29 @@ func TestCreatePerProjectTasksWithFiles(t *testing.T) {
 
 	t.Run("no projectTypes restriction uses all locations", func(t *testing.T) {
 		planner := &Planner{
-			rootPath:         "/repo",
-			cwdPath:          "/repo",
-			cachedProjects:   projects,
-			cacheInitialized: true,
+			detectedTypes:      nil,
+			tools:              nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedFiles:        nil,
+			cachedRel:          nil,
+			seedFiles:          nil,
+			globCacheMu:        zerovalue_sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        zerovalue_sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo",
+			cachedProjects:     projects,
+			cacheInitialized:   true,
 		}
-		base := Task{ToolName: "any", Tool: config.Tool{Name: "any"}}
+		base := Task{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "any", Tool: config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "any"}}
 		tasks := planner.createPerProjectTasksWithFiles(context.Background(), base, nil)
 		if len(tasks) != 3 {
 			t.Fatalf("expected 3 tasks (all projects), got %d", len(tasks))
@@ -229,7 +339,7 @@ func TestFormatParallelizationInfo(t *testing.T) {
 	mkTasks := func(n int) []Task {
 		tasks := make([]Task, n)
 		for i := range tasks {
-			tasks[i] = Task{ToolName: "tool"}
+			tasks[i] = Task{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "tool"}
 		}
 		return tasks
 	}
@@ -277,12 +387,23 @@ func TestFormatParallelizationInfo(t *testing.T) {
 // the multi-chunk parallel fan-out.
 func TestExecuteBatchDryRun(t *testing.T) {
 	e := NewExecutor("/repo", true /*dryRun*/, false, nil, nil)
-	cmdInfo := &binmanager.CommandInfo{Type: "binary", Command: "tool"}
+	cmdInfo := &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "tool"}
 
 	t.Run("whole-project mode (no files) executes once", func(t *testing.T) {
 		task := Task{
-			ToolName: "gofmt",
-			OpConfig: config.ToolOperation{Scope: config.ToolScopeRepository, Args: []string{"-l"}},
+			perFileCache: "",
+			inherited:    zerovalue_toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Operation:    "",
+			Files:        nil,
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "gofmt",
+			OpConfig:     config.ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopeRepository, Args: []string{"-l"}},
 		}
 		res := e.executeBatch(context.Background(), task, cmdInfo, "/repo", time.Now())
 		if !res.Success {
@@ -295,9 +416,19 @@ func TestExecuteBatchDryRun(t *testing.T) {
 
 	t.Run("single chunk executes sequentially", func(t *testing.T) {
 		task := Task{
-			ToolName: "eslint",
-			Files:    []string{"/repo/a.js", "/repo/b.js"},
-			OpConfig: config.ToolOperation{Scope: config.ToolScopePerFile, Args: []string{"--fix", "{files}"}},
+			perFileCache: "",
+			inherited:    zerovalue_toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Operation:    "",
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "eslint",
+			Files:        []string{"/repo/a.js", "/repo/b.js"},
+			OpConfig:     config.ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile, Args: []string{"--fix", "{files}"}},
 		}
 		res := e.executeBatch(context.Background(), task, cmdInfo, "/repo", time.Now())
 		if !res.Success {
@@ -312,9 +443,19 @@ func TestExecuteBatchDryRun(t *testing.T) {
 		// A tiny command-length limit forces one file per chunk.
 		t.Setenv("DATAMITSU_MAX_CMD_LENGTH", "20")
 		task := Task{
-			ToolName: "prettier",
-			Files:    []string{"/repo/long-name-file-1.ts", "/repo/long-name-file-2.ts", "/repo/long-name-file-3.ts"},
-			OpConfig: config.ToolOperation{Scope: config.ToolScopePerFile, Args: []string{"--write", "{files}"}},
+			perFileCache: "",
+			inherited:    zerovalue_toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Operation:    "",
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "prettier",
+			Files:        []string{"/repo/long-name-file-1.ts", "/repo/long-name-file-2.ts", "/repo/long-name-file-3.ts"},
+			OpConfig:     config.ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile, Args: []string{"--write", "{files}"}},
 		}
 		res := e.executeBatch(context.Background(), task, cmdInfo, "/repo", time.Now())
 		if !res.Success {
@@ -331,14 +472,25 @@ func TestExecuteBatchDryRun(t *testing.T) {
 // tool failure. The caller cancelled it, not fail-fast: an interruption.
 func TestExecuteBatchChunksParallelCancelled(t *testing.T) {
 	e := NewExecutor("/repo", true, false, nil, nil)
-	cmdInfo := &binmanager.CommandInfo{Type: "binary", Command: "tool"}
+	cmdInfo := &binmanager.CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: "tool"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel before execution
 
 	task := Task{
-		ToolName: "prettier",
-		OpConfig: config.ToolOperation{Scope: config.ToolScopePerFile, Args: []string{"--write", "{files}"}},
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Operation:    "",
+		Files:        nil,
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "prettier",
+		OpConfig:     config.ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerFile, Args: []string{"--write", "{files}"}},
 	}
 	chunks := [][]string{{"a.ts"}, {"b.ts"}, {"c.ts"}}
 	res := e.executeBatchChunksParallel(ctx, task, cmdInfo, "/repo", chunks, time.Now())

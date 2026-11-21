@@ -10,7 +10,7 @@ import (
 
 func TestBundleInstallPublishesReadinessMarker(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
-	bundles := MapOfBundles{"probe": {Version: "v1", Files: map[string]string{"payload": "complete"}}}
+	bundles := MapOfBundles{"probe": {Archives: nil, Links: nil, Version: "v1", Files: map[string]string{"payload": "complete"}}}
 	bm := New(MapOfApps{}, bundles, nil)
 	path, err := bm.ComputeBundlePath("probe")
 	if err != nil {
@@ -174,9 +174,10 @@ func TestMapOfBundlesDeserialize(t *testing.T) {
 func TestBinManagerInitializesWithBundles(t *testing.T) {
 	bundles := MapOfBundles{
 		"test-bundle": {
-			Version: "1.0",
-			Files:   map[string]string{"a.txt": "hello"},
-			Links:   map[string]string{"a": "a.txt"},
+			Archives: nil,
+			Version:  "1.0",
+			Files:    map[string]string{"a.txt": "hello"},
+			Links:    map[string]string{"a": "a.txt"},
 		},
 	}
 
@@ -206,25 +207,33 @@ func TestBinManagerInitializesWithNilBundles(t *testing.T) {
 
 func TestHasExternalArchives(t *testing.T) {
 	t.Run("no archives", func(t *testing.T) {
-		b := &Bundle{Files: map[string]string{"a": "b"}}
+		b := &Bundle{Version: "", Archives: nil, Links: nil, Files: map[string]string{"a": "b"}}
 		if b.HasExternalArchives() {
 			t.Error("expected false for bundle with no archives")
 		}
 	})
 
 	t.Run("inline only", func(t *testing.T) {
-		b := &Bundle{Archives: map[string]*ArchiveSpec{
-			"a": {Inline: "tar.br:abc"},
-		}}
+		b := &Bundle{
+			Version: "",
+			Files:   nil,
+			Links:   nil, Archives: map[string]*ArchiveSpec{
+				"a": {URL: "", Hash: "", Format: "", Inline: "tar.br:abc"},
+			},
+		}
 		if b.HasExternalArchives() {
 			t.Error("expected false for inline-only archives")
 		}
 	})
 
 	t.Run("external archive", func(t *testing.T) {
-		b := &Bundle{Archives: map[string]*ArchiveSpec{
-			"a": {URL: "https://example.com/a.tar.gz", Hash: "abc", Format: "tar.gz"},
-		}}
+		b := &Bundle{
+			Version: "",
+			Files:   nil,
+			Links:   nil, Archives: map[string]*ArchiveSpec{
+				"a": {Inline: "", URL: "https://example.com/a.tar.gz", Hash: "abc", Format: "tar.gz"},
+			},
+		}
 		if !b.HasExternalArchives() {
 			t.Error("expected true for external archive")
 		}
@@ -237,7 +246,8 @@ func TestInstallBundle_FreshInstall(t *testing.T) {
 
 	bundles := MapOfBundles{
 		"test-bundle": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"hello.txt":     "hello world",
 				"sub/nested.md": "# Nested",
@@ -282,8 +292,10 @@ func TestInstallBundle_AlreadyCached(t *testing.T) {
 
 	bundles := MapOfBundles{
 		"cached-bundle": {
-			Version: "1.0",
-			Files:   map[string]string{"a.txt": "original"},
+			Archives: nil,
+			Links:    nil,
+			Version:  "1.0",
+			Files:    map[string]string{"a.txt": "original"},
 		},
 	}
 
@@ -343,12 +355,16 @@ func TestInstallBundles_MultipleBundles(t *testing.T) {
 
 	bundles := MapOfBundles{
 		"bundle-a": {
-			Version: "1.0",
-			Files:   map[string]string{"a.txt": "aaa"},
+			Archives: nil,
+			Links:    nil,
+			Version:  "1.0",
+			Files:    map[string]string{"a.txt": "aaa"},
 		},
 		"bundle-b": {
-			Version: "2.0",
-			Files:   map[string]string{"b.txt": "bbb"},
+			Archives: nil,
+			Links:    nil,
+			Version:  "2.0",
+			Files:    map[string]string{"b.txt": "bbb"},
 		},
 	}
 
@@ -385,14 +401,17 @@ func TestInstallBundles_SkipExternalArchives(t *testing.T) {
 
 	bundles := MapOfBundles{
 		"inline-only": {
-			Version: "1.0",
-			Files:   map[string]string{"a.txt": "inline content"},
+			Archives: nil,
+			Links:    nil,
+			Version:  "1.0",
+			Files:    map[string]string{"a.txt": "inline content"},
 		},
 		"with-external": {
+			Links:   nil,
 			Version: "1.0",
 			Files:   map[string]string{"b.txt": "has external"},
 			Archives: map[string]*ArchiveSpec{
-				"dist": {URL: "https://example.com/dist.tar.gz", Hash: "abc123", Format: "tar.gz"},
+				"dist": {Inline: "", URL: "https://example.com/dist.tar.gz", Hash: "abc123", Format: "tar.gz"},
 			},
 		},
 	}
@@ -419,8 +438,10 @@ func TestInstallBundles_NoSkipInstallsAll(t *testing.T) {
 
 	bundles := MapOfBundles{
 		"inline-only": {
-			Version: "1.0",
-			Files:   map[string]string{"a.txt": "inline content"},
+			Archives: nil,
+			Links:    nil,
+			Version:  "1.0",
+			Files:    map[string]string{"a.txt": "inline content"},
 		},
 	}
 
@@ -445,7 +466,7 @@ func TestInstallBundles_ContextCancelled(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", tmpDir)
 
 	bundles := MapOfBundles{
-		"bundle-a": {Version: "1.0", Files: map[string]string{"a.txt": "aaa"}},
+		"bundle-a": {Archives: nil, Links: nil, Version: "1.0", Files: map[string]string{"a.txt": "aaa"}},
 	}
 
 	bm := New(MapOfApps{}, bundles, nil)

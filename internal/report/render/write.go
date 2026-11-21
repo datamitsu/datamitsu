@@ -42,7 +42,7 @@ type Target struct {
 // can record which of its exports could not be written. Missing directories
 // are created. stdout is where "-" writes.
 func Open(spec Spec, stdout io.Writer) *Target {
-	t := &Target{Spec: spec, stdout: stdout}
+	t := &Target{renderer: nil, tmp: nil, companion: nil, appendTo: nil, Guard: nil, Err: nil, Spec: spec, stdout: stdout}
 	r, ok := Lookup(spec.Format)
 	if !ok {
 		t.Err = fmt.Errorf("unknown report format %q", spec.Format)

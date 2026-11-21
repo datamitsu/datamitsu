@@ -32,19 +32,22 @@ func dependencyPathFixture(t *testing.T, cacheDir string) (*BinManager, map[stri
 	t.Setenv("DATAMITSU_OFFLINE", "1")
 	apps := binaryAppFixture(t, "root")
 	binary := apps["root"].Binary
-	apps["a"] = App{Binary: binary, DependsOn: edges("b")}
-	apps["b"] = App{Binary: binary}
-	apps["sh"] = App{Shell: &AppConfigShell{Name: "sh"}}
-	apps["runtime"] = App{Uv: &AppConfigUV{}}
-	apps["root"] = App{Binary: binary, DependsOn: edges("a", "sh", "runtime")}
+	apps["a"] = App{Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: binary, DependsOn: edges("b")}
+	apps["b"] = App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: binary}
+	apps["sh"] = App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &AppConfigShell{Args: nil, Name: "sh"}}
+	apps["runtime"] = App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &AppConfigUV{PackageName: "", Version: "", Runtime: "", LockFile: "", RequiresPython: ""}}
+	apps["root"] = App{Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: binary, DependsOn: edges("a", "sh", "runtime")}
 	runtimeTool := filepath.Join(t.TempDir(), "runtime-tool")
 	if err := os.WriteFile(runtimeTool, []byte("stub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	mock := &mockRuntimeAppManager{
-		resolveCommandInfoFunc: func(string, App) (*CommandInfo, error) { return &CommandInfo{Command: runtimeTool}, nil },
+		computeAppPathFunc: nil,
+		resolveCommandInfoFunc: func(string, App) (*CommandInfo, error) {
+			return &CommandInfo{Type: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Command: runtimeTool}, nil
+		},
 		getCommandInfoFunc: func(context.Context, string, App) (*CommandInfo, error) {
-			return &CommandInfo{Command: runtimeTool}, nil
+			return &CommandInfo{Type: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Command: runtimeTool}, nil
 		},
 	}
 	bm := New(apps, nil, mock)
@@ -241,11 +244,11 @@ func TestComposeDependencyPath(t *testing.T) {
 		name, runtimePath, inherited, want string
 		set                                bool
 	}{
-		{name: "no runtime PATH, exec", inherited: "/usr/bin", want: join("/dep", "/usr/bin")},
-		{name: "no runtime PATH, resolve", want: "/dep"},
+		{runtimePath: "", set: false, name: "no runtime PATH, exec", inherited: "/usr/bin", want: join("/dep", "/usr/bin")},
+		{runtimePath: "", inherited: "", set: false, name: "no runtime PATH, resolve", want: "/dep"},
 		// A dependency named `node` must not displace the runtime's pinned interpreter.
 		{name: "runtime prefix, exec", runtimePath: join("/rt", "/usr/bin"), set: true, inherited: "/usr/bin", want: join("/rt", "/dep", "/usr/bin")},
-		{name: "runtime prefix, resolve", runtimePath: "/rt", set: true, want: join("/rt", "/dep")},
+		{inherited: "", name: "runtime prefix, resolve", runtimePath: "/rt", set: true, want: join("/rt", "/dep")},
 		{name: "runtime added nothing", runtimePath: "/usr/bin", set: true, inherited: "/usr/bin", want: join("/dep", "/usr/bin")},
 		{name: "runtime composed otherwise", runtimePath: join("/rt", "/other"), set: true, inherited: "/usr/bin", want: join("/rt", "/other", "/dep")},
 	} {

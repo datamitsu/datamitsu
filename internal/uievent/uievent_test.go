@@ -22,8 +22,8 @@ func TestJSONLSinkRecordsTheFirstWriteError(t *testing.T) {
 	if s.Failed() != nil {
 		t.Fatal("a sink that wrote nothing has failed")
 	}
-	s.Emit(Event{Type: TypeHello, OpID: "stream"})
-	s.Emit(Event{Type: TypeLog, OpID: "log-1"})
+	s.Emit(Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeHello, OpID: "stream"})
+	s.Emit(Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeLog, OpID: "log-1"})
 	if err := s.Failed(); !errors.Is(err, first) {
 		t.Errorf("Failed() = %v, want %v", err, first)
 	}
@@ -87,9 +87,9 @@ func TestJSONLSinkEmitsValidTypedLines(t *testing.T) {
 	var buf bytes.Buffer
 	s := NewJSONLSink(&buf)
 
-	s.Emit(Event{Type: TypePhase, OpID: "run-1", Status: StatusStart, Op: "lint"})
-	s.Emit(Event{Type: TypeToolRun, OpID: "run-1:eslint:.", Status: StatusDone, Tool: "eslint", Success: new(true)})
-	s.Emit(Event{Type: TypeDone, OpID: "run-1", Status: StatusDone, Op: "lint", Tools: 1, Runs: 1})
+	s.Emit(Event{TS: 0, Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypePhase, OpID: "run-1", Status: StatusStart, Op: "lint"})
+	s.Emit(Event{TS: 0, Op: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeToolRun, OpID: "run-1:eslint:.", Status: StatusDone, Tool: "eslint", Success: new(true)})
+	s.Emit(Event{TS: 0, Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeDone, OpID: "run-1", Status: StatusDone, Op: "lint", Tools: 1, Runs: 1})
 
 	lines := decodeLines(t, &buf)
 	if len(lines) != 3 {
@@ -116,7 +116,7 @@ func TestJSONLSinkThrottlesProgressPerOp(t *testing.T) {
 	s.nowFn = func() time.Time { return clock }
 
 	emitProgress := func(op string) {
-		s.Emit(Event{Type: TypeDownload, OpID: op, Status: StatusProgress, Name: "x", BytesDone: 1})
+		s.Emit(Event{TS: 0, Op: "", Tool: "", Dir: "", BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeDownload, OpID: op, Status: StatusProgress, Name: "x", BytesDone: 1})
 	}
 
 	// First progress for dl-1 passes; a second within the interval is dropped.
@@ -129,7 +129,7 @@ func TestJSONLSinkThrottlesProgressPerOp(t *testing.T) {
 	clock = base.Add(150 * time.Millisecond)
 	emitProgress("dl-1")
 	// A terminal (done) event is never throttled, even immediately after.
-	s.Emit(Event{Type: TypeDownload, OpID: "dl-1", Status: StatusDone, Name: "x", BytesDone: 2})
+	s.Emit(Event{TS: 0, Op: "", Tool: "", Dir: "", BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeDownload, OpID: "dl-1", Status: StatusDone, Name: "x", BytesDone: 2})
 
 	lines := decodeLines(t, &buf)
 	// Expect: dl-1 progress, dl-2 progress, dl-1 progress (post-interval), dl-1 done
@@ -147,11 +147,11 @@ func TestJSONLSinkDoesNotThrottlePhaseOrToolRun(t *testing.T) {
 
 	// All low-frequency event types fire back-to-back at the same instant and
 	// must all survive (only download/chunk progress is throttled).
-	s.Emit(Event{Type: TypePhase, OpID: "run-1", Status: StatusStart})
-	s.Emit(Event{Type: TypeToolRun, OpID: "run-1:a:.", Status: StatusStart})
-	s.Emit(Event{Type: TypeToolRun, OpID: "run-1:a:.", Status: StatusDone})
-	s.Emit(Event{Type: TypeInstall, OpID: "inst-1", Status: StatusStart})
-	s.Emit(Event{Type: TypeError, OpID: "run-1:a:.", Msg: "boom"})
+	s.Emit(Event{TS: 0, Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypePhase, OpID: "run-1", Status: StatusStart})
+	s.Emit(Event{TS: 0, Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeToolRun, OpID: "run-1:a:.", Status: StatusStart})
+	s.Emit(Event{TS: 0, Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeToolRun, OpID: "run-1:a:.", Status: StatusDone})
+	s.Emit(Event{TS: 0, Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeInstall, OpID: "inst-1", Status: StatusStart})
+	s.Emit(Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeError, OpID: "run-1:a:.", Msg: "boom"})
 
 	if lines := decodeLines(t, &buf); len(lines) != 5 {
 		t.Fatalf("got %d lines, want 5", len(lines))
@@ -173,7 +173,7 @@ func TestJSONLSinkCancelledCounter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			NewJSONLSink(&buf).Emit(Event{Type: TypeDone, OpID: "run-1", Status: StatusFail, Cancelled: tt.cancelled})
+			NewJSONLSink(&buf).Emit(Event{TS: 0, Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeDone, OpID: "run-1", Status: StatusFail, Cancelled: tt.cancelled})
 			dec := json.NewDecoder(&buf)
 			dec.UseNumber()
 			var m map[string]any
@@ -202,11 +202,11 @@ func TestJSONLSinkLogLevel(t *testing.T) {
 		event Event
 		want  any // nil = key absent
 	}{
-		{"debug log", Event{Type: TypeLog, OpID: "log-1", Level: LevelDebug, Msg: "detail"}, "debug"},
-		{"info log", Event{Type: TypeLog, OpID: "lsp-1", Level: LevelInfo, Msg: "policy"}, "info"},
-		{"warn log", Event{Type: TypeLog, OpID: "lsp-2", Level: LevelWarn, Msg: "timeout"}, "warn"},
-		{"error log", Event{Type: TypeLog, OpID: "log-2", Level: LevelError, Msg: "failed"}, "error"},
-		{"non-log event omits level", Event{Type: TypeDone, OpID: "fmt-1", Op: "format"}, nil},
+		{"debug log", Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeLog, OpID: "log-1", Level: LevelDebug, Msg: "detail"}, "debug"},
+		{"info log", Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeLog, OpID: "lsp-1", Level: LevelInfo, Msg: "policy"}, "info"},
+		{"warn log", Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeLog, OpID: "lsp-2", Level: LevelWarn, Msg: "timeout"}, "warn"},
+		{"error log", Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeLog, OpID: "log-2", Level: LevelError, Msg: "failed"}, "error"},
+		{"non-log event omits level", Event{TS: 0, Status: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: TypeDone, OpID: "fmt-1", Op: "format"}, nil},
 	}
 
 	for _, tt := range tests {

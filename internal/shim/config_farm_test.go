@@ -43,7 +43,7 @@ func newConfigHarness(t *testing.T) *configHarness {
 	t.Helper()
 
 	h := newHarness(t)
-	ch := &configHarness{harness: h}
+	ch := &configHarness{configDir: "", configPath: "", configFarmDir: "", configManifestPath: "", getwdCalls: 0, superprojectCalls: 0, harness: h}
 
 	ch.configDir = filepath.Join(h.base, "machine-config")
 	if err := os.MkdirAll(ch.configDir, 0o755); err != nil {
@@ -143,12 +143,40 @@ func TestDispatchExplicitConfigFarmPerformsNoGitDiscovery(t *testing.T) {
 	// same name at a different target. Nothing here may reach it.
 	projectTool := ch.tool("tofu-project")
 	ch.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: projectTool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: projectTool, Installed: true}},
 	})
 
 	configTool := ch.tool("tofu-machine")
 	ch.writeConfigManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: configTool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: configTool, Installed: true}},
 	})
 	ch.invokeThroughConfigFarm("tofu", "plan")
 
@@ -173,10 +201,38 @@ func TestDispatchProjectFarmWinsByPathOrder(t *testing.T) {
 
 	projectTool := ch.tool("tofu-project")
 	ch.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: projectTool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: projectTool, Installed: true}},
 	})
 	ch.writeConfigManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: ch.tool("tofu-machine"), Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: ch.tool("tofu-machine"), Installed: true}},
 	})
 
 	// Both farms are active; the shell resolved the name through the project
@@ -198,7 +254,21 @@ func TestDispatchExplicitConfigFarmRebakesOnConfigChange(t *testing.T) {
 	ch := newConfigHarness(t)
 	tool := ch.tool("tofu")
 	ch.writeConfigManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	// The config file changed, so the recorded watch tuples no longer match.
 	ch.d.Validate = func(sourcefarm.Manifest) bool { return false }
@@ -230,8 +300,21 @@ func TestDispatchExplicitConfigFarmReplaysRecordedFlags(t *testing.T) {
 	ch := newConfigHarness(t)
 	tool := ch.tool("tofu")
 	ch.writeConfigManifest(sourcefarm.Manifest{
-		ConfigArgs: []string{"--before-config", filepath.Join(ch.configDir, "shared.js"), "--config", ch.configPath},
-		Entries:    []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		ConfigArgs:       []string{"--before-config", filepath.Join(ch.configDir, "shared.js"), "--config", ch.configPath},
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	ch.d.Validate = func(sourcefarm.Manifest) bool { return false }
 	ch.d.QuietFarm = func(string) bool { return true }
@@ -260,7 +343,21 @@ func TestDispatchExplicitConfigFarmMissingManifest(t *testing.T) {
 		// The repository has a perfectly good farm declaring the name. Falling
 		// back to it is the silent failure this must not produce.
 		ch.writeManifest(sourcefarm.Manifest{
-			Entries: []sourcefarm.Entry{{Name: "tofu", Command: ch.tool("tofu-project"), Installed: true}},
+			FormatVersion:    0,
+			Origin:           "",
+			Root:             "",
+			ConfigPaths:      nil,
+			FarmDir:          "",
+			DatamitsuVersion: "",
+			OS:               "",
+			Arch:             "",
+			ShimTarget:       "",
+			StalenessKey:     "",
+			Watch:            nil,
+			ConfigArgs:       nil,
+			Excluded:         nil,
+			Shadowed:         nil,
+			Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: ch.tool("tofu-project"), Installed: true}},
 		})
 		ch.invokeThroughConfigFarm("tofu")
 
@@ -305,7 +402,21 @@ func TestDispatchExplicitConfigFarmMissingManifest(t *testing.T) {
 		// the variable says so, and its manifest is gone. The origin cannot be
 		// read, and the repository's own farm must not be what answers instead.
 		ch.writeManifest(sourcefarm.Manifest{
-			Entries: []sourcefarm.Entry{{Name: "tofu", Command: ch.tool("tofu-project"), Installed: true}},
+			FormatVersion:    0,
+			Origin:           "",
+			Root:             "",
+			ConfigPaths:      nil,
+			FarmDir:          "",
+			DatamitsuVersion: "",
+			OS:               "",
+			Arch:             "",
+			ShimTarget:       "",
+			StalenessKey:     "",
+			Watch:            nil,
+			ConfigArgs:       nil,
+			Excluded:         nil,
+			Shadowed:         nil,
+			Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: ch.tool("tofu-project"), Installed: true}},
 		})
 		ch.d.CacheRoot = func() string { return filepath.Join(ch.base, "other-cache") }
 		ch.activate(ch.configFarmDir)
@@ -334,13 +445,21 @@ func TestDispatchExplicitConfigFarmMissingManifest(t *testing.T) {
 func (ch *configHarness) writeWrongOriginConfigManifest() {
 	ch.t.Helper()
 	data, err := sourcefarm.Encode(sourcefarm.Manifest{
-		FormatVersion: sourcefarm.ManifestFormatVersion,
-		Origin:        sourcefarm.OriginGitRoot,
-		Root:          ch.root,
-		FarmDir:       ch.configFarmDir,
-		OS:            runtime.GOOS,
-		Arch:          runtime.GOARCH,
-		Entries:       []sourcefarm.Entry{{Name: "tofu", Command: ch.tool("tofu-machine"), Installed: true}},
+		ConfigPaths:      nil,
+		DatamitsuVersion: "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		FormatVersion:    sourcefarm.ManifestFormatVersion,
+		Origin:           sourcefarm.OriginGitRoot,
+		Root:             ch.root,
+		FarmDir:          ch.configFarmDir,
+		OS:               runtime.GOOS,
+		Arch:             runtime.GOARCH,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: ch.tool("tofu-machine"), Installed: true}},
 	})
 	if err != nil {
 		ch.t.Fatalf("encode manifest: %v", err)
@@ -364,7 +483,21 @@ func TestDispatchConfigFarmWrongOrigin(t *testing.T) {
 		// The repository the shell stands in has a good farm declaring the name.
 		// Answering from it is the silent cross-boundary failure under test.
 		ch.writeManifest(sourcefarm.Manifest{
-			Entries: []sourcefarm.Entry{{Name: "tofu", Command: ch.tool("tofu-project"), Installed: true}},
+			FormatVersion:    0,
+			Origin:           "",
+			Root:             "",
+			ConfigPaths:      nil,
+			FarmDir:          "",
+			DatamitsuVersion: "",
+			OS:               "",
+			Arch:             "",
+			ShimTarget:       "",
+			StalenessKey:     "",
+			Watch:            nil,
+			ConfigArgs:       nil,
+			Excluded:         nil,
+			Shadowed:         nil,
+			Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: ch.tool("tofu-project"), Installed: true}},
 		})
 		ch.writeWrongOriginConfigManifest()
 		prepare(ch)
@@ -414,7 +547,21 @@ func TestDispatchUnrecognizedFarmGitRootManifestFallsThrough(t *testing.T) {
 	ch := newConfigHarness(t)
 	tool := ch.tool("tofu-project")
 	ch.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	ch.writeWrongOriginConfigManifest()
 	ch.d.CacheRoot = func() string { return filepath.Join(ch.base, "other-cache") }
@@ -435,7 +582,21 @@ func TestDispatchExplicitConfigFarmFoundThroughActivationVariable(t *testing.T) 
 	ch := newConfigHarness(t)
 	tool := ch.tool("tofu")
 	ch.writeConfigManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	// The cache root this process computes is not the one activation computed,
 	// so the farm directory is recognizable only through the exported variable.
@@ -461,10 +622,38 @@ func TestDispatchExplicitConfigUnknownNameExits127(t *testing.T) {
 	// The repository declares the name; the machine-level config does not. A
 	// PATH search would find it, which is exactly what must not happen.
 	ch.writeManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "terragrunt", Command: ch.tool("terragrunt"), Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "terragrunt", Command: ch.tool("terragrunt"), Installed: true}},
 	})
 	ch.writeConfigManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: ch.tool("tofu"), Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: ch.tool("tofu"), Installed: true}},
 	})
 	ch.invokeThroughConfigFarm("terragrunt", "plan")
 
@@ -490,10 +679,23 @@ func TestDispatchExplicitConfigUnknownNameExits127(t *testing.T) {
 func TestDispatchExplicitConfigRetiredFarmNamesTheConfigFlag(t *testing.T) {
 	ch := newConfigHarness(t)
 	ch.writeConfigManifest(sourcefarm.Manifest{
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
 		// A format version this build retired: it cannot be served back, and the
 		// rebake below is made to fail.
 		FormatVersion: sourcefarm.ManifestFormatVersion - 1,
-		Entries:       []sourcefarm.Entry{{Name: "tofu", Command: ch.tool("tofu"), Installed: true}},
+		Entries:       []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: ch.tool("tofu"), Installed: true}},
 	})
 	ch.d.Validate = func(sourcefarm.Manifest) bool { return false }
 	ch.spawnFunc = func([]string) error { return os.ErrPermission }
@@ -516,7 +718,21 @@ func TestConfigFarmDirectoryIsStrippedFromChildPath(t *testing.T) {
 	ch := newConfigHarness(t)
 	tool := ch.tool("tofu")
 	ch.writeConfigManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: tool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: tool, Installed: true}},
 	})
 	ch.d.Environ = func() []string {
 		return []string{"PATH=" + ch.configFarmDir + string(os.PathListSeparator) + "/usr/bin"}
@@ -551,7 +767,21 @@ func TestDispatchUnreadableProjectManifestNeverFallsBackToTheConfigFarm(t *testi
 
 	machineTool := ch.tool("tofu-machine")
 	ch.writeConfigManifest(sourcefarm.Manifest{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Command: machineTool, Installed: true}},
+		FormatVersion:    0,
+		Origin:           "",
+		Root:             "",
+		ConfigPaths:      nil,
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Entries:          []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Command: machineTool, Installed: true}},
 	})
 
 	// The project farm exists on disk and PATH selected it; its manifest does
@@ -581,16 +811,42 @@ func TestDispatchUnreadableProjectManifestNeverFallsBackToTheConfigFarm(t *testi
 // split into two arguments and name neither config.
 func TestRefreshHintQuotesAChainThatNeedsIt(t *testing.T) {
 	plain := refreshHint(sourcefarm.Manifest{
-		Origin:      sourcefarm.OriginExplicitConfig,
-		ConfigPaths: []string{"/home/u/tools.config.ts"},
+		FormatVersion:    0,
+		Root:             "",
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Entries:          nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Origin:           sourcefarm.OriginExplicitConfig,
+		ConfigPaths:      []string{"/home/u/tools.config.ts"},
 	})
 	if !strings.Contains(plain, "--config /home/u/tools.config.ts --force") {
 		t.Errorf("an ordinary path was not spelled plainly: %s", plain)
 	}
 
 	spaced := refreshHint(sourcefarm.Manifest{
-		Origin:      sourcefarm.OriginExplicitConfig,
-		ConfigPaths: []string{"/home/u/My Configs/tools.config.ts"},
+		FormatVersion:    0,
+		Root:             "",
+		FarmDir:          "",
+		DatamitsuVersion: "",
+		OS:               "",
+		Arch:             "",
+		ShimTarget:       "",
+		StalenessKey:     "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Entries:          nil,
+		Excluded:         nil,
+		Shadowed:         nil,
+		Origin:           sourcefarm.OriginExplicitConfig,
+		ConfigPaths:      []string{"/home/u/My Configs/tools.config.ts"},
 	})
 	if strings.Contains(spaced, "--config /home/u/My Configs/") {
 		t.Errorf("a path with a space was left unquoted: %s", spaced)

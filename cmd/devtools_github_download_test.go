@@ -105,15 +105,15 @@ func TestGitHubVisibilityDownloadPaths(t *testing.T) {
 						_ = json.NewEncoder(w).Encode(map[string]any{"description": "fixture", "private": tc.private, "id": 1})
 						return
 					}
-					_ = json.NewEncoder(w).Encode(releaseasset.Release{TagName: "v1", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{Name: "tool-linux-amd64", APIURL: apiURL + "/repos/o/tool/releases/assets/1", BrowserDownloadURL: browser.URL + "/tool-linux-amd64", Digest: expected}}})
+					_ = json.NewEncoder(w).Encode(releaseasset.Release{Prerelease: false, Draft: false, TagName: "v1", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-amd64", APIURL: apiURL + "/repos/o/tool/releases/assets/1", BrowserDownloadURL: browser.URL + "/tool-linux-amd64", Digest: expected}}})
 				}))
 				defer api.Close()
 				apiURL = api.URL
-				source := releaseprovider.Source{Type: "github", URL: api.URL, APIURL: api.URL}
+				source := releaseprovider.Source{TokenEnv: "", DownloadAuth: "", Type: "github", URL: api.URL, APIURL: api.URL}
 				if tc.token {
 					source.TokenEnv = "GITHUB_TOKEN"
 				}
-				state := &appstate.State{Sources: map[string]releaseprovider.Source{"upstream": source}, Apps: map[string]*appstate.AppMetadata{"tool": {Source: "upstream", Repository: "o/tool", Tag: "v1"}}, Platforms: []string{"linux/amd64/glibc"}, Binaries: map[string]*appstate.BinariesEntry{}}
+				state := &appstate.State{Sources: map[string]releaseprovider.Source{"upstream": source}, Apps: map[string]*appstate.AppMetadata{"tool": {Hashes: nil, Checksums: nil, Source: "upstream", Repository: "o/tool", Tag: "v1"}}, Platforms: []string{"linux/amd64/glibc"}, Binaries: map[string]*appstate.BinariesEntry{}}
 				path := filepath.Join(t.TempDir(), "binaryApps.json")
 				if err := appstate.Save(path, state); err != nil {
 					t.Fatal(err)
@@ -159,7 +159,7 @@ func TestGitHubVisibilityDownloadPaths(t *testing.T) {
 					}
 				}
 				manager := func() *binmanager.BinManager {
-					return binmanager.NewWithResolver(binmanager.MapOfApps{"tool": {Binary: &binmanager.AppConfigBinary{Binaries: saved.Binaries["tool"].Binaries}}}, nil, nil, target.NewResolver(target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcGlibc}))
+					return binmanager.NewWithResolver(binmanager.MapOfApps{"tool": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Version: "", Binaries: saved.Binaries["tool"].Binaries}}}, nil, nil, target.NewResolver(target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcGlibc}))
 				}
 				t.Setenv("GITHUB_TOKEN", "")
 				beforeAPI := assetRequests.Load()
@@ -212,12 +212,12 @@ func TestGitHubPreviouslyGeneratedAPIEntryIsRefreshed(t *testing.T) {
 			_, _ = w.Write([]byte(`{"private":false,"description":"fixture"}`))
 			return
 		}
-		_ = json.NewEncoder(w).Encode(releaseasset.Release{TagName: "v1", Assets: []releaseasset.Asset{{Name: "tool-linux-amd64", APIURL: base + "/repos/o/tool/releases/assets/1", BrowserDownloadURL: base + "/releases/download/v1/tool-linux-amd64", Digest: "sha256:" + strings.Repeat("a", 64)}}})
+		_ = json.NewEncoder(w).Encode(releaseasset.Release{PublishedAt: time.Time{}, Prerelease: false, Draft: false, TagName: "v1", Assets: []releaseasset.Asset{{UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-amd64", APIURL: base + "/repos/o/tool/releases/assets/1", BrowserDownloadURL: base + "/releases/download/v1/tool-linux-amd64", Digest: "sha256:" + strings.Repeat("a", 64)}}})
 	}))
 	defer srv.Close()
 	base = srv.URL
-	source := releaseprovider.Source{Type: "github", URL: base, APIURL: base, TokenEnv: "GITHUB_TOKEN"}
-	metadata := &appstate.AppMetadata{Source: "upstream", Repository: "o/tool", Tag: "v1"}
+	source := releaseprovider.Source{DownloadAuth: "", Type: "github", URL: base, APIURL: base, TokenEnv: "GITHUB_TOKEN"}
+	metadata := &appstate.AppMetadata{Hashes: nil, Checksums: nil, Source: "upstream", Repository: "o/tool", Tag: "v1"}
 	selection := []string{"linux/amd64/glibc"}
 	// This is the published PR #367 fingerprint representation, before visibility became a generation input.
 	legacy := struct {
@@ -233,7 +233,7 @@ func TestGitHubPreviouslyGeneratedAPIEntryIsRefreshed(t *testing.T) {
 	if oldHash == appstate.ComputeConfigHash(metadata, selection, source) {
 		t.Fatal("old generation fingerprint still matches")
 	}
-	state := &appstate.State{Sources: map[string]releaseprovider.Source{"upstream": source}, Apps: map[string]*appstate.AppMetadata{"tool": metadata}, Platforms: selection, Binaries: map[string]*appstate.BinariesEntry{"tool": {ConfigHash: oldHash, Binaries: binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": {URL: base + "/repos/o/tool/releases/assets/1", Auth: &httpx.RequestAuth{TokenEnv: "GITHUB_TOKEN", Origin: base, Header: "Authorization", Scheme: "Bearer", Accept: "application/octet-stream"}, Hash: strings.Repeat("a", 64), ContentType: binmanager.BinContentTypeBinary}}}}}}}
+	state := &appstate.State{Sources: map[string]releaseprovider.Source{"upstream": source}, Apps: map[string]*appstate.AppMetadata{"tool": metadata}, Platforms: selection, Binaries: map[string]*appstate.BinariesEntry{"tool": {Source: nil, Description: "", ConfigHash: oldHash, Binaries: binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": {BinaryPath: nil, ExtractDir: false, URL: base + "/repos/o/tool/releases/assets/1", Auth: &httpx.RequestAuth{TokenEnv: "GITHUB_TOKEN", Origin: base, Header: "Authorization", Scheme: "Bearer", Accept: "application/octet-stream"}, Hash: strings.Repeat("a", 64), ContentType: binmanager.BinContentTypeBinary}}}}}}}
 	path := filepath.Join(t.TempDir(), "binaryApps.json")
 	if err := appstate.Save(path, state); err != nil {
 		t.Fatal(err)

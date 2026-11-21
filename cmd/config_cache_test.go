@@ -352,7 +352,10 @@ func TestConfigCacheRefusesAChainEditedMidEvaluation(t *testing.T) {
 	path := writeStandaloneConfig(t, `return { ignoreRules: ["before: eslint"] };`)
 
 	c := newConfigCache(context.Background(), configCacheParams{
-		sources:       []configSource{{name: path, path: path}},
+		gitRoot:       "",
+		prior:         nil,
+		opts:          loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false},
+		sources:       []configSource{{content: "", isDefault: false, isRemote: false, name: path, path: path}},
 		explicitChain: []string{path},
 		noAutoConfig:  true,
 		cwd:           t.TempDir(),
@@ -365,7 +368,7 @@ func TestConfigCacheRefusesAChainEditedMidEvaluation(t *testing.T) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { version: "1.0.0", ignoreRules: ["after: eslint"] }; }`)
 
-	c.save(&chainObservations{}, &configcache.Entry{Config: &config.Config{}})
+	c.save(&chainObservations{nonDeterminism: "", warnings: nil, engines: nil}, &configcache.Entry{Warnings: nil, RemoteURLs: nil, Config: &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}})
 	if n := configEvalArtifactCount(t, cacheHome); n != 0 {
 		t.Errorf("stored %d artifacts for a chain edited mid-evaluation, want 0", n)
 	}
@@ -383,7 +386,9 @@ function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { version: "1.0.0", ignoreRules: ["after: eslint"] }; }`)
 
 	c := newConfigCache(context.Background(), configCacheParams{
-		sources:       []configSource{{name: path, path: path}},
+		gitRoot:       "",
+		opts:          loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false},
+		sources:       []configSource{{content: "", isDefault: false, isRemote: false, name: path, path: path}},
 		explicitChain: []string{path},
 		noAutoConfig:  true,
 		cwd:           t.TempDir(),
@@ -426,7 +431,7 @@ func TestChainMatches(t *testing.T) {
 		},
 		{
 			name:  "file vanished",
-			chain: []configcache.ChainFile{{Path: present, Exists: false}},
+			chain: []configcache.ChainFile{{ContentHash: "", Path: present, Exists: false}},
 			want:  false,
 		},
 	}
@@ -512,7 +517,9 @@ func TestConfigCacheInputsRecordTheGitRootUnderNoAutoConfig(t *testing.T) {
 	cfgPath := writeStandaloneConfig(t, `return { ignoreRules: ["no-auto: eslint"] };`)
 
 	inputs, _, err := configCacheInputs(context.Background(), configCacheParams{
-		sources:       []configSource{{name: cfgPath, path: cfgPath}},
+		prior:         nil,
+		opts:          loadConfigOptions{skipLockfileValidation: false, tolerateGitRootFailure: false, detectProjectLocations: false, evaluateManagedConfigContent: false, retainManagedConfigLayers: false, requireVM: false},
+		sources:       []configSource{{content: "", isDefault: false, isRemote: false, name: cfgPath, path: cfgPath}},
 		explicitChain: []string{cfgPath},
 		noAutoConfig:  true,
 		gitRoot:       "", // --no-auto-config: the loader never resolves one

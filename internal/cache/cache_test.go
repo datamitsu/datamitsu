@@ -32,7 +32,7 @@ func TestCacheConcurrentAccess(t *testing.T) {
 	}
 
 	// Create cache
-	cfg := config.Config{}
+	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	cache, err := NewCache(tmpDir, projectPath, cfg, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
@@ -109,7 +109,7 @@ func TestCacheConcurrentSave(t *testing.T) {
 	}
 
 	// Create cache
-	cfg := config.Config{}
+	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	cache, err := NewCache(tmpDir, projectPath, cfg, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
@@ -168,7 +168,7 @@ func TestInvalidationKeyFormat(t *testing.T) {
 		t.Fatalf("failed to create project dir: %v", err)
 	}
 
-	cfg := config.Config{}
+	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	key, err := calculateInvalidationKey(cfg, nil)
 	if err != nil {
 		t.Fatalf("calculateInvalidationKey() error = %v", err)
@@ -206,7 +206,7 @@ func TestInvalidationKeyFormat(t *testing.T) {
 // TestInvalidationKeyNamesTheEmbeddedParser: two builds that report one version
 // but embed different fallback modules share no per-file pass.
 func TestInvalidationKeyNamesTheEmbeddedParser(t *testing.T) {
-	cfg := config.Config{}
+	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	key, err := calculateInvalidationKey(cfg, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -227,13 +227,34 @@ func TestInvalidationKeyNamesTheEmbeddedParser(t *testing.T) {
 // operation's failOn is not part of the key, while any other edit is.
 func TestInvalidationKeyIgnoresFailOn(t *testing.T) {
 	cfg := func(failOn config.Severity, args ...string) config.Config {
-		return config.Config{Tools: config.MapOfTools{
-			"lint": {Name: "lint", Operations: map[config.OperationType]config.ToolOperation{
-				config.OpLint: {App: "lint", Args: args, FailOn: failOn},
-			}},
-			// A tool kept only to be skipped declares no operations at all.
-			"placeholder": {Name: "placeholder", Skip: true},
-		}}
+		return config.Config{
+			Name:           "",
+			Version:        "",
+			Apps:           nil,
+			Bundles:        nil,
+			Runtimes:       nil,
+			ManagedConfigs: nil,
+			EjectConfigs:   nil,
+			ProjectTypes:   nil,
+			Execution:      nil,
+			InitCommands:   nil,
+			IgnoreRules:    nil,
+			SharedStorage:  nil,
+			OCI:            nil,
+			Parsers:        nil,
+			Lsp:            nil, Tools: config.MapOfTools{
+				"lint": {
+					ProjectTypes: nil,
+					Skip:         false,
+					SkipReason:   "",
+					OutputParser: nil, Name: "lint", Operations: map[config.OperationType]config.ToolOperation{
+						config.OpLint: {Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "lint", Args: args, FailOn: failOn},
+					},
+				},
+				// A tool kept only to be skipped declares no operations at all.
+				"placeholder": {ProjectTypes: nil, SkipReason: "", Operations: nil, OutputParser: nil, Name: "placeholder", Skip: true},
+			},
+		}
 	}
 	key := func(c config.Config) string {
 		t.Helper()

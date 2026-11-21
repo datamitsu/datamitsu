@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	zerovalue_cienv "github.com/datamitsu/datamitsu/internal/cienv"
 	"github.com/datamitsu/datamitsu/internal/facts"
 
 	"github.com/dop251/goja"
@@ -41,7 +42,7 @@ func evalString(t *testing.T, vm *goja.Runtime, expr string) string {
 // The whole point: enumeration order must be the same on every conversion, and
 // it must be sorted rather than whatever Go's map iteration produced first.
 func TestDeterministicValueSortsMapKeysStably(t *testing.T) {
-	sample := &jsvSample{Entries: map[string]jsvNested{}}
+	sample := &jsvSample{Names: nil, Ptr: nil, Plain: "", Hidden: "", Untagged: "", Entries: map[string]jsvNested{}}
 	for _, name := range []string{"zeta", "alpha", "mu", "beta", "kappa", "omega", "delta", "iota"} {
 		sample.Entries[name] = jsvNested{Files: map[string]string{"b": "2", "a": "1", "c": "3"}}
 	}
@@ -63,11 +64,11 @@ func TestDeterministicValueSortsMapKeysStably(t *testing.T) {
 // fields, the same JSON, the same nil shapes — only the order is pinned.
 func TestDeterministicValueMatchesGojaShapes(t *testing.T) {
 	cases := map[string]*jsvSample{
-		"zero": {},
+		"zero": {Entries: nil, Names: nil, Ptr: nil, Plain: "", Hidden: "", Untagged: ""},
 		"populated": {
 			Entries:  map[string]jsvNested{"a": {Files: map[string]string{"f": "1"}}},
 			Names:    []string{"n1", "n2"},
-			Ptr:      &jsvNested{},
+			Ptr:      &jsvNested{Files: nil},
 			Plain:    "p",
 			Hidden:   "h",
 			Untagged: "u",
@@ -131,7 +132,7 @@ func TestDeterministicValueNil(t *testing.T) {
 // change between two evaluations that share a cache key.
 func TestFactsEnvEnumerationIsSorted(t *testing.T) {
 	e := newTestEngine(t)
-	e.facts = &facts.Facts{Env: map[string]string{"ZZZ": "1", "AAA": "2", "MMM": "3"}}
+	e.facts = &facts.Facts{PackageName: "", Version: "", BinaryCommand: "", BinaryPath: "", OS: "", Arch: "", Libc: "", IsInGitRepo: false, IsMonorepo: false, CI: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Env: map[string]string{"ZZZ": "1", "AAA": "2", "MMM": "3"}}
 
 	const want = "AAA,MMM,ZZZ"
 	for range 20 {

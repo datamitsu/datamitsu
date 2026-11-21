@@ -21,24 +21,25 @@ func TestResolveAnnotations(t *testing.T) {
 		recorded      bool
 		export        string
 	}{
-		{name: "auto on GitHub", requested: AnnotationsAuto, vendor: cienv.VendorGitHub, mode: AnnotationsGitHub, recorded: true, export: "github-annotations"},
-		{name: "auto on Azure", requested: AnnotationsAuto, vendor: cienv.VendorAzure, mode: AnnotationsAzure, recorded: true, export: "azure-annotations"},
-		{name: "auto on TeamCity", requested: AnnotationsAuto, vendor: cienv.VendorTeamCity, mode: AnnotationsTeamCity, recorded: true, export: "teamcity-annotations"},
-		{name: "auto elsewhere", requested: AnnotationsAuto, vendor: cienv.VendorGitLab, mode: AnnotationsOff, why: "not a CI job that reads annotations"},
-		{name: "auto on Gitea", requested: AnnotationsAuto, vendor: cienv.VendorGitea, mode: AnnotationsOff, why: "not a CI job that reads annotations"},
+		{quiet: false, stdout: false, why: "", name: "auto on GitHub", requested: AnnotationsAuto, vendor: cienv.VendorGitHub, mode: AnnotationsGitHub, recorded: true, export: "github-annotations"},
+		{quiet: false, stdout: false, why: "", name: "auto on Azure", requested: AnnotationsAuto, vendor: cienv.VendorAzure, mode: AnnotationsAzure, recorded: true, export: "azure-annotations"},
+		{quiet: false, stdout: false, why: "", name: "auto on TeamCity", requested: AnnotationsAuto, vendor: cienv.VendorTeamCity, mode: AnnotationsTeamCity, recorded: true, export: "teamcity-annotations"},
+		{quiet: false, stdout: false, recorded: false, export: "", name: "auto elsewhere", requested: AnnotationsAuto, vendor: cienv.VendorGitLab, mode: AnnotationsOff, why: "not a CI job that reads annotations"},
+		{quiet: false, stdout: false, recorded: false, export: "", name: "auto on Gitea", requested: AnnotationsAuto, vendor: cienv.VendorGitea, mode: AnnotationsOff, why: "not a CI job that reads annotations"},
 		{
 			name: "auto beside a document", requested: AnnotationsAuto, vendor: cienv.VendorGitHub, quiet: true, stdout: true,
 			mode: AnnotationsOff, why: "stdout carries a document", recorded: true, export: "github-annotations",
 		},
 		{
-			name: "auto beside a stream", requested: AnnotationsAuto, vendor: cienv.VendorTeamCity, quiet: true,
+			stdout: false,
+			name:   "auto beside a stream", requested: AnnotationsAuto, vendor: cienv.VendorTeamCity, quiet: true,
 			mode: AnnotationsOff, why: "the run writes a JSON-L event stream", recorded: true, export: "teamcity-annotations",
 		},
-		{name: "github anywhere", requested: AnnotationsGitHub, quiet: true, mode: AnnotationsGitHub, recorded: true, export: "github-annotations"},
-		{name: "azure on GitHub", requested: AnnotationsAzure, vendor: cienv.VendorGitHub, mode: AnnotationsAzure, recorded: true, export: "azure-annotations"},
-		{name: "off on GitHub", requested: AnnotationsOff, vendor: cienv.VendorGitHub, mode: AnnotationsOff, why: "--annotations off", recorded: true, export: "github-annotations"},
-		{name: "off elsewhere", requested: AnnotationsOff, mode: AnnotationsOff, why: "--annotations off"},
-		{name: "a continuation asks for none", vendor: cienv.VendorGitHub, mode: AnnotationsOff, export: "github-annotations"},
+		{vendor: "", stdout: false, why: "", name: "github anywhere", requested: AnnotationsGitHub, quiet: true, mode: AnnotationsGitHub, recorded: true, export: "github-annotations"},
+		{quiet: false, stdout: false, why: "", name: "azure on GitHub", requested: AnnotationsAzure, vendor: cienv.VendorGitHub, mode: AnnotationsAzure, recorded: true, export: "azure-annotations"},
+		{quiet: false, stdout: false, name: "off on GitHub", requested: AnnotationsOff, vendor: cienv.VendorGitHub, mode: AnnotationsOff, why: "--annotations off", recorded: true, export: "github-annotations"},
+		{vendor: "", quiet: false, stdout: false, recorded: false, export: "", name: "off elsewhere", requested: AnnotationsOff, mode: AnnotationsOff, why: "--annotations off"},
+		{requested: "", quiet: false, stdout: false, why: "", recorded: false, name: "a continuation asks for none", vendor: cienv.VendorGitHub, mode: AnnotationsOff, export: "github-annotations"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -130,14 +131,14 @@ func TestTouchedFiles(t *testing.T) {
 	}
 
 	t.Run("pull_request diffs the merge against the base tip", func(t *testing.T) {
-		touched, why := TouchedFiles(ctx, repo, cienv.Info{SHA: merge}, cienv.Runtime{EventName: "pull_request"})
+		touched, why := TouchedFiles(ctx, repo, cienv.Info{Vendor: "", IsCI: false, IsPR: false, Ref: "", BaseRef: "", PRNumber: "", SHA: merge}, cienv.Runtime{Workspace: "", StepSummaryPath: "", EventPath: "", EventName: "pull_request"})
 		if why != "" || len(touched) != 1 || !touched["b.txt"] {
 			t.Errorf("touched = %v, why %q; want only the branch's b.txt", touched, why)
 		}
 	})
 
 	t.Run("pull_request not on the merge commit", func(t *testing.T) {
-		_, why := TouchedFiles(ctx, repo, cienv.Info{SHA: first}, cienv.Runtime{EventName: "pull_request"})
+		_, why := TouchedFiles(ctx, repo, cienv.Info{Vendor: "", IsCI: false, IsPR: false, Ref: "", BaseRef: "", PRNumber: "", SHA: first}, cienv.Runtime{Workspace: "", StepSummaryPath: "", EventPath: "", EventName: "pull_request"})
 		if why != "HEAD is not the merge commit" {
 			t.Errorf("why = %q", why)
 		}
@@ -149,23 +150,25 @@ func TestTouchedFiles(t *testing.T) {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("shallow clone: %v\n%s", err, out)
 		}
-		_, why := TouchedFiles(ctx, shallow, cienv.Info{SHA: merge}, cienv.Runtime{EventName: "pull_request"})
+		_, why := TouchedFiles(ctx, shallow, cienv.Info{Vendor: "", IsCI: false, IsPR: false, Ref: "", BaseRef: "", PRNumber: "", SHA: merge}, cienv.Runtime{Workspace: "", StepSummaryPath: "", EventPath: "", EventName: "pull_request"})
 		if why != "HEAD^1 not fetched (set fetch-depth: 2)" {
 			t.Errorf("why = %q", why)
 		}
 	})
 
 	t.Run("push diffs from the commit it started at", func(t *testing.T) {
-		touched, why := TouchedFiles(ctx, repo, cienv.Info{}, cienv.Runtime{EventName: "push", EventPath: event(t, `{"before":"`+first+`"}`)})
+		touched, why := TouchedFiles(ctx, repo, cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, cienv.Runtime{Workspace: "", StepSummaryPath: "", EventName: "push", EventPath: event(t, `{"before":"`+first+`"}`)})
 		if why != "" || len(touched) != 2 || !touched["b.txt"] || !touched["c.txt"] {
 			t.Errorf("touched = %v, why %q; want b.txt and c.txt", touched, why)
 		}
 	})
 
 	t.Run("push from a commit not fetched", func(t *testing.T) {
-		_, why := TouchedFiles(ctx, repo, cienv.Info{}, cienv.Runtime{
-			EventName: "push",
-			EventPath: event(t, `{"before":"1111111111111111111111111111111111111111"}`),
+		_, why := TouchedFiles(ctx, repo, cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, cienv.Runtime{
+			Workspace:       "",
+			StepSummaryPath: "",
+			EventName:       "push",
+			EventPath:       event(t, `{"before":"1111111111111111111111111111111111111111"}`),
 		})
 		if why != "before commit not fetched (set fetch-depth: 0)" {
 			t.Errorf("why = %q", why)
@@ -173,9 +176,11 @@ func TestTouchedFiles(t *testing.T) {
 	})
 
 	t.Run("push that created its branch", func(t *testing.T) {
-		_, why := TouchedFiles(ctx, repo, cienv.Info{}, cienv.Runtime{
-			EventName: "push",
-			EventPath: event(t, `{"before":"0000000000000000000000000000000000000000"}`),
+		_, why := TouchedFiles(ctx, repo, cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, cienv.Runtime{
+			Workspace:       "",
+			StepSummaryPath: "",
+			EventName:       "push",
+			EventPath:       event(t, `{"before":"0000000000000000000000000000000000000000"}`),
 		})
 		if why != "the push names no commit it started from" {
 			t.Errorf("why = %q", why)
@@ -184,9 +189,11 @@ func TestTouchedFiles(t *testing.T) {
 
 	t.Run("push whose before is not an object name", func(t *testing.T) {
 		out := filepath.Join(t.TempDir(), "written")
-		_, why := TouchedFiles(ctx, repo, cienv.Info{}, cienv.Runtime{
-			EventName: "push",
-			EventPath: event(t, `{"before":"--output=`+filepath.ToSlash(out)+`"}`),
+		_, why := TouchedFiles(ctx, repo, cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, cienv.Runtime{
+			Workspace:       "",
+			StepSummaryPath: "",
+			EventName:       "push",
+			EventPath:       event(t, `{"before":"--output=`+filepath.ToSlash(out)+`"}`),
 		})
 		if why != "the event names no commit" {
 			t.Errorf("why = %q", why)
@@ -197,7 +204,7 @@ func TestTouchedFiles(t *testing.T) {
 	})
 
 	t.Run("an event without a change", func(t *testing.T) {
-		_, why := TouchedFiles(ctx, repo, cienv.Info{}, cienv.Runtime{EventName: "workflow_dispatch"})
+		_, why := TouchedFiles(ctx, repo, cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, cienv.Runtime{Workspace: "", StepSummaryPath: "", EventPath: "", EventName: "workflow_dispatch"})
 		if why != "a workflow_dispatch event names no change" {
 			t.Errorf("why = %q", why)
 		}
@@ -214,14 +221,14 @@ func TestAzureTouchedFiles(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("update-ref: %v\n%s", err, out)
 	}
-	touched, why := AzureTouchedFiles(ctx, repo, cienv.Info{BaseRef: "refs/heads/main"})
+	touched, why := AzureTouchedFiles(ctx, repo, cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", PRNumber: "", BaseRef: "refs/heads/main"})
 	if why != "" || len(touched) != 1 || !touched["b.txt"] {
 		t.Errorf("touched = %v, why %q; want only the branch's b.txt", touched, why)
 	}
-	if _, why := AzureTouchedFiles(ctx, repo, cienv.Info{BaseRef: "refs/heads/release"}); why != "origin/release not fetched" {
+	if _, why := AzureTouchedFiles(ctx, repo, cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", PRNumber: "", BaseRef: "refs/heads/release"}); why != "origin/release not fetched" {
 		t.Errorf("why = %q", why)
 	}
-	if _, why := AzureTouchedFiles(ctx, repo, cienv.Info{}); why != "not a pull request build" {
+	if _, why := AzureTouchedFiles(ctx, repo, cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}); why != "not a pull request build" {
 		t.Errorf("why = %q", why)
 	}
 }

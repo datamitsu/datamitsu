@@ -105,14 +105,15 @@ func newSession(cfg *config.Config, root string) *session {
 	executor.SetParser(fallbackParser{mgr: parsers})
 
 	return &session{
-		planner:        planner,
-		binMgr:         binMgr,
-		executor:       executor,
-		cache:          projectCache,
-		parsers:        parsers,
-		fixWidenTo:     cfg.Execution.ResolveWidenTo(config.OpFix, ""),
-		managedConfigs: cfg.ManagedConfigs,
-		tools:          cfg.Tools,
+		foreignCacheReported: false,
+		planner:              planner,
+		binMgr:               binMgr,
+		executor:             executor,
+		cache:                projectCache,
+		parsers:              parsers,
+		fixWidenTo:           cfg.Execution.ResolveWidenTo(config.OpFix, ""),
+		managedConfigs:       cfg.ManagedConfigs,
+		tools:                cfg.Tools,
 	}
 }
 

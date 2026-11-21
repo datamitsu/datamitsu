@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/textpos"
@@ -13,45 +14,115 @@ import (
 
 func issue(path string, row int, severity string, reported bool, msg string) report.Finding {
 	return report.Finding{
-		Tool: "eslint", Source: "eslint", Code: "no-var", Severity: severity, Reported: reported, Shown: reported, Kind: "issue", Message: msg,
-		Location: report.Location{Path: path, Row: row, EndRow: row, Chars: &textpos.Span{Start: 3, End: 4}, Precision: "exact"},
+		Fingerprint:      "",
+		FingerprintBasis: "",
+		RuleURL:          "",
+		Gates:            false,
+		Baselined:        false,
+		Provenance:       "",
+		Tool:             "eslint", Source: "eslint", Code: "no-var", Severity: severity, Reported: reported, Shown: reported, Kind: "issue", Message: msg,
+		Location: report.Location{Col: 0, EndCol: 0, Unit: "", Bytes: nil, Utf16: nil, Path: path, Row: row, EndRow: row, Chars: &textpos.Span{Start: 3, End: 4}, Precision: "exact"},
 	}
 }
 
 func sampleRun() *report.Run {
 	one, two := 1, 2
 	return &report.Run{
-		Datamitsu:  report.Producer{Configuration: "my config"},
-		Selection:  report.Selection{Mode: "all"},
-		Complete:   false,
-		Incomplete: []report.Reason{"operation-skipped"},
+		Schema:      "",
+		Fingerprint: "",
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		FailFast:    false,
+		Exports:     nil,
+		CI:          report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		Datamitsu:   report.Producer{Version: "", Configuration: "my config"},
+		Selection:   report.Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"},
+		Complete:    false,
+		Incomplete:  []report.Reason{"operation-skipped"},
 		Operations: []report.Operation{
 			{
-				Name: "lint", Ran: true,
+				Success:         false,
+				Duration:        0,
+				ChangesObserved: false,
+				ChangesReason:   "",
+				ChangesDetail:   "",
+				ChangesScope:    nil,
+				Changes:         nil,
+				Name:            "lint", Ran: true,
 				Skipped:   []report.Skip{{Tool: "trivy", Reason: "unsupported-platform", Detail: "no binary for windows/arm64"}},
-				Cancelled: []report.Cancel{{Tool: "knip", Dir: "pkg/a", Started: true, Cause: "fail-fast"}},
+				Cancelled: []report.Cancel{{TaskID: "", Tool: "knip", Dir: "pkg/a", Started: true, Cause: "fail-fast"}},
 				Tools: []report.ToolRun{
 					{
-						Name: "eslint", FailOn: "error", GateActive: true, Complete: true,
+						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+						Parser:     nil,
+						Category:   "",
+						Incomplete: nil,
+						Name:       "eslint", FailOn: "error", GateActive: true, Complete: true,
 						Invocations: []report.Invocation{
-							{State: "ran", ExitCode: &one, FailureKind: "exit", Findings: []report.Finding{
-								issue("src/b.ts", 9, "error", true, "Unexpected var"),
-								issue("src/a.ts", 3, "error", true, "Unexpected *var* <b>|x|</b>\n::error::x"),
-								issue("src/a.ts", 4, "warning", false, "hidden"),
-							}},
-							{State: "cached", Success: true, Files: []report.FileResult{{Path: "src/c.ts"}, {Path: "src/d.ts"}}},
+							{
+								ID:          "",
+								TaskID:      "",
+								Dir:         "",
+								Scope:       "",
+								Granularity: "",
+								Arity:       "",
+								Coverage:    "",
+								WholeUnit:   false,
+								Success:     false,
+								Duration:    0,
+								Extraction:  "",
+								Provenance:  "",
+								Files:       nil,
+								Step:        0,
+								Changes:     nil,
+								OutputTail:  "", State: "ran", ExitCode: &one, FailureKind: "exit", Findings: []report.Finding{
+									issue("src/b.ts", 9, "error", true, "Unexpected var"),
+									issue("src/a.ts", 3, "error", true, "Unexpected *var* <b>|x|</b>\n::error::x"),
+									issue("src/a.ts", 4, "warning", false, "hidden"),
+								},
+							},
+							{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Step: 0, Changes: nil, OutputTail: "", State: "cached", Success: true, Files: []report.FileResult{{State: "", Success: false, ExitCode: nil, Patch: "", Path: "src/c.ts"}, {State: "", Success: false, ExitCode: nil, Patch: "", Path: "src/d.ts"}}},
 						},
 					},
 					{
-						Name: "tsc", FailOn: "error", GateActive: true, Incomplete: []report.Reason{"no-extraction"},
-						Invocations: []report.Invocation{{State: "ran", ExitCode: &two, FailureKind: "exit", Findings: []report.Finding{{
-							Tool: "tsc", Source: "tsc", Severity: "error", Gates: true, Kind: "synthetic",
-							Message: "tsc exited 2 without parsable findings", Location: report.Location{Precision: "unknown"},
-						}}}},
+						App:      report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+						Parser:   nil,
+						Category: "",
+						Complete: false,
+						Name:     "tsc", FailOn: "error", GateActive: true, Incomplete: []report.Reason{"no-extraction"},
+						Invocations: []report.Invocation{{
+							ID:          "",
+							TaskID:      "",
+							Dir:         "",
+							Scope:       "",
+							Granularity: "",
+							Arity:       "",
+							Coverage:    "",
+							WholeUnit:   false,
+							Success:     false,
+							Duration:    0,
+							Extraction:  "",
+							Provenance:  "",
+							Files:       nil,
+							Step:        0,
+							Changes:     nil,
+							OutputTail:  "", State: "ran", ExitCode: &two, FailureKind: "exit", Findings: []report.Finding{{
+								Fingerprint:      "",
+								FingerprintBasis: "",
+								Code:             "",
+								RuleURL:          "",
+								Reported:         false,
+								Shown:            false,
+								Baselined:        false,
+								Provenance:       "",
+								Tool:             "tsc", Source: "tsc", Severity: "error", Gates: true, Kind: "synthetic",
+								Message: "tsc exited 2 without parsable findings", Location: report.Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "unknown"},
+							}},
+						}},
 					},
 				},
 			},
-			{Name: "fix"},
+			{Ran: false, Success: false, Duration: 0, Skipped: nil, Cancelled: nil, Tools: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "fix"},
 		},
 	}
 }
@@ -98,13 +169,36 @@ func TestWriteBudget(t *testing.T) {
 	for row := 1; row <= 200; row++ {
 		fs = append(fs, issue(fmt.Sprintf("src/f%03d.ts", row), row, "error", true, strings.Repeat("x", 40)))
 	}
-	run := &report.Run{Selection: report.Selection{Mode: "all"}, Complete: true, Operations: []report.Operation{{
-		Name: "lint", Ran: true,
-		Tools: []report.ToolRun{{
-			Name: "eslint", FailOn: "error", GateActive: true, Complete: true,
-			Invocations: []report.Invocation{{State: "ran", ExitCode: &code, Findings: fs}},
+	run := &report.Run{
+		Schema:      "",
+		Fingerprint: "",
+		Datamitsu:   report.Producer{Version: "", Configuration: ""},
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		FailFast:    false,
+		Incomplete:  nil,
+		Exports:     nil,
+		CI:          report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: report.Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}, Complete: true, Operations: []report.Operation{{
+			Success:         false,
+			Duration:        0,
+			Skipped:         nil,
+			Cancelled:       nil,
+			ChangesObserved: false,
+			ChangesReason:   "",
+			ChangesDetail:   "",
+			ChangesScope:    nil,
+			Changes:         nil,
+			Name:            "lint", Ran: true,
+			Tools: []report.ToolRun{{
+				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+				Parser:     nil,
+				Category:   "",
+				Incomplete: nil,
+				Name:       "eslint", FailOn: "error", GateActive: true, Complete: true,
+				Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", ExitCode: &code, Findings: fs}},
+			}},
 		}},
-	}}}
+	}
 
 	var full bytes.Buffer
 	if cut, err := Write(&full, run, 0); err != nil || cut != 0 {
@@ -128,9 +222,9 @@ func TestWriteBudget(t *testing.T) {
 	}
 
 	run.Exports = []report.Export{
-		{Format: "json", Path: "out/run.json", Status: report.ExportWritten},
-		{Format: "json", Path: "-", Status: report.ExportWritten},
-		{Format: "markdown", Path: "out/run.md", Status: report.ExportWritten},
+		{Detail: "", Companion: "", Omitted: nil, Format: "json", Path: "out/run.json", Status: report.ExportWritten},
+		{Detail: "", Companion: "", Omitted: nil, Format: "json", Path: "-", Status: report.ExportWritten},
+		{Detail: "", Companion: "", Omitted: nil, Format: "markdown", Path: "out/run.md", Status: report.ExportWritten},
 	}
 	out.Reset()
 	if _, err := Write(&out, run, budget); err != nil {
@@ -158,7 +252,7 @@ func TestWriteExactFit(t *testing.T) {
 func TestPlatformSkippedToolIsNotPassed(t *testing.T) {
 	run := sampleRun()
 	run.Operations[0].Tools = append(run.Operations[0].Tools,
-		report.ToolRun{Name: "trivy", Incomplete: []report.Reason{"platform-skip"}, Invocations: []report.Invocation{}})
+		report.ToolRun{App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Name: "trivy", Incomplete: []report.Reason{"platform-skip"}, Invocations: []report.Invocation{}})
 	var out bytes.Buffer
 	if err := (Renderer{}).Render(&out, run, nil); err != nil {
 		t.Fatal(err)
@@ -205,9 +299,30 @@ func TestCode(t *testing.T) {
 func TestRenderCountsBaselined(t *testing.T) {
 	f := issue("src/a.ts", 3, "error", false, "old")
 	f.Baselined = true
-	run := &report.Run{Selection: report.Selection{Mode: "all"}, Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{
-		{Name: "eslint", Invocations: []report.Invocation{{State: "ran", Success: true, Findings: []report.Finding{f}}}},
-	}}}}
+	run := &report.Run{
+		Schema:      "",
+		Fingerprint: "",
+		Datamitsu:   report.Producer{Version: "", Configuration: ""},
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		FailFast:    false,
+		Complete:    false,
+		Incomplete:  nil,
+		Exports:     nil,
+		CI:          report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: report.Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}, Operations: []report.Operation{{
+			Success:         false,
+			Duration:        0,
+			Skipped:         nil,
+			Cancelled:       nil,
+			ChangesObserved: false,
+			ChangesReason:   "",
+			ChangesDetail:   "",
+			ChangesScope:    nil,
+			Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{
+				{App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Name: "eslint", Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", Success: true, Findings: []report.Finding{f}}}},
+			},
+		}},
+	}
 	var out bytes.Buffer
 	if err := (Renderer{}).Render(&out, run, nil); err != nil {
 		t.Fatal(err)
@@ -219,16 +334,48 @@ func TestRenderCountsBaselined(t *testing.T) {
 
 func TestRenderChangedFiles(t *testing.T) {
 	fix := report.Operation{
-		Name: "fix", Ran: true, ChangesObserved: true, Changes: []report.Change{{Path: "b.ts", Kind: "created"}},
-		Tools: []report.ToolRun{{Name: "prettier", Invocations: []report.Invocation{{
-			State: "ran", Success: true,
-			Changes: []report.Change{{Path: "a.ts", Kind: "modified", Patch: true}},
-		}}}},
+		Success:       false,
+		Duration:      0,
+		Skipped:       nil,
+		Cancelled:     nil,
+		ChangesReason: "",
+		ChangesDetail: "",
+		ChangesScope:  nil,
+		Name:          "fix", Ran: true, ChangesObserved: true, Changes: []report.Change{{Patch: false, Step: 0, Path: "b.ts", Kind: "created"}},
+		Tools: []report.ToolRun{{
+			App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+			Parser:     nil,
+			FailOn:     "",
+			GateActive: false,
+			Category:   "",
+			Complete:   false,
+			Incomplete: nil, Name: "prettier", Invocations: []report.Invocation{{
+				ID:          "",
+				TaskID:      "",
+				Dir:         "",
+				Scope:       "",
+				Granularity: "",
+				Arity:       "",
+				Coverage:    "",
+				WholeUnit:   false,
+				ExitCode:    nil,
+				FailureKind: "",
+				Duration:    0,
+				Extraction:  "",
+				Provenance:  "",
+				Files:       nil,
+				Findings:    nil,
+				Step:        0,
+				OutputTail:  "",
+				State:       "ran", Success: true,
+				Changes: []report.Change{{Step: 0, Path: "a.ts", Kind: "modified", Patch: true}},
+			}},
+		}},
 	}
-	unobserved := report.Operation{Name: "fix", Ran: true, ChangesReason: "snapshot-failed", ChangesDetail: "no repository"}
-	lint := report.Operation{Name: "lint", Ran: true, ChangesReason: report.ChangesNoFixTask}
+	unobserved := report.Operation{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, Tools: nil, ChangesObserved: false, ChangesScope: nil, Changes: nil, Name: "fix", Ran: true, ChangesReason: "snapshot-failed", ChangesDetail: "no repository"}
+	lint := report.Operation{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, Tools: nil, ChangesObserved: false, ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "lint", Ran: true, ChangesReason: report.ChangesNoFixTask}
 	var out bytes.Buffer
-	run := &report.Run{Selection: report.Selection{Mode: "all"}, Operations: []report.Operation{fix, lint}}
+	run := &report.Run{Schema: "", Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Complete: false, Incomplete: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: report.Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}, Operations: []report.Operation{fix, lint}}
 	if err := (Renderer{}).Render(&out, run, nil); err != nil {
 		t.Fatal(err)
 	}

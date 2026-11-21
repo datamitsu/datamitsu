@@ -42,7 +42,7 @@ func TestStartCleanupStopsTheTools(t *testing.T) {
 			run: func(t *testing.T, args []string, dir, pidFile string) {
 				t.Helper()
 				t.Run("ends before Wait", func(t *testing.T) {
-					Start(t, RunOptions{Dir: dir}, args...)
+					Start(t, RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: dir}, args...)
 					for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 						if data, err := os.ReadFile(pidFile); err == nil && strings.HasSuffix(string(data), "\n") {
 							return
@@ -58,11 +58,11 @@ func TestStartCleanupStopsTheTools(t *testing.T) {
 			name: "the run times out",
 			run: func(t *testing.T, args []string, dir, _ string) {
 				t.Helper()
-				tb := &fatalTB{TB: t}
+				tb := &fatalTB{msg: "", TB: t}
 				done := make(chan struct{})
 				go func() {
 					defer close(done)
-					Start(tb, RunOptions{Dir: dir, Timeout: 4 * time.Second}, args...).Wait()
+					Start(tb, RunOptions{CacheDir: "", Env: nil, Stdin: "", Dir: dir, Timeout: 4 * time.Second}, args...).Wait()
 				}()
 				<-done
 				if !strings.Contains(tb.msg, "timed out") {
@@ -77,8 +77,8 @@ func TestStartCleanupStopsTheTools(t *testing.T) {
 			MarkerDir(p)
 			p.WriteFile("fixture.marker", "")
 			cfg := p.WriteFile("cleanup.config.js", ShellConfig(
-				ShellConfigSpec{ProjectTypes: map[string][]string{"fixture": {"fixture.marker"}}},
-				ShellTool("sleeper", `echo $$ > "$MARKERS/pid"; sleep 30`, ToolOpSpec{}),
+				ShellConfigSpec{Parsers: "", Extra: "", ProjectTypes: map[string][]string{"fixture": {"fixture.marker"}}},
+				ShellTool("sleeper", `echo $$ > "$MARKERS/pid"; sleep 30`, ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 			))
 			pidFile := filepath.Join(p.Dir, MarkerDirName, "pid")
 

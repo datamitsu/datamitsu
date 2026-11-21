@@ -19,8 +19,8 @@ func TestPrefetch_DownloadsAndStoresAllParsers(t *testing.T) {
 	srvB, hitsB := serveWASM(t, bodyB)
 
 	parsers := config.MapOfParsers{
-		"a": {URL: srvA.URL, Hash: sha256Hex(bodyA)},
-		"b": {URL: srvB.URL, Hash: sha256Hex(bodyB)},
+		"a": {OCI: nil, URL: srvA.URL, Hash: sha256Hex(bodyA)},
+		"b": {OCI: nil, URL: srvB.URL, Hash: sha256Hex(bodyB)},
 	}
 	m := New(parsers)
 	t.Cleanup(func() { _ = m.Close(context.Background()) })
@@ -67,7 +67,7 @@ func TestPrefetch_UndeclaredParserErrors(t *testing.T) {
 
 func TestModuleStorePath_MatchesInternalLayout(t *testing.T) {
 	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
-	p := config.Parser{URL: "https://example.invalid/m.wasm", Hash: sha256Hex([]byte("x"))}
+	p := config.Parser{OCI: nil, URL: "https://example.invalid/m.wasm", Hash: sha256Hex([]byte("x"))}
 	if got, want := ModuleStorePath("core", p), moduleDir("core", p); got != want {
 		t.Errorf("ModuleStorePath = %q, want %q (must equal the internal moduleDir)", got, want)
 	}

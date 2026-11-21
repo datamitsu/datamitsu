@@ -147,16 +147,18 @@ func location(loc report.Location) Location {
 	r := common.RegionOf(loc, common.Chars)
 	begin, end := max(r.Line, 1), max(r.EndLine, r.Line, 1)
 	if r.Col == 0 {
-		return Location{Path: loc.Path, Lines: &Lines{Begin: begin, End: end}}
+		return Location{Positions: nil, Path: loc.Path, Lines: &Lines{Begin: begin, End: end}}
 	}
 	endCol := r.EndCol
 	if endCol == 0 {
 		endCol = r.Col
 	}
-	return Location{Path: loc.Path, Positions: &Positions{
-		Begin: Position{Line: begin, Column: r.Col},
-		End:   Position{Line: end, Column: endCol},
-	}}
+	return Location{
+		Lines: nil, Path: loc.Path, Positions: &Positions{
+			Begin: Position{Line: begin, Column: r.Col},
+			End:   Position{Line: end, Column: endCol},
+		},
+	}
 }
 
 // Severity is the Code Quality severity of a core severity: an error is

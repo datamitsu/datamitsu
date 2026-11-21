@@ -162,7 +162,7 @@ func (rm *RuntimeManager) GetGoAppPath(appName string, appConfig *binmanager.App
 func (rm *RuntimeManager) InstallGoApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigGo, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Go: appConfig, Env: customEnv, Files: files, Archives: archives})
+	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, RuntimeEnv: nil, Caches: nil, Links: nil, Prepare: nil, Go: appConfig, Env: customEnv, Files: files, Archives: archives})
 	if handled || dispatchErr != nil {
 		return wrapInstallTimeout(dispatchErr, timeoutSec)
 	}
@@ -554,9 +554,13 @@ func (rm *RuntimeManager) GetGoCommandInfo(appName string, appConfig *binmanager
 	binPath := getGoBinaryPath(appEnvPath, appConfig.PackageName)
 
 	return &binmanager.CommandInfo{
-		Type:          "go",
-		Command:       binPath,
-		Env:           runtimeEnv,
-		RequiredPaths: []string{filepath.Join(appEnvPath, appReadyMarker)},
+		Args:           nil,
+		Artifact:       "",
+		ToolCacheDir:   "",
+		ToolCacheSlots: nil,
+		Type:           "go",
+		Command:        binPath,
+		Env:            runtimeEnv,
+		RequiredPaths:  []string{filepath.Join(appEnvPath, appReadyMarker)},
 	}, nil
 }

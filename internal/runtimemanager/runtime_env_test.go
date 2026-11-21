@@ -17,15 +17,15 @@ func TestRuntimeEnvPreservesAppIdentity(t *testing.T) {
 		kind config.RuntimeKind
 		app  binmanager.App
 	}{
-		{config.RuntimeKindBun, binmanager.App{Bun: &binmanager.AppConfigBun{BinPath: "index.js", PackageName: "tool"}}},
-		{config.RuntimeKindNode, binmanager.App{Node: &binmanager.AppConfigNode{BinPath: "tool", PackageName: "tool"}}},
-		{config.RuntimeKindUV, binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "tool"}}},
-		{config.RuntimeKindGo, binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "example.org/tool"}}},
-		{config.RuntimeKindJVM, binmanager.App{Jvm: &binmanager.AppConfigJVM{Version: "1"}}},
+		{config.RuntimeKindBun, binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{Version: "", Runtime: "", LockFile: "", Dependencies: nil, BinPath: "index.js", PackageName: "tool"}}},
+		{config.RuntimeKindNode, binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{Version: "", Runtime: "", LockFile: "", Dependencies: nil, BinPath: "tool", PackageName: "tool"}}},
+		{config.RuntimeKindUV, binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{Version: "", Runtime: "", LockFile: "", RequiresPython: "", PackageName: "tool"}}},
+		{config.RuntimeKindGo, binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{Version: "", Runtime: "", LockFile: "", PackageName: "example.org/tool"}}},
+		{config.RuntimeKindJVM, binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{JarURL: "", JarHash: "", Runtime: "", MainClass: "", Version: "1"}}},
 	} {
 		t.Run(string(tt.kind), func(t *testing.T) {
 			t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
-			rm := New(config.MapOfRuntimes{string(tt.kind): {Kind: tt.kind, Mode: config.RuntimeModeSystem}, "pnpm": {Kind: config.RuntimeKindPNPM, Mode: config.RuntimeModeSystem}})
+			rm := New(config.MapOfRuntimes{string(tt.kind): {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: tt.kind, Mode: config.RuntimeModeSystem}, "pnpm": {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindPNPM, Mode: config.RuntimeModeSystem}})
 			before, err := rm.ComputeAppPath("tool", tt.app)
 			if err != nil {
 				t.Fatal(err)
@@ -68,7 +68,7 @@ chmod +x .venv/bin/tool .venv/bin/python
 			rm := New(config.MapOfRuntimes{"uv": testUVRuntimeConfig(t, uv, "3.14.0")})
 			seedTestPythonReady(t, rm, "uv", "", "")
 			capture := filepath.Join(dir, "capture")
-			app := binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "tool", Version: "1"}, Env: map[string]string{"DEP_TEST_INSTALL_ENV": "install", "DEP_TEST_CAPTURE": capture}, RuntimeEnv: map[string]string{"DEP_TEST_RUNTIME_ONLY": runtimeValue}}
+			app := binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "tool", Version: "1"}, Env: map[string]string{"DEP_TEST_INSTALL_ENV": "install", "DEP_TEST_CAPTURE": capture}, RuntimeEnv: map[string]string{"DEP_TEST_RUNTIME_ONLY": runtimeValue}}
 			if _, err := rm.GetCommandInfo(context.Background(), "tool", app); err != nil {
 				t.Fatal(err)
 			}
