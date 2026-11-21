@@ -66,7 +66,8 @@ func StartWorker(ctx context.Context) (*Worker, error) {
 	// #nosec G204 -- The OS supplies this binary's absolute path; only private pipe descriptors are passed.
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), executable, workerArgs...)
 	cmd.Cancel = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Chroot: "", Credential: nil, Ptrace: false, Setsid: false, Setctty: false, Noctty: false, Ctty: 0, Foreground: false, Pgid: 0, Setpgid: true}
+	cmd.SysProcAttr = new(syscall.SysProcAttr)
+	cmd.SysProcAttr.Setpgid = true
 	cmd.ExtraFiles = []*os.File{rpcChild, rpcWrite, liveRead, cancelRead, handshakeRead}
 	if err := cmd.Start(); err != nil {
 		closeFiles([]*os.File{rpcChild, rpcParent, rpcRead, rpcWrite, liveRead, liveWrite, cancelRead, cancelWrite, handshakeRead, handshakeWrite})

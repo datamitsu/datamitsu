@@ -32,7 +32,9 @@ func TestRuntimeRunUnixSignalHandoff(t *testing.T) {
 		cmd := exec.Command(clitest.BuildOnce(t), runtimeArgs(p, cfg, "run", "zed", "--", "-c", "touch "+shellQuoteRuntime(marker)+"; exec sleep 30")...)
 		cmd.Dir, cmd.Env = p.Dir, clitest.BaseEnv(t.TempDir())
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+		cmd.SysProcAttr = new(syscall.SysProcAttr)
+		cmd.SysProcAttr.Setsid = true
+		cmd.SysProcAttr.Setctty = true
 		if err := cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
@@ -46,7 +48,7 @@ func TestRuntimeRunUnixSignalHandoff(t *testing.T) {
 		go func() { done <- cmd.Wait() }()
 		select {
 		case err := <-done:
-			status := &exec.ExitError{}
+			var status *exec.ExitError
 			ok := errors.As(err, &status)
 			if !ok || status.ProcessState.Sys().(syscall.WaitStatus).Signal() != syscall.SIGINT {
 				t.Fatalf("runtime run status = %v, want SIGINT", err)
@@ -63,7 +65,9 @@ func TestRuntimeRunUnixSignalHandoff(t *testing.T) {
 		cmd := exec.Command(clitest.BuildOnce(t), runtimeArgs(p, cfg, "run", "zed", "--", "-c", "touch "+shellQuoteRuntime(marker)+"; exec sleep 30")...)
 		cmd.Dir, cmd.Env = p.Dir, clitest.BaseEnv(t.TempDir())
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+		cmd.SysProcAttr = new(syscall.SysProcAttr)
+		cmd.SysProcAttr.Setsid = true
+		cmd.SysProcAttr.Setctty = true
 		if err := cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
@@ -74,7 +78,7 @@ func TestRuntimeRunUnixSignalHandoff(t *testing.T) {
 			t.Fatal(err)
 		}
 		err = cmd.Wait()
-		status := &exec.ExitError{}
+		var status *exec.ExitError
 		ok := errors.As(err, &status)
 		if !ok || status.ProcessState.Sys().(syscall.WaitStatus).Signal() != syscall.SIGTERM {
 			t.Fatalf("runtime run status = %v, want SIGTERM", err)
@@ -99,7 +103,9 @@ func TestRuntimeRunUnixSignalHandoff(t *testing.T) {
 		cmd := exec.Command(bash, "--noprofile", "--norc", "-i")
 		cmd.Dir, cmd.Env = p.Dir, clitest.BaseEnv(t.TempDir())
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+		cmd.SysProcAttr = new(syscall.SysProcAttr)
+		cmd.SysProcAttr.Setsid = true
+		cmd.SysProcAttr.Setctty = true
 		if err := cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
