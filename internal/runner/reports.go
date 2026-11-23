@@ -124,9 +124,10 @@ func (sc *sharedContext) reportSelection() report.Selection {
 		Dir:           "",
 		Paths:         nil,
 		ExcludedTools: nil,
-		Mode:          sc.selection.String(),
-		FileScoped:    sc.fileScoped,
-		Tools:         append([]string(nil), sc.selectedTools...),
+
+		Mode:       sc.selection.String(),
+		FileScoped: sc.fileScoped,
+		Tools:      append([]string(nil), sc.selectedTools...),
 	}
 	sort.Strings(sel.Tools)
 	switch sc.selection.Mode {
@@ -199,6 +200,7 @@ func (sc *sharedContext) emitDiagnostics(runOpID string, found []report.ToolFind
 		e := uievent.Event{
 			TS:              0,
 			Status:          "",
+			ThrottleID:      "",
 			Op:              "",
 			Name:            "",
 			BytesDone:       0,
@@ -225,65 +227,84 @@ func (sc *sharedContext) emitDiagnostics(runOpID string, found []report.ToolFind
 			Schema:          "",
 			Events:          "",
 			Annotations:     "",
-			Type:            uievent.TypeDiagnostic,
-			OpID:            toolOpID(runOpID, tf.TaskID),
-			Tool:            f.Tool,
-			Dir:             tf.Dir,
-			File:            f.Location.Path,
-			Row:             f.Location.Row,
-			Col:             f.Location.Col,
-			EndRow:          f.Location.EndRow,
-			EndCol:          f.Location.EndCol,
-			Severity:        f.Severity,
-			Code:            f.Code,
-			Source:          f.Source,
-			Msg:             f.Message,
-			Fingerprint:     f.Fingerprint,
-			Provenance:      f.Provenance,
-			Reported:        new(f.Reported),
-			Gates:           new(f.Gates),
-			Baselined:       f.Baselined,
+
+			Type:        uievent.TypeDiagnostic,
+			OpID:        toolOpID(runOpID, tf.TaskID),
+			Tool:        f.Tool,
+			Dir:         tf.Dir,
+			File:        f.Location.Path,
+			Row:         f.Location.Row,
+			Col:         f.Location.Col,
+			EndRow:      f.Location.EndRow,
+			EndCol:      f.Location.EndCol,
+			Severity:    f.Severity,
+			Code:        f.Code,
+			Source:      f.Source,
+			Msg:         f.Message,
+			Fingerprint: f.Fingerprint,
+			Provenance:  f.Provenance,
+			Reported:    new(f.Reported),
+			Gates:       new(f.Gates),
+			Baselined:   f.Baselined,
 		}
 		ui.Emit(e)
 	}
 }
 
-// buildReport builds the record of the run once its last operation has ended,
-// masked, with every report it was asked for opened on its path so that the
-// record says which of them could not be; nil when the run records nothing.
-func (sc *sharedContext) buildReport(operations []config.OperationType) (*report.Run, []*render.Target) {
+type reportTarget struct {
+	*render.Target
+
+	exportIndex int
+}
+
+// buildReport records the completed operations and prepares the exports. A
+// capacity refusal affects only the target, not the operation it describes.
+func (sc *sharedContext) buildReport(operations []config.OperationType) (*report.Run, []reportTarget) {
 	if sc.report == nil {
 		return nil, nil
 	}
 	for _, op := range operations {
 		sc.report.NotRun(string(op))
 	}
-	targets := make([]*render.Target, len(sc.opts.Reports))
-	exports := make([]report.Export, 0, len(targets)+1)
-	for i, spec := range sc.opts.Reports {
-		targets[i] = render.Open(spec, os.Stdout)
-		targets[i].Guard = CommandGuard(sc.annotations.mode, sc.ci.Vendor)
-		e := report.Export{Detail: "", Companion: "", Omitted: nil, Format: spec.Format, Path: spec.Path, Status: report.ExportWritten}
-		if err := targets[i].Err; err != nil {
-			e.Status, e.Detail = report.ExportFailed, err.Error()
-		}
-		exports = append(exports, e)
-	}
-	if e, ok := sc.annotationExport(); ok {
-		exports = append(exports, e)
-	}
+	targets := make([]reportTarget, 0, len(sc.opts.Reports))
 	run := sc.report.Build(report.BuildInfo{
+		Exports: nil,
+
 		Version:       ldflags.Version,
 		Configuration: sc.cfg.DisplayName(),
 		StartedAt:     sc.startedAt,
 		EndedAt:       now(),
 		Selection:     sc.reportSelection(),
 		FailFast:      sc.failFast,
-		Exports:       exports,
 		CI: report.CIEnvironment{
 			Vendor: sc.ci.Vendor, SHA: sc.ci.SHA, Ref: sc.ci.Ref, BaseRef: sc.ci.BaseRef, PRNumber: sc.ci.PRNumber,
 		},
 	})
+	for _, spec := range sc.opts.Reports {
+		e := report.Export{
+			Detail:    "",
+			Companion: "",
+			Omitted:   nil,
+			Format:    spec.Format, Path: spec.Path, Status: report.ExportWritten,
+		}
+		if err := render.CheckRunCapacity(spec, run); err != nil {
+			e.Status, e.Detail = report.ExportRefused, err.Error()
+			if cleanupErr := render.RemoveStaleFile(spec); cleanupErr != nil {
+				e.Detail += "\n" + cleanupErr.Error()
+			}
+		} else {
+			target := render.Open(spec, os.Stdout)
+			target.Guard = CommandGuard(sc.annotations.mode, sc.ci.Vendor)
+			if target.Err != nil {
+				e.Status, e.Detail = report.ExportFailed, target.Err.Error()
+			}
+			targets = append(targets, reportTarget{target, len(run.Exports)})
+		}
+		run.Exports = append(run.Exports, e)
+	}
+	if e, ok := sc.annotationExport(); ok {
+		run.Exports = append(run.Exports, e)
+	}
 	render.Describe(run, sc.opts.Reports)
 	report.Mask(run, sc.secretValues())
 	return run, targets
@@ -295,24 +316,66 @@ func (sc *sharedContext) buildReport(operations []config.OperationType) (*report
 // written is always said — as a report event in JSON-L mode — and fails the
 // run with exitcode.Export only when nothing else did: a tool failure (1) and
 // an incomplete run (4) outrank it.
-func (sc *sharedContext) writeReports(run *report.Run, targets []*render.Target, err error) error {
+func (sc *sharedContext) writeReports(run *report.Run, targets []reportTarget, err error) error {
 	if run == nil {
 		return err
 	}
-	for _, note := range render.Notes(run, sc.opts.Reports) {
+	specs := make([]render.Spec, 0, len(targets))
+	for _, target := range targets {
+		if target.Err == nil {
+			specs = append(specs, target.Spec)
+		}
+	}
+	for _, note := range render.Notes(run, specs) {
 		logger.Logger.Warn(note)
 	}
 	var failures []error
-	for _, t := range targets {
+	for i, spec := range sc.opts.Reports {
+		export := run.Exports[i]
+		if export.Status != report.ExportRefused {
+			continue
+		}
+		emitReport(spec, export.Status, export.Detail, sc.secretValues())
+		if err != nil {
+			err = fmt.Errorf("%w\n%s", err, export.Detail)
+		} else {
+			err = exitcode.ExportError{Err: errors.New(export.Detail)}
+		}
+	}
+	for _, target := range targets {
+		if target.Err == nil && run.Exports[target.exportIndex].Status == report.ExportWritten {
+			run.Exports[target.exportIndex].Status = ""
+		}
+	}
+	write := func(t reportTarget) {
+		export := &run.Exports[t.exportIndex]
+		if export.Status == "" {
+			export.Status = report.ExportWritten
+		}
 		status, msg := report.ExportWritten, ""
 		writeErr := t.Write(run)
 		if declined, ok := errors.AsType[render.DeclinedError](writeErr); ok {
 			status, msg = report.ExportOmitted, declined.Reason
 		} else if writeErr != nil {
 			status, msg = report.ExportFailed, writeErr.Error()
-			failures = append(failures, fmt.Errorf("report %s: %s: %w", t.Spec.Format, t.Spec.Path, writeErr))
+			failure := fmt.Sprintf("report %s: %s: %s", t.Spec.Format, t.Spec.Path, writeErr)
+			report.MaskAll(&failure, sc.secretValues())
+			failures = append(failures, errors.New(failure))
 		}
+		detail := msg
+		report.MaskAll(&detail, sc.secretValues())
+		run.Exports[t.exportIndex].Status, run.Exports[t.exportIndex].Detail = status, detail
 		emitReport(t.Spec, status, msg, sc.secretValues())
+	}
+	for _, target := range targets {
+		if target.Spec.Format != "json" {
+			write(target)
+		}
+	}
+	for _, target := range targets {
+		if target.Spec.Format == "json" {
+			write(target)
+		}
 	}
 	if len(failures) == 0 {
 		return err
@@ -360,17 +423,8 @@ func (sc *sharedContext) refuseCrowdedReports(ctx context.Context, operations []
 		// The operation meets the same error when it plans, and says so.
 		return nil //nolint:nilerr // not this check's error to report
 	}
-	tools := map[string]bool{}
-	for _, group := range plan.Groups {
-		for _, task := range group.Tasks {
-			tools[task.ToolName] = true
-		}
-	}
-	for _, crowded := range capped {
-		err := render.CheckCapacity(crowded, len(tools))
-		if err == nil {
-			continue
-		}
+	crowded, err := crowdedReport(capped, plan)
+	if err != nil {
 		for _, spec := range sc.opts.Reports {
 			status := report.ExportOmitted
 			if spec.Format == crowded.Format {
@@ -381,6 +435,26 @@ func (sc *sharedContext) refuseCrowdedReports(ctx context.Context, operations []
 		return refusedReportsError{exitcode.UsageError{Err: err}}
 	}
 	return nil
+}
+
+func crowdedReport(specs []render.Spec, plan *tooling.ExecutionPlan) (render.Spec, error) {
+	tools := map[string]bool{}
+	for _, group := range plan.Groups {
+		for _, task := range group.Tasks {
+			tools[task.ToolName] = true
+		}
+	}
+	count := len(tools)
+	for _, spec := range specs {
+		if err := render.CheckCapacity(spec, count); err != nil {
+			return spec, err
+		}
+	}
+	return render.Spec{
+		Format:  "",
+		Path:    "",
+		Options: nil,
+	}, nil
 }
 
 // omitReports says, for a run that could not start, that none of its reports
@@ -396,6 +470,7 @@ func omitReports(specs []render.Spec, cause error) {
 func emitReport(spec render.Spec, status, msg string, secrets []string) {
 	e := uievent.Event{
 		TS:              0,
+		ThrottleID:      "",
 		Op:              "",
 		Tool:            "",
 		Dir:             "",
@@ -435,12 +510,13 @@ func emitReport(spec render.Spec, status, msg string, secrets []string) {
 		Schema:          "",
 		Events:          "",
 		Annotations:     "",
-		Type:            uievent.TypeReport,
-		OpID:            uievent.NextOpID("report"),
-		Status:          status,
-		Format:          spec.Format,
-		Path:            spec.Path,
-		Msg:             msg,
+
+		Type:   uievent.TypeReport,
+		OpID:   uievent.NextOpID("report"),
+		Status: status,
+		Format: spec.Format,
+		Path:   spec.Path,
+		Msg:    msg,
 	}
 	report.MaskAll(&e, secrets)
 	ui.Emit(e)

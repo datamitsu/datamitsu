@@ -50,7 +50,8 @@ func TestRender(t *testing.T) {
 	imprecise := finding("src/a.ts", 9, "hint", "", "no rule")
 	imprecise.Location.Chars, imprecise.Location.Precision = nil, "unknown"
 	run := &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		StartedAt:   zerovalue_time.Time{},
 		EndedAt:     zerovalue_time.Time{},
@@ -62,7 +63,14 @@ func TestRender(t *testing.T) {
 		CI:          report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
 		Datamitsu:   report.Producer{Configuration: "", Version: "1.2.3"},
 		Operations: []report.Operation{
-			{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "fix", Ran: true, Tools: []report.ToolRun{{App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Name: "prettier", Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", Findings: []report.Finding{finding("x.md", 1, "error", "c", "fix")}}}}}},
+			{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "fix", Ran: true, Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+				App:             report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Name: "prettier", Invocations: []report.Invocation{{
+					RedactedState:      0,
+					RedactedExtraction: 0,
+					ID:                 "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", Findings: []report.Finding{finding("x.md", 1, "error", "c", "fix")},
+				}},
+			}}},
 			{
 				Success:         false,
 				Duration:        0,
@@ -74,12 +82,17 @@ func TestRender(t *testing.T) {
 				ChangesScope:    nil,
 				Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{
 					{
+						RedactedReasons: nil,
+
 						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 						Parser:     nil,
 						FailOn:     "",
 						GateActive: false,
 						Category:   "",
 						Incomplete: nil, Name: "eslint", Complete: true, Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+
 							ID:          "",
 							TaskID:      "",
 							Dir:         "",
@@ -104,12 +117,17 @@ func TestRender(t *testing.T) {
 						}},
 					},
 					{
+						RedactedReasons: nil,
+
 						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 						Parser:     nil,
 						FailOn:     "",
 						GateActive: false,
 						Category:   "",
 						Complete:   false, Name: "tsc", Incomplete: []report.Reason{"no-extraction"}, Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+
 							ID:          "",
 							TaskID:      "",
 							Dir:         "",
@@ -181,7 +199,11 @@ func TestRender(t *testing.T) {
 
 func TestEmpty(t *testing.T) {
 	var b bytes.Buffer
-	if err := (Renderer{}).Render(&b, &report.Run{Schema: "", Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}}, nil); err != nil {
+	if err := (Renderer{}).Render(&b, &report.Run{
+		RedactedReasons: nil,
+
+		Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if want := `<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<checkstyle version="datamitsu-">` + "\n</checkstyle>\n"; b.String() != want {

@@ -241,10 +241,13 @@ func operation(op report.Operation) []part {
 // changed, or saying why they were not observed; "" for an operation that
 // observes none.
 func changedFiles(op report.Operation) string {
-	if op.Name != "fix" || op.ChangesReason == report.ChangesNoFixTask {
+	if op.Name != "fix" {
 		return ""
 	}
 	changes := op.AllChanges()
+	if len(changes) == 0 && op.ChangesReason == report.ChangesNoFixTask {
+		return ""
+	}
 	var b strings.Builder
 	b.WriteString("\n#### Changed files\n\n")
 	if !op.ChangesObserved {
@@ -287,7 +290,7 @@ func status(tr report.ToolRun) string {
 		case "cancelled":
 			stopped = true
 		}
-		if inv.State == "not-started" {
+		if inv.ExecutionState() == "not-started" {
 			stopped = true
 		}
 	}
@@ -303,7 +306,7 @@ func status(tr report.ToolRun) string {
 func runs(tr report.ToolRun) int {
 	n := 0
 	for _, inv := range tr.Invocations {
-		if inv.State == "ran" {
+		if inv.ExecutionState() == "ran" {
 			n++
 		}
 	}
@@ -314,7 +317,8 @@ func runs(tr report.ToolRun) int {
 func cached(tr report.ToolRun) int {
 	n := 0
 	for _, inv := range tr.Invocations {
-		if inv.State == "cached" || inv.State == "verdict-hit" {
+		switch inv.ExecutionState() {
+		case "cached", "verdict-hit":
 			n += len(inv.Files)
 		}
 	}

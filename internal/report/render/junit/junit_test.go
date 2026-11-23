@@ -116,7 +116,10 @@ func issue(path string, row int, severity string, gates bool, msg string) report
 func files(paths ...string) []report.FileResult {
 	out := make([]report.FileResult, len(paths))
 	for i, p := range paths {
-		out[i] = report.FileResult{Success: false, ExitCode: nil, Patch: "", Path: p, State: "ran"}
+		out[i] = report.FileResult{
+			RedactedState: 0,
+			Success:       false, ExitCode: nil, Patch: "", Path: p, State: "ran",
+		}
 	}
 	return out
 }
@@ -124,7 +127,8 @@ func files(paths ...string) []report.FileResult {
 func sampleRun() *report.Run {
 	one, two := 1, 2
 	return &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		EndedAt:     time.Time{},
@@ -149,6 +153,8 @@ func sampleRun() *report.Run {
 				Cancelled: []report.Cancel{{TaskID: "knip:pkg:5", Tool: "knip", Dir: "pkg", Started: true, Cause: "fail-fast"}},
 				Tools: []report.ToolRun{
 					{
+						RedactedReasons: nil,
+
 						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 						Parser:     nil,
 						GateActive: false,
@@ -157,6 +163,9 @@ func sampleRun() *report.Run {
 						Name:       "eslint", FailOn: "error", Complete: true,
 						Invocations: []report.Invocation{
 							{
+								RedactedState:      0,
+								RedactedExtraction: 0,
+
 								TaskID:      "",
 								Dir:         "",
 								Scope:       "",
@@ -178,10 +187,19 @@ func sampleRun() *report.Run {
 									issue("src/b.ts", 1, "warning", false, "only a warning"),
 								},
 							},
-							{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::2#cached", State: "cached", Success: true, Files: []report.FileResult{{ExitCode: nil, Patch: "", Path: "src/d.ts", State: "cached", Success: true}}},
+							{
+								RedactedState:      0,
+								RedactedExtraction: 0,
+								TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::2#cached", State: "cached", Success: true, Files: []report.FileResult{{
+									RedactedState: 0,
+									ExitCode:      nil, Patch: "", Path: "src/d.ts", State: "cached", Success: true,
+								}},
+							},
 						},
 					},
 					{
+						RedactedReasons: nil,
+
 						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 						Parser:     nil,
 						GateActive: false,
@@ -191,6 +209,9 @@ func sampleRun() *report.Run {
 						// not a failure of each member.
 						Name: "tsc", FailOn: "error", Complete: true,
 						Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+
 							TaskID:      "",
 							Scope:       "",
 							Granularity: "",
@@ -209,6 +230,8 @@ func sampleRun() *report.Run {
 						}},
 					},
 					{
+						RedactedReasons: nil,
+
 						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 						Parser:     nil,
 						GateActive: false,
@@ -216,6 +239,9 @@ func sampleRun() *report.Run {
 						Complete:   false,
 						Name:       "shellcheck", FailOn: "error", Incomplete: []report.Reason{"no-extraction"},
 						Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+
 							TaskID:      "",
 							Dir:         "",
 							Scope:       "",
@@ -246,6 +272,8 @@ func sampleRun() *report.Run {
 						}},
 					},
 					{
+						RedactedReasons: nil,
+
 						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 						Parser:     nil,
 						GateActive: false,
@@ -253,6 +281,9 @@ func sampleRun() *report.Run {
 						Incomplete: nil,
 						Name:       "gitleaks", FailOn: "error", Category: "security",
 						Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+
 							TaskID:      "",
 							Dir:         "",
 							Scope:       "",
@@ -282,7 +313,17 @@ func sampleRun() *report.Run {
 							}},
 						}},
 					},
-					{App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, GateActive: false, Category: "", Complete: false, Name: "knip", FailOn: "error", Incomplete: []report.Reason{"cancelled"}, Invocations: []report.Invocation{{Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "knip:pkg:5#1", TaskID: "knip:pkg:5", State: "cancelled", Files: []report.FileResult{{Success: false, ExitCode: nil, Patch: "", Path: "pkg/x.ts", State: "cancelled"}}}}},
+					{
+						RedactedReasons: nil,
+						App:             report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, GateActive: false, Category: "", Complete: false, Name: "knip", FailOn: "error", Incomplete: []report.Reason{"cancelled"}, Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+							Dir:                "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "knip:pkg:5#1", TaskID: "knip:pkg:5", State: "cancelled", Files: []report.FileResult{{
+								RedactedState: 0,
+								Success:       false, ExitCode: nil, Patch: "", Path: "pkg/x.ts", State: "cancelled",
+							}},
+						}},
+					},
 				},
 			},
 			{Ran: false, Success: false, Duration: 0, Skipped: nil, Cancelled: nil, Tools: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "fix"},
@@ -377,13 +418,19 @@ func TestCheck(t *testing.T) {
 		ChangesDetail:   "",
 		ChangesScope:    nil,
 		Changes:         nil, Name: "fix", Ran: true, Tools: []report.ToolRun{{
+			RedactedReasons: nil,
+
 			App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 			Parser:     nil,
 			FailOn:     "",
 			GateActive: false,
 			Category:   "",
 			Name:       "prettier", Complete: false, Incomplete: []report.Reason{"no-extraction"},
-			Invocations: []report.Invocation{{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "prettier::1#1", State: "ran", Success: true, Files: files("a.md")}},
+			Invocations: []report.Invocation{{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "prettier::1#1", State: "ran", Success: true, Files: files("a.md"),
+			}},
 		}},
 	}
 	doc, _ := decode(t, run)
@@ -397,7 +444,8 @@ func TestCheck(t *testing.T) {
 // created for it when the invocation passed.
 func TestFileLessFinding(t *testing.T) {
 	run := &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   time.Time{},
@@ -417,6 +465,8 @@ func TestFileLessFinding(t *testing.T) {
 			ChangesDetail:   "",
 			ChangesScope:    nil,
 			Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+
 				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 				Parser:     nil,
 				GateActive: false,
@@ -424,6 +474,9 @@ func TestFileLessFinding(t *testing.T) {
 				Incomplete: nil,
 				Name:       "tsc", FailOn: "error", Complete: true,
 				Invocations: []report.Invocation{{
+					RedactedState:      0,
+					RedactedExtraction: 0,
+
 					TaskID:      "",
 					Scope:       "",
 					Granularity: "",
@@ -451,7 +504,8 @@ func TestFileLessFinding(t *testing.T) {
 
 func TestSetupFailure(t *testing.T) {
 	run := &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   time.Time{},
@@ -471,6 +525,8 @@ func TestSetupFailure(t *testing.T) {
 			ChangesDetail:   "",
 			ChangesScope:    nil,
 			Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+
 				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 				Parser:     nil,
 				GateActive: false,
@@ -479,6 +535,9 @@ func TestSetupFailure(t *testing.T) {
 				Incomplete: nil,
 				Name:       "installer", FailOn: "error",
 				Invocations: []report.Invocation{{
+					RedactedState:      0,
+					RedactedExtraction: 0,
+
 					TaskID:      "",
 					Dir:         "",
 					Scope:       "",
@@ -495,7 +554,10 @@ func TestSetupFailure(t *testing.T) {
 					Step:        0,
 					Changes:     nil,
 					ID:          "installer::1#0", State: "setup-failed", FailureKind: "setup", OutputTail: "download failed\n",
-					Files: []report.FileResult{{Success: false, ExitCode: nil, Patch: "", Path: "a", State: "setup-failed"}},
+					Files: []report.FileResult{{
+						RedactedState: 0,
+						Success:       false, ExitCode: nil, Patch: "", Path: "a", State: "setup-failed",
+					}},
 				}},
 			}},
 		}},
@@ -513,7 +575,8 @@ func TestSetupFailure(t *testing.T) {
 func TestFailedInvocationsInOneDirectory(t *testing.T) {
 	one, two := 1, 2
 	run := &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   time.Time{},
@@ -533,6 +596,8 @@ func TestFailedInvocationsInOneDirectory(t *testing.T) {
 			ChangesDetail:   "",
 			ChangesScope:    nil,
 			Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+
 				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 				Parser:     nil,
 				GateActive: false,
@@ -542,6 +607,9 @@ func TestFailedInvocationsInOneDirectory(t *testing.T) {
 				Name:       "hadolint", FailOn: "error",
 				Invocations: []report.Invocation{
 					{
+						RedactedState:      0,
+						RedactedExtraction: 0,
+
 						TaskID:      "",
 						Dir:         "",
 						Scope:       "",
@@ -560,6 +628,9 @@ func TestFailedInvocationsInOneDirectory(t *testing.T) {
 						Findings: []report.Finding{issue("Dockerfile", 1, "warning", false, "pin it")},
 					},
 					{
+						RedactedState:      0,
+						RedactedExtraction: 0,
+
 						TaskID:      "",
 						Dir:         "",
 						Scope:       "",
@@ -612,7 +683,8 @@ func TestThresholdFailureAfterDedupe(t *testing.T) {
 	zero := 0
 	gating := issue("pkg/a.ts", 3, "error", true, "Unexpected var")
 	run := &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   time.Time{},
@@ -632,6 +704,8 @@ func TestThresholdFailureAfterDedupe(t *testing.T) {
 			ChangesDetail:   "",
 			ChangesScope:    nil,
 			Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+
 				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 				Parser:     nil,
 				GateActive: false,
@@ -639,8 +713,16 @@ func TestThresholdFailureAfterDedupe(t *testing.T) {
 				Incomplete: nil,
 				Name:       "eslint", FailOn: "error", Complete: true,
 				Invocations: []report.Invocation{
-					{TaskID: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, Duration: 0, Extraction: "", Provenance: "", Step: 0, Changes: nil, OutputTail: "", ID: "eslint:pkg:1#1", Dir: "pkg", State: "ran", ExitCode: &zero, FailureKind: "threshold", Files: files("pkg/a.ts"), Findings: []report.Finding{gating}},
-					{TaskID: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, Duration: 0, Extraction: "", Provenance: "", Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint:pkg:2#1", Dir: "pkg", State: "ran", ExitCode: &zero, FailureKind: "threshold", Files: files("pkg/a.ts")},
+					{
+						RedactedState:      0,
+						RedactedExtraction: 0,
+						TaskID:             "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, Duration: 0, Extraction: "", Provenance: "", Step: 0, Changes: nil, OutputTail: "", ID: "eslint:pkg:1#1", Dir: "pkg", State: "ran", ExitCode: &zero, FailureKind: "threshold", Files: files("pkg/a.ts"), Findings: []report.Finding{gating},
+					},
+					{
+						RedactedState:      0,
+						RedactedExtraction: 0,
+						TaskID:             "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, Duration: 0, Extraction: "", Provenance: "", Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint:pkg:2#1", Dir: "pkg", State: "ran", ExitCode: &zero, FailureKind: "threshold", Files: files("pkg/a.ts"),
+					},
 				},
 			}},
 		}},
@@ -660,7 +742,8 @@ func TestExitFailureAfterDedupe(t *testing.T) {
 	build := func(gates bool) *report.Run {
 		f := issue("pkg/a.ts", 3, "warning", gates, "Unexpected var")
 		return &report.Run{
-			Schema:      "",
+			RedactedReasons: nil,
+
 			Fingerprint: "",
 			Datamitsu:   report.Producer{Version: "", Configuration: ""},
 			StartedAt:   time.Time{},
@@ -680,6 +763,8 @@ func TestExitFailureAfterDedupe(t *testing.T) {
 				ChangesDetail:   "",
 				ChangesScope:    nil,
 				Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{{
+					RedactedReasons: nil,
+
 					App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 					Parser:     nil,
 					GateActive: false,
@@ -687,8 +772,16 @@ func TestExitFailureAfterDedupe(t *testing.T) {
 					Incomplete: nil,
 					Name:       "eslint", FailOn: "error", Complete: true,
 					Invocations: []report.Invocation{
-						{TaskID: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, Duration: 0, Extraction: "", Provenance: "", Step: 0, Changes: nil, OutputTail: "", ID: "eslint:pkg:1#1", Dir: "pkg", State: "ran", ExitCode: &one, FailureKind: "exit", Files: files("pkg/a.ts"), Findings: []report.Finding{f}},
-						{TaskID: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, Duration: 0, Extraction: "", Provenance: "", Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint:pkg:2#1", Dir: "pkg", State: "ran", ExitCode: &one, FailureKind: "exit", Files: files("pkg/a.ts")},
+						{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+							TaskID:             "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, Duration: 0, Extraction: "", Provenance: "", Step: 0, Changes: nil, OutputTail: "", ID: "eslint:pkg:1#1", Dir: "pkg", State: "ran", ExitCode: &one, FailureKind: "exit", Files: files("pkg/a.ts"), Findings: []report.Finding{f},
+						},
+						{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+							TaskID:             "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, Duration: 0, Extraction: "", Provenance: "", Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint:pkg:2#1", Dir: "pkg", State: "ran", ExitCode: &one, FailureKind: "exit", Files: files("pkg/a.ts"),
+						},
 					},
 				}},
 			}},
@@ -714,7 +807,8 @@ func TestExitFailureAfterDedupe(t *testing.T) {
 func TestExitFailureAfterPartialDedupe(t *testing.T) {
 	one := 1
 	run := &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   time.Time{},
@@ -734,6 +828,8 @@ func TestExitFailureAfterPartialDedupe(t *testing.T) {
 			ChangesDetail:   "",
 			ChangesScope:    nil,
 			Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+
 				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 				Parser:     nil,
 				GateActive: false,
@@ -742,6 +838,9 @@ func TestExitFailureAfterPartialDedupe(t *testing.T) {
 				Name:       "eslint", FailOn: "error", Complete: true,
 				Invocations: []report.Invocation{
 					{
+						RedactedState:      0,
+						RedactedExtraction: 0,
+
 						TaskID:      "",
 						Scope:       "",
 						Granularity: "",
@@ -759,6 +858,9 @@ func TestExitFailureAfterPartialDedupe(t *testing.T) {
 						Findings: []report.Finding{issue("pkg/a.ts", 3, "error", true, "Unexpected var")},
 					},
 					{
+						RedactedState:      0,
+						RedactedExtraction: 0,
+
 						TaskID:      "",
 						Scope:       "",
 						Granularity: "",
@@ -793,7 +895,8 @@ func TestExitFailureAfterPartialDedupe(t *testing.T) {
 func TestFailureAfterExitZero(t *testing.T) {
 	zero := 0
 	run := &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   time.Time{},
@@ -813,6 +916,8 @@ func TestFailureAfterExitZero(t *testing.T) {
 			ChangesDetail:   "",
 			ChangesScope:    nil,
 			Changes:         nil, Name: "fix", Ran: true, Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+
 				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 				Parser:     nil,
 				GateActive: false,
@@ -821,6 +926,9 @@ func TestFailureAfterExitZero(t *testing.T) {
 				Incomplete: nil,
 				Name:       "fmt", FailOn: "error",
 				Invocations: []report.Invocation{{
+					RedactedState:      0,
+					RedactedExtraction: 0,
+
 					TaskID:      "",
 					Dir:         "",
 					Scope:       "",
@@ -848,11 +956,86 @@ func TestFailureAfterExitZero(t *testing.T) {
 	}
 }
 
+// A not-started invocation is retained even when no cancellation record was
+// produced for its task.
+func TestNotStartedInvocationWithoutStopRecord(t *testing.T) {
+	run := &report.Run{
+		Fingerprint:     "",
+		Datamitsu:       report.Producer{Version: "", Configuration: ""},
+		StartedAt:       time.Time{},
+		EndedAt:         time.Time{},
+		Selection:       report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:        false,
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Exports:         nil,
+		CI:              report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		Operations: []report.Operation{{
+			Success:         false,
+			Duration:        0,
+			Skipped:         nil,
+			Cancelled:       nil,
+			ChangesObserved: false,
+			ChangesReason:   "",
+			ChangesDetail:   "",
+			ChangesScope:    nil,
+			Changes:         nil,
+			Name:            "lint", Ran: true, Tools: []report.ToolRun{{
+				App:             report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+				Parser:          nil,
+				FailOn:          "",
+				GateActive:      false,
+				Category:        "",
+				Complete:        false,
+				Incomplete:      nil,
+				RedactedReasons: nil,
+
+				Name: "formatter", Invocations: []report.Invocation{{
+					Dir:                "",
+					Scope:              "",
+					Granularity:        "",
+					Arity:              "",
+					Coverage:           "",
+					WholeUnit:          false,
+					RedactedState:      0,
+					ExitCode:           nil,
+					Success:            false,
+					FailureKind:        "",
+					Duration:           0,
+					Extraction:         "",
+					RedactedExtraction: 0,
+					Provenance:         "",
+					Findings:           nil,
+					Step:               0,
+					Changes:            nil,
+					OutputTail:         "",
+
+					ID: "formatter::1#0", TaskID: "formatter::1", State: "not-started",
+					Files: []report.FileResult{{
+						RedactedState: 0,
+						Success:       false,
+						ExitCode:      nil,
+						Patch:         "",
+						Path:          "a.go", State: "not-started",
+					}},
+				}},
+			}},
+		}},
+	}
+	doc, _ := decode(t, run)
+	s := doc.suite(t, "lint/formatter")
+	if s.Tests != 1 || s.Skipped != 1 || s.Cases[0].Name != "formatter::1" || s.Cases[0].Skipped.Message != "not started" {
+		t.Errorf("suite = %+v, want one skipped case for the unstarted task", s)
+	}
+}
+
 // A task the run never reached without a stop record — its tools could not
 // be installed — is still a skipped case, not an empty suite.
 func TestNotStartedWithoutStopRecord(t *testing.T) {
 	run := &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   time.Time{},
@@ -872,6 +1055,8 @@ func TestNotStartedWithoutStopRecord(t *testing.T) {
 			ChangesDetail:   "",
 			ChangesScope:    nil,
 			Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+
 				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 				Parser:     nil,
 				GateActive: false,
@@ -879,6 +1064,9 @@ func TestNotStartedWithoutStopRecord(t *testing.T) {
 				Complete:   false,
 				Name:       "installer", FailOn: "error", Incomplete: []report.Reason{"not-started"},
 				Invocations: []report.Invocation{{
+					RedactedState:      0,
+					RedactedExtraction: 0,
+
 					Dir:         "",
 					Scope:       "",
 					Granularity: "",
@@ -896,7 +1084,10 @@ func TestNotStartedWithoutStopRecord(t *testing.T) {
 					Changes:     nil,
 					OutputTail:  "",
 					ID:          "installer::1#0", TaskID: "installer::1", State: "not-started",
-					Files: []report.FileResult{{Success: false, ExitCode: nil, Patch: "", Path: "a", State: "not-started"}},
+					Files: []report.FileResult{{
+						RedactedState: 0,
+						Success:       false, ExitCode: nil, Patch: "", Path: "a", State: "not-started",
+					}},
 				}},
 			}},
 		}},

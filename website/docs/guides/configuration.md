@@ -25,6 +25,12 @@ the final resolved config must contain a top-level `version`.
 - `getMinVersion()` — Returns the minimum datamitsu version required (semver string). For stable builds, the loader fails with upgrade instructions if the current version is too old. Unstable builds (`0.0.0-unstable.<date>.<sha>`, produced from non-tagged commits) skip the check and emit an advisory warning instead — users on those builds have already opted into a non-released binary.
 - `getConfig(config)` — Receives the accumulated configuration from previous layers and returns a new config.
 
+The unstable-build advisory is grouped once per configuration load, including a
+cache hit. It lists the current build and each configuration's required minimum
+under compact project or package labels. Use `--verbose` for full source paths.
+The advisory does not establish compatibility; use a stable release to enforce
+the declared minimum versions.
+
 `version` identifies the configuration release and is required on the final
 resolved config. The embedded default supplies `core`, inherited as a normal
 scalar; a standalone config that discards the incoming config must still supply

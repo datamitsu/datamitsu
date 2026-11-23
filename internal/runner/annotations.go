@@ -349,11 +349,12 @@ func (sc *sharedContext) writeStepSummary(run *report.Run) bool {
 		logger.Logger.Warn(fmt.Sprintf("the step summary was not written: it holds %d bytes of GitHub's %d", info.Size(), summaryLimit))
 		return false
 	}
-	if _, err := markdown.Write(f, run, budget); err != nil {
+	cut, err := markdown.Write(f, run, budget)
+	if err != nil {
 		logger.Logger.Warn("the step summary was not written: " + err.Error())
 		return false
 	}
-	return true
+	return cut == 0
 }
 
 // annotationsRest names where the findings the annotations leave out can be
@@ -380,7 +381,10 @@ func annotationsRest(run *report.Run, summary bool) []string {
 // JSON-L stream, a line on stderr otherwise.
 func info(msg string) {
 	if ui.Quiet() {
-		ui.Emit(uievent.Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, OpID: uievent.NextOpID("log"), Level: uievent.LevelInfo, Msg: msg})
+		ui.Emit(uievent.Event{
+			ThrottleID: "",
+			TS:         0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, OpID: uievent.NextOpID("log"), Level: uievent.LevelInfo, Msg: msg,
+		})
 		return
 	}
 	fmt.Fprintln(os.Stderr, "info: "+msg)

@@ -134,49 +134,56 @@ func init() {
 }
 
 func runReportBaseline(cmd *cobra.Command, args []string) error {
+	secrets := report.SecretValues(env.EnvironAll())
 	run, err := readReport(args[0])
 	if err != nil {
-		return err
+		return maskCodedError(err, secrets)
 	}
 	if run.Fingerprint != report.FingerprintVersion {
-		return exitcode.UsageErrorf("report baseline: %s holds fingerprints of version %q, and this build computes %q",
-			args[0], run.Fingerprint, report.FingerprintVersion)
+		return maskCodedError(exitcode.UsageErrorf("report baseline: %s holds fingerprints of version %q, and this build computes %q",
+			args[0], run.Fingerprint, report.FingerprintVersion), secrets)
 	}
 	if !run.Complete {
-		logger.Logger.Warn(fmt.Sprintf("report baseline: the run of %s is incomplete (%s): the baseline holds only "+
-			"the fingerprints it found, and suppresses no finding it missed", args[0], reasonList(run)))
+		message := fmt.Sprintf("report baseline: the run of %s is incomplete (%s): the baseline holds only "+
+			"the fingerprints it found, and suppresses no finding it missed", args[0], reasonList(run))
+		report.MaskAll(&message, secrets)
+		logger.Logger.Warn(message)
 	}
 	created := time.Now().UTC()
 	if t, ok := env.SourceDateEpoch(); ok {
 		created = t
 	}
+	report.Mask(run, secrets)
 	data, err := json.MarshalIndent(report.NewBaseline(run, created), "", "  ")
 	if err != nil {
-		return fmt.Errorf("encode baseline: %w", err)
+		return maskCodedError(fmt.Errorf("encode baseline: %w", err), secrets)
 	}
-	return writeOutput(cmd.OutOrStdout(), "baseline", "json", reportBaselineOutput, append(data, '\n'))
+	return maskCodedError(writeOutput(cmd.OutOrStdout(), "baseline", "json", reportBaselineOutput, append(data, '\n')), secrets)
 }
 
 func runReportDiff(cmd *cobra.Command, args []string) error {
+	secrets := report.SecretValues(env.EnvironAll())
 	if !slices.Contains(diff.Formats(), reportDiffFormat) {
-		return exitcode.UsageErrorf("invalid --format: %q (must be %s)", reportDiffFormat, strings.Join(diff.Formats(), " or "))
+		return maskCodedError(exitcode.UsageErrorf("invalid --format: %q (must be %s)", reportDiffFormat, strings.Join(diff.Formats(), " or ")), secrets)
 	}
 	before, err := readReport(args[0])
 	if err != nil {
-		return err
+		return maskCodedError(err, secrets)
 	}
 	after, err := readReport(args[1])
 	if err != nil {
-		return err
+		return maskCodedError(err, secrets)
 	}
 	if err := diff.Comparable(before, after); err != nil {
-		return exitcode.UsageErrorf("report diff: %w", err)
+		return maskCodedError(exitcode.UsageErrorf("report diff: %w", err), secrets)
 	}
 	var out bytes.Buffer
-	if err := diff.Write(&out, diff.Diff(before, after), reportDiffFormat); err != nil {
-		return err
+	result := diff.Diff(before, after)
+	report.MaskAll(&result, secrets)
+	if err := diff.Write(&out, result, reportDiffFormat); err != nil {
+		return maskCodedError(err, secrets)
 	}
-	return writeOutput(cmd.OutOrStdout(), "diff", reportDiffFormat, reportDiffOutput, out.Bytes())
+	return maskCodedError(writeOutput(cmd.OutOrStdout(), "diff", reportDiffFormat, reportDiffOutput, out.Bytes()), secrets)
 }
 
 // writeOutput writes a document of format to stdout or, atomically, to path;

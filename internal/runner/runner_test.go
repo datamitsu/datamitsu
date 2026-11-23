@@ -11,11 +11,14 @@ import (
 	"testing"
 	"time"
 
-	zerovalue_cienv "github.com/datamitsu/datamitsu/internal/cienv"
+	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/timing"
 	"github.com/datamitsu/datamitsu/internal/tooling"
+
+	zerovalue_cienv "github.com/datamitsu/datamitsu/internal/cienv"
 )
 
 func TestIsCI(t *testing.T) {
@@ -179,6 +182,7 @@ func TestGroupResultsByTool(t *testing.T) {
 				Priority:          0,
 				Success:           false,
 				WallClockDuration: 0,
+
 				Results: []tooling.ExecutionResult{
 					{
 						TaskID:           "",
@@ -205,10 +209,11 @@ func TestGroupResultsByTool(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          true,
-						Duration:         1000,
-						RelativeDir:      ".",
+
+						ToolName:    "eslint",
+						Success:     true,
+						Duration:    1000,
+						RelativeDir: ".",
 					},
 				},
 			},
@@ -250,6 +255,7 @@ func TestGroupResultsByTool(t *testing.T) {
 				Priority:          0,
 				Success:           false,
 				WallClockDuration: 0,
+
 				Results: []tooling.ExecutionResult{
 					{
 						TaskID:           "",
@@ -276,10 +282,11 @@ func TestGroupResultsByTool(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          true,
-						Duration:         1000,
-						RelativeDir:      "dir1",
+
+						ToolName:    "eslint",
+						Success:     true,
+						Duration:    1000,
+						RelativeDir: "dir1",
 					},
 					{
 						TaskID:           "",
@@ -306,10 +313,11 @@ func TestGroupResultsByTool(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          false,
-						Duration:         500,
-						RelativeDir:      "dir2",
+
+						ToolName:    "eslint",
+						Success:     false,
+						Duration:    500,
+						RelativeDir: "dir2",
 					},
 					{
 						TaskID:           "",
@@ -336,10 +344,11 @@ func TestGroupResultsByTool(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          true,
-						Duration:         1500,
-						RelativeDir:      "dir3",
+
+						ToolName:    "eslint",
+						Success:     true,
+						Duration:    1500,
+						RelativeDir: "dir3",
 					},
 				},
 			},
@@ -384,6 +393,7 @@ func TestGroupResultsByTool(t *testing.T) {
 				Priority:          0,
 				Success:           false,
 				WallClockDuration: 0,
+
 				Results: []tooling.ExecutionResult{
 					{
 						TaskID:           "",
@@ -411,9 +421,10 @@ func TestGroupResultsByTool(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          true,
-						Duration:         1000,
+
+						ToolName: "eslint",
+						Success:  true,
+						Duration: 1000,
 					},
 					{
 						TaskID:           "",
@@ -441,9 +452,10 @@ func TestGroupResultsByTool(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "prettier",
-						Success:          true,
-						Duration:         500,
+
+						ToolName: "prettier",
+						Success:  true,
+						Duration: 500,
 					},
 					{
 						TaskID:           "",
@@ -471,9 +483,10 @@ func TestGroupResultsByTool(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          false,
-						Duration:         1200,
+
+						ToolName: "eslint",
+						Success:  false,
+						Duration: 1200,
 					},
 				},
 			},
@@ -517,9 +530,11 @@ func TestFormatExecutionPlan(t *testing.T) {
 		ConfigName: "",
 		FailOn:     "",
 		Skipped:    nil,
+
 		Groups: []tooling.TaskGroup{
 			{
 				Priority: 0,
+
 				Tasks: []tooling.Task{
 					{
 						ID:          "",
@@ -530,7 +545,8 @@ func TestFormatExecutionPlan(t *testing.T) {
 						UnitMembers: nil,
 						UnitGuards:  nil,
 						Coverage:    "",
-						ToolName:    "eslint",
+
+						ToolName: "eslint",
 						OpConfig: config.ToolOperation{
 							App:               "",
 							Args:              nil,
@@ -548,7 +564,8 @@ func TestFormatExecutionPlan(t *testing.T) {
 							LSP:               nil,
 							Output:            "",
 							ManagedConfigRefs: nil,
-							Scope:             config.ToolScopePerFile,
+
+							Scope: config.ToolScopePerFile,
 						},
 						Files: []string{"file1.js", "file2.js"},
 					},
@@ -620,15 +637,16 @@ func TestPrintFailedExecutionContainsAllFields(t *testing.T) {
 			Cached:           false,
 			WholeUnit:        false,
 			UnitDir:          "",
-			ToolName:         "golangci-lint",
-			Success:          false,
-			Duration:         2500,
-			ExitCode:         2,
-			Command:          "golangci-lint run ./...",
-			Output:           "internal/foo.go:10:5: unused variable\ninternal/bar.go:20:1: missing return",
-			WorkingDir:       "/home/user/monorepo/services/api",
-			RelativeDir:      "services/api",
-			Scope:            config.ToolScopePerProject,
+
+			ToolName:    "golangci-lint",
+			Success:     false,
+			Duration:    2500,
+			ExitCode:    2,
+			Command:     "golangci-lint run ./...",
+			Output:      "internal/foo.go:10:5: unused variable\ninternal/bar.go:20:1: missing return",
+			WorkingDir:  "/home/user/monorepo/services/api",
+			RelativeDir: "services/api",
+			Scope:       config.ToolScopePerProject,
 		},
 		relativeDir: "services/api",
 	}
@@ -704,10 +722,11 @@ func TestPrintFailedExecutionMinimalFields(t *testing.T) {
 			Cached:           false,
 			WholeUnit:        false,
 			UnitDir:          "",
-			ToolName:         "custom-tool",
-			Success:          false,
-			Duration:         100,
-			ExitCode:         1,
+
+			ToolName: "custom-tool",
+			Success:  false,
+			Duration: 100,
+			ExitCode: 1,
 		},
 		relativeDir: "",
 	}
@@ -753,6 +772,7 @@ func TestPrintFailedExecutionWithScope(t *testing.T) {
 		t.Run(string(scope), func(t *testing.T) {
 			exec := executionInstance{
 				relativeDir: "",
+
 				result: tooling.ExecutionResult{
 					TaskID:           "",
 					Output:           "",
@@ -777,11 +797,12 @@ func TestPrintFailedExecutionWithScope(t *testing.T) {
 					Cached:           false,
 					WholeUnit:        false,
 					UnitDir:          "",
-					ToolName:         "test-tool",
-					Success:          false,
-					Duration:         100,
-					ExitCode:         1,
-					Scope:            scope,
+
+					ToolName: "test-tool",
+					Success:  false,
+					Duration: 100,
+					ExitCode: 1,
+					Scope:    scope,
 				},
 			}
 
@@ -814,14 +835,15 @@ func TestPrintGroupedResultsShowsScope(t *testing.T) {
 			wallStart:      time.Time{},
 			wallEnd:        time.Time{},
 			firstSeenIndex: 0,
-			toolName:       "eslint",
-			scope:          config.ToolScopePerProject,
-			totalRuns:      1,
-			succeededRuns:  0,
-			failedRuns:     1,
-			totalTime:      500,
-			minTime:        500,
-			maxTime:        500,
+
+			toolName:      "eslint",
+			scope:         config.ToolScopePerProject,
+			totalRuns:     1,
+			succeededRuns: 0,
+			failedRuns:    1,
+			totalTime:     500,
+			minTime:       500,
+			maxTime:       500,
 			executions: []executionInstance{
 				{
 					result: tooling.ExecutionResult{
@@ -845,14 +867,15 @@ func TestPrintGroupedResultsShowsScope(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          false,
-						Duration:         500,
-						ExitCode:         1,
-						Output:           "test error",
-						WorkingDir:       "/home/user/project/packages/web",
-						RelativeDir:      "packages/web",
-						Scope:            config.ToolScopePerProject,
+
+						ToolName:    "eslint",
+						Success:     false,
+						Duration:    500,
+						ExitCode:    1,
+						Output:      "test error",
+						WorkingDir:  "/home/user/project/packages/web",
+						RelativeDir: "packages/web",
+						Scope:       config.ToolScopePerProject,
 					},
 					relativeDir: "packages/web",
 				},
@@ -864,7 +887,7 @@ func TestPrintGroupedResultsShowsScope(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	printGroupedResults(toolGroups, 20, false)
+	printGroupedResults(toolGroups, 20, false, nil)
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -916,18 +939,20 @@ func TestGroupResultsByToolWallClock(t *testing.T) {
 			Cached:           false,
 			WholeUnit:        false,
 			UnitDir:          "",
-			ToolName:         "eslint",
-			Success:          true,
-			Duration:         dur,
-			StartedAt:        t0.Add(time.Duration(start) * time.Millisecond),
-			EndedAt:          t0.Add(time.Duration(end) * time.Millisecond),
+
+			ToolName:  "eslint",
+			Success:   true,
+			Duration:  dur,
+			StartedAt: t0.Add(time.Duration(start) * time.Millisecond),
+			EndedAt:   t0.Add(time.Duration(end) * time.Millisecond),
 		}
 	}
 	groupResults := []tooling.GroupExecutionResult{
 		{
 			Priority:          0,
 			Success:           false,
-			WallClockDuration: 0, Results: []tooling.ExecutionResult{
+			WallClockDuration: 0,
+			Results: []tooling.ExecutionResult{
 				mk(0, 3000, 3000),
 				mk(500, 4000, 3500),
 				mk(1000, 2000, 1000),
@@ -954,9 +979,64 @@ func TestGroupResultsByToolWallClockFallsBackToSum(t *testing.T) {
 		{
 			Priority:          0,
 			Success:           false,
-			WallClockDuration: 0, Results: []tooling.ExecutionResult{
-				{TaskID: "", Output: "", Error: nil, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: time.Time{}, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", ToolName: "prettier", Success: true, Duration: 1200},
-				{TaskID: "", Output: "", Error: nil, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: time.Time{}, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", ToolName: "prettier", Success: true, Duration: 800},
+			WallClockDuration: 0,
+			Results: []tooling.ExecutionResult{
+				{
+					TaskID:           "",
+					Output:           "",
+					Error:            nil,
+					Command:          "",
+					ExitCode:         0,
+					WorkingDir:       "",
+					RelativeDir:      "",
+					Scope:            "",
+					Batch:            false,
+					Cancelled:        false,
+					FailureReason:    0,
+					StartedAt:        time.Time{},
+					EndedAt:          time.Time{},
+					FilesNotRun:      0,
+					UnparsedFailures: nil,
+					CapturedStdout:   "",
+					Diagnostics:      nil,
+					Processes:        nil,
+					ParseFailed:      false,
+					FailOn:           "",
+					Files:            nil,
+					FileResults:      nil,
+					Cached:           false,
+					WholeUnit:        false,
+					UnitDir:          "",
+					ToolName:         "prettier", Success: true, Duration: 1200,
+				},
+				{
+					TaskID:           "",
+					Output:           "",
+					Error:            nil,
+					Command:          "",
+					ExitCode:         0,
+					WorkingDir:       "",
+					RelativeDir:      "",
+					Scope:            "",
+					Batch:            false,
+					Cancelled:        false,
+					FailureReason:    0,
+					StartedAt:        time.Time{},
+					EndedAt:          time.Time{},
+					FilesNotRun:      0,
+					UnparsedFailures: nil,
+					CapturedStdout:   "",
+					Diagnostics:      nil,
+					Processes:        nil,
+					ParseFailed:      false,
+					FailOn:           "",
+					Files:            nil,
+					FileResults:      nil,
+					Cached:           false,
+					WholeUnit:        false,
+					UnitDir:          "",
+					ToolName:         "prettier", Success: true, Duration: 800,
+				},
 			},
 		},
 	}
@@ -976,6 +1056,7 @@ func TestGroupResultsByToolHidesCancelledResults(t *testing.T) {
 				Priority:          0,
 				Success:           false,
 				WallClockDuration: 0,
+
 				Results: []tooling.ExecutionResult{
 					{
 						TaskID:           "",
@@ -1002,10 +1083,11 @@ func TestGroupResultsByToolHidesCancelledResults(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          false,
-						Duration:         1000,
-						FailureReason:    tooling.FailureReasonIndependent,
+
+						ToolName:      "eslint",
+						Success:       false,
+						Duration:      1000,
+						FailureReason: tooling.FailureReasonIndependent,
 					},
 					{
 						TaskID:           "",
@@ -1031,11 +1113,12 @@ func TestGroupResultsByToolHidesCancelledResults(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "prettier",
-						Success:          false,
-						Duration:         200,
-						Cancelled:        true,
-						FailureReason:    tooling.FailureReasonCancelled,
+
+						ToolName:      "prettier",
+						Success:       false,
+						Duration:      200,
+						Cancelled:     true,
+						FailureReason: tooling.FailureReasonCancelled,
 					},
 					{
 						TaskID:           "",
@@ -1061,11 +1144,12 @@ func TestGroupResultsByToolHidesCancelledResults(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "tsc",
-						Success:          false,
-						Duration:         100,
-						Cancelled:        true,
-						FailureReason:    tooling.FailureReasonCancelled,
+
+						ToolName:      "tsc",
+						Success:       false,
+						Duration:      100,
+						Cancelled:     true,
+						FailureReason: tooling.FailureReasonCancelled,
 					},
 				},
 			},
@@ -1090,6 +1174,7 @@ func TestGroupResultsByToolHidesCancelledResults(t *testing.T) {
 				Priority:          0,
 				Success:           false,
 				WallClockDuration: 0,
+
 				Results: []tooling.ExecutionResult{
 					{
 						TaskID:           "",
@@ -1116,10 +1201,11 @@ func TestGroupResultsByToolHidesCancelledResults(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          false,
-						Duration:         500,
-						FailureReason:    tooling.FailureReasonIndependent,
+
+						ToolName:      "eslint",
+						Success:       false,
+						Duration:      500,
+						FailureReason: tooling.FailureReasonIndependent,
 					},
 					{
 						TaskID:           "",
@@ -1145,11 +1231,12 @@ func TestGroupResultsByToolHidesCancelledResults(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "prettier",
-						Success:          false,
-						Duration:         100,
-						Cancelled:        false,
-						FailureReason:    tooling.FailureReasonCancelled,
+
+						ToolName:      "prettier",
+						Success:       false,
+						Duration:      100,
+						Cancelled:     false,
+						FailureReason: tooling.FailureReasonCancelled,
 					},
 				},
 			},
@@ -1171,6 +1258,7 @@ func TestGroupResultsByToolHidesCancelledResults(t *testing.T) {
 				Priority:          0,
 				Success:           false,
 				WallClockDuration: 0,
+
 				Results: []tooling.ExecutionResult{
 					{
 						TaskID:           "",
@@ -1197,10 +1285,11 @@ func TestGroupResultsByToolHidesCancelledResults(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          true,
-						Duration:         1000,
-						FailureReason:    tooling.FailureReasonNone,
+
+						ToolName:      "eslint",
+						Success:       true,
+						Duration:      1000,
+						FailureReason: tooling.FailureReasonNone,
 					},
 					{
 						TaskID:           "",
@@ -1227,10 +1316,11 @@ func TestGroupResultsByToolHidesCancelledResults(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "tsc",
-						Success:          false,
-						Duration:         50,
-						Cancelled:        true,
+
+						ToolName:  "tsc",
+						Success:   false,
+						Duration:  50,
+						Cancelled: true,
 					},
 				},
 			},
@@ -1254,6 +1344,7 @@ func TestGroupResultsByToolShowsIndependentFailures(t *testing.T) {
 				Priority:          0,
 				Success:           false,
 				WallClockDuration: 0,
+
 				Results: []tooling.ExecutionResult{
 					{
 						TaskID:           "",
@@ -1278,12 +1369,13 @@ func TestGroupResultsByToolShowsIndependentFailures(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          false,
-						Duration:         1000,
-						ExitCode:         1,
-						Output:           "lint error in file.js",
-						FailureReason:    tooling.FailureReasonIndependent,
+
+						ToolName:      "eslint",
+						Success:       false,
+						Duration:      1000,
+						ExitCode:      1,
+						Output:        "lint error in file.js",
+						FailureReason: tooling.FailureReasonIndependent,
 					},
 					{
 						TaskID:           "",
@@ -1308,12 +1400,13 @@ func TestGroupResultsByToolShowsIndependentFailures(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "golangci-lint",
-						Success:          false,
-						Duration:         2000,
-						ExitCode:         2,
-						Output:           "unused variable",
-						FailureReason:    tooling.FailureReasonIndependent,
+
+						ToolName:      "golangci-lint",
+						Success:       false,
+						Duration:      2000,
+						ExitCode:      2,
+						Output:        "unused variable",
+						FailureReason: tooling.FailureReasonIndependent,
 					},
 				},
 			},
@@ -1341,6 +1434,7 @@ func TestGroupResultsByToolShowsIndependentFailures(t *testing.T) {
 				Priority:          0,
 				Success:           false,
 				WallClockDuration: 0,
+
 				Results: []tooling.ExecutionResult{
 					{
 						TaskID:           "",
@@ -1367,10 +1461,11 @@ func TestGroupResultsByToolShowsIndependentFailures(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          true,
-						Duration:         1000,
-						FailureReason:    tooling.FailureReasonNone,
+
+						ToolName:      "eslint",
+						Success:       true,
+						Duration:      1000,
+						FailureReason: tooling.FailureReasonNone,
 					},
 					{
 						TaskID:           "",
@@ -1395,12 +1490,13 @@ func TestGroupResultsByToolShowsIndependentFailures(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          false,
-						Duration:         500,
-						ExitCode:         1,
-						FailureReason:    tooling.FailureReasonIndependent,
-						RelativeDir:      "packages/web",
+
+						ToolName:      "eslint",
+						Success:       false,
+						Duration:      500,
+						ExitCode:      1,
+						FailureReason: tooling.FailureReasonIndependent,
+						RelativeDir:   "packages/web",
 					},
 					{
 						TaskID:           "",
@@ -1426,11 +1522,12 @@ func TestGroupResultsByToolShowsIndependentFailures(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "prettier",
-						Success:          false,
-						Duration:         100,
-						Cancelled:        true,
-						FailureReason:    tooling.FailureReasonCancelled,
+
+						ToolName:      "prettier",
+						Success:       false,
+						Duration:      100,
+						Cancelled:     true,
+						FailureReason: tooling.FailureReasonCancelled,
 					},
 				},
 			},
@@ -1461,6 +1558,7 @@ func TestGroupResultsByToolShowsIndependentFailures(t *testing.T) {
 				Priority:          0,
 				Success:           false,
 				WallClockDuration: 0,
+
 				Results: []tooling.ExecutionResult{
 					{
 						TaskID:           "",
@@ -1487,10 +1585,11 @@ func TestGroupResultsByToolShowsIndependentFailures(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "eslint",
-						Success:          false,
-						Cancelled:        true,
-						FailureReason:    tooling.FailureReasonCancelled,
+
+						ToolName:      "eslint",
+						Success:       false,
+						Cancelled:     true,
+						FailureReason: tooling.FailureReasonCancelled,
 					},
 					{
 						TaskID:           "",
@@ -1517,10 +1616,11 @@ func TestGroupResultsByToolShowsIndependentFailures(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "prettier",
-						Success:          false,
-						Cancelled:        true,
-						FailureReason:    tooling.FailureReasonCancelled,
+
+						ToolName:      "prettier",
+						Success:       false,
+						Cancelled:     true,
+						FailureReason: tooling.FailureReasonCancelled,
 					},
 				},
 			},
@@ -1540,6 +1640,7 @@ func TestGroupResultsByToolCapturesScope(t *testing.T) {
 			Priority:          0,
 			Success:           false,
 			WallClockDuration: 0,
+
 			Results: []tooling.ExecutionResult{
 				{
 					TaskID:           "",
@@ -1566,10 +1667,11 @@ func TestGroupResultsByToolCapturesScope(t *testing.T) {
 					Cached:           false,
 					WholeUnit:        false,
 					UnitDir:          "",
-					ToolName:         "eslint",
-					Success:          true,
-					Duration:         1000,
-					Scope:            config.ToolScopePerProject,
+
+					ToolName: "eslint",
+					Success:  true,
+					Duration: 1000,
+					Scope:    config.ToolScopePerProject,
 				},
 			},
 		},
@@ -1599,10 +1701,11 @@ func TestPrintOverallSummary(t *testing.T) {
 			wallEnd:        time.Time{},
 			firstSeenIndex: 0,
 			executions:     nil,
-			toolName:       "eslint",
-			totalRuns:      2,
-			succeededRuns:  1,
-			failedRuns:     1,
+
+			toolName:      "eslint",
+			totalRuns:     2,
+			succeededRuns: 1,
+			failedRuns:    1,
 		},
 		{
 			scope:          "",
@@ -1616,10 +1719,11 @@ func TestPrintOverallSummary(t *testing.T) {
 			wallEnd:        time.Time{},
 			firstSeenIndex: 0,
 			executions:     nil,
-			toolName:       "prettier",
-			totalRuns:      1,
-			succeededRuns:  1,
-			failedRuns:     0,
+
+			toolName:      "prettier",
+			totalRuns:     1,
+			succeededRuns: 1,
+			failedRuns:    0,
 		},
 	}
 
@@ -1807,7 +1911,12 @@ func (m *mockProgressTracker) onResult(result tooling.ExecutionResult) {
 }
 
 func TestBatchModeProgressTracking(t *testing.T) {
-	tracker := &mockProgressTracker{taskStartCount: 0, fileProgressCount: 0, resultCallbackCount: 0, fileProgressCalls: nil}
+	tracker := &mockProgressTracker{
+		taskStartCount:      0,
+		fileProgressCount:   0,
+		resultCallbackCount: 0,
+		fileProgressCalls:   nil,
+	}
 	task := tooling.Task{
 		ID:          "",
 		Tool:        config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
@@ -1817,7 +1926,8 @@ func TestBatchModeProgressTracking(t *testing.T) {
 		UnitMembers: nil,
 		UnitGuards:  nil,
 		Coverage:    "",
-		ToolName:    "test-tool",
+
+		ToolName: "test-tool",
 		OpConfig: config.ToolOperation{
 			App:               "",
 			Args:              nil,
@@ -1835,7 +1945,8 @@ func TestBatchModeProgressTracking(t *testing.T) {
 			LSP:               nil,
 			Output:            "",
 			ManagedConfigRefs: nil,
-			Scope:             config.ToolScopePerProject,
+
+			Scope: config.ToolScopePerProject,
 		},
 		Files: []string{"file1.go", "file2.go", "file3.go"},
 	}
@@ -1869,9 +1980,10 @@ func TestBatchModeProgressTracking(t *testing.T) {
 		Cached:           false,
 		WholeUnit:        false,
 		UnitDir:          "",
-		ToolName:         task.ToolName,
-		Success:          true,
-		Batch:            true,
+
+		ToolName: task.ToolName,
+		Success:  true,
+		Batch:    true,
 	}
 	tracker.onResult(result)
 
@@ -1889,7 +2001,12 @@ func TestBatchModeProgressTracking(t *testing.T) {
 }
 
 func TestPerFileModeProgressTracking(t *testing.T) {
-	tracker := &mockProgressTracker{taskStartCount: 0, fileProgressCount: 0, resultCallbackCount: 0, fileProgressCalls: nil}
+	tracker := &mockProgressTracker{
+		taskStartCount:      0,
+		fileProgressCount:   0,
+		resultCallbackCount: 0,
+		fileProgressCalls:   nil,
+	}
 	task := tooling.Task{
 		ID:          "",
 		Tool:        config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
@@ -1899,7 +2016,8 @@ func TestPerFileModeProgressTracking(t *testing.T) {
 		UnitMembers: nil,
 		UnitGuards:  nil,
 		Coverage:    "",
-		ToolName:    "test-tool",
+
+		ToolName: "test-tool",
 		OpConfig: config.ToolOperation{
 			App:               "",
 			Args:              nil,
@@ -1917,7 +2035,8 @@ func TestPerFileModeProgressTracking(t *testing.T) {
 			LSP:               nil,
 			Output:            "",
 			ManagedConfigRefs: nil,
-			Scope:             config.ToolScopePerFile,
+
+			Scope: config.ToolScopePerFile,
 		},
 		Files: []string{"file1.go", "file2.go", "file3.go", "file4.go", "file5.go"},
 	}
@@ -1954,9 +2073,10 @@ func TestPerFileModeProgressTracking(t *testing.T) {
 		Cached:           false,
 		WholeUnit:        false,
 		UnitDir:          "",
-		ToolName:         task.ToolName,
-		Success:          true,
-		Batch:            false,
+
+		ToolName: task.ToolName,
+		Success:  true,
+		Batch:    false,
 	}
 	tracker.onResult(result)
 
@@ -1984,7 +2104,12 @@ func TestPerFileModeProgressTracking(t *testing.T) {
 }
 
 func TestProgressTrackingWithCachedFiles(t *testing.T) {
-	tracker := &mockProgressTracker{taskStartCount: 0, fileProgressCount: 0, resultCallbackCount: 0, fileProgressCalls: nil}
+	tracker := &mockProgressTracker{
+		taskStartCount:      0,
+		fileProgressCount:   0,
+		resultCallbackCount: 0,
+		fileProgressCalls:   nil,
+	}
 	task := tooling.Task{
 		ID:          "",
 		Tool:        config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
@@ -1994,7 +2119,8 @@ func TestProgressTrackingWithCachedFiles(t *testing.T) {
 		UnitMembers: nil,
 		UnitGuards:  nil,
 		Coverage:    "",
-		ToolName:    "test-tool",
+
+		ToolName: "test-tool",
 		OpConfig: config.ToolOperation{
 			App:               "",
 			Args:              nil,
@@ -2012,7 +2138,8 @@ func TestProgressTrackingWithCachedFiles(t *testing.T) {
 			LSP:               nil,
 			Output:            "",
 			ManagedConfigRefs: nil,
-			Scope:             config.ToolScopePerProject,
+
+			Scope: config.ToolScopePerProject,
 		},
 		Files: []string{"file1.go", "file2.go"},
 	}
@@ -2046,9 +2173,10 @@ func TestProgressTrackingWithCachedFiles(t *testing.T) {
 		Cached:           false,
 		WholeUnit:        false,
 		UnitDir:          "",
-		ToolName:         task.ToolName,
-		Success:          true,
-		Batch:            true,
+
+		ToolName: task.ToolName,
+		Success:  true,
+		Batch:    true,
 	}
 	tracker.onResult(result)
 
@@ -2062,7 +2190,12 @@ func TestProgressTrackingWithCachedFiles(t *testing.T) {
 }
 
 func TestProgressTrackingWithGetCommandInfoError(t *testing.T) {
-	tracker := &mockProgressTracker{taskStartCount: 0, fileProgressCount: 0, resultCallbackCount: 0, fileProgressCalls: nil}
+	tracker := &mockProgressTracker{
+		taskStartCount:      0,
+		fileProgressCount:   0,
+		resultCallbackCount: 0,
+		fileProgressCalls:   nil,
+	}
 	task := tooling.Task{
 		ID:          "",
 		Tool:        config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
@@ -2072,7 +2205,8 @@ func TestProgressTrackingWithGetCommandInfoError(t *testing.T) {
 		UnitMembers: nil,
 		UnitGuards:  nil,
 		Coverage:    "",
-		ToolName:    "failing-tool",
+
+		ToolName: "failing-tool",
 		OpConfig: config.ToolOperation{
 			App:               "",
 			Args:              nil,
@@ -2090,7 +2224,8 @@ func TestProgressTrackingWithGetCommandInfoError(t *testing.T) {
 			LSP:               nil,
 			Output:            "",
 			ManagedConfigRefs: nil,
-			Scope:             config.ToolScopePerProject,
+
+			Scope: config.ToolScopePerProject,
 		},
 		Files: []string{"file1.go"},
 	}
@@ -2124,9 +2259,10 @@ func TestProgressTrackingWithGetCommandInfoError(t *testing.T) {
 		Cached:           false,
 		WholeUnit:        false,
 		UnitDir:          "",
-		ToolName:         task.ToolName,
-		Success:          false,
-		Batch:            true,
+
+		ToolName: task.ToolName,
+		Success:  false,
+		Batch:    true,
 	}
 	tracker.onResult(result)
 
@@ -2144,7 +2280,12 @@ func TestProgressTrackingWithGetCommandInfoError(t *testing.T) {
 }
 
 func TestMixedBatchAndPerFileProgress(t *testing.T) {
-	tracker := &mockProgressTracker{taskStartCount: 0, fileProgressCount: 0, resultCallbackCount: 0, fileProgressCalls: nil}
+	tracker := &mockProgressTracker{
+		taskStartCount:      0,
+		fileProgressCount:   0,
+		resultCallbackCount: 0,
+		fileProgressCalls:   nil,
+	}
 
 	tasks := []tooling.Task{
 		{
@@ -2156,7 +2297,8 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 			UnitMembers: nil,
 			UnitGuards:  nil,
 			Coverage:    "",
-			ToolName:    "batch-tool-1",
+
+			ToolName: "batch-tool-1",
 			OpConfig: config.ToolOperation{
 				App:               "",
 				Args:              nil,
@@ -2174,7 +2316,8 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 				LSP:               nil,
 				Output:            "",
 				ManagedConfigRefs: nil,
-				Scope:             config.ToolScopePerProject,
+
+				Scope: config.ToolScopePerProject,
 			},
 			Files: []string{"file1.go"},
 		},
@@ -2187,7 +2330,8 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 			UnitMembers: nil,
 			UnitGuards:  nil,
 			Coverage:    "",
-			ToolName:    "batch-tool-2",
+
+			ToolName: "batch-tool-2",
 			OpConfig: config.ToolOperation{
 				App:               "",
 				Args:              nil,
@@ -2205,7 +2349,8 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 				LSP:               nil,
 				Output:            "",
 				ManagedConfigRefs: nil,
-				Scope:             config.ToolScopePerProject,
+
+				Scope: config.ToolScopePerProject,
 			},
 			Files: []string{"file2.go"},
 		},
@@ -2218,7 +2363,8 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 			UnitMembers: nil,
 			UnitGuards:  nil,
 			Coverage:    "",
-			ToolName:    "per-file-tool-1",
+
+			ToolName: "per-file-tool-1",
 			OpConfig: config.ToolOperation{
 				App:               "",
 				Args:              nil,
@@ -2236,7 +2382,8 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 				LSP:               nil,
 				Output:            "",
 				ManagedConfigRefs: nil,
-				Scope:             config.ToolScopePerFile,
+
+				Scope: config.ToolScopePerFile,
 			},
 			Files: []string{"file3.go", "file4.go", "file5.go"},
 		},
@@ -2249,7 +2396,8 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 			UnitMembers: nil,
 			UnitGuards:  nil,
 			Coverage:    "",
-			ToolName:    "per-file-tool-2",
+
+			ToolName: "per-file-tool-2",
 			OpConfig: config.ToolOperation{
 				App:               "",
 				Args:              nil,
@@ -2267,7 +2415,8 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 				LSP:               nil,
 				Output:            "",
 				ManagedConfigRefs: nil,
-				Scope:             config.ToolScopePerFile,
+
+				Scope: config.ToolScopePerFile,
 			},
 			Files: []string{"file6.go", "file7.go", "file8.go"},
 		},
@@ -2304,9 +2453,10 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 				Cached:           false,
 				WholeUnit:        false,
 				UnitDir:          "",
-				ToolName:         task.ToolName,
-				Success:          true,
-				Batch:            true,
+
+				ToolName: task.ToolName,
+				Success:  true,
+				Batch:    true,
 			}
 			tracker.onResult(result)
 		} else {
@@ -2339,9 +2489,10 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 				Cached:           false,
 				WholeUnit:        false,
 				UnitDir:          "",
-				ToolName:         task.ToolName,
-				Success:          true,
-				Batch:            false,
+
+				ToolName: task.ToolName,
+				Success:  true,
+				Batch:    false,
 			}
 			tracker.onResult(result)
 		}
@@ -2363,7 +2514,12 @@ func TestMixedBatchAndPerFileProgress(t *testing.T) {
 }
 
 func TestConcurrentProgressUpdates(t *testing.T) {
-	tracker := &mockProgressTracker{taskStartCount: 0, fileProgressCount: 0, resultCallbackCount: 0, fileProgressCalls: nil}
+	tracker := &mockProgressTracker{
+		taskStartCount:      0,
+		fileProgressCount:   0,
+		resultCallbackCount: 0,
+		fileProgressCalls:   nil,
+	}
 
 	numTasks := 10
 	done := make(chan bool, numTasks)
@@ -2399,9 +2555,10 @@ func TestConcurrentProgressUpdates(t *testing.T) {
 				Cached:           false,
 				WholeUnit:        false,
 				UnitDir:          "",
-				ToolName:         toolName,
-				Success:          true,
-				Batch:            true,
+
+				ToolName: toolName,
+				Success:  true,
+				Batch:    true,
 			}
 			tracker.onResult(result)
 			done <- true
@@ -2435,17 +2592,19 @@ func TestPrintGroupedResultsOutputOnce(t *testing.T) {
 			wallStart:      time.Time{},
 			wallEnd:        time.Time{},
 			firstSeenIndex: 0,
-			toolName:       "failing-tool",
-			scope:          config.ToolScopeRepository,
-			totalRuns:      1,
-			succeededRuns:  0,
-			failedRuns:     1,
-			totalTime:      500,
-			minTime:        500,
-			maxTime:        500,
+
+			toolName:      "failing-tool",
+			scope:         config.ToolScopeRepository,
+			totalRuns:     1,
+			succeededRuns: 0,
+			failedRuns:    1,
+			totalTime:     500,
+			minTime:       500,
+			maxTime:       500,
 			executions: []executionInstance{
 				{
 					relativeDir: "",
+
 					result: tooling.ExecutionResult{
 						TaskID:           "",
 						Error:            nil,
@@ -2468,13 +2627,14 @@ func TestPrintGroupedResultsOutputOnce(t *testing.T) {
 						Cached:           false,
 						WholeUnit:        false,
 						UnitDir:          "",
-						ToolName:         "failing-tool",
-						Success:          false,
-						Duration:         500,
-						ExitCode:         1,
-						Output:           toolOutput,
-						Command:          "failing-tool --check",
-						Scope:            config.ToolScopeRepository,
+
+						ToolName: "failing-tool",
+						Success:  false,
+						Duration: 500,
+						ExitCode: 1,
+						Output:   toolOutput,
+						Command:  "failing-tool --check",
+						Scope:    config.ToolScopeRepository,
 					},
 				},
 			},
@@ -2486,7 +2646,7 @@ func TestPrintGroupedResultsOutputOnce(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	printGroupedResults(toolGroups, 20, false)
+	printGroupedResults(toolGroups, 20, false, nil)
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -2505,7 +2665,18 @@ func TestRunSequentialConfigLoadError(t *testing.T) {
 	err := RunSequential(
 		[]config.OperationType{config.OpFix},
 		nil, "", false, "", false,
-		Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		Options{
+			WidenTo:         "",
+			RequireCoverage: "",
+			FailFast:        nil,
+			FailOn:          "",
+			Reports:         nil,
+			AllowPartial:    false,
+			AllDiagnostics:  false,
+			Annotations:     "",
+			Output:          "",
+			Baseline:        nil,
+		},
 		func() (*config.Config, string, error) {
 			return nil, "", errors.New("config load failed")
 		},
@@ -2522,9 +2693,37 @@ func TestRunSequentialInvalidExplainMode(t *testing.T) {
 	err := RunSequential(
 		[]config.OperationType{config.OpFix},
 		nil, "invalid_mode", false, "", false,
-		Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		Options{
+			WidenTo:         "",
+			RequireCoverage: "",
+			FailFast:        nil,
+			FailOn:          "",
+			Reports:         nil,
+			AllowPartial:    false,
+			AllDiagnostics:  false,
+			Annotations:     "",
+			Output:          "",
+			Baseline:        nil,
+		},
 		func() (*config.Config, string, error) {
-			return &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, "", nil
+			return &config.Config{
+				Name:           "",
+				Version:        "",
+				Apps:           nil,
+				Bundles:        nil,
+				Runtimes:       nil,
+				ManagedConfigs: nil,
+				EjectConfigs:   nil,
+				ProjectTypes:   nil,
+				Tools:          nil,
+				Execution:      nil,
+				InitCommands:   nil,
+				IgnoreRules:    nil,
+				SharedStorage:  nil,
+				OCI:            nil,
+				Parsers:        nil,
+				Lsp:            nil,
+			}, "", nil
 		},
 	)
 	if err == nil {
@@ -2536,11 +2735,26 @@ func TestRunSequentialInvalidExplainMode(t *testing.T) {
 }
 
 func TestRunSequentialConfigLoadedOnce(t *testing.T) {
+	root := walkFixture(t)
+	if err := os.Remove(filepath.Join(root, ".datamitsuignore")); err != nil {
+		t.Fatal(err)
+	}
 	loadCount := 0
 	err := RunSequential(
 		[]config.OperationType{config.OpFix, config.OpLint},
 		nil, "", false, "", false,
-		Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		Options{
+			WidenTo:         "",
+			RequireCoverage: "",
+			FailFast:        nil,
+			FailOn:          "",
+			Reports:         nil,
+			AllowPartial:    false,
+			AllDiagnostics:  false,
+			Annotations:     "",
+			Output:          "",
+			Baseline:        nil,
+		},
 		func() (*config.Config, string, error) {
 			loadCount++
 			return &config.Config{
@@ -2558,8 +2772,9 @@ func TestRunSequentialConfigLoadedOnce(t *testing.T) {
 				OCI:            nil,
 				Parsers:        nil,
 				Lsp:            nil,
-				Tools:          config.MapOfTools{},
-				ProjectTypes:   config.MapOfProjectTypes{},
+
+				Tools:        config.MapOfTools{},
+				ProjectTypes: config.MapOfProjectTypes{},
 			}, "", nil
 		},
 	)
@@ -2575,7 +2790,18 @@ func TestRunDelegatesToRunSequential(t *testing.T) {
 	err := Run(
 		config.OpFix,
 		nil, "", false, "", false,
-		Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		Options{
+			WidenTo:         "",
+			RequireCoverage: "",
+			FailFast:        nil,
+			FailOn:          "",
+			Reports:         nil,
+			AllowPartial:    false,
+			AllDiagnostics:  false,
+			Annotations:     "",
+			Output:          "",
+			Baseline:        nil,
+		},
 		func() (*config.Config, string, error) {
 			return nil, "", errors.New("test error from Run")
 		},
@@ -2590,16 +2816,23 @@ func TestRunDelegatesToRunSequential(t *testing.T) {
 
 // fakePlanner returns a fixed plan and detected project types.
 type fakePlanner struct {
-	plan *tooling.ExecutionPlan
+	plan   *tooling.ExecutionPlan
+	planFn func(call int, operation config.OperationType) *tooling.ExecutionPlan
+	calls  int
 }
 
-func (f *fakePlanner) Plan(_ context.Context, _ config.OperationType, _ tooling.Selection, _ []string) (*tooling.ExecutionPlan, error) {
+func (f *fakePlanner) Plan(_ context.Context, operation config.OperationType, _ tooling.Selection, _ []string) (*tooling.ExecutionPlan, error) {
+	f.calls++
+	if f.planFn != nil {
+		return f.planFn(f.calls, operation), nil
+	}
 	return f.plan, nil
 }
 
 // SeedFiles discards the list: these tests drive runSingleOperation with a
 // pre-built plan, so nothing downstream reads the repository walk.
 func (f *fakePlanner) SeedFiles(_ []string)              {}
+func (f *fakePlanner) Invalidate()                       {}
 func (f *fakePlanner) GetDetectedProjectTypes() []string { return []string{"go"} }
 func (f *fakePlanner) GetTimings() *timing.Timings       { return timing.New() }
 
@@ -2630,9 +2863,41 @@ func (f *fakeExecutor) Execute(_ context.Context, plan *tooling.ExecutionPlan) (
 	results := f.results
 	if results == nil {
 		for _, group := range plan.Groups {
-			g := tooling.GroupExecutionResult{Results: nil, WallClockDuration: 0, Priority: group.Priority, Success: true}
+			g := tooling.GroupExecutionResult{
+				Results:           nil,
+				WallClockDuration: 0,
+				Priority:          group.Priority, Success: true,
+			}
 			for _, task := range group.Tasks {
-				g.Results = append(g.Results, tooling.ExecutionResult{TaskID: "", Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: time.Time{}, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", ToolName: task.ToolName, Success: true})
+				g.Results = append(g.Results, tooling.ExecutionResult{
+					TaskID:           "",
+					Output:           "",
+					Error:            nil,
+					Duration:         0,
+					Command:          "",
+					ExitCode:         0,
+					WorkingDir:       "",
+					RelativeDir:      "",
+					Scope:            "",
+					Batch:            false,
+					Cancelled:        false,
+					FailureReason:    0,
+					StartedAt:        time.Time{},
+					EndedAt:          time.Time{},
+					FilesNotRun:      0,
+					UnparsedFailures: nil,
+					CapturedStdout:   "",
+					Diagnostics:      nil,
+					Processes:        nil,
+					ParseFailed:      false,
+					FailOn:           "",
+					Files:            nil,
+					FileResults:      nil,
+					Cached:           false,
+					WholeUnit:        false,
+					UnitDir:          "",
+					ToolName:         task.ToolName, Success: true,
+				})
 			}
 			results = append(results, g)
 		}
@@ -2661,6 +2926,8 @@ func (f *fakeEnsurer) EnsureTools(_ context.Context, names []string) error {
 	*f.order = append(*f.order, "ensure")
 	return f.err
 }
+func (*fakeEnsurer) AppInstalled(string) bool                { return true }
+func (*fakeEnsurer) PreparedStateReady(string) (bool, error) { return true, nil }
 
 func planWithTools(tools ...string) *tooling.ExecutionPlan {
 	tasks := make([]tooling.Task, 0, len(tools))
@@ -2675,15 +2942,511 @@ func planWithTools(tools ...string) *tooling.ExecutionPlan {
 			UnitMembers: nil,
 			UnitGuards:  nil,
 			Coverage:    "",
-			ToolName:    name,
-			OpConfig:    config.ToolOperation{Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: name, Scope: config.ToolScopeRepository},
+
+			ToolName: name,
+			OpConfig: config.ToolOperation{
+				Args:              nil,
+				Arity:             "",
+				Granularity:       "",
+				Globs:             nil,
+				ExcludeGlobs:      nil,
+				Priority:          0,
+				Cache:             nil,
+				InvalidateOn:      nil,
+				Env:               nil,
+				InheritEnv:        nil,
+				FailOn:            "",
+				Input:             "",
+				LSP:               nil,
+				Output:            "",
+				ManagedConfigRefs: nil,
+				App:               name, Scope: config.ToolScopeRepository,
+			},
 		})
 	}
 	return &tooling.ExecutionPlan{
 		ConfigName: "",
 		FailOn:     "",
 		Skipped:    nil,
-		Groups:     []tooling.TaskGroup{{Priority: 0, Tasks: tasks}},
+
+		Groups: []tooling.TaskGroup{{
+			Priority: 0,
+			Tasks:    tasks,
+		}},
+	}
+}
+
+func TestPrepareToolsUnionsPlansAndRunsOnce(t *testing.T) {
+	t.Setenv("CI", "true")
+	var order []string
+	ensurer := &fakeEnsurer{
+		names:  nil,
+		called: false,
+		err:    nil,
+		order:  &order,
+	}
+	sc := &sharedContext{
+		cfg:                  nil,
+		rootPath:             "",
+		cwdPath:              "",
+		selection:            tooling.Selection{Mode: 0, Dir: "", Paths: nil},
+		opts:                 Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		files:                nil,
+		selectedTools:        nil,
+		explainLevel:         "",
+		planner:              nil,
+		projectCache:         nil,
+		executor:             nil,
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		timings:              nil,
+		parserMgr:            nil,
+		parseProblems:        nil,
+		ignoredFailOn:        nil,
+		nameWidth:            0,
+		failOnSkip:           false,
+		platformSkipped:      nil,
+		narrowed:             nil,
+		failFast:             false,
+		afterFailedFix:       false,
+		summaries:            nil,
+		fileScoped:           false,
+		report:               nil,
+		secrets:              nil,
+		annotator:            nil,
+		baselineMatcher:      nil,
+		placement:            nil,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		startedAt:            time.Time{},
+		ci:                   zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:            zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations:          annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+		binMgr:               ensurer,
+	}
+	plans := []*tooling.ExecutionPlan{planWithTools("yq", "lefthook"), planWithTools("yq", "prettier")}
+	if err := sc.prepareTools(context.Background(), plans); err != nil {
+		t.Fatalf("prepareTools: %v", err)
+	}
+	if !ensurer.called || strings.Join(ensurer.names, ",") != "lefthook,prettier,yq" {
+		t.Fatalf("EnsureTools called=%v names=%v", ensurer.called, ensurer.names)
+	}
+	ensurer.called = false
+	if err := sc.prepareTools(context.Background(), plans); err != nil {
+		t.Fatalf("second prepareTools: %v", err)
+	}
+	if ensurer.called {
+		t.Fatal("prepared tools were provisioned twice")
+	}
+}
+
+func TestPrepareToolsFailureDoesNotMarkPrepared(t *testing.T) {
+	var order []string
+	ensurer := &fakeEnsurer{
+		names:  nil,
+		called: false,
+		order:  &order, err: errors.New("download boom"),
+	}
+	sc := &sharedContext{
+		cfg:                  nil,
+		rootPath:             "",
+		cwdPath:              "",
+		selection:            tooling.Selection{Mode: 0, Dir: "", Paths: nil},
+		opts:                 Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		files:                nil,
+		selectedTools:        nil,
+		explainLevel:         "",
+		planner:              nil,
+		projectCache:         nil,
+		executor:             nil,
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		timings:              nil,
+		parserMgr:            nil,
+		parseProblems:        nil,
+		ignoredFailOn:        nil,
+		nameWidth:            0,
+		failOnSkip:           false,
+		platformSkipped:      nil,
+		narrowed:             nil,
+		failFast:             false,
+		afterFailedFix:       false,
+		summaries:            nil,
+		fileScoped:           false,
+		report:               nil,
+		secrets:              nil,
+		annotator:            nil,
+		baselineMatcher:      nil,
+		placement:            nil,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		startedAt:            time.Time{},
+		ci:                   zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:            zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations:          annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+		binMgr:               ensurer,
+	}
+	if err := sc.prepareTools(context.Background(), []*tooling.ExecutionPlan{planWithTools("yq")}); err == nil {
+		t.Fatal("prepareTools succeeded after EnsureTools failed")
+	}
+	if sc.preparedTools {
+		t.Fatal("failed preparation marked tools prepared")
+	}
+}
+
+func TestPrepareToolsCancelledDoesNotEnsure(t *testing.T) {
+	var order []string
+	ensurer := &fakeEnsurer{
+		names:  nil,
+		called: false,
+		err:    nil,
+		order:  &order,
+	}
+	sc := &sharedContext{
+		cfg:                  nil,
+		rootPath:             "",
+		cwdPath:              "",
+		selection:            tooling.Selection{Mode: 0, Dir: "", Paths: nil},
+		opts:                 Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		files:                nil,
+		selectedTools:        nil,
+		explainLevel:         "",
+		planner:              nil,
+		projectCache:         nil,
+		executor:             nil,
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		timings:              nil,
+		parserMgr:            nil,
+		parseProblems:        nil,
+		ignoredFailOn:        nil,
+		nameWidth:            0,
+		failOnSkip:           false,
+		platformSkipped:      nil,
+		narrowed:             nil,
+		failFast:             false,
+		afterFailedFix:       false,
+		summaries:            nil,
+		fileScoped:           false,
+		report:               nil,
+		secrets:              nil,
+		annotator:            nil,
+		baselineMatcher:      nil,
+		placement:            nil,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		startedAt:            time.Time{},
+		ci:                   zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:            zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations:          annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+		binMgr:               ensurer,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := sc.prepareTools(ctx, []*tooling.ExecutionPlan{planWithTools("yq")}); err == nil {
+		t.Fatal("prepareTools succeeded with a cancelled context")
+	}
+	if ensurer.called || sc.preparedTools {
+		t.Fatal("cancelled preparation reached EnsureTools or marked tools prepared")
+	}
+}
+
+func TestRunOperationsReplansLintAfterBundledFix(t *testing.T) {
+	t.Setenv("CI", "true")
+	root := t.TempDir()
+	ignorePath := filepath.Join(root, ".datamitsuignore")
+	if err := os.WriteFile(ignorePath, []byte("*.ts:  eslint , prettier\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var observed []string
+	planner := &fakePlanner{
+		plan:  nil,
+		calls: 0,
+		planFn: func(call int, _ config.OperationType) *tooling.ExecutionPlan {
+			content, err := os.ReadFile(ignorePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			observed = append(observed, string(content))
+			if call <= 2 {
+				return planWithTools("app")
+			}
+			return &tooling.ExecutionPlan{
+				ConfigName: "",
+				FailOn:     "",
+				Groups:     nil,
+				Skipped:    nil,
+			}
+		},
+	}
+	order := []string{}
+	sc := &sharedContext{
+		opts:                 Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		files:                nil,
+		selectedTools:        nil,
+		explainLevel:         "",
+		projectCache:         nil,
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		parserMgr:            nil,
+		parseProblems:        nil,
+		ignoredFailOn:        nil,
+		nameWidth:            0,
+		failOnSkip:           false,
+		failFast:             false,
+		afterFailedFix:       false,
+		summaries:            nil,
+		fileScoped:           false,
+		secrets:              nil,
+		annotator:            nil,
+		baselineMatcher:      nil,
+		placement:            nil,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		startedAt:            time.Time{},
+		ci:                   zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:            zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations:          annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+
+		cfg: &config.Config{
+			Name:           "",
+			Version:        "",
+			Bundles:        nil,
+			Runtimes:       nil,
+			ManagedConfigs: nil,
+			EjectConfigs:   nil,
+			ProjectTypes:   nil,
+			Execution:      nil,
+			InitCommands:   nil,
+			IgnoreRules:    nil,
+			SharedStorage:  nil,
+			OCI:            nil,
+			Parsers:        nil,
+			Lsp:            nil,
+
+			Apps: binmanager.MapOfApps{"app": {
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Binary:             nil,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Links:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Shell: &binmanager.AppConfigShell{
+					Args: nil,
+					Name: "app",
+				},
+			}},
+			Tools: config.MapOfTools{"eslint": {
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				Operations:   nil,
+				OutputParser: nil,
+				Name:         "eslint",
+			}, "prettier": {
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				Operations:   nil,
+				OutputParser: nil,
+				Name:         "prettier",
+			}},
+		},
+		rootPath: root,
+		cwdPath:  root,
+		selection: tooling.Selection{
+			Dir:   "",
+			Paths: nil,
+			Mode:  tooling.SelectionAll,
+		},
+		planner: planner,
+		executor: &fakeExecutor{
+			called:   false,
+			results:  nil,
+			onResult: nil,
+			order:    &order,
+		},
+		binMgr: &fakeEnsurer{
+			names:  nil,
+			called: false,
+			err:    nil,
+			order:  &order,
+		},
+		timings: timing.New(),
+		report: report.NewAccumulator(report.Options{
+			Root:    "",
+			Tools:   nil,
+			Apps:    nil,
+			FailOn:  "",
+			Parsers: nil,
+			Secrets: nil,
+		}),
+		platformSkipped: map[string]struct{}{},
+		narrowed:        map[string]struct{}{},
+	}
+	if err := sc.runOperations(context.Background(), []config.OperationType{config.OpFix, config.OpLint}); err != nil {
+		t.Fatalf("runOperations: %v", err)
+	}
+	if len(observed) != 3 || observed[0] == observed[1] || observed[1] != "*.ts: eslint, prettier\n" || observed[2] != observed[1] {
+		t.Fatalf("expected preflight followed by fresh fix and lint plans; inputs = %q", observed)
+	}
+}
+
+func TestRunOperationsPreflightFailureStopsBundledFix(t *testing.T) {
+	t.Setenv("CI", "true")
+	root := t.TempDir()
+	ignorePath := filepath.Join(root, ".datamitsuignore")
+	const nonCanonical = "*.go: golangci-lint  \n"
+	if err := os.WriteFile(ignorePath, []byte(nonCanonical), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	planner := &fakePlanner{
+		planFn: nil,
+		calls:  0,
+		plan:   planWithTools("app"),
+	}
+	order := []string{}
+	sc := &sharedContext{
+		opts:                 Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		files:                nil,
+		selectedTools:        nil,
+		explainLevel:         "",
+		projectCache:         nil,
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		parserMgr:            nil,
+		parseProblems:        nil,
+		ignoredFailOn:        nil,
+		nameWidth:            0,
+		failOnSkip:           false,
+		failFast:             false,
+		afterFailedFix:       false,
+		summaries:            nil,
+		fileScoped:           false,
+		secrets:              nil,
+		annotator:            nil,
+		baselineMatcher:      nil,
+		placement:            nil,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		startedAt:            time.Time{},
+		ci:                   zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:            zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations:          annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+
+		cfg: &config.Config{
+			Name:           "",
+			Version:        "",
+			Bundles:        nil,
+			Runtimes:       nil,
+			ManagedConfigs: nil,
+			EjectConfigs:   nil,
+			ProjectTypes:   nil,
+			Tools:          nil,
+			Execution:      nil,
+			InitCommands:   nil,
+			IgnoreRules:    nil,
+			SharedStorage:  nil,
+			OCI:            nil,
+			Parsers:        nil,
+			Lsp:            nil,
+			Apps: binmanager.MapOfApps{"app": {
+				Required:           false,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Binary:             nil,
+				Bun:                nil,
+				Uv:                 nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Links:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Shell: &binmanager.AppConfigShell{
+					Args: nil,
+					Name: "app",
+				},
+			}},
+		},
+		rootPath: root,
+		cwdPath:  root,
+		selection: tooling.Selection{
+			Dir:   "",
+			Paths: nil,
+			Mode:  tooling.SelectionAll,
+		},
+		planner: planner,
+		executor: &fakeExecutor{
+			called:   false,
+			results:  nil,
+			onResult: nil,
+			order:    &order,
+		},
+		binMgr: &fakeEnsurer{
+			names:  nil,
+			called: false,
+			order:  &order, err: errors.New("download boom"),
+		},
+		timings: timing.New(),
+		report: report.NewAccumulator(report.Options{
+			Root:    "",
+			Tools:   nil,
+			Apps:    nil,
+			FailOn:  "",
+			Parsers: nil,
+			Secrets: nil,
+		}),
+		platformSkipped: map[string]struct{}{},
+		narrowed:        map[string]struct{}{},
+	}
+	err := sc.runOperations(context.Background(), []config.OperationType{config.OpFix, config.OpLint})
+	if err == nil || !strings.Contains(err.Error(), "download boom") {
+		t.Fatalf("runOperations error = %v, want preflight failure", err)
+	}
+	content, readErr := os.ReadFile(ignorePath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(content) != nonCanonical {
+		t.Fatalf("bundled fix changed file after preflight failure: %q", content)
 	}
 }
 
@@ -2691,43 +3454,64 @@ func TestRunSingleOperationEnsuresToolsBeforeExecute(t *testing.T) {
 	t.Setenv("CI", "true")
 
 	var order []string
-	ensurer := &fakeEnsurer{names: nil, called: false, err: nil, order: &order}
-	executor := &fakeExecutor{called: false, results: nil, onResult: nil, order: &order}
+	ensurer := &fakeEnsurer{
+		names:  nil,
+		called: false,
+		err:    nil,
+		order:  &order,
+	}
+	executor := &fakeExecutor{
+		called:   false,
+		results:  nil,
+		onResult: nil,
+		order:    &order,
+	}
 	sc := &sharedContext{
-		cfg:             nil,
-		rootPath:        "",
-		cwdPath:         "",
-		selection:       tooling.Selection{Mode: 0, Dir: "", Paths: nil},
-		opts:            Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
-		files:           nil,
-		selectedTools:   nil,
-		explainLevel:    "",
-		projectCache:    nil,
-		parserMgr:       nil,
-		parseProblems:   nil,
-		ignoredFailOn:   nil,
-		nameWidth:       0,
-		failOnSkip:      false,
-		platformSkipped: nil,
-		narrowed:        nil,
-		failFast:        false,
-		afterFailedFix:  false,
-		summaries:       nil,
-		fileScoped:      false,
-		report:          nil,
-		secrets:         nil,
-		annotator:       nil,
-		baselineMatcher: nil,
-		placement:       nil,
-		placementGated:  false,
-		startedAt:       time.Time{},
-		ci:              zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
-		ciRuntime:       zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
-		annotations:     annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
-		planner:         &fakePlanner{plan: planWithTools("yq", "lefthook")},
-		executor:        executor,
-		binMgr:          ensurer,
-		timings:         timing.New(),
+		cfg:                  nil,
+		rootPath:             "",
+		cwdPath:              "",
+		selection:            tooling.Selection{Mode: 0, Dir: "", Paths: nil},
+		opts:                 Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		files:                nil,
+		selectedTools:        nil,
+		explainLevel:         "",
+		projectCache:         nil,
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		parserMgr:            nil,
+		parseProblems:        nil,
+		ignoredFailOn:        nil,
+		nameWidth:            0,
+		failOnSkip:           false,
+		platformSkipped:      nil,
+		narrowed:             nil,
+		failFast:             false,
+		afterFailedFix:       false,
+		summaries:            nil,
+		fileScoped:           false,
+		report:               nil,
+		secrets:              nil,
+		annotator:            nil,
+		baselineMatcher:      nil,
+		placement:            nil,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		startedAt:            time.Time{},
+		ci:                   zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:            zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations:          annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+
+		planner: &fakePlanner{
+			planFn: nil,
+			calls:  0,
+			plan:   planWithTools("yq", "lefthook"),
+		},
+		executor: executor,
+		binMgr:   ensurer,
+		timings:  timing.New(),
 	}
 
 	if err := runSingleOperation(context.Background(), sc, config.OpLint); err != nil {
@@ -2753,56 +3537,135 @@ func TestRunSingleOperationEnsuresAppNamesNotToolNames(t *testing.T) {
 	t.Setenv("CI", "true")
 
 	var order []string
-	ensurer := &fakeEnsurer{names: nil, called: false, err: nil, order: &order}
-	executor := &fakeExecutor{called: false, results: nil, onResult: nil, order: &order}
+	ensurer := &fakeEnsurer{
+		names:  nil,
+		called: false,
+		err:    nil,
+		order:  &order,
+	}
+	executor := &fakeExecutor{
+		called:   false,
+		results:  nil,
+		onResult: nil,
+		order:    &order,
+	}
 	// Tool names differ from the apps they execute. Pre-install must resolve the
 	// apps (what BinManager installs), not the tool registry keys.
 	plan := &tooling.ExecutionPlan{
 		ConfigName: "",
 		FailOn:     "",
 		Skipped:    nil,
+
 		Groups: []tooling.TaskGroup{{
-			Priority: 0, Tasks: []tooling.Task{
-				{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "lint-yaml", OpConfig: config.ToolOperation{Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "yq", Scope: config.ToolScopeRepository}},
-				{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "format", OpConfig: config.ToolOperation{Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "prettier", Scope: config.ToolScopeRepository}},
+			Priority: 0,
+			Tasks: []tooling.Task{
+				{
+					ID:          "",
+					Tool:        config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+					Operation:   "",
+					Files:       nil,
+					ProjectPath: "",
+					UnitDir:     "",
+					UnitMembers: nil,
+					UnitGuards:  nil,
+					Coverage:    "",
+					ToolName:    "lint-yaml", OpConfig: config.ToolOperation{
+						Args:              nil,
+						Arity:             "",
+						Granularity:       "",
+						Globs:             nil,
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						Env:               nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						App:               "yq", Scope: config.ToolScopeRepository,
+					},
+				},
+				{
+					ID:          "",
+					Tool:        config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+					Operation:   "",
+					Files:       nil,
+					ProjectPath: "",
+					UnitDir:     "",
+					UnitMembers: nil,
+					UnitGuards:  nil,
+					Coverage:    "",
+					ToolName:    "format", OpConfig: config.ToolOperation{
+						Args:              nil,
+						Arity:             "",
+						Granularity:       "",
+						Globs:             nil,
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						Env:               nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						App:               "prettier", Scope: config.ToolScopeRepository,
+					},
+				},
 			},
 		}},
 	}
 	sc := &sharedContext{
-		cfg:             nil,
-		rootPath:        "",
-		cwdPath:         "",
-		selection:       tooling.Selection{Mode: 0, Dir: "", Paths: nil},
-		opts:            Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
-		files:           nil,
-		selectedTools:   nil,
-		explainLevel:    "",
-		projectCache:    nil,
-		parserMgr:       nil,
-		parseProblems:   nil,
-		ignoredFailOn:   nil,
-		nameWidth:       0,
-		failOnSkip:      false,
-		platformSkipped: nil,
-		narrowed:        nil,
-		failFast:        false,
-		afterFailedFix:  false,
-		summaries:       nil,
-		fileScoped:      false,
-		report:          nil,
-		secrets:         nil,
-		annotator:       nil,
-		baselineMatcher: nil,
-		placement:       nil,
-		placementGated:  false,
-		startedAt:       time.Time{},
-		ci:              zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
-		ciRuntime:       zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
-		annotations:     annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
-		planner:         &fakePlanner{plan: plan},
-		executor:        executor,
-		binMgr:          ensurer,
-		timings:         timing.New(),
+		cfg:                  nil,
+		rootPath:             "",
+		cwdPath:              "",
+		selection:            tooling.Selection{Mode: 0, Dir: "", Paths: nil},
+		opts:                 Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		files:                nil,
+		selectedTools:        nil,
+		explainLevel:         "",
+		projectCache:         nil,
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		parserMgr:            nil,
+		parseProblems:        nil,
+		ignoredFailOn:        nil,
+		nameWidth:            0,
+		failOnSkip:           false,
+		platformSkipped:      nil,
+		narrowed:             nil,
+		failFast:             false,
+		afterFailedFix:       false,
+		summaries:            nil,
+		fileScoped:           false,
+		report:               nil,
+		secrets:              nil,
+		annotator:            nil,
+		baselineMatcher:      nil,
+		placement:            nil,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		startedAt:            time.Time{},
+		ci:                   zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:            zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations:          annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+
+		planner: &fakePlanner{
+			planFn: nil,
+			calls:  0,
+			plan:   plan,
+		},
+		executor: executor,
+		binMgr:   ensurer,
+		timings:  timing.New(),
 	}
 
 	if err := runSingleOperation(context.Background(), sc, config.OpLint); err != nil {
@@ -2819,43 +3682,63 @@ func TestRunSingleOperationEnsureToolsFailureAbortsExecute(t *testing.T) {
 	t.Setenv("CI", "true")
 
 	var order []string
-	ensurer := &fakeEnsurer{names: nil, called: false, order: &order, err: errors.New("download boom")}
-	executor := &fakeExecutor{called: false, results: nil, onResult: nil, order: &order}
+	ensurer := &fakeEnsurer{
+		names:  nil,
+		called: false,
+		order:  &order, err: errors.New("download boom"),
+	}
+	executor := &fakeExecutor{
+		called:   false,
+		results:  nil,
+		onResult: nil,
+		order:    &order,
+	}
 	sc := &sharedContext{
-		cfg:             nil,
-		rootPath:        "",
-		cwdPath:         "",
-		selection:       tooling.Selection{Mode: 0, Dir: "", Paths: nil},
-		opts:            Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
-		files:           nil,
-		selectedTools:   nil,
-		explainLevel:    "",
-		projectCache:    nil,
-		parserMgr:       nil,
-		parseProblems:   nil,
-		ignoredFailOn:   nil,
-		nameWidth:       0,
-		failOnSkip:      false,
-		platformSkipped: nil,
-		narrowed:        nil,
-		failFast:        false,
-		afterFailedFix:  false,
-		summaries:       nil,
-		fileScoped:      false,
-		report:          nil,
-		secrets:         nil,
-		annotator:       nil,
-		baselineMatcher: nil,
-		placement:       nil,
-		placementGated:  false,
-		startedAt:       time.Time{},
-		ci:              zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
-		ciRuntime:       zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
-		annotations:     annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
-		planner:         &fakePlanner{plan: planWithTools("yq")},
-		executor:        executor,
-		binMgr:          ensurer,
-		timings:         timing.New(),
+		cfg:                  nil,
+		rootPath:             "",
+		cwdPath:              "",
+		selection:            tooling.Selection{Mode: 0, Dir: "", Paths: nil},
+		opts:                 Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		files:                nil,
+		selectedTools:        nil,
+		explainLevel:         "",
+		projectCache:         nil,
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		parserMgr:            nil,
+		parseProblems:        nil,
+		ignoredFailOn:        nil,
+		nameWidth:            0,
+		failOnSkip:           false,
+		platformSkipped:      nil,
+		narrowed:             nil,
+		failFast:             false,
+		afterFailedFix:       false,
+		summaries:            nil,
+		fileScoped:           false,
+		report:               nil,
+		secrets:              nil,
+		annotator:            nil,
+		baselineMatcher:      nil,
+		placement:            nil,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		startedAt:            time.Time{},
+		ci:                   zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:            zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations:          annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+
+		planner: &fakePlanner{
+			planFn: nil,
+			calls:  0,
+			plan:   planWithTools("yq"),
+		},
+		executor: executor,
+		binMgr:   ensurer,
+		timings:  timing.New(),
 	}
 
 	err := runSingleOperation(context.Background(), sc, config.OpLint)
@@ -2872,43 +3755,64 @@ func TestRunSingleOperationEnsureToolsFailureAbortsExecute(t *testing.T) {
 
 func TestRunSingleOperationExplainModeSkipsEnsureTools(t *testing.T) {
 	var order []string
-	ensurer := &fakeEnsurer{names: nil, called: false, err: nil, order: &order}
-	executor := &fakeExecutor{called: false, results: nil, onResult: nil, order: &order}
+	ensurer := &fakeEnsurer{
+		names:  nil,
+		called: false,
+		err:    nil,
+		order:  &order,
+	}
+	executor := &fakeExecutor{
+		called:   false,
+		results:  nil,
+		onResult: nil,
+		order:    &order,
+	}
 	sc := &sharedContext{
-		cfg:             nil,
-		rootPath:        "",
-		cwdPath:         "",
-		selection:       tooling.Selection{Mode: 0, Dir: "", Paths: nil},
-		opts:            Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
-		files:           nil,
-		selectedTools:   nil,
-		projectCache:    nil,
-		parserMgr:       nil,
-		parseProblems:   nil,
-		ignoredFailOn:   nil,
-		nameWidth:       0,
-		failOnSkip:      false,
-		platformSkipped: nil,
-		narrowed:        nil,
-		failFast:        false,
-		afterFailedFix:  false,
-		summaries:       nil,
-		fileScoped:      false,
-		report:          nil,
-		secrets:         nil,
-		annotator:       nil,
-		baselineMatcher: nil,
-		placement:       nil,
-		placementGated:  false,
-		startedAt:       time.Time{},
-		ci:              zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
-		ciRuntime:       zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
-		annotations:     annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
-		planner:         &fakePlanner{plan: planWithTools("yq")},
-		executor:        executor,
-		binMgr:          ensurer,
-		explainLevel:    "summary",
-		timings:         timing.New(),
+		cfg:                  nil,
+		rootPath:             "",
+		cwdPath:              "",
+		selection:            tooling.Selection{Mode: 0, Dir: "", Paths: nil},
+		opts:                 Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		files:                nil,
+		selectedTools:        nil,
+		projectCache:         nil,
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		parserMgr:            nil,
+		parseProblems:        nil,
+		ignoredFailOn:        nil,
+		nameWidth:            0,
+		failOnSkip:           false,
+		platformSkipped:      nil,
+		narrowed:             nil,
+		failFast:             false,
+		afterFailedFix:       false,
+		summaries:            nil,
+		fileScoped:           false,
+		report:               nil,
+		secrets:              nil,
+		annotator:            nil,
+		baselineMatcher:      nil,
+		placement:            nil,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		startedAt:            time.Time{},
+		ci:                   zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:            zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations:          annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+
+		planner: &fakePlanner{
+			planFn: nil,
+			calls:  0,
+			plan:   planWithTools("yq"),
+		},
+		executor:     executor,
+		binMgr:       ensurer,
+		explainLevel: "summary",
+		timings:      timing.New(),
 	}
 
 	if err := runSingleOperation(context.Background(), sc, config.OpLint); err != nil {
@@ -2926,7 +3830,18 @@ func TestRunSequentialFixThenLintOrdering(t *testing.T) {
 	err := RunSequential(
 		[]config.OperationType{config.OpFix, config.OpLint},
 		nil, "summary", false, "", false,
-		Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		Options{
+			WidenTo:         "",
+			RequireCoverage: "",
+			FailFast:        nil,
+			FailOn:          "",
+			Reports:         nil,
+			AllowPartial:    false,
+			AllDiagnostics:  false,
+			Annotations:     "",
+			Output:          "",
+			Baseline:        nil,
+		},
 		func() (*config.Config, string, error) {
 			return &config.Config{
 				Name:           "",
@@ -2943,13 +3858,15 @@ func TestRunSequentialFixThenLintOrdering(t *testing.T) {
 				OCI:            nil,
 				Parsers:        nil,
 				Lsp:            nil,
+
 				Tools: config.MapOfTools{
 					"test-tool": config.Tool{
 						ProjectTypes: nil,
 						Skip:         false,
 						SkipReason:   "",
 						OutputParser: nil,
-						Name:         "test-tool",
+
+						Name: "test-tool",
 						Operations: map[config.OperationType]config.ToolOperation{
 							config.OpFix: {
 								Arity:             "",
@@ -2966,9 +3883,10 @@ func TestRunSequentialFixThenLintOrdering(t *testing.T) {
 								LSP:               nil,
 								Output:            "",
 								ManagedConfigRefs: nil,
-								App:               "echo",
-								Args:              []string{"fix"},
-								Scope:             config.ToolScopeRepository,
+
+								App:   "echo",
+								Args:  []string{"fix"},
+								Scope: config.ToolScopeRepository,
 							},
 							config.OpLint: {
 								Arity:             "",
@@ -2985,15 +3903,19 @@ func TestRunSequentialFixThenLintOrdering(t *testing.T) {
 								LSP:               nil,
 								Output:            "",
 								ManagedConfigRefs: nil,
-								App:               "echo",
-								Args:              []string{"lint"},
-								Scope:             config.ToolScopeRepository,
+
+								App:   "echo",
+								Args:  []string{"lint"},
+								Scope: config.ToolScopeRepository,
 							},
 						},
 					},
 				},
 				ProjectTypes: config.MapOfProjectTypes{
-					"go": {Description: "", Markers: []string{"go.mod"}},
+					"go": {
+						Description: "",
+						Markers:     []string{"go.mod"},
+					},
 				},
 			}, "", nil
 		},

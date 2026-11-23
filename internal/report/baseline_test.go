@@ -13,20 +13,47 @@ import (
 
 func baselineRun() *Run {
 	f := func(fp string, kind string) Finding {
-		return Finding{FingerprintBasis: "", Tool: "", Source: "", Code: "", RuleURL: "", Reported: false, Gates: false, Shown: false, Baselined: false, Message: "", Location: Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: ""}, Provenance: "", lineHash: "", Fingerprint: fp, Kind: kind, Severity: "error"}
+		return Finding{
+			FingerprintBasis: "",
+			Tool:             "",
+			Source:           "",
+			Code:             "",
+			RuleURL:          "",
+			Reported:         false,
+			Gates:            false,
+			Shown:            false,
+			Baselined:        false,
+			Message:          "",
+			Location:         Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: ""},
+			Provenance:       "",
+			lineHash:         "",
+			Fingerprint:      fp, Kind: kind, Severity: "error",
+		}
 	}
 	return &Run{
-		Fingerprint: "",
-		EndedAt:     time.Time{},
-		Selection:   Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
-		FailFast:    false,
-		Complete:    false,
-		Exports:     nil,
-		Schema:      SchemaVersion,
-		Datamitsu:   Producer{Version: "1.0.0", Configuration: "cfg"},
-		StartedAt:   time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
-		CI:          CIEnvironment{BaseRef: "", PRNumber: "", Vendor: "github", SHA: "abc", Ref: "refs/heads/main"},
-		Incomplete:  []Reason{ReasonToolsFilter},
+		Fingerprint:     "",
+		EndedAt:         time.Time{},
+		FailFast:        false,
+		Complete:        false,
+		RedactedReasons: nil,
+		Exports:         nil,
+
+		Datamitsu: Producer{Version: "1.0.0", Configuration: "cfg"},
+		StartedAt: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+		CI: CIEnvironment{
+			BaseRef:  "",
+			PRNumber: "",
+			Vendor:   "github", SHA: "abc", Ref: "refs/heads/main",
+		},
+		Selection: Selection{
+			Dir:           "",
+			Paths:         nil,
+			Tools:         nil,
+			FileScoped:    false,
+			ExcludedTools: nil,
+			Mode:          modeAll,
+		},
+		Incomplete: []Reason{ReasonToolsFilter},
 		Operations: []Operation{
 			{
 				Success:         false,
@@ -37,34 +64,36 @@ func baselineRun() *Run {
 				ChangesReason:   "",
 				ChangesDetail:   "",
 				ChangesScope:    nil,
-				Changes:         nil, Name: "fix", Ran: true, Tools: []ToolRun{{
-					App:            AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
-					Parser:         nil,
-					FailOn:         "",
-					GateActive:     false,
-					Category:       "",
-					Complete:       false,
-					Incomplete:     nil,
-					mayHoldSecrets: false, Name: "prettier", Invocations: []Invocation{{
-						ID:          "",
-						TaskID:      "",
-						Dir:         "",
-						Scope:       "",
-						Granularity: "",
-						Arity:       "",
-						Coverage:    "",
-						WholeUnit:   false,
-						State:       "",
-						ExitCode:    nil,
-						Success:     false,
-						FailureKind: "",
-						Duration:    0,
-						Extraction:  "",
-						Provenance:  "",
-						Files:       nil,
-						Step:        0,
-						Changes:     nil,
-						OutputTail:  "", Findings: []Finding{
+				Changes:         nil,
+				Name:            "fix", Ran: true, Tools: []ToolRun{{
+					App:             AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+					Parser:          nil,
+					FailOn:          "",
+					GateActive:      false,
+					Category:        "",
+					RedactedReasons: nil,
+					mayHoldSecrets:  false,
+					Name:            "prettier", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{
+						ID:                 "",
+						TaskID:             "",
+						Dir:                "",
+						Scope:              "",
+						Granularity:        "",
+						Arity:              "",
+						Coverage:           "",
+						WholeUnit:          false,
+						RedactedState:      0,
+						ExitCode:           nil,
+						Success:            false,
+						FailureKind:        "",
+						Duration:           0,
+						RedactedExtraction: 0,
+						Provenance:         "",
+						Files:              nil,
+						Step:               0,
+						Changes:            nil,
+						OutputTail:         "",
+						State:              "ran", Extraction: "parsed-findings", Findings: []Finding{
 							f(strings.Repeat("b", 64), kindIssue),
 						},
 					}},
@@ -79,33 +108,39 @@ func baselineRun() *Run {
 				ChangesReason:   "",
 				ChangesDetail:   "",
 				ChangesScope:    nil,
-				Changes:         nil, Name: "lint", Ran: true, Tools: []ToolRun{{
-					App:            AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
-					Parser:         nil,
-					FailOn:         "",
-					GateActive:     false,
-					Category:       "",
-					Complete:       false,
-					mayHoldSecrets: false, Name: "eslint", Incomplete: []Reason{ReasonCancelled}, Invocations: []Invocation{{
-						ID:          "",
-						TaskID:      "",
-						Dir:         "",
-						Scope:       "",
-						Granularity: "",
-						Arity:       "",
-						Coverage:    "",
-						WholeUnit:   false,
-						State:       "",
-						ExitCode:    nil,
-						Success:     false,
-						FailureKind: "",
-						Duration:    0,
-						Extraction:  "",
-						Provenance:  "",
-						Files:       nil,
-						Step:        0,
-						Changes:     nil,
-						OutputTail:  "", Findings: []Finding{
+				Changes:         nil,
+				Name:            "lint", Ran: true, Tools: []ToolRun{{
+					App:             AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+					Parser:          nil,
+					FailOn:          "",
+					GateActive:      false,
+					Category:        "",
+					Complete:        false,
+					RedactedReasons: nil,
+					mayHoldSecrets:  false,
+					Name:            "eslint", Incomplete: []Reason{ReasonCancelled}, Invocations: []Invocation{{
+						ID:                 "",
+						TaskID:             "",
+						Dir:                "",
+						Scope:              "",
+						Granularity:        "",
+						Arity:              "",
+						Coverage:           "",
+						WholeUnit:          false,
+						State:              "",
+						RedactedState:      0,
+						ExitCode:           nil,
+						Success:            false,
+						FailureKind:        "",
+						Duration:           0,
+						Extraction:         "",
+						RedactedExtraction: 0,
+						Provenance:         "",
+						Files:              nil,
+						Step:               0,
+						Changes:            nil,
+						OutputTail:         "",
+						Findings: []Finding{
 							f(strings.Repeat("a", 64), kindIssue),
 							f(strings.Repeat("b", 64), kindIssue),
 							f(strings.Repeat("c", 64), kindSynthetic),
@@ -170,7 +205,11 @@ func TestLoadBaseline(t *testing.T) {
 		}
 	})
 	t.Run("report", func(t *testing.T) {
-		b, err := LoadBaseline(write("r.json", baselineRun()))
+		b, err := LoadBaseline(write("r.json", struct {
+			*Run
+
+			Schema string `json:"schema"`
+		}{Run: baselineRun(), Schema: SchemaVersion}))
 		if err != nil || b.Version != FingerprintVersion || !reflect.DeepEqual(b.Set, want) || !b.FromReport ||
 			!reflect.DeepEqual(b.Incomplete, []Reason{ReasonCancelled, ReasonToolsFilter}) {
 			t.Errorf("LoadBaseline = %+v, %v", b, err)

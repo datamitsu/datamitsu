@@ -368,7 +368,13 @@ func TestConfigCacheRefusesAChainEditedMidEvaluation(t *testing.T) {
 function getMinVersion() { return "0.0.0"; }
 function getConfig(input) { return { version: "1.0.0", ignoreRules: ["after: eslint"] }; }`)
 
-	c.save(&chainObservations{nonDeterminism: "", warnings: nil, engines: nil}, &configcache.Entry{Warnings: nil, RemoteURLs: nil, Config: &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}})
+	c.save(&chainObservations{
+		versionNotices: nil,
+		nonDeterminism: "", warnings: nil, engines: nil,
+	}, &configcache.Entry{
+		VersionNotices: nil,
+		Warnings:       nil, RemoteURLs: nil, Config: &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil},
+	})
 	if n := configEvalArtifactCount(t, cacheHome); n != 0 {
 		t.Errorf("stored %d artifacts for a chain edited mid-evaluation, want 0", n)
 	}

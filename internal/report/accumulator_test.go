@@ -139,6 +139,8 @@ func TestInvocationsOfATask(t *testing.T) {
 	}
 	tr := tools[0]
 	wantTool := ToolRun{
+		RedactedReasons: nil,
+
 		Complete:    false,
 		Invocations: nil,
 		Name:        "hadolint", App: AppRef{OfficialURL: "", Name: "hadolint", Kind: "binary", Version: "2.12.0"},
@@ -225,7 +227,10 @@ func TestStandInInvocations(t *testing.T) {
 			task := perFileTask("t::1", "a")
 			tt.result.TaskID = task.ID
 			acc := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root})
-			invocations := acc.invocations(task, &tt.result, nil, &ToolRun{Name: "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: nil, mayHoldSecrets: false})
+			invocations := acc.invocations(task, &tt.result, nil, &ToolRun{
+				RedactedReasons: nil,
+				Name:            "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: nil, mayHoldSecrets: false,
+			})
 			if len(invocations) != 1 {
 				t.Fatalf("invocations = %+v, want one", invocations)
 			}
@@ -273,7 +278,10 @@ func TestWholeUnitProcessClaimsTheUnit(t *testing.T) {
 			{Edits: nil, Patch: "", File: abs("pkg/a.ts"), State: tooling.FileRan, Success: true, ProcessID: "tsc:pkg:1#1", ExitCode: new(0)},
 		},
 	}
-	invocations := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root}).invocations(task, &result, nil, &ToolRun{Name: "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: nil, mayHoldSecrets: false})
+	invocations := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root}).invocations(task, &result, nil, &ToolRun{
+		RedactedReasons: nil,
+		Name:            "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: nil, mayHoldSecrets: false,
+	})
 	if len(invocations) != 1 || !invocations[0].WholeUnit || invocations[0].Dir != "pkg" {
 		t.Fatalf("invocations = %+v, want the one whole-unit process in pkg", invocations)
 	}
@@ -303,6 +311,8 @@ func TestSettleFindings(t *testing.T) {
 		}
 	}
 	tr := &ToolRun{
+		RedactedReasons: nil,
+
 		Name:           "",
 		App:            AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 		Parser:         nil,
@@ -312,8 +322,16 @@ func TestSettleFindings(t *testing.T) {
 		Complete:       false,
 		Incomplete:     nil,
 		mayHoldSecrets: false, Invocations: []Invocation{
-			{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#1", Findings: []Finding{finding(7)}},
-			{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#2", Findings: []Finding{finding(3), finding(7)}},
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#1", Findings: []Finding{finding(7)},
+			},
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#2", Findings: []Finding{finding(3), finding(7)},
+			},
 		},
 	}
 	settleFindings(tr)
@@ -421,7 +439,10 @@ func TestFindingsOfAFinishedTool(t *testing.T) {
 // A message a structured format carried with escaped colour codes reaches the
 // report without them.
 func TestFindingMessageIsPlainText(t *testing.T) {
-	f := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root}).finding("t", diagnostic.Diagnostic{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "\x1b[31merror\x1b[0m: bad"}, &ToolRun{Name: "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: nil, mayHoldSecrets: false})
+	f := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root}).finding("t", diagnostic.Diagnostic{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "\x1b[31merror\x1b[0m: bad"}, &ToolRun{
+		RedactedReasons: nil,
+		Name:            "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: nil, mayHoldSecrets: false,
+	})
 	if f.Message != "error: bad" {
 		t.Errorf("message = %q, want it without ANSI sequences", f.Message)
 	}
@@ -445,6 +466,8 @@ func TestSettleFindingsKeepsTheStrongest(t *testing.T) {
 		}
 	}
 	tr := &ToolRun{
+		RedactedReasons: nil,
+
 		Name:           "",
 		App:            AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 		Parser:         nil,
@@ -454,8 +477,16 @@ func TestSettleFindingsKeepsTheStrongest(t *testing.T) {
 		Complete:       false,
 		Incomplete:     nil,
 		mayHoldSecrets: false, Invocations: []Invocation{
-			{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#1", Findings: []Finding{finding("warning", false, false)}},
-			{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#2", Findings: []Finding{finding("error", true, true)}},
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#1", Findings: []Finding{finding("warning", false, false)},
+			},
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#2", Findings: []Finding{finding("error", true, true)},
+			},
 		},
 	}
 	settleFindings(tr)
@@ -468,6 +499,8 @@ func TestSettleFindingsKeepsTheStrongest(t *testing.T) {
 
 	// Of equals, the first is kept.
 	tr = &ToolRun{
+		RedactedReasons: nil,
+
 		Name:           "",
 		App:            AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 		Parser:         nil,
@@ -477,8 +510,16 @@ func TestSettleFindingsKeepsTheStrongest(t *testing.T) {
 		Complete:       false,
 		Incomplete:     nil,
 		mayHoldSecrets: false, Invocations: []Invocation{
-			{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#1", Findings: []Finding{finding("error", true, true)}},
-			{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#2", Findings: []Finding{finding("error", true, true)}},
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#1", Findings: []Finding{finding("error", true, true)},
+			},
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#2", Findings: []Finding{finding("error", true, true)},
+			},
 		},
 	}
 	settleFindings(tr)
@@ -511,7 +552,31 @@ func TestRelPath(t *testing.T) {
 
 func TestInvocationOrder(t *testing.T) {
 	invocations := []Invocation{
-		{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::10#1"}, {TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#cached"}, {TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#10"}, {TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#2"}, {TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#0"}, {TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#verdict"},
+		{
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::10#1",
+		}, {
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#cached",
+		}, {
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#10",
+		}, {
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#2",
+		}, {
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#0",
+		}, {
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#verdict",
+		},
 	}
 	sortInvocations(invocations)
 	got := make([]string, 0, len(invocations))

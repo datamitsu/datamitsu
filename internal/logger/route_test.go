@@ -61,9 +61,18 @@ func TestRouteReachesLoggersDerivedBeforeIt(t *testing.T) {
 	named.Info("version check skipped")
 
 	want := []uievent.Event{
-		{OpID: "", TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, Level: uievent.LevelWarn, Msg: `failed to load cache {"component":"cache","error":"corrupt"}`},
-		{OpID: "", TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, Level: uievent.LevelDebug, Msg: `downloading {"binmanager":{"name":"shfmt"}}`},
-		{OpID: "", TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, Level: uievent.LevelInfo, Msg: `version check skipped`},
+		{
+			ThrottleID: "",
+			OpID:       "", TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, Level: uievent.LevelWarn, Msg: `failed to load cache {"component":"cache","error":"corrupt"}`,
+		},
+		{
+			ThrottleID: "",
+			OpID:       "", TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, Level: uievent.LevelDebug, Msg: `downloading {"binmanager":{"name":"shfmt"}}`,
+		},
+		{
+			ThrottleID: "",
+			OpID:       "", TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, Level: uievent.LevelInfo, Msg: `version check skipped`,
+		},
 	}
 	events := got.all()
 	if len(events) != len(want) {

@@ -220,7 +220,14 @@ func TestGateFingerprintIsTheReports(t *testing.T) {
 	ds := annotated(t, root, "eslint", "utf-16", one, two)
 
 	acc := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root})
-	tr := &ToolRun{App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, mayHoldSecrets: false, Name: "eslint", Invocations: []Invocation{{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#1"}}}
+	tr := &ToolRun{
+		RedactedReasons: nil,
+		App:             AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, mayHoldSecrets: false, Name: "eslint", Invocations: []Invocation{{
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#1",
+		}},
+	}
 	for _, d := range ds {
 		tr.Invocations[0].Findings = append(tr.Invocations[0].Findings, acc.finding("eslint", d, tr))
 	}

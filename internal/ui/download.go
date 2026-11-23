@@ -97,6 +97,7 @@ func wrapDownloadEvents(name string, total int64, rc io.ReadCloser) io.ReadClose
 	opID := uievent.NextOpID("dl")
 	Emit(uievent.Event{
 		TS:              0,
+		ThrottleID:      "",
 		Op:              "",
 		Tool:            "",
 		Dir:             "",
@@ -171,6 +172,7 @@ func (m *meteredEmitter) Read(b []byte) (int, error) {
 		m.mu.Unlock()
 		Emit(uievent.Event{
 			TS:              0,
+			ThrottleID:      "",
 			Op:              "",
 			Tool:            "",
 			Dir:             "",
@@ -244,6 +246,8 @@ func (m *meteredEmitter) emitTerminal(status string) {
 	read := m.read
 	m.mu.Unlock()
 	Emit(uievent.Event{
+		ThrottleID: "",
+
 		TS:              0,
 		Op:              "",
 		Tool:            "",

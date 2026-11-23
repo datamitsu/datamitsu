@@ -63,6 +63,8 @@ func (d *Display) Spinner(name string) *Spinner {
 	if sinkActive() {
 		s.opID = uievent.NextOpID("inst")
 		Emit(uievent.Event{
+			ThrottleID: "",
+
 			TS:              0,
 			Op:              "",
 			Tool:            "",
@@ -198,6 +200,8 @@ func (s *Spinner) emitTerminal(status string) {
 	}
 	s.termOnce.Do(func() {
 		Emit(uievent.Event{
+			ThrottleID: "",
+
 			TS:              0,
 			Op:              "",
 			Tool:            "",

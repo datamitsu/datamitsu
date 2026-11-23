@@ -295,6 +295,10 @@ jobs:
 - **One run per tool, of `lint`.** A file holds one run per tool of the lint
   operation — `check` writes its lint, a `fix` run its fix — because GitHub
   rejects a file with two runs of one tool in one category.
+  When the built-in `datamitsu` lint completes over the whole repository, its
+  result is recorded even if it has no findings or an external tool fails to
+  install. An empty run allows earlier built-in alerts to close and occupies
+  one slot in the file.
 - **A tool that did not cover everything is left out.** An alert is closed when
   the next upload of its tool does not hold it, so a tool whose completeness is
   not established ([How complete a report is](#how-complete-a-report-is)) is
@@ -308,9 +312,10 @@ jobs:
   subdirectory or `--file-scoped` leave every tool out. GitHub refuses a SARIF
   file without a run, so a report that would hold none is not written at all:
   a file an earlier run left at its path, or its directory's
-  `datamitsu-<n>.sarif` files, are removed, the export is recorded as
-  `omitted`, a `WARN` line says so, and every alert stays as it is. A tool with
-  more than 25 000 results is left out too: GitHub would keep the 5 000 most
+  `datamitsu-<n>.sarif` files, are removed before the export is recorded as
+  `omitted`. If cleanup fails, the export fails instead: any file left at the
+  target is not a result of this run. A tool with more than 25 000 results is
+  left out too: GitHub would keep the 5 000 most
   severe and close the alerts of the rest.
 - **Twenty tools per file.** GitHub reads at most twenty runs from one file. A
   path that ends in `/` names a directory: `datamitsu-1.sarif`,
@@ -318,15 +323,21 @@ jobs:
   `datamitsu-<n>.sarif` files an earlier run left there that this one did not
   write are removed. Upload each file in a step of its own: `upload-sarif`
   combines the files of a directory into one upload, which GitHub refuses
-  above twenty runs just the same. A configuration of up to twenty tools
-  writes `datamitsu-1.sarif` alone, and needs one more step for every twenty
-  more. A file, or `-`, for a
-  run that plans more than twenty tools exits 2 before anything runs. GitHub
-  refuses an upload of more than 10 MB gzipped.
-- **The category is in the file.** Every run is written under the category
-  `datamitsu` (`automationDetails.id` `datamitsu/`). The upload action's
-  `category` input does not change a file that already names one, so a job
-  that uploads more than once — a matrix — names its own:
+  above twenty runs just the same. A report with up to twenty eligible runs
+  writes `datamitsu-1.sarif` alone, including any clean built-in run in that
+  count. A file, or `-`, for a run that initially plans more than twenty tools
+  exits 2 before anything runs. If the limit is exceeded only in the final
+  results, the checks finish and only that export is refused. The final count
+  includes only eligible tools and is checked before building the SARIF document.
+  Any earlier file at the refused target is removed. GitHub refuses an upload of more than 10 MB
+  gzipped.
+- **The category is in the file.** The default category is `datamitsu`
+  (`automationDetails.id` `datamitsu/`). The built-in fix run uses the
+  SARIF driver name `datamitsu-fix`, distinct from the built-in lint driver
+  `datamitsu`. Both use the selected category unchanged, so publishing a fix
+  cannot replace a built-in lint analysis even when their categories match.
+  The upload action's `category` input does not override a category already
+  in the file, so a job that uploads more than once names its own:
   `--report "sarif=sarif/?category=lint-${{ matrix.os }}"`. Uploads in one
   category replace each other's alerts tool by tool. An alert is one rule at
   one fingerprint, whatever the category: the same finding uploaded under two
@@ -831,8 +842,23 @@ datamitsu report render --input out/run.json --format json --output -
 The document holds everything a renderer needs — the columns in every unit
 were converted while the files were on disk — so this works on another machine,
 without the checkout, and after the sources changed, and every format comes out
-byte for byte as the run wrote it, completeness companion included. A pipeline
-can therefore write the own JSON once and publish it in whatever formats its
+byte for byte as the run wrote it, completeness companion included. Companions
+describe their own format; consult the run JSON for the outcomes of other exports.
+Live runs and replay use the same coverage checks. A nonempty `incomplete`
+list overrides `complete: true`. A skipped operation, a restricted file
+selection (even when labeled `all`), no invocation, or missing extraction
+evidence prevents a tool from being treated as complete. SARIF omits those
+tools, and `report diff` does not treat their missing findings as fixed.
+
+When masking hides an execution status, extraction result, or completeness
+reason, the JSON report keeps its identity as a numeric code. Replay uses
+those codes for coverage decisions and cached-file counts, and does not add
+back the text of a reason that was already recorded and masked. This also
+applies when `report render --format json` masks an existing report.
+The JSON envelope adds the fixed schema identifier outside the masked run data,
+so the resulting document remains readable for subsequent replays.
+
+A pipeline can write the run JSON once and publish it in whatever formats its
 consumers read:
 
 ```bash

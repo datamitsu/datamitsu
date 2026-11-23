@@ -446,6 +446,7 @@ export default defineConfig((config) => ({
     "pkgs",
     "scoop",
     "winget",
+    "winsize",
     "libstdc",
     "libgcc",
     "remirrored",

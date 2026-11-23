@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	"github.com/datamitsu/datamitsu/internal/uievent"
 )
 
 // Handler executes one named provisioning operation with its JSON payload.
@@ -115,6 +117,23 @@ func ServeContext(ctx context.Context, rw io.ReadWriteCloser, handler Handler) e
 }
 
 type progressKey struct{}
+
+// QueueProgressType is private worker traffic, not a JSONL event type.
+const QueueProgressType = "provision_queue"
+
+// CleanupProgressType removes a terminal row without reporting an install outcome.
+const CleanupProgressType = "provision_cleanup"
+
+// InstallProgress carries lease ownership only across the worker connection.
+type InstallProgress struct {
+	uievent.Event
+
+	Owners         []string `json:"lease_owners,omitempty"`
+	WaitOwner      string   `json:"wait_owner,omitempty"`
+	WaitUpdatedAt  int64    `json:"wait_updated_at,omitempty"`
+	WaitBytesDone  int64    `json:"wait_bytes_done,omitempty"`
+	WaitBytesTotal int64    `json:"wait_bytes_total,omitempty"`
+}
 
 // HasProgress reports whether ctx can emit worker progress events.
 func HasProgress(ctx context.Context) bool {

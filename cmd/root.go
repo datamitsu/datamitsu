@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -295,6 +296,8 @@ func (h *helloFirst) open() {
 			names[i] = string(t)
 		}
 		h.JSONLSink.Emit(uievent.Event{
+			ThrottleID: "",
+
 			TS:              0,
 			Status:          "",
 			Op:              "",
@@ -413,7 +416,10 @@ func reportToStderr(write func(io.Writer)) {
 	var buf bytes.Buffer
 	write(&buf)
 	if report := strings.Trim(buf.String(), "\n"); strings.TrimSpace(report) != "" {
-		ui.Emit(uievent.Event{TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, OpID: uievent.NextOpID("log"), Level: uievent.LevelInfo, Msg: report})
+		ui.Emit(uievent.Event{
+			ThrottleID: "",
+			TS:         0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, OpID: uievent.NextOpID("log"), Level: uievent.LevelInfo, Msg: report,
+		})
 	}
 }
 
@@ -470,33 +476,116 @@ func Execute() {
 		activeProvisionWorker = worker
 		if startErr == nil {
 			provision.Select(worker.Client)
-			worker.Client.SetProgress(func(data json.RawMessage) {
-				var event uievent.Event
-				if json.Unmarshal(data, &event) != nil {
+			type requestDisplay struct {
+				display *ui.Display
+				rows    map[string]struct{}
+				queue   string
+			}
+			requests := make(map[uint64]*requestDisplay)
+			refreshQueue := func(display *ui.Display) {
+				var queues []string
+				for _, req := range requests {
+					if req.display == display && req.queue != "" {
+						queues = append(queues, req.queue)
+					}
+				}
+				slices.Sort(queues)
+				display.RenderProvisionQueue(strings.Join(queues, " · "))
+			}
+			worker.Client.SetRequestProgress(func(id uint64, data json.RawMessage) {
+				req := requests[id]
+				if data == nil {
+					if req != nil {
+						delete(requests, id)
+						for op := range req.rows {
+							ui.ForgetProgress(op)
+							req.display.RenderProvisionEvent(uievent.Event{
+								TS:              0,
+								ThrottleID:      "",
+								Op:              "",
+								Tool:            "",
+								Dir:             "",
+								Name:            "",
+								BytesDone:       0,
+								BytesTotal:      0,
+								Percent:         0,
+								Index:           0,
+								Total:           0,
+								Success:         nil,
+								DurationMs:      0,
+								Msg:             "",
+								Level:           "",
+								Tools:           0,
+								Runs:            0,
+								Failed:          0,
+								Skipped:         0,
+								Cancelled:       nil,
+								Complete:        nil,
+								Format:          "",
+								Path:            "",
+								File:            "",
+								Row:             0,
+								Col:             0,
+								EndRow:          0,
+								EndCol:          0,
+								Severity:        "",
+								Code:            "",
+								Source:          "",
+								Fingerprint:     "",
+								Provenance:      "",
+								Reported:        nil,
+								Gates:           nil,
+								Baselined:       false,
+								FindingsError:   nil,
+								FindingsWarning: nil,
+								FindingsInfo:    nil,
+								FindingsHint:    nil,
+								Cached:          nil,
+								Schema:          "",
+								Events:          "",
+								Annotations:     "",
+								Type:            uievent.TypeInstall, Status: uievent.StatusSkip, OpID: op,
+							})
+						}
+						refreshQueue(req.display)
+					}
+					return
+				}
+				var progress provision.InstallProgress
+				if json.Unmarshal(data, &progress) != nil {
+					return
+				}
+				event := progress.Event
+				if req == nil {
+					req = &requestDisplay{
+						queue:   "",
+						display: ui.Current(), rows: make(map[string]struct{}),
+					}
+					requests[id] = req
+				}
+				if event.Type == provision.QueueProgressType {
+					report.RewriteAll(&event, ciText)
+					req.queue = event.Msg
+					refreshQueue(req.display)
+					return
+				}
+				if event.Type == provision.CleanupProgressType {
+					ui.ForgetProgress(event.OpID)
+					event.Type, event.Status = uievent.TypeInstall, uievent.StatusSkip
+					delete(req.rows, event.OpID)
+					req.display.RenderProvisionEvent(event)
 					return
 				}
 				ui.Emit(event)
-				if ui.Current().IsQuiet() {
-					return
+				report.RewriteAll(&event, ciText)
+				progress.Event = event
+				switch event.Status {
+				case uievent.StatusSkip, uievent.StatusDone, uievent.StatusFail:
+					delete(req.rows, event.OpID)
+				default:
+					req.rows[event.OpID] = struct{}{}
 				}
-				if !ui.Quiet() && !ui.Muted() && event.Type == uievent.TypeInstall && event.Status == uievent.StatusProgress {
-					if strings.HasPrefix(event.Msg, "Waiting for installation:") {
-						ui.Current().Diagnosticf("%s\n", event.Msg)
-					} else if event.Name != "" {
-						switch {
-						case event.Total > 0:
-							ui.Current().Diagnosticf("Installing %s: %s (%d/%d packages)\n", event.Name, event.Msg, event.Index, event.Total)
-						case event.Index > 0:
-							ui.Current().Diagnosticf("Installing %s: %s (%d packages)\n", event.Name, event.Msg, event.Index)
-						default:
-							ui.Current().Diagnosticf("Installing %s: %s\n", event.Name, event.Msg)
-						}
-					}
-				} else if !ui.Quiet() && !ui.Muted() && event.Type == uievent.TypeDownload && event.Status == uievent.StatusProgress && event.Name != "" {
-					if event.BytesTotal > 0 {
-						ui.Current().Diagnosticf("Downloading %s: %d/%d bytes\n", event.Name, event.BytesDone, event.BytesTotal)
-					}
-				}
+				req.display.RenderInstallProgress(progress)
 			})
 			rootCmd.SetContext(context.Background())
 		}
@@ -584,6 +673,8 @@ func Execute() {
 		// line stays valid JSON.
 		if ui.Quiet() {
 			ui.Emit(uievent.Event{
+				ThrottleID: "",
+
 				TS:              0,
 				Op:              "",
 				Tool:            "",

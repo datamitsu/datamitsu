@@ -7,6 +7,7 @@ exit code: 0
 | Tool | New | Fixed | Unchanged | Moved | Unknown | Unobserved |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `alpha` | 0 | 0 | 0 | 0 | 0 | 0 |
+| `datamitsu` | 0 | 0 | 0 | 0 | 0 | 0 |
 | `hadolint` | 1 | 0 | 0 | 0 | 0 | 0 |
 
 ### New

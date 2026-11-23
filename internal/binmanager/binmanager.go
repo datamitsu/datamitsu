@@ -28,12 +28,14 @@ import (
 	"github.com/datamitsu/datamitsu/internal/installstate"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/prepare"
+	"github.com/datamitsu/datamitsu/internal/provision"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/storelock"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
 	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
+	"github.com/datamitsu/datamitsu/internal/uievent"
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 )
@@ -601,8 +603,81 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 		})
 	}
 
+	var pending []string
+	if provision.HasProgress(ctx) {
+		for _, name := range distinct {
+			if !bm.AppInstalled(name) {
+				pending = append(pending, name)
+			}
+		}
+	}
+	reportQueue := func() {
+		var detail string
+		if n := len(pending); n != 0 {
+			shown := min(n, 3)
+			detail = fmt.Sprintf("queued %d: %s", n, strings.Join(pending[:shown], ", "))
+			if n > shown {
+				detail += fmt.Sprintf(" +%d", n-shown)
+			}
+		}
+		_ = provision.Progress(ctx, uievent.Event{
+			OpID:            "",
+			TS:              0,
+			Status:          "",
+			ThrottleID:      "",
+			Op:              "",
+			Tool:            "",
+			Dir:             "",
+			Name:            "",
+			BytesDone:       0,
+			BytesTotal:      0,
+			Percent:         0,
+			Index:           0,
+			Total:           0,
+			Success:         nil,
+			DurationMs:      0,
+			Level:           "",
+			Tools:           0,
+			Runs:            0,
+			Failed:          0,
+			Skipped:         0,
+			Cancelled:       nil,
+			Complete:        nil,
+			Format:          "",
+			Path:            "",
+			File:            "",
+			Row:             0,
+			Col:             0,
+			EndRow:          0,
+			EndCol:          0,
+			Severity:        "",
+			Code:            "",
+			Source:          "",
+			Fingerprint:     "",
+			Provenance:      "",
+			Reported:        nil,
+			Gates:           nil,
+			Baselined:       false,
+			FindingsError:   nil,
+			FindingsWarning: nil,
+			FindingsInfo:    nil,
+			FindingsHint:    nil,
+			Cached:          nil,
+			Schema:          "",
+			Events:          "",
+			Annotations:     "",
+			Type:            provision.QueueProgressType, Msg: detail,
+		})
+	}
+	if len(pending) > 0 {
+		reportQueue()
+	}
 	for _, name := range distinct {
 		jobs <- name
+		if len(pending) > 0 && pending[0] == name {
+			pending = pending[1:]
+			reportQueue()
+		}
 	}
 	close(jobs)
 	wg.Wait()
@@ -1564,18 +1639,39 @@ func (bm *BinManager) materializeDependencyPaths(ctx context.Context, names []st
 func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, BinaryOsArchInfo, error) {
 	app, ok := bm.mapOfApps[name]
 	if !ok {
-		return nil, BinaryOsArchInfo{}, fmt.Errorf("binary '%s' not found in registry", name)
+		return nil, BinaryOsArchInfo{
+			Auth:        nil,
+			URL:         "",
+			Hash:        "",
+			ContentType: "",
+			BinaryPath:  nil,
+			ExtractDir:  false,
+		}, fmt.Errorf("binary '%s' not found in registry", name)
 	}
 
 	if app.Binary == nil {
-		return nil, BinaryOsArchInfo{}, fmt.Errorf("app '%s' is not a binary type", name)
+		return nil, BinaryOsArchInfo{
+			Auth:        nil,
+			URL:         "",
+			Hash:        "",
+			ContentType: "",
+			BinaryPath:  nil,
+			ExtractDir:  false,
+		}, fmt.Errorf("app '%s' is not a binary type", name)
 	}
 
 	candidates := parseBinaryCandidates(app.Binary.Binaries)
 	resolved, info := bm.resolver.Resolve(name, candidates)
 	if resolved == nil {
 		host := bm.resolver.Host()
-		return nil, BinaryOsArchInfo{}, fmt.Errorf("binary '%s' is not available for %s", name, host.String())
+		return nil, BinaryOsArchInfo{
+			Auth:        nil,
+			URL:         "",
+			Hash:        "",
+			ContentType: "",
+			BinaryPath:  nil,
+			ExtractDir:  false,
+		}, fmt.Errorf("binary '%s' is not available for %s", name, host.String())
 	}
 
 	if resolved.Source == target.ResolutionFallback && resolved.FallbackInfo != nil {
@@ -1587,7 +1683,14 @@ func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, Binary
 
 	binInfo, ok := info.(*BinaryOsArchInfo)
 	if !ok {
-		return nil, BinaryOsArchInfo{}, fmt.Errorf("binary '%s' resolved to unexpected info type %T", name, info)
+		return nil, BinaryOsArchInfo{
+			Auth:        nil,
+			URL:         "",
+			Hash:        "",
+			ContentType: "",
+			BinaryPath:  nil,
+			ExtractDir:  false,
+		}, fmt.Errorf("binary '%s' resolved to unexpected info type %T", name, info)
 	}
 
 	return resolved, *binInfo, nil
@@ -1614,7 +1717,14 @@ func (bm *BinManager) getInstallPath(name string) (string, error) {
 func (bm *BinManager) binaryInstall(name string) (string, BinaryOsArchInfo, error) {
 	resolved, binaryInfo, err := bm.getBinaryInfo(name)
 	if err != nil {
-		return "", BinaryOsArchInfo{}, err
+		return "", BinaryOsArchInfo{
+			Auth:        nil,
+			URL:         "",
+			Hash:        "",
+			ContentType: "",
+			BinaryPath:  nil,
+			ExtractDir:  false,
+		}, err
 	}
 	configHash := calculateConfigHash(binaryInfo, *resolved)
 	return binaryStorePath(name, configHash, binaryInfo.ExtractDir, runtime.GOOS), binaryInfo, nil

@@ -55,7 +55,8 @@ func withCompanion(t *testing.T) {
 
 func incompleteRun() *report.Run {
 	return &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   zerovalue_time.Time{},
@@ -76,8 +77,14 @@ func incompleteRun() *report.Run {
 			ChangesDetail:   "",
 			ChangesScope:    nil,
 			Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{
-				{App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Incomplete: nil, Invocations: nil, Name: "eslint", Complete: true},
-				{App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Invocations: nil, Name: "tsc", Incomplete: []report.Reason{"parse-failed"}},
+				{
+					RedactedReasons: nil,
+					App:             report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Incomplete: nil, Invocations: nil, Name: "eslint", Complete: true,
+				},
+				{
+					RedactedReasons: nil,
+					App:             report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Invocations: nil, Name: "tsc", Incomplete: []report.Reason{"parse-failed"},
+				},
 			},
 		}},
 	}
@@ -162,7 +169,8 @@ func TestTargetCompanionWithoutItsReport(t *testing.T) {
 // earlier run left that this one did not write, and nothing else.
 func TestTargetDirectory(t *testing.T) {
 	run := &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   zerovalue_time.Time{},
@@ -182,13 +190,19 @@ func TestTargetDirectory(t *testing.T) {
 			ChangesDetail:   "",
 			ChangesScope:    nil,
 			Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+
 				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 				Parser:     nil,
 				FailOn:     "",
 				GateActive: false,
 				Category:   "",
 				Incomplete: nil,
-				Name:       "eslint", Complete: true, Invocations: []report.Invocation{{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#1", State: "ran", Success: true}},
+				Name:       "eslint", Complete: true, Invocations: []report.Invocation{{
+					RedactedState:      0,
+					RedactedExtraction: 0,
+					TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#1", State: "ran", Success: true,
+				}},
 			}},
 		}},
 	}
@@ -241,10 +255,16 @@ func TestTargetDirectoryFailureKeepsTheOldFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	run := &report.Run{Schema: "", Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Complete: false, Incomplete: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: report.Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}, Operations: []report.Operation{{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, Tools: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "lint", Ran: true}}}
+	run := &report.Run{
+		RedactedReasons: nil,
+
+		Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Complete: false, Incomplete: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: report.Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}, Operations: []report.Operation{{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, Tools: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "lint", Ran: true}},
+	}
 	for i := range 21 {
 		name := "tool" + strings.Repeat("x", i)
 		run.Operations[0].Tools = append(run.Operations[0].Tools, report.ToolRun{
+			RedactedReasons: nil,
+
 			App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 			Parser:     nil,
 			FailOn:     "",
@@ -252,7 +272,11 @@ func TestTargetDirectoryFailureKeepsTheOldFiles(t *testing.T) {
 			Category:   "",
 			Incomplete: nil,
 			Name:       name, Complete: true,
-			Invocations: []report.Invocation{{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: name + "::1#1", State: "ran", Success: true}},
+			Invocations: []report.Invocation{{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: name + "::1#1", State: "ran", Success: true,
+			}},
 		})
 	}
 	target := Open(Spec{Options: nil, Format: "sarif", Path: dir}, nil)
@@ -295,7 +319,11 @@ func TestTargetDeclined(t *testing.T) {
 		if target.Err != nil {
 			t.Fatal(target.Err)
 		}
-		if _, ok := errors.AsType[DeclinedError](target.Write(&report.Run{Schema: "", Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}})); !ok {
+		if _, ok := errors.AsType[DeclinedError](target.Write(&report.Run{
+			RedactedReasons: nil,
+
+			Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		})); !ok {
 			t.Errorf("%s: a SARIF report without a run was not declined", path)
 		}
 	}
@@ -305,8 +333,51 @@ func TestTargetDeclined(t *testing.T) {
 		t.Errorf("left %v and %v, want the unrelated file alone", entries, inSplit)
 	}
 	var out bytes.Buffer
-	if _, ok := errors.AsType[DeclinedError](Open(Spec{Options: nil, Format: "sarif", Path: Stdout}, &out).Write(&report.Run{Schema: "", Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}})); !ok || out.Len() != 0 {
+	if _, ok := errors.AsType[DeclinedError](Open(Spec{Options: nil, Format: "sarif", Path: Stdout}, &out).Write(&report.Run{
+		RedactedReasons: nil,
+
+		Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	})); !ok || out.Len() != 0 {
 		t.Errorf("stdout = %q, want nothing", out.String())
+	}
+}
+
+func TestTargetDeclineRefusesToRemoveDirectoryAtFilePath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "results.sarif")
+	target := Open(Spec{
+		Options: nil,
+		Format:  "sarif", Path: path,
+	}, nil)
+	if target.Err != nil {
+		t.Fatal(target.Err)
+	}
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err := target.Write(&report.Run{
+		Fingerprint:     "",
+		Datamitsu:       report.Producer{Version: "", Configuration: ""},
+		StartedAt:       zerovalue_time.Time{},
+		EndedAt:         zerovalue_time.Time{},
+		Selection:       report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:        false,
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Operations:      nil,
+		Exports:         nil,
+		CI:              report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	})
+	if err == nil || !strings.Contains(err.Error(), "not a regular file or symlink") {
+		t.Fatalf("Write error = %v, want refusal to remove directory at report path", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != filepath.Base(path) || !entries[0].IsDir() {
+		t.Errorf("entries = %v, want original directory and no temporary report", entries)
 	}
 }
 

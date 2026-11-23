@@ -940,6 +940,12 @@ interface RuntimeConfigGo {
 
 Tools define fix and lint operations that datamitsu executes.
 
+The `datamitsu` and `datamitsu-fix` keys in `tools` are reserved for built-in
+results. Rename any configured tool using either key and update its references.
+App keys are unaffected. To export an older report containing an eligible
+configured tool with either reserved key to SARIF, rename the tool and rerun
+the check.
+
 ```typescript
 interface Tool {
   name: string;

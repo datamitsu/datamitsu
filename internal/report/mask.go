@@ -2,12 +2,16 @@ package report
 
 import (
 	"encoding/json"
+	"math"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/datamitsu/datamitsu/internal/tooling"
 )
 
 // Masked is what a secret value becomes in a report.
@@ -97,7 +101,107 @@ func secretName(name string) bool {
 // best effort: it catches what the environment names, not a secret a tool
 // prints that no variable ever held.
 func Mask(run *Run, secrets []string) {
-	MaskAll(run, secrets)
+	if run == nil || len(secrets) == 0 {
+		return
+	}
+	replace := replacer(secrets).Replace
+	run.RedactedReasons = recordRedactedReasons(run.Incomplete, run.RedactedReasons, replace)
+	for i := range run.Operations {
+		for j := range run.Operations[i].Tools {
+			tr := &run.Operations[i].Tools[j]
+			tr.RedactedReasons = recordRedactedReasons(tr.Incomplete, tr.RedactedReasons, replace)
+			for k := range tr.Invocations {
+				inv := &tr.Invocations[k]
+				if replace(inv.State) != inv.State {
+					inv.RedactedState = labelCode(inv.State, executionLabels[:])
+				}
+				if replace(inv.Extraction) != inv.Extraction {
+					inv.RedactedExtraction = labelCode(inv.Extraction, extractionLabels[:])
+				}
+				for k := range inv.Files {
+					fr := &inv.Files[k]
+					if replace(fr.State) != fr.State {
+						fr.RedactedState = labelCode(fr.State, executionLabels[:])
+					}
+				}
+			}
+		}
+	}
+	RewriteAll(run, replace)
+}
+
+// These indices are wire codes. Keep existing entries in order.
+var executionLabels = [...]string{
+	"", string(tooling.ProcessRan), string(tooling.FileCached), string(tooling.FileVerdictHit),
+	string(tooling.ProcessCancelled), string(tooling.ProcessNotStarted), string(tooling.ProcessSetupFailed),
+}
+
+var extractionLabels = [...]string{
+	"", string(tooling.ExtractionParsedClean), string(tooling.ExtractionParsedFindings),
+	string(tooling.ExtractionParserUnavailable), string(tooling.ExtractionParseFailed),
+	string(tooling.ExtractionTruncated), string(tooling.ExtractionNone),
+}
+
+// Indices are stable wire codes, as for executionLabels and extractionLabels.
+var reasonLabels = [...]string{
+	"", string(ReasonNarrowedSelection), string(ReasonPartialUnit), string(ReasonCancelled),
+	string(ReasonNotStarted), string(ReasonSetupFailed), string(ReasonPlatformSkip),
+	string(ReasonNoExtraction), string(ReasonParserUnavailable), string(ReasonParseFailed),
+	string(ReasonTruncated), string(ReasonUnparsedCacheHit), string(ReasonFailedWithoutFindings),
+	string(ReasonToolsFilter), string(ReasonNotNarrowable), string(ReasonOperationSkipped),
+	string(ReasonMissingCompleteness),
+}
+
+func recordRedactedReasons(reasons []Reason, codes []uint16, replace func(string) string) []uint16 {
+	for i, reason := range reasons {
+		if label := string(reason); replace(label) != label {
+			if code := labelCode(label, reasonLabels[:]); code != 0 {
+				if i >= len(codes) {
+					codes = append(codes, make([]uint16, i+1-len(codes))...)
+				}
+				codes[i] = uint16(code)
+			}
+		}
+	}
+	return codes
+}
+
+func effectiveReason(label Reason, codes []uint16, i int) Reason {
+	if i < len(codes) && int(codes[i]) < len(reasonLabels) {
+		return Reason(effectiveLabel(string(label), uint8(codes[i]), reasonLabels[:]))
+	}
+	return label
+}
+
+func labelCode(label string, labels []string) uint8 {
+	for i := 1; i < len(labels); i++ {
+		if labels[i] == label {
+			return uint8(i)
+		}
+	}
+	return 0
+}
+
+func effectiveLabel(label string, code uint8, labels []string) string {
+	if code != 0 && int(code) < len(labels) && strings.Contains(label, Masked) {
+		return labels[code]
+	}
+	return label
+}
+
+// ExecutionState is the state for decisions. Display and serialization use State.
+func (inv Invocation) ExecutionState() string {
+	return effectiveLabel(inv.State, inv.RedactedState, executionLabels[:])
+}
+
+// ExecutionState is the file's state for decisions, not for display.
+func (fr FileResult) ExecutionState() string {
+	return effectiveLabel(fr.State, fr.RedactedState, executionLabels[:])
+}
+
+// ExtractionState is the extraction result for decisions, not for display.
+func (inv Invocation) ExtractionState() tooling.Extraction {
+	return tooling.Extraction(effectiveLabel(inv.Extraction, inv.RedactedExtraction, extractionLabels[:]))
 }
 
 // MaskAll masks every exported string that ptr, a pointer, reaches — a Run,
@@ -124,15 +228,30 @@ func RewriteAll(ptr any, rewrite func(string) string) {
 // a log line routed to the stream carries its fields JSON-encoded, where a
 // quote or a backslash in a secret is escaped.
 func replacer(secrets []string) *strings.Replacer {
-	pairs := make([]string, 0, 4*len(secrets))
+	var spellings []string
+	if len(secrets) <= math.MaxInt/3 {
+		spellings = make([]string, 0, 3*len(secrets))
+	}
 	for _, s := range secrets {
 		if s == "" {
 			continue
 		}
-		pairs = append(pairs, s, Masked)
+		spellings = append(spellings, s)
 		if escaped := jsonSpelling(s); escaped != s {
-			pairs = append(pairs, escaped, Masked)
+			spellings = append(spellings, escaped)
 		}
+		quoted := strconv.Quote(s)
+		if escaped := quoted[1 : len(quoted)-1]; escaped != s {
+			spellings = append(spellings, escaped)
+		}
+	}
+	sort.Slice(spellings, func(i, j int) bool { return len(spellings[i]) > len(spellings[j]) })
+	var pairs []string
+	if len(spellings) <= math.MaxInt/2 {
+		pairs = make([]string, 0, 2*len(spellings))
+	}
+	for _, spelling := range spellings {
+		pairs = append(pairs, spelling, Masked)
 	}
 	return strings.NewReplacer(pairs...)
 }

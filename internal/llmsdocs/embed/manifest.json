@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "b1d898f472062c97fee9c7a6113f8610",
+  "pageSetHash": "037b34cc3767bb5a1a1b6074843dda6b",
   "pages": [
     {
       "slug": "about",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 23369,
-      "contentHash": "91d954d1f6bb3200be619a0631915b77"
+      "bytes": 25870,
+      "contentHash": "1a9d9878d2288866bcdae58d63abf095"
     },
     {
       "slug": "guides/architecture",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 14900,
-      "contentHash": "9c3c7279af9a6c6eeac067785ff47055"
+      "bytes": 15251,
+      "contentHash": "e8b5e3a22fa33e581aa84809163c74db"
     },
     {
       "slug": "guides/managed-configs",
@@ -325,8 +325,8 @@
       "url": "https://datamitsu.com/docs/guides/reports.md",
       "title": "Reports",
       "description": "One record of a fix, lint or check run — what it holds, what it never contains, how complete it says it is, and how its findings keep their identity across runs",
-      "bytes": 45685,
-      "contentHash": "696531d46e862bb53a081c04c05ff45a"
+      "bytes": 47464,
+      "contentHash": "81ffa1b02fb1b7487b755a35683c9caf"
     },
     {
       "slug": "guides/runtime-management",
@@ -361,8 +361,8 @@
       "url": "https://datamitsu.com/docs/guides/tooling-system.md",
       "title": "Tooling System",
       "description": "Understanding the fix, lint, and check operations in datamitsu",
-      "bytes": 11046,
-      "contentHash": "551b5ad56a3caa9b1047d00a078ff1a4"
+      "bytes": 11191,
+      "contentHash": "351780cdd1c4ca30e35341036de704fc"
     },
     {
       "slug": "guides/using-wrappers",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 197975,
-      "contentHash": "b2e4e90210bf7a74a97bc11ff17eb728"
+      "bytes": 198573,
+      "contentHash": "a1a9b61b96c494eaf964af36b1e5a0e2"
     },
     {
       "slug": "reference/comparison",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 93806,
-      "contentHash": "5e010c2c1517fb37066daee4164a1731"
+      "bytes": 94127,
+      "contentHash": "374b7de6e53df0a52e32a8d34480d094"
     },
     {
       "slug": "reference/ignore-rules",
@@ -487,8 +487,8 @@
       "url": "https://datamitsu.com/docs/reference/ignore-rules.md",
       "title": "Ignore Rules",
       "description": "Reference for .datamitsuignore syntax and usage",
-      "bytes": 8586,
-      "contentHash": "17b7b552a1eb5d151833a968cc952f83"
+      "bytes": 8594,
+      "contentHash": "4778f350a541c1d75df2b668a9ce06db"
     },
     {
       "slug": "reference/js-api",

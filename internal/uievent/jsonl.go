@@ -54,19 +54,30 @@ func (s *JSONLSink) Emit(e Event) {
 
 	now := s.nowFn()
 	e.TS = now.UnixMilli()
+	key := e.ThrottleID
+	if key == "" {
+		key = e.OpID
+	}
 
-	if s.throttled(e, now) {
+	if s.throttled(e, key, now) {
 		return
 	}
 
 	// Terminal events end a chain — forget the op's throttle state.
 	if e.Status == StatusDone || e.Status == StatusFail || e.Status == StatusSkip {
-		delete(s.lastProgress, e.OpID)
+		delete(s.lastProgress, key)
 	}
 
 	if err := s.enc.Encode(e); err != nil && s.err == nil {
 		s.err = err
 	}
+}
+
+// ForgetProgress retires throttling state without emitting an outcome.
+func (s *JSONLSink) ForgetProgress(id string) {
+	s.mu.Lock()
+	delete(s.lastProgress, id)
+	s.mu.Unlock()
 }
 
 // Failed returns the first error writing the stream met, nil when every line
@@ -80,16 +91,20 @@ func (s *JSONLSink) Failed() error {
 // throttled reports whether e is a progress update for download/chunk that
 // arrived within throttleInterval of the previous one for the same op_id. When
 // it is NOT throttled it records the timestamp. Caller holds s.mu.
-func (s *JSONLSink) throttled(e Event, now time.Time) bool {
+func (s *JSONLSink) throttled(e Event, key string, now time.Time) bool {
 	if e.Status != StatusProgress {
 		return false
 	}
 	if e.Type != TypeDownload && e.Type != TypeChunk {
 		return false
 	}
-	if last, ok := s.lastProgress[e.OpID]; ok && now.Sub(last) < throttleInterval {
+	if e.Type == TypeDownload && e.BytesDone == 0 && e.BytesTotal == 0 {
+		delete(s.lastProgress, key)
+		return false
+	}
+	if last, ok := s.lastProgress[key]; ok && now.Sub(last) < throttleInterval {
 		return true
 	}
-	s.lastProgress[e.OpID] = now
+	s.lastProgress[key] = now
 	return false
 }

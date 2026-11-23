@@ -4,10 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 )
 
 // discoverForTest is the discovery step RunFix/RunLint no longer do themselves:
@@ -208,7 +210,14 @@ func TestRunLintUnknownToolWarning(t *testing.T) {
 	writeTestFile(t, path, "*.go: known-tool, unknown-tool\n")
 
 	tools := config.MapOfTools{
-		"known-tool": config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "known-tool"},
+		"known-tool": config.Tool{
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			Operations:   nil,
+			OutputParser: nil,
+			Name:         "known-tool",
+		},
 	}
 
 	err := RunLint(root, tools, discoverForTest(t, root))
@@ -236,7 +245,14 @@ func TestRunLintValidFileNoError(t *testing.T) {
 	writeTestFile(t, path, "*.go: golangci-lint\nvendor/**: *\n")
 
 	tools := config.MapOfTools{
-		"golangci-lint": config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"},
+		"golangci-lint": config.Tool{
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			Operations:   nil,
+			OutputParser: nil,
+			Name:         "golangci-lint",
+		},
 	}
 
 	err := RunLint(root, tools, discoverForTest(t, root))
@@ -245,19 +261,66 @@ func TestRunLintValidFileNoError(t *testing.T) {
 	}
 }
 
-func TestRunLintFormattingWarning(t *testing.T) {
+func TestRunLintStructuredErrors(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, ".datamitsuignore")
-	writeTestFile(t, path, "*.go:  golangci-lint ,  gofmt\n")
+	writeTestFile(t, path, "*.go:  known-tool , unknown-tool\n")
 
-	tools := config.MapOfTools{
-		"golangci-lint": config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"},
-		"gofmt":         config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "gofmt"},
-	}
-
-	err := RunLint(root, tools, discoverForTest(t, root))
+	var got []diagnostic.Diagnostic
+	err := RunLint(root, config.MapOfTools{"known-tool": config.Tool{
+		ProjectTypes: nil,
+		Skip:         false,
+		SkipReason:   "",
+		Operations:   nil,
+		OutputParser: nil,
+		Name:         "known-tool",
+	}}, []string{path}, func(d diagnostic.Diagnostic) {
+		got = append(got, d)
+	})
 	if err != nil {
-		t.Fatalf("expected no error for formatting warning, got: %v", err)
+		t.Fatal(err)
+	}
+	want := []diagnostic.Diagnostic{
+		{
+			EndRow:    0,
+			EndCol:    0,
+			URL:       "",
+			Baselined: false,
+			Anchor:    nil,
+			File:      path, Row: 1, Col: 1, Severity: diagnostic.SeverityError, Source: "datamitsu", Code: "datamitsuignore-format", Message: "Use canonical spacing\n  have: \"*.go:  known-tool , unknown-tool\"\n  want: \"*.go: known-tool, unknown-tool\"", Reported: true, Gates: true,
+		},
+		{
+			EndRow:    0,
+			EndCol:    0,
+			URL:       "",
+			Baselined: false,
+			Anchor:    nil,
+			File:      path, Row: 1, Col: 1, Severity: diagnostic.SeverityError, Source: "datamitsu", Code: "datamitsuignore-tool", Message: `unknown tool "unknown-tool"`, Reported: true, Gates: true,
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("findings differ:\n got: %#v\nwant: %#v", got, want)
+	}
+}
+
+func TestRunFixReportsOnlyChangedFiles(t *testing.T) {
+	root := t.TempDir()
+	changedPath := filepath.Join(root, ".datamitsuignore")
+	unchangedPath := filepath.Join(root, "sub", ".datamitsuignore")
+	writeTestFile(t, changedPath, "*.go:  tool\n")
+	if err := os.MkdirAll(filepath.Dir(unchangedPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, unchangedPath, "*.go: tool\n")
+	var changed []string
+	err := RunFix(root, []string{changedPath, unchangedPath}, func(path string) {
+		changed = append(changed, path)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(changed, []string{".datamitsuignore"}) {
+		t.Fatalf("changed paths = %#v, want only changed relative path", changed)
 	}
 }
 
@@ -419,7 +482,14 @@ func TestRunLintLeadingBlankLineWarning(t *testing.T) {
 	path := filepath.Join(root, ".datamitsuignore")
 	writeTestFile(t, path, "\n*.go: golangci-lint\n")
 
-	tools := config.MapOfTools{"golangci-lint": config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"}}
+	tools := config.MapOfTools{"golangci-lint": config.Tool{
+		ProjectTypes: nil,
+		Skip:         false,
+		SkipReason:   "",
+		Operations:   nil,
+		OutputParser: nil,
+		Name:         "golangci-lint",
+	}}
 	err := RunLint(root, tools, discoverForTest(t, root))
 	if err != nil {
 		t.Fatalf("expected no error for leading blank line (only warning), got: %v", err)
@@ -432,8 +502,22 @@ func TestRunLintConsecutiveBlankLinesWarning(t *testing.T) {
 	writeTestFile(t, path, "*.go: golangci-lint\n\n\n*.ts: eslint\n")
 
 	tools := config.MapOfTools{
-		"golangci-lint": config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"},
-		"eslint":        config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "eslint"},
+		"golangci-lint": config.Tool{
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			Operations:   nil,
+			OutputParser: nil,
+			Name:         "golangci-lint",
+		},
+		"eslint": config.Tool{
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			Operations:   nil,
+			OutputParser: nil,
+			Name:         "eslint",
+		},
 	}
 	err := RunLint(root, tools, discoverForTest(t, root))
 	if err != nil {
@@ -447,8 +531,22 @@ func TestRunLintWhitespaceOnlyLineWarning(t *testing.T) {
 	writeTestFile(t, path, "*.go: golangci-lint\n   \n*.ts: eslint\n")
 
 	tools := config.MapOfTools{
-		"golangci-lint": config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"},
-		"eslint":        config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "eslint"},
+		"golangci-lint": config.Tool{
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			Operations:   nil,
+			OutputParser: nil,
+			Name:         "golangci-lint",
+		},
+		"eslint": config.Tool{
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			Operations:   nil,
+			OutputParser: nil,
+			Name:         "eslint",
+		},
 	}
 	err := RunLint(root, tools, discoverForTest(t, root))
 	if err != nil {

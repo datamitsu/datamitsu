@@ -1,4 +1,0 @@
-╭<RULE>╮ ╭<RULE>╮
-│ datamitsu  <VERSION> │ │ datamitsu.config  1.0.0 │
-╰<RULE>╯ ╰<RULE>╯
-⚠️  No project types detected

@@ -144,6 +144,40 @@
               "findings": []
             }
           ]
+        },
+        {
+          "name": "datamitsu",
+          "app": {
+            "name": "",
+            "kind": ""
+          },
+          "parser": null,
+          "failOn": "error",
+          "gateActive": true,
+          "category": "",
+          "complete": true,
+          "incomplete": [],
+          "invocations": [
+            {
+              "id": "datamitsu#0",
+              "taskId": "builtin",
+              "dir": "",
+              "scope": "",
+              "granularity": "",
+              "arity": "",
+              "coverage": "complete",
+              "wholeUnit": false,
+              "state": "ran",
+              "exitCode": 0,
+              "success": true,
+              "failureKind": "",
+              "durationMs": <DUR>,
+              "extraction": "parsed-clean",
+              "provenance": "core",
+              "files": [],
+              "findings": []
+            }
+          ]
         }
       ],
       "changesObserved": false,

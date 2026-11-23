@@ -9,6 +9,8 @@
 package report
 
 import (
+	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 
@@ -25,7 +27,6 @@ type Millis int64
 
 // Run is one run of fix, lint or check.
 type Run struct {
-	Schema string `json:"schema"`
 	// Fingerprint is the version of the findings' fingerprints; a document
 	// without it holds dmfp1, the first.
 	Fingerprint string    `json:"fingerprint"`
@@ -40,14 +41,99 @@ type Run struct {
 	Complete bool `json:"complete"`
 	// Incomplete are the run-level reasons: narrowed-selection, tools-filter,
 	// not-narrowable, operation-skipped.
-	Incomplete []Reason    `json:"incomplete"`
-	Operations []Operation `json:"operations"`
+	Incomplete []Reason `json:"incomplete"`
+	// RedactedReasons holds numeric identities at the corresponding Incomplete indices.
+	RedactedReasons []uint16    `json:"redactedReasons,omitempty"`
+	Operations      []Operation `json:"operations"`
 	// Exports lists every report the run was asked for, with the status each
 	// had when this document was written.
 	Exports []Export `json:"exports"`
 	// CI is the continuous-integration job the run ran in; its vendor is ""
 	// outside CI.
 	CI CIEnvironment `json:"ci"`
+}
+
+// UnmarshalJSON treats a report without explicit completeness as incomplete.
+func (r *Run) UnmarshalJSON(data []byte) error {
+	type plain Run
+	wire := struct {
+		*plain
+
+		Complete *bool `json:"complete"`
+	}{
+		Complete: nil,
+		plain:    (*plain)(r),
+	}
+	*r = Run{
+		Fingerprint:     "",
+		Datamitsu:       Producer{Version: "", Configuration: ""},
+		StartedAt:       time.Time{},
+		EndedAt:         time.Time{},
+		Selection:       Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:        false,
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Operations:      nil,
+		Exports:         nil,
+		CI:              CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return fmt.Errorf("decode run: %w", err)
+	}
+	missing := wire.Complete == nil || r.Incomplete == nil
+	r.Complete = !missing && *wire.Complete && len(r.Incomplete) == 0
+	for i := range r.Operations {
+		for j := range r.Operations[i].Tools {
+			tool := &r.Operations[i].Tools[j]
+			if missing || tool.Incomplete == nil {
+				tool.Complete = false
+				addReason(&tool.Incomplete, tool.RedactedReasons, ReasonMissingCompleteness)
+			}
+			if !tool.Complete {
+				r.Complete = false
+			}
+		}
+	}
+	if missing {
+		addReason(&r.Incomplete, r.RedactedReasons, ReasonMissingCompleteness)
+	}
+	return nil
+}
+
+// UnmarshalJSON never treats a missing completeness claim as a clean tool run.
+func (t *ToolRun) UnmarshalJSON(data []byte) error {
+	type plain ToolRun
+	*t = ToolRun{
+		Name:            "",
+		App:             AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+		Parser:          nil,
+		FailOn:          "",
+		GateActive:      false,
+		Category:        "",
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Invocations:     nil,
+		mayHoldSecrets:  false,
+	}
+	wire := struct {
+		*plain
+
+		Complete *bool `json:"complete"`
+	}{
+		Complete: nil,
+		plain:    (*plain)(t),
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return fmt.Errorf("decode tool run: %w", err)
+	}
+	if wire.Complete == nil {
+		addReason(&t.Incomplete, t.RedactedReasons, ReasonMissingCompleteness)
+	} else {
+		t.Complete = *wire.Complete && len(t.Incomplete) == 0
+	}
+	return nil
 }
 
 // CIEnvironment identifies a CI job and the change it built: identifiers only.
@@ -84,6 +170,12 @@ type Selection struct {
 	ExcludedTools []string `json:"excludedTools,omitempty"`
 }
 
+// RepositoryWide requires both the all mode and no contrary scope evidence.
+// A tool filter limits which tools ran, not where the included tools ran.
+func (s Selection) RepositoryWide() bool {
+	return s.Mode == modeAll && !s.FileScoped && s.Dir == "" && len(s.Paths) == 0
+}
+
 // Reason says why a tool run or a run is not complete.
 type Reason string
 
@@ -111,9 +203,10 @@ const (
 	// a module that could not say whether it recognized the output.)
 	ReasonFailedWithoutFindings Reason = "failed-without-findings"
 
-	ReasonToolsFilter      Reason = "tools-filter"
-	ReasonNotNarrowable    Reason = "not-narrowable"
-	ReasonOperationSkipped Reason = "operation-skipped"
+	ReasonToolsFilter         Reason = "tools-filter"
+	ReasonNotNarrowable       Reason = "not-narrowable"
+	ReasonOperationSkipped    Reason = "operation-skipped"
+	ReasonMissingCompleteness Reason = "missing-completeness"
 )
 
 // Operation is one operation of a run: fix or lint.
@@ -163,8 +256,7 @@ var ObservedScope = ChangesScope{Ignored: false, Submodules: false, Tracked: tru
 type Change struct {
 	// Path is relative to the repository root with "/".
 	Path string `json:"path"`
-	// Kind is created, modified, deleted, or reverted: a file that differed
-	// from the index before and matches it after.
+	// Kind is created, modified, deleted, or reverted.
 	Kind string `json:"kind"`
 	// Patch reports that the invocation's file result holds the change's
 	// patch; a tool that writes files itself leaves none.
@@ -281,14 +373,20 @@ type ToolRun struct {
 	// Complete is true when Incomplete is empty: the tool covered the whole
 	// repository, every planned task ran to the end, and every output was
 	// read into findings.
-	Complete    bool         `json:"complete"`
-	Incomplete  []Reason     `json:"incomplete"`
-	Invocations []Invocation `json:"invocations"`
+	Complete        bool         `json:"complete"`
+	Incomplete      []Reason     `json:"incomplete"`
+	RedactedReasons []uint16     `json:"redactedReasons,omitempty"`
+	Invocations     []Invocation `json:"invocations"`
 
 	// mayHoldSecrets is set for a security tool, and for a tool with a parser
 	// the run never described, whose category is unknown: its output is
 	// withheld.
 	mayHoldSecrets bool
+}
+
+// IsBuiltin identifies a core check independently of its display name.
+func (t *ToolRun) IsBuiltin() bool {
+	return len(t.Invocations) == 1 && t.Invocations[0].Provenance == provenanceCore
 }
 
 // AppRef is the app a tool ran, as configured.
@@ -333,6 +431,8 @@ type Invocation struct {
 	// State is ran, cached, verdict-hit, cancelled, not-started or
 	// setup-failed.
 	State string `json:"state"`
+	// RedactedState preserves a known execution state if its label was masked.
+	RedactedState uint8 `json:"redactedState,omitempty"`
 	// ExitCode is nil unless State is ran.
 	ExitCode *int `json:"exitCode"`
 	Success  bool `json:"success"`
@@ -344,6 +444,8 @@ type Invocation struct {
 	// Extraction is what became of the output: parsed-clean,
 	// parsed-findings, parser-unavailable, parse-failed, truncated or none.
 	Extraction string `json:"extraction"`
+	// RedactedExtraction preserves a known extraction result if its label was masked.
+	RedactedExtraction uint8 `json:"redactedExtraction,omitempty"`
 	// Provenance is what read the findings: parser (a tool's own parser),
 	// format (a declared format parser), fallback:<format> (the fallback
 	// built into datamitsu, and the format it recognized), or none.
@@ -365,10 +467,11 @@ type Invocation struct {
 // FileResult is what became of one file an invocation answered for.
 type FileResult struct {
 	// Path is relative to the repository root with "/", or absolute outside it.
-	Path     string `json:"path"`
-	State    string `json:"state"`
-	Success  bool   `json:"success"`
-	ExitCode *int   `json:"exitCode"`
+	Path          string `json:"path"`
+	State         string `json:"state"`
+	RedactedState uint8  `json:"redactedState,omitempty"`
+	Success       bool   `json:"success"`
+	ExitCode      *int   `json:"exitCode"`
 	// Patch is the unified diff a formatter that writes its result on stdout
 	// applied to the file, taken while both versions existed and masked; only
 	// in a run asked for --report patch.

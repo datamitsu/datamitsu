@@ -381,6 +381,9 @@ func downloadAndVerifyInternal(ctx context.Context, url string, expectedHash str
 			}
 			delay = asked.RetryAfter()
 		}
+		// The failed attempt's byte count is discarded; publish a fresh indeterminate
+		// download state before waiting so lock observers do not report stale progress.
+		installstate.Progress(ctx, installstate.PhaseDownload, -1, -1, "bytes")
 		log.Warn("download failed, retrying",
 			zap.String("url", url),
 			zap.Int("attempt", attempt),
