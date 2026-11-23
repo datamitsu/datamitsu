@@ -2,6 +2,8 @@
 
 package cli_test
 
+// cspell:ignore Xpixel Ypixel
+
 import (
 	"context"
 	"fmt"
@@ -120,7 +122,7 @@ globalThis.getConfig = () => ({ version: "fixture", runtimes: {},
 	master := os.NewFile(uintptr(masterFD), "resize-pty")
 	defer func() { _ = master.Close() }()
 	defer func() { _ = slave.Close() }()
-	if err := unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: 24, Col: 104}); err != nil {
+	if err := unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: 24, Col: 104, Xpixel: 0, Ypixel: 0}); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -166,7 +168,7 @@ globalThis.getConfig = () => ({ version: "fixture", runtimes: {},
 		}
 	}
 	beforeResize := len(buf)
-	if err := unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: 24, Col: 64}); err != nil {
+	if err := unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: 24, Col: 64, Xpixel: 0, Ypixel: 0}); err != nil {
 		t.Fatal(err)
 	}
 	_ = slave.Close()
@@ -190,7 +192,7 @@ func runProvisioningTTY(t *testing.T, dir string, width uint16, args ...string) 
 	master := os.NewFile(uintptr(masterFD), "provision-pty")
 	defer func() { _ = master.Close() }()
 	defer func() { _ = slave.Close() }()
-	if err := unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: 24, Col: width}); err != nil {
+	if err := unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: 24, Col: width, Xpixel: 0, Ypixel: 0}); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
