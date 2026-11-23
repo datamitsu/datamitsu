@@ -42,10 +42,22 @@ func Emit(e uievent.Event) {
 	if s == nil {
 		return
 	}
+	id := e.OpID
 	if mask != nil {
 		mask(&e)
 	}
+	e.ThrottleID = id
 	s.Emit(e)
+}
+
+// ForgetProgress retires an operation's throttle state without writing an event.
+func ForgetProgress(id string) {
+	eventMu.RLock()
+	s := eventSink
+	eventMu.RUnlock()
+	if sink, ok := s.(interface{ ForgetProgress(id string) }); ok {
+		sink.ForgetProgress(id)
+	}
 }
 
 // SetEventMask installs a function every event passes through before the sink

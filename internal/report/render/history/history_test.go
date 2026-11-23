@@ -13,7 +13,6 @@ import (
 func sampleRun() *report.Run {
 	one, zero := 1, 0
 	return &report.Run{
-		Schema:    report.SchemaVersion,
 		Datamitsu: report.Producer{Version: "1.2.3", Configuration: "my config"},
 		StartedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC),
 		Selection: report.Selection{Mode: "paths", Paths: []string{"secret/plan.md"}, Tools: []string{"eslint"}},

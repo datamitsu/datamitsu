@@ -79,17 +79,29 @@ func NewCompanion(run *report.Run, format string, ops []*report.Operation, omitt
 		Incomplete: []report.Reason{},
 		Tools:      []CompanionTool{},
 		Omitted:    omitted,
-		Exports:    append([]report.Export{}, run.Exports...),
+		Exports:    []report.Export{},
 	}
-	for _, r := range run.Incomplete {
-		if r != report.ReasonOperationSkipped {
-			c.Incomplete = append(c.Incomplete, r)
+	for _, export := range run.Exports {
+		if export.Format == format && export.Status == report.ExportWritten {
+			c.Exports = append(c.Exports, export)
 		}
+	}
+	skippedLabel := report.ReasonOperationSkipped
+	hasNarrowed := false
+	for i, label := range run.Incomplete {
+		reason := run.IncompleteReason(i)
+		if reason == report.ReasonOperationSkipped {
+			skippedLabel = label
+			continue
+		}
+		hasNarrowed = hasNarrowed || reason == report.ReasonNarrowedSelection
+		c.Incomplete = append(c.Incomplete, label)
 	}
 	complete := true
 	for _, op := range ops {
-		if !op.Ran && !slices.Contains(c.Incomplete, report.ReasonOperationSkipped) {
-			c.Incomplete = append(c.Incomplete, report.ReasonOperationSkipped)
+		if !op.Ran && skippedLabel != "" {
+			c.Incomplete = append(c.Incomplete, skippedLabel)
+			skippedLabel = ""
 		}
 		for _, tr := range op.Tools {
 			c.Tools = append(c.Tools, CompanionTool{
@@ -103,7 +115,7 @@ func NewCompanion(run *report.Run, format string, ops []*report.Operation, omitt
 	}
 	// A document read back without its run-level fields holds no evidence
 	// that the run covered everything.
-	if run.Selection.Mode == "" && !slices.Contains(c.Incomplete, report.ReasonNarrowedSelection) {
+	if run.Selection.Mode == "" && !hasNarrowed {
 		c.Incomplete = append(c.Incomplete, report.ReasonNarrowedSelection)
 	}
 	slices.Sort(c.Incomplete)

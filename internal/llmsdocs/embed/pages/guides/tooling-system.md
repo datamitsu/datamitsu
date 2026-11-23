@@ -338,7 +338,7 @@ See the [Core Concepts](/docs/getting-started/core-concepts#monorepo-support) pa
 
 datamitsu includes built-in lint and fix operations for its own file formats:
 
-- `.datamitsuignore` files are automatically formatted during fix operations
-- `.datamitsuignore` files are validated during lint operations (unknown tool names produce warnings)
+- `.datamitsuignore` formatting fixes appear first in the fix result frame.
+- `.datamitsuignore` formatting and unknown-tool advisories appear first in the lint result frame, under the built-in `datamitsu` check; parse errors remain fatal setup errors.
 
-These bundled operations run before your configured tools.
+They run before configured tools within the same fix or lint operation, and their results render first in that operation's frame.

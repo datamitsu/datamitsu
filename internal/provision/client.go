@@ -15,15 +15,18 @@ var ErrRemoteUnavailable = errors.New("provision worker unavailable")
 
 // Client sends provisioning requests over one private worker transport.
 type Client struct {
-	rw         io.ReadWriteCloser
-	writeMu    sync.Mutex
-	mu         sync.Mutex
-	pending    map[uint64]chan Response
-	discarded  map[uint64]struct{}
-	next       atomic.Uint64
-	closed     chan struct{}
-	err        error
-	onProgress func(json.RawMessage)
+	rw                io.ReadWriteCloser
+	writeMu           sync.Mutex
+	mu                sync.Mutex
+	pending           map[uint64]chan Response
+	discarded         map[uint64]struct{}
+	next              atomic.Uint64
+	closed            chan struct{}
+	err               error
+	onProgress        func(json.RawMessage)
+	onRequestProgress func(uint64, json.RawMessage)
+	progressMu        sync.Mutex
+	observed          map[uint64]func(uint64, json.RawMessage)
 }
 
 var (
@@ -55,6 +58,13 @@ func (c *Client) SetProgress(callback func(json.RawMessage)) {
 	c.mu.Unlock()
 }
 
+// SetRequestProgress observes active progress and request completion (nil data).
+func (c *Client) SetRequestProgress(callback func(uint64, json.RawMessage)) {
+	c.mu.Lock()
+	c.onRequestProgress = callback
+	c.mu.Unlock()
+}
+
 // Call dispatches an operation remotely when a worker client is selected.
 func Call(ctx context.Context, operation string, payload any, result any) (bool, error) {
 	selectionMu.RLock()
@@ -68,12 +78,19 @@ func Call(ctx context.Context, operation string, payload any, result any) (bool,
 
 // Call correlates one request with its response and propagates caller cancellation.
 func (c *Client) Call(ctx context.Context, operation string, payload any, result any) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("provision request canceled: %w", err)
+	}
 	params, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal provision request: %w", err)
 	}
 	ch := make(chan Response, 1)
 	c.writeMu.Lock()
+	if err := ctx.Err(); err != nil {
+		c.writeMu.Unlock()
+		return fmt.Errorf("provision request canceled: %w", err)
+	}
 	c.mu.Lock()
 	select {
 	case <-c.closed:
@@ -127,6 +144,7 @@ func (c *Client) Call(ctx context.Context, operation string, payload any, result
 		if cancelErr != nil {
 			c.fail(cancelErr)
 		}
+		c.endProgress(id)
 		return fmt.Errorf("provision request canceled: %w", ctx.Err())
 	case <-c.closed:
 		c.mu.Lock()
@@ -135,6 +153,7 @@ func (c *Client) Call(ctx context.Context, operation string, payload any, result
 		if err == nil {
 			err = ErrRemoteUnavailable
 		}
+		c.endProgress(id)
 		return err
 	}
 }
@@ -143,6 +162,13 @@ func (c *Client) Call(ctx context.Context, operation string, payload any, result
 func (c *Client) Close() error { c.fail(io.EOF); return nil }
 
 func (c *Client) readLoop() {
+	defer func() {
+		c.progressMu.Lock()
+		defer c.progressMu.Unlock()
+		for id := range c.observed {
+			c.finishProgress(id)
+		}
+	}()
 	for {
 		var response Response
 		if err := readFrame(c.rw, &response); err != nil {
@@ -154,12 +180,15 @@ func (c *Client) readLoop() {
 			return
 		}
 		if response.Kind == "progress" {
+			c.progressMu.Lock()
 			c.mu.Lock()
 			_, active := c.pending[response.ID]
 			_, canceled := c.discarded[response.ID]
 			callback := c.onProgress
+			scoped := c.onRequestProgress
 			c.mu.Unlock()
 			if !active {
+				c.progressMu.Unlock()
 				if canceled {
 					continue
 				}
@@ -169,6 +198,14 @@ func (c *Client) readLoop() {
 			if callback != nil {
 				callback(response.Event)
 			}
+			if scoped != nil {
+				if c.observed == nil {
+					c.observed = make(map[uint64]func(uint64, json.RawMessage))
+				}
+				c.observed[response.ID] = scoped
+				scoped(response.ID, response.Event)
+			}
+			c.progressMu.Unlock()
 			continue
 		}
 		if response.Kind != "response" || response.ID == 0 {
@@ -182,6 +219,7 @@ func (c *Client) readLoop() {
 			if ignored {
 				delete(c.discarded, response.ID)
 				c.mu.Unlock()
+				c.endProgress(response.ID)
 				continue
 			}
 		}
@@ -191,7 +229,21 @@ func (c *Client) readLoop() {
 			c.fail(fmt.Errorf("%w: unknown response id %d", ErrProtocol, response.ID))
 			return
 		}
+		c.endProgress(response.ID)
 		ch <- response
+	}
+}
+
+func (c *Client) endProgress(id uint64) {
+	c.progressMu.Lock()
+	defer c.progressMu.Unlock()
+	c.finishProgress(id)
+}
+
+func (c *Client) finishProgress(id uint64) {
+	if callback := c.observed[id]; callback != nil {
+		delete(c.observed, id)
+		callback(id, nil)
 	}
 }
 

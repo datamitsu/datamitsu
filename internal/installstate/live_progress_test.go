@@ -70,6 +70,10 @@ func TestPackageProgressEmissionIsIndependentOfStatusWriteThrottle(t *testing.T)
 	if second.Msg != string(PhaseVerify) || second.Index != 0 || second.Total != 0 {
 		t.Fatalf("phase transition lost its event or retained obsolete package counters: %+v", second)
 	}
+	cleanup := readEvent()
+	if cleanup.Type != provision.CleanupProgressType || cleanup.OpID != initial.OpID || cleanup.Status != "" {
+		t.Fatalf("expected private cleanup for the install, got %+v", cleanup)
+	}
 	select {
 	case data := <-events:
 		t.Fatalf("duplicate or throttled progress was emitted: %s", data)

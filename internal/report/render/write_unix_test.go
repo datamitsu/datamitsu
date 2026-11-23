@@ -17,7 +17,7 @@ func TestTargetMode(t *testing.T) {
 	write := func(t *testing.T, path string) os.FileMode {
 		t.Helper()
 		target := Open(Spec{Format: "json", Path: path}, nil)
-		if err := target.Write(&report.Run{Schema: report.SchemaVersion}); err != nil {
+		if err := target.Write(&report.Run{}); err != nil {
 			t.Fatal(err)
 		}
 		info, err := os.Stat(path)

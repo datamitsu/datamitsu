@@ -138,7 +138,7 @@ func (s suite) write(b *strings.Builder, timestamp string) {
 // planner skipped, by tool name, or one for an operation that did not run.
 func operationSuites(run *report.Run, op *report.Operation) []suite {
 	runProps := [][2]string{{"run.complete", strconv.FormatBool(run.Complete)}, {"run.incomplete", reasons(run.Incomplete)}}
-	if !op.Ran {
+	if !op.Ran && len(op.Tools) == 0 && len(op.Skipped) == 0 && len(op.Cancelled) == 0 {
 		return []suite{{
 			name:       op.Name,
 			properties: runProps,
@@ -212,7 +212,8 @@ func reasons(rs []report.Reason) string {
 func cachedFiles(tr *report.ToolRun) int {
 	n := 0
 	for _, inv := range tr.Invocations {
-		if inv.State == string(tooling.FileCached) || inv.State == string(tooling.FileVerdictHit) {
+		switch inv.ExecutionState() {
+		case string(tooling.FileCached), string(tooling.FileVerdictHit):
 			n += len(inv.Files)
 		}
 	}
@@ -270,28 +271,28 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 	withhold := common.Security(tr)
 
 	for _, inv := range tr.Invocations {
-		if inv.State == string(tooling.ProcessSetupFailed) {
+		state := inv.ExecutionState()
+		if state == string(tooling.ProcessSetupFailed) {
 			tc := caseOf(inv)
 			tc.time += inv.Duration
 			tc.failure = &caseFailure{kind: "setup", message: "setup failed", tail: tail(inv, withhold)}
 			continue
 		}
-		// A task cancelled or never started is its skipped case.
-		if !answered(inv.State) {
+		if !answered(state) {
 			continue
 		}
 		count := 0
 		for _, fr := range inv.Files {
-			if answered(fr.State) {
+			if answered(fr.ExecutionState()) {
 				count++
 			}
 		}
 		for _, fr := range inv.Files {
-			if !answered(fr.State) {
+			if !answered(fr.ExecutionState()) {
 				continue
 			}
 			tc := fileCase(fr.Path)
-			if count == 1 && inv.State == string(tooling.ProcessRan) {
+			if count == 1 && state == string(tooling.ProcessRan) {
 				tc.time += inv.Duration
 			}
 		}
@@ -314,7 +315,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		// lists it after duplicates across invocations collapsed; only a
 		// process that failed on its own, without one, needs a case of its
 		// own — not a failure of every file it answered for.
-		if inv.State != string(tooling.ProcessRan) || inv.FailureKind != report.FailureExit || gating {
+		if state != string(tooling.ProcessRan) || inv.FailureKind != report.FailureExit || gating {
 			continue
 		}
 		code := 0
@@ -346,7 +347,7 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 	for _, e := range onFindings {
 		gated := false
 		for _, fr := range e.inv.Files {
-			if tc := files[fr.Path]; answered(fr.State) && tc != nil && len(tc.gating) > 0 {
+			if tc := files[fr.Path]; answered(fr.ExecutionState()) && tc != nil && len(tc.gating) > 0 {
 				gated = true
 			}
 		}
@@ -403,9 +404,9 @@ func toolCases(tr *report.ToolRun, cancelled []report.Cancel) []*testCase {
 		switch {
 		case listed[inv.TaskID]:
 			continue
-		case inv.State == string(tooling.ProcessCancelled):
+		case inv.ExecutionState() == string(tooling.ProcessCancelled):
 			state = "cancelled"
-		case inv.State != string(tooling.ProcessNotStarted):
+		case inv.ExecutionState() != string(tooling.ProcessNotStarted):
 			continue
 		}
 		listed[inv.TaskID] = true

@@ -139,6 +139,21 @@ func TestJSONLSinkThrottlesProgressPerOp(t *testing.T) {
 	}
 }
 
+func TestJSONLSinkPreservesFirstSampleAfterDownloadRestart(t *testing.T) {
+	var buf bytes.Buffer
+	s := NewJSONLSink(&buf)
+	s.nowFn = func() time.Time { return time.Unix(100, 0) }
+	e := Event{Type: TypeDownload, Status: StatusProgress, OpID: "masked", ThrottleID: "original"}
+	for _, done := range []int64{0, 16, 0, 32} {
+		e.BytesDone = done
+		s.Emit(e)
+	}
+	lines := decodeLines(t, &buf)
+	if len(lines) != 4 || lines[1]["bytes_done"] != float64(16) || lines[3]["bytes_done"] != float64(32) {
+		t.Fatalf("download restart lost its first byte sample: %v", lines)
+	}
+}
+
 func TestJSONLSinkDoesNotThrottlePhaseOrToolRun(t *testing.T) {
 	var buf bytes.Buffer
 	s := NewJSONLSink(&buf)

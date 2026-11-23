@@ -118,10 +118,13 @@ func (sc *sharedContext) printAgentOperation(a agentOperation) {
 // read again, or of why they were not observed; "" for an operation that
 // observes none — lint, or a fix that planned nothing.
 func agentChanges(op report.Operation) string {
-	if op.Name != string(config.OpFix) || !op.Ran || op.ChangesReason == report.ChangesNoFixTask {
+	if op.Name != string(config.OpFix) || !op.Ran {
 		return ""
 	}
 	changes := op.AllChanges()
+	if len(changes) == 0 && op.ChangesReason == report.ChangesNoFixTask {
+		return ""
+	}
 	paths := make([]string, len(changes))
 	for i, c := range changes {
 		paths[i] = c.Path
@@ -269,10 +272,4 @@ func (sc *sharedContext) describedParser() report.ParserFacts {
 		return nil
 	}
 	return sc.parserMgr.DescribedParser
-}
-
-// printAgentLine prints a line of agent output, masked.
-func (sc *sharedContext) printAgentLine(line string) {
-	report.MaskAll(&line, sc.secretValues())
-	fmt.Println(line)
 }

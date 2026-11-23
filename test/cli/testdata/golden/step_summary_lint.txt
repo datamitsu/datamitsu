@@ -8,6 +8,7 @@
 | Tool | Status | Runs | Cached | Errors | Warnings | Info | Hints |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `beta` | ✗ failed | 1 | 0 | 0 | 0 | 0 | 0 |
+| `datamitsu` | ✓ passed | 1 | 0 | 0 | 0 | 0 | 0 |
 | `hadolint` | ✗ failed | 1 | 0 | 1 | 0 | 0 | 0 |
 
 #### Findings

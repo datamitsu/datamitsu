@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -48,7 +49,7 @@ func ignoreFileContent(t *testing.T, root string) string {
 	return string(b)
 }
 
-func runWithWalkCount(t *testing.T, ops []config.OperationType) int64 {
+func runWithWalkCount(t *testing.T, ops []config.OperationType, wantFailure bool) int64 {
 	t.Helper()
 	prev := trace.Enabled()
 	trace.Reset()
@@ -66,7 +67,10 @@ func runWithWalkCount(t *testing.T, ops []config.OperationType) int64 {
 			}, "", nil
 		},
 	)
-	if err != nil {
+	if wantFailure && (err == nil || !strings.Contains(err.Error(), "built-in finding")) {
+		t.Fatalf("expected built-in lint failure, got %v", err)
+	}
+	if !wantFailure && err != nil {
 		t.Fatalf("RunSequential(%v) error = %v", ops, err)
 	}
 
@@ -93,13 +97,13 @@ func runWithWalkCount(t *testing.T, ops []config.OperationType) int64 {
 // planner's copy is as good as its own walk is TestSeedFilesMatchesWalk.
 func TestRunPerformsOneRepositoryWalk(t *testing.T) {
 	lintRoot := walkFixture(t)
-	lintWalks := runWithWalkCount(t, []config.OperationType{config.OpLint})
+	lintWalks := runWithWalkCount(t, []config.OperationType{config.OpLint}, true)
 	if got := ignoreFileContent(t, lintRoot); got != unformattedRule {
 		t.Errorf("lint rewrote .datamitsuignore to %q; lint must not fix", got)
 	}
 
 	checkRoot := walkFixture(t)
-	checkWalks := runWithWalkCount(t, []config.OperationType{config.OpFix, config.OpLint})
+	checkWalks := runWithWalkCount(t, []config.OperationType{config.OpFix, config.OpLint}, false)
 	if got := ignoreFileContent(t, checkRoot); got != canonicalRule {
 		t.Errorf("check left .datamitsuignore as %q, want %q — the discovered files never reached RunFix", got, canonicalRule)
 	}

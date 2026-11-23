@@ -22,7 +22,9 @@ type opSummary struct {
 	skipped   int
 	cancelled int
 	// partial counts the tasks that failed with files fail-fast left unrun.
-	partial int
+	partial    int
+	incomplete bool
+	unstarted  bool
 	// durationMs is the operation's execution time, the "done in" of its footer.
 	durationMs int64
 }
@@ -61,7 +63,7 @@ func (sc *sharedContext) printRunClosing(command string, operations []config.Ope
 	setup := elapsedMs
 	for _, op := range operations {
 		s, ran := sc.summaryOf(op)
-		if !ran {
+		if !ran || s.unstarted {
 			parts = append(parts, string(op)+" not run")
 			continue
 		}
@@ -94,6 +96,7 @@ func (sc *sharedContext) emitRunDone(command string, operations []config.Operati
 			continue
 		}
 		total.tools += s.tools
+		complete = complete && !s.incomplete
 		total.runs += s.runs
 		total.failed += s.failed
 		total.skipped += s.skipped

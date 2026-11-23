@@ -349,11 +349,12 @@ func (sc *sharedContext) writeStepSummary(run *report.Run) bool {
 		logger.Logger.Warn(fmt.Sprintf("the step summary was not written: it holds %d bytes of GitHub's %d", info.Size(), summaryLimit))
 		return false
 	}
-	if _, err := markdown.Write(f, run, budget); err != nil {
+	cut, err := markdown.Write(f, run, budget)
+	if err != nil {
 		logger.Logger.Warn("the step summary was not written: " + err.Error())
 		return false
 	}
-	return true
+	return cut == 0
 }
 
 // annotationsRest names where the findings the annotations leave out can be

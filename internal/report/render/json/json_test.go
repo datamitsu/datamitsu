@@ -12,15 +12,17 @@ import (
 func sampleRun() *report.Run {
 	code := 1
 	return &report.Run{
-		Schema:    report.SchemaVersion,
-		Datamitsu: report.Producer{Version: "1.2.3", Configuration: "datamitsu.config"},
-		StartedAt: time.Date(2023, 11, 14, 22, 13, 20, 0, time.UTC),
-		EndedAt:   time.Date(2023, 11, 14, 22, 13, 21, 0, time.UTC),
-		Selection: report.Selection{Mode: "all"},
+		Datamitsu:  report.Producer{Version: "1.2.3", Configuration: "datamitsu.config"},
+		StartedAt:  time.Date(2023, 11, 14, 22, 13, 20, 0, time.UTC),
+		EndedAt:    time.Date(2023, 11, 14, 22, 13, 21, 0, time.UTC),
+		Selection:  report.Selection{Mode: "all"},
+		Complete:   true,
+		Incomplete: []report.Reason{},
 		Operations: []report.Operation{{
 			Name: "lint", Ran: true, Skipped: []report.Skip{}, Cancelled: []report.Cancel{},
 			Tools: []report.ToolRun{{
 				Name: "eslint", App: report.AppRef{Name: "eslint", Kind: "node", Version: "9.0.0"},
+				Complete: true, Incomplete: []report.Reason{},
 				Invocations: []report.Invocation{{
 					ID: "eslint::1#1", State: "ran", ExitCode: &code, FailureKind: "exit",
 					Files: []report.FileResult{{Path: "a.ts", State: "ran", ExitCode: &code}},

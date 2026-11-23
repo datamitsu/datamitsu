@@ -119,7 +119,7 @@ func History(run *Run) HistoryLine {
 func historyTool(tr ToolRun) HistoryTool {
 	ht := HistoryTool{Name: tr.Name, Complete: tr.Complete, Incomplete: append([]Reason{}, tr.Incomplete...)}
 	for _, inv := range tr.Invocations {
-		switch inv.State {
+		switch inv.ExecutionState() {
 		case "ran":
 			ht.Runs++
 		case "cached", "verdict-hit":

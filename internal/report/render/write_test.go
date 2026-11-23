@@ -24,7 +24,7 @@ func TestTargetWritesAtomically(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("the report exists before it is written: %v", err)
 	}
-	if err := target.Write(&report.Run{Schema: report.SchemaVersion}); err != nil {
+	if err := target.Write(&report.Run{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -73,7 +73,7 @@ func TestTargetFailureKeepsTheOldReport(t *testing.T) {
 func TestTargetStdout(t *testing.T) {
 	var out bytes.Buffer
 	target := Open(Spec{Format: "json", Path: Stdout}, &out)
-	if err := target.Write(&report.Run{Schema: report.SchemaVersion}); err != nil {
+	if err := target.Write(&report.Run{}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), `"schema": "datamitsu.report/1"`) {
@@ -121,7 +121,7 @@ func TestTargetAppends(t *testing.T) {
 		if target.Err != nil {
 			t.Fatal(target.Err)
 		}
-		if err := target.Write(&report.Run{Schema: report.SchemaVersion}); err != nil {
+		if err := target.Write(&report.Run{}); err != nil {
 			t.Fatal(err)
 		}
 	}

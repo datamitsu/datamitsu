@@ -1,6 +1,6 @@
 // Package ui is datamitsu's single rendering authority for the terminal.
 //
-// The whole program shares ONE progress container per process. Any code that
+// A Display owns at most one progress container at a time. Any code that
 // downloads an artifact or wants to print a status line goes through the
 // process-wide "current" Display (see Current); when a progress bar is active,
 // lines are printed safely ABOVE the bars instead of corrupting them. This
@@ -21,8 +21,10 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	clr "github.com/datamitsu/datamitsu/internal/color"
+	"github.com/datamitsu/datamitsu/internal/provision"
 	"github.com/datamitsu/datamitsu/internal/term"
 
 	"github.com/mattn/go-runewidth"
@@ -76,11 +78,16 @@ type Display struct {
 	mode  term.Mode
 	quiet bool // suppress routine human output without changing typed event delivery
 
-	mu   sync.Mutex
-	prog *mpb.Progress // lazily created; Interactive mode only
-	bars int           // number of active bars; lines route through mpb only while > 0
-	out  io.Writer
-	err  io.Writer
+	mu            sync.Mutex
+	prog          *mpb.Progress // lazily created; Interactive mode only
+	bars          int           // number of active bars
+	closing       bool
+	provision     map[string]*provisionRow
+	hiddenWaits   map[string]provision.InstallProgress
+	waitSnapshots map[string]provision.InstallProgress
+	provisionNext int
+	out           io.Writer
+	err           io.Writer
 }
 
 // New creates a Display for the given mode writing to stdout/stderr.
@@ -171,6 +178,10 @@ func (d *Display) Errorln(a ...any) { d.Diagnosticf("%s\n", fmt.Sprint(a...)) }
 // direct line output.
 func (d *Display) Close() {
 	d.mu.Lock()
+	d.closing = true
+	for id := range d.provision {
+		d.detachProvisionRowLocked(id, false)
+	}
 	p := d.prog
 	d.prog = nil
 	d.mu.Unlock()
@@ -185,21 +196,41 @@ func (d *Display) Diagnosticf(format string, a ...any) {
 		return
 	}
 	d.mu.Lock()
-	p := d.prog
-	active := d.bars > 0
-	d.mu.Unlock()
-	if p != nil && active {
-		_, _ = fmt.Fprintf(p, format, a...)
-		return
+	defer d.mu.Unlock()
+	_, _ = fmt.Fprintf(d.lineWriterLocked(d.err), format, a...)
+}
+
+// SlowStatus keeps fast paths quiet. Its stop function joins the writer before
+// the caller can open a new frame or switch displays.
+func (d *Display) SlowStatus(message string) func() {
+	if d.IsQuiet() || Quiet() || Muted() {
+		return func() {}
 	}
-	_, _ = fmt.Fprintf(d.err, format, a...)
+	done := make(chan struct{})
+	timer := time.AfterFunc(time.Second, func() {
+		defer close(done)
+		if d.mode == term.Interactive {
+			d.mu.Lock()
+			defer d.mu.Unlock()
+			if d.bars == 0 && !d.closing {
+				_, _ = fmt.Fprintln(d.lineWriterLocked(d.err), SymStep.render()+" "+message)
+			}
+			return
+		}
+		d.writeLine(d.err, SymStep.render()+" "+message)
+	})
+	return func() {
+		if !timer.Stop() {
+			<-done
+		}
+	}
 }
 
 // ensureProg lazily creates the single mpb container. Returns nil in Plain
 // mode, and in JSON-L (quiet) mode so no animated bars compete with the typed
 // stream even when stdout is a TTY. Caller must hold d.mu.
 func (d *Display) ensureProg() *mpb.Progress {
-	if d.mode != term.Interactive || d.quiet || Muted() {
+	if d.closing || d.mode != term.Interactive || d.quiet || Muted() {
 		return nil
 	}
 	if d.prog == nil {
@@ -213,29 +244,38 @@ func (d *Display) barEnded() {
 	d.mu.Lock()
 	if d.bars > 0 {
 		d.bars--
+		d.drainIdleProgressLocked()
 	}
 	d.mu.Unlock()
 }
 
-// writeLine emits one line. Lines are routed through the mpb container (printed
-// safely ABOVE the running bars) ONLY while at least one bar is active; with no
-// active bar the line is written straight to w. Routing buffer-free when idle
-// avoids the mpb-pending-write race that would otherwise drop a line when
-// non-ui code writes directly to the same stream between bars.
+// drainIdleProgressLocked waits for the final cursor movement and repaint before
+// handing the terminal back to ordinary output. A retired container cannot be
+// reused; the next group of bars creates a new one.
+func (d *Display) drainIdleProgressLocked() {
+	if d.prog != nil && d.bars == 0 {
+		d.prog.Wait()
+		d.prog = nil
+	}
+}
+
+func (d *Display) lineWriterLocked(w io.Writer) io.Writer {
+	d.drainIdleProgressLocked()
+	if d.prog != nil {
+		return d.prog
+	}
+	return w
+}
+
+// writeLine prints above active bars, or directly once the terminal is idle.
 func (d *Display) writeLine(w io.Writer, s string) {
 	// JSON-L mode, agent output, and command-local quiet mode suppress human lines.
 	if d.quiet || Muted() {
 		return
 	}
 	d.mu.Lock()
-	p := d.prog
-	active := d.bars > 0
-	d.mu.Unlock()
-	if p != nil && active {
-		_, _ = p.Write([]byte(s + "\n"))
-		return
-	}
-	_, _ = fmt.Fprintln(w, s)
+	defer d.mu.Unlock()
+	_, _ = fmt.Fprintln(d.lineWriterLocked(w), s)
 }
 
 // --- process-wide current Display ------------------------------------------

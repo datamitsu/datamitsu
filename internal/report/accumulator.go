@@ -74,6 +74,7 @@ type OperationRecord struct {
 	// (AddCoreFindings): no process ran, so they are built once, complete,
 	// and appended to the operation's tools at build time.
 	coreToolRuns []*ToolRun
+	coreChanges  []gitutil.Change
 
 	success  bool
 	duration int64
@@ -176,6 +177,17 @@ func (o *OperationRecord) Flush() []ToolFinding {
 	return out
 }
 
+// EndUnstarted marks a planned operation that was never started. Its plan is
+// retained so consumers can distinguish unstarted tasks from absent tasks.
+func (o *OperationRecord) EndUnstarted() {
+	if o == nil {
+		return
+	}
+	o.acc.mu.Lock()
+	defer o.acc.mu.Unlock()
+	o.ran = false
+}
+
 // Stopped records a task the run stopped: cancelled after it started, or never
 // started.
 func (o *OperationRecord) Stopped(c Cancel) {
@@ -187,14 +199,13 @@ func (o *OperationRecord) Stopped(c Cancel) {
 	o.stopped = append(o.stopped, c)
 }
 
-// AddCoreFindings records the findings of a core-built-in check under a
-// pseudo tool run named tool — a check that ran no process and reports
-// through the same report surface as a tool. The diagnostics must already
+// AddCoreFindings records a completed built-in check, including an empty
+// result, as a tool run. The diagnostics must already
 // carry their Reported/Gates marks and their Anchor. It returns the findings
 // as the event stream carries them (fingerprints included, computed exactly
 // as the report will hold them), once per call.
-func (o *OperationRecord) AddCoreFindings(tool string, diags []diagnostic.Diagnostic) []ToolFinding {
-	if o == nil || len(diags) == 0 {
+func (o *OperationRecord) AddCoreFindings(tool string, diags []diagnostic.Diagnostic, partial ...bool) []ToolFinding {
+	if o == nil {
 		return nil
 	}
 	o.acc.mu.Lock()
@@ -211,6 +222,12 @@ func (o *OperationRecord) AddCoreFindings(tool string, diags []diagnostic.Diagno
 		Files:      []FileResult{},
 		Findings:   []Finding{},
 		Provenance: provenanceCore,
+	}
+	if len(diags) == 0 {
+		inv.Extraction = string(tooling.ExtractionParsedClean)
+	}
+	if len(partial) > 0 && partial[0] {
+		inv.Coverage = string(tooling.CoveragePartial)
 	}
 	for _, d := range diags {
 		if d.Gates {
@@ -236,12 +253,45 @@ func (o *OperationRecord) AddCoreFindings(tool string, diags []diagnostic.Diagno
 	tr.GateActive = true // the core gate is always active; failOn cannot soften it
 	settleFindings(tr)
 	o.coreToolRuns = append(o.coreToolRuns, tr)
-
+	if o.name == string(config.OpFix) {
+		seen := map[string]bool{}
+		for _, d := range diags {
+			if d.File == "" {
+				continue
+			}
+			rel, err := filepath.Rel(o.acc.opts.Root, d.File)
+			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				continue
+			}
+			path := filepath.ToSlash(rel)
+			if !seen[path] {
+				o.coreChanges = append(o.coreChanges, gitutil.Change{Path: path, Kind: gitutil.Modified})
+				seen[path] = true
+			}
+		}
+	}
 	var out []ToolFinding
 	for _, f := range inv.Findings {
 		out = append(out, ToolFinding{TaskID: inv.TaskID, Dir: inv.Dir, Finding: f})
 	}
 	return out
+}
+
+// ClassifyCoreChanges applies observed kinds to writes known from bundled fixes.
+func (o *OperationRecord) ClassifyCoreChanges(changes []gitutil.Change) {
+	if o == nil || len(changes) == 0 {
+		return
+	}
+	o.acc.mu.Lock()
+	defer o.acc.mu.Unlock()
+	for i := range o.coreChanges {
+		for _, change := range changes {
+			if change.Path == o.coreChanges[i].Path {
+				o.coreChanges[i].Kind = change.Kind
+				break
+			}
+		}
+	}
 }
 
 // Step records that the tasks named by taskIDs ran together as step of the
@@ -354,7 +404,6 @@ func (a *Accumulator) Build(info BuildInfo) *Run {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	run := &Run{
-		Schema:      SchemaVersion,
 		Fingerprint: FingerprintVersion,
 		Datamitsu:   Producer{Version: info.Version, Configuration: info.Configuration},
 		StartedAt:   info.StartedAt.UTC(),
@@ -371,7 +420,7 @@ func (a *Accumulator) Build(info BuildInfo) *Run {
 		names = append(names, op.name)
 	}
 	run.Selection.ExcludedTools = excludedTools(a.opts.Tools, names, run.Selection.Tools)
-	judge(run, a.opts.Tools)
+	judge(run)
 	return run
 }
 
@@ -473,6 +522,9 @@ func recordChanges(o *OperationRecord, op *Operation) {
 				op.Changes = append(op.Changes, Change{Path: c.Path, Kind: c.Kind, Step: step})
 			}
 		}
+	}
+	for _, c := range o.coreChanges {
+		op.Changes = append(op.Changes, Change{Path: c.Path, Kind: c.Kind})
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/datamitsu/datamitsu/internal/cienv"
+	"github.com/datamitsu/datamitsu/internal/env"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/report"
@@ -69,6 +70,7 @@ func init() {
 }
 
 func runReportRender(cmd *cobra.Command, _ []string) error {
+	secrets := report.SecretValues(env.EnvironAll())
 	name, options, _ := strings.Cut(reportRenderFormat, "?")
 	raw := name + "=" + reportRenderOutput
 	if options != "" {
@@ -76,27 +78,26 @@ func runReportRender(cmd *cobra.Command, _ []string) error {
 	}
 	spec, err := render.ParseSpec(raw)
 	if err != nil {
-		return exitcode.UsageErrorf("invalid --format: %w", err)
+		return maskCodedError(exitcode.UsageErrorf("invalid --format: %w", err), secrets)
 	}
 	run, err := readReport(reportRenderInput)
 	if err != nil {
-		return err
-	}
-	if why := narrowedBy(run.Selection); len(why) > 0 && !reportRenderAllowPartial && len(render.Listing([]render.Spec{spec})) > 0 {
-		return exitcode.UsageErrorf("the run of %s was narrowed (%s), so report %s would not list every finding: "+
-			"pass --allow-partial to render it with the reasons it is incomplete",
-			reportRenderInput, strings.Join(why, ", "), spec.Format)
-	}
-	if r, _ := render.Lookup(spec.Format); r != nil {
-		if c, capped := r.(render.Capped); capped {
-			if err := render.CheckCapacity(spec, c.WrittenTools(run, spec.Options)); err != nil {
-				return exitcode.UsageError{Err: err}
-			}
-		}
+		return maskCodedError(err, secrets)
 	}
 	if spec.Stdout() {
 		stdoutOwned = true
 	}
+	report.Mask(run, secrets)
+	report.MaskAll(&spec.Options, secrets)
+	if why := narrowedBy(run.Selection); len(why) > 0 && !reportRenderAllowPartial && len(render.Listing([]render.Spec{spec})) > 0 {
+		return maskCodedError(exitcode.UsageErrorf("the run of %s was narrowed (%s), so report %s would not list every finding: "+
+			"pass --allow-partial to render it with the reasons it is incomplete",
+			reportRenderInput, strings.Join(why, ", "), spec.Format), secrets)
+	}
+	if err := render.CheckRunCapacity(spec, run); err != nil {
+		return maskCodedError(exitcode.UsageError{Err: err}, secrets)
+	}
+
 	for _, note := range render.Notes(run, []render.Spec{spec}) {
 		logger.Logger.Warn(note)
 	}
@@ -108,10 +109,31 @@ func runReportRender(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	if err != nil {
-		return exitcode.ExportError{Err: fmt.Errorf("report %s: %s: %w", spec.Format, spec.Path, err)}
+		return maskCodedError(exitcode.ExportError{Err: fmt.Errorf("report %s: %s: %w", spec.Format, spec.Path, err)}, secrets)
 	}
 	return nil
 }
+
+func maskCodedError(err error, secrets []string) error {
+	if err == nil || len(secrets) == 0 {
+		return err
+	}
+	message := err.Error()
+	report.MaskAll(&message, secrets)
+	if coded, ok := errors.AsType[CodedError](err); ok {
+		return maskedCodedError{message: message, code: coded.ExitCode()}
+	}
+	return errors.New(message)
+}
+
+type maskedCodedError struct {
+	message string
+	code    int
+}
+
+func (e maskedCodedError) Error() string { return e.message }
+
+func (e maskedCodedError) ExitCode() int { return e.code }
 
 func readReport(path string) (*report.Run, error) {
 	f, err := os.Open(path)
@@ -139,8 +161,10 @@ func narrowedBy(sel report.Selection) []string {
 		why = append(why, "run in a subdirectory")
 	case sel.Mode != "all":
 		why = append(why, "selection "+fmt.Sprintf("%q", sel.Mode))
+	case !sel.RepositoryWide():
+		why = append(why, "recorded paths or directory")
 	}
-	if len(sel.Tools) > 0 {
+	if len(sel.Tools) > 0 || len(sel.ExcludedTools) > 0 {
 		why = append(why, "--tools")
 	}
 	return why

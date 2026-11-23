@@ -256,6 +256,29 @@ func TestTargetDeclined(t *testing.T) {
 	}
 }
 
+func TestTargetDeclineRefusesToRemoveDirectoryAtFilePath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "results.sarif")
+	target := Open(Spec{Format: "sarif", Path: path}, nil)
+	if target.Err != nil {
+		t.Fatal(target.Err)
+	}
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err := target.Write(&report.Run{})
+	if err == nil || !strings.Contains(err.Error(), "not a regular file or symlink") {
+		t.Fatalf("Write error = %v, want refusal to remove directory at report path", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != filepath.Base(path) || !entries[0].IsDir() {
+		t.Errorf("entries = %v, want original directory and no temporary report", entries)
+	}
+}
+
 func TestCheckCapacity(t *testing.T) {
 	tests := []struct {
 		spec  Spec

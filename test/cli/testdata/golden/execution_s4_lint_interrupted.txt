@@ -6,9 +6,9 @@ exit code: 130
 
 ┏━ lint <RULE>
 ┃ fixture
-┃
 ┃ ⊘ sleeper  cancelled (interrupted)
 ┃ ⊘ later    not started (interrupted)
+┃
 ┗━ 0 tools · 0 runs · done in <DUR> · 2 cancelled <RULE>
 
 ===STDERR===

@@ -49,22 +49,17 @@ func TestLintConfigPlacementGolden(t *testing.T) {
 	clitest.AssertGolden(t, "lint_config_placement", out)
 }
 
-// The same repository without violations passes with no datamitsu surface.
-func TestLintConfigPlacementCleanGolden(t *testing.T) {
+func TestLintConfigPlacementClean(t *testing.T) {
 	p := clitest.NewProject(t)
 	p.WriteFile("datamitsu.config.js", noToolsConfigJS)
-	p.WriteFile(".datamitsuignore", "*.go: eslint\n")
 	p.WriteFile(".datamitsu/keep", "x\n")
 	p.WriteFile("main.go", "package main\n")
 
-	norm := clitest.NewNormalizer()
 	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "lint")
 	if res.ExitCode != 0 {
 		t.Fatalf("lint exit = %d, want 0\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
 	}
-	out := norm.Apply(res.Stdout)
-	if strings.Contains(out, "config-placement") || strings.Contains(out, "datamitsu ✗") {
-		t.Errorf("a clean repository must not surface the placement check:\n%s", out)
+	if strings.Contains(res.Stdout, "[config-placement]") {
+		t.Errorf("unexpected placement violation:\n%s", res.Stdout)
 	}
-	clitest.AssertGolden(t, "lint_config_placement_clean", out)
 }

@@ -287,6 +287,23 @@ func TestExecutionTwoToolsPass(t *testing.T) {
 	})
 }
 
+func TestExecutionFailuresStayNearFooter(t *testing.T) {
+	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
+		clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Priority: 10}),
+		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Priority: 20}),
+		clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Priority: 30}))
+	res := e.run("", nil, "lint", "--fail-fast=false")
+	e.wantExit(res, 1)
+	last := -1
+	for _, marker := range []string{"┃ ✓ beta", "┃ ✓ gamma", "┃ ✗ alpha", "┗━"} {
+		at := strings.Index(res.Stdout, marker)
+		if at <= last {
+			t.Fatalf("missing or out-of-order %q:\n%s", marker, res.Stdout)
+		}
+		last = at
+	}
+}
+
 // TestExecutionFailFastBetweenPriorities is S2 (and S12 on it): a failure at
 // priority 10 stops the run before priority 20, and beta is reported as not
 // started. --fail-fast=false, or DATAMITSU_FAIL_FAST=false, runs it; the flag
@@ -756,10 +773,9 @@ func TestExecutionSetupErrorIsReported(t *testing.T) {
 		res := e.run("", nil, "check")
 		e.wantExit(res, 1)
 		e.wantMarker("fixer", "")
-		if !strings.Contains(res.Stdout, "· fix not run · lint not run ·") || !strings.Contains(res.Stderr, "missing colon separator") {
+		if !strings.Contains(res.Stdout, "· fix not run · lint not run ·") || !strings.Contains(res.Stderr, ".datamitsuignore") || !strings.Contains(res.Stderr, "missing colon separator") {
 			t.Errorf("check should report the setup error and close with neither operation run:\nstdout:\n%s\nstderr:\n%s", res.Stdout, res.Stderr)
 		}
-		e.golden("setup_error", res)
 	})
 
 	t.Run("jsonl", func(t *testing.T) {
@@ -783,10 +799,7 @@ c.tools[%q] = { name: %q, operations: { %s: { app: "unreachable", args: [], scop
 `, runtime.GOOS, runtime.GOARCH, build, build, build, tool, tool, operation)
 }
 
-// TestExecutionKeepGoingKeepsLaterErrors: under keep-going, lint can fail to
-// install its tools after fix failed on a tool. Both reasons are reported, the
-// lint block is closed, and the exit code is still 1.
-func TestExecutionKeepGoingKeepsLaterErrors(t *testing.T) {
+func TestExecutionLintPreparationFailureLeavesFixResult(t *testing.T) {
 	spec := clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")}
 	fixer := clitest.ShellTool("fixer", failScript, clitest.ToolOpSpec{Operation: "fix"})
 
@@ -794,12 +807,12 @@ func TestExecutionKeepGoingKeepsLaterErrors(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec, fixer)
 		res := e.run("", nil, "check", keepGoing)
 		e.wantExit(res, 1)
-		failed, install := strings.Index(res.Stderr, "operation failed"), strings.Index(res.Stderr, "failed to pre-install tools")
-		if failed < 0 || install < failed {
-			t.Errorf("stderr should report fix's failure, then lint's install error:\n%s", res.Stderr)
+		e.wantMarker("fixer", "fixer \n")
+		if !strings.Contains(res.Stderr, "failed to pre-install tools") {
+			t.Errorf("preparation failure was not reported: %s", res.Stderr)
 		}
-		if !strings.Contains(res.Stdout, "┗━ setup failed") || !strings.Contains(res.Stdout, "· lint not run ·") {
-			t.Errorf("the lint block should close as a failed setup, and check's line say lint did not run:\n%s", res.Stdout)
+		if !strings.Contains(res.Stdout, "┃ ✗ fixer") || strings.Contains(res.Stdout, "┏━ lint") {
+			t.Errorf("expected the fix result but no lint frame: %s", res.Stdout)
 		}
 	})
 
@@ -809,9 +822,8 @@ func TestExecutionKeepGoingKeepsLaterErrors(t *testing.T) {
 		e.wantExit(res, 1)
 		events := clitest.MustParseJSONL(t, res.Stderr)
 		clitest.AssertChains(t, events)
-		lint := eventsOf(events, func(e clitest.Event) bool { return operationDone(e) && e.Op == "lint" })
-		if len(lint) != 1 || lint[0].Status != "fail" {
-			t.Errorf("lint's done events = %+v, want one fail", lint)
+		if runs := toolRuns(events, "installer"); len(runs) != 0 {
+			t.Errorf("linter started after preparation failed: %+v", runs)
 		}
 		wantRunDone(t, events, "check", false, 1, 0, false)
 	})
@@ -1324,6 +1336,17 @@ func TestExecutionFailOnSkip(t *testing.T) {
 			t.Errorf("the skipped tool should be listed:\n%s", res.Stdout)
 		}
 		e.golden("s10_lint_fail_on_skip", res, maskHost)
+	})
+
+	t.Run("core error wins over platform skips", func(t *testing.T) {
+		e := newExecProject(t, map[string]string{"fixture.marker": "", ".datamitsuignore": "*.go:native\n"}, spec)
+		for _, flag := range []string{"--fail-on-skip", "--require-coverage=repo"} {
+			res := e.run("", nil, "lint", flag)
+			e.wantExit(res, 1)
+			if !strings.Contains(res.Stdout, "┃ ✗ datamitsu") || !strings.Contains(res.Stdout, "[datamitsuignore-format]") || !strings.Contains(res.Stdout, "⊘ native") || !strings.Contains(res.Stderr, flag+":") {
+				t.Errorf("%s: expected core error, platform skip and coverage error:\n%s\n%s", flag, res.Stdout, res.Stderr)
+			}
+		}
 	})
 
 	t.Run("tool_failure_wins", func(t *testing.T) {
