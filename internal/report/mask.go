@@ -2,6 +2,7 @@ package report
 
 import (
 	"encoding/json"
+	"math"
 	"reflect"
 	"sort"
 	"strconv"
@@ -227,7 +228,10 @@ func RewriteAll(ptr any, rewrite func(string) string) {
 // a log line routed to the stream carries its fields JSON-encoded, where a
 // quote or a backslash in a secret is escaped.
 func replacer(secrets []string) *strings.Replacer {
-	spellings := make([]string, 0, 3*len(secrets))
+	var spellings []string
+	if len(secrets) <= math.MaxInt/3 {
+		spellings = make([]string, 0, 3*len(secrets))
+	}
 	for _, s := range secrets {
 		if s == "" {
 			continue
@@ -242,7 +246,10 @@ func replacer(secrets []string) *strings.Replacer {
 		}
 	}
 	sort.Slice(spellings, func(i, j int) bool { return len(spellings[i]) > len(spellings[j]) })
-	pairs := make([]string, 0, 2*len(spellings))
+	var pairs []string
+	if len(spellings) <= math.MaxInt/2 {
+		pairs = make([]string, 0, 2*len(spellings))
+	}
 	for _, spelling := range spellings {
 		pairs = append(pairs, spelling, Masked)
 	}
