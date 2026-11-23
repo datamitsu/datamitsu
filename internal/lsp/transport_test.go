@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	zerovalue_sync "sync"
 	"testing"
 	"time"
 
@@ -63,7 +64,7 @@ func runSession(t *testing.T, s *Server) *pipeSession {
 }
 
 func readTestFrame(r *bufio.Reader) (map[string]json.RawMessage, error) {
-	c := &conn{r: r}
+	c := &conn{w: nil, wmu: zerovalue_sync.Mutex{}, r: r}
 	body, err := c.readFrame()
 	if err != nil {
 		return nil, err
@@ -161,7 +162,7 @@ func newGate(t *testing.T) *gate {
 	if out, err := exec.Command("mkfifo", path).CombinedOutput(); err != nil {
 		t.Skipf("mkfifo unavailable: %v: %s", err, out)
 	}
-	return &gate{t: t, path: path}
+	return &gate{w: nil, t: t, path: path}
 }
 
 // awaitTool returns once the gated tool is running.
@@ -199,15 +200,29 @@ func (g *gate) release() {
 // format is inside its first group.
 func gatedConfig(g *gate) *config.Config {
 	return &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Apps: binmanager.MapOfApps{
 			"append-1": shellApp(`printf 1 >> "$1"; case "$1" in */gate.txt) cat '` + g.path + `' > /dev/null;; esac`),
 			"append-2": shellApp(`printf 2 >> "$1"`),
 			"append-3": shellApp(`printf 3 >> "$1"`),
 		},
 		Tools: config.MapOfTools{
-			"first":  {Name: "first", Operations: fixOp("append-1", 0)},
-			"second": {Name: "second", Operations: fixOp("append-2", 1)},
-			"third":  {Name: "third", Operations: fixOp("append-3", 2)},
+			"first":  {ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Name: "first", Operations: fixOp("append-1", 0)},
+			"second": {ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Name: "second", Operations: fixOp("append-2", 1)},
+			"third":  {ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Name: "third", Operations: fixOp("append-3", 2)},
 		},
 	}
 }
@@ -325,8 +340,22 @@ func TestCancelDuringTheLastGroup(t *testing.T) {
 	sink := captureEvents(t)
 	p, _, g, files := gatedSessionWith(t, func(g *gate) *config.Config {
 		return &config.Config{
-			Apps:  binmanager.MapOfApps{"append-1": shellApp(`printf 1 >> "$1"; cat '` + g.path + `' > /dev/null`)},
-			Tools: config.MapOfTools{"only": {Name: "only", Operations: fixOp("append-1", 0)}},
+			Name:           "",
+			Version:        "",
+			Bundles:        nil,
+			Runtimes:       nil,
+			ManagedConfigs: nil,
+			EjectConfigs:   nil,
+			ProjectTypes:   nil,
+			Execution:      nil,
+			InitCommands:   nil,
+			IgnoreRules:    nil,
+			SharedStorage:  nil,
+			OCI:            nil,
+			Parsers:        nil,
+			Lsp:            nil,
+			Apps:           binmanager.MapOfApps{"append-1": shellApp(`printf 1 >> "$1"; cat '` + g.path + `' > /dev/null`)},
+			Tools:          config.MapOfTools{"only": {ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Name: "only", Operations: fixOp("append-1", 0)}},
 		}
 	})
 

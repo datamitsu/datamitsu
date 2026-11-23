@@ -47,7 +47,7 @@ func TestDevtoolsCommandSetDrift(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{}, tc.args...)
+			res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, tc.args...)
 			if res.ExitCode != 0 {
 				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s",
 					strings.Join(tc.args, " "), res.ExitCode, res.Stderr)
@@ -75,54 +75,64 @@ func TestDevtoolsArgValidation(t *testing.T) {
 		wantExit int
 	}{
 		{
-			name:    "dockerfile-missing-output",
-			args:    []string{"devtools", "dockerfile"},
-			wantMsg: `required flag(s) "output" not set`,
+			wantExit: 0,
+			name:     "dockerfile-missing-output",
+			args:     []string{"devtools", "dockerfile"},
+			wantMsg:  `required flag(s) "output" not set`,
 		},
 		{
-			name:    "dockerfile-invalid-env-with-broken-config",
-			args:    []string{"--no-auto-config", "--config", "broken.config.js", "devtools", "dockerfile", "--output", "Dockerfile", "--env", "bad"},
-			wantMsg: `invalid --env "bad": want key=value`,
+			wantExit: 0,
+			name:     "dockerfile-invalid-env-with-broken-config",
+			args:     []string{"--no-auto-config", "--config", "broken.config.js", "devtools", "dockerfile", "--output", "Dockerfile", "--env", "bad"},
+			wantMsg:  `invalid --env "bad": want key=value`,
 		},
 		{
-			name:    "split-config-missing-output",
-			args:    []string{"devtools", "split-config"},
-			wantMsg: `required flag(s) "output" not set`,
+			wantExit: 0,
+			name:     "split-config-missing-output",
+			args:     []string{"devtools", "split-config"},
+			wantMsg:  `required flag(s) "output" not set`,
 		},
 		{
-			name:    "pull-runtimes-no-arg",
-			args:    []string{"devtools", "pull-runtimes"},
-			wantMsg: "accepts 1 arg(s), received 0",
+			wantExit: 0,
+			name:     "pull-runtimes-no-arg",
+			args:     []string{"devtools", "pull-runtimes"},
+			wantMsg:  "accepts 1 arg(s), received 0",
 		},
 		{
-			name:    "pull-runtimes-requires-update",
-			args:    []string{"devtools", "pull-runtimes", "runtimes.json"},
-			wantMsg: "--update flag is required",
+			wantExit: 0,
+			name:     "pull-runtimes-requires-update",
+			args:     []string{"devtools", "pull-runtimes", "runtimes.json"},
+			wantMsg:  "--update flag is required",
 		},
 		{
-			name:    "pull-runtimes-invalid-runtime",
-			args:    []string{"devtools", "pull-runtimes", "--update", "--runtime", "bogus", "runtimes.json"},
-			wantMsg: `invalid runtime "bogus"`,
+			wantExit: 0,
+			name:     "pull-runtimes-invalid-runtime",
+			args:     []string{"devtools", "pull-runtimes", "--update", "--runtime", "bogus", "runtimes.json"},
+			wantMsg:  `invalid runtime "bogus"`,
 		},
 		{
-			name:    "pull-releases-no-arg",
-			args:    []string{"devtools", "pull-releases"},
-			wantMsg: "accepts 1 arg(s), received 0",
+			wantExit: 0,
+			name:     "pull-releases-no-arg",
+			args:     []string{"devtools", "pull-releases"},
+			wantMsg:  "accepts 1 arg(s), received 0",
 		},
 		{
-			name:    "pull-node-no-arg",
-			args:    []string{"devtools", "pull-node"},
-			wantMsg: "accepts 1 arg(s), received 0",
+			wantExit: 0,
+			name:     "pull-node-no-arg",
+			args:     []string{"devtools", "pull-node"},
+			wantMsg:  "accepts 1 arg(s), received 0",
 		},
 		{
-			name:    "pull-uv-no-arg",
-			args:    []string{"devtools", "pull-uv"},
-			wantMsg: "accepts 1 arg(s), received 0",
+			wantExit: 0,
+			name:     "pull-uv-no-arg",
+			args:     []string{"devtools", "pull-uv"},
+			wantMsg:  "accepts 1 arg(s), received 0",
 		},
 		{
-			name:    "pack-inline-archive-no-arg",
-			args:    []string{"devtools", "pack-inline-archive"},
-			wantMsg: "accepts 1 arg(s), received 0",
+			wantExit: 0,
+			name:     "pack-inline-archive-no-arg",
+			args:     []string{"devtools", "pack-inline-archive"},
+			wantMsg:  "accepts 1 arg(s), received 0",
 		},
 		{
 			name:     "pack-inline-archive-not-a-dir",
@@ -140,7 +150,7 @@ func TestDevtoolsArgValidation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, tc.args...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, tc.args...)
 			want := tc.wantExit
 			if want == 0 {
 				want = 2
@@ -197,7 +207,7 @@ func TestDevtoolsAppsList(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		p := clitest.NewProject(t)
 		cfg := clitest.WriteMinimalConfig(p)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "devtools", "apps", "list")
 		if res.ExitCode != 0 {
 			t.Fatalf("`devtools apps list` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -211,7 +221,7 @@ func TestDevtoolsAppsList(t *testing.T) {
 		p := clitest.NewProject(t)
 		cfg := p.WriteFile("apps.config.js", appsListConfigJS)
 		norm := clitest.NewNormalizer()
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "devtools", "apps", "list")
 		if res.ExitCode != 0 {
 			t.Fatalf("`devtools apps list` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -227,7 +237,7 @@ func TestDevtoolsBundlesList(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		p := clitest.NewProject(t)
 		cfg := clitest.WriteMinimalConfig(p)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "devtools", "bundles", "list")
 		if res.ExitCode != 0 {
 			t.Fatalf("`devtools bundles list` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -241,7 +251,7 @@ func TestDevtoolsBundlesList(t *testing.T) {
 		p := clitest.NewProject(t)
 		cfg := p.WriteFile("bundles.config.js", bundlesListConfigJS)
 		norm := clitest.NewNormalizer()
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "devtools", "bundles", "list")
 		if res.ExitCode != 0 {
 			t.Fatalf("`devtools bundles list` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -259,7 +269,7 @@ func TestDevtoolsAppsInspectPath(t *testing.T) {
 		t.Run(sub+"-unknown", func(t *testing.T) {
 			p := clitest.NewProject(t)
 			cfg := clitest.WriteMinimalConfig(p)
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 				"--no-auto-config", "--config", cfg, "devtools", "apps", sub, "nonesuch")
 			assertOfflineError(t, res, "not found in config")
 		})
@@ -267,7 +277,7 @@ func TestDevtoolsAppsInspectPath(t *testing.T) {
 		t.Run(sub+"-not-installed", func(t *testing.T) {
 			p := clitest.NewProject(t)
 			cfg := p.WriteFile("apps.config.js", appsListConfigJS)
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 				"--no-auto-config", "--config", cfg, "devtools", "apps", sub, "hello-shell")
 			assertOfflineError(t, res, "is not installed")
 		})
@@ -281,7 +291,7 @@ func TestDevtoolsBundlesInspectPath(t *testing.T) {
 		t.Run(sub+"-unknown", func(t *testing.T) {
 			p := clitest.NewProject(t)
 			cfg := clitest.WriteMinimalConfig(p)
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 				"--no-auto-config", "--config", cfg, "devtools", "bundles", sub, "nonesuch")
 			assertOfflineError(t, res, "not found in config")
 		})
@@ -289,7 +299,7 @@ func TestDevtoolsBundlesInspectPath(t *testing.T) {
 		t.Run(sub+"-not-installed", func(t *testing.T) {
 			p := clitest.NewProject(t)
 			cfg := p.WriteFile("bundles.config.js", bundlesListConfigJS)
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 				"--no-auto-config", "--config", cfg, "devtools", "bundles", sub, "alpha-bundle")
 			assertOfflineError(t, res, "is not installed")
 		})
@@ -321,7 +331,7 @@ func TestDevtoolsPullGithubReportsFailures(t *testing.T) {
 	state := `{"sources":{"github":{"type":"github","url":"https://github.com"}},"apps":{"alpha":{"source":"github","repository":"o/alpha","tag":"v1"},"beta":{"source":"github","repository":"o/beta","tag":"v2"}},"binaries":{}}` + "\n"
 	path := p.WriteFile("binaryApps.json", state)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "pull-releases", "binaryApps.json")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "devtools", "pull-releases", "binaryApps.json")
 	if res.ExitCode != 1 {
 		t.Fatalf("exit = %d, want 1\nstdout:\n%s\nstderr:\n%s", res.ExitCode, res.Stdout, res.Stderr)
 	}

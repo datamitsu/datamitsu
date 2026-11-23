@@ -150,7 +150,7 @@ func (r *recorderTB) Fatalf(format string, args ...any) {
 // captureFatal runs fn with a recorderTB on its own goroutine and reports
 // whether fn called Fatalf, plus the formatted message.
 func captureFatal(fn func(tb testing.TB)) (bool, string) {
-	r := &recorderTB{}
+	r := &recorderTB{TB: nil, failed: false, msg: ""}
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

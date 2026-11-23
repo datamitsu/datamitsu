@@ -3,6 +3,8 @@ package cache
 import (
 	"os"
 	"path/filepath"
+	zerovalue_sync "sync"
+	zerovalue_atomic "sync/atomic"
 	"testing"
 	"time"
 
@@ -15,7 +17,7 @@ import (
 // once its content changes.
 func TestAfterFixResetsLintOnChange(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -49,7 +51,7 @@ func TestAfterFixResetsLintOnChange(t *testing.T) {
 // brand-new-entry path (no prior lint/fix) and the idempotent re-add.
 func TestAfterFixUnchangedFileAddsFix(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -77,7 +79,7 @@ func TestAfterFixUnchangedFileAddsFix(t *testing.T) {
 // for both AfterLint and AfterFix.
 func TestAfterDisabledToolIsNoOp(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -97,8 +99,25 @@ func TestAfterDisabledToolIsNoOp(t *testing.T) {
 // AfterFix, and AfterLint.
 func TestNilDataErrors(t *testing.T) {
 	c := &Cache{
-		projectPath: t.TempDir(),
-		logger:      logger.Logger,
+		path:              "",
+		invalidationKey:   "",
+		data:              nil,
+		hits:              zerovalue_atomic.Int64{},
+		misses:            zerovalue_atomic.Int64{},
+		mu:                zerovalue_sync.RWMutex{},
+		deletedEntries:    nil,
+		deletedVerdicts:   nil,
+		saveMu:            zerovalue_sync.Mutex{},
+		yieldToForeignKey: zerovalue_atomic.Bool{},
+		supersededKeys:    nil,
+		dirty:             zerovalue_atomic.Bool{},
+		saveTimer:         nil,
+		saveTimerMu:       zerovalue_sync.Mutex{},
+		flushMu:           zerovalue_sync.Mutex{},
+		shutdownCh:        nil,
+		shutdownOnce:      zerovalue_sync.Once{},
+		projectPath:       t.TempDir(),
+		logger:            logger.Logger,
 	}
 
 	if err := c.Save(); err == nil {
@@ -107,7 +126,7 @@ func TestNilDataErrors(t *testing.T) {
 	if err := c.AfterFix("/some/file", "tool", true); err == nil {
 		t.Error("AfterFix with nil data expected error, got nil")
 	}
-	if err := c.AfterLint("/some/file", "tool", Seen{Hash: "h"}, true, true); err == nil {
+	if err := c.AfterLint("/some/file", "tool", Seen{Size: 0, ModTime: time.Time{}, Identity: FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}, At: time.Time{}, Hash: "h"}, true, true); err == nil {
 		t.Error("AfterLint with nil data expected error, got nil")
 	}
 }
@@ -116,7 +135,7 @@ func TestNilDataErrors(t *testing.T) {
 // delayed save that fires on its own (without an explicit Shutdown).
 func TestDebounceSaveFlushesOnTimer(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}

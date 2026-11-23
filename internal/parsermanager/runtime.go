@@ -100,7 +100,7 @@ func DecodeResponse(data []byte, exitCode int32) (Response, error) {
 	if diags == nil {
 		diags = []RawDiagnostic{}
 	}
-	return Response{ABI: 1, Recognized: len(diags) > 0 || exitCode == 0, Diagnostics: diags}, nil
+	return Response{Format: "", Partial: false, ABI: 1, Recognized: len(diags) > 0 || exitCode == 0, Diagnostics: diags}, nil
 }
 
 // ParserRuntime is an instantiated wazero module ready to parse tool output. It

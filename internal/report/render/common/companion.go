@@ -74,6 +74,7 @@ const ReasonTooManyResults = "too-many-results"
 // does not hold did not run.
 func NewCompanion(run *report.Run, format string, ops []*report.Operation, omitted []OmittedFindings) Companion {
 	c := Companion{
+		Complete:   false,
 		Schema:     CompanionSchema,
 		Format:     format,
 		Incomplete: []report.Reason{},

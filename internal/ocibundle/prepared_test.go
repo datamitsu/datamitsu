@@ -23,6 +23,8 @@ func preparedBinaryConfig(t *testing.T) *config.Config {
 	tool := cfg.Apps["tool"]
 	off := false
 	tool.Prepare = &binmanager.AppPrepare{
+		BinPath: "",
+		Path:    "",
 		Args:    []string{"--prepare"},
 		Env:     map[string]string{"STEP_OUT": "${APP_PREPARED}"},
 		Network: &off,
@@ -220,9 +222,16 @@ type layerAnn struct {
 
 func buildLayerManifest(t *testing.T, layers []layerAnn) *ocispec.Manifest {
 	t.Helper()
-	m := &ocispec.Manifest{Layers: make([]ocispec.Descriptor, 0, len(layers))}
+	m := &ocispec.Manifest{SchemaVersion: 0, MediaType: "", ArtifactType: "", Config: ocispec.Descriptor{MediaType: "", Digest: "", Size: 0, URLs: nil, Annotations: nil, Data: nil, Platform: nil, ArtifactType: ""}, Subject: nil, Annotations: nil, Layers: make([]ocispec.Descriptor, 0, len(layers))}
 	for _, l := range layers {
 		m.Layers = append(m.Layers, ocispec.Descriptor{
+			MediaType:    "",
+			Digest:       "",
+			Size:         0,
+			URLs:         nil,
+			Data:         nil,
+			Platform:     nil,
+			ArtifactType: "",
 			Annotations: map[string]string{
 				AnnotationSubtree: l.subtree,
 				AnnotationApp:     l.app,
@@ -262,7 +271,7 @@ func TestSeed_MarkerDeletionReSeedsPreparedState(t *testing.T) {
 	desc := src.addLayer(preparedStateLayer(t, subtree, []byte("state payload")), subtree)
 	digest := src.addManifest(t, []ocispec.Descriptor{desc}, nil)
 
-	opts := Options{Needed: []string{"tool"}}
+	opts := Options{NeededRuntimes: nil, RequireRequested: false, Needed: []string{"tool"}}
 	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, opts); err != nil {
 		t.Fatalf("first seed: %v", err)
 	}
@@ -308,7 +317,7 @@ func TestSeed_FullPullRepairsMarkerDeletion(t *testing.T) {
 	digest := src.addManifest(t, []ocispec.Descriptor{desc}, nil)
 
 	// Full pull (Options{}): writes the bundle marker.
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("first full pull: %v", err)
 	}
 	state := filepath.Join(storeRoot, filepath.FromSlash(subtree))
@@ -327,7 +336,7 @@ func TestSeed_FullPullRepairsMarkerDeletion(t *testing.T) {
 		t.Fatal("markerSatisfied accepted a store whose recorded prepared state lost its marker")
 	}
 
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("second full pull (repair): %v", err)
 	}
 	if !prepare.Ready(state) {
@@ -366,7 +375,7 @@ func TestSeedAndPrepareShareTheLock(t *testing.T) {
 		src := newFakeSource()
 		desc := src.addLayer(preparedStateLayer(t, subtree, []byte("raced")), subtree)
 		digest := src.addManifest(t, []ocispec.Descriptor{desc}, nil)
-		_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: []string{"tool"}})
+		_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{NeededRuntimes: nil, RequireRequested: false, Needed: []string{"tool"}})
 		seeded <- err
 	}()
 

@@ -16,8 +16,9 @@ import (
 
 func makeResolvedTarget(os, arch string, libc target.LibcType) target.ResolvedTarget {
 	return target.ResolvedTarget{
-		Target: target.Target{OS: os, Arch: arch, Libc: libc},
-		Source: target.ResolutionExact,
+		FallbackInfo: nil,
+		Target:       target.Target{OS: os, Arch: arch, Libc: libc},
+		Source:       target.ResolutionExact,
 	}
 }
 
@@ -32,6 +33,9 @@ func TestCalculateConfigHash(t *testing.T) {
 		{
 			name: "basic config",
 			info: BinaryOsArchInfo{
+				Auth:        nil,
+				BinaryPath:  nil,
+				ExtractDir:  false,
 				URL:         "https://example.com/app.tar.gz",
 				Hash:        "abc123",
 				ContentType: BinContentTypeTarGz,
@@ -41,6 +45,8 @@ func TestCalculateConfigHash(t *testing.T) {
 		{
 			name: "with binary path",
 			info: BinaryOsArchInfo{
+				Auth:        nil,
+				ExtractDir:  false,
 				URL:         "https://example.com/app.tar.gz",
 				Hash:        "abc123",
 				ContentType: BinContentTypeTarGz,
@@ -66,6 +72,9 @@ func TestCalculateConfigHash(t *testing.T) {
 
 	t.Run("deterministic hash", func(t *testing.T) {
 		info := BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
+			ExtractDir:  false,
 			URL:         "https://example.com/app.tar.gz",
 			Hash:        "abc123",
 			ContentType: BinContentTypeTarGz,
@@ -82,12 +91,18 @@ func TestCalculateConfigHash(t *testing.T) {
 
 	t.Run("different configs produce different hashes", func(t *testing.T) {
 		info1 := BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
+			ExtractDir:  false,
 			URL:         "https://example.com/app1.tar.gz",
 			Hash:        "abc123",
 			ContentType: BinContentTypeTarGz,
 		}
 
 		info2 := BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
+			ExtractDir:  false,
 			URL:         "https://example.com/app2.tar.gz",
 			Hash:        "abc123",
 			ContentType: BinContentTypeTarGz,
@@ -104,6 +119,9 @@ func TestCalculateConfigHash(t *testing.T) {
 
 	t.Run("different os/arch produce different hashes", func(t *testing.T) {
 		info := BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
+			ExtractDir:  false,
 			URL:         "https://example.com/app.tar.gz",
 			Hash:        "abc123",
 			ContentType: BinContentTypeTarGz,
@@ -124,6 +142,9 @@ func TestCalculateConfigHash(t *testing.T) {
 
 	t.Run("musl binary produces different hash than glibc", func(t *testing.T) {
 		info := BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
+			ExtractDir:  false,
 			URL:         "https://example.com/app.tar.gz",
 			Hash:        "abc123",
 			ContentType: BinContentTypeTarGz,
@@ -139,6 +160,9 @@ func TestCalculateConfigHash(t *testing.T) {
 
 	t.Run("glibc fallback uses glibc hash not musl", func(t *testing.T) {
 		info := BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
+			ExtractDir:  false,
 			URL:         "https://example.com/app.tar.gz",
 			Hash:        "abc123",
 			ContentType: BinContentTypeTarGz,
@@ -164,6 +188,9 @@ func TestCalculateConfigHash(t *testing.T) {
 
 	t.Run("different resolved targets produce different cache paths", func(t *testing.T) {
 		info := BinaryOsArchInfo{
+			Auth:        nil,
+			BinaryPath:  nil,
+			ExtractDir:  false,
 			URL:         "https://example.com/app.tar.gz",
 			Hash:        "abc123",
 			ContentType: BinContentTypeTarGz,
@@ -220,7 +247,7 @@ func TestHashFilesAndArchives(t *testing.T) {
 
 	t.Run("with archives", func(t *testing.T) {
 		archives := map[string]*ArchiveSpec{
-			"dist": {Inline: "tar.br:abc123"},
+			"dist": {URL: "", Hash: "", Format: "", Inline: "tar.br:abc123"},
 		}
 		hash := HashFilesAndArchives(nil, archives)
 		if hash == "" {
@@ -292,8 +319,10 @@ func TestComputeBundlePath(t *testing.T) {
 	t.Run("returns path for existing bundle", func(t *testing.T) {
 		bundles := MapOfBundles{
 			"test-bundle": {
-				Version: "1.0",
-				Files:   map[string]string{"a.txt": "hello"},
+				Archives: nil,
+				Links:    nil,
+				Version:  "1.0",
+				Files:    map[string]string{"a.txt": "hello"},
 			},
 		}
 		bm := New(MapOfApps{}, bundles, nil)
@@ -329,8 +358,10 @@ func TestComputeBundlePath(t *testing.T) {
 	t.Run("deterministic path", func(t *testing.T) {
 		bundles := MapOfBundles{
 			"test-bundle": {
-				Version: "1.0",
-				Files:   map[string]string{"a.txt": "hello"},
+				Archives: nil,
+				Links:    nil,
+				Version:  "1.0",
+				Files:    map[string]string{"a.txt": "hello"},
 			},
 		}
 		bm := New(MapOfApps{}, bundles, nil)
@@ -344,10 +375,10 @@ func TestComputeBundlePath(t *testing.T) {
 
 	t.Run("different content produces different path", func(t *testing.T) {
 		bm1 := New(MapOfApps{}, MapOfBundles{
-			"test-bundle": {Version: "1.0", Files: map[string]string{"a.txt": "hello"}},
+			"test-bundle": {Archives: nil, Links: nil, Version: "1.0", Files: map[string]string{"a.txt": "hello"}},
 		}, nil)
 		bm2 := New(MapOfApps{}, MapOfBundles{
-			"test-bundle": {Version: "1.0", Files: map[string]string{"a.txt": "world"}},
+			"test-bundle": {Archives: nil, Links: nil, Version: "1.0", Files: map[string]string{"a.txt": "world"}},
 		}, nil)
 
 		path1, _ := bm1.ComputeBundlePath("test-bundle")
@@ -366,8 +397,10 @@ func TestGetBundleRoot(t *testing.T) {
 	t.Run("error when bundle not installed", func(t *testing.T) {
 		bundles := MapOfBundles{
 			"test-bundle": {
-				Version: "1.0",
-				Files:   map[string]string{"a.txt": "hello"},
+				Archives: nil,
+				Links:    nil,
+				Version:  "1.0",
+				Files:    map[string]string{"a.txt": "hello"},
 			},
 		}
 		bm := New(MapOfApps{}, bundles, nil)
@@ -390,8 +423,10 @@ func TestGetBundleRoot(t *testing.T) {
 	t.Run("returns path for completed bundle", func(t *testing.T) {
 		bundles := MapOfBundles{
 			"test-bundle": {
-				Version: "1.0",
-				Files:   map[string]string{"a.txt": "hello"},
+				Archives: nil,
+				Links:    nil,
+				Version:  "1.0",
+				Files:    map[string]string{"a.txt": "hello"},
 			},
 		}
 		bm := New(MapOfApps{}, bundles, nil)
@@ -413,7 +448,7 @@ func TestGetBundleRoot(t *testing.T) {
 
 	t.Run("rejects markerless directory", func(t *testing.T) {
 		t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
-		bundles := MapOfBundles{"test-bundle": {Version: "1.0", Files: map[string]string{"a.txt": "hello"}}}
+		bundles := MapOfBundles{"test-bundle": {Archives: nil, Links: nil, Version: "1.0", Files: map[string]string{"a.txt": "hello"}}}
 		bm := New(MapOfApps{}, bundles, nil)
 		bundlePath, err := bm.ComputeBundlePath("test-bundle")
 		if err != nil {

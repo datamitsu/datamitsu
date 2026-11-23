@@ -25,11 +25,25 @@ func TestValidateSubtree_AcceptsParsers(t *testing.T) {
 
 func parserOnlyConfig() *config.Config {
 	return &config.Config{
+		Name:           "",
+		Version:        "",
+		Apps:           nil,
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Lsp:            nil,
 		Tools: config.MapOfTools{
-			"eslint": {Name: "eslint", OutputParser: &config.OutputParser{Module: "core", Parser: "eslint"}},
+			"eslint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "eslint", OutputParser: &config.OutputParser{Module: "core", Parser: "eslint"}},
 		},
 		Parsers: config.MapOfParsers{
-			"core": {URL: "https://example.invalid/m.wasm", Hash: strings.Repeat("a", 64)},
+			"core": {OCI: nil, URL: "https://example.invalid/m.wasm", Hash: strings.Repeat("a", 64)},
 		},
 	}
 }
@@ -58,7 +72,22 @@ func TestExpectedSubtrees_UnreferencedParserExcluded(t *testing.T) {
 	storeRoot := testStore(t)
 	// A declared parser that no tool references contributes nothing.
 	cfg := &config.Config{
-		Parsers: config.MapOfParsers{"core": {URL: "https://example.invalid/m.wasm", Hash: strings.Repeat("a", 64)}},
+		Name:           "",
+		Version:        "",
+		Apps:           nil,
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Lsp:            nil,
+		Parsers:        config.MapOfParsers{"core": {OCI: nil, URL: "https://example.invalid/m.wasm", Hash: strings.Repeat("a", 64)}},
 	}
 	if expected := expectedSubtrees(cfg, storeRoot, nil, nil); len(expected) != 0 {
 		t.Errorf("expected = %v, want empty (no tool references the parser)", expected)
@@ -75,14 +104,14 @@ func TestSeed_SkipsParserLayerTheConfigDoesNotDeclare(t *testing.T) {
 	cfg := parserOnlyConfig()
 
 	declaredModule := []byte("declared module bytes")
-	cfg.Parsers["core"] = config.Parser{URL: "https://example.invalid/m.wasm", Hash: sha256Hex(declaredModule)}
+	cfg.Parsers["core"] = config.Parser{OCI: nil, URL: "https://example.invalid/m.wasm", Hash: sha256Hex(declaredModule)}
 	declaredSubtree, err := subtreeRel(storeRoot, parsermanager.ModuleStorePath("core", cfg.Parsers["core"]))
 	if err != nil {
 		t.Fatalf("subtreeRel: %v", err)
 	}
 	// A second module, published by a bundle producer whose config pins a
 	// different version. Same shape, different content-addressed directory.
-	foreign := config.Parser{URL: "https://example.invalid/other.wasm", Hash: strings.Repeat("b", 64)}
+	foreign := config.Parser{OCI: nil, URL: "https://example.invalid/other.wasm", Hash: strings.Repeat("b", 64)}
 	foreignSubtree, err := subtreeRel(storeRoot, parsermanager.ModuleStorePath("core", foreign))
 	if err != nil {
 		t.Fatalf("subtreeRel: %v", err)
@@ -95,7 +124,7 @@ func TestSeed_SkipsParserLayerTheConfigDoesNotDeclare(t *testing.T) {
 	}
 	digest := src.addManifest(t, layers, nil)
 
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("seedFrom: %v", err)
 	}
 
@@ -122,7 +151,22 @@ func TestBuildReVerifyIndex_IndexesParser(t *testing.T) {
 	storeRoot := testStore(t)
 	hash := strings.Repeat("a", 64)
 	cfg := &config.Config{
-		Parsers: config.MapOfParsers{"core": {URL: "https://example.invalid/m.wasm", Hash: hash}},
+		Name:           "",
+		Version:        "",
+		Apps:           nil,
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Lsp:            nil,
+		Parsers:        config.MapOfParsers{"core": {OCI: nil, URL: "https://example.invalid/m.wasm", Hash: hash}},
 	}
 
 	index := buildReVerifyIndex(cfg, storeRoot)

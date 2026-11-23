@@ -22,7 +22,7 @@ func TestRuntimeAppInfo(t *testing.T) {
 	}{
 		{
 			name:    "bun",
-			app:     binmanager.App{Bun: &binmanager.AppConfigBun{PackageName: "eslint", Version: "10.9.0", BinPath: "b", Runtime: "bun-rt"}},
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{LockFile: "", Dependencies: nil, PackageName: "eslint", Version: "10.9.0", BinPath: "b", Runtime: "bun-rt"}},
 			wantK:   "bun",
 			wantVer: "10.9.0",
 			wantRef: "bun-rt",
@@ -30,7 +30,7 @@ func TestRuntimeAppInfo(t *testing.T) {
 		},
 		{
 			name:    "uv",
-			app:     binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.35.0", Runtime: "uv-rt"}},
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.35.0", Runtime: "uv-rt"}},
 			wantK:   "uv",
 			wantVer: "1.35.0",
 			wantRef: "uv-rt",
@@ -38,7 +38,7 @@ func TestRuntimeAppInfo(t *testing.T) {
 		},
 		{
 			name:    "node",
-			app:     binmanager.App{Node: &binmanager.AppConfigNode{PackageName: "eslint", Version: "9.0.0", BinPath: "b", Runtime: "node-rt"}},
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{LockFile: "", Dependencies: nil, PackageName: "eslint", Version: "9.0.0", BinPath: "b", Runtime: "node-rt"}},
 			wantK:   "node",
 			wantVer: "9.0.0",
 			wantRef: "node-rt",
@@ -46,7 +46,7 @@ func TestRuntimeAppInfo(t *testing.T) {
 		},
 		{
 			name:    "jvm",
-			app:     binmanager.App{Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: "7.0.0", Runtime: "jvm-rt"}},
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{MainClass: "", JarURL: "https://x/x.jar", JarHash: "h", Version: "7.0.0", Runtime: "jvm-rt"}},
 			wantK:   "jvm",
 			wantVer: "7.0.0",
 			wantRef: "jvm-rt",
@@ -54,26 +54,35 @@ func TestRuntimeAppInfo(t *testing.T) {
 		},
 		{
 			name:    "go",
-			app:     binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "x", Version: "v1.3.0", Runtime: "go-rt"}},
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "x", Version: "v1.3.0", Runtime: "go-rt"}},
 			wantK:   "go",
 			wantVer: "v1.3.0",
 			wantRef: "go-rt",
 			wantOk:  true,
 		},
 		{
-			name:   "binary is not a runtime app",
-			app:    binmanager.App{Binary: &binmanager.AppConfigBinary{Version: "1.0"}},
-			wantOk: false,
+			wantK:   "",
+			wantVer: "",
+			wantRef: "",
+			name:    "binary is not a runtime app",
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: "1.0"}},
+			wantOk:  false,
 		},
 		{
-			name:   "shell is not a runtime app",
-			app:    binmanager.App{Shell: &binmanager.AppConfigShell{Name: "echo"}},
-			wantOk: false,
+			wantK:   "",
+			wantVer: "",
+			wantRef: "",
+			name:    "shell is not a runtime app",
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "echo"}},
+			wantOk:  false,
 		},
 		{
-			name:   "empty is not a runtime app",
-			app:    binmanager.App{},
-			wantOk: false,
+			wantK:   "",
+			wantVer: "",
+			wantRef: "",
+			name:    "empty is not a runtime app",
+			app:     binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil},
+			wantOk:  false,
 		},
 	}
 
@@ -110,7 +119,7 @@ func TestRuntimeAppInfo(t *testing.T) {
 // path: the sub-config returned as `any` must marshal byte-identically to the
 // typed field, so the consolidation does not perturb cached verify fingerprints.
 func TestRuntimeAppInfo_SubConfigMarshalsLikeTypedField(t *testing.T) {
-	app := binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "x", Version: "v1.3.0", Runtime: "go-rt"}}
+	app := binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "x", Version: "v1.3.0", Runtime: "go-rt"}}
 	_, _, _, sub, ok := runtimeAppInfo(app)
 	if !ok {
 		t.Fatal("expected ok for go app")
@@ -127,11 +136,11 @@ func TestRuntimeAppInfo_SubConfigMarshalsLikeTypedField(t *testing.T) {
 // changes the fingerprint) for uv, node, jvm and go.
 func TestRuntimeAppKeyAndFP_EveryKind(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
-		"bun-rt":  {Kind: config.RuntimeKindBun},
-		"uv-rt":   {Kind: config.RuntimeKindUV},
-		"node-rt": {Kind: config.RuntimeKindNode},
-		"jvm-rt":  {Kind: config.RuntimeKindJVM},
-		"go-rt":   {Kind: config.RuntimeKindGo},
+		"bun-rt":  {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindBun},
+		"uv-rt":   {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV},
+		"node-rt": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode},
+		"jvm-rt":  {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM},
+		"go-rt":   {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindGo},
 	}
 
 	cases := []struct {
@@ -142,7 +151,7 @@ func TestRuntimeAppKeyAndFP_EveryKind(t *testing.T) {
 		{
 			kind: "bun",
 			mkApp: func(v string) binmanager.App {
-				return binmanager.App{Bun: &binmanager.AppConfigBun{PackageName: "eslint", Version: v, BinPath: "b", Runtime: "bun-rt"}}
+				return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{LockFile: "", Dependencies: nil, PackageName: "eslint", Version: v, BinPath: "b", Runtime: "bun-rt"}}
 			},
 			v1: "10.8.0",
 			v2: "10.9.0",
@@ -150,7 +159,7 @@ func TestRuntimeAppKeyAndFP_EveryKind(t *testing.T) {
 		{
 			kind: "uv",
 			mkApp: func(v string) binmanager.App {
-				return binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: v, Runtime: "uv-rt"}}
+				return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: v, Runtime: "uv-rt"}}
 			},
 			v1: "1.35.0",
 			v2: "1.36.0",
@@ -158,7 +167,7 @@ func TestRuntimeAppKeyAndFP_EveryKind(t *testing.T) {
 		{
 			kind: "node",
 			mkApp: func(v string) binmanager.App {
-				return binmanager.App{Node: &binmanager.AppConfigNode{PackageName: "eslint", Version: v, BinPath: "b", Runtime: "node-rt"}}
+				return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{LockFile: "", Dependencies: nil, PackageName: "eslint", Version: v, BinPath: "b", Runtime: "node-rt"}}
 			},
 			v1: "9.0.0",
 			v2: "9.1.0",
@@ -166,7 +175,7 @@ func TestRuntimeAppKeyAndFP_EveryKind(t *testing.T) {
 		{
 			kind: "jvm",
 			mkApp: func(v string) binmanager.App {
-				return binmanager.App{Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: v, Runtime: "jvm-rt"}}
+				return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{MainClass: "", JarURL: "https://x/x.jar", JarHash: "h", Version: v, Runtime: "jvm-rt"}}
 			},
 			v1: "7.0.0",
 			v2: "7.1.0",
@@ -174,7 +183,7 @@ func TestRuntimeAppKeyAndFP_EveryKind(t *testing.T) {
 		{
 			kind: "go",
 			mkApp: func(v string) binmanager.App {
-				return binmanager.App{Go: &binmanager.AppConfigGo{PackageName: "x", Version: v, Runtime: "go-rt"}}
+				return binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "x", Version: v, Runtime: "go-rt"}}
 			},
 			v1: "v1.3.0",
 			v2: "v1.4.0",
@@ -205,12 +214,12 @@ func TestRuntimeAppKeyAndFP_EveryKind(t *testing.T) {
 // runtime reference, the default runtime of the app's kind is resolved and its
 // config contributes to the fingerprint.
 func TestRuntimeAppKeyAndFP_DefaultRuntimeFold(t *testing.T) {
-	withRT := config.MapOfRuntimes{"uv-rt": {Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged}}
+	withRT := config.MapOfRuntimes{"uv-rt": {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged}}
 	noRT := config.MapOfRuntimes{}
 
 	entry := runtimeAppEntry{
 		name: "yamllint",
-		app:  binmanager.App{Uv: &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.35.0"}},
+		app:  binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.35.0"}},
 		kind: "uv",
 	}
 	_, fpWith := runtimeAppKeyAndFP(entry, withRT, "linux", "amd64")
@@ -225,11 +234,11 @@ func TestRuntimeAppKeyAndFP_DefaultRuntimeFold(t *testing.T) {
 // an unknown kind.
 func TestResolveDefaultRuntimeName_AllKinds(t *testing.T) {
 	runtimes := config.MapOfRuntimes{
-		"bun-rt":  {Kind: config.RuntimeKindBun},
-		"uv-rt":   {Kind: config.RuntimeKindUV},
-		"node-rt": {Kind: config.RuntimeKindNode},
-		"jvm-rt":  {Kind: config.RuntimeKindJVM},
-		"go-rt":   {Kind: config.RuntimeKindGo},
+		"bun-rt":  {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindBun},
+		"uv-rt":   {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV},
+		"node-rt": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode},
+		"jvm-rt":  {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM},
+		"go-rt":   {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindGo},
 	}
 
 	for kind, want := range map[string]string{

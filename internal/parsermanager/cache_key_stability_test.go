@@ -13,9 +13,9 @@ func TestCacheKeySpellingStability(t *testing.T) {
 	canonical := "sha256:" + bare
 	upper := "sha256:BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD"
 
-	gotBare := cacheKey(config.Parser{URL: "https://example.com/m.wasm", Hash: bare})
-	gotCanonical := cacheKey(config.Parser{URL: "https://example.com/m.wasm", Hash: canonical})
-	gotUpper := cacheKey(config.Parser{URL: "https://example.com/m.wasm", Hash: upper})
+	gotBare := cacheKey(config.Parser{OCI: nil, URL: "https://example.com/m.wasm", Hash: bare})
+	gotCanonical := cacheKey(config.Parser{OCI: nil, URL: "https://example.com/m.wasm", Hash: canonical})
+	gotUpper := cacheKey(config.Parser{OCI: nil, URL: "https://example.com/m.wasm", Hash: upper})
 
 	if gotBare == "" || gotBare != gotCanonical || gotBare != gotUpper {
 		t.Fatalf("pin spelling moved the module store key: bare=%s canonical=%s upper=%s", gotBare, gotCanonical, gotUpper)

@@ -20,6 +20,7 @@ func TestVerifyBinaryOrDir_ExtractDirBinaryPath(t *testing.T) {
 	srv := vcServe(t, archive)
 	entry := func(binaryPath string) binmanager.BinaryOsArchInfo {
 		return binmanager.BinaryOsArchInfo{
+			Auth:        nil,
 			URL:         srv.URL,
 			Hash:        vcSHA256Hex(archive),
 			ContentType: binmanager.BinContentTypeTarGz,

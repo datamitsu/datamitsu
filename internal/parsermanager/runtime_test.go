@@ -206,8 +206,8 @@ func TestHasParser(t *testing.T) {
 	wasm := echoWASM(t)
 	srv, hits := serveWASM(t, wasm)
 	m := New(config.MapOfParsers{
-		"core":   {URL: srv.URL, Hash: sha256Hex(wasm)},
-		"broken": {URL: srv.URL, Hash: strings.Repeat("0", 64)},
+		"core":   {OCI: nil, URL: srv.URL, Hash: sha256Hex(wasm)},
+		"broken": {OCI: nil, URL: srv.URL, Hash: strings.Repeat("0", 64)},
 	})
 	t.Cleanup(func() { _ = m.Close(context.Background()) })
 
@@ -248,8 +248,8 @@ func TestSeverityContract(t *testing.T) {
 	currentSrv, currentHits := serveWASM(t, current)
 	releasedSrv, _ := serveWASM(t, released)
 	m := New(config.MapOfParsers{
-		"current":  {URL: currentSrv.URL, Hash: sha256Hex(current)},
-		"released": {URL: releasedSrv.URL, Hash: sha256Hex(released)},
+		"current":  {OCI: nil, URL: currentSrv.URL, Hash: sha256Hex(current)},
+		"released": {OCI: nil, URL: releasedSrv.URL, Hash: sha256Hex(released)},
 	})
 	t.Cleanup(func() { _ = m.Close(context.Background()) })
 
@@ -278,7 +278,7 @@ func TestDescribedParser(t *testing.T) {
 	ctx := context.Background()
 	wasm := echoWASM(t)
 	srv, hits := serveWASM(t, wasm)
-	m := New(config.MapOfParsers{"core": {URL: srv.URL, Hash: sha256Hex(wasm)}})
+	m := New(config.MapOfParsers{"core": {OCI: nil, URL: srv.URL, Hash: sha256Hex(wasm)}})
 	t.Cleanup(func() { _ = m.Close(context.Background()) })
 
 	if _, ok := m.DescribedParser("core", "yamllint"); ok {
@@ -321,7 +321,7 @@ func TestHasParserDescribesOnce(t *testing.T) {
 	ctx := context.Background()
 	wasm := echoWASM(t)
 	srv, _ := serveWASM(t, wasm)
-	m := New(config.MapOfParsers{"core": {URL: srv.URL, Hash: sha256Hex(wasm)}})
+	m := New(config.MapOfParsers{"core": {OCI: nil, URL: srv.URL, Hash: sha256Hex(wasm)}})
 	t.Cleanup(func() { _ = m.Close(ctx) })
 
 	var wg sync.WaitGroup
@@ -360,7 +360,7 @@ func TestParseOutput_EndToEnd(t *testing.T) {
 	srv, hits := serveWASM(t, wasm)
 
 	m := New(config.MapOfParsers{
-		"echo": {URL: srv.URL, Hash: sha256Hex(wasm)},
+		"echo": {OCI: nil, URL: srv.URL, Hash: sha256Hex(wasm)},
 	})
 
 	resp, err := m.ParseOutput(ctx, "echo", "echo", []byte("end to end"), nil, 0)

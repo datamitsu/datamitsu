@@ -15,6 +15,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/globmatch"
 	"github.com/datamitsu/datamitsu/internal/project"
 	"github.com/datamitsu/datamitsu/internal/timing"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/traverser"
 
@@ -126,6 +127,20 @@ func NewPlanner(
 	extraIgnoreRules []string,
 ) *Planner {
 	return &Planner{
+		platformChecker:    nil,
+		cachedFiles:        nil,
+		cachedRel:          nil,
+		cachedProjects:     nil,
+		cacheInitialized:   false,
+		seedFiles:          nil,
+		globCacheMu:        sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
 		rootPath:           filepath.Clean(rootPath),
 		cwdPath:            filepath.Clean(cwdPath),
 		detectedTypes:      detectedTypes,
@@ -296,7 +311,7 @@ func (p *Planner) Plan(ctx context.Context, operation config.OperationType, sel 
 		groups = p.groupByPriority(tasks)
 	}()
 
-	return &ExecutionPlan{Groups: groups, Skipped: skipped}, nil
+	return &ExecutionPlan{ConfigName: "", FailOn: "", Groups: groups, Skipped: skipped}, nil
 }
 
 // collectTasks collects all tasks (and explicitly-skipped tools) for the operation.
@@ -381,10 +396,19 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 		}
 
 		task := Task{
-			ToolName:  toolName,
-			Tool:      tool,
-			Operation: operation,
-			OpConfig:  opConfig,
+			perFileCache: "",
+			inherited:    zerovalue_toolenv.Inherited{},
+			ID:           "",
+			Files:        nil,
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     toolName,
+			Tool:         tool,
+			Operation:    operation,
+			OpConfig:     opConfig,
 		}
 
 		// Match files and create tasks based on scope
@@ -405,6 +429,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			repoWide := config.InferGranularity(opConfig) == config.GranularityRepo
 			if repoWide && p.cwdPath != p.rootPath && widenTo != config.WidenToRepo {
 				skipped = append(skipped, SkippedTool{
+					Detail:    "",
 					ToolName:  toolName,
 					Operation: operation,
 					Reason:    SkipReasonNotNarrowable,
@@ -429,7 +454,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 			// skip entry existed to expose.
 			matchSel := sel
 			if repoWide && widenTo == config.WidenToRepo {
-				matchSel = Selection{Mode: SelectionAll}
+				matchSel = Selection{Dir: "", Paths: nil, Mode: SelectionAll}
 			}
 			// Skip when globs are configured but no files match (consistent with per-project behavior).
 			matchedFiles := p.matchFiles(ctx, matchSel, opConfig)
@@ -457,6 +482,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 				unitTasks, narrowedAway := p.collectUnitTasks(ctx, task, sel, matchedFiles, widenTo)
 				if narrowedAway {
 					skipped = append(skipped, SkippedTool{
+						Detail:    "",
 						ToolName:  toolName,
 						Operation: operation,
 						Reason:    SkipReasonNotNarrowable,
@@ -489,6 +515,7 @@ func (p *Planner) collectTasks(ctx context.Context, operation config.OperationTy
 				unitTasks, narrowedAway := p.collectUnitTasks(ctx, task, sel, matchedFiles, widenTo)
 				if narrowedAway {
 					skipped = append(skipped, SkippedTool{
+						Detail:    "",
 						ToolName:  toolName,
 						Operation: operation,
 						Reason:    SkipReasonNotNarrowable,
@@ -644,7 +671,7 @@ func (p *Planner) collectUnitTasks(
 	}
 	var fullInputs map[string][]string
 	if hasFileArgs {
-		files := p.filterFilesByIgnore(task.ToolName, p.matchFiles(ctx, Selection{Mode: SelectionAll}, task.OpConfig))
+		files := p.filterFilesByIgnore(task.ToolName, p.matchFiles(ctx, Selection{Dir: "", Paths: nil, Mode: SelectionAll}, task.OpConfig))
 		fullInputs = make(map[string][]string)
 		for _, fullTask := range p.createPerProjectTasksInScope(ctx, task, files, false) {
 			fullInputs[fullTask.ProjectPath] = fullTask.Files

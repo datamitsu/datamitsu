@@ -11,6 +11,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 // TestApplyStdoutFormat exercises the diff-in-core apply helper directly: a
@@ -103,24 +104,52 @@ func TestFormattingPipelineEndToEnd(t *testing.T) {
 	const script = "sed 's/foo/bar/'; echo formatted >&2"
 
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
 			"fmt-tool": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", script},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", script},
 			},
 		},
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 	task := Task{
-		ToolName:  "fmt-tool",
-		Operation: config.OpFix,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "fmt-tool",
+		Operation:    config.OpFix,
 		OpConfig: config.ToolOperation{
-			App:    "fmt-tool",
-			Scope:  config.ToolScopePerFile,
-			Input:  config.ToolInputStdin,
-			Output: config.ToolOutputStdout,
+			Args:              nil,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			LSP:               nil,
+			ManagedConfigRefs: nil,
+			App:               "fmt-tool",
+			Scope:             config.ToolScopePerFile,
+			Input:             config.ToolInputStdin,
+			Output:            config.ToolOutputStdout,
 		},
 		Files:       []string{file},
 		ProjectPath: tmpDir,
@@ -181,25 +210,53 @@ func TestFormattingPipelineNoChange(t *testing.T) {
 	}
 
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
 			// `cat` echoes stdin verbatim → identical candidate → no edits.
 			"noop-fmt": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", "cat"},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", "cat"},
 			},
 		},
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 	task := Task{
-		ToolName:  "noop-fmt",
-		Operation: config.OpFix,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "noop-fmt",
+		Operation:    config.OpFix,
 		OpConfig: config.ToolOperation{
-			App:    "noop-fmt",
-			Scope:  config.ToolScopePerFile,
-			Input:  config.ToolInputStdin,
-			Output: config.ToolOutputStdout,
+			Args:              nil,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			LSP:               nil,
+			ManagedConfigRefs: nil,
+			App:               "noop-fmt",
+			Scope:             config.ToolScopePerFile,
+			Input:             config.ToolInputStdin,
+			Output:            config.ToolOutputStdout,
 		},
 		Files:       []string{file},
 		ProjectPath: tmpDir,
@@ -234,25 +291,53 @@ func TestFormattingPipelineEmptyStdoutDoesNotTruncate(t *testing.T) {
 	}
 
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
 			// Writes only to stderr, nothing to stdout, exits 0.
 			"silent-fmt": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", "echo noise >&2"},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", "echo noise >&2"},
 			},
 		},
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 	task := Task{
-		ToolName:  "silent-fmt",
-		Operation: config.OpFix,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "silent-fmt",
+		Operation:    config.OpFix,
 		OpConfig: config.ToolOperation{
-			App:    "silent-fmt",
-			Scope:  config.ToolScopePerFile,
-			Input:  config.ToolInputStdin,
-			Output: config.ToolOutputStdout,
+			Args:              nil,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			LSP:               nil,
+			ManagedConfigRefs: nil,
+			App:               "silent-fmt",
+			Scope:             config.ToolScopePerFile,
+			Input:             config.ToolInputStdin,
+			Output:            config.ToolOutputStdout,
 		},
 		Files:       []string{file},
 		ProjectPath: tmpDir,

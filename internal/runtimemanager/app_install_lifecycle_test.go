@@ -100,7 +100,7 @@ func TestInstallUVAppRealLifecycle(t *testing.T) {
 	rm := New(config.MapOfRuntimes{"uv": rc})
 	pythonPath := seedTestPythonReady(t, rm, "uv", "", "")
 	record := filepath.Join(base, "uv-record.json")
-	app := &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.37.0", Runtime: "uv", RequiresPython: ">=3.12"}
+	app := &binmanager.AppConfigUV{LockFile: "", PackageName: "yamllint", Version: "1.37.0", Runtime: "uv", RequiresPython: ">=3.12"}
 	appPath, err := rm.GetAppPath("yamllint", config.RuntimeKindUV, uvVersionForHash(app.Version, app.RequiresPython), nil, "", nil, nil, "uv")
 	if err != nil {
 		t.Fatal(err)
@@ -173,11 +173,11 @@ func TestInstallNodeAppRealPNPMLifecycle(t *testing.T) {
 	pnpm := copyInstallerHelper(t, helper, filepath.Join(base, "pnpm-bin", "pnpm"+executableSuffix()))
 	record := filepath.Join(base, "pnpm-record.json")
 	runtimes := config.MapOfRuntimes{
-		"node": {Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: pnpm, SystemVersion: "22"}, Node: &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: "pnpm"}},
+		"node": {Managed: nil, Bun: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem, System: &config.RuntimeConfigSystem{Command: pnpm, SystemVersion: "22"}, Node: &config.RuntimeConfigNode{NodeVersion: "22", PNPMRuntime: "pnpm"}},
 		"pnpm": systemPNPMRuntime(pnpm),
 	}
 	rm := New(runtimes)
-	app := &binmanager.AppConfigNode{PackageName: "probe-pkg", Version: "1.2.3", BinPath: "bin/probe", Runtime: "node"}
+	app := &binmanager.AppConfigNode{LockFile: "", Dependencies: nil, PackageName: "probe-pkg", Version: "1.2.3", BinPath: "bin/probe", Runtime: "node"}
 	t.Setenv("DATAMITSU_HELPER_RECORD", record)
 	t.Setenv("DATAMITSU_HELPER_KIND", "pnpm")
 	t.Setenv("DATAMITSU_HELPER_PACKAGE", app.PackageName)

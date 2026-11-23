@@ -96,7 +96,7 @@ func TestRunPullNode_MinAgeSelectsOlderVersion(t *testing.T) {
 
 	dir := t.TempDir()
 	path := writeNodeApps(t, dir, nodeAppsJSON{
-		"demo": {PackageName: "demo", Version: "1.0.0"},
+		"demo": {Description: "", PackageName: "demo", Version: "1.0.0"},
 	})
 
 	// minAge of one day filters out the one-hour-old 2.0.0, keeping 1.0.0.
@@ -135,7 +135,7 @@ func TestRunPullNode_MinAgeNoVersionOldEnoughSkips(t *testing.T) {
 
 	dir := t.TempDir()
 	path := writeNodeApps(t, dir, nodeAppsJSON{
-		"fresh": {PackageName: "fresh", Version: "2.0.0"},
+		"fresh": {Description: "", PackageName: "fresh", Version: "2.0.0"},
 	})
 
 	*pullNodeMinAge = 24 * 60
@@ -174,7 +174,7 @@ func TestRunPullNode_MinAgeZeroTakesLatest(t *testing.T) {
 
 	dir := t.TempDir()
 	path := writeNodeApps(t, dir, nodeAppsJSON{
-		"demo": {PackageName: "demo", Version: "1.0.0"},
+		"demo": {Description: "", PackageName: "demo", Version: "1.0.0"},
 	})
 
 	// --min-age 0 disables filtering: the brand-new 2.0.0 should win.

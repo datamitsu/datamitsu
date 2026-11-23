@@ -74,82 +74,96 @@ func TestResolveFormatPolicy(t *testing.T) {
 		wantFrom  []string
 		wantWarns []string // substrings, one per expected warning, in order
 	}{
-		{name: "absent options", options: "", want: base},
-		{name: "null options", options: "null", want: base},
-		{name: "empty object", options: "{}", want: base},
+		{wantFrom: nil, wantWarns: nil, name: "absent options", options: "", want: base},
+		{wantFrom: nil, wantWarns: nil, name: "null options", options: "null", want: base},
+		{wantFrom: nil, wantWarns: nil, name: "empty object", options: "{}", want: base},
 		{
+			wantFrom:  nil,
 			name:      "options not an object",
 			options:   `["format"]`,
 			want:      base,
 			wantWarns: []string{"initializationOptions is not an object"},
 		},
 		{
-			name:    "reserved and unknown top-level keys are silent",
-			options: `{"diagnostics": {"enabled": true}, "future": 1}`,
-			want:    base,
+			wantFrom:  nil,
+			wantWarns: nil,
+			name:      "reserved and unknown top-level keys are silent",
+			options:   `{"diagnostics": {"enabled": true}, "future": 1}`,
+			want:      base,
 		},
-		{name: "null format", options: `{"format": null}`, want: base},
+		{wantFrom: nil, wantWarns: nil, name: "null format", options: `{"format": null}`, want: base},
 		{
+			wantFrom:  nil,
 			name:      "format not an object",
 			options:   `{"format": "unit"}`,
 			want:      base,
 			wantWarns: []string{"initializationOptions.format is not an object"},
 		},
 		{
-			name:     "widenTo target",
-			options:  `{"format": {"widenTo": "target"}}`,
-			want:     formatPolicy{WidenTo: config.WidenToTarget, TimeoutMs: 15000, Tools: map[string]bool{}},
-			wantFrom: []string{"widenTo"},
+			wantWarns: nil,
+			name:      "widenTo target",
+			options:   `{"format": {"widenTo": "target"}}`,
+			want:      formatPolicy{WidenTo: config.WidenToTarget, TimeoutMs: 15000, Tools: map[string]bool{}},
+			wantFrom:  []string{"widenTo"},
 		},
 		{
+			wantFrom:  nil,
 			name:      "widenTo repo is rejected",
 			options:   `{"format": {"widenTo": "repo"}}`,
 			want:      base,
 			wantWarns: []string{`"repo" is not allowed in the editor: a repository-wide fix never runs on save`},
 		},
 		{
+			wantFrom:  nil,
 			name:      "widenTo is case-sensitive",
 			options:   `{"format": {"widenTo": "Unit"}}`,
 			want:      base,
 			wantWarns: []string{`format.widenTo: expected "target" or "unit", got "Unit"`},
 		},
 		{
+			wantFrom:  nil,
 			name:      "widenTo of the wrong type",
 			options:   `{"format": {"widenTo": 1}}`,
 			want:      base,
 			wantWarns: []string{"format.widenTo: expected"},
 		},
 		{
-			name:     "timeoutMs zero disables the watchdog",
-			options:  `{"format": {"timeoutMs": 0}}`,
-			want:     formatPolicy{WidenTo: config.WidenToUnit, TimeoutMs: 0, Tools: map[string]bool{}},
-			wantFrom: []string{"timeoutMs"},
+			wantWarns: nil,
+			name:      "timeoutMs zero disables the watchdog",
+			options:   `{"format": {"timeoutMs": 0}}`,
+			want:      formatPolicy{WidenTo: config.WidenToUnit, TimeoutMs: 0, Tools: map[string]bool{}},
+			wantFrom:  []string{"timeoutMs"},
 		},
 		{
-			name:     "timeoutMs in exponent form is still an integer",
-			options:  `{"format": {"timeoutMs": 1.5e3}}`,
-			want:     formatPolicy{WidenTo: config.WidenToUnit, TimeoutMs: 1500, Tools: map[string]bool{}},
-			wantFrom: []string{"timeoutMs"},
+			wantWarns: nil,
+			name:      "timeoutMs in exponent form is still an integer",
+			options:   `{"format": {"timeoutMs": 1.5e3}}`,
+			want:      formatPolicy{WidenTo: config.WidenToUnit, TimeoutMs: 1500, Tools: map[string]bool{}},
+			wantFrom:  []string{"timeoutMs"},
 		},
 		{
+			wantFrom:  nil,
 			name:      "negative timeoutMs",
 			options:   `{"format": {"timeoutMs": -1}}`,
 			want:      base,
 			wantWarns: []string{"format.timeoutMs: expected a non-negative integer, got -1; using 15000"},
 		},
 		{
+			wantFrom:  nil,
 			name:      "fractional timeoutMs",
 			options:   `{"format": {"timeoutMs": 2.5}}`,
 			want:      base,
 			wantWarns: []string{"format.timeoutMs: expected a non-negative integer"},
 		},
 		{
-			name:     "the largest timeoutMs a Duration holds",
-			options:  `{"format": {"timeoutMs": 9223372036854}}`,
-			want:     formatPolicy{WidenTo: config.WidenToUnit, TimeoutMs: 9223372036854, Tools: map[string]bool{}},
-			wantFrom: []string{"timeoutMs"},
+			wantWarns: nil,
+			name:      "the largest timeoutMs a Duration holds",
+			options:   `{"format": {"timeoutMs": 9223372036854}}`,
+			want:      formatPolicy{WidenTo: config.WidenToUnit, TimeoutMs: 9223372036854, Tools: map[string]bool{}},
+			wantFrom:  []string{"timeoutMs"},
 		},
 		{
+			wantFrom: nil,
 			// It would wrap to a negative Duration and disable the watchdog.
 			name:      "timeoutMs past what a Duration holds",
 			options:   `{"format": {"timeoutMs": 1e13}}`,
@@ -157,6 +171,7 @@ func TestResolveFormatPolicy(t *testing.T) {
 			wantWarns: []string{"format.timeoutMs: 1e13 is more than the largest limit, 9223372036854; using 15000"},
 		},
 		{
+			wantFrom: nil,
 			// It would wrap to about 448µs and stop every save after one group.
 			name:      "timeoutMs that wraps to microseconds",
 			options:   `{"format": {"timeoutMs": 18446744073710}}`,
@@ -164,16 +179,18 @@ func TestResolveFormatPolicy(t *testing.T) {
 			wantWarns: []string{"format.timeoutMs: 18446744073710 is more than the largest limit"},
 		},
 		{
+			wantFrom:  nil,
 			name:      "timeoutMs as a string",
 			options:   `{"format": {"timeoutMs": "15000"}}`,
 			want:      base,
 			wantWarns: []string{"format.timeoutMs: expected a non-negative integer"},
 		},
 		{
-			name:     "tools",
-			options:  `{"format": {"tools": {"eslint": true, "prettier": false}}}`,
-			want:     formatPolicy{WidenTo: config.WidenToUnit, TimeoutMs: 15000, Tools: map[string]bool{"eslint": true, "prettier": false}},
-			wantFrom: []string{"tools"},
+			wantWarns: nil,
+			name:      "tools",
+			options:   `{"format": {"tools": {"eslint": true, "prettier": false}}}`,
+			want:      formatPolicy{WidenTo: config.WidenToUnit, TimeoutMs: 15000, Tools: map[string]bool{"eslint": true, "prettier": false}},
+			wantFrom:  []string{"tools"},
 		},
 		{
 			name:      "unknown tool has no effect",
@@ -190,6 +207,7 @@ func TestResolveFormatPolicy(t *testing.T) {
 			wantWarns: []string{`format.tools.eslint: expected a boolean, got "yes"`},
 		},
 		{
+			wantFrom:  nil,
 			name:      "tools not an object",
 			options:   `{"format": {"tools": ["eslint"]}}`,
 			want:      base,
@@ -203,16 +221,18 @@ func TestResolveFormatPolicy(t *testing.T) {
 			wantWarns: []string{"format.timeout: unknown key"},
 		},
 		{
-			name:     "null values read as not set",
-			options:  `{"format": {"widenTo": null, "timeoutMs": null, "tools": {"eslint": null}}}`,
-			want:     base,
-			wantFrom: []string{"tools"},
+			wantWarns: nil,
+			name:      "null values read as not set",
+			options:   `{"format": {"widenTo": null, "timeoutMs": null, "tools": {"eslint": null}}}`,
+			want:      base,
+			wantFrom:  []string{"tools"},
 		},
 		{
-			name:     "every key at once",
-			options:  `{"format": {"widenTo": "target", "timeoutMs": 500, "tools": {"eslint": true}}}`,
-			want:     formatPolicy{WidenTo: config.WidenToTarget, TimeoutMs: 500, Tools: map[string]bool{"eslint": true}},
-			wantFrom: []string{"timeoutMs", "tools", "widenTo"},
+			wantWarns: nil,
+			name:      "every key at once",
+			options:   `{"format": {"widenTo": "target", "timeoutMs": 500, "tools": {"eslint": true}}}`,
+			want:      formatPolicy{WidenTo: config.WidenToTarget, TimeoutMs: 500, Tools: map[string]bool{"eslint": true}},
+			wantFrom:  []string{"timeoutMs", "tools", "widenTo"},
 		},
 	}
 
@@ -303,12 +323,13 @@ func TestPolicySummary(t *testing.T) {
 	}{
 		{
 			"nothing from the editor",
-			policyResolution{Policy: formatPolicy{WidenTo: config.WidenToUnit, TimeoutMs: 15000, Tools: map[string]bool{}}},
+			policyResolution{FromOptions: nil, Warnings: nil, Policy: formatPolicy{WidenTo: config.WidenToUnit, TimeoutMs: 15000, Tools: map[string]bool{}}},
 			"format policy: widenTo=unit timeoutMs=15000 tools={} (from initializationOptions: none)",
 		},
 		{
 			"keys from the editor",
 			policyResolution{
+				Warnings:    nil,
 				Policy:      formatPolicy{WidenTo: config.WidenToTarget, TimeoutMs: 0, Tools: map[string]bool{"prettier": false, "eslint": true}},
 				FromOptions: []string{"tools", "widenTo"},
 			},
@@ -331,10 +352,16 @@ func TestPolicySummary(t *testing.T) {
 // project — precisely the blast radius that setting exists to prevent.
 func TestFilterPlanForEditorClampsToTheProjectPolicy(t *testing.T) {
 	newPlan := func() *tooling.ExecutionPlan {
-		return &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{
-			{ToolName: "gofmt", OpConfig: unitOp, ProjectPath: "/repo/pkg"},
-			{ToolName: "shfmt", OpConfig: fileOp, ProjectPath: "/repo/pkg"},
-		}}}}
+		return &tooling.ExecutionPlan{
+			ConfigName: "",
+			FailOn:     "",
+			Skipped:    nil, Groups: []tooling.TaskGroup{{
+				Priority: 0, Tasks: []tooling.Task{
+					{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "gofmt", OpConfig: unitOp, ProjectPath: "/repo/pkg"},
+					{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "shfmt", OpConfig: fileOp, ProjectPath: "/repo/pkg"},
+				},
+			}},
+		}
 	}
 
 	t.Run("project target overrides the looser session default", func(t *testing.T) {
@@ -381,34 +408,34 @@ func TestTaskCoversPath(t *testing.T) {
 	}{
 		{
 			"file inside the unit",
-			tooling.Task{ProjectPath: unit},
+			tooling.Task{ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ProjectPath: unit},
 			filepath.Join(unit, "main.go"), true,
 		},
 		{
 			"file in a nested directory",
-			tooling.Task{ProjectPath: unit},
+			tooling.Task{ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ProjectPath: unit},
 			filepath.Join(unit, "internal", "x.go"), true,
 		},
 		{
 			"file in a sibling unit",
-			tooling.Task{ProjectPath: unit},
+			tooling.Task{ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ProjectPath: unit},
 			filepath.FromSlash("/repo/svc/b/main.go"), false,
 		},
 		{
 			// "/repo/svc/ab" must not count as inside "/repo/svc/a".
 			"sibling with a shared name prefix",
-			tooling.Task{ProjectPath: unit},
+			tooling.Task{ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ProjectPath: unit},
 			filepath.FromSlash("/repo/svc/ab/main.go"), false,
 		},
 		{
 			"file above the unit",
-			tooling.Task{ProjectPath: unit},
+			tooling.Task{ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ProjectPath: unit},
 			filepath.FromSlash("/repo/main.go"), false,
 		},
 		{
 			// No project path means the task is not unit-bound.
 			"task with no unit covers everything",
-			tooling.Task{},
+			tooling.Task{ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: ""},
 			filepath.FromSlash("/repo/anywhere.go"), true,
 		},
 	}

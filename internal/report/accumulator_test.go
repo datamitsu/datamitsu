@@ -24,28 +24,38 @@ func perFileTask(id string, files ...string) tooling.Task {
 		absFiles[i] = abs(f)
 	}
 	return tooling.Task{
-		ID: id, ToolName: "hadolint",
-		Tool:     config.Tool{OutputParser: &config.OutputParser{Module: "core", Parser: "hadolint"}},
-		OpConfig: config.ToolOperation{App: "hadolint", Args: []string{"{file}"}, Scope: config.ToolScopePerFile},
+		Operation:   "",
+		ProjectPath: "",
+		UnitDir:     "",
+		UnitMembers: nil,
+		UnitGuards:  nil,
+		ID:          id, ToolName: "hadolint",
+		Tool:     config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: &config.OutputParser{Module: "core", Parser: "hadolint"}},
+		OpConfig: config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "hadolint", Args: []string{"{file}"}, Scope: config.ToolScopePerFile},
 		Files:    absFiles, Coverage: tooling.CoverageComplete,
 	}
 }
 
 func testOptions() Options {
 	return Options{
-		Root: root,
+		Secrets: nil,
+		Root:    root,
 		Tools: config.MapOfTools{
 			"hadolint": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
 				OutputParser: &config.OutputParser{Module: "core", Parser: "hadolint"},
-				Operations:   map[config.OperationType]config.ToolOperation{config.OpLint: {App: "hadolint", FailOn: config.SeverityWarning}},
+				Operations:   map[config.OperationType]config.ToolOperation{config.OpLint: {Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "hadolint", FailOn: config.SeverityWarning}},
 			},
 		},
-		Apps:   binmanager.MapOfApps{"hadolint": {Binary: &binmanager.AppConfigBinary{Version: "2.12.0"}}},
+		Apps:   binmanager.MapOfApps{"hadolint": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: "2.12.0"}}},
 		FailOn: config.SeverityError,
 		Parsers: func(module, parser string) (parsermanager.ParserFacts, bool) {
 			return parsermanager.ParserFacts{
 				Version: "0.3.0", Schema: 2, Contract: true,
-				Tool: parsermanager.ToolCapability{Name: parser, ColumnUnit: "utf-32", Category: "security"},
+				Tool: parsermanager.ToolCapability{Description: "", URL: "", Operations: nil, Severities: nil, Kind: "", Name: parser, ColumnUnit: "utf-32", Category: "security"},
 			}, module == "core"
 		},
 	}
@@ -57,36 +67,68 @@ func testOptions() Options {
 func TestInvocationsOfATask(t *testing.T) {
 	task := perFileTask("hadolint::1", "b/Dockerfile", "a/Dockerfile", "c/Dockerfile")
 	unreached := perFileTask("hadolint:x:2", "x/Dockerfile")
-	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{task, unreached}}}}
+	plan := &tooling.ExecutionPlan{ConfigName: "", FailOn: "", Skipped: nil, Groups: []tooling.TaskGroup{{Priority: 0, Tasks: []tooling.Task{task, unreached}}}}
 	result := tooling.ExecutionResult{
-		ToolName: "hadolint", TaskID: task.ID, Success: false,
+		Output:           "",
+		Error:            nil,
+		Duration:         0,
+		Command:          "",
+		ExitCode:         0,
+		WorkingDir:       "",
+		RelativeDir:      "",
+		Scope:            "",
+		Batch:            false,
+		Cancelled:        false,
+		FailureReason:    0,
+		StartedAt:        time.Time{},
+		EndedAt:          time.Time{},
+		FilesNotRun:      0,
+		UnparsedFailures: nil,
+		CapturedStdout:   "",
+		Diagnostics:      nil,
+		ParseFailed:      false,
+		FailOn:           "",
+		Cached:           false,
+		WholeUnit:        false,
+		UnitDir:          "",
+		ToolName:         "hadolint", TaskID: task.ID, Success: false,
 		Processes: []tooling.ProcessResult{
 			{
-				ID: "hadolint::1#1", Files: []string{abs("b/Dockerfile")}, State: tooling.ProcessRan, ExitCode: new(1),
+				Success:         false,
+				ParseError:      "",
+				Provenance:      "",
+				ParserModule:    "",
+				OutputTail:      nil,
+				FailOn:          "",
+				GateActive:      false,
+				ThresholdFailed: false,
+				ID:              "hadolint::1#1", Files: []string{abs("b/Dockerfile")}, State: tooling.ProcessRan, ExitCode: new(1),
 				Extraction: tooling.ExtractionParsedFindings, DurationMs: 12,
 				Diagnostics: []diagnostic.Diagnostic{{
-					File: abs("b/Dockerfile"), Row: 3, EndRow: 3, Col: 1, EndCol: 5,
+					Baselined: false,
+					Anchor:    nil,
+					File:      abs("b/Dockerfile"), Row: 3, EndRow: 3, Col: 1, EndCol: 5,
 					Severity: diagnostic.SeverityError, Message: "m", Source: "hadolint", Code: "DL3000",
 					URL: "https://example.test/DL3000", Reported: true, Gates: true,
 				}},
 			},
-			{ID: "hadolint::1#2", Files: []string{abs("c/Dockerfile")}, State: tooling.ProcessNotStarted, Extraction: tooling.ExtractionNone},
+			{ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, ID: "hadolint::1#2", Files: []string{abs("c/Dockerfile")}, State: tooling.ProcessNotStarted, Extraction: tooling.ExtractionNone},
 		},
 		Files: []string{abs("b/Dockerfile"), abs("a/Dockerfile"), abs("c/Dockerfile")},
 		FileResults: []tooling.FileResult{
-			{File: abs("b/Dockerfile"), State: tooling.FileRan, ProcessID: "hadolint::1#1", ExitCode: new(1)},
-			{File: abs("a/Dockerfile"), State: tooling.FileCached, Success: true},
-			{File: abs("c/Dockerfile"), State: tooling.FileNotStarted},
+			{Success: false, Edits: nil, Patch: "", File: abs("b/Dockerfile"), State: tooling.FileRan, ProcessID: "hadolint::1#1", ExitCode: new(1)},
+			{ProcessID: "", ExitCode: nil, Edits: nil, Patch: "", File: abs("a/Dockerfile"), State: tooling.FileCached, Success: true},
+			{ProcessID: "", Success: false, ExitCode: nil, Edits: nil, Patch: "", File: abs("c/Dockerfile"), State: tooling.FileNotStarted},
 		},
 	}
 
 	acc := NewAccumulator(testOptions())
 	op := acc.BeginOperation("lint", plan, func(tooling.Task) string { return "x" })
 	op.AddTask(result)
-	op.Stopped(Cancel{TaskID: unreached.ID, Tool: "hadolint", Dir: "x", Cause: "fail-fast"})
+	op.Stopped(Cancel{Started: false, TaskID: unreached.ID, Tool: "hadolint", Dir: "x", Cause: "fail-fast"})
 	op.End(false, 40)
 	acc.NotRun("fix")
-	run := acc.Build(BuildInfo{Version: "1.0.0", Configuration: "c", StartedAt: time.Unix(0, 0), EndedAt: time.Unix(1, 0), Selection: Selection{Mode: "all"}})
+	run := acc.Build(BuildInfo{FailFast: false, Exports: nil, CI: CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Version: "1.0.0", Configuration: "c", StartedAt: time.Unix(0, 0), EndedAt: time.Unix(1, 0), Selection: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}})
 
 	if len(run.Operations) != 2 || run.Operations[1].Name != "fix" || run.Operations[1].Ran {
 		t.Fatalf("operations = %+v, want lint then a fix that did not run", run.Operations)
@@ -97,7 +139,11 @@ func TestInvocationsOfATask(t *testing.T) {
 	}
 	tr := tools[0]
 	wantTool := ToolRun{
-		Name: "hadolint", App: AppRef{Name: "hadolint", Kind: "binary", Version: "2.12.0"},
+		RedactedReasons: nil,
+
+		Complete:    false,
+		Invocations: nil,
+		Name:        "hadolint", App: AppRef{OfficialURL: "", Name: "hadolint", Kind: "binary", Version: "2.12.0"},
 		Parser: &ParserRef{Module: "core", Parser: "hadolint", Version: "0.3.0", Schema: 2, ColumnUnit: "utf-32"},
 		FailOn: "warning", GateActive: true, Category: "security", Incomplete: []Reason{ReasonNotStarted}, mayHoldSecrets: true,
 	}
@@ -125,11 +171,12 @@ func TestInvocationsOfATask(t *testing.T) {
 	}
 	// Never anchored, so it rests on its row.
 	wantFinding := Finding{
+		Baselined:        false,
 		Fingerprint:      Fingerprint("hadolint", "DL3000", "b/Dockerfile", "row:3", 0),
 		FingerprintBasis: "row",
 		Tool:             "hadolint", Source: "hadolint", Code: "DL3000", RuleURL: "https://example.test/DL3000",
 		Severity: "error", Reported: true, Gates: true, Shown: true, Kind: "security", Message: "m", Provenance: "parser",
-		Location: Location{Path: "b/Dockerfile", Row: 3, EndRow: 3, Col: 1, EndCol: 5, Unit: "utf-32", Precision: "unknown"},
+		Location: Location{Chars: nil, Bytes: nil, Utf16: nil, Path: "b/Dockerfile", Row: 3, EndRow: 3, Col: 1, EndCol: 5, Unit: "utf-32", Precision: "unknown"},
 		lineHash: "row:3",
 	}
 	if len(first.Findings) != 1 || !reflect.DeepEqual(first.Findings[0], wantFinding) {
@@ -156,27 +203,34 @@ func TestStandInInvocations(t *testing.T) {
 		success   bool
 	}{
 		{
-			name:   "verdict hit",
-			result: tooling.ExecutionResult{Success: true, Cached: true, FileResults: []tooling.FileResult{{File: abs("a"), State: tooling.FileVerdictHit, Success: true}}},
-			wantID: "t::1#verdict", wantState: "verdict-hit", success: true,
+			wantKind: "",
+			name:     "verdict hit",
+			result:   tooling.ExecutionResult{ToolName: "", TaskID: "", Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: time.Time{}, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, WholeUnit: false, UnitDir: "", Success: true, Cached: true, FileResults: []tooling.FileResult{{ProcessID: "", ExitCode: nil, Edits: nil, Patch: "", File: abs("a"), State: tooling.FileVerdictHit, Success: true}}},
+			wantID:   "t::1#verdict", wantState: "verdict-hit", success: true,
 		},
 		{
-			name:   "setup failed",
-			result: tooling.ExecutionResult{Success: false, StartedAt: time.Unix(1, 0), FileResults: []tooling.FileResult{{File: abs("a"), State: tooling.FileSetupFailed}}},
-			wantID: "t::1#0", wantState: "setup-failed", wantKind: "setup",
+			success: false,
+			name:    "setup failed",
+			result:  tooling.ExecutionResult{ToolName: "", TaskID: "", Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, Cached: false, WholeUnit: false, UnitDir: "", Success: false, StartedAt: time.Unix(1, 0), FileResults: []tooling.FileResult{{ProcessID: "", Success: false, ExitCode: nil, Edits: nil, Patch: "", File: abs("a"), State: tooling.FileSetupFailed}}},
+			wantID:  "t::1#0", wantState: "setup-failed", wantKind: "setup",
 		},
 		{
-			name:   "cancelled before it started",
-			result: tooling.ExecutionResult{Success: false, Cancelled: true, FileResults: []tooling.FileResult{{File: abs("a"), State: tooling.FileNotStarted}}},
-			wantID: "t::1#0", wantState: "not-started",
+			wantKind: "",
+			success:  false,
+			name:     "cancelled before it started",
+			result:   tooling.ExecutionResult{ToolName: "", TaskID: "", Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, FailureReason: 0, StartedAt: time.Time{}, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, Cached: false, WholeUnit: false, UnitDir: "", Success: false, Cancelled: true, FileResults: []tooling.FileResult{{ProcessID: "", Success: false, ExitCode: nil, Edits: nil, Patch: "", File: abs("a"), State: tooling.FileNotStarted}}},
+			wantID:   "t::1#0", wantState: "not-started",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			task := perFileTask("t::1", "a")
 			tt.result.TaskID = task.ID
-			acc := NewAccumulator(Options{Root: root})
-			invocations := acc.invocations(task, &tt.result, nil, &ToolRun{})
+			acc := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root})
+			invocations := acc.invocations(task, &tt.result, nil, &ToolRun{
+				RedactedReasons: nil,
+				Name:            "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: nil, mayHoldSecrets: false,
+			})
 			if len(invocations) != 1 {
 				t.Fatalf("invocations = %+v, want one", invocations)
 			}
@@ -193,16 +247,41 @@ func TestStandInInvocations(t *testing.T) {
 
 // A process given no path answers for every file no cache answered.
 func TestWholeUnitProcessClaimsTheUnit(t *testing.T) {
-	task := tooling.Task{ID: "tsc:pkg:1", ToolName: "tsc", OpConfig: config.ToolOperation{Scope: config.ToolScopePerProject}}
+	task := tooling.Task{Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ID: "tsc:pkg:1", ToolName: "tsc", OpConfig: config.ToolOperation{App: "", Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: config.ToolScopePerProject}}
 	result := tooling.ExecutionResult{
-		TaskID: task.ID, Success: true, RelativeDir: "pkg", WholeUnit: true,
-		Processes: []tooling.ProcessResult{{ID: "tsc:pkg:1#1", State: tooling.ProcessRan, ExitCode: new(0), Success: true, Extraction: tooling.ExtractionNone}},
+		ToolName:         "",
+		Output:           "",
+		Error:            nil,
+		Duration:         0,
+		Command:          "",
+		ExitCode:         0,
+		WorkingDir:       "",
+		Scope:            "",
+		Batch:            false,
+		Cancelled:        false,
+		FailureReason:    0,
+		StartedAt:        time.Time{},
+		EndedAt:          time.Time{},
+		FilesNotRun:      0,
+		UnparsedFailures: nil,
+		CapturedStdout:   "",
+		Diagnostics:      nil,
+		ParseFailed:      false,
+		FailOn:           "",
+		Files:            nil,
+		Cached:           false,
+		UnitDir:          "",
+		TaskID:           task.ID, Success: true, RelativeDir: "pkg", WholeUnit: true,
+		Processes: []tooling.ProcessResult{{Files: nil, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, ID: "tsc:pkg:1#1", State: tooling.ProcessRan, ExitCode: new(0), Success: true, Extraction: tooling.ExtractionNone}},
 		FileResults: []tooling.FileResult{
-			{File: abs("pkg/b.ts"), State: tooling.FileRan, Success: true, ProcessID: "tsc:pkg:1#1", ExitCode: new(0)},
-			{File: abs("pkg/a.ts"), State: tooling.FileRan, Success: true, ProcessID: "tsc:pkg:1#1", ExitCode: new(0)},
+			{Edits: nil, Patch: "", File: abs("pkg/b.ts"), State: tooling.FileRan, Success: true, ProcessID: "tsc:pkg:1#1", ExitCode: new(0)},
+			{Edits: nil, Patch: "", File: abs("pkg/a.ts"), State: tooling.FileRan, Success: true, ProcessID: "tsc:pkg:1#1", ExitCode: new(0)},
 		},
 	}
-	invocations := NewAccumulator(Options{Root: root}).invocations(task, &result, nil, &ToolRun{})
+	invocations := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root}).invocations(task, &result, nil, &ToolRun{
+		RedactedReasons: nil,
+		Name:            "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: nil, mayHoldSecrets: false,
+	})
 	if len(invocations) != 1 || !invocations[0].WholeUnit || invocations[0].Dir != "pkg" {
 		t.Fatalf("invocations = %+v, want the one whole-unit process in pkg", invocations)
 	}
@@ -217,14 +296,44 @@ func TestWholeUnitProcessClaimsTheUnit(t *testing.T) {
 func TestSettleFindings(t *testing.T) {
 	finding := func(col int) Finding {
 		return Finding{
-			Tool: "eslint", Code: "eqeqeq", Source: "eslint", Message: "m", lineHash: "h",
-			Location: Location{Path: "a.js", Row: 5, Col: col},
+			Fingerprint:      "",
+			FingerprintBasis: "",
+			RuleURL:          "",
+			Severity:         "",
+			Reported:         false,
+			Gates:            false,
+			Shown:            false,
+			Baselined:        false,
+			Kind:             "",
+			Provenance:       "",
+			Tool:             "eslint", Code: "eqeqeq", Source: "eslint", Message: "m", lineHash: "h",
+			Location: Location{EndRow: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "", Path: "a.js", Row: 5, Col: col},
 		}
 	}
-	tr := &ToolRun{Invocations: []Invocation{
-		{ID: "eslint::1#1", Findings: []Finding{finding(7)}},
-		{ID: "eslint::1#2", Findings: []Finding{finding(3), finding(7)}},
-	}}
+	tr := &ToolRun{
+		RedactedReasons: nil,
+
+		Name:           "",
+		App:            AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+		Parser:         nil,
+		FailOn:         "",
+		GateActive:     false,
+		Category:       "",
+		Complete:       false,
+		Incomplete:     nil,
+		mayHoldSecrets: false, Invocations: []Invocation{
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#1", Findings: []Finding{finding(7)},
+			},
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#2", Findings: []Finding{finding(3), finding(7)},
+			},
+		},
+	}
 	settleFindings(tr)
 	first, second := tr.Invocations[0].Findings, tr.Invocations[1].Findings
 	if len(first) != 1 || len(second) != 1 || second[0].Location.Col != 3 {
@@ -241,22 +350,55 @@ func TestSettleFindings(t *testing.T) {
 // holds, and never twice.
 func TestFindingsOfAFinishedTool(t *testing.T) {
 	finding := func(file string, col int) diagnostic.Diagnostic {
-		return diagnostic.Diagnostic{File: abs(file), Row: 1, EndRow: 1, Col: col, EndCol: col, Code: "C", Source: "hadolint", Message: "m", Severity: diagnostic.SeverityError}
+		return diagnostic.Diagnostic{URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, File: abs(file), Row: 1, EndRow: 1, Col: col, EndCol: col, Code: "C", Source: "hadolint", Message: "m", Severity: diagnostic.SeverityError}
 	}
 	a1, a2, b1 := perFileTask("hadolint::1", "a"), perFileTask("hadolint::2", "a"), perFileTask("other::3", "b")
 	b1.ToolName = "other"
-	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{a1, a2, b1}}}}
+	plan := &tooling.ExecutionPlan{ConfigName: "", FailOn: "", Skipped: nil, Groups: []tooling.TaskGroup{{Priority: 0, Tasks: []tooling.Task{a1, a2, b1}}}}
 	result := func(task tooling.Task, d diagnostic.Diagnostic) tooling.ExecutionResult {
 		return tooling.ExecutionResult{
-			ToolName: task.ToolName, TaskID: task.ID, Success: false,
+			Output:           "",
+			Error:            nil,
+			Duration:         0,
+			Command:          "",
+			ExitCode:         0,
+			WorkingDir:       "",
+			RelativeDir:      "",
+			Scope:            "",
+			Batch:            false,
+			Cancelled:        false,
+			FailureReason:    0,
+			StartedAt:        time.Time{},
+			EndedAt:          time.Time{},
+			FilesNotRun:      0,
+			UnparsedFailures: nil,
+			CapturedStdout:   "",
+			Diagnostics:      nil,
+			ParseFailed:      false,
+			FailOn:           "",
+			Files:            nil,
+			FileResults:      nil,
+			Cached:           false,
+			WholeUnit:        false,
+			UnitDir:          "",
+			ToolName:         task.ToolName, TaskID: task.ID, Success: false,
 			Processes: []tooling.ProcessResult{{
-				ID: task.ID + "#1", Files: task.Files, State: tooling.ProcessRan, ExitCode: new(1),
+				Success:         false,
+				ParseError:      "",
+				Provenance:      "",
+				ParserModule:    "",
+				OutputTail:      nil,
+				DurationMs:      0,
+				FailOn:          "",
+				GateActive:      false,
+				ThresholdFailed: false,
+				ID:              task.ID + "#1", Files: task.Files, State: tooling.ProcessRan, ExitCode: new(1),
 				Extraction: tooling.ExtractionParsedFindings, Diagnostics: []diagnostic.Diagnostic{d},
 			}},
 		}
 	}
 
-	acc := NewAccumulator(Options{Root: root})
+	acc := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root})
 	op := acc.BeginOperation("lint", plan, nil)
 	if got := op.AddTask(result(a1, finding("a", 5))); got != nil {
 		t.Fatalf("findings before hadolint finished = %+v", got)
@@ -276,7 +418,7 @@ func TestFindingsOfAFinishedTool(t *testing.T) {
 		got[0].Finding.Fingerprint != Fingerprint("hadolint", "C", "a", "row:1", 1) {
 		t.Errorf("fingerprints = %s, %s", got[0].Finding.Fingerprint, got[1].Finding.Fingerprint)
 	}
-	run := acc.Build(BuildInfo{Selection: Selection{Mode: "all"}})
+	run := acc.Build(BuildInfo{Version: "", Configuration: "", StartedAt: time.Time{}, EndedAt: time.Time{}, FailFast: false, Exports: nil, CI: CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}})
 	for _, tr := range run.Operations[0].Tools {
 		for _, inv := range tr.Invocations {
 			for _, f := range inv.Findings {
@@ -287,7 +429,7 @@ func TestFindingsOfAFinishedTool(t *testing.T) {
 		}
 	}
 
-	stopped := NewAccumulator(Options{Root: root}).BeginOperation("lint", plan, nil)
+	stopped := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root}).BeginOperation("lint", plan, nil)
 	stopped.AddTask(result(a1, finding("a", 5)))
 	if rest := stopped.Flush(); len(rest) != 1 || rest[0].TaskID != a1.ID {
 		t.Errorf("Flush = %+v, want the finding of the tool the run stopped", rest)
@@ -297,7 +439,10 @@ func TestFindingsOfAFinishedTool(t *testing.T) {
 // A message a structured format carried with escaped colour codes reaches the
 // report without them.
 func TestFindingMessageIsPlainText(t *testing.T) {
-	f := NewAccumulator(Options{Root: root}).finding("t", diagnostic.Diagnostic{Message: "\x1b[31merror\x1b[0m: bad"}, &ToolRun{})
+	f := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root}).finding("t", diagnostic.Diagnostic{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "\x1b[31merror\x1b[0m: bad"}, &ToolRun{
+		RedactedReasons: nil,
+		Name:            "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: nil, mayHoldSecrets: false,
+	})
 	if f.Message != "error: bad" {
 		t.Errorf("message = %q, want it without ANSI sequences", f.Message)
 	}
@@ -309,14 +454,41 @@ func TestFindingMessageIsPlainText(t *testing.T) {
 func TestSettleFindingsKeepsTheStrongest(t *testing.T) {
 	finding := func(severity string, reported, gates bool) Finding {
 		return Finding{
-			Tool: "t", Code: "C", Source: "t", Message: "m", lineHash: "h", Severity: severity,
-			Reported: reported, Gates: gates, Location: Location{Path: "a", Row: 1, Col: 1},
+			Fingerprint:      "",
+			FingerprintBasis: "",
+			RuleURL:          "",
+			Shown:            false,
+			Baselined:        false,
+			Kind:             "",
+			Provenance:       "",
+			Tool:             "t", Code: "C", Source: "t", Message: "m", lineHash: "h", Severity: severity,
+			Reported: reported, Gates: gates, Location: Location{EndRow: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "", Path: "a", Row: 1, Col: 1},
 		}
 	}
-	tr := &ToolRun{Invocations: []Invocation{
-		{ID: "t::1#1", Findings: []Finding{finding("warning", false, false)}},
-		{ID: "t::1#2", Findings: []Finding{finding("error", true, true)}},
-	}}
+	tr := &ToolRun{
+		RedactedReasons: nil,
+
+		Name:           "",
+		App:            AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+		Parser:         nil,
+		FailOn:         "",
+		GateActive:     false,
+		Category:       "",
+		Complete:       false,
+		Incomplete:     nil,
+		mayHoldSecrets: false, Invocations: []Invocation{
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#1", Findings: []Finding{finding("warning", false, false)},
+			},
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#2", Findings: []Finding{finding("error", true, true)},
+			},
+		},
+	}
 	settleFindings(tr)
 	if len(tr.Invocations[0].Findings) != 0 {
 		t.Fatalf("the weaker duplicate was kept: %+v", tr.Invocations[0].Findings)
@@ -326,10 +498,30 @@ func TestSettleFindingsKeepsTheStrongest(t *testing.T) {
 	}
 
 	// Of equals, the first is kept.
-	tr = &ToolRun{Invocations: []Invocation{
-		{ID: "t::1#1", Findings: []Finding{finding("error", true, true)}},
-		{ID: "t::1#2", Findings: []Finding{finding("error", true, true)}},
-	}}
+	tr = &ToolRun{
+		RedactedReasons: nil,
+
+		Name:           "",
+		App:            AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+		Parser:         nil,
+		FailOn:         "",
+		GateActive:     false,
+		Category:       "",
+		Complete:       false,
+		Incomplete:     nil,
+		mayHoldSecrets: false, Invocations: []Invocation{
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#1", Findings: []Finding{finding("error", true, true)},
+			},
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#2", Findings: []Finding{finding("error", true, true)},
+			},
+		},
+	}
 	settleFindings(tr)
 	if len(tr.Invocations[0].Findings) != 1 || len(tr.Invocations[1].Findings) != 0 {
 		t.Errorf("findings = %+v, %+v; want the first of two equals", tr.Invocations[0].Findings, tr.Invocations[1].Findings)
@@ -360,7 +552,31 @@ func TestRelPath(t *testing.T) {
 
 func TestInvocationOrder(t *testing.T) {
 	invocations := []Invocation{
-		{ID: "a::10#1"}, {ID: "a::2#cached"}, {ID: "a::2#10"}, {ID: "a::2#2"}, {ID: "a::2#0"}, {ID: "a::2#verdict"},
+		{
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::10#1",
+		}, {
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#cached",
+		}, {
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#10",
+		}, {
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#2",
+		}, {
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#0",
+		}, {
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "a::2#verdict",
+		},
 	}
 	sortInvocations(invocations)
 	got := make([]string, 0, len(invocations))
@@ -377,7 +593,7 @@ func TestInvocationOrder(t *testing.T) {
 // one.
 func TestNilOperationRecord(t *testing.T) {
 	var op *OperationRecord
-	op.AddTask(tooling.ExecutionResult{})
-	op.Stopped(Cancel{})
+	op.AddTask(tooling.ExecutionResult{ToolName: "", TaskID: "", Success: false, Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: time.Time{}, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: ""})
+	op.Stopped(Cancel{TaskID: "", Tool: "", Dir: "", Started: false, Cause: ""})
 	op.End(true, 1)
 }

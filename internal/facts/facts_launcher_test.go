@@ -12,8 +12,9 @@ func TestResolveBinaryCommandForInitIgnoresStaleMarker(t *testing.T) {
 	t.Setenv("DATAMITSU_BINARY_COMMAND", "")
 	root := t.TempDir()
 	if err := managedconfig.WriteLauncherMarker(root, managedconfig.LauncherMarker{
-		Command:    "pnpm datamitsu",
-		BinaryPath: "/marker/bin/datamitsu",
+		CoreVersion: "",
+		Command:     "pnpm datamitsu",
+		BinaryPath:  "/marker/bin/datamitsu",
 	}, false); err != nil {
 		t.Fatal(err)
 	}
@@ -39,8 +40,9 @@ func TestResolveBinaryCommandForInitIgnoresStaleMarker(t *testing.T) {
 func TestResolveBinaryCommandPrecedence(t *testing.T) {
 	root := t.TempDir()
 	if err := managedconfig.WriteLauncherMarker(root, managedconfig.LauncherMarker{
-		Command:    "pnpm datamitsu",
-		BinaryPath: "/marker/bin/datamitsu",
+		CoreVersion: "",
+		Command:     "pnpm datamitsu",
+		BinaryPath:  "/marker/bin/datamitsu",
 	}, false); err != nil {
 		t.Fatal(err)
 	}

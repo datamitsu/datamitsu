@@ -77,7 +77,7 @@ func (c *Client) decorateAsset(ctx context.Context, repository string, r *releas
 		asset.BrowserDownloadURL = asset.APIURL
 	}
 	u, _ := url.Parse(asset.BrowserDownloadURL)
-	ref := &httpx.RequestAuth{Origin: u.Scheme + "://" + u.Host, TokenEnv: c.source.TokenEnv, Header: "Authorization", Scheme: "token"}
+	ref := &httpx.RequestAuth{Accept: "", Origin: u.Scheme + "://" + u.Host, TokenEnv: c.source.TokenEnv, Header: "Authorization", Scheme: "token"}
 	switch c.source.Type {
 	case "gitea", "forgejo":
 		ref.Scheme = "Bearer"

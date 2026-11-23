@@ -50,18 +50,18 @@ func mustParse(t *testing.T, raw string) *url.URL {
 }
 
 func TestHardenedRedirectPolicy(t *testing.T) {
-	httpsReq := &http.Request{URL: mustParse(t, "https://example.com/a")}
-	httpReq := &http.Request{URL: mustParse(t, "http://example.com/a")}
+	httpsReq := &http.Request{Method: "", Proto: "", ProtoMajor: 0, ProtoMinor: 0, Header: nil, Body: nil, GetBody: nil, ContentLength: 0, TransferEncoding: nil, Close: false, Host: "", Form: nil, PostForm: nil, MultipartForm: nil, Trailer: nil, RemoteAddr: "", RequestURI: "", TLS: nil, Response: nil, Pattern: "", URL: mustParse(t, "https://example.com/a")}
+	httpReq := &http.Request{Method: "", Proto: "", ProtoMajor: 0, ProtoMinor: 0, Header: nil, Body: nil, GetBody: nil, ContentLength: 0, TransferEncoding: nil, Close: false, Host: "", Form: nil, PostForm: nil, MultipartForm: nil, Trailer: nil, RemoteAddr: "", RequestURI: "", TLS: nil, Response: nil, Pattern: "", URL: mustParse(t, "http://example.com/a")}
 
 	t.Run("allows https to https", func(t *testing.T) {
-		via := []*http.Request{{URL: mustParse(t, "https://example.com/start")}}
+		via := []*http.Request{{Method: "", Proto: "", ProtoMajor: 0, ProtoMinor: 0, Header: nil, Body: nil, GetBody: nil, ContentLength: 0, TransferEncoding: nil, Close: false, Host: "", Form: nil, PostForm: nil, MultipartForm: nil, Trailer: nil, RemoteAddr: "", RequestURI: "", TLS: nil, Response: nil, Pattern: "", URL: mustParse(t, "https://example.com/start")}}
 		if err := hardenedRedirect(httpsReq, via); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("rejects https to http downgrade", func(t *testing.T) {
-		via := []*http.Request{{URL: mustParse(t, "https://example.com/start")}}
+		via := []*http.Request{{Method: "", Proto: "", ProtoMajor: 0, ProtoMinor: 0, Header: nil, Body: nil, GetBody: nil, ContentLength: 0, TransferEncoding: nil, Close: false, Host: "", Form: nil, PostForm: nil, MultipartForm: nil, Trailer: nil, RemoteAddr: "", RequestURI: "", TLS: nil, Response: nil, Pattern: "", URL: mustParse(t, "https://example.com/start")}}
 		err := hardenedRedirect(httpReq, via)
 		if err == nil {
 			t.Fatal("expected error for HTTPS to HTTP downgrade, got nil")
@@ -74,7 +74,7 @@ func TestHardenedRedirectPolicy(t *testing.T) {
 	t.Run("rejects after 10 redirects", func(t *testing.T) {
 		via := make([]*http.Request, 10)
 		for i := range via {
-			via[i] = &http.Request{URL: mustParse(t, "https://example.com/hop")}
+			via[i] = &http.Request{Method: "", Proto: "", ProtoMajor: 0, ProtoMinor: 0, Header: nil, Body: nil, GetBody: nil, ContentLength: 0, TransferEncoding: nil, Close: false, Host: "", Form: nil, PostForm: nil, MultipartForm: nil, Trailer: nil, RemoteAddr: "", RequestURI: "", TLS: nil, Response: nil, Pattern: "", URL: mustParse(t, "https://example.com/hop")}
 		}
 		err := hardenedRedirect(httpsReq, via)
 		if err == nil {

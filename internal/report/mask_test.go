@@ -36,23 +36,109 @@ func TestMask(t *testing.T) {
 	code := 3
 	stamp := time.Date(2023, 11, 14, 22, 13, 20, 0, time.UTC)
 	run := &Run{
+		Fingerprint:     "",
+		Datamitsu:       Producer{Version: "", Configuration: ""},
+		EndedAt:         time.Time{},
+		FailFast:        false,
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		CI:              CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+
 		StartedAt: stamp,
-		Selection: Selection{Mode: "paths", Paths: []string{"dir-" + secret + "/a"}},
+		Selection: Selection{
+			Dir:           "",
+			Tools:         nil,
+			FileScoped:    false,
+			ExcludedTools: nil,
+			Mode:          "paths", Paths: []string{"dir-" + secret + "/a"},
+		},
 		Operations: []Operation{{
+			Ran:             false,
+			Success:         false,
+			Duration:        0,
+			Skipped:         nil,
+			Cancelled:       nil,
+			ChangesObserved: false,
+			ChangesReason:   "",
+			ChangesDetail:   "",
+			ChangesScope:    nil,
+			Changes:         nil,
+
 			Name: "lint",
 			Tools: []ToolRun{{
+				App:             AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+				Parser:          nil,
+				FailOn:          "",
+				GateActive:      false,
+				Category:        "",
+				Complete:        false,
+				Incomplete:      nil,
+				RedactedReasons: nil,
+				mayHoldSecrets:  false,
+
 				Name: "leaky",
 				Invocations: []Invocation{{
+					ID:                 "",
+					TaskID:             "",
+					Dir:                "",
+					Scope:              "",
+					Granularity:        "",
+					Arity:              "",
+					Coverage:           "",
+					WholeUnit:          false,
+					State:              "",
+					RedactedState:      0,
+					Success:            false,
+					FailureKind:        "",
+					Duration:           0,
+					Extraction:         "",
+					RedactedExtraction: 0,
+					Provenance:         "",
+					Files:              nil,
+					Step:               0,
+					Changes:            nil,
+
 					ExitCode:   &code,
 					OutputTail: "token=" + secret + "\n",
 					Findings: []Finding{{
-						Message:  "found " + secret + " twice: " + secret,
-						Location: Location{Path: "a", Chars: &textpos.Span{Start: 1, End: 2}},
+						Fingerprint:      "",
+						FingerprintBasis: "",
+						Tool:             "",
+						Source:           "",
+						Code:             "",
+						RuleURL:          "",
+						Severity:         "",
+						Reported:         false,
+						Gates:            false,
+						Shown:            false,
+						Baselined:        false,
+						Kind:             "",
+						Provenance:       "",
+						lineHash:         "",
+
+						Message: "found " + secret + " twice: " + secret,
+						Location: Location{
+							Row:       0,
+							EndRow:    0,
+							Col:       0,
+							EndCol:    0,
+							Unit:      "",
+							Bytes:     nil,
+							Utf16:     nil,
+							Precision: "",
+							Path:      "a", Chars: &textpos.Span{Start: 1, End: 2},
+						},
 					}},
 				}},
 			}},
 		}},
-		Exports: []Export{{Format: "json", Path: "out.json", Detail: secret}},
+		Exports: []Export{{
+			Status:    "",
+			Companion: "",
+			Omitted:   nil,
+			Format:    "json", Path: "out.json", Detail: secret,
+		}},
 	}
 	Mask(run, []string{secret, "abcdefgh"})
 
@@ -78,7 +164,33 @@ func TestMask(t *testing.T) {
 // spelling too, the one a routed log line's fields carry.
 func TestMaskJSONSpelling(t *testing.T) {
 	const secret = `token"with\\slash`
-	run := &Run{Operations: []Operation{{Name: `{"files":["dir/token\"with\\\\slash/a"]}` + " and " + secret}}}
+	run := &Run{
+		Fingerprint:     "",
+		Datamitsu:       Producer{Version: "", Configuration: ""},
+		StartedAt:       time.Time{},
+		EndedAt:         time.Time{},
+		Selection:       Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:        false,
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Exports:         nil,
+		CI:              CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		Operations: []Operation{{
+			Ran:             false,
+			Success:         false,
+			Duration:        0,
+			Skipped:         nil,
+			Cancelled:       nil,
+			Tools:           nil,
+			ChangesObserved: false,
+			ChangesReason:   "",
+			ChangesDetail:   "",
+			ChangesScope:    nil,
+			Changes:         nil,
+			Name:            `{"files":["dir/token\"with\\\\slash/a"]}` + " and " + secret,
+		}},
+	}
 	Mask(run, []string{secret})
 	if got := run.Operations[0].Name; got != `{"files":["dir/***/a"]}`+" and "+Masked {
 		t.Errorf("masked = %s", got)
@@ -86,7 +198,20 @@ func TestMaskJSONSpelling(t *testing.T) {
 }
 
 func TestMaskNothing(t *testing.T) {
-	run := &Run{Fingerprint: FingerprintVersion}
+	run := &Run{
+		Datamitsu:       Producer{Version: "", Configuration: ""},
+		StartedAt:       time.Time{},
+		EndedAt:         time.Time{},
+		Selection:       Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:        false,
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Operations:      nil,
+		Exports:         nil,
+		CI:              CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		Fingerprint:     FingerprintVersion,
+	}
 	Mask(run, nil)
 	Mask(nil, []string{"abcdefgh"})
 	if run.Fingerprint != FingerprintVersion {

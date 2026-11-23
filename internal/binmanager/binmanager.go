@@ -248,6 +248,8 @@ type BinManager struct {
 // New creates a BinManager for the given apps and bundles using the host target resolver.
 func New(mapOfApps MapOfApps, mapOfBundles MapOfBundles, runtimeManager RuntimeAppManager) *BinManager {
 	return &BinManager{
+		toolCacheRoot:  "",
+		downloadGroup:  singleflight.Group{},
 		mapOfApps:      mapOfApps,
 		mapOfBundles:   mapOfBundles,
 		runtimeManager: runtimeManager,
@@ -258,6 +260,8 @@ func New(mapOfApps MapOfApps, mapOfBundles MapOfBundles, runtimeManager RuntimeA
 // NewWithResolver creates a BinManager with a custom resolver (for testing).
 func NewWithResolver(mapOfApps MapOfApps, mapOfBundles MapOfBundles, runtimeManager RuntimeAppManager, resolver *target.Resolver) *BinManager {
 	return &BinManager{
+		toolCacheRoot:  "",
+		downloadGroup:  singleflight.Group{},
 		mapOfApps:      mapOfApps,
 		mapOfBundles:   mapOfBundles,
 		runtimeManager: runtimeManager,
@@ -616,7 +620,54 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 				detail += fmt.Sprintf(" +%d", n-shown)
 			}
 		}
-		_ = provision.Progress(ctx, uievent.Event{Type: provision.QueueProgressType, Msg: detail})
+		_ = provision.Progress(ctx, uievent.Event{
+			OpID:            "",
+			TS:              0,
+			Status:          "",
+			ThrottleID:      "",
+			Op:              "",
+			Tool:            "",
+			Dir:             "",
+			Name:            "",
+			BytesDone:       0,
+			BytesTotal:      0,
+			Percent:         0,
+			Index:           0,
+			Total:           0,
+			Success:         nil,
+			DurationMs:      0,
+			Level:           "",
+			Tools:           0,
+			Runs:            0,
+			Failed:          0,
+			Skipped:         0,
+			Cancelled:       nil,
+			Complete:        nil,
+			Format:          "",
+			Path:            "",
+			File:            "",
+			Row:             0,
+			Col:             0,
+			EndRow:          0,
+			EndCol:          0,
+			Severity:        "",
+			Code:            "",
+			Source:          "",
+			Fingerprint:     "",
+			Provenance:      "",
+			Reported:        nil,
+			Gates:           nil,
+			Baselined:       false,
+			FindingsError:   nil,
+			FindingsWarning: nil,
+			FindingsInfo:    nil,
+			FindingsHint:    nil,
+			Cached:          nil,
+			Schema:          "",
+			Events:          "",
+			Annotations:     "",
+			Type:            provision.QueueProgressType, Msg: detail,
+		})
 	}
 	if len(pending) > 0 {
 		reportQueue()
@@ -734,7 +785,7 @@ func (bm *BinManager) ResolveCommandInfo(appName string) (*CommandInfo, bool, er
 		if name == appName {
 			// Only the root's dependency PATH directory is a health path: the dependencies are
 			// reached through it and never run with directories of their own.
-			pathEntries, _, _, err := bm.dependencyPathInfo(appName, &CommandInfo{}, bm.resolveBindingPath, "")
+			pathEntries, _, _, err := bm.dependencyPathInfo(appName, &CommandInfo{Type: "", Command: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil}, bm.resolveBindingPath, "")
 			if err != nil {
 				return nil, false, fmt.Errorf("app %q: %w", appName, err)
 			}
@@ -1104,6 +1155,9 @@ func (bm *BinManager) GetAppsList() []AppInfo {
 // an app that declares no kind.
 func DescribeApp(name string, app App) AppInfo {
 	info := AppInfo{
+		Command:     "",
+		Version:     "",
+		PackageName: "",
 		Name:        name,
 		Type:        "unknown",
 		Description: app.Description,
@@ -1331,13 +1385,13 @@ func (bm *BinManager) resolveRawCommandInfo(appName string) (*CommandInfo, error
 	var cmdInfo *CommandInfo
 	switch {
 	case app.Shell != nil:
-		cmdInfo = &CommandInfo{Type: "shell", Command: app.Shell.Name, Args: app.Shell.Args}
+		cmdInfo = &CommandInfo{Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: app.Shell.Name, Args: app.Shell.Args}
 	case app.Binary != nil:
 		binPath, err := bm.getBinaryPath(appName)
 		if err != nil {
 			return nil, err
 		}
-		cmdInfo = &CommandInfo{Type: "binary", Command: binPath}
+		cmdInfo = &CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "binary", Command: binPath}
 	case app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
 		if bm.runtimeManager == nil {
 			return nil, fmt.Errorf("no runtime manager configured for runtime-managed app %q", appName)
@@ -1370,9 +1424,14 @@ func (bm *BinManager) resolveCommandInfo(appName string) (*CommandInfo, bool, er
 	switch {
 	case app.Shell != nil:
 		cmdInfo = &CommandInfo{
-			Type:    "shell",
-			Command: app.Shell.Name,
-			Args:    app.Shell.Args,
+			Env:            nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "shell",
+			Command:        app.Shell.Name,
+			Args:           app.Shell.Args,
 		}
 		installed = true
 
@@ -1384,8 +1443,14 @@ func (bm *BinManager) resolveCommandInfo(appName string) (*CommandInfo, bool, er
 			return nil, false, err
 		}
 		cmdInfo = &CommandInfo{
-			Type:    "binary",
-			Command: binPath,
+			Args:           nil,
+			Env:            nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "binary",
+			Command:        binPath,
 		}
 		installed = pathExists(binPath)
 
@@ -1467,9 +1532,14 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 	switch {
 	case app.Shell != nil:
 		cmdInfo = &CommandInfo{
-			Type:    "shell",
-			Command: app.Shell.Name,
-			Args:    app.Shell.Args,
+			Env:            nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "shell",
+			Command:        app.Shell.Name,
+			Args:           app.Shell.Args,
 		}
 
 	case app.Binary != nil:
@@ -1478,8 +1548,14 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 			return nil, err
 		}
 		cmdInfo = &CommandInfo{
-			Type:    "binary",
-			Command: binPath,
+			Args:           nil,
+			Env:            nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Type:           "binary",
+			Command:        binPath,
 		}
 
 	case app.Bun != nil || app.Uv != nil || app.Node != nil || app.Jvm != nil || app.Go != nil:
@@ -1529,7 +1605,7 @@ func (bm *BinManager) getCommandInfo(ctx context.Context, appName string) (*Comm
 	// throwaway so the returned cmdInfo keeps the runtime-owned PATH alone.
 	// The barrier caller (materializeDependencyPaths) composes the final
 	// PATH — dependency dir plus inherited tail — exactly once.
-	if _, _, _, err := bm.dependencyPathInfo(appName, &CommandInfo{}, installDependency, ""); err != nil {
+	if _, _, _, err := bm.dependencyPathInfo(appName, &CommandInfo{Type: "", Command: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil}, installDependency, ""); err != nil {
 		return nil, fmt.Errorf("app %q: %w", appName, err)
 	}
 	if cmdInfo.ToolCacheDir != "" {
@@ -1551,7 +1627,7 @@ func (bm *BinManager) materializeDependencyPaths(ctx context.Context, names []st
 	for _, name := range names {
 		info := root
 		if info == nil || name != names[len(names)-1] {
-			info = &CommandInfo{}
+			info = &CommandInfo{Type: "", Command: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil}
 		}
 		if _, err := bm.addDependencyPath(ctx, name, info, bm.resolveBindingPath, true); err != nil {
 			return fmt.Errorf("app %q: %w", name, err)
@@ -1563,18 +1639,39 @@ func (bm *BinManager) materializeDependencyPaths(ctx context.Context, names []st
 func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, BinaryOsArchInfo, error) {
 	app, ok := bm.mapOfApps[name]
 	if !ok {
-		return nil, BinaryOsArchInfo{}, fmt.Errorf("binary '%s' not found in registry", name)
+		return nil, BinaryOsArchInfo{
+			Auth:        nil,
+			URL:         "",
+			Hash:        "",
+			ContentType: "",
+			BinaryPath:  nil,
+			ExtractDir:  false,
+		}, fmt.Errorf("binary '%s' not found in registry", name)
 	}
 
 	if app.Binary == nil {
-		return nil, BinaryOsArchInfo{}, fmt.Errorf("app '%s' is not a binary type", name)
+		return nil, BinaryOsArchInfo{
+			Auth:        nil,
+			URL:         "",
+			Hash:        "",
+			ContentType: "",
+			BinaryPath:  nil,
+			ExtractDir:  false,
+		}, fmt.Errorf("app '%s' is not a binary type", name)
 	}
 
 	candidates := parseBinaryCandidates(app.Binary.Binaries)
 	resolved, info := bm.resolver.Resolve(name, candidates)
 	if resolved == nil {
 		host := bm.resolver.Host()
-		return nil, BinaryOsArchInfo{}, fmt.Errorf("binary '%s' is not available for %s", name, host.String())
+		return nil, BinaryOsArchInfo{
+			Auth:        nil,
+			URL:         "",
+			Hash:        "",
+			ContentType: "",
+			BinaryPath:  nil,
+			ExtractDir:  false,
+		}, fmt.Errorf("binary '%s' is not available for %s", name, host.String())
 	}
 
 	if resolved.Source == target.ResolutionFallback && resolved.FallbackInfo != nil {
@@ -1586,7 +1683,14 @@ func (bm *BinManager) getBinaryInfo(name string) (*target.ResolvedTarget, Binary
 
 	binInfo, ok := info.(*BinaryOsArchInfo)
 	if !ok {
-		return nil, BinaryOsArchInfo{}, fmt.Errorf("binary '%s' resolved to unexpected info type %T", name, info)
+		return nil, BinaryOsArchInfo{
+			Auth:        nil,
+			URL:         "",
+			Hash:        "",
+			ContentType: "",
+			BinaryPath:  nil,
+			ExtractDir:  false,
+		}, fmt.Errorf("binary '%s' resolved to unexpected info type %T", name, info)
 	}
 
 	return resolved, *binInfo, nil
@@ -1613,7 +1717,14 @@ func (bm *BinManager) getInstallPath(name string) (string, error) {
 func (bm *BinManager) binaryInstall(name string) (string, BinaryOsArchInfo, error) {
 	resolved, binaryInfo, err := bm.getBinaryInfo(name)
 	if err != nil {
-		return "", BinaryOsArchInfo{}, err
+		return "", BinaryOsArchInfo{
+			Auth:        nil,
+			URL:         "",
+			Hash:        "",
+			ContentType: "",
+			BinaryPath:  nil,
+			ExtractDir:  false,
+		}, err
 	}
 	configHash := calculateConfigHash(binaryInfo, *resolved)
 	return binaryStorePath(name, configHash, binaryInfo.ExtractDir, runtime.GOOS), binaryInfo, nil

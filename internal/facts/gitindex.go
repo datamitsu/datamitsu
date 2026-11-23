@@ -134,18 +134,18 @@ func readGitIndexEntry(raw []byte, pos, idLen int, version uint32) (entry gitInd
 	// Fixed stat data, the object id, then the 16-bit flags word.
 	head := pos + gitIndexStatLen + idLen + 2
 	if head > len(raw) {
-		return gitIndexEntry{}, false
+		return gitIndexEntry{mode: 0, name: "", stage: 0, next: 0}, false
 	}
 	mode := binary.BigEndian.Uint32(raw[pos+gitIndexModeOff : pos+gitIndexModeOff+4])
 	flags := binary.BigEndian.Uint16(raw[pos+gitIndexStatLen+idLen : head])
 
 	if flags&gitIndexExtendedFlag != 0 {
 		if version < 3 {
-			return gitIndexEntry{}, false
+			return gitIndexEntry{mode: 0, name: "", stage: 0, next: 0}, false
 		}
 		head += 2
 		if head > len(raw) {
-			return gitIndexEntry{}, false
+			return gitIndexEntry{mode: 0, name: "", stage: 0, next: 0}, false
 		}
 	}
 
@@ -155,12 +155,12 @@ func readGitIndexEntry(raw []byte, pos, idLen int, version uint32) (entry gitInd
 	if nameLen := int(flags & gitIndexNameMask); nameLen < gitIndexNameMask {
 		end = head + nameLen
 		if end > len(raw) {
-			return gitIndexEntry{}, false
+			return gitIndexEntry{mode: 0, name: "", stage: 0, next: 0}, false
 		}
 	} else {
 		i := bytes.IndexByte(raw[head:], 0)
 		if i < 0 {
-			return gitIndexEntry{}, false
+			return gitIndexEntry{mode: 0, name: "", stage: 0, next: 0}, false
 		}
 		end = head + i
 	}
@@ -168,10 +168,10 @@ func readGitIndexEntry(raw []byte, pos, idLen int, version uint32) (entry gitInd
 	// One to eight NUL bytes pad every entry to a multiple of eight bytes.
 	next := pos + (end-pos+8)&^7
 	if next > len(raw) {
-		return gitIndexEntry{}, false
+		return gitIndexEntry{mode: 0, name: "", stage: 0, next: 0}, false
 	}
 	if !allZero(raw[end:next]) {
-		return gitIndexEntry{}, false
+		return gitIndexEntry{mode: 0, name: "", stage: 0, next: 0}, false
 	}
 
 	return gitIndexEntry{

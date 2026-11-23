@@ -25,9 +25,11 @@ func fixtureRoot(t *testing.T) (string, Manifest) {
 	mustWrite(t, filepath.Join(root, "before.config.ts"), "export default {}\n")
 
 	plan := Plan{
-		Root:    root,
-		FarmDir: filepath.Join(root, "farm"),
-		Entries: []Entry{{Name: "tofu", Kind: "binary", Strategy: StrategySymlink, Command: "/store/.bin/tofu/abc", Installed: true}},
+		Excluded: nil,
+		Shadowed: nil,
+		Root:     root,
+		FarmDir:  filepath.Join(root, "farm"),
+		Entries:  []Entry{{Provider: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Kind: "binary", Strategy: StrategySymlink, Command: "/store/.bin/tofu/abc", Installed: true}},
 	}
 	// Exactly what cmd.ConfigChainFiles() yields: the discovered config plus the
 	// resolved before-config files, and nothing else. The undiscovered
@@ -215,7 +217,7 @@ func TestValidate_UnchangedTreeIsFresh(t *testing.T) {
 func TestValidate_FutureFormatVersionIsStaleNotAnError(t *testing.T) {
 	root, m := fixtureRoot(t)
 	m.FormatVersion = ManifestFormatVersion + 99
-	m.Entries = append(m.Entries, Entry{Name: "from-the-future", Kind: "binary", Strategy: StrategyShim})
+	m.Entries = append(m.Entries, Entry{Provider: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false, Name: "from-the-future", Kind: "binary", Strategy: StrategyShim})
 
 	path := filepath.Join(root, "manifest.json")
 	data, err := Encode(m)
@@ -253,7 +255,8 @@ func TestValidate_ShimTargetTransitions(t *testing.T) {
 			wantFresh: true,
 		},
 		{
-			name: "target moved away",
+			wantFresh: false,
+			name:      "target moved away",
 			mutate: func(t *testing.T, target string) {
 				t.Helper()
 				if err := os.Remove(target); err != nil {
@@ -262,7 +265,8 @@ func TestValidate_ShimTargetTransitions(t *testing.T) {
 			},
 		},
 		{
-			name: "target lost its executable bit",
+			wantFresh: false,
+			name:      "target lost its executable bit",
 			mutate: func(t *testing.T, target string) {
 				t.Helper()
 				if err := os.Chmod(target, 0o644); err != nil {
@@ -326,6 +330,7 @@ func TestUsableStale(t *testing.T) {
 	}{
 		{name: "as baked", mutate: func(*Manifest) {}, want: true},
 		{
+			want: false,
 			// The case the whole function exists for: a retired format decodes
 			// with RequiredPaths unset, which the shim reads as "nothing else is
 			// required".
@@ -333,18 +338,22 @@ func TestUsableStale(t *testing.T) {
 			mutate: func(m *Manifest) { m.FormatVersion = ManifestFormatVersion - 1 },
 		},
 		{
+			want:   false,
 			name:   "newer format version",
 			mutate: func(m *Manifest) { m.FormatVersion = ManifestFormatVersion + 1 },
 		},
 		{
+			want:   false,
 			name:   "baked for another platform",
 			mutate: func(m *Manifest) { m.OS = "plan9" },
 		},
 		{
+			want:   false,
 			name:   "baked for another architecture",
 			mutate: func(m *Manifest) { m.Arch = "mips" },
 		},
 		{
+			want:   false,
 			name:   "shim target is gone",
 			mutate: func(m *Manifest) { m.ShimTarget = filepath.Join(root, "not-here") },
 		},
@@ -438,7 +447,7 @@ func BenchmarkValidate(b *testing.B) {
 			b.Fatalf("write: %v", err)
 		}
 	}
-	plan := Plan{Root: root, FarmDir: filepath.Join(root, "farm")}
+	plan := Plan{Entries: nil, Excluded: nil, Shadowed: nil, Root: root, FarmDir: filepath.Join(root, "farm")}
 	m := BuildManifest(plan, OriginGitRoot, WatchSet(WatchPaths(root, []string{
 		filepath.Join(root, "datamitsu.config.ts"),
 		filepath.Join(root, "before.config.ts"),
@@ -465,8 +474,8 @@ func BenchmarkValidate(b *testing.B) {
 func TestEncode_RoundTripIsStable(t *testing.T) {
 	_, m := fixtureRoot(t)
 	m.Entries = []Entry{
-		{Name: "prettier", Provider: "node", Kind: "node", Strategy: StrategyShim, Command: "/store/node/prettier", Args: []string{"--no-color"}, Env: map[string]string{"PATH": "/store/node/bin", "npm_config_cache": "/cache"}, Installed: true},
-		{Name: "tofu", Provider: "binary", Kind: "binary", Strategy: StrategySymlink, Command: "/store/.bin/tofu/abc", Installed: true},
+		{Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Name: "prettier", Provider: "node", Kind: "node", Strategy: StrategyShim, Command: "/store/node/prettier", Args: []string{"--no-color"}, Env: map[string]string{"PATH": "/store/node/bin", "npm_config_cache": "/cache"}, Installed: true},
+		{Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Provider: "binary", Kind: "binary", Strategy: StrategySymlink, Command: "/store/.bin/tofu/abc", Installed: true},
 	}
 	m.Excluded = []Excluded{{Name: "echo", Reason: ReasonShellApp}}
 	m.Shadowed = []Shadow{{Name: "tofu", Path: "/usr/local/bin/tofu"}}
@@ -690,7 +699,7 @@ func TestManifestMatchesRejectsADifferentConfigChain(t *testing.T) {
 	dir := t.TempDir()
 	manifestPath := filepath.Join(dir, "manifest.json")
 
-	existing := Manifest{StalenessKey: "k1", ConfigArgs: []string{"--config", "/abs/a.ts"}}
+	existing := Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", Watch: nil, Entries: nil, Excluded: nil, Shadowed: nil, StalenessKey: "k1", ConfigArgs: []string{"--config", "/abs/a.ts"}}
 	data, err := Encode(existing)
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
@@ -702,10 +711,10 @@ func TestManifestMatchesRejectsADifferentConfigChain(t *testing.T) {
 	if !manifestMatches(manifestPath, existing) {
 		t.Fatal("manifestMatches = false for an identical bake, want true")
 	}
-	if manifestMatches(manifestPath, Manifest{StalenessKey: "k1"}) {
+	if manifestMatches(manifestPath, Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil, StalenessKey: "k1"}) {
 		t.Error("a plain bake accepted a peer's flagged manifest")
 	}
-	if manifestMatches(manifestPath, Manifest{StalenessKey: "k1", ConfigArgs: []string{"--config", "/abs/b.ts"}}) {
+	if manifestMatches(manifestPath, Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", Watch: nil, Entries: nil, Excluded: nil, Shadowed: nil, StalenessKey: "k1", ConfigArgs: []string{"--config", "/abs/b.ts"}}) {
 		t.Error("a bake accepted a peer's manifest from a different config chain")
 	}
 }

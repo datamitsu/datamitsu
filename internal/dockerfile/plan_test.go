@@ -16,32 +16,32 @@ func linuxBin(arches map[syslist.ArchType][]string) *binmanager.AppConfigBinary 
 	for arch, libcs := range arches {
 		m := make(map[string]binmanager.BinaryOsArchInfo, len(libcs))
 		for _, l := range libcs {
-			m[l] = binmanager.BinaryOsArchInfo{}
+			m[l] = binmanager.BinaryOsArchInfo{Auth: nil, URL: "", Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false}
 		}
 		b[syslist.OsTypeLinux][arch] = m
 	}
-	return &binmanager.AppConfigBinary{Binaries: b}
+	return &binmanager.AppConfigBinary{Version: "", Binaries: b}
 }
 
 func sampleApps() binmanager.MapOfApps {
 	return binmanager.MapOfApps{
-		"biome":      {Bun: &binmanager.AppConfigBun{}},
-		"shellcheck": {Binary: &binmanager.AppConfigBinary{}},
-		"prettier":   {Node: &binmanager.AppConfigNode{}},
-		"ruff":       {Uv: &binmanager.AppConfigUV{}},
-		"golangci":   {Go: &binmanager.AppConfigGo{}},
-		"ktlint":     {Jvm: &binmanager.AppConfigJVM{}},
-		"localfmt":   {Shell: &binmanager.AppConfigShell{Name: "fmt"}},
+		"biome":      {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &binmanager.AppConfigBun{PackageName: "", Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil}},
+		"shellcheck": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}},
+		"prettier":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil}},
+		"ruff":       {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &binmanager.AppConfigUV{PackageName: "", Version: "", Runtime: "", LockFile: "", RequiresPython: ""}},
+		"golangci":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &binmanager.AppConfigGo{PackageName: "", Version: "", Runtime: "", LockFile: ""}},
+		"ktlint":     {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &binmanager.AppConfigJVM{JarURL: "", JarHash: "", Version: "", Runtime: "", MainClass: ""}},
+		"localfmt":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &binmanager.AppConfigShell{Args: nil, Name: "fmt"}},
 	}
 }
 
 func sampleRuntimes() config.MapOfRuntimes {
 	return config.MapOfRuntimes{
-		"bun":  {Kind: config.RuntimeKindBun},
-		"node": {Kind: config.RuntimeKindNode},
-		"uv":   {Kind: config.RuntimeKindUV},
-		"go":   {Kind: config.RuntimeKindGo},
-		"jvm":  {Kind: config.RuntimeKindJVM},
+		"bun":  {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindBun},
+		"node": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode},
+		"uv":   {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV},
+		"go":   {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindGo},
+		"jvm":  {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM},
 	}
 }
 
@@ -67,11 +67,11 @@ func TestBuildPlan_Classification(t *testing.T) {
 
 	// Runtime stages are name sorted.
 	wantRuntimes := []RuntimeStage{
-		{Name: "bun", Kind: config.RuntimeKindBun},
-		{Name: "go", Kind: config.RuntimeKindGo},
-		{Name: "jvm", Kind: config.RuntimeKindJVM},
-		{Name: "node", Kind: config.RuntimeKindNode},
-		{Name: "uv", Kind: config.RuntimeKindUV},
+		{PNPMRuntime: "", Name: "bun", Kind: config.RuntimeKindBun},
+		{PNPMRuntime: "", Name: "go", Kind: config.RuntimeKindGo},
+		{PNPMRuntime: "", Name: "jvm", Kind: config.RuntimeKindJVM},
+		{PNPMRuntime: "", Name: "node", Kind: config.RuntimeKindNode},
+		{PNPMRuntime: "", Name: "uv", Kind: config.RuntimeKindUV},
 	}
 	if !reflect.DeepEqual(plan.RuntimeStages, wantRuntimes) {
 		t.Errorf("RuntimeStages = %+v, want %+v", plan.RuntimeStages, wantRuntimes)
@@ -92,10 +92,10 @@ func TestBuildPlan_Deterministic(t *testing.T) {
 
 func TestBuildPlan_SharedRuntime(t *testing.T) {
 	apps := binmanager.MapOfApps{
-		"prettier": {Node: &binmanager.AppConfigNode{}},
-		"eslint":   {Node: &binmanager.AppConfigNode{}},
+		"prettier": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil}},
+		"eslint":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil}},
 	}
-	plan := BuildPlan(apps, config.MapOfRuntimes{"node": {Kind: config.RuntimeKindNode}})
+	plan := BuildPlan(apps, config.MapOfRuntimes{"node": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode}})
 
 	if len(plan.RuntimeStages) != 1 {
 		t.Fatalf("expected 1 shared runtime stage, got %d", len(plan.RuntimeStages))
@@ -112,9 +112,9 @@ func TestBuildPlan_SharedRuntime(t *testing.T) {
 
 func TestBuildPlan_DanglingRuntimeRefSkipped(t *testing.T) {
 	apps := binmanager.MapOfApps{
-		"prettier": {Node: &binmanager.AppConfigNode{Runtime: "does-not-exist"}},
+		"prettier": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &binmanager.AppConfigNode{PackageName: "", Version: "", BinPath: "", LockFile: "", Dependencies: nil, Runtime: "does-not-exist"}},
 	}
-	plan := BuildPlan(apps, config.MapOfRuntimes{"node": {Kind: config.RuntimeKindNode}})
+	plan := BuildPlan(apps, config.MapOfRuntimes{"node": {Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindNode}})
 
 	if len(plan.RuntimeAppStages) != 0 {
 		t.Errorf("expected dangling-ref app to be skipped, got app stages %+v", plan.RuntimeAppStages)
@@ -128,15 +128,16 @@ func TestBuildPlan_LibcFilter(t *testing.T) {
 	both := []string{"glibc", "musl"}
 	amd64, arm64 := syslist.ArchTypeAmd64, syslist.ArchTypeArm64
 	apps := binmanager.MapOfApps{
-		"ruff": {Binary: linuxBin(map[syslist.ArchType][]string{amd64: both, arm64: both})},
-		"swag": {Binary: linuxBin(map[syslist.ArchType][]string{amd64: {"glibc"}, arm64: {"glibc"}})},
+		"ruff": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: linuxBin(map[syslist.ArchType][]string{amd64: both, arm64: both})},
+		"swag": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: linuxBin(map[syslist.ArchType][]string{amd64: {"glibc"}, arm64: {"glibc"}})},
 		// musl present on amd64 but missing on arm64 -> not musl-complete.
-		"snyk": {Binary: linuxBin(map[syslist.ArchType][]string{amd64: both, arm64: {"glibc"}})},
-		"task": {Binary: linuxBin(map[syslist.ArchType][]string{amd64: {"glibc"}, arm64: {"glibc"}})},
+		"snyk": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: linuxBin(map[syslist.ArchType][]string{amd64: both, arm64: {"glibc"}})},
+		"task": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: linuxBin(map[syslist.ArchType][]string{amd64: {"glibc"}, arm64: {"glibc"}})},
 	}
 
 	// musl target, force-including task (a universal tool under-declared as glibc).
 	musl := BuildPlan(apps, config.MapOfRuntimes{}, PlanOptions{
+		Parsers:      nil,
 		TargetLibc:   "musl",
 		ForceInclude: map[string]bool{"task": true},
 	})
@@ -148,7 +149,7 @@ func TestBuildPlan_LibcFilter(t *testing.T) {
 	}
 
 	// glibc target: every app has glibc on both arches -> all kept, none excluded.
-	glibc := BuildPlan(apps, config.MapOfRuntimes{}, PlanOptions{TargetLibc: "glibc"})
+	glibc := BuildPlan(apps, config.MapOfRuntimes{}, PlanOptions{ForceInclude: nil, Parsers: nil, TargetLibc: "glibc"})
 	if len(glibc.BinaryStages) != 4 || len(glibc.LibcExcluded) != 0 {
 		t.Errorf("glibc: bins=%d excluded=%v, want 4 bins / 0 excluded", len(glibc.BinaryStages), glibc.LibcExcluded)
 	}

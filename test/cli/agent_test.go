@@ -19,8 +19,8 @@ const agentOutput = "--output=agent"
 func TestAgentOutput(t *testing.T) {
 	t.Run("s2_priorities", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-			clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Priority: 10}),
-			clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Priority: 20}))
+			clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Priority: 10}),
+			clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Priority: 20}))
 		res := e.run("", nil, "lint", keepGoing, agentOutput)
 		e.wantExit(res, 1)
 		want := "alpha exited 1 without parsable findings\n" +
@@ -42,8 +42,8 @@ func TestAgentOutput(t *testing.T) {
 	// Fail-fast is not implied: the tasks the run stopped are records too.
 	t.Run("s2_fail_fast", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-			clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Priority: 10}),
-			clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Priority: 20}))
+			clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Priority: 10}),
+			clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Priority: 20}))
 		res := e.run("", nil, "lint", agentOutput)
 		e.wantExit(res, 1)
 		if !strings.Contains(res.Stdout, "beta: not started (fail-fast)\n") {
@@ -71,7 +71,7 @@ func TestAgentOutput(t *testing.T) {
 	// the records alone.
 	t.Run("config_console", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		e.p.WriteFile("exec.config.js", "console.log(\"loading\");\nconsole.info(\"still loading\");\n"+e.read("exec.config.js"))
 		res := e.run("", nil, "lint", agentOutput)
 		e.wantExit(res, 0)
@@ -86,7 +86,7 @@ func TestAgentOutput(t *testing.T) {
 	// DATAMITSU_TIMINGS reports are human output too.
 	t.Run("timings", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		res := e.run("", []string{"DATAMITSU_TIMINGS=1"}, "lint", agentOutput)
 		e.wantExit(res, 0)
 		if lines := strings.Split(strings.TrimSuffix(res.Stdout, "\n"), "\n"); len(lines) != 1 {
@@ -98,7 +98,7 @@ func TestAgentOutput(t *testing.T) {
 	// included.
 	t.Run("masked_tail", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-			clitest.ShellTool("alpha", settle+clitest.RecordRun+`; printf 'token: %s\n' "$DEPLOY_TOKEN"; exit 1`, clitest.ToolOpSpec{}))
+			clitest.ShellTool("alpha", settle+clitest.RecordRun+`; printf 'token: %s\n' "$DEPLOY_TOKEN"; exit 1`, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		res := e.run("", []string{"DEPLOY_TOKEN=first-half-of-it\nsecond-half-of-it"}, "lint", agentOutput)
 		e.wantExit(res, 1)
 		if strings.Contains(res.Stdout, "half-of-it") || !strings.Contains(res.Stdout, "  │  token: ***\n") {
@@ -110,8 +110,8 @@ func TestAgentOutput(t *testing.T) {
 	// files it changed, here none.
 	t.Run("check", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-			clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Operation: "fix"}),
-			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+			clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix"}),
+			clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		res := e.run("", nil, "check", agentOutput)
 		e.wantExit(res, 0)
 		lines := strings.Split(strings.TrimSuffix(res.Stdout, "\n"), "\n")
@@ -186,7 +186,7 @@ func TestAgentOutputMessageIsOneRecord(t *testing.T) {
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("hadolint",
 		settle+clitest.RecordRun+`; printf '%s\n' '`+injectedFinding+`'; exit 1`,
-		clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint"})))
+		clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint"})))
 	res := e.run("", nil, "lint", agentOutput)
 	e.wantExit(res, 1)
 	const want = "Dockerfile:1:1: error hadolint(DL3006): Always tag the version of an image explicitly\\n::error::injected\n"
@@ -202,15 +202,15 @@ func TestAgentOutputUsage(t *testing.T) {
 		args  []string
 		jsonl bool
 	}{
-		{name: "invalid_flag", args: []string{"lint", "--output", "json"}},
-		{name: "invalid_env", env: []string{"DATAMITSU_OUTPUT=robot"}, args: []string{"lint", "--output", "human"}},
-		{name: "with_report_on_stdout", jsonl: true, args: []string{"lint", agentOutput, "--report", "json=-"}},
-		{name: "with_jsonl", jsonl: true, args: []string{"--log-format", "jsonl", "lint", agentOutput}},
+		{env: nil, jsonl: false, name: "invalid_flag", args: []string{"lint", "--output", "json"}},
+		{jsonl: false, name: "invalid_env", env: []string{"DATAMITSU_OUTPUT=robot"}, args: []string{"lint", "--output", "human"}},
+		{env: nil, name: "with_report_on_stdout", jsonl: true, args: []string{"lint", agentOutput, "--report", "json=-"}},
+		{env: nil, name: "with_jsonl", jsonl: true, args: []string{"--log-format", "jsonl", "lint", agentOutput}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-				clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+				clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 			res := e.run("", tc.env, tc.args...)
 			e.wantExit(res, 2)
 			e.wantMarker("alpha", "")

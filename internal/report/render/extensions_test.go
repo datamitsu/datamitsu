@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render/checkstyle"
@@ -54,12 +55,38 @@ func withCompanion(t *testing.T) {
 
 func incompleteRun() *report.Run {
 	return &report.Run{
-		Selection: report.Selection{Mode: "all"},
-		Exports:   []report.Export{{Format: "companioned", Path: "x", Status: "written"}},
-		Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{
-			{Name: "eslint", Complete: true},
-			{Name: "tsc", Incomplete: []report.Reason{"parse-failed"}},
-		}}},
+		RedactedReasons: nil,
+
+		Fingerprint: "",
+		Datamitsu:   report.Producer{Version: "", Configuration: ""},
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		FailFast:    false,
+		Complete:    false,
+		Incomplete:  nil,
+		CI:          report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		Selection:   report.Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"},
+		Exports:     []report.Export{{Detail: "", Companion: "", Omitted: nil, Format: "companioned", Path: "x", Status: "written"}},
+		Operations: []report.Operation{{
+			Success:         false,
+			Duration:        0,
+			Skipped:         nil,
+			Cancelled:       nil,
+			ChangesObserved: false,
+			ChangesReason:   "",
+			ChangesDetail:   "",
+			ChangesScope:    nil,
+			Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{
+				{
+					RedactedReasons: nil,
+					App:             report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Incomplete: nil, Invocations: nil, Name: "eslint", Complete: true,
+				},
+				{
+					RedactedReasons: nil,
+					App:             report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Invocations: nil, Name: "tsc", Incomplete: []report.Reason{"parse-failed"},
+				},
+			},
+		}},
 	}
 }
 
@@ -69,7 +96,7 @@ func TestTargetWritesCompanion(t *testing.T) {
 	withCompanion(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "cq.json")
-	target := Open(Spec{Format: "companioned", Path: path}, nil)
+	target := Open(Spec{Options: nil, Format: "companioned", Path: path}, nil)
 	if target.Err != nil {
 		t.Fatal(target.Err)
 	}
@@ -95,7 +122,7 @@ func TestTargetWritesCompanion(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := Open(Spec{Format: "companioned", Path: Stdout}, &out).Write(incompleteRun()); err != nil {
+	if err := Open(Spec{Options: nil, Format: "companioned", Path: Stdout}, &out).Write(incompleteRun()); err != nil {
 		t.Fatal(err)
 	}
 	if out.String() != "findings\n" {
@@ -115,7 +142,7 @@ func TestTargetCompanionWithoutItsReport(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	target := Open(Spec{Format: "companioned", Path: path}, nil)
+	target := Open(Spec{Options: nil, Format: "companioned", Path: path}, nil)
 	if target.Err != nil {
 		t.Fatal(target.Err)
 	}
@@ -141,9 +168,44 @@ func TestTargetCompanionWithoutItsReport(t *testing.T) {
 // A directory target writes a split format's files and removes the ones an
 // earlier run left that this one did not write, and nothing else.
 func TestTargetDirectory(t *testing.T) {
-	run := &report.Run{Operations: []report.Operation{{Name: "lint", Ran: true, Tools: []report.ToolRun{{
-		Name: "eslint", Complete: true, Invocations: []report.Invocation{{ID: "eslint::1#1", State: "ran", Success: true}},
-	}}}}}
+	run := &report.Run{
+		RedactedReasons: nil,
+
+		Fingerprint: "",
+		Datamitsu:   report.Producer{Version: "", Configuration: ""},
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		Selection:   report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:    false,
+		Complete:    false,
+		Incomplete:  nil,
+		Exports:     nil,
+		CI:          report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Operations: []report.Operation{{
+			Success:         false,
+			Duration:        0,
+			Skipped:         nil,
+			Cancelled:       nil,
+			ChangesObserved: false,
+			ChangesReason:   "",
+			ChangesDetail:   "",
+			ChangesScope:    nil,
+			Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+
+				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+				Parser:     nil,
+				FailOn:     "",
+				GateActive: false,
+				Category:   "",
+				Incomplete: nil,
+				Name:       "eslint", Complete: true, Invocations: []report.Invocation{{
+					RedactedState:      0,
+					RedactedExtraction: 0,
+					TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#1", State: "ran", Success: true,
+				}},
+			}},
+		}},
+	}
 	dir := filepath.Join(t.TempDir(), "sarif") + "/"
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -153,7 +215,7 @@ func TestTargetDirectory(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	target := Open(Spec{Format: "sarif", Path: dir}, nil)
+	target := Open(Spec{Options: nil, Format: "sarif", Path: dir}, nil)
 	if target.Err != nil {
 		t.Fatal(target.Err)
 	}
@@ -176,7 +238,7 @@ func TestTargetDirectory(t *testing.T) {
 	if err := os.WriteFile(blocker, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if target := Open(Spec{Format: "sarif", Path: blocker + "/"}, nil); target.Err == nil {
+	if target := Open(Spec{Options: nil, Format: "sarif", Path: blocker + "/"}, nil); target.Err == nil {
 		t.Error("a file at a directory target opened")
 	}
 }
@@ -193,15 +255,31 @@ func TestTargetDirectoryFailureKeepsTheOldFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	run := &report.Run{Selection: report.Selection{Mode: "all"}, Operations: []report.Operation{{Name: "lint", Ran: true}}}
+	run := &report.Run{
+		RedactedReasons: nil,
+
+		Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Complete: false, Incomplete: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Selection: report.Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}, Operations: []report.Operation{{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, Tools: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "lint", Ran: true}},
+	}
 	for i := range 21 {
 		name := "tool" + strings.Repeat("x", i)
 		run.Operations[0].Tools = append(run.Operations[0].Tools, report.ToolRun{
-			Name: name, Complete: true,
-			Invocations: []report.Invocation{{ID: name + "::1#1", State: "ran", Success: true}},
+			RedactedReasons: nil,
+
+			App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+			Parser:     nil,
+			FailOn:     "",
+			GateActive: false,
+			Category:   "",
+			Incomplete: nil,
+			Name:       name, Complete: true,
+			Invocations: []report.Invocation{{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: name + "::1#1", State: "ran", Success: true,
+			}},
 		})
 	}
-	target := Open(Spec{Format: "sarif", Path: dir}, nil)
+	target := Open(Spec{Options: nil, Format: "sarif", Path: dir}, nil)
 	if target.Err != nil {
 		t.Fatal(target.Err)
 	}
@@ -237,11 +315,15 @@ func TestTargetDeclined(t *testing.T) {
 		}
 	}
 	for _, path := range []string{file, split} {
-		target := Open(Spec{Format: "sarif", Path: path}, nil)
+		target := Open(Spec{Options: nil, Format: "sarif", Path: path}, nil)
 		if target.Err != nil {
 			t.Fatal(target.Err)
 		}
-		if _, ok := errors.AsType[DeclinedError](target.Write(&report.Run{})); !ok {
+		if _, ok := errors.AsType[DeclinedError](target.Write(&report.Run{
+			RedactedReasons: nil,
+
+			Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		})); !ok {
 			t.Errorf("%s: a SARIF report without a run was not declined", path)
 		}
 	}
@@ -251,7 +333,11 @@ func TestTargetDeclined(t *testing.T) {
 		t.Errorf("left %v and %v, want the unrelated file alone", entries, inSplit)
 	}
 	var out bytes.Buffer
-	if _, ok := errors.AsType[DeclinedError](Open(Spec{Format: "sarif", Path: Stdout}, &out).Write(&report.Run{})); !ok || out.Len() != 0 {
+	if _, ok := errors.AsType[DeclinedError](Open(Spec{Options: nil, Format: "sarif", Path: Stdout}, &out).Write(&report.Run{
+		RedactedReasons: nil,
+
+		Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	})); !ok || out.Len() != 0 {
 		t.Errorf("stdout = %q, want nothing", out.String())
 	}
 }
@@ -259,14 +345,30 @@ func TestTargetDeclined(t *testing.T) {
 func TestTargetDeclineRefusesToRemoveDirectoryAtFilePath(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "results.sarif")
-	target := Open(Spec{Format: "sarif", Path: path}, nil)
+	target := Open(Spec{
+		Options: nil,
+		Format:  "sarif", Path: path,
+	}, nil)
 	if target.Err != nil {
 		t.Fatal(target.Err)
 	}
 	if err := os.Mkdir(path, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	err := target.Write(&report.Run{})
+	err := target.Write(&report.Run{
+		Fingerprint:     "",
+		Datamitsu:       report.Producer{Version: "", Configuration: ""},
+		StartedAt:       zerovalue_time.Time{},
+		EndedAt:         zerovalue_time.Time{},
+		Selection:       report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:        false,
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Operations:      nil,
+		Exports:         nil,
+		CI:              report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	})
 	if err == nil || !strings.Contains(err.Error(), "not a regular file or symlink") {
 		t.Fatalf("Write error = %v, want refusal to remove directory at report path", err)
 	}
@@ -285,11 +387,11 @@ func TestCheckCapacity(t *testing.T) {
 		tools int
 		want  string
 	}{
-		{spec: Spec{Format: "sarif", Path: "a.sarif"}, tools: 20},
-		{spec: Spec{Format: "sarif", Path: "a.sarif"}, tools: 21, want: "report sarif would hold 21 tools in one file, more than the 20 it can: name a directory, sarif=<dir>/"},
-		{spec: Spec{Format: "sarif", Path: "-"}, tools: 21, want: "in stdout"},
-		{spec: Spec{Format: "sarif", Path: "out/"}, tools: 500},
-		{spec: Spec{Format: "json", Path: "a.json"}, tools: 500},
+		{want: "", spec: Spec{Options: nil, Format: "sarif", Path: "a.sarif"}, tools: 20},
+		{spec: Spec{Options: nil, Format: "sarif", Path: "a.sarif"}, tools: 21, want: "report sarif would hold 21 tools in one file, more than the 20 it can: name a directory, sarif=<dir>/"},
+		{spec: Spec{Options: nil, Format: "sarif", Path: "-"}, tools: 21, want: "in stdout"},
+		{want: "", spec: Spec{Options: nil, Format: "sarif", Path: "out/"}, tools: 500},
+		{want: "", spec: Spec{Options: nil, Format: "json", Path: "a.json"}, tools: 500},
 	}
 	for _, tt := range tests {
 		err := CheckCapacity(tt.spec, tt.tools)
@@ -305,10 +407,10 @@ func TestDescribeAndNotes(t *testing.T) {
 	withCompanion(t)
 	run := incompleteRun()
 	run.Exports = []report.Export{
-		{Format: "companioned", Path: "cq.json", Status: "written"},
-		{Format: "sarif", Path: "out/", Status: "written"},
+		{Detail: "", Companion: "", Omitted: nil, Format: "companioned", Path: "cq.json", Status: "written"},
+		{Detail: "", Companion: "", Omitted: nil, Format: "sarif", Path: "out/", Status: "written"},
 	}
-	specs := []Spec{{Format: "companioned", Path: "cq.json"}, {Format: "sarif", Path: "out/"}}
+	specs := []Spec{{Options: nil, Format: "companioned", Path: "cq.json"}, {Options: nil, Format: "sarif", Path: "out/"}}
 	Describe(run, specs)
 	if run.Exports[0].Companion != "cq.json.completeness.json" || run.Exports[0].Omitted != nil {
 		t.Errorf("companioned export = %+v", run.Exports[0])
@@ -323,19 +425,19 @@ func TestDescribeAndNotes(t *testing.T) {
 	if !reflect.DeepEqual(notes, wantNotes) {
 		t.Errorf("Notes = %q, want %q", notes, wantNotes)
 	}
-	notes = Notes(run, []Spec{{Format: "companioned", Path: Stdout}})
+	notes = Notes(run, []Spec{{Options: nil, Format: "companioned", Path: Stdout}})
 	if len(notes) != 1 || !strings.Contains(notes[0], "listed as if complete by companioned on stdout, which has no companion") {
 		t.Errorf("Notes on stdout = %q", notes)
 	}
-	if notes := Notes(run, []Spec{{Format: "json", Path: "run.json"}}); len(notes) != 0 {
+	if notes := Notes(run, []Spec{{Options: nil, Format: "json", Path: "run.json"}}); len(notes) != 0 {
 		t.Errorf("the own JSON says it itself, yet Notes = %q", notes)
 	}
 	run.Operations[0].Tools = run.Operations[0].Tools[1:]
-	notes = Notes(run, []Spec{{Format: "sarif", Path: "r.sarif"}})
+	notes = Notes(run, []Spec{{Options: nil, Format: "sarif", Path: "r.sarif"}})
 	if len(notes) != 2 || notes[1] != "report: sarif is not written: it would hold no tool run, which code scanning refuses; every alert stays as it is" {
 		t.Errorf("Notes of a SARIF file without a run = %q", notes)
 	}
-	Describe(run, []Spec{{Format: "sarif", Path: "out/"}})
+	Describe(run, []Spec{{Options: nil, Format: "sarif", Path: "out/"}})
 	if e := run.Exports[1]; e.Status != report.ExportOmitted || !strings.Contains(e.Detail, "no tool run") {
 		t.Errorf("the export of a SARIF file without a run = %+v, want omitted", e)
 	}

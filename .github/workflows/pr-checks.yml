@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-environment
       - name: Install syft
-        uses: anchore/sbom-action/download-syft@fffec3d851af758d56fee099cf3fbf8aa8779843 # v0.24.3
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       # Build the WASM parser module BEFORE goreleaser: .goreleaser.yml lists it
       # under extra_files, so a snapshot build globbing-fails without it. Mirrors
       # release.yml. rustup is preinstalled on ubuntu-latest; the release it
@@ -87,7 +87,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-environment
       - name: Install syft
-        uses: anchore/sbom-action/download-syft@fffec3d851af758d56fee099cf3fbf8aa8779843 # v0.24.3
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       # Build the WASM parser module BEFORE goreleaser: .goreleaser.yml lists it
       # under extra_files, so a snapshot build globbing-fails without it. Mirrors
       # release.yml. rustup is preinstalled on ubuntu-latest; the release it

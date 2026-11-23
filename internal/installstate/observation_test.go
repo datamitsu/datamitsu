@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	zerovalue_sync "sync"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ func TestWaitStatusReportsOnlyFreshTrustedCounters(t *testing.T) {
 				t.Fatal(err)
 			}
 			completed, total := int64(3), int64(10)
-			record := status{Schema: schema, Owner: "owner", PID: os.Getpid(), Phase: "download", UpdatedAt: time.Now(), Completed: &completed, Total: &total, Unit: "bytes"}
+			record := status{Target: "", Label: "", Schema: schema, Owner: "owner", PID: os.Getpid(), Phase: "download", UpdatedAt: time.Now(), Completed: &completed, Total: &total, Unit: "bytes"}
 			want := "Waiting for installation: probe (download 3/10 bytes)"
 			switch name {
 			case "packages":
@@ -115,7 +116,23 @@ func TestWaitStatusReportsReplacementOwner(t *testing.T) {
 	}
 	completed, total := int64(3), int64(10)
 	writeStatus := func(owner string) {
-		w := &statusWriter{path: "probe.json", owner: owner, label: "probe", target: "apps/probe"}
+		w := &statusWriter{
+			opID:               "",
+			mu:                 zerovalue_sync.Mutex{},
+			last:               time.Time{},
+			lastEvent:          time.Time{},
+			lastEventPhase:     "",
+			lastEventUnit:      "",
+			lastEventCompleted: 0,
+			lastEventTotal:     0,
+			hasEventCounters:   false,
+			closed:             false,
+			phase:              "",
+			completed:          nil,
+			total:              nil,
+			unit:               "",
+			path:               "probe.json", owner: owner, label: "probe", target: "apps/probe",
+		}
 		w.write("download", &completed, &total, "bytes", true)
 	}
 	writeStatus("first")
@@ -149,7 +166,8 @@ func TestWaitStatusReportsReplacementOwner(t *testing.T) {
 			return progress
 		case <-ctx.Done():
 			t.Fatal("wait progress did not reach the worker client")
-			return provision.InstallProgress{}
+			var progress provision.InstallProgress
+			return progress
 		}
 	}
 	first := receive()
@@ -165,9 +183,9 @@ func TestStatusReleasePreservesReplacementOwner(t *testing.T) {
 	if err := os.MkdirAll(env.GetCachePath(), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	owner := &statusWriter{path: "probe.json", owner: "first", label: "probe", target: "apps/probe"}
+	owner := &statusWriter{opID: "", mu: zerovalue_sync.Mutex{}, last: time.Time{}, lastEvent: time.Time{}, lastEventPhase: "", lastEventUnit: "", lastEventCompleted: 0, lastEventTotal: 0, hasEventCounters: false, closed: false, phase: "", completed: nil, total: nil, unit: "", path: "probe.json", owner: "first", label: "probe", target: "apps/probe"}
 	owner.write("install", nil, nil, "", true)
-	replacement := &statusWriter{path: "probe.json", owner: "second", label: "probe", target: "apps/probe"}
+	replacement := &statusWriter{opID: "", mu: zerovalue_sync.Mutex{}, last: time.Time{}, lastEvent: time.Time{}, lastEventPhase: "", lastEventUnit: "", lastEventCompleted: 0, lastEventTotal: 0, hasEventCounters: false, closed: false, phase: "", completed: nil, total: nil, unit: "", path: "probe.json", owner: "second", label: "probe", target: "apps/probe"}
 	replacement.write("verify", nil, nil, "", true)
 	if err := owner.remove(); err != nil {
 		t.Fatal(err)

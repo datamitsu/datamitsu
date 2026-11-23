@@ -4,9 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	zerovalue_sync "sync"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 func touch(t *testing.T, path string) string {
@@ -34,8 +36,8 @@ func TestUnitGuardsWalkToTheRoot(t *testing.T) {
 	unitCfg := touch(t, filepath.Join(unit, "tsconfig.json"))
 	unrelated := touch(t, filepath.Join(root, "packages", "web", "tsconfig.json"))
 
-	p := &Planner{rootPath: root, cwdPath: unit}
-	guards := p.unitGuards(Task{OpConfig: config.ToolOperation{App: "tsc"}}, unit)
+	p := &Planner{detectedTypes: nil, tools: nil, projectTypesConfig: nil, platformChecker: nil, extraIgnoreRules: nil, cachedFiles: nil, cachedRel: nil, cachedProjects: nil, cacheInitialized: false, seedFiles: nil, globCacheMu: zerovalue_sync.Mutex{}, globCache: nil, unitCacheMu: zerovalue_sync.Mutex{}, memberCache: nil, guardCache: nil, ignoreMatcher: nil, execution: nil, widenOverride: "", timings: nil, rootPath: root, cwdPath: unit}
+	guards := p.unitGuards(Task{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", OpConfig: config.ToolOperation{Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "tsc"}}, unit)
 
 	if !hasGuard(guards, rootCfg) {
 		t.Error("the root config is missing; editing it would not invalidate the unit's verdict")
@@ -59,8 +61,8 @@ func TestUnitGuardsIgnoreDirectoriesAndAbsentFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := &Planner{rootPath: root, cwdPath: root}
-	guards := p.unitGuards(Task{OpConfig: config.ToolOperation{App: "eslint"}}, root)
+	p := &Planner{detectedTypes: nil, tools: nil, projectTypesConfig: nil, platformChecker: nil, extraIgnoreRules: nil, cachedFiles: nil, cachedRel: nil, cachedProjects: nil, cacheInitialized: false, seedFiles: nil, globCacheMu: zerovalue_sync.Mutex{}, globCache: nil, unitCacheMu: zerovalue_sync.Mutex{}, memberCache: nil, guardCache: nil, ignoreMatcher: nil, execution: nil, widenOverride: "", timings: nil, rootPath: root, cwdPath: root}
+	guards := p.unitGuards(Task{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", ToolName: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", OpConfig: config.ToolOperation{Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "eslint"}}, root)
 
 	if hasGuard(guards, filepath.Join(root, "package.json")) {
 		t.Error("a directory was recorded as a guard")
@@ -75,11 +77,39 @@ func TestUnitGuardsIncludeArgumentPaths(t *testing.T) {
 	root := t.TempDir()
 	cfg := touch(t, filepath.Join(root, "custom", "sqruff.toml"))
 
-	p := &Planner{rootPath: root, cwdPath: root}
-	task := Task{OpConfig: config.ToolOperation{
-		App:  "sqruff",
-		Args: []string{"--config", "{root}/custom/sqruff.toml", "lint"},
-	}}
+	p := &Planner{detectedTypes: nil, tools: nil, projectTypesConfig: nil, platformChecker: nil, extraIgnoreRules: nil, cachedFiles: nil, cachedRel: nil, cachedProjects: nil, cacheInitialized: false, seedFiles: nil, globCacheMu: zerovalue_sync.Mutex{}, globCache: nil, unitCacheMu: zerovalue_sync.Mutex{}, memberCache: nil, guardCache: nil, ignoreMatcher: nil, execution: nil, widenOverride: "", timings: nil, rootPath: root, cwdPath: root}
+	task := Task{
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		ToolName:     "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Operation:    "",
+		Files:        nil,
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "", OpConfig: config.ToolOperation{
+			Scope:             "",
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "sqruff",
+			Args:              []string{"--config", "{root}/custom/sqruff.toml", "lint"},
+		},
+	}
 	guards := p.unitGuards(task, root)
 
 	if !hasGuard(guards, cfg) {
@@ -94,11 +124,39 @@ func TestUnitGuardsExcludeTheToolCache(t *testing.T) {
 	root := t.TempDir()
 	out := touch(t, filepath.Join(root, ".datamitsu-cache", "tsbuildinfo"))
 
-	p := &Planner{rootPath: root, cwdPath: root}
-	task := Task{OpConfig: config.ToolOperation{
-		App:  "tsc",
-		Args: []string{"--tsBuildInfoFile", "{root}/.datamitsu-cache/tsbuildinfo"},
-	}}
+	p := &Planner{detectedTypes: nil, tools: nil, projectTypesConfig: nil, platformChecker: nil, extraIgnoreRules: nil, cachedFiles: nil, cachedRel: nil, cachedProjects: nil, cacheInitialized: false, seedFiles: nil, globCacheMu: zerovalue_sync.Mutex{}, globCache: nil, unitCacheMu: zerovalue_sync.Mutex{}, memberCache: nil, guardCache: nil, ignoreMatcher: nil, execution: nil, widenOverride: "", timings: nil, rootPath: root, cwdPath: root}
+	task := Task{
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		ToolName:     "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Operation:    "",
+		Files:        nil,
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "", OpConfig: config.ToolOperation{
+			Scope:             "",
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "tsc",
+			Args:              []string{"--tsBuildInfoFile", "{root}/.datamitsu-cache/tsbuildinfo"},
+		},
+	}
 
 	if guards := p.unitGuards(task, root); hasGuard(guards, out) {
 		t.Error("the tool cache was recorded as an input; the verdict could never hit again")
@@ -116,11 +174,39 @@ func TestUnitGuardsResolveInvalidateOnAgainstAncestors(t *testing.T) {
 	}
 	shared := touch(t, filepath.Join(root, "shared.config.json"))
 
-	p := &Planner{rootPath: root, cwdPath: unit}
-	task := Task{OpConfig: config.ToolOperation{
-		App:          "eslint",
-		InvalidateOn: []string{"shared.config.json"},
-	}}
+	p := &Planner{detectedTypes: nil, tools: nil, projectTypesConfig: nil, platformChecker: nil, extraIgnoreRules: nil, cachedFiles: nil, cachedRel: nil, cachedProjects: nil, cacheInitialized: false, seedFiles: nil, globCacheMu: zerovalue_sync.Mutex{}, globCache: nil, unitCacheMu: zerovalue_sync.Mutex{}, memberCache: nil, guardCache: nil, ignoreMatcher: nil, execution: nil, widenOverride: "", timings: nil, rootPath: root, cwdPath: unit}
+	task := Task{
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		ToolName:     "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Operation:    "",
+		Files:        nil,
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "", OpConfig: config.ToolOperation{
+			Args:              nil,
+			Scope:             "",
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "eslint",
+			InvalidateOn:      []string{"shared.config.json"},
+		},
+	}
 
 	if guards := p.unitGuards(task, unit); !hasGuard(guards, shared) {
 		t.Errorf("guards = %v, want the ancestor config named by invalidateOn", guards)
@@ -138,7 +224,7 @@ func TestUnitMembers(t *testing.T) {
 	}
 
 	t.Run("a subdirectory takes only its own files", func(t *testing.T) {
-		p := &Planner{rootPath: root, cachedFiles: files, cacheInitialized: true}
+		p := &Planner{cwdPath: "", detectedTypes: nil, tools: nil, projectTypesConfig: nil, platformChecker: nil, extraIgnoreRules: nil, cachedRel: nil, cachedProjects: nil, seedFiles: nil, globCacheMu: zerovalue_sync.Mutex{}, globCache: nil, unitCacheMu: zerovalue_sync.Mutex{}, memberCache: nil, guardCache: nil, ignoreMatcher: nil, execution: nil, widenOverride: "", timings: nil, rootPath: root, cachedFiles: files, cacheInitialized: true}
 		got := p.unitMembers(unit)
 		if len(got) != 2 {
 			t.Fatalf("unitMembers = %v, want the two files under the unit", got)
@@ -146,7 +232,7 @@ func TestUnitMembers(t *testing.T) {
 	})
 
 	t.Run("the root takes everything", func(t *testing.T) {
-		p := &Planner{rootPath: root, cachedFiles: files, cacheInitialized: true}
+		p := &Planner{cwdPath: "", detectedTypes: nil, tools: nil, projectTypesConfig: nil, platformChecker: nil, extraIgnoreRules: nil, cachedRel: nil, cachedProjects: nil, seedFiles: nil, globCacheMu: zerovalue_sync.Mutex{}, globCache: nil, unitCacheMu: zerovalue_sync.Mutex{}, memberCache: nil, guardCache: nil, ignoreMatcher: nil, execution: nil, widenOverride: "", timings: nil, rootPath: root, cachedFiles: files, cacheInitialized: true}
 		if got := p.unitMembers(root); len(got) != len(files) {
 			t.Errorf("unitMembers = %v, want all %d files", got, len(files))
 		}
@@ -155,7 +241,7 @@ func TestUnitMembers(t *testing.T) {
 	// Without a walk there is no membership, and an empty member list makes the
 	// input vector constant — a permanent, unearned pass.
 	t.Run("no walk means no members", func(t *testing.T) {
-		p := &Planner{rootPath: root, cachedFiles: files}
+		p := &Planner{cwdPath: "", detectedTypes: nil, tools: nil, projectTypesConfig: nil, platformChecker: nil, extraIgnoreRules: nil, cachedRel: nil, cachedProjects: nil, cacheInitialized: false, seedFiles: nil, globCacheMu: zerovalue_sync.Mutex{}, globCache: nil, unitCacheMu: zerovalue_sync.Mutex{}, memberCache: nil, guardCache: nil, ignoreMatcher: nil, execution: nil, widenOverride: "", timings: nil, rootPath: root, cachedFiles: files}
 		if got := p.unitMembers(unit); got != nil {
 			t.Errorf("unitMembers = %v, want nil when the file walk has not run", got)
 		}
@@ -163,7 +249,7 @@ func TestUnitMembers(t *testing.T) {
 }
 
 func TestPlannerContains(t *testing.T) {
-	p := &Planner{}
+	p := &Planner{rootPath: "", cwdPath: "", detectedTypes: nil, tools: nil, projectTypesConfig: nil, platformChecker: nil, extraIgnoreRules: nil, cachedFiles: nil, cachedRel: nil, cachedProjects: nil, cacheInitialized: false, seedFiles: nil, globCacheMu: zerovalue_sync.Mutex{}, globCache: nil, unitCacheMu: zerovalue_sync.Mutex{}, memberCache: nil, guardCache: nil, ignoreMatcher: nil, execution: nil, widenOverride: "", timings: nil}
 	dir := filepath.FromSlash("/repo/svc/a")
 
 	tests := []struct {

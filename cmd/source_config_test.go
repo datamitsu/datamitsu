@@ -166,7 +166,7 @@ func TestConfigActivationExportsTheChain(t *testing.T) {
 	cfg := writeMachineConfigFile(t, "machine.config.ts")
 	target := configTarget(t, cfg)
 
-	a := activationFor(target, sourcefarm.Plan{FarmDir: target.FarmDir})
+	a := activationFor(target, sourcefarm.Plan{Root: "", Entries: nil, Excluded: nil, Shadowed: nil, FarmDir: target.FarmDir})
 
 	bash := renderBash(a)
 	fish := renderFish(a)
@@ -222,8 +222,11 @@ func TestConfigFarmAndProjectFarmDoNotShareAManifest(t *testing.T) {
 	writeFarmEntries(t, configTgt.FarmDir, "machine-tool")
 
 	plan := sourcefarm.Plan{
-		FarmDir: configTgt.FarmDir,
-		Entries: []sourcefarm.Entry{{Name: "machine-tool", Installed: true}},
+		Root:     "",
+		Excluded: nil,
+		Shadowed: nil,
+		FarmDir:  configTgt.FarmDir,
+		Entries:  []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "machine-tool", Installed: true}},
 	}
 	watch := sourcefarm.WatchSet(targetWatchPaths(configTgt, nil))
 	m := sourcefarm.BuildConfigManifest(plan, configTgt.ConfigPaths, watch)
@@ -267,7 +270,7 @@ func TestConfigFarmStatusReportsOriginAndChain(t *testing.T) {
 	cfg := writeMachineConfigFile(t, "machine.config.ts")
 	target := configTarget(t, cfg)
 
-	s := buildSourceStatus(sourcefarm.Plan{FarmDir: target.FarmDir}, target)
+	s := buildSourceStatus(sourcefarm.Plan{Root: "", Entries: nil, Excluded: nil, Shadowed: nil, FarmDir: target.FarmDir}, target)
 	if s.Origin != sourcefarm.OriginExplicitConfig {
 		t.Errorf("origin = %q, want explicit-config", s.Origin)
 	}
@@ -328,8 +331,11 @@ func TestPreviousConfigFarmSurvivesAFailedBake(t *testing.T) {
 	writeFarmEntries(t, target.FarmDir, "machine-tool")
 
 	plan := sourcefarm.Plan{
-		FarmDir: target.FarmDir,
-		Entries: []sourcefarm.Entry{{Name: "machine-tool", Installed: true}},
+		Root:     "",
+		Excluded: nil,
+		Shadowed: nil,
+		FarmDir:  target.FarmDir,
+		Entries:  []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "machine-tool", Installed: true}},
 	}
 	watch := sourcefarm.WatchSet(targetWatchPaths(target, nil))
 	m := sourcefarm.BuildConfigManifest(plan, target.ConfigPaths, watch)

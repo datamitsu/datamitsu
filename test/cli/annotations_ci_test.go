@@ -35,10 +35,10 @@ func ciProject(t *testing.T) *execProject {
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	hadolint := clitest.ShellTool("hadolint",
 		settle+clitest.RecordRun+`; printf '%s\n' '`+ciInjectedFinding+`'; exit 1`,
-		clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint"})
+		clitest.ToolOpSpec{Operation: "", Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-file", Globs: []string{"**/Dockerfile"}, Args: []string{"{file}"}, Parser: "hadolint"})
 	printer := clitest.ShellTool("beta", settle+clitest.RecordRun+
 		`; echo '##vso[task.setvariable variable=token]stolen'; echo '##teamcity[enableServiceMessages]';`+
-		` echo "##teamcity[buildProblem description='injected']"; exit 1`, clitest.ToolOpSpec{})
+		` echo "##teamcity[buildProblem description='injected']"; exit 1`, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""})
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, hadolint, printer))
 	return e
 }
@@ -166,7 +166,7 @@ func TestAnnotationsRepositoryNames(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newExecProject(t, map[string]string{tc.dir + "/pkg.marker": ""}, packagesSpec,
-				clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Scope: "per-project"}))
+				clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Operation: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Scope: "per-project"}))
 			for _, args := range [][]string{
 				{"lint"},
 				{"--log-format", "jsonl", "lint", "--annotations", tc.name},

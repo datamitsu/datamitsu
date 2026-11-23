@@ -29,10 +29,10 @@ func TestExecRuntimeEnvDependency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	binary := &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{osType: {arch: {"unknown": {URL: "https://example.invalid/offline-fixture", Hash: "sha256:" + strings.Repeat("0", 64), ContentType: binmanager.BinContentTypeBinary}}}}}
+	binary := &binmanager.AppConfigBinary{Version: "", Binaries: binmanager.MapOfBinaries{osType: {arch: {"unknown": {Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.invalid/offline-fixture", Hash: "sha256:" + strings.Repeat("0", 64), ContentType: binmanager.BinContentTypeBinary}}}}}
 	apps := binmanager.MapOfApps{
-		"proxy":            {Binary: binary, DependsOn: edges("private-upstream"), RuntimeEnv: map[string]string{"UPSTREAM": "${APP_BIN:private-upstream}"}},
-		"private-upstream": {Binary: binary, Lazy: true},
+		"proxy":            {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: binary, DependsOn: edges("private-upstream"), RuntimeEnv: map[string]string{"UPSTREAM": "${APP_BIN:private-upstream}"}},
+		"private-upstream": {Required: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: binary, Lazy: true},
 	}
 	data, err := json.Marshal(apps)
 	if err != nil {
@@ -59,7 +59,7 @@ globalThis.getMinVersion = () => "0.0.0";
 			t.Fatal(err)
 		}
 	}
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cache}
+	opts := clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cache}
 	for range 2 {
 		res := clitest.Run(t, opts, "--no-auto-config", "--config", cfg, "exec", "proxy")
 		if res.ExitCode != 0 || res.Stdout != dep.Command+"\nupstream executed\n" {
@@ -85,7 +85,7 @@ func TestConfigRuntimeEnvValidation(t *testing.T) {
 globalThis.getConfig = () => ({version: "1.0.0", `+tt.extra+`});
 globalThis.getMinVersion = () => "0.0.0";
 `)
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--config", cfg, "config", "show")
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "--no-auto-config", "--config", cfg, "config", "show")
 			if res.ExitCode != 1 || !strings.Contains(res.Stderr, tt.want) {
 				t.Fatalf("exit=%d stderr=%s", res.ExitCode, res.Stderr)
 			}

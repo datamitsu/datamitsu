@@ -23,8 +23,40 @@ var (
 )
 
 var checkCmd = &cobra.Command{
-	Use:   "check [files...]",
-	Short: "Run fix then lint operations on files",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	Args:                       nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "check [files...]",
+	Short:                      "Run fix then lint operations on files",
 	Long: `Runs fix followed by lint on specified files or the entire project,
 reusing shared context (config, file listing, caches) for efficiency.
 If fix fails, lint is skipped, unless --fail-fast=false runs it anyway.
@@ -54,7 +86,7 @@ func init() {
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
-	opts := runner.Options{WidenTo: checkWidenTo, RequireCoverage: checkRequireCov}
+	opts := runner.Options{FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, WidenTo: checkWidenTo, RequireCoverage: checkRequireCov}
 	if err := applyFailOn(cmd, checkFailOn, &opts); err != nil {
 		return err
 	}

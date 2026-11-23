@@ -1434,16 +1434,16 @@ func TestFailFast(t *testing.T) {
 		wantSet   bool
 		wantErr   bool
 	}{
-		{name: "unset", unset: true, wantValue: true},
-		{name: "empty", raw: "", wantValue: true},
-		{name: "true", raw: "true", wantValue: true, wantSet: true},
-		{name: "one", raw: "1", wantValue: true, wantSet: true},
-		{name: "false", raw: "false", wantValue: false, wantSet: true},
-		{name: "zero", raw: "0", wantValue: false, wantSet: true},
-		{name: "upper case", raw: "FALSE", wantValue: false, wantSet: true},
-		{name: "padded", raw: " true ", wantValue: true, wantSet: true},
-		{name: "yes", raw: "yes", wantValue: true, wantErr: true},
-		{name: "off", raw: "off", wantValue: true, wantErr: true},
+		{raw: "", wantSet: false, wantErr: false, name: "unset", unset: true, wantValue: true},
+		{unset: false, wantSet: false, wantErr: false, name: "empty", raw: "", wantValue: true},
+		{unset: false, wantErr: false, name: "true", raw: "true", wantValue: true, wantSet: true},
+		{unset: false, wantErr: false, name: "one", raw: "1", wantValue: true, wantSet: true},
+		{unset: false, wantErr: false, name: "false", raw: "false", wantValue: false, wantSet: true},
+		{unset: false, wantErr: false, name: "zero", raw: "0", wantValue: false, wantSet: true},
+		{unset: false, wantErr: false, name: "upper case", raw: "FALSE", wantValue: false, wantSet: true},
+		{unset: false, wantErr: false, name: "padded", raw: " true ", wantValue: true, wantSet: true},
+		{unset: false, wantSet: false, name: "yes", raw: "yes", wantValue: true, wantErr: true},
+		{unset: false, wantSet: false, name: "off", raw: "off", wantValue: true, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1586,12 +1586,12 @@ func TestSourceDateEpoch(t *testing.T) {
 		want time.Time
 		ok   bool
 	}{
-		{raw: "", ok: false},
+		{want: time.Time{}, raw: "", ok: false},
 		{raw: "1700000000", want: time.Date(2023, 11, 14, 22, 13, 20, 0, time.UTC), ok: true},
 		{raw: " 0 ", want: time.Unix(0, 0).UTC(), ok: true},
-		{raw: "-1", ok: false},
-		{raw: "1.5", ok: false},
-		{raw: "yesterday", ok: false},
+		{want: time.Time{}, raw: "-1", ok: false},
+		{want: time.Time{}, raw: "1.5", ok: false},
+		{want: time.Time{}, raw: "yesterday", ok: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.raw, func(t *testing.T) {
@@ -1615,11 +1615,11 @@ func TestParseCaps(t *testing.T) {
 		wantFindings int
 		wantErr      string
 	}{
-		{name: "defaults", wantBytes: 8 << 20, wantFindings: 10000},
-		{name: "overrides", bytes: "1024", findings: " 5 ", wantBytes: 1024, wantFindings: 5},
-		{name: "zero bytes", bytes: "0", wantBytes: 8 << 20, wantFindings: 10000, wantErr: maxParseInputBytes.Name},
-		{name: "negative findings", findings: "-1", wantBytes: 8 << 20, wantFindings: 10000, wantErr: maxFindingsPerProcess.Name},
-		{name: "words", bytes: "8MiB", wantBytes: 8 << 20, wantFindings: 10000, wantErr: maxParseInputBytes.Name},
+		{bytes: "", findings: "", wantErr: "", name: "defaults", wantBytes: 8 << 20, wantFindings: 10000},
+		{wantErr: "", name: "overrides", bytes: "1024", findings: " 5 ", wantBytes: 1024, wantFindings: 5},
+		{findings: "", name: "zero bytes", bytes: "0", wantBytes: 8 << 20, wantFindings: 10000, wantErr: maxParseInputBytes.Name},
+		{bytes: "", name: "negative findings", findings: "-1", wantBytes: 8 << 20, wantFindings: 10000, wantErr: maxFindingsPerProcess.Name},
+		{findings: "", name: "words", bytes: "8MiB", wantBytes: 8 << 20, wantFindings: 10000, wantErr: maxParseInputBytes.Name},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

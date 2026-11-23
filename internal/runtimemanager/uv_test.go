@@ -155,9 +155,11 @@ func TestGetUVCommandInfo(t *testing.T) {
 
 	t.Run("returns correct command info", func(t *testing.T) {
 		appConfig := &binmanager.AppConfigUV{
-			PackageName: "yamllint",
-			Version:     "1.37.0",
-			Runtime:     "uv",
+			LockFile:       "",
+			RequiresPython: "",
+			PackageName:    "yamllint",
+			Version:        "1.37.0",
+			Runtime:        "uv",
 		}
 
 		info, err := rm.GetUVCommandInfo("yamllint", appConfig, nil, nil)
@@ -194,9 +196,11 @@ func TestGetUVCommandInfo(t *testing.T) {
 	// symlink dangles after a store restore is not installed.
 	t.Run("requires the venv interpreter", func(t *testing.T) {
 		appConfig := &binmanager.AppConfigUV{
-			PackageName: "yamllint",
-			Version:     "1.37.0",
-			Runtime:     "uv",
+			LockFile:       "",
+			RequiresPython: "",
+			PackageName:    "yamllint",
+			Version:        "1.37.0",
+			Runtime:        "uv",
 		}
 
 		info, err := rm.GetUVCommandInfo("yamllint", appConfig, nil, nil)
@@ -213,9 +217,11 @@ func TestGetUVCommandInfo(t *testing.T) {
 
 	t.Run("explicit runtime ref", func(t *testing.T) {
 		appConfig := &binmanager.AppConfigUV{
-			PackageName: "yamllint",
-			Version:     "1.37.0",
-			Runtime:     "uv",
+			LockFile:       "",
+			RequiresPython: "",
+			PackageName:    "yamllint",
+			Version:        "1.37.0",
+			Runtime:        "uv",
 		}
 
 		info, err := rm.GetUVCommandInfo("yamllint", appConfig, nil, nil)
@@ -230,9 +236,11 @@ func TestGetUVCommandInfo(t *testing.T) {
 
 	t.Run("invalid runtime returns error", func(t *testing.T) {
 		appConfig := &binmanager.AppConfigUV{
-			PackageName: "yamllint",
-			Version:     "1.37.0",
-			Runtime:     "nonexistent",
+			LockFile:       "",
+			RequiresPython: "",
+			PackageName:    "yamllint",
+			Version:        "1.37.0",
+			Runtime:        "nonexistent",
 		}
 
 		_, err := rm.GetUVCommandInfo("yamllint", appConfig, nil, nil)
@@ -243,9 +251,11 @@ func TestGetUVCommandInfo(t *testing.T) {
 
 	t.Run("deterministic paths", func(t *testing.T) {
 		appConfig := &binmanager.AppConfigUV{
-			PackageName: "yamllint",
-			Version:     "1.37.0",
-			Runtime:     "uv",
+			LockFile:       "",
+			RequiresPython: "",
+			PackageName:    "yamllint",
+			Version:        "1.37.0",
+			Runtime:        "uv",
 		}
 
 		info1, err := rm.GetUVCommandInfo("yamllint", appConfig, nil, nil)
@@ -265,14 +275,18 @@ func TestGetUVCommandInfo(t *testing.T) {
 
 	t.Run("different versions produce different paths", func(t *testing.T) {
 		config1 := &binmanager.AppConfigUV{
-			PackageName: "yamllint",
-			Version:     "1.37.0",
-			Runtime:     "uv",
+			LockFile:       "",
+			RequiresPython: "",
+			PackageName:    "yamllint",
+			Version:        "1.37.0",
+			Runtime:        "uv",
 		}
 		config2 := &binmanager.AppConfigUV{
-			PackageName: "yamllint",
-			Version:     "1.38.0",
-			Runtime:     "uv",
+			LockFile:       "",
+			RequiresPython: "",
+			PackageName:    "yamllint",
+			Version:        "1.38.0",
+			Runtime:        "uv",
 		}
 
 		info1, err := rm.GetUVCommandInfo("yamllint", config1, nil, nil)
@@ -295,15 +309,18 @@ func TestGetUVCommandInfo_LockFileAffectsPath(t *testing.T) {
 	rm := New(runtimes)
 
 	configNoLock := &binmanager.AppConfigUV{
-		PackageName: "yamllint",
-		Version:     "1.37.0",
-		Runtime:     "uv",
+		LockFile:       "",
+		RequiresPython: "",
+		PackageName:    "yamllint",
+		Version:        "1.37.0",
+		Runtime:        "uv",
 	}
 	configWithLock := &binmanager.AppConfigUV{
-		PackageName: "yamllint",
-		Version:     "1.37.0",
-		Runtime:     "uv",
-		LockFile:    "version = 1\nrequires-python = \">=3.8\"",
+		RequiresPython: "",
+		PackageName:    "yamllint",
+		Version:        "1.37.0",
+		Runtime:        "uv",
+		LockFile:       "version = 1\nrequires-python = \">=3.8\"",
 	}
 
 	infoNoLock, err := rm.GetUVCommandInfo("yamllint", configNoLock, nil, nil)
@@ -325,16 +342,18 @@ func TestGetUVCommandInfo_DifferentLockFilesProduceDifferentPaths(t *testing.T) 
 	rm := New(runtimes)
 
 	config1 := &binmanager.AppConfigUV{
-		PackageName: "yamllint",
-		Version:     "1.37.0",
-		Runtime:     "uv",
-		LockFile:    "lockfile-content-v1",
+		RequiresPython: "",
+		PackageName:    "yamllint",
+		Version:        "1.37.0",
+		Runtime:        "uv",
+		LockFile:       "lockfile-content-v1",
 	}
 	config2 := &binmanager.AppConfigUV{
-		PackageName: "yamllint",
-		Version:     "1.37.0",
-		Runtime:     "uv",
-		LockFile:    "lockfile-content-v2",
+		RequiresPython: "",
+		PackageName:    "yamllint",
+		Version:        "1.37.0",
+		Runtime:        "uv",
+		LockFile:       "lockfile-content-v2",
 	}
 
 	info1, err := rm.GetUVCommandInfo("yamllint", config1, nil, nil)
@@ -357,9 +376,11 @@ func TestInstallUVAppAlreadyInstalled(t *testing.T) {
 	rm := New(runtimes)
 
 	appConfig := &binmanager.AppConfigUV{
-		PackageName: "yamllint",
-		Version:     "1.37.0",
-		Runtime:     "uv",
+		LockFile:       "",
+		RequiresPython: "",
+		PackageName:    "yamllint",
+		Version:        "1.37.0",
+		Runtime:        "uv",
 	}
 
 	appEnvPath, err := rm.GetAppPath("yamllint", config.RuntimeKindUV, uvVersionForHash("1.37.0", ""), nil, "", nil, nil, "uv")
@@ -452,9 +473,11 @@ func TestInstallUVAppHealthyVenvSkips(t *testing.T) {
 	rm := New(runtimes)
 
 	appConfig := &binmanager.AppConfigUV{
-		PackageName: "yamllint",
-		Version:     "1.37.0",
-		Runtime:     "uv",
+		LockFile:       "",
+		RequiresPython: "",
+		PackageName:    "yamllint",
+		Version:        "1.37.0",
+		Runtime:        "uv",
 	}
 
 	appEnvPath, err := rm.GetAppPath("yamllint", config.RuntimeKindUV, uvVersionForHash("1.37.0", ""), nil, "", nil, nil, "uv")
@@ -506,9 +529,11 @@ func TestInstallUVAppMissingRuntimeLeavesStaleVenvUntouched(t *testing.T) {
 	rm := New(runtimes)
 
 	appConfig := &binmanager.AppConfigUV{
-		PackageName: "yamllint",
-		Version:     "1.37.0",
-		Runtime:     "uv",
+		LockFile:       "",
+		RequiresPython: "",
+		PackageName:    "yamllint",
+		Version:        "1.37.0",
+		Runtime:        "uv",
 	}
 
 	appEnvPath, err := rm.GetAppPath("yamllint", config.RuntimeKindUV, uvVersionForHash("1.37.0", ""), nil, "", nil, nil, "uv")
@@ -547,13 +572,19 @@ func TestInstallUVAppRequiresPinnedPythonBeforeProvisioning(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	runtimes := config.MapOfRuntimes{
 		"uv": {
-			Kind: config.RuntimeKindUV, Mode: config.RuntimeModeSystem,
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindUV, Mode: config.RuntimeModeSystem,
 			System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "test"},
-			UV:     &config.RuntimeConfigUV{PythonVersion: "3.12.0"},
+			UV:     &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.12.0"},
 		},
 	}
 	rm := New(runtimes)
-	app := &binmanager.AppConfigUV{PackageName: "yamllint", Version: "1.37.0", Runtime: "uv"}
+	app := &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.37.0", Runtime: "uv"}
 	appPath, err := rm.GetAppPath("yamllint", config.RuntimeKindUV, uvVersionForHash(app.Version, ""), nil, "", nil, nil, "uv")
 	if err != nil {
 		t.Fatal(err)
@@ -618,7 +649,7 @@ func TestUVVersionForHash(t *testing.T) {
 func TestBuildUVInstallArgs(t *testing.T) {
 	base := []string{"sync", "--output-format=json", "--no-install-project", "--no-config"}
 	withBase := func(extra ...string) []string { return append(slices.Clone(base), extra...) }
-	noWindow := uvWindow{}
+	noWindow := uvWindow{excludeNewer: "", packages: nil}
 	if got, want := buildUVInstallArgs("", "", noWindow), withBase(); !equalStringSlices(got, want) {
 		t.Fatalf("no-lock args = %v, want %v", got, want)
 	}
@@ -634,7 +665,7 @@ func TestBuildUVInstallArgs(t *testing.T) {
 	if got := buildUVInstallArgs("version = 1\n", "", noWindow); !slices.Contains(got, "--no-build") {
 		t.Fatalf("--no-build must be present with a lockfile: %v", got)
 	}
-	if got, want := buildUVInstallArgs("version = 1\n", "", uvWindow{excludeNewer: "P7D"}), withBase("--locked", "--no-build", "--exclude-newer", "P7D"); !equalStringSlices(got, want) {
+	if got, want := buildUVInstallArgs("version = 1\n", "", uvWindow{packages: nil, excludeNewer: "P7D"}), withBase("--locked", "--no-build", "--exclude-newer", "P7D"); !equalStringSlices(got, want) {
 		t.Fatalf("span window args = %v, want %v", got, want)
 	}
 	w := uvWindow{excludeNewer: "2026-09-01T00:00:00Z", packages: []string{"certifi=P1D", "idna=false"}}
@@ -643,7 +674,7 @@ func TestBuildUVInstallArgs(t *testing.T) {
 		t.Fatalf("package cutoff args = %v, want %v", got, want)
 	}
 	configArgs := []string{"sync", "--output-format=json", "--no-install-project", "--config-file", "/store/app/uv.toml", "--exclude-newer", "P7D"}
-	if got := buildUVInstallArgs("", "/store/app/uv.toml", uvWindow{excludeNewer: "P7D"}); !equalStringSlices(got, configArgs) {
+	if got := buildUVInstallArgs("", "/store/app/uv.toml", uvWindow{packages: nil, excludeNewer: "P7D"}); !equalStringSlices(got, configArgs) {
 		t.Fatalf("config args = %v, want %v", got, configArgs)
 	}
 }

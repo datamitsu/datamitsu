@@ -47,7 +47,7 @@ func NewClient() *Client {
 
 // NewClientForSource binds an explicit credential to a configured GitHub API origin.
 func NewClientForSource(baseURL, token string) *Client {
-	c := &Client{httpClient: httpx.NewHardenedClient(30 * time.Second), token: token, BaseURL: baseURL}
+	c := &Client{RetryNotifier: nil, httpClient: httpx.NewHardenedClient(30 * time.Second), token: token, BaseURL: baseURL}
 	guard := c.httpClient.CheckRedirect
 	c.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if err := guard(req, via); err != nil {
@@ -277,7 +277,7 @@ func (c *Client) doJSONRequest(ctx context.Context, url string, target any) erro
 // seconds (a secondary limit), or X-Ratelimit-Reset once X-Ratelimit-Remaining
 // is 0 (the primary limit). A response with neither names no wait.
 func rateLimitFromResponse(resp *http.Response, now time.Time) *RateLimitError {
-	limit := &RateLimitError{}
+	limit := &RateLimitError{Wait: 0, Reset: time.Time{}}
 	if wait := httpretry.RetryAfterHeader(resp.Header, now); wait > 0 {
 		limit.Wait = wait
 		return limit

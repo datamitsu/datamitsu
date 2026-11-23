@@ -44,7 +44,7 @@ type commandInfoEntry struct {
 }
 
 func newCommandInfoMemo() *commandInfoMemo {
-	return &commandInfoMemo{entries: map[string]*commandInfoEntry{}}
+	return &commandInfoMemo{mu: sync.Mutex{}, entries: map[string]*commandInfoEntry{}}
 }
 
 // get returns app's CommandInfo, calling resolve at most once per app. A failure
@@ -58,7 +58,7 @@ func (m *commandInfoMemo) get(
 	m.mu.Lock()
 	entry, ok := m.entries[app]
 	if !ok {
-		entry = &commandInfoEntry{}
+		entry = &commandInfoEntry{once: sync.Once{}, info: nil, err: nil}
 		m.entries[app] = entry
 	}
 	m.mu.Unlock()

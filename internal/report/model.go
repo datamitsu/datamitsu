@@ -60,8 +60,24 @@ func (r *Run) UnmarshalJSON(data []byte) error {
 		*plain
 
 		Complete *bool `json:"complete"`
-	}{plain: (*plain)(r)}
-	*r = Run{}
+	}{
+		Complete: nil,
+		plain:    (*plain)(r),
+	}
+	*r = Run{
+		Fingerprint:     "",
+		Datamitsu:       Producer{Version: "", Configuration: ""},
+		StartedAt:       time.Time{},
+		EndedAt:         time.Time{},
+		Selection:       Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:        false,
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Operations:      nil,
+		Exports:         nil,
+		CI:              CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	}
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return fmt.Errorf("decode run: %w", err)
 	}
@@ -88,12 +104,27 @@ func (r *Run) UnmarshalJSON(data []byte) error {
 // UnmarshalJSON never treats a missing completeness claim as a clean tool run.
 func (t *ToolRun) UnmarshalJSON(data []byte) error {
 	type plain ToolRun
-	*t = ToolRun{}
+	*t = ToolRun{
+		Name:            "",
+		App:             AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+		Parser:          nil,
+		FailOn:          "",
+		GateActive:      false,
+		Category:        "",
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Invocations:     nil,
+		mayHoldSecrets:  false,
+	}
 	wire := struct {
 		*plain
 
 		Complete *bool `json:"complete"`
-	}{plain: (*plain)(t)}
+	}{
+		Complete: nil,
+		plain:    (*plain)(t),
+	}
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return fmt.Errorf("decode tool run: %w", err)
 	}
@@ -219,7 +250,7 @@ type ChangesScope struct {
 
 // ObservedScope is the scope of every observation: the working tree as the
 // version control status reports it.
-var ObservedScope = ChangesScope{Tracked: true, Untracked: true, Renames: "deleted+created"}
+var ObservedScope = ChangesScope{Ignored: false, Submodules: false, Tracked: true, Untracked: true, Renames: "deleted+created"}
 
 // Change is one file an operation changed.
 type Change struct {
@@ -278,7 +309,7 @@ func netChange(steps []Change) (Change, bool) {
 	c := last
 	switch {
 	case !existed && !exists:
-		return Change{}, false
+		return Change{Path: "", Kind: "", Patch: false, Step: 0}, false
 	case !existed:
 		c.Kind = gitutil.Created
 	case !exists:

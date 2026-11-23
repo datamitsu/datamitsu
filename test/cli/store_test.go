@@ -20,7 +20,7 @@ func TestStorePath(t *testing.T) {
 	cacheBase := t.TempDir()
 	norm := clitest.NewNormalizer().MaskPath(cacheBase, "<CACHE>")
 
-	res := clitest.Run(t, clitest.RunOptions{CacheDir: cacheBase}, "store", "path")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", Env: nil, Stdin: "", Timeout: 0, CacheDir: cacheBase}, "store", "path")
 	if res.ExitCode != 0 {
 		t.Fatalf("`store path` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -52,7 +52,7 @@ func TestStoreStatusNoOCI(t *testing.T) {
 			name = "json"
 		}
 		t.Run(name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, args...)
 			if res.ExitCode == 0 {
 				t.Fatalf("`store status %s` exit = 0, want non-zero\nstdout:\n%s",
 					strings.Join(extra, " "), res.Stdout)
@@ -84,7 +84,7 @@ func TestStoreClear(t *testing.T) {
 
 	norm := clitest.NewNormalizer().MaskPath(cacheBase, "<CACHE>")
 
-	res := clitest.Run(t, clitest.RunOptions{CacheDir: cacheBase}, "store", "clear")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", Env: nil, Stdin: "", Timeout: 0, CacheDir: cacheBase}, "store", "clear")
 	if res.ExitCode != 0 {
 		t.Fatalf("`store clear` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -159,7 +159,7 @@ func TestStoreClearRefusesDangerousPath(t *testing.T) {
 
 	// Point HOME at the store path so the dangerous-path guard (storePath ==
 	// home) trips without needing a literal "/" or volume root.
-	res := clitest.Run(t, clitest.RunOptions{CacheDir: cacheBase, Env: []string{"HOME=" + storeDir}},
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", Stdin: "", Timeout: 0, CacheDir: cacheBase, Env: []string{"HOME=" + storeDir}},
 		"store", "clear")
 	if res.ExitCode == 0 {
 		t.Fatalf("`store clear` on a dangerous path exit = 0, want non-zero\nstdout:\n%s", res.Stdout)
@@ -196,42 +196,49 @@ func TestStoreSeedArgValidation(t *testing.T) {
 			wantExit: 2,
 		},
 		{
+			cfg:      "",
 			name:     "bare-tag-without-resolve",
 			args:     []string{"store", "seed", "ghcr.io/owner/repo:latest"},
 			want:     "a tag reference does not pin content",
 			wantExit: 2,
 		},
 		{
+			cfg:      "",
 			name:     "unpinned-reference",
 			args:     []string{"store", "seed", "ghcr.io-owner-repo"},
 			want:     "must be pinned as <ref>@sha256:<digest>",
 			wantExit: 2,
 		},
 		{
+			cfg:      "",
 			name:     "malformed-digest",
 			args:     []string{"store", "seed", "example.invalid/owner/repo@bad"},
 			want:     `reference "example.invalid/owner/repo@bad"`,
 			wantExit: 2,
 		},
 		{
+			cfg:      "",
 			name:     "digest-reference-without-host",
 			args:     []string{"store", "seed", "owner/repo@sha256:" + strings.Repeat("a", 64)},
 			want:     `oci: ref "owner/repo"`,
 			wantExit: 2,
 		},
 		{
+			cfg:      "",
 			name:     "uppercase-digest",
 			args:     []string{"store", "seed", "example.invalid/owner/repo@sha256:" + strings.Repeat("A", 64)},
 			want:     "64 lowercase hex characters",
 			wantExit: 2,
 		},
 		{
+			cfg:      "",
 			name:     "malformed-reference-with-resolve-tag",
 			args:     []string{"store", "seed", "--resolve-tag", "bad:latest"},
 			want:     `reference "bad"`,
 			wantExit: 2,
 		},
 		{
+			cfg:      "",
 			name:     "no-arg-no-oci",
 			args:     []string{"store", "seed"},
 			want:     "no oci bundle declared in the effective config",
@@ -245,7 +252,7 @@ func TestStoreSeedArgValidation(t *testing.T) {
 				config = tc.cfg
 			}
 			args := append([]string{"--no-auto-config", "--config", config}, tc.args...)
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, args...)
 			if res.ExitCode != tc.wantExit {
 				t.Fatalf("`%s` exit = %d, want %d\nstdout:\n%s\nstderr:\n%s",
 					strings.Join(tc.args, " "), res.ExitCode, tc.wantExit, res.Stdout, res.Stderr)
@@ -294,7 +301,7 @@ func TestStoreImportArgValidation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			args := append([]string{"--no-auto-config", "--config", cfg}, tc.args...)
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, args...)
 			if res.ExitCode == 0 {
 				t.Fatalf("`%s` exit = 0, want non-zero\nstdout:\n%s",
 					strings.Join(tc.args, " "), res.Stdout)
@@ -371,7 +378,7 @@ func TestStoreRefsEmpty(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "store", "refs")
 	if res.ExitCode != 0 {
 		t.Fatalf("`store refs` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -401,7 +408,7 @@ func TestStoreRefsPopulated(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			args := append([]string{"--no-auto-config", "--config", cfg, "store", "refs"}, tc.args...)
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, args...)
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, args...)
 			if res.ExitCode != 0 {
 				t.Fatalf("`store refs %s` exit = %d, want 0\nstderr:\n%s",
 					strings.Join(tc.args, " "), res.ExitCode, res.Stderr)

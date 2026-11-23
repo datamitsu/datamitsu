@@ -49,6 +49,7 @@ type opFinding struct {
 // findings' paths are made relative to.
 func NewBaselineMatcher(set BaselineSet, root string) *BaselineMatcher {
 	return &BaselineMatcher{
+		mu:  sync.Mutex{},
 		set: set, root: root,
 		held: map[lineKey]int{}, used: map[opLine]int{}, seen: map[opFinding]bool{},
 	}

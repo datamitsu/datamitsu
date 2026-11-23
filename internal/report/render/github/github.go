@@ -173,6 +173,11 @@ func levelRank(severity string) uint8 {
 
 func fromFinding(f report.Finding) Annotation {
 	a := Annotation{
+		File:        "",
+		Line:        0,
+		EndLine:     0,
+		Col:         0,
+		EndCol:      0,
 		Level:       levelOf(f.Severity),
 		Source:      f.Source,
 		Code:        f.Code,
@@ -248,7 +253,7 @@ func Select(candidates []Annotation, touched map[string]bool) Selection {
 	for _, a := range candidates {
 		buckets[a.Level] = append(buckets[a.Level], a)
 	}
-	sel := Selection{Candidates: len(candidates)}
+	sel := Selection{Annotations: nil, Omitted: 0, Candidates: len(candidates)}
 	errors := Order(buckets[LevelError], touched)
 	warnings := Order(buckets[LevelWarning], touched)
 	notices := Order(buckets[LevelNotice], touched)

@@ -160,17 +160,32 @@ func NewCache(
 	}
 
 	c := &Cache{
-		path:            cachePath,
-		projectPath:     projectPath,
-		invalidationKey: invalidationKey,
-		logger:          logger.With(zap.String("component", "cache")),
-		shutdownCh:      make(chan struct{}),
+		data:              nil,
+		hits:              atomic.Int64{},
+		misses:            atomic.Int64{},
+		mu:                sync.RWMutex{},
+		deletedEntries:    nil,
+		deletedVerdicts:   nil,
+		saveMu:            sync.Mutex{},
+		yieldToForeignKey: atomic.Bool{},
+		supersededKeys:    nil,
+		dirty:             atomic.Bool{},
+		saveTimer:         nil,
+		saveTimerMu:       sync.Mutex{},
+		flushMu:           sync.Mutex{},
+		shutdownOnce:      sync.Once{},
+		path:              cachePath,
+		projectPath:       projectPath,
+		invalidationKey:   invalidationKey,
+		logger:            logger.With(zap.String("component", "cache")),
+		shutdownCh:        make(chan struct{}),
 	}
 
 	// Load existing cache or create new one
 	if err := c.Load(); err != nil {
 		c.log().Warn("failed to load cache, creating new", zap.Error(err))
 		c.data = &File{
+			Version:         "",
 			InvalidationKey: invalidationKey,
 			ProjectPath:     projectPath,
 			LastPruned:      time.Now(),
@@ -191,6 +206,7 @@ func (c *Cache) Load() error {
 		if os.IsNotExist(err) {
 			// Cache doesn't exist yet, create new
 			c.data = &File{
+				Version:         "",
 				InvalidationKey: c.invalidationKey,
 				ProjectPath:     c.projectPath,
 				LastPruned:      time.Now(),
@@ -231,6 +247,7 @@ func (c *Cache) Load() error {
 			zap.String("old", data.InvalidationKey),
 			zap.String("new", c.invalidationKey))
 		c.data = &File{
+			Version:         "",
 			InvalidationKey: c.invalidationKey,
 			ProjectPath:     c.projectPath,
 			LastPruned:      time.Now(),
@@ -595,6 +612,7 @@ func (c *Cache) GetStats() Stats {
 func (c *Cache) Clear() error {
 	c.mu.Lock()
 	c.data = &File{
+		Version:         "",
 		InvalidationKey: c.invalidationKey,
 		ProjectPath:     c.projectPath,
 		LastPruned:      time.Now(),

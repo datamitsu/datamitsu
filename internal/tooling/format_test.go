@@ -9,18 +9,41 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/textdiff"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 // formatTask builds a per-file stdin->stdout fix task for app appName.
 func formatTask(appName, projectPath string) Task {
 	return Task{
-		ToolName:  appName,
-		Operation: config.OpFix,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Files:        nil,
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     appName,
+		Operation:    config.OpFix,
 		OpConfig: config.ToolOperation{
-			App:    appName,
-			Scope:  config.ToolScopePerFile,
-			Input:  config.ToolInputStdin,
-			Output: config.ToolOutputStdout,
+			Args:              nil,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			LSP:               nil,
+			ManagedConfigRefs: nil,
+			App:               appName,
+			Scope:             config.ToolScopePerFile,
+			Input:             config.ToolInputStdin,
+			Output:            config.ToolOutputStdout,
 		},
 		ProjectPath: projectPath,
 	}
@@ -28,10 +51,13 @@ func formatTask(appName, projectPath string) Task {
 
 func TestFormatContent_NoChangeYieldsNilEdits(t *testing.T) {
 	dir := t.TempDir()
-	appMgr := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		// `cat` echoes stdin unchanged → candidate == content → no edits.
-		"noop": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "cat"}},
-	}}
+	appMgr := &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			// `cat` echoes stdin unchanged → candidate == content → no edits.
+			"noop": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", "cat"}},
+		},
+	}
 	e := NewExecutor(dir, false, false, appMgr, nil)
 
 	content := []byte("a\nb\nc\n")
@@ -49,10 +75,13 @@ func TestFormatContent_NoChangeYieldsNilEdits(t *testing.T) {
 
 func TestFormatContent_TransformProducesApplicableEdits(t *testing.T) {
 	dir := t.TempDir()
-	appMgr := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		// upper-case stdin; diagnostics to stderr must NOT leak into the candidate.
-		"upper": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "tr a-z A-Z; echo note >&2"}},
-	}}
+	appMgr := &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			// upper-case stdin; diagnostics to stderr must NOT leak into the candidate.
+			"upper": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", "tr a-z A-Z; echo note >&2"}},
+		},
+	}
 	e := NewExecutor(dir, false, false, appMgr, nil)
 
 	content := []byte("hello\nworld\n")
@@ -74,7 +103,7 @@ func TestFormatContent_TransformProducesApplicableEdits(t *testing.T) {
 
 func TestFormatContent_RejectsNonStdoutOp(t *testing.T) {
 	dir := t.TempDir()
-	e := NewExecutor(dir, false, false, &mockAppManager{}, nil)
+	e := NewExecutor(dir, false, false, &mockAppManager{binaries: nil, err: nil, commands: nil}, nil)
 
 	task := formatTask("x", dir)
 	task.OpConfig.Output = "" // not stdout
@@ -85,10 +114,13 @@ func TestFormatContent_RejectsNonStdoutOp(t *testing.T) {
 
 func TestFormatContent_EmptyStdoutForNonEmptyContentIsError(t *testing.T) {
 	dir := t.TempDir()
-	appMgr := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		// exits 0 but writes nothing → would truncate the buffer; must be rejected.
-		"sink": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "true"}},
-	}}
+	appMgr := &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			// exits 0 but writes nothing → would truncate the buffer; must be rejected.
+			"sink": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", "true"}},
+		},
+	}
 	e := NewExecutor(dir, false, false, appMgr, nil)
 
 	if _, _, err := e.FormatContent(context.Background(), formatTask("sink", dir), dir+"/f.txt", []byte("data\n")); err == nil {
@@ -107,10 +139,13 @@ func TestFormatContent_ToolEnvironment(t *testing.T) {
 		t.Setenv(name, value)
 	}
 	dir := t.TempDir()
-	e := NewExecutor(dir, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"probe": shellApp(`cat >/dev/null; printf 'CI=%s GITHUB_ACTIONS=%s AI_AGENT=%s FORCE_COLOR=%s NO_COLOR=%s MODE=%s\n' ` +
-			`"$CI" "$GITHUB_ACTIONS" "$AI_AGENT" "$FORCE_COLOR" "$NO_COLOR" "$MODE"`),
-	}}, nil)
+	e := NewExecutor(dir, false, false, &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"probe": shellApp(`cat >/dev/null; printf 'CI=%s GITHUB_ACTIONS=%s AI_AGENT=%s FORCE_COLOR=%s NO_COLOR=%s MODE=%s\n' ` +
+				`"$CI" "$GITHUB_ACTIONS" "$AI_AGENT" "$FORCE_COLOR" "$NO_COLOR" "$MODE"`),
+		},
+	}, nil)
 	task := formatTask("probe", dir)
 	task.OpConfig.InheritEnv = []string{"GITHUB_ACTIONS", "MODE"}
 	task.OpConfig.Env = map[string]string{"MODE": "op"}

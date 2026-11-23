@@ -21,9 +21,10 @@ func TestMarshalIndent(t *testing.T) {
 	path := "bin/tool"
 	value := map[string]any{
 		"zeta": entry{
-			URL: "https://example.test/tool.tar.gz", Hash: "abc", ContentType: "tar.gz", BinaryPath: &path,
+			ExtractDir: false,
+			URL:        "https://example.test/tool.tar.gz", Hash: "abc", ContentType: "tar.gz", BinaryPath: &path,
 			Tags: []string{"z", "a", "m"}, Size: 9007199254740993, Ratio: 0.1,
-			Nested: map[string]*entry{"b": {URL: "u", Hash: "h", ContentType: "binary"}, "a": {URL: "u2", Hash: "h2", ContentType: "zip"}},
+			Nested: map[string]*entry{"b": {BinaryPath: nil, ExtractDir: false, Tags: nil, Nested: nil, Size: 0, Ratio: 0, URL: "u", Hash: "h", ContentType: "binary"}, "a": {BinaryPath: nil, ExtractDir: false, Tags: nil, Nested: nil, Size: 0, Ratio: 0, URL: "u2", Hash: "h2", ContentType: "zip"}},
 		},
 		"alpha": 1,
 	}

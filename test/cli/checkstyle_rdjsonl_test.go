@@ -13,7 +13,7 @@ import (
 // the lint operation, a finding without a file included, and the completeness
 // companion beside each.
 func TestReportCheckstyleAndRdjsonl(t *testing.T) {
-	e := reportProject(t, outsider, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{}))
+	e := reportProject(t, outsider, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 	res := e.run("", nil, "lint", "--report", "checkstyle=out/checkstyle.xml", "--report", "rdjsonl=out/rd.jsonl")
 	e.wantExit(res, 1)
 

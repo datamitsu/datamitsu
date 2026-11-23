@@ -16,8 +16,8 @@ var renderFormats = []struct {
 	format, file string
 	companion    bool
 }{
-	{format: "markdown", file: "run.md"},
-	{format: "sarif", file: "results.sarif"},
+	{companion: false, format: "markdown", file: "run.md"},
+	{companion: false, format: "sarif", file: "results.sarif"},
 	{format: "junit", file: "junit.xml", companion: true},
 	{format: "codequality", file: "gl-code-quality.json", companion: true},
 	{format: "checkstyle", file: "checkstyle.xml", companion: true},
@@ -28,7 +28,7 @@ var renderFormats = []struct {
 // own JSON is the file the run wrote, byte for byte, companion included — on
 // another machine, without the checkout, after the sources changed.
 func TestReportRenderFormats(t *testing.T) {
-	e := reportProject(t, outsider, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{}))
+	e := reportProject(t, outsider, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 	args := make([]string, 0, 3+2*len(renderFormats))
 	args = append(args, "lint", "--report", "json=out/run.json")
 	for _, f := range renderFormats {
@@ -46,7 +46,7 @@ func TestReportRenderFormats(t *testing.T) {
 
 	for _, f := range renderFormats {
 		t.Run(f.format, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{Dir: elsewhere, CacheDir: e.cache},
+			res := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: elsewhere, CacheDir: e.cache},
 				"report", "render", "--input", "run.json", "--format", f.format, "--output", "again/"+f.file)
 			e.wantExit(res, 0)
 			again, err := os.ReadFile(filepath.Join(elsewhere, "again", f.file))
@@ -66,7 +66,7 @@ func TestReportRenderFormats(t *testing.T) {
 				t.Errorf("%s has a companion", f.format)
 			}
 
-			stdout := clitest.Run(t, clitest.RunOptions{Dir: elsewhere, CacheDir: e.cache},
+			stdout := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: elsewhere, CacheDir: e.cache},
 				"report", "render", "--input", "run.json", "--format", f.format)
 			e.wantExit(stdout, 0)
 			if stdout.Stdout != e.read("out/"+f.file) {
@@ -88,7 +88,13 @@ func TestReportRenderSARIFOmitContradictoryTool(t *testing.T) {
     {"name":"ready", "complete":true, "incomplete":[], "invocations":[{"state":"ran", "extraction":"parsed-clean", "exitCode":0, "success":true}]}
   ]}]
 }`)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "report", "render", "--input", "run.json", "--format", "sarif")
+	res := clitest.Run(t, clitest.RunOptions{
+		CacheDir: "",
+		Env:      nil,
+		Stdin:    "",
+		Timeout:  0,
+		Dir:      p.Dir,
+	}, "report", "render", "--input", "run.json", "--format", "sarif")
 	if res.ExitCode != 0 || !strings.Contains(res.Stdout, `"ready"`) || strings.Contains(res.Stdout, `"partial"`) || strings.Contains(res.Stdout, `"pending"`) || strings.Contains(res.Stdout, `"unparsed"`) || strings.Contains(res.Stdout, `"empty"`) {
 		t.Fatalf("expected only the complete tool in SARIF: exit=%d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
 	}
@@ -106,7 +112,13 @@ func TestReportRenderRejectsContradictoryCoverage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := clitest.NewProject(t)
 			p.WriteFile("run.json", strings.Replace(equivalentCompleteReport, tc.old, tc.replacement, 1))
-			opts := clitest.RunOptions{Dir: p.Dir}
+			opts := clitest.RunOptions{
+				CacheDir: "",
+				Env:      nil,
+				Stdin:    "",
+				Timeout:  0,
+				Dir:      p.Dir,
+			}
 			res := clitest.Run(t, opts, "report", "render", "--input", "run.json", "--format", "sarif")
 			if res.ExitCode != 0 || res.Stdout != "" || !strings.Contains(res.Stderr, tc.reason) {
 				t.Fatalf("SARIF should omit the tool for %s: %+v", tc.reason, res)
@@ -131,7 +143,12 @@ const equivalentCompleteReport = `{
 func TestReportRenderRedactedVerdictAndSchema(t *testing.T) {
 	p := clitest.NewProject(t)
 	p.WriteFile("run.json", equivalentCompleteReport)
-	masked := clitest.RunOptions{Dir: p.Dir, Env: []string{"REPORT_TOKEN=verdict-hit", "SCHEMA_SECRET=datamitsu.report/1"}}
+	masked := clitest.RunOptions{
+		CacheDir: "",
+		Stdin:    "",
+		Timeout:  0,
+		Dir:      p.Dir, Env: []string{"REPORT_TOKEN=verdict-hit", "SCHEMA_SECRET=datamitsu.report/1"},
+	}
 	res := clitest.Run(t, masked, "report", "render", "--input", "run.json", "--format", "json", "--output", "redacted.json")
 	if res.ExitCode != 0 {
 		t.Fatalf("JSON rendering failed: %+v", res)
@@ -140,7 +157,13 @@ func TestReportRenderRedactedVerdictAndSchema(t *testing.T) {
 	if err != nil || strings.Contains(string(data), "verdict-hit") {
 		t.Fatalf("expected JSON with masked verdict: %v\n%s", err, data)
 	}
-	res = clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "report", "render", "--input", "redacted.json", "--format", "sarif")
+	res = clitest.Run(t, clitest.RunOptions{
+		CacheDir: "",
+		Env:      nil,
+		Stdin:    "",
+		Timeout:  0,
+		Dir:      p.Dir,
+	}, "report", "render", "--input", "redacted.json", "--format", "sarif")
 	if res.ExitCode != 0 || !strings.Contains(res.Stdout, `"name": "ready"`) || !strings.Contains(res.Stdout, `"executionSuccessful": true`) {
 		t.Fatalf("expected successful cached tool in replay SARIF: %+v", res)
 	}
@@ -150,7 +173,13 @@ func TestReportRenderRedactedVerdictAndSchema(t *testing.T) {
 		{"history", "history.jsonl", `"cached":1`},
 	} {
 		t.Run(tc.format, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "report", "render", "--input", "redacted.json", "--format", tc.format, "--output", tc.filename)
+			res := clitest.Run(t, clitest.RunOptions{
+				CacheDir: "",
+				Env:      nil,
+				Stdin:    "",
+				Timeout:  0,
+				Dir:      p.Dir,
+			}, "report", "render", "--input", "redacted.json", "--format", tc.format, "--output", tc.filename)
 			data, err := os.ReadFile(filepath.Join(p.Dir, tc.filename))
 			if res.ExitCode != 0 || err != nil || !strings.Contains(string(data), tc.expected) {
 				t.Fatalf("expected the cached file in %s: %+v, %v\n%s", tc.format, res, err, data)
@@ -221,6 +250,9 @@ func TestReportRenderMasksSecretsWithoutChangingOutputPath(t *testing.T) {
 	e.wantExit(e.run("", nil, "lint", "--report", "json=run.json"), 0)
 	secret := "report-render-secret-value"
 	res := clitest.Run(t, clitest.RunOptions{
+		Stdin:   "",
+		Timeout: 0,
+
 		Dir: e.p.Dir, CacheDir: e.cache,
 		Env: []string{"REPORT_TOKEN=" + secret},
 	},

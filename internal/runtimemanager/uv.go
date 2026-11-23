@@ -82,7 +82,7 @@ func uvVenvHealthy(appEnvPath, binPath string) bool {
 func (rm *RuntimeManager) InstallUVApp(ctx context.Context, appName string, appConfig *binmanager.AppConfigUV, customEnv map[string]string, files map[string]string, archives map[string]*binmanager.ArchiveSpec) error {
 	ctx, cancel, timeoutSec := newInstallContext(ctx)
 	defer cancel()
-	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Uv: appConfig, Env: customEnv, Files: files, Archives: archives})
+	handled, dispatchErr := rm.dispatchAppInstall(ctx, appName, binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, RuntimeEnv: nil, Caches: nil, Links: nil, Prepare: nil, Uv: appConfig, Env: customEnv, Files: files, Archives: archives})
 	if handled || dispatchErr != nil {
 		return wrapInstallTimeout(dispatchErr, timeoutSec)
 	}
@@ -233,7 +233,7 @@ func (rm *RuntimeManager) installUVAppOnce(ctx context.Context, appName string, 
 	// installed-package count is read from the --output-format=json summary on
 	// stdout. On failure stderr (or the stdout summary) carries the error.
 	sp := ui.Current().Spinner("Installing " + appName)
-	rep := &uvReporter{sp: sp}
+	rep := &uvReporter{resolved: 0, prepared: 0, sp: sp}
 	stdout, stderr, err := runInstallCmdStreamingStderr(ctx, cmd, rep.line)
 	if err != nil {
 		sp.Fail()
@@ -402,9 +402,13 @@ func (rm *RuntimeManager) GetUVCommandInfo(appName string, appConfig *binmanager
 	}
 
 	return &binmanager.CommandInfo{
-		Type:    "uv",
-		Command: binPath,
-		Env:     envVars,
+		Args:           nil,
+		Artifact:       "",
+		ToolCacheDir:   "",
+		ToolCacheSlots: nil,
+		Type:           "uv",
+		Command:        binPath,
+		Env:            envVars,
 		// The same pair uvVenvHealthy checks. The wrapper script alone survives a
 		// store restore that lost the shared Python dir, and running it then fails
 		// on a dangling `#!` line instead of reinstalling.

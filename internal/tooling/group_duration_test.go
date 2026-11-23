@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 // TestExecuteGroupRecordsDurationOnFailFast pins that a group which exits early
@@ -44,7 +45,7 @@ func TestExecuteGroupRecordsDurationOnFailFast(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e := NewExecutor(t.TempDir(), false, tt.failFast,
-				&mockAppManager{binaries: map[string]string{"sh": "/bin/sh"}}, nil)
+				&mockAppManager{err: nil, commands: nil, binaries: map[string]string{"sh": "/bin/sh"}}, nil)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -71,12 +72,34 @@ func sleepTask(t *testing.T, tool string, fail bool) Task {
 		script = "sleep 0.05; exit 3"
 	}
 	return Task{
-		ToolName: tool,
-		Tool:     config.Tool{Name: tool},
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Files:        nil,
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     tool,
+		Tool:         config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: tool},
 		OpConfig: config.ToolOperation{
-			App:   "sh",
-			Args:  []string{"-c", script},
-			Scope: config.ToolScopeRepository,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "sh",
+			Args:              []string{"-c", script},
+			Scope:             config.ToolScopeRepository,
 		},
 		Operation:   config.OpLint,
 		ProjectPath: t.TempDir(),

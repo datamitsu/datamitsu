@@ -32,54 +32,64 @@ func TestParse(t *testing.T) {
 		wantErr   bool
 	}{
 		{
+			wantErr:   false,
 			name:      "empty content",
 			content:   "",
 			wantRules: 0,
 		},
 		{
+			wantErr:   false,
 			name:      "blank lines only",
 			content:   "\n  \n\n",
 			wantRules: 0,
 		},
 		{
+			wantErr:   false,
 			name:      "comments only",
 			content:   "# comment\n# another",
 			wantRules: 0,
 		},
 		{
+			wantErr:   false,
 			name:      "single rule",
 			content:   "**/*.md: eslint, prettier",
 			wantRules: 1,
 		},
 		{
+			wantErr:   false,
 			name:      "inversion rule",
 			content:   "!docs/**/*.md: prettier",
 			wantRules: 1,
 		},
 		{
+			wantErr:   false,
 			name:      "mixed rules and comments",
 			content:   "# Disable eslint for markdown\n**/*.md: eslint\n\n# But re-enable for docs\n!docs/**/*.md: eslint\n",
 			wantRules: 2,
 		},
 		{
-			name:    "missing colon",
-			content: "**/*.md eslint",
-			wantErr: true,
+			wantRules: 0,
+			name:      "missing colon",
+			content:   "**/*.md eslint",
+			wantErr:   true,
 		},
 		{
-			name:    "empty glob",
-			content: ": eslint",
-			wantErr: true,
+			wantRules: 0,
+			name:      "empty glob",
+			content:   ": eslint",
+			wantErr:   true,
 		},
 		{
-			name:    "empty tool list",
-			content: "**/*.md:",
-			wantErr: true,
+			wantRules: 0,
+			name:      "empty tool list",
+			content:   "**/*.md:",
+			wantErr:   true,
 		},
 		{
-			name:    "only bang",
-			content: "!: eslint",
-			wantErr: true,
+			wantRules: 0,
+			name:      "only bang",
+			content:   "!: eslint",
+			wantErr:   true,
 		},
 	}
 

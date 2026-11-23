@@ -10,6 +10,7 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 // shCmd builds a `sh -c <script>` command for the IO tests. These tests rely on
@@ -104,25 +105,53 @@ func TestExecuteTaskStdinStdoutMode(t *testing.T) {
 	}
 
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
 			// `tr` upper-cases stdin → stdout; the diagnostic goes to stderr.
 			"fmt-tool": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", "tr a-z A-Z; echo formatting-note >&2"},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", "tr a-z A-Z; echo formatting-note >&2"},
 			},
 		},
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 	task := Task{
-		ToolName:  "fmt-tool",
-		Operation: config.OpFix,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "fmt-tool",
+		Operation:    config.OpFix,
 		OpConfig: config.ToolOperation{
-			App:    "fmt-tool",
-			Scope:  config.ToolScopePerFile,
-			Input:  config.ToolInputStdin,
-			Output: config.ToolOutputStdout,
+			Args:              nil,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			LSP:               nil,
+			ManagedConfigRefs: nil,
+			App:               "fmt-tool",
+			Scope:             config.ToolScopePerFile,
+			Input:             config.ToolInputStdin,
+			Output:            config.ToolOutputStdout,
 		},
 		Files:       []string{file},
 		ProjectPath: tmpDir,
@@ -154,22 +183,52 @@ func TestExecuteTaskDefaultModeUnchanged(t *testing.T) {
 	}
 
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
 			"plain-tool": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", "echo out-line; echo err-line >&2"},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", "echo out-line; echo err-line >&2"},
 			},
 		},
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 
 	task := Task{
-		ToolName:  "plain-tool",
-		Operation: config.OpLint,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "plain-tool",
+		Operation:    config.OpLint,
 		OpConfig: config.ToolOperation{
-			App:   "plain-tool",
-			Scope: config.ToolScopePerFile,
+			Args:              nil,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "plain-tool",
+			Scope:             config.ToolScopePerFile,
 		},
 		Files:       []string{file},
 		ProjectPath: tmpDir,
@@ -203,32 +262,37 @@ func TestStdinForOperation(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "file mode returns nil (default)",
-			op:   config.ToolOperation{Input: config.ToolInputFile},
-			file: file,
-			want: nil,
+			wantErr: false,
+			name:    "file mode returns nil (default)",
+			op:      config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Input: config.ToolInputFile},
+			file:    file,
+			want:    nil,
 		},
 		{
-			name: "unset mode returns nil",
-			op:   config.ToolOperation{},
-			file: file,
-			want: nil,
+			wantErr: false,
+			name:    "unset mode returns nil",
+			op:      config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil},
+			file:    file,
+			want:    nil,
 		},
 		{
-			name: "stdin mode reads file content",
-			op:   config.ToolOperation{Input: config.ToolInputStdin},
-			file: file,
-			want: content,
+			wantErr: false,
+			name:    "stdin mode reads file content",
+			op:      config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Input: config.ToolInputStdin},
+			file:    file,
+			want:    content,
 		},
 		{
-			name: "stdin mode with empty file path returns nil",
-			op:   config.ToolOperation{Input: config.ToolInputStdin},
-			file: "",
-			want: nil,
+			wantErr: false,
+			name:    "stdin mode with empty file path returns nil",
+			op:      config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Input: config.ToolInputStdin},
+			file:    "",
+			want:    nil,
 		},
 		{
+			want:    nil,
 			name:    "stdin mode with missing file errors",
-			op:      config.ToolOperation{Input: config.ToolInputStdin},
+			op:      config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Input: config.ToolInputStdin},
 			file:    filepath.Join(dir, "does-not-exist.txt"),
 			wantErr: true,
 		},

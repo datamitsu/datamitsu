@@ -175,7 +175,7 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 	}
 
 	t.Run("minAge 0 returns latest without full fetch", func(t *testing.T) {
-		srv, fullHit := minAgeServer(t, "pkg", "2.0.0", npmFullResponse{Name: "pkg"})
+		srv, fullHit := minAgeServer(t, "pkg", "2.0.0", npmFullResponse{Description: "", DistTags: nil, Versions: nil, Time: nil, Name: "pkg"})
 		setup(t, srv)
 
 		info, err := GetNPMPackageInfoWithMinAge(context.Background(), "pkg", 0)
@@ -192,9 +192,11 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("latest old enough - fast path", func(t *testing.T) {
 		srv, _ := minAgeServer(t, "pkg", "2.0.0", npmFullResponse{
-			Name:     "pkg",
-			Versions: map[string]npmVersionMeta{"2.0.0": {}, "1.0.0": {}},
-			Time:     map[string]string{"2.0.0": rfc3339(old), "1.0.0": rfc3339(old)},
+			Description: "",
+			DistTags:    nil,
+			Name:        "pkg",
+			Versions:    map[string]npmVersionMeta{"2.0.0": {Description: ""}, "1.0.0": {Description: ""}},
+			Time:        map[string]string{"2.0.0": rfc3339(old), "1.0.0": rfc3339(old)},
 		})
 		setup(t, srv)
 
@@ -209,9 +211,11 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("latest too fresh - falls back to older", func(t *testing.T) {
 		srv, _ := minAgeServer(t, "pkg", "2.0.0", npmFullResponse{
-			Name:     "pkg",
-			Versions: map[string]npmVersionMeta{"2.0.0": {}, "1.0.0": {}},
-			Time:     map[string]string{"2.0.0": rfc3339(fresh), "1.0.0": rfc3339(old)},
+			Description: "",
+			DistTags:    nil,
+			Name:        "pkg",
+			Versions:    map[string]npmVersionMeta{"2.0.0": {Description: ""}, "1.0.0": {Description: ""}},
+			Time:        map[string]string{"2.0.0": rfc3339(fresh), "1.0.0": rfc3339(old)},
 		})
 		setup(t, srv)
 
@@ -226,9 +230,11 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("skips pre-release versions", func(t *testing.T) {
 		srv, _ := minAgeServer(t, "pkg", "2.0.0-beta.1", npmFullResponse{
-			Name: "pkg",
+			Description: "",
+			DistTags:    nil,
+			Name:        "pkg",
 			Versions: map[string]npmVersionMeta{
-				"2.0.0-beta.1": {}, "2.0.0-rc.0": {}, "1.0.0": {},
+				"2.0.0-beta.1": {Description: ""}, "2.0.0-rc.0": {Description: ""}, "1.0.0": {Description: ""},
 			},
 			Time: map[string]string{
 				"2.0.0-beta.1": rfc3339(old), "2.0.0-rc.0": rfc3339(old), "1.0.0": rfc3339(old),
@@ -247,9 +253,11 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("build metadata is not pre-release", func(t *testing.T) {
 		srv, _ := minAgeServer(t, "pkg", "1.2.3+build.1", npmFullResponse{
-			Name:     "pkg",
-			Versions: map[string]npmVersionMeta{"1.2.3+build.1": {}, "1.0.0": {}},
-			Time:     map[string]string{"1.2.3+build.1": rfc3339(old), "1.0.0": rfc3339(old.Add(-time.Hour))},
+			Description: "",
+			DistTags:    nil,
+			Name:        "pkg",
+			Versions:    map[string]npmVersionMeta{"1.2.3+build.1": {Description: ""}, "1.0.0": {Description: ""}},
+			Time:        map[string]string{"1.2.3+build.1": rfc3339(old), "1.0.0": rfc3339(old.Add(-time.Hour))},
 		})
 		setup(t, srv)
 
@@ -264,9 +272,11 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("missing time entry is skipped", func(t *testing.T) {
 		srv, _ := minAgeServer(t, "pkg", "2.0.0", npmFullResponse{
-			Name:     "pkg",
-			Versions: map[string]npmVersionMeta{"2.0.0": {}, "1.5.0": {}, "1.0.0": {}},
-			Time:     map[string]string{"2.0.0": rfc3339(fresh), "1.0.0": rfc3339(old)},
+			Description: "",
+			DistTags:    nil,
+			Name:        "pkg",
+			Versions:    map[string]npmVersionMeta{"2.0.0": {Description: ""}, "1.5.0": {Description: ""}, "1.0.0": {Description: ""}},
+			Time:        map[string]string{"2.0.0": rfc3339(fresh), "1.0.0": rfc3339(old)},
 		})
 		setup(t, srv)
 
@@ -281,10 +291,11 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("latest dist-tag points to pre-release", func(t *testing.T) {
 		srv, _ := minAgeServer(t, "pkg", "3.0.0-rc.1", npmFullResponse{
-			Name:     "pkg",
-			DistTags: map[string]string{"latest": "3.0.0-rc.1"},
-			Versions: map[string]npmVersionMeta{"3.0.0-rc.1": {}, "2.0.0": {}},
-			Time:     map[string]string{"3.0.0-rc.1": rfc3339(old), "2.0.0": rfc3339(old)},
+			Description: "",
+			Name:        "pkg",
+			DistTags:    map[string]string{"latest": "3.0.0-rc.1"},
+			Versions:    map[string]npmVersionMeta{"3.0.0-rc.1": {Description: ""}, "2.0.0": {Description: ""}},
+			Time:        map[string]string{"3.0.0-rc.1": rfc3339(old), "2.0.0": rfc3339(old)},
 		})
 		setup(t, srv)
 
@@ -299,9 +310,11 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("no version old enough returns nil", func(t *testing.T) {
 		srv, _ := minAgeServer(t, "pkg", "2.0.0", npmFullResponse{
-			Name:     "pkg",
-			Versions: map[string]npmVersionMeta{"2.0.0": {}, "1.0.0": {}},
-			Time:     map[string]string{"2.0.0": rfc3339(fresh), "1.0.0": rfc3339(fresh)},
+			Description: "",
+			DistTags:    nil,
+			Name:        "pkg",
+			Versions:    map[string]npmVersionMeta{"2.0.0": {Description: ""}, "1.0.0": {Description: ""}},
+			Time:        map[string]string{"2.0.0": rfc3339(fresh), "1.0.0": rfc3339(fresh)},
 		})
 		setup(t, srv)
 
@@ -316,9 +329,11 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("scoped package", func(t *testing.T) {
 		srv, _ := minAgeServer(t, "@scope/name", "2.0.0", npmFullResponse{
-			Name:     "@scope/name",
-			Versions: map[string]npmVersionMeta{"2.0.0": {}, "1.0.0": {}},
-			Time:     map[string]string{"2.0.0": rfc3339(fresh), "1.0.0": rfc3339(old)},
+			Description: "",
+			DistTags:    nil,
+			Name:        "@scope/name",
+			Versions:    map[string]npmVersionMeta{"2.0.0": {Description: ""}, "1.0.0": {Description: ""}},
+			Time:        map[string]string{"2.0.0": rfc3339(fresh), "1.0.0": rfc3339(old)},
 		})
 		setup(t, srv)
 
@@ -333,9 +348,11 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("major line ignores newer major and prereleases", func(t *testing.T) {
 		srv, _ := minAgeServer(t, "pnpm", "12.0.0", npmFullResponse{
-			Name: "pnpm",
+			Description: "",
+			DistTags:    nil,
+			Name:        "pnpm",
 			Versions: map[string]npmVersionMeta{
-				"12.0.0": {}, "11.21.0": {}, "11.22.0-rc.1": {}, "11.20.0": {},
+				"12.0.0": {Description: ""}, "11.21.0": {Description: ""}, "11.22.0-rc.1": {Description: ""}, "11.20.0": {Description: ""},
 			},
 			Time: map[string]string{
 				"12.0.0": rfc3339(old), "11.21.0": rfc3339(old), "11.22.0-rc.1": rfc3339(old), "11.20.0": rfc3339(old),
@@ -354,9 +371,11 @@ func TestGetNPMPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("major line still enforces minimum age", func(t *testing.T) {
 		srv, _ := minAgeServer(t, "pnpm", "12.0.0", npmFullResponse{
-			Name:     "pnpm",
-			Versions: map[string]npmVersionMeta{"12.0.0": {}, "11.21.0": {}, "11.20.0": {}},
-			Time:     map[string]string{"12.0.0": rfc3339(old), "11.21.0": rfc3339(fresh), "11.20.0": rfc3339(old)},
+			Description: "",
+			DistTags:    nil,
+			Name:        "pnpm",
+			Versions:    map[string]npmVersionMeta{"12.0.0": {Description: ""}, "11.21.0": {Description: ""}, "11.20.0": {Description: ""}},
+			Time:        map[string]string{"12.0.0": rfc3339(old), "11.21.0": rfc3339(fresh), "11.20.0": rfc3339(old)},
 		})
 		setup(t, srv)
 

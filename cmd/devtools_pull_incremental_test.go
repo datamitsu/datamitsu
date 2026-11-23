@@ -26,10 +26,10 @@ func TestApplyNodeResult(t *testing.T) {
 		result npmVersionResult
 		want   nodeAppEntry
 	}{
-		{"newer version and description", npmVersionResult{LatestVersion: "2.0.0", UpdateNeeded: true, Description: "new"}, nodeAppEntry{PackageName: "demo", Version: "2.0.0", Description: "new"}},
-		{"up to date keeps the version", npmVersionResult{LatestVersion: "1.0.0", Description: "new"}, nodeAppEntry{PackageName: "demo", Version: "1.0.0", Description: "new"}},
-		{"no description keeps the old one", npmVersionResult{LatestVersion: "2.0.0", UpdateNeeded: true}, nodeAppEntry{PackageName: "demo", Version: "2.0.0", Description: "old"}},
-		{"nothing old enough changes nothing", npmVersionResult{}, entry},
+		{"newer version and description", npmVersionResult{Name: "", PackageName: "", CurrentVersion: "", Error: "", LatestVersion: "2.0.0", UpdateNeeded: true, Description: "new"}, nodeAppEntry{PackageName: "demo", Version: "2.0.0", Description: "new"}},
+		{"up to date keeps the version", npmVersionResult{Name: "", PackageName: "", CurrentVersion: "", UpdateNeeded: false, Error: "", LatestVersion: "1.0.0", Description: "new"}, nodeAppEntry{PackageName: "demo", Version: "1.0.0", Description: "new"}},
+		{"no description keeps the old one", npmVersionResult{Name: "", PackageName: "", CurrentVersion: "", Description: "", Error: "", LatestVersion: "2.0.0", UpdateNeeded: true}, nodeAppEntry{PackageName: "demo", Version: "2.0.0", Description: "old"}},
+		{"nothing old enough changes nothing", npmVersionResult{Name: "", PackageName: "", CurrentVersion: "", LatestVersion: "", Description: "", UpdateNeeded: false, Error: ""}, entry},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -47,10 +47,10 @@ func TestApplyUVResult(t *testing.T) {
 		result pypiVersionResult
 		want   uvAppEntry
 	}{
-		{"newer version and description", pypiVersionResult{LatestVersion: "2.0.0", UpdateNeeded: true, Description: "new"}, uvAppEntry{PackageName: "demo", Version: "2.0.0", Description: "new"}},
-		{"up to date keeps the version", pypiVersionResult{LatestVersion: "1.0.0", Description: "new"}, uvAppEntry{PackageName: "demo", Version: "1.0.0", Description: "new"}},
-		{"no description keeps the old one", pypiVersionResult{LatestVersion: "2.0.0", UpdateNeeded: true}, uvAppEntry{PackageName: "demo", Version: "2.0.0", Description: "old"}},
-		{"nothing old enough changes nothing", pypiVersionResult{}, entry},
+		{"newer version and description", pypiVersionResult{Name: "", PackageName: "", CurrentVersion: "", Error: "", LatestVersion: "2.0.0", UpdateNeeded: true, Description: "new"}, uvAppEntry{PackageName: "demo", Version: "2.0.0", Description: "new"}},
+		{"up to date keeps the version", pypiVersionResult{Name: "", PackageName: "", CurrentVersion: "", UpdateNeeded: false, Error: "", LatestVersion: "1.0.0", Description: "new"}, uvAppEntry{PackageName: "demo", Version: "1.0.0", Description: "new"}},
+		{"no description keeps the old one", pypiVersionResult{Name: "", PackageName: "", CurrentVersion: "", Description: "", Error: "", LatestVersion: "2.0.0", UpdateNeeded: true}, uvAppEntry{PackageName: "demo", Version: "2.0.0", Description: "old"}},
+		{"nothing old enough changes nothing", pypiVersionResult{Name: "", PackageName: "", CurrentVersion: "", LatestVersion: "", Description: "", UpdateNeeded: false, Error: ""}, entry},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -69,9 +69,9 @@ func TestRunPullNode_SavesEachPackageBeforeTheNext(t *testing.T) {
 	}
 	dir := t.TempDir()
 	path := writeNodeApps(t, dir, nodeAppsJSON{
-		"alpha":  {PackageName: "alpha", Version: "0.9.0"},
-		"beta":   {PackageName: "beta", Version: "0.9.0"},
-		"broken": {PackageName: "broken", Version: "0.1.0"},
+		"alpha":  {Description: "", PackageName: "alpha", Version: "0.9.0"},
+		"beta":   {Description: "", PackageName: "beta", Version: "0.9.0"},
+		"broken": {Description: "", PackageName: "broken", Version: "0.1.0"},
 	})
 
 	var mu sync.Mutex
@@ -139,9 +139,9 @@ func TestRunPullUV_SavesEachPackageBeforeTheNext(t *testing.T) {
 	}
 	dir := t.TempDir()
 	path := writeUVApps(t, dir, uvAppsJSON{
-		"alpha":  {PackageName: "alpha", Version: "0.9.0"},
-		"beta":   {PackageName: "beta", Version: "0.9.0"},
-		"broken": {PackageName: "broken", Version: "0.1.0"},
+		"alpha":  {Description: "", PackageName: "alpha", Version: "0.9.0"},
+		"beta":   {Description: "", PackageName: "beta", Version: "0.9.0"},
+		"broken": {Description: "", PackageName: "broken", Version: "0.1.0"},
 	})
 
 	var mu sync.Mutex
@@ -249,7 +249,7 @@ func TestRunPullRuntimes_SavesEachRuntimeBeforeTheNext(t *testing.T) {
 		"go":   func() (*RuntimeJSON, error) { return nil, errors.New("go.dev is down") },
 		"jvm":  entryOf(buildJVMRuntimeJSON(&JVMRuntimeData{JavaVersion: "26"}, nil)),
 		"node": entryOf(buildNodeRuntimeJSON(&NodeRuntimeData{NodeVersion: "26.8.0"}, nil)),
-		"uv":   entryOf(buildUVRuntimeJSON(&UVRuntimeData{PythonVersion: "3.14.3"}, nil)),
+		"uv":   entryOf(buildUVRuntimeJSON(&UVRuntimeData{PythonDownloads: nil, PythonVersion: "3.14.3"}, nil)),
 	})
 
 	var err error
@@ -298,13 +298,15 @@ func TestRunPullRuntimes_PartialFileKeepsItsEntriesWhileOthersFail(t *testing.T)
 	oldGo := buildGoRuntimeJSON(&GoRuntimeData{GoVersion: "1.27.2"}, binmanager.MapOfBinaries{
 		syslist.OsTypeDarwin: {
 			syslist.ArchTypeArm64: {"unknown": binmanager.BinaryOsArchInfo{
-				URL: "https://go.dev/dl/go1.27.2.darwin-arm64.tar.gz", Hash: testHash1,
+				Auth: nil,
+				URL:  "https://go.dev/dl/go1.27.2.darwin-arm64.tar.gz", Hash: testHash1,
 				ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &goBP, ExtractDir: true,
 			}},
 		},
 		syslist.OsTypeLinux: {
 			syslist.ArchTypeAmd64: {"glibc": binmanager.BinaryOsArchInfo{
-				URL: "https://go.dev/dl/go1.27.2.linux-amd64.tar.gz", Hash: testHash2,
+				Auth: nil,
+				URL:  "https://go.dev/dl/go1.27.2.linux-amd64.tar.gz", Hash: testHash2,
 				ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &goBP, ExtractDir: true,
 			}},
 		},
@@ -312,7 +314,8 @@ func TestRunPullRuntimes_PartialFileKeepsItsEntriesWhileOthersFail(t *testing.T)
 	oldPNPM := buildPNPMRuntimeJSON(&PNPMRuntimeData{PNPMVersion: "12.14.0"}, binmanager.MapOfBinaries{
 		syslist.OsTypeLinux: {
 			syslist.ArchTypeAmd64: {"glibc": binmanager.BinaryOsArchInfo{
-				URL: "https://github.com/pnpm/pnpm/releases/download/v12.14.0/pnpm-linux-x64.tar.gz", Hash: testHash3,
+				Auth: nil,
+				URL:  "https://github.com/pnpm/pnpm/releases/download/v12.14.0/pnpm-linux-x64.tar.gz", Hash: testHash3,
 				ContentType: binmanager.BinContentTypeTarGz, BinaryPath: &pnpmBP, ExtractDir: true,
 			}},
 		},
@@ -334,7 +337,7 @@ func TestRunPullRuntimes_PartialFileKeepsItsEntriesWhileOthersFail(t *testing.T)
 				return nil, err
 			}
 			goWhenUVPulled = saved["go"]
-			return buildUVRuntimeJSON(&UVRuntimeData{PythonVersion: "3.15.1"}, testPNPMBinaries()), nil
+			return buildUVRuntimeJSON(&UVRuntimeData{PythonDownloads: nil, PythonVersion: "3.15.1"}, testPNPMBinaries()), nil
 		},
 	})
 
@@ -384,7 +387,7 @@ func TestRunPullRuntimes_MissingPNPMFailsOnlyItsDependents(t *testing.T) {
 		"go":   entryOf(buildGoRuntimeJSON(&GoRuntimeData{GoVersion: "1.26.0"}, nil)),
 		"jvm":  entryOf(buildJVMRuntimeJSON(&JVMRuntimeData{JavaVersion: "26"}, nil)),
 		"node": entryOf(buildNodeRuntimeJSON(&NodeRuntimeData{NodeVersion: "26.8.0"}, nil)),
-		"uv":   entryOf(buildUVRuntimeJSON(&UVRuntimeData{PythonVersion: "3.14.3"}, nil)),
+		"uv":   entryOf(buildUVRuntimeJSON(&UVRuntimeData{PythonDownloads: nil, PythonVersion: "3.14.3"}, nil)),
 	})
 
 	var err error
@@ -421,7 +424,7 @@ func TestRunPullRuntimes_DryRunWritesNothing(t *testing.T) {
 		"go":   func() (*RuntimeJSON, error) { return nil, errors.New("go.dev is down") },
 		"jvm":  entryOf(buildJVMRuntimeJSON(&JVMRuntimeData{JavaVersion: "26"}, nil)),
 		"node": entryOf(buildNodeRuntimeJSON(&NodeRuntimeData{NodeVersion: "26.8.0"}, nil)),
-		"uv":   entryOf(buildUVRuntimeJSON(&UVRuntimeData{PythonVersion: "3.14.3"}, nil)),
+		"uv":   entryOf(buildUVRuntimeJSON(&UVRuntimeData{PythonDownloads: nil, PythonVersion: "3.14.3"}, nil)),
 	})
 
 	var err error
@@ -508,8 +511,8 @@ func TestRunPullNode_SaveFailureStopsTheRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := writeNodeApps(t, dir, nodeAppsJSON{
-		"alpha": {PackageName: "alpha", Version: "0.9.0"},
-		"beta":  {PackageName: "beta", Version: "0.9.0"},
+		"alpha": {Description: "", PackageName: "alpha", Version: "0.9.0"},
+		"beta":  {Description: "", PackageName: "beta", Version: "0.9.0"},
 	})
 
 	var mu sync.Mutex
@@ -564,8 +567,8 @@ func TestRunPullUV_SaveFailureStopsTheRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := writeUVApps(t, dir, uvAppsJSON{
-		"alpha": {PackageName: "alpha", Version: "0.9.0"},
-		"beta":  {PackageName: "beta", Version: "0.9.0"},
+		"alpha": {Description: "", PackageName: "alpha", Version: "0.9.0"},
+		"beta":  {Description: "", PackageName: "beta", Version: "0.9.0"},
 	})
 
 	var mu sync.Mutex

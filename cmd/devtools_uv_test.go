@@ -70,8 +70,8 @@ func TestWriteUVAppsJSON(t *testing.T) {
 	path := filepath.Join(dir, "uvApps.json")
 
 	apps := uvAppsJSON{
-		"pycowsay": {PackageName: "pycowsay", Version: "1.0.0"},
-		"yamllint": {PackageName: "yamllint", Version: "2.0.0"},
+		"pycowsay": {Description: "", PackageName: "pycowsay", Version: "1.0.0"},
+		"yamllint": {Description: "", PackageName: "yamllint", Version: "2.0.0"},
 	}
 
 	if err := writeUVAppsJSON(path, apps); err != nil {

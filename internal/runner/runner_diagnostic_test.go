@@ -3,6 +3,7 @@ package runner
 import (
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/tooling"
@@ -11,7 +12,15 @@ import (
 func TestFormatDiagnostic_FullAndMinimal(t *testing.T) {
 	// Color codes (if any) wrap the tokens, so substring checks hold either way.
 	full := formatDiagnostic(diagnostic.Diagnostic{
-		File: "f.js", Row: 1, Col: 5,
+		EndRow:    0,
+		EndCol:    0,
+		Source:    "",
+		URL:       "",
+		Reported:  false,
+		Gates:     false,
+		Baselined: false,
+		Anchor:    nil,
+		File:      "f.js", Row: 1, Col: 5,
 		Severity: diagnostic.SeverityError, Message: "bad thing", Code: "no-undef",
 	})
 	for _, want := range []string{"f.js:1:5", "error", "bad thing", "[no-undef]"} {
@@ -22,7 +31,17 @@ func TestFormatDiagnostic_FullAndMinimal(t *testing.T) {
 
 	// No file → just row:col; no code → no brackets.
 	minimal := formatDiagnostic(diagnostic.Diagnostic{
-		Row: 3, Col: 2, Severity: diagnostic.SeverityWarning, Message: "m",
+		File:      "",
+		EndRow:    0,
+		EndCol:    0,
+		Source:    "",
+		Code:      "",
+		URL:       "",
+		Reported:  false,
+		Gates:     false,
+		Baselined: false,
+		Anchor:    nil,
+		Row:       3, Col: 2, Severity: diagnostic.SeverityWarning, Message: "m",
 	})
 	if !strings.Contains(minimal, "3:2") || !strings.Contains(minimal, "warning") {
 		t.Errorf("minimal = %q, want 3:2 + warning", minimal)
@@ -61,7 +80,16 @@ func TestRelativeToBase(t *testing.T) {
 
 func TestFormatDiagnosticRelativeTo(t *testing.T) {
 	d := diagnostic.Diagnostic{
-		File: "/repo/pkg/cli/src/a.ts", Row: 9, Col: 1,
+		EndRow:    0,
+		EndCol:    0,
+		Source:    "",
+		Code:      "",
+		URL:       "",
+		Reported:  false,
+		Gates:     false,
+		Baselined: false,
+		Anchor:    nil,
+		File:      "/repo/pkg/cli/src/a.ts", Row: 9, Col: 1,
 		Severity: diagnostic.SeverityError, Message: "m",
 	}
 
@@ -75,7 +103,16 @@ func TestFormatDiagnosticRelativeTo(t *testing.T) {
 
 	// A path outside the working directory reads better whole than as "../..".
 	outside := formatDiagnosticRelativeTo(diagnostic.Diagnostic{
-		File: "/repo/pkg/other/b.ts", Row: 1, Col: 1, Severity: diagnostic.SeverityError, Message: "m",
+		EndRow:    0,
+		EndCol:    0,
+		Source:    "",
+		Code:      "",
+		URL:       "",
+		Reported:  false,
+		Gates:     false,
+		Baselined: false,
+		Anchor:    nil,
+		File:      "/repo/pkg/other/b.ts", Row: 1, Col: 1, Severity: diagnostic.SeverityError, Message: "m",
 	}, "/repo/pkg/cli")
 	if !strings.Contains(outside, "/repo/pkg/other/b.ts:1:1") {
 		t.Errorf("a path climbing out of the cwd should print absolute: %q", outside)
@@ -86,8 +123,8 @@ func TestFormatDiagnosticRelativeTo(t *testing.T) {
 // reports no paths from replacing the raw output — which does name the files —
 // with an unattributable list.
 func TestUsableDiagnostics(t *testing.T) {
-	withFile := diagnostic.Diagnostic{File: "a.md", Message: "m"}
-	noFile := diagnostic.Diagnostic{Message: "m"}
+	withFile := diagnostic.Diagnostic{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, File: "a.md", Message: "m"}
+	noFile := diagnostic.Diagnostic{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m"}
 
 	cases := []struct {
 		name  string
@@ -103,7 +140,7 @@ func TestUsableDiagnostics(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			result := tooling.ExecutionResult{Batch: c.batch, Diagnostics: c.diags}
+			result := tooling.ExecutionResult{ToolName: "", TaskID: "", Success: false, Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Cancelled: false, FailureReason: 0, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Processes: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", Batch: c.batch, Diagnostics: c.diags}
 			if got := usableDiagnostics(result); got != c.want {
 				t.Errorf("usableDiagnostics() = %v, want %v", got, c.want)
 			}
@@ -115,7 +152,7 @@ func TestUsableDiagnostics(t *testing.T) {
 // output; the diagnostics are still there for everything else the run does.
 func TestUsableDiagnosticsNoParse(t *testing.T) {
 	t.Cleanup(func() { SetParsingDisabledByFlag(false) })
-	result := tooling.ExecutionResult{Diagnostics: []diagnostic.Diagnostic{{File: "a.md", Message: "m"}}}
+	result := tooling.ExecutionResult{ToolName: "", TaskID: "", Success: false, Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Processes: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", Diagnostics: []diagnostic.Diagnostic{{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, File: "a.md", Message: "m"}}}
 	if !usableDiagnostics(result) {
 		t.Fatal("parsed diagnostics should be shown by default")
 	}

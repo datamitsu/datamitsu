@@ -226,7 +226,14 @@ func lintFile(path string, tools config.MapOfTools, rootPath string, findings []
 
 	reportError := func(row int, code, message string) {
 		for _, emit := range findings {
-			emit(diagnostic.Diagnostic{File: path, Row: row, Col: 1, Severity: diagnostic.SeverityError, Source: "datamitsu", Code: "datamitsuignore-" + code, Message: message, Reported: true, Gates: true})
+			emit(diagnostic.Diagnostic{
+				EndRow:    0,
+				EndCol:    0,
+				URL:       "",
+				Baselined: false,
+				Anchor:    nil,
+				File:      path, Row: row, Col: 1, Severity: diagnostic.SeverityError, Source: "datamitsu", Code: "datamitsuignore-" + code, Message: message, Reported: true, Gates: true,
+			})
 		}
 	}
 

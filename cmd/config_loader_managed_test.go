@@ -160,12 +160,12 @@ func TestLoaderInheritedContentSemantics(t *testing.T) {
 		absent       bool
 		renderAbsent bool
 	}{
-		{name: "project replacement", layers: []string{`return { ...input, managedConfigs: { ...input.managedConfigs, ".gitleaks.toml": { ...input.managedConfigs[".gitleaks.toml"], content: () => "project" } } };`}, want: "project"},
-		{name: "removed entry", layers: []string{`return { ...input, tools: {}, managedConfigs: {} };`}, absent: true},
-		{name: "undefined opt out", layers: []string{`return merge(input, {});`}, baseResult: "undefined", renderAbsent: true},
-		{name: "null opt out", layers: []string{`return merge(input, {});`}, baseResult: "null", renderAbsent: true},
-		{name: "throwing callback", layers: []string{`return merge(input, {});`}, baseResult: `(() => { throw new Error("inherited-content-failure"); })()`, wantError: "inherited-content-failure"},
-		{name: "nested callback bridge", layers: []string{`return merge(input, {});`, `return merge(input, {});`}, want: "base:placement=internal from=..\n"},
+		{baseResult: "", wantError: "", absent: false, renderAbsent: false, name: "project replacement", layers: []string{`return { ...input, managedConfigs: { ...input.managedConfigs, ".gitleaks.toml": { ...input.managedConfigs[".gitleaks.toml"], content: () => "project" } } };`}, want: "project"},
+		{baseResult: "", want: "", wantError: "", renderAbsent: false, name: "removed entry", layers: []string{`return { ...input, tools: {}, managedConfigs: {} };`}, absent: true},
+		{want: "", wantError: "", absent: false, name: "undefined opt out", layers: []string{`return merge(input, {});`}, baseResult: "undefined", renderAbsent: true},
+		{want: "", wantError: "", absent: false, name: "null opt out", layers: []string{`return merge(input, {});`}, baseResult: "null", renderAbsent: true},
+		{want: "", absent: false, renderAbsent: false, name: "throwing callback", layers: []string{`return merge(input, {});`}, baseResult: `(() => { throw new Error("inherited-content-failure"); })()`, wantError: "inherited-content-failure"},
+		{baseResult: "", wantError: "", absent: false, renderAbsent: false, name: "nested callback bridge", layers: []string{`return merge(input, {});`, `return merge(input, {});`}, want: "base:placement=internal from=..\n"},
 	}
 
 	for _, tc := range cases {

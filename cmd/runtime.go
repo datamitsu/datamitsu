@@ -58,21 +58,85 @@ type runtimeExecHandoffError struct{ request runtimeExecRequest }
 func (runtimeExecHandoffError) Error() string { return "runtime execution handoff" }
 
 var (
-	runtimeCmd                     = &cobra.Command{Use: "runtime", Short: "Inspect and run configured runtimes"}
+	runtimeCmd                     = &cobra.Command{Aliases: nil, SuggestFor: nil, GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0, Use: "runtime", Short: "Inspect and run configured runtimes"}
 	runtimeListJSON, runtimeRunDry bool
 	runtimeListCmd                 = &cobra.Command{
-		Use:   "list",
-		Short: "List configured runtimes",
-		Args:  usageArgs(cobra.NoArgs),
-		RunE:  runRuntimeList,
+		Aliases:                    nil,
+		SuggestFor:                 nil,
+		GroupID:                    "",
+		Long:                       "",
+		Example:                    "",
+		ValidArgs:                  nil,
+		ValidArgsFunction:          nil,
+		ArgAliases:                 nil,
+		BashCompletionFunction:     "",
+		Deprecated:                 "",
+		Annotations:                nil,
+		Version:                    "",
+		PersistentPreRun:           nil,
+		PersistentPreRunE:          nil,
+		PreRun:                     nil,
+		PreRunE:                    nil,
+		Run:                        nil,
+		PostRun:                    nil,
+		PostRunE:                   nil,
+		PersistentPostRun:          nil,
+		PersistentPostRunE:         nil,
+		FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+		CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+		TraverseChildren:           false,
+		Hidden:                     false,
+		SilenceErrors:              false,
+		SilenceUsage:               false,
+		DisableFlagParsing:         false,
+		DisableAutoGenTag:          false,
+		DisableFlagsInUseLine:      false,
+		DisableSuggestions:         false,
+		SuggestionsMinimumDistance: 0,
+		Use:                        "list",
+		Short:                      "List configured runtimes",
+		Args:                       usageArgs(cobra.NoArgs),
+		RunE:                       runRuntimeList,
 	}
 )
 
 var runtimeRunCmd = &cobra.Command{
-	Use:                   "run [--dry-run] <name> -- <args...>",
-	Short:                 "Run a configured language interpreter",
-	DisableFlagsInUseLine: true,
-	RunE:                  runRuntimeRun,
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Long:                       "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	Args:                       nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "run [--dry-run] <name> -- <args...>",
+	Short:                      "Run a configured language interpreter",
+	DisableFlagsInUseLine:      true,
+	RunE:                       runRuntimeRun,
 }
 
 func init() {
@@ -173,7 +237,8 @@ func runRuntimeRun(cmd *cobra.Command, args []string) error {
 
 	if runtimeRunDry {
 		doc := runtimeRunDocument{
-			Schema: "datamitsu.runtime-run/1", Name: name, Kind: entry.Kind,
+			Executable: nil,
+			Schema:     "datamitsu.runtime-run/1", Name: name, Kind: entry.Kind,
 			Args: childArgs, Status: entry.Status,
 			WouldInstall: entry.Status == runtimemanager.RuntimeStatusMissing &&
 				(entry.EffectiveMode == config.RuntimeModeManaged || entry.Kind == config.RuntimeKindUV),
@@ -216,7 +281,7 @@ func runtimeInventoryEntry(rm *runtimemanager.RuntimeManager, name string) (runt
 			return entry, true, nil
 		}
 	}
-	return runtimemanager.RuntimeInventoryEntry{}, false, nil
+	return runtimemanager.RuntimeInventoryEntry{Name: "", Kind: "", ConfiguredMode: "", EffectiveMode: "", Version: "", Runnable: false, Status: "", Executable: "", Reason: "", NotRunnableReason: ""}, false, nil
 }
 
 func usageError(message string) error {

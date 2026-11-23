@@ -14,7 +14,8 @@ import (
 // zombies nobody has reaped yet: kill(-pgid, 0) still answers for them.
 func TestGroupAlive(t *testing.T) {
 	cmd := exec.CommandContext(context.Background(), "/bin/sh", "-c", "exec sleep 30")
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = new(syscall.SysProcAttr)
+	cmd.SysProcAttr.Setpgid = true
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

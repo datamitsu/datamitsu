@@ -33,16 +33,40 @@ func TestLspAppToolCacheUsesWorkspaceRoot(t *testing.T) {
 	}
 	body := "#!/bin/sh\nset -eu\nprintf 'formatted\\n' > \"$FORMATTER_CACHE/result\"\nIFS= read -r text < \"$FORMATTER_CACHE/result\"\nprintf '%s\\n' \"$text\" > \"$1\"\n"
 	binary := binmanager.BinaryOsArchInfo{
+		Auth:        nil,
+		BinaryPath:  nil,
+		ExtractDir:  false,
 		URL:         "https://example.invalid/cache-formatter",
 		Hash:        digest.SHA256Of([]byte(body)).String(),
 		ContentType: binmanager.BinContentTypeBinary,
 	}
 	apps := binmanager.MapOfApps{"formatter": {
-		Binary: &binmanager.AppConfigBinary{Binaries: binmanager.MapOfBinaries{osType: {arch: {
-			"unknown": binary,
-			"glibc":   binary,
-			"musl":    binary,
-		}}}},
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
+		Binary: &binmanager.AppConfigBinary{
+			Version: "", Binaries: binmanager.MapOfBinaries{osType: {arch: {
+				"unknown": binary,
+				"glibc":   binary,
+				"musl":    binary,
+			}}},
+		},
 		RuntimeEnv: map[string]string{"FORMATTER_CACHE": "{toolCache}"},
 	}}
 	data, err := json.Marshal(apps)
@@ -103,7 +127,7 @@ globalThis.getMinVersion = () => "0.0.0";
 	if _, err := os.Stat(launchCache); !os.IsNotExist(err) {
 		t.Fatalf("worker created a launch-CWD cache: %v", err)
 	}
-	cleared := clitest.Run(t, clitest.RunOptions{Dir: workspace.Dir, CacheDir: cacheHome}, "cache", "clear")
+	cleared := clitest.Run(t, clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: workspace.Dir, CacheDir: cacheHome}, "cache", "clear")
 	if cleared.ExitCode != 0 {
 		t.Fatalf("cache clear failed: %s", cleared.Stderr)
 	}

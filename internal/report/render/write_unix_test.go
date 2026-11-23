@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/report"
+
+	zerovalue_time "time"
 )
 
 // A report gets the mode a file created in its place would: the umask
@@ -16,8 +18,24 @@ import (
 func TestTargetMode(t *testing.T) {
 	write := func(t *testing.T, path string) os.FileMode {
 		t.Helper()
-		target := Open(Spec{Format: "json", Path: path}, nil)
-		if err := target.Write(&report.Run{}); err != nil {
+		target := Open(Spec{
+			Options: nil,
+			Format:  "json", Path: path,
+		}, nil)
+		if err := target.Write(&report.Run{
+			Fingerprint:     "",
+			Datamitsu:       report.Producer{Version: "", Configuration: ""},
+			StartedAt:       zerovalue_time.Time{},
+			EndedAt:         zerovalue_time.Time{},
+			Selection:       report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+			FailFast:        false,
+			Complete:        false,
+			Incomplete:      nil,
+			RedactedReasons: nil,
+			Operations:      nil,
+			Exports:         nil,
+			CI:              report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		}); err != nil {
 			t.Fatal(err)
 		}
 		info, err := os.Stat(path)

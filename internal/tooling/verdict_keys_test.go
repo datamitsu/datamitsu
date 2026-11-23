@@ -4,11 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	zerovalue_atomic "sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 
 	"go.uber.org/zap"
 )
@@ -17,11 +19,11 @@ import (
 func newVerdictExecutor(t *testing.T) (*Executor, string) {
 	t.Helper()
 	root := t.TempDir()
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{Tools: config.MapOfTools{}}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}
-	return &Executor{rootPath: root, cache: c}, root
+	return &Executor{dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, parser: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: zerovalue_atomic.Pointer[commandInfoMemo]{}, rootPath: root, cache: c}, root
 }
 
 // unitTask is a task the verdict cache applies to: unit granularity, one member.
@@ -29,14 +31,34 @@ func newVerdictExecutor(t *testing.T) (*Executor, string) {
 // invalidation reads the tool's other operations out of it.
 func unitTask(root string) Task {
 	op := config.ToolOperation{
-		App: "tsc", Args: []string{"--noEmit"},
+		Arity:             "",
+		Granularity:       "",
+		Globs:             nil,
+		ExcludeGlobs:      nil,
+		Priority:          0,
+		Cache:             nil,
+		InvalidateOn:      nil,
+		Env:               nil,
+		InheritEnv:        nil,
+		FailOn:            "",
+		Input:             "",
+		LSP:               nil,
+		Output:            "",
+		ManagedConfigRefs: nil,
+		App:               "tsc", Args: []string{"--noEmit"},
 		Scope: config.ToolScopePerProject,
 	}
 	return Task{
-		ToolName:  "tsc",
-		Tool:      config.Tool{Operations: map[config.OperationType]config.ToolOperation{config.OpLint: op}},
-		Operation: config.OpLint,
-		OpConfig:  op,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Files:        nil,
+		ProjectPath:  "",
+		UnitGuards:   nil,
+		ToolName:     "tsc",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{config.OpLint: op}},
+		Operation:    config.OpLint,
+		OpConfig:     op,
 
 		UnitDir:     "pkg",
 		UnitMembers: []string{filepath.Join(root, "pkg", "a.ts")},
@@ -96,7 +118,7 @@ func TestVerdictKeysAppliesOnlyWhereItIsSound(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			task := unitTask(root)
 			tt.mutate(&task)
-			exec := &Executor{rootPath: root, cache: tt.cache}
+			exec := &Executor{dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, parser: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: zerovalue_atomic.Pointer[commandInfoMemo]{}, rootPath: root, cache: tt.cache}
 
 			key, snap, _, ok := exec.verdictKeys(task)
 			if ok != tt.want {
@@ -369,17 +391,51 @@ func TestRecordVerdict(t *testing.T) {
 		e, root := newVerdictExecutor(t)
 
 		lintOp := config.ToolOperation{
-			App: "prettier", Args: []string{"--check"},
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "prettier", Args: []string{"--check"},
 			Scope: config.ToolScopePerProject,
 		}
 		fixOp := config.ToolOperation{
-			App: "prettier", Args: []string{"--write"},
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "prettier", Args: []string{"--write"},
 			Scope: config.ToolScopePerProject,
 		}
-		tool := config.Tool{Operations: map[config.OperationType]config.ToolOperation{
-			config.OpLint: lintOp,
-			config.OpFix:  fixOp,
-		}}
+		tool := config.Tool{
+			Name:         "",
+			ProjectTypes: nil,
+			Skip:         false,
+			SkipReason:   "",
+			OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+				config.OpLint: lintOp,
+				config.OpFix:  fixOp,
+			},
+		}
 
 		lint := unitTask(root)
 		lint.Tool, lint.OpConfig, lint.Operation = tool, lintOp, config.OpLint

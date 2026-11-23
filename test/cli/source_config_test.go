@@ -103,7 +103,7 @@ func TestSourceConfigActivationGolden(t *testing.T) {
 			cacheBase := t.TempDir()
 			mask := sourceConfigNormalizer(d.Dir, cacheBase)
 
-			res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir, CacheDir: cacheBase, Env: sourceEnv()},
+			res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: d.Dir, CacheDir: cacheBase, Env: sourceEnv()},
 				"source", shell, "--config", cfg)
 			if res.ExitCode != 0 {
 				t.Fatalf("`source %s --config <path>` exit = %d, want 0\nstderr:\n%s", shell, res.ExitCode, res.Stderr)
@@ -135,7 +135,7 @@ func TestSourceConfigStatusGolden(t *testing.T) {
 			mask := sourceConfigNormalizer(d.Dir, cacheBase)
 
 			args := append(append([]string(nil), tc.args...), "--config", cfg)
-			res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir, CacheDir: cacheBase, Env: sourceEnv()}, args...)
+			res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: d.Dir, CacheDir: cacheBase, Env: sourceEnv()}, args...)
 			if res.ExitCode != 0 {
 				t.Fatalf("`%s` exit = %d, want 0\nstderr:\n%s", strings.Join(args, " "), res.ExitCode, res.Stderr)
 			}
@@ -160,7 +160,7 @@ func TestSourceExplicitConfigCannotInjectIntoStdout(t *testing.T) {
 			"return { version: \"1.0.0\", apps: {}, tools: {}, projectTypes: {} }; };\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
 	noisyCache := t.TempDir()
-	noisyRes := clitest.Run(t, clitest.RunOptions{Dir: noisy.Dir, CacheDir: noisyCache, Env: sourceEnv()},
+	noisyRes := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: noisy.Dir, CacheDir: noisyCache, Env: sourceEnv()},
 		"source", "bash", "--config", noisyCfg)
 	if noisyRes.ExitCode != 0 {
 		t.Fatalf("`source bash --config <path>` exit = %d, want 0\nstderr:\n%s", noisyRes.ExitCode, noisyRes.Stderr)
@@ -169,7 +169,7 @@ func TestSourceExplicitConfigCannotInjectIntoStdout(t *testing.T) {
 	control := clitest.NewBareDir(t)
 	controlCfg := control.WriteFile("machine.config.js", emptyMachineConfigJS)
 	controlCache := t.TempDir()
-	controlRes := clitest.Run(t, clitest.RunOptions{Dir: control.Dir, CacheDir: controlCache, Env: sourceEnv()},
+	controlRes := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: control.Dir, CacheDir: controlCache, Env: sourceEnv()},
 		"source", "bash", "--config", controlCfg)
 	if controlRes.ExitCode != 0 {
 		t.Fatalf("control `source bash --config <path>` exit = %d, want 0\nstderr:\n%s",
@@ -208,7 +208,7 @@ func TestSourceConfigUnusableChainFails(t *testing.T) {
 		{"malformed", malformed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir, CacheDir: t.TempDir(), Env: sourceEnv()},
+			res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: d.Dir, CacheDir: t.TempDir(), Env: sourceEnv()},
 				"source", "bash", "--config", tc.path)
 			if res.ExitCode == 0 {
 				t.Fatalf("`source bash --config %s` exited 0:\n%s", tc.path, res.Stdout)
@@ -256,7 +256,7 @@ func TestSourceConfigActivatesOutsideARepository(t *testing.T) {
 	d, cfg := writeMachineConfig(t)
 	cacheDir := t.TempDir()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir, CacheDir: cacheDir, Env: sourceEnv()},
+	res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: d.Dir, CacheDir: cacheDir, Env: sourceEnv()},
 		"source", "bash", "--config", cfg)
 	if res.ExitCode != 0 {
 		t.Fatalf("`source bash --config <path>` outside a repository exit = %d, want 0\nstdout:\n%s\nstderr:\n%s",
@@ -303,7 +303,7 @@ func TestSourceConfigActivatesOutsideARepository(t *testing.T) {
 func TestSourceConfigFishActivatesOutsideARepository(t *testing.T) {
 	d, cfg := writeMachineConfig(t)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir, CacheDir: t.TempDir(), Env: sourceEnv()},
+	res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: d.Dir, CacheDir: t.TempDir(), Env: sourceEnv()},
 		"source", "fish", "--config", cfg)
 	if res.ExitCode != 0 {
 		t.Fatalf("`source fish --config <path>` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -329,7 +329,9 @@ func TestSourceConfigDownloadsNothing(t *testing.T) {
 	// DATAMITSU_OFFLINE=1 is already in the harness base environment; pinning it
 	// here states the property this test is about rather than relying on it.
 	res := clitest.Run(t, clitest.RunOptions{
-		Dir: d.Dir, CacheDir: cacheDir, Env: append(sourceEnv(), "DATAMITSU_OFFLINE=1"),
+		Stdin:   "",
+		Timeout: 0,
+		Dir:     d.Dir, CacheDir: cacheDir, Env: append(sourceEnv(), "DATAMITSU_OFFLINE=1"),
 	}, "source", "bash", "--config", cfg)
 	if res.ExitCode != 0 {
 		t.Fatalf("`source bash --config <path>` offline exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -340,7 +342,9 @@ func TestSourceConfigDownloadsNothing(t *testing.T) {
 	}
 
 	status := clitest.Run(t, clitest.RunOptions{
-		Dir: d.Dir, CacheDir: cacheDir, Env: append(sourceEnv(), "DATAMITSU_OFFLINE=1"),
+		Stdin:   "",
+		Timeout: 0,
+		Dir:     d.Dir, CacheDir: cacheDir, Env: append(sourceEnv(), "DATAMITSU_OFFLINE=1"),
 	}, "source", "status", "--json", "--config", cfg)
 	if status.ExitCode != 0 {
 		t.Fatalf("`source status --json` exit = %d, want 0\nstderr:\n%s", status.ExitCode, status.Stderr)
@@ -359,7 +363,7 @@ func TestSourceConfigDownloadsNothing(t *testing.T) {
 // it is reported rather than left to be inferred from an empty root.
 func TestSourceConfigStatusReportsOrigin(t *testing.T) {
 	d, cfg := writeMachineConfig(t)
-	opts := clitest.RunOptions{Dir: d.Dir, CacheDir: t.TempDir(), Env: sourceEnv()}
+	opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: d.Dir, CacheDir: t.TempDir(), Env: sourceEnv()}
 
 	res := clitest.Run(t, opts, "source", "status", "--json", "--config", cfg)
 	if res.ExitCode != 0 {
@@ -402,7 +406,7 @@ func TestSourceConfigStatusReportsOrigin(t *testing.T) {
 func TestSourceConfigExclusionsStillApply(t *testing.T) {
 	d, cfg := writeMachineConfig(t)
 	cacheDir := t.TempDir()
-	opts := clitest.RunOptions{Dir: d.Dir, CacheDir: cacheDir, Env: sourceEnv()}
+	opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: d.Dir, CacheDir: cacheDir, Env: sourceEnv()}
 
 	res := clitest.Run(t, opts, "source", "status", "--json", "--config", cfg)
 	if res.ExitCode != 0 {
@@ -457,7 +461,7 @@ func TestSourceConfigDoesNotMergeTheSurroundingRepository(t *testing.T) {
 			" tools: {}, projectTypes: {} });\n"+
 			"globalThis.getMinVersion = () => \"0.0.0\";\n")
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()},
+	res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: t.TempDir(), Env: sourceEnv()},
 		"source", "status", "--json", "--config", cfg)
 	if res.ExitCode != 0 {
 		t.Fatalf("`source status --json --config <path>` inside a repository exit = %d, want 0\nstderr:\n%s",
@@ -485,7 +489,7 @@ func TestSourceConfigDoesNotMergeTheSurroundingRepository(t *testing.T) {
 func TestSourceConfigRefreshRebakesTheChain(t *testing.T) {
 	d, cfg := writeMachineConfig(t)
 	cacheDir := t.TempDir()
-	opts := clitest.RunOptions{Dir: d.Dir, CacheDir: cacheDir, Env: sourceEnv()}
+	opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: d.Dir, CacheDir: cacheDir, Env: sourceEnv()}
 
 	if res := clitest.Run(t, opts, "source", "bash", "--config", cfg); res.ExitCode != 0 {
 		t.Fatalf("`source bash --config <path>` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -542,7 +546,7 @@ func TestSourceConfigOneIdentityPerChain(t *testing.T) {
 
 	farms := make(map[string]bool)
 	for _, spelling := range []string{cfg, "machine.config.js", "./machine.config.js", link} {
-		res := clitest.Run(t, clitest.RunOptions{Dir: d.Dir, CacheDir: cacheDir, Env: sourceEnv()},
+		res := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: d.Dir, CacheDir: cacheDir, Env: sourceEnv()},
 			"source", "bash", "--config", spelling)
 		if res.ExitCode != 0 {
 			t.Fatalf("`source bash --config %s` exit = %d, want 0\nstderr:\n%s", spelling, res.ExitCode, res.Stderr)

@@ -18,8 +18,39 @@ import (
 )
 
 var packInlineArchiveCmd = &cobra.Command{
-	Use:   "pack-inline-archive <directory>",
-	Short: "Pack a directory into an inline archive (tar.br: format)",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "pack-inline-archive <directory>",
+	Short:                      "Pack a directory into an inline archive (tar.br: format)",
 	Long: `Pack a directory into a brotli-compressed tar archive for use in inline archive configs.
 
 Output is written to stdout in tar.br: format (tar → brotli level 11 → base64).
@@ -160,7 +191,7 @@ func createTarFromDir(dirPath string, maxSize int64) ([]byte, error) {
 	}
 
 	var buf bytes.Buffer
-	lw := &limitedWriter{w: &buf, limit: maxSize}
+	lw := &limitedWriter{n: 0, w: &buf, limit: maxSize}
 	tw := tar.NewWriter(lw)
 
 	for _, entry := range entries {

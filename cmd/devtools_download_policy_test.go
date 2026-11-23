@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/digest"
 
@@ -73,7 +74,7 @@ func TestForgeDownloadPolicyInstallAndVerify(t *testing.T) {
 							if kind == "gitlab" {
 								_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v1", "assets": map[string]any{"links": []map[string]string{{"name": "tool-linux-amd64", "url": base + downloadPath}}}})
 							} else {
-								_ = json.NewEncoder(w).Encode(releaseasset.Release{TagName: "v1", Assets: []releaseasset.Asset{{Name: "tool-linux-amd64", BrowserDownloadURL: base + downloadPath}}})
+								_ = json.NewEncoder(w).Encode(releaseasset.Release{PublishedAt: zerovalue_time.Time{}, Prerelease: false, Draft: false, TagName: "v1", Assets: []releaseasset.Asset{{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "tool-linux-amd64", BrowserDownloadURL: base + downloadPath}}})
 							}
 							return
 						}
@@ -85,8 +86,8 @@ func TestForgeDownloadPolicyInstallAndVerify(t *testing.T) {
 					}))
 					defer srv.Close()
 					base = srv.URL
-					source := releaseprovider.Source{Type: kind, URL: base, TokenEnv: "TEST_DOWNLOAD_TOKEN"}
-					state := &appstate.State{Sources: map[string]releaseprovider.Source{"s": source}, Apps: map[string]*appstate.AppMetadata{"tool": {Source: "s", Repository: "group/tool", Tag: "v1", Hashes: map[string]string{"tool-linux-amd64": hash}}}, Platforms: []string{"linux/amd64/glibc"}, Binaries: map[string]*appstate.BinariesEntry{}}
+					source := releaseprovider.Source{APIURL: "", DownloadAuth: "", Type: kind, URL: base, TokenEnv: "TEST_DOWNLOAD_TOKEN"}
+					state := &appstate.State{Sources: map[string]releaseprovider.Source{"s": source}, Apps: map[string]*appstate.AppMetadata{"tool": {Checksums: nil, Source: "s", Repository: "group/tool", Tag: "v1", Hashes: map[string]string{"tool-linux-amd64": hash}}}, Platforms: []string{"linux/amd64/glibc"}, Binaries: map[string]*appstate.BinariesEntry{}}
 					path := filepath.Join(t.TempDir(), "binaryApps.json")
 					if err := appstate.Save(path, state); err != nil {
 						t.Fatal(err)
@@ -102,7 +103,7 @@ func TestForgeDownloadPolicyInstallAndVerify(t *testing.T) {
 					if info.URL != base+downloadPath || (info.Auth != nil) != private || info.Hash != hash {
 						t.Fatalf("generated info=%+v", info)
 					}
-					bm := binmanager.NewWithResolver(binmanager.MapOfApps{"tool": {Binary: &binmanager.AppConfigBinary{Binaries: saved.Binaries["tool"].Binaries}}}, nil, nil, target.NewResolver(target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcGlibc}))
+					bm := binmanager.NewWithResolver(binmanager.MapOfApps{"tool": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Version: "", Binaries: saved.Binaries["tool"].Binaries}}}, nil, nil, target.NewResolver(target.Target{OS: "linux", Arch: "amd64", Libc: target.LibcGlibc}))
 					t.Setenv("TEST_DOWNLOAD_TOKEN", "")
 					before := downloads.Load()
 					if private {

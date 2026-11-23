@@ -40,7 +40,7 @@ func ExecuteSeed(ctx context.Context, request SeedRequest) SeedResult {
 	} else {
 		changed, err = seedBundleChanged(ctx, request.Config, request.Ref, request.Options)
 	}
-	result := SeedResult{Changed: changed}
+	result := SeedResult{Error: "", Fatal: false, NoPlatform: false, Incomplete: false, Changed: changed}
 	if err != nil {
 		result.Error = err.Error()
 		result.Fatal = IsFatalSeedError(err)

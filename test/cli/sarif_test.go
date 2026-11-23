@@ -66,7 +66,7 @@ func sarifProject(t *testing.T, extra ...string) *execProject {
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	spec.Extra = `c.apps.hadolint.officialUrl = "https://example.com/hadolint";` + "\n"
 	tools := append([]string{
-		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}),
+		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 		parsedTool(hadolintFinding, 0),
 	}, extra...)
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, tools...))
@@ -110,9 +110,9 @@ func TestReportSARIF(t *testing.T) {
 	// check writes the lint operation alone: two runs of one tool in one
 	// category are rejected.
 	t.Run("check", func(t *testing.T) {
-		e := sarifProject(t, clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Operation: "fix"}),
+		e := sarifProject(t, clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix"}),
 			clitest.ShellTool("delta", settle+clitest.RecordRun+"; echo '[]'",
-				clitest.ToolOpSpec{Operation: "fix", Parser: "hadolint"}))
+				clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix", Parser: "hadolint"}))
 		res := e.run("", nil, "check", "--report", "sarif=r.sarif")
 		e.wantExit(res, 0)
 		if _, doc := e.sarif("r.sarif"); strings.Join(doc.tools(), ",") != "datamitsu,hadolint" {
@@ -136,7 +136,7 @@ func TestReportSARIF(t *testing.T) {
 	// results would close every alert it has.
 	t.Run("failed_without_findings", func(t *testing.T) {
 		e := sarifProject(t, clitest.ShellTool("crasher", settle+clitest.RecordRun+"; echo '[]'; exit 2",
-			clitest.ToolOpSpec{Parser: "hadolint"}))
+			clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Parser: "hadolint"}))
 		res := e.run("", nil, "lint", "--report", "sarif=r.sarif", "--report", "json=run.json")
 		e.wantExit(res, 1)
 		if _, doc := e.sarif("r.sarif"); strings.Join(doc.tools(), ",") != "datamitsu,hadolint" {
@@ -221,7 +221,7 @@ func manyParsedTools(n int) []string {
 	var tools []string
 	for i := n; i >= 1; i-- {
 		tools = append(tools, clitest.ShellTool(fmt.Sprintf("t%02d", i), settle+clitest.RecordRun+"; echo '[]'",
-			clitest.ToolOpSpec{Parser: "hadolint"}))
+			clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Parser: "hadolint"}))
 	}
 	return tools
 }
@@ -294,11 +294,31 @@ func TestReportSARIFRefusedAfterFix(t *testing.T) {
 		platformSkip bool
 		fits         bool
 	}{
-		{name: "export refused", output: "[]", wantExit: 5},
-		{name: "tool failure wins", output: hadolintFinding, toolExit: 1, wantExit: 1},
-		{name: "coverage failure wins", output: "[]", wantExit: 4, platformSkip: true},
-		{name: "incomplete tool does not consume a slot", output: "[]", toolExit: 1, wantExit: 1},
-		{name: "nineteen external tools and the built-in fit", output: "[]", toolExit: 1, wantExit: 1, fits: true},
+		{
+			toolExit:     0,
+			platformSkip: false,
+			fits:         false,
+			name:         "export refused", output: "[]", wantExit: 5,
+		},
+		{
+			platformSkip: false,
+			fits:         false,
+			name:         "tool failure wins", output: hadolintFinding, toolExit: 1, wantExit: 1,
+		},
+		{
+			toolExit: 0,
+			fits:     false,
+			name:     "coverage failure wins", output: "[]", wantExit: 4, platformSkip: true,
+		},
+		{
+			platformSkip: false,
+			fits:         false,
+			name:         "incomplete tool does not consume a slot", output: "[]", toolExit: 1, wantExit: 1,
+		},
+		{
+			platformSkip: false,
+			name:         "nineteen external tools and the built-in fit", output: "[]", toolExit: 1, wantExit: 1, fits: true,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newExecProject(t, map[string]string{"fixture.marker": "", "a.txt": "fixture", ".datamitsuignore": "*.txt: t21\n"}, fixtureSpec)
@@ -314,8 +334,33 @@ func TestReportSARIFRefusedAfterFix(t *testing.T) {
 				n = 19
 			}
 			tools := append(manyParsedTools(n),
-				clitest.ShellTool("t21", fmt.Sprintf("%s; echo '%s'; exit %d", clitest.RecordRun, tc.output, tc.toolExit), clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"*.txt"}, Args: []string{"{file}"}, Parser: "hadolint"}),
-				clitest.ShellTool("fixer", clitest.RecordRun+`; rm .datamitsuignore`, clitest.ToolOpSpec{Operation: "fix"}))
+				clitest.ShellTool("t21", fmt.Sprintf("%s; echo '%s'; exit %d", clitest.RecordRun, tc.output, tc.toolExit), clitest.ToolOpSpec{
+					Operation:    "",
+					Priority:     0,
+					ProjectTypes: nil,
+					ParserModule: "",
+					Env:          nil,
+					InheritEnv:   nil,
+					FailOn:       "",
+					Input:        "",
+					Output:       "",
+					Scope:        "per-file", Globs: []string{"*.txt"}, Args: []string{"{file}"}, Parser: "hadolint",
+				}),
+				clitest.ShellTool("fixer", clitest.RecordRun+`; rm .datamitsuignore`, clitest.ToolOpSpec{
+					Scope:        "",
+					Args:         nil,
+					Globs:        nil,
+					Priority:     0,
+					ProjectTypes: nil,
+					Parser:       "",
+					ParserModule: "",
+					Env:          nil,
+					InheritEnv:   nil,
+					FailOn:       "",
+					Input:        "",
+					Output:       "",
+					Operation:    "fix",
+				}))
 			e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, tools...))
 			e.p.WriteFile("r.sarif", `{"version":"2.1.0","runs":[]}`)
 			res := e.run("", nil, jsonl(args...)...)
@@ -385,7 +430,21 @@ func TestReportSARIFRejectsReservedToolKey(t *testing.T) {
 			e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec)
 			spec := fixtureSpec
 			spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
-			tool := clitest.ShellTool(name, passScript+"; echo '[]'", clitest.ToolOpSpec{Parser: "hadolint"})
+			tool := clitest.ShellTool(name, passScript+"; echo '[]'", clitest.ToolOpSpec{
+				Operation:    "",
+				Scope:        "",
+				Args:         nil,
+				Globs:        nil,
+				Priority:     0,
+				ProjectTypes: nil,
+				ParserModule: "",
+				Env:          nil,
+				InheritEnv:   nil,
+				FailOn:       "",
+				Input:        "",
+				Output:       "",
+				Parser:       "hadolint",
+			})
 			e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, tool))
 			res := e.run("", nil, "lint", "--report", "sarif=scan.sarif")
 			e.wantExit(res, 1)
@@ -452,7 +511,13 @@ func TestReportSARIFRejectsLegacyReservedDriverKeys(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			p := clitest.NewProject(t)
 			p.WriteFile("old.json", strings.Replace(equivalentCompleteReport, `"ready"`, fmt.Sprintf("%q", name), 1))
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "report", "render", "--input", "old.json", "--format", "sarif")
+			res := clitest.Run(t, clitest.RunOptions{
+				CacheDir: "",
+				Env:      nil,
+				Stdin:    "",
+				Timeout:  0,
+				Dir:      p.Dir,
+			}, "report", "render", "--input", "old.json", "--format", "sarif")
 			if res.ExitCode != 5 || res.Stdout != "" || !strings.Contains(res.Stderr, fmt.Sprintf("tool %q uses a reserved SARIF driver name", name)) {
 				t.Fatalf("legacy report must not publish the reserved driver: exit=%d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
 			}
@@ -507,7 +572,21 @@ func TestReportSARIFCountsPostFixCoreFinding(t *testing.T) {
 	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec)
 	spec := fixtureSpec
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
-	tools := append(manyParsedTools(20), clitest.ShellTool("fixer", `printf '*.go:t01\n' > .datamitsuignore`, clitest.ToolOpSpec{Operation: "fix"}))
+	tools := append(manyParsedTools(20), clitest.ShellTool("fixer", `printf '*.go:t01\n' > .datamitsuignore`, clitest.ToolOpSpec{
+		Scope:        "",
+		Args:         nil,
+		Globs:        nil,
+		Priority:     0,
+		ProjectTypes: nil,
+		Parser:       "",
+		ParserModule: "",
+		Env:          nil,
+		InheritEnv:   nil,
+		FailOn:       "",
+		Input:        "",
+		Output:       "",
+		Operation:    "fix",
+	}))
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, tools...))
 	res := e.run("", nil, jsonl("check", "--events", "diagnostics=all", "--report", "sarif=r.sarif", "--report", "json=run.json")...)
 	e.wantExit(res, 1)
@@ -537,7 +616,20 @@ func TestReportSARIFRefusedAfterBuiltInFix(t *testing.T) {
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	tools := make([]string, 0, 20)
 	for i := 1; i <= 20; i++ {
-		tools = append(tools, clitest.ShellTool(fmt.Sprintf("t%02d", i), clitest.RecordRun+`; echo '[]'`, clitest.ToolOpSpec{Operation: "fix", Parser: "hadolint"}))
+		tools = append(tools, clitest.ShellTool(fmt.Sprintf("t%02d", i), clitest.RecordRun+`; echo '[]'`, clitest.ToolOpSpec{
+			Scope:        "",
+			Args:         nil,
+			Globs:        nil,
+			Priority:     0,
+			ProjectTypes: nil,
+			ParserModule: "",
+			Env:          nil,
+			InheritEnv:   nil,
+			FailOn:       "",
+			Input:        "",
+			Output:       "",
+			Operation:    "fix", Parser: "hadolint",
+		}))
 	}
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, tools...))
 	res := e.run("", nil, jsonl("fix", "--report", "sarif=r.sarif")...)
@@ -553,7 +645,21 @@ func TestPostFixLintSetupFailureKeepsCoreDiagnostic(t *testing.T) {
 	spec := fixtureSpec
 	spec.Extra = hostUninstallable("installer", "lint")
 	e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec,
-		clitest.ShellTool("fixer", `printf '*.go:installer\n' > .datamitsuignore`, clitest.ToolOpSpec{Operation: "fix"}))
+		clitest.ShellTool("fixer", `printf '*.go:installer\n' > .datamitsuignore`, clitest.ToolOpSpec{
+			Scope:        "",
+			Args:         nil,
+			Globs:        nil,
+			Priority:     0,
+			ProjectTypes: nil,
+			Parser:       "",
+			ParserModule: "",
+			Env:          nil,
+			InheritEnv:   nil,
+			FailOn:       "",
+			Input:        "",
+			Output:       "",
+			Operation:    "fix",
+		}))
 	res := e.run("", nil, jsonl("check", "--events", "diagnostics=all")...)
 	e.wantExit(res, 1)
 	events := clitest.MustParseJSONL(t, res.Stderr)

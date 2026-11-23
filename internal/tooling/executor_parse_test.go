@@ -14,6 +14,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 // fakeParser records its inputs and returns a canned result/error. The
@@ -56,7 +57,7 @@ func (f *fakeParser) Fallback(_ context.Context, _ string, stdout, stderr []byte
 		return ParseAnswer{}, f.fallbackFails
 	}
 	if f.fallback == nil {
-		return ParseAnswer{}, nil
+		return ParseAnswer{Diagnostics: nil, Recognized: false, Format: "", FormatParser: false, Partial: false}, nil
 	}
 	answer := *f.fallback
 	answer.Diagnostics = append([]diagnostic.Diagnostic(nil), answer.Diagnostics...)
@@ -73,14 +74,25 @@ func (f *fakeParser) Unrecognized(tool string, declared config.OutputParser) {
 
 func parseTask(module, parser string) Task {
 	return Task{
-		ToolName: "eslint",
-		Tool:     config.Tool{Name: "eslint", OutputParser: &config.OutputParser{Module: module, Parser: parser}},
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Operation:    "",
+		OpConfig:     config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil},
+		Files:        nil,
+		ProjectPath:  "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "eslint",
+		Tool:         config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "eslint", OutputParser: &config.OutputParser{Module: module, Parser: parser}},
 	}
 }
 
 func TestParseFileDiagnostics_PassesTheOutputThrough(t *testing.T) {
-	fp := &fakeParser{diags: []diagnostic.Diagnostic{{Message: "a", Row: 1}}}
-	e := &Executor{parser: fp}
+	fp := &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, diags: []diagnostic.Diagnostic{{File: "", Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "a", Row: 1}}}
+	e := &Executor{rootPath: "", dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, cache: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: atomic.Pointer[commandInfoMemo]{}, parser: fp}
 	var proc ProcessResult
 
 	e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), t.TempDir(), []byte("OUT"), []byte("ERR"), 1, true)
@@ -118,8 +130,8 @@ func TestParseFileDiagnostics_Paths(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := &Executor{parser: &fakeParser{diags: []diagnostic.Diagnostic{{Message: "m", File: c.reported}}}}
-			proc := ProcessResult{Files: c.files}
+			e := &Executor{rootPath: "", dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, cache: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: atomic.Pointer[commandInfoMemo]{}, parser: &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, diags: []diagnostic.Diagnostic{{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m", File: c.reported}}}}
+			proc := ProcessResult{ID: "", State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Files: c.files}
 			e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "tsc"), dir, nil, nil, 1, true)
 			if len(proc.Diagnostics) != 1 {
 				t.Fatalf("got %d diagnostics, want 1", len(proc.Diagnostics))
@@ -141,15 +153,15 @@ func TestParseFileDiagnostics_Extraction(t *testing.T) {
 		want      Extraction
 		wantError string
 	}{
-		{"no finding", &fakeParser{}, ExtractionParsedClean, ""},
-		{"a finding", &fakeParser{diags: []diagnostic.Diagnostic{{Message: "m"}}}, ExtractionParsedFindings, ""},
-		{"a parse error", &fakeParser{err: errors.New("boom")}, ExtractionParseFailed, "boom"},
-		{"an unavailable parser", &fakeParser{err: fmt.Errorf("parse: %w", unavailable)}, ExtractionParserUnavailable, "parse: module did not load"},
+		{"no finding", &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil}, ExtractionParsedClean, ""},
+		{"a finding", &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, diags: []diagnostic.Diagnostic{{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m"}}}, ExtractionParsedFindings, ""},
+		{"a parse error", &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, err: errors.New("boom")}, ExtractionParseFailed, "boom"},
+		{"an unavailable parser", &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, err: fmt.Errorf("parse: %w", unavailable)}, ExtractionParserUnavailable, "parse: module did not load"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := &Executor{parser: c.parser}
-			proc := ProcessResult{Files: []string{"/w/f.js"}, Extraction: ExtractionNone}
+			e := &Executor{rootPath: "", dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, cache: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: atomic.Pointer[commandInfoMemo]{}, parser: c.parser}
+			proc := ProcessResult{ID: "", State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Files: []string{"/w/f.js"}, Extraction: ExtractionNone}
 			e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), "/w", nil, nil, 0, true)
 			if proc.Extraction != c.want {
 				t.Errorf("Extraction = %q, want %q", proc.Extraction, c.want)
@@ -168,7 +180,7 @@ func TestParseFileDiagnostics_Extraction(t *testing.T) {
 // the limit of each stream, keeps at most the limit of findings, and a process
 // over either is truncated with what was kept.
 func TestParseFileDiagnostics_Limits(t *testing.T) {
-	three := []diagnostic.Diagnostic{{Message: "a"}, {Message: "b"}, {Message: "c"}}
+	three := []diagnostic.Diagnostic{{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "a"}, {File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "b"}, {File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "c"}}
 	cases := []struct {
 		name         string
 		limits       ParseLimits
@@ -184,12 +196,12 @@ func TestParseFileDiagnostics_Limits(t *testing.T) {
 		{"stdout cut", ParseLimits{InputBytes: 4, Findings: 3}, "12345678", "", nil, "1234", "", 0, ExtractionTruncated},
 		{"stderr cut", ParseLimits{InputBytes: 2, Findings: 3}, "", "abc", three, "", "ab", 3, ExtractionTruncated},
 		{"findings dropped", ParseLimits{InputBytes: 8, Findings: 2}, "x", "", three, "x", "", 2, ExtractionTruncated},
-		{"unset limits are the defaults", ParseLimits{}, "x", "y", three, "x", "y", 3, ExtractionParsedFindings},
+		{"unset limits are the defaults", ParseLimits{InputBytes: 0, Findings: 0}, "x", "y", three, "x", "y", 3, ExtractionParsedFindings},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			fp := &fakeParser{diags: c.diags}
-			e := &Executor{parser: fp}
+			fp := &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, diags: c.diags}
+			e := &Executor{rootPath: "", dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, cache: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: atomic.Pointer[commandInfoMemo]{}, parser: fp}
 			e.SetParseLimits(c.limits)
 			var proc ProcessResult
 			e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), "/w", []byte(c.stdout), []byte(c.stderr), 1, true)
@@ -217,7 +229,7 @@ func TestExecutionResultParseFailed(t *testing.T) {
 	} {
 		var r ExecutionResult
 		for _, o := range c.outcomes {
-			r.addProcess(ProcessResult{Extraction: o})
+			r.addProcess(ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Extraction: o})
 		}
 		if r.ParseFailed != c.want {
 			t.Errorf("outcomes %v: ParseFailed = %v, want %v", c.outcomes, r.ParseFailed, c.want)
@@ -234,27 +246,57 @@ func TestExecutionResultParseFailed(t *testing.T) {
 // must reach the result so the runner prints them instead of raw JSON.
 func TestExecuteBatchChunkParses(t *testing.T) {
 	tmpDir := t.TempDir()
-	fp := &fakeParser{diags: []diagnostic.Diagnostic{{Message: "prefer replaceAll", Row: 91, File: "src/a.ts"}}}
+	fp := &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, diags: []diagnostic.Diagnostic{{Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "prefer replaceAll", Row: 91, File: "src/a.ts"}}}
 
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
 			// Mimics eslint under a pnpm wrapper: JSON on stdout, warning on stderr.
 			"eslint": {
-				Type:    "shell",
-				Command: "/bin/sh",
-				Args:    []string{"-c", `echo 'catalog warning' >&2; echo '[{"filePath":"src/a.ts"}]'; exit 1`},
+				Env:            nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "shell",
+				Command:        "/bin/sh",
+				Args:           []string{"-c", `echo 'catalog warning' >&2; echo '[{"filePath":"src/a.ts"}]'; exit 1`},
 			},
 		},
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 	executor.SetParser(fp)
 	task := Task{
-		ToolName:  "eslint",
-		Operation: config.OpLint,
-		Tool:      config.Tool{Name: "eslint", OutputParser: &config.OutputParser{Module: "core", Parser: "eslint"}},
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Files:        nil,
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "eslint",
+		Operation:    config.OpLint,
+		Tool:         config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "eslint", OutputParser: &config.OutputParser{Module: "core", Parser: "eslint"}},
 		OpConfig: config.ToolOperation{
-			App:   "eslint",
-			Scope: config.ToolScopePerProject,
+			Args:              nil,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "eslint",
+			Scope:             config.ToolScopePerProject,
 		},
 		ProjectPath: tmpDir,
 	}
@@ -288,14 +330,17 @@ func TestParserReadsOutputWithoutANSI(t *testing.T) {
 		t.Skip("the tool is an sh script")
 	}
 	tmpDir := t.TempDir()
-	fp := &fakeParser{}
-	executor := NewExecutor(tmpDir, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"yamllint": shellApp(`printf 'a.yaml:3:1: [\033[31merror\033[0m] x\n'; printf '\033[33m[note]\033[0m\n' >&2; exit 1`),
-	}}, nil)
+	fp := &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil}
+	executor := NewExecutor(tmpDir, false, false, &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"yamllint": shellApp(`printf 'a.yaml:3:1: [\033[31merror\033[0m] x\n'; printf '\033[33m[note]\033[0m\n' >&2; exit 1`),
+		},
+	}, nil)
 	executor.SetParser(fp)
 	task := parseTask("core", "yamllint")
 	task.ToolName, task.Operation = "yamllint", config.OpLint
-	task.OpConfig = config.ToolOperation{App: "yamllint", Scope: config.ToolScopePerProject}
+	task.OpConfig = config.ToolOperation{Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "yamllint", Scope: config.ToolScopePerProject}
 	task.ProjectPath = tmpDir
 
 	result := executor.executeTask(context.Background(), task)
@@ -324,18 +369,28 @@ func TestExecuteBatchStampsASingleFile(t *testing.T) {
 					t.Fatalf("write fixture: %v", err)
 				}
 			}
-			appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-				"vale": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "exit 1"}},
-			}}
+			appManager := &mockAppManager{
+				binaries: nil,
+				err:      nil, commands: map[string]*binmanager.CommandInfo{
+					"vale": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", "exit 1"}},
+				},
+			}
 			executor := NewExecutor(tmpDir, false, false, appManager, nil)
-			executor.SetParser(&fakeParser{diags: []diagnostic.Diagnostic{{Message: "m"}}})
+			executor.SetParser(&fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, diags: []diagnostic.Diagnostic{{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m"}}})
 			result := executor.executeTask(context.Background(), Task{
-				ToolName:    "vale",
-				Operation:   config.OpLint,
-				Tool:        config.Tool{Name: "vale", OutputParser: &config.OutputParser{Module: "core", Parser: "vale"}},
-				OpConfig:    config.ToolOperation{App: "vale", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
-				Files:       files,
-				ProjectPath: tmpDir,
+				perFileCache: "",
+				inherited:    zerovalue_toolenv.Inherited{},
+				ID:           "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				Coverage:     "",
+				ToolName:     "vale",
+				Operation:    config.OpLint,
+				Tool:         config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "vale", OutputParser: &config.OutputParser{Module: "core", Parser: "vale"}},
+				OpConfig:     config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "vale", Scope: config.ToolScopeRepository, Args: []string{"{files}"}},
+				Files:        files,
+				ProjectPath:  tmpDir,
 			})
 			if len(result.Diagnostics) != 1 {
 				t.Fatalf("Diagnostics = %+v, want one", result.Diagnostics)
@@ -386,22 +441,45 @@ func TestExecuteBatchChunksParallelMergesDiagnostics(t *testing.T) {
 
 	// One diagnostic per invocation, labelled with the file the chunk carried, so
 	// a dropped chunk is visible in the result rather than merely a smaller count.
-	fp := &perCallParser{}
+	fp := &perCallParser{calls: atomic.Int32{}}
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
-			"eslint": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", `echo "$@"; exit 1`, "sh"}},
+			"eslint": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", `echo "$@"; exit 1`, "sh"}},
 		},
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 	executor.SetParser(fp)
 	result := executor.executeTask(context.Background(), Task{
-		ToolName:  "eslint",
-		Operation: config.OpLint,
-		Tool:      config.Tool{Name: "eslint", OutputParser: &config.OutputParser{Module: "core", Parser: "eslint"}},
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "eslint",
+		Operation:    config.OpLint,
+		Tool:         config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "eslint", OutputParser: &config.OutputParser{Module: "core", Parser: "eslint"}},
 		OpConfig: config.ToolOperation{
-			App:   "eslint",
-			Scope: config.ToolScopePerProject,
-			Args:  []string{"{files}"},
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "eslint",
+			Scope:             config.ToolScopePerProject,
+			Args:              []string{"{files}"},
 		},
 		Files:       files,
 		ProjectPath: tmpDir,
@@ -440,22 +518,45 @@ func TestExecuteBatchRunsOnceWhenArgsIgnoreFiles(t *testing.T) {
 		}
 	}
 
-	fp := &perCallParser{}
+	fp := &perCallParser{calls: atomic.Int32{}}
 	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil,
 		commands: map[string]*binmanager.CommandInfo{
-			"tsc": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", "echo whole-project; exit 1"}},
+			"tsc": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", "echo whole-project; exit 1"}},
 		},
 	}
 	executor := NewExecutor(tmpDir, false, false, appManager, nil)
 	executor.SetParser(fp)
 	result := executor.executeTask(context.Background(), Task{
-		ToolName:  "tsc",
-		Operation: config.OpLint,
-		Tool:      config.Tool{Name: "tsc", OutputParser: &config.OutputParser{Module: "core", Parser: "tsc"}},
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "tsc",
+		Operation:    config.OpLint,
+		Tool:         config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "tsc", OutputParser: &config.OutputParser{Module: "core", Parser: "tsc"}},
 		OpConfig: config.ToolOperation{
-			App:   "tsc",
-			Scope: config.ToolScopePerProject,
-			Args:  []string{"--noEmit"}, // no {files}
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			Output:            "",
+			ManagedConfigRefs: nil,
+			App:               "tsc",
+			Scope:             config.ToolScopePerProject,
+			Args:              []string{"--noEmit"}, // no {files}
 		},
 		Files:       files,
 		ProjectPath: tmpDir,
@@ -476,14 +577,16 @@ type perCallParser struct{ calls atomic.Int32 }
 func (p *perCallParser) Parse(_ context.Context, _, parser, _ string, stdout, _ []byte, _ int32) (ParseAnswer, error) {
 	p.calls.Add(1)
 	return ParseAnswer{
-		Diagnostics: []diagnostic.Diagnostic{{Message: strings.TrimSpace(string(stdout)), File: "x.js"}},
-		Recognized:  true,
-		Format:      parser,
+		FormatParser: false,
+		Partial:      false,
+		Diagnostics:  []diagnostic.Diagnostic{{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: strings.TrimSpace(string(stdout)), File: "x.js"}},
+		Recognized:   true,
+		Format:       parser,
 	}, nil
 }
 
 func (p *perCallParser) Fallback(context.Context, string, []byte, []byte, int32) (ParseAnswer, error) {
-	return ParseAnswer{}, nil
+	return ParseAnswer{Diagnostics: nil, Recognized: false, Format: "", FormatParser: false, Partial: false}, nil
 }
 
 func (p *perCallParser) FellBack(string, config.OutputParser, string) {}

@@ -33,7 +33,7 @@ type FileIdentity struct {
 // comparison against it is a miss.
 func IdentityOf(fi os.FileInfo) FileIdentity {
 	if fi == nil {
-		return FileIdentity{}
+		return FileIdentity{Ino: 0, ChangeTimeNano: 0, Known: false}
 	}
 	return statIdentity(fi)
 }

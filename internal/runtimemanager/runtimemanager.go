@@ -248,7 +248,7 @@ func (rm *RuntimeManager) RuntimeInventory() ([]RuntimeInventoryEntry, error) {
 	entries := make([]RuntimeInventoryEntry, 0, len(names))
 	for _, name := range names {
 		configured := rm.mapOfRuntimes[name]
-		entry := RuntimeInventoryEntry{Name: name, Kind: configured.Kind, ConfiguredMode: configured.Mode, EffectiveMode: configured.Mode, Runnable: runnableRuntimeKind(configured.Kind), Status: RuntimeStatusUnavailable}
+		entry := RuntimeInventoryEntry{Version: "", Executable: "", Reason: "", NotRunnableReason: "", Name: name, Kind: configured.Kind, ConfiguredMode: configured.Mode, EffectiveMode: configured.Mode, Runnable: runnableRuntimeKind(configured.Kind), Status: RuntimeStatusUnavailable}
 		entry.NotRunnableReason = runtimeNotRunnableReason(configured.Kind)
 		entry.Version = runtimeConfiguredVersion(configured)
 		if !validRuntimePathName(name) {
@@ -1147,7 +1147,8 @@ func (rm *RuntimeManager) resolveEffectiveRuntimeConfig(runtimeName string, rc c
 
 	rc.Mode = config.RuntimeModeSystem
 	systemConfig := &config.RuntimeConfigSystem{
-		Command: systemPath,
+		SystemVersion: "",
+		Command:       systemPath,
 	}
 	if rc.System != nil {
 		systemConfig.SystemVersion = rc.System.SystemVersion
@@ -1185,7 +1186,7 @@ func (rm *RuntimeManager) computeRuntimeBinPath(runtimeName string) (resolvedRun
 		if rc.System == nil {
 			return resolvedRuntime{}, fmt.Errorf("runtime %q is system mode but has no system config", runtimeName)
 		}
-		return resolvedRuntime{binPath: rc.System.Command, rc: rc}, nil
+		return resolvedRuntime{configHash: "", binaryPath: nil, managed: false, binPath: rc.System.Command, rc: rc}, nil
 	}
 
 	if rc.Managed == nil {
@@ -1310,7 +1311,7 @@ func (rm *RuntimeManager) downloadRuntime(ctx context.Context, runtimeName strin
 		return fmt.Errorf("runtime install context canceled before downloading %q: %w", runtimeName, err)
 	}
 	log.Debug("runtime not found in cache, downloading", zap.String("name", runtimeName))
-	runtimeApp := binmanager.App{Required: true, Binary: &binmanager.AppConfigBinary{Binaries: rc.Managed.Binaries}}
+	runtimeApp := binmanager.App{Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Binary: &binmanager.AppConfigBinary{Version: "", Binaries: rc.Managed.Binaries}}
 	downloaderConstructions.Add(1)
 	tmpBinManager := binmanager.New(binmanager.MapOfApps{runtimeName: runtimeApp}, nil, nil)
 	if err := tmpBinManager.Install(ctx); err != nil {

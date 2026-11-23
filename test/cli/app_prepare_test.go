@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/clitest"
@@ -44,7 +45,7 @@ func TestConfigShowPrepare(t *testing.T) {
 	cfg := p.WriteFile("prepare.config.js", prepareConfigJS())
 	norm := clitest.NewNormalizer()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "show")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config show` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -107,7 +108,7 @@ func TestConfigShowPrepareValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := clitest.NewProject(t)
 			cfg := p.WriteFile("bad.config.js", "globalThis.getBeforeConfigs = () => [];\nglobalThis.getConfig = () => ({ version: \"1.0.0\", apps: { "+tt.appJS+" } });\nglobalThis.getMinVersion = () => \"0.0.0\";\n")
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 				"--no-auto-config", "--config", cfg, "config", "show")
 			if res.ExitCode == 0 {
 				t.Fatalf("`config show` exit = 0, want failure\nstdout:\n%s", res.Stdout)
@@ -126,7 +127,7 @@ func TestConfigShowDependsOnLegacyStrings(t *testing.T) {
 		"  upstream: { binary: { binaries: { linux: { amd64: { glibc: { url: \"https://example.invalid/u\", hash: \"sha256:"+strings.Repeat("a", 64)+"\", contentType: \"application/octet-stream\" } } } } } },\n"+
 		"} });\nglobalThis.getMinVersion = () => \"0.0.0\";\n")
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "show")
 	if res.ExitCode != 0 {
 		t.Fatalf("legacy string dependsOn rejected:\nstderr:\n%s", res.Stderr)
@@ -145,7 +146,7 @@ func goSourceConfigJS(t *testing.T) string {
 	var tarBuf bytes.Buffer
 	tw := tar.NewWriter(&tarBuf)
 	body := "package main\n\nfunc main() {}\n"
-	if err := tw.WriteHeader(&tar.Header{Name: "main.go", Mode: 0o644, Size: int64(len(body))}); err != nil {
+	if err := tw.WriteHeader(&tar.Header{Typeflag: 0, Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "main.go", Mode: 0o644, Size: int64(len(body))}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tw.Write([]byte(body)); err != nil {
@@ -189,7 +190,7 @@ func TestConfigShowGoSourceArchive(t *testing.T) {
 	cfg := p.WriteFile("gosource.config.js", goSourceConfigJS(t))
 	norm := clitest.NewNormalizer()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "show")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config show` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)

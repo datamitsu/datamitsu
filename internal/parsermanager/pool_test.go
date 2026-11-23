@@ -17,7 +17,7 @@ func pooledManager(t *testing.T) (*Manager, []byte) {
 	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
 	wasm := echoWASM(t)
 	srv, _ := serveWASM(t, wasm)
-	m := New(config.MapOfParsers{"echo": {URL: srv.URL, Hash: sha256Hex(wasm)}})
+	m := New(config.MapOfParsers{"echo": {OCI: nil, URL: srv.URL, Hash: sha256Hex(wasm)}})
 	t.Cleanup(func() { _ = m.Close(context.Background()) })
 	return m, wasm
 }

@@ -65,10 +65,10 @@ func TestFingerprintVectors(t *testing.T) {
 func annotated(t *testing.T, root string, tool string, unit string, ds ...diagnostic.Diagnostic) []diagnostic.Diagnostic {
 	t.Helper()
 	facts := func(string, string) (parsermanager.ParserFacts, bool) {
-		return parsermanager.ParserFacts{Tool: parsermanager.ToolCapability{ColumnUnit: unit}}, true
+		return parsermanager.ParserFacts{Version: "", Schema: 0, Contract: false, Tool: parsermanager.ToolCapability{Name: "", Description: "", URL: "", Operations: nil, Severities: nil, Category: "", Kind: "", ColumnUnit: unit}}, true
 	}
-	task := tooling.Task{ToolName: tool, Tool: config.Tool{OutputParser: &config.OutputParser{Module: "m", Parser: tool}}}
-	proc := tooling.ProcessResult{Diagnostics: ds, ParserModule: "m"}
+	task := tooling.Task{ID: "", Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: tool, Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: &config.OutputParser{Module: "m", Parser: tool}}}
+	proc := tooling.ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, Diagnostics: ds, ParserModule: "m"}
 	NewAnnotator(root, facts).Annotate(task, &proc)
 	return proc.Diagnostics
 }
@@ -79,12 +79,24 @@ func TestTheFallbacksColumnsHaveNoUnit(t *testing.T) {
 	root := t.TempDir()
 	path := writeFile(t, root, "src/a.js", "const café = 1;\n")
 	facts := func(string, string) (parsermanager.ParserFacts, bool) {
-		return parsermanager.ParserFacts{Tool: parsermanager.ToolCapability{ColumnUnit: "utf-16"}}, true
+		return parsermanager.ParserFacts{Version: "", Schema: 0, Contract: false, Tool: parsermanager.ToolCapability{Name: "", Description: "", URL: "", Operations: nil, Severities: nil, Category: "", Kind: "", ColumnUnit: "utf-16"}}, true
 	}
-	task := tooling.Task{ToolName: "eslint", Tool: config.Tool{OutputParser: &config.OutputParser{Module: "m", Parser: "eslint"}}}
+	task := tooling.Task{ID: "", Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "eslint", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: &config.OutputParser{Module: "m", Parser: "eslint"}}}
 	proc := tooling.ProcessResult{
-		ParserModule: tooling.EmbeddedParserModule, Provenance: "fallback:gcc",
-		Diagnostics: []diagnostic.Diagnostic{{File: path, Row: 1, EndRow: 1, Col: 7, EndCol: 11, Message: "m"}},
+		ID:              "",
+		Files:           nil,
+		State:           "",
+		ExitCode:        nil,
+		Success:         false,
+		Extraction:      "",
+		ParseError:      "",
+		OutputTail:      nil,
+		DurationMs:      0,
+		FailOn:          "",
+		GateActive:      false,
+		ThresholdFailed: false,
+		ParserModule:    tooling.EmbeddedParserModule, Provenance: "fallback:gcc",
+		Diagnostics: []diagnostic.Diagnostic{{Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, File: path, Row: 1, EndRow: 1, Col: 7, EndCol: 11, Message: "m"}},
 	}
 	NewAnnotator(root, facts).Annotate(task, &proc)
 	if got := proc.Diagnostics[0].Anchor; got.Precision != textpos.Unknown || got.Chars != nil {
@@ -110,7 +122,13 @@ func TestAnnotateMatchesTheVectors(t *testing.T) {
 	root := t.TempDir()
 	path := writeFile(t, root, "src/a.js", "// header\nconst café = 1;  \n")
 	got := annotated(t, root, "eslint", "utf-16", diagnostic.Diagnostic{
-		File: path, Row: 2, EndRow: 2, Col: 7, EndCol: 11, Code: "no-unused-vars", Source: "eslint", Message: "unused",
+		Severity:  0,
+		URL:       "",
+		Reported:  false,
+		Gates:     false,
+		Baselined: false,
+		Anchor:    nil,
+		File:      path, Row: 2, EndRow: 2, Col: 7, EndCol: 11, Code: "no-unused-vars", Source: "eslint", Message: "unused",
 	})[0]
 	const want = "782d56fb252d612d013fd522fde6a5a8d4493f0dbe4113f391291cedde45da5c"
 	if got.Anchor.Fingerprint != want || got.Anchor.Basis != BasisLine {
@@ -125,7 +143,7 @@ func TestAnnotateMatchesTheVectors(t *testing.T) {
 // A line inserted above a finding moves its row, not its fingerprint.
 func TestFingerprintSurvivesALineAbove(t *testing.T) {
 	root := t.TempDir()
-	finding := diagnostic.Diagnostic{Row: 2, EndRow: 2, Col: 1, EndCol: 2, Code: "C1", Source: "t", Message: "m"}
+	finding := diagnostic.Diagnostic{File: "", Severity: 0, URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Row: 2, EndRow: 2, Col: 1, EndCol: 2, Code: "C1", Source: "t", Message: "m"}
 
 	finding.File = writeFile(t, root, "a.go", "package a\nvar bad = 1\n")
 	before := annotated(t, root, "t", "utf-8", finding)[0].Anchor.Fingerprint
@@ -143,7 +161,7 @@ func TestFingerprintSurvivesALineAbove(t *testing.T) {
 func TestFingerprintsAreDistinct(t *testing.T) {
 	root := t.TempDir()
 	path := writeFile(t, root, "src/b.js", "let x = y == z;\n")
-	one := diagnostic.Diagnostic{File: path, Row: 1, EndRow: 1, Col: 11, EndCol: 13, Code: "eqeqeq", Source: "eslint", Message: "Expected ==="}
+	one := diagnostic.Diagnostic{Severity: 0, URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, File: path, Row: 1, EndRow: 1, Col: 11, EndCol: 13, Code: "eqeqeq", Source: "eslint", Message: "Expected ==="}
 	two := one
 	two.Col, two.EndCol = 7, 8
 
@@ -167,14 +185,14 @@ func TestFingerprintsAreDistinct(t *testing.T) {
 // A file that is gone rests on the row; a finding without a file on nothing.
 func TestFingerprintFallbacks(t *testing.T) {
 	root := t.TempDir()
-	gone := diagnostic.Diagnostic{File: filepath.Join(root, "gone", "Dockerfile"), Row: 12, EndRow: 12, Col: 1, EndCol: 1, Code: "DL3006", Source: "hadolint"}
+	gone := diagnostic.Diagnostic{Severity: 0, Message: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, File: filepath.Join(root, "gone", "Dockerfile"), Row: 12, EndRow: 12, Col: 1, EndCol: 1, Code: "DL3006", Source: "hadolint"}
 	got := annotated(t, root, "hadolint", "", gone)[0].Anchor
 	if got.Basis != BasisRow || got.Fingerprint != "243067f037e64756174f040f8142559b790e4173d35cbdf7ca3c5fb64ccd66cf" ||
 		got.Precision != textpos.Unknown || got.Chars != nil {
 		t.Errorf("deleted file anchor = %+v, want the row vector and no spans", got)
 	}
 
-	withoutFile := annotated(t, root, "golangci-lint", "utf-8", diagnostic.Diagnostic{Row: 1, EndRow: 1, Col: 1, EndCol: 1, Source: "golangci-lint", Message: "typecheck"})[0].Anchor
+	withoutFile := annotated(t, root, "golangci-lint", "utf-8", diagnostic.Diagnostic{File: "", Severity: 0, Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Row: 1, EndRow: 1, Col: 1, EndCol: 1, Source: "golangci-lint", Message: "typecheck"})[0].Anchor
 	if withoutFile.Basis != BasisNone || withoutFile.Fingerprint != "3389a70737766fc5b3754e0cf170e1a6e0c6c9e0cf1755ad727010293798ad27" {
 		t.Errorf("file-less anchor = %+v, want the file-less vector", withoutFile)
 	}
@@ -185,7 +203,7 @@ func TestFingerprintFallbacks(t *testing.T) {
 func TestAnnotateOutsideTheRoot(t *testing.T) {
 	root, outside := t.TempDir(), t.TempDir()
 	path := writeFile(t, outside, "shared.go", "package shared\n")
-	got := annotated(t, root, "t", "utf-8", diagnostic.Diagnostic{File: path, Row: 1, EndRow: 1, Col: 1, EndCol: 2})[0].Anchor
+	got := annotated(t, root, "t", "utf-8", diagnostic.Diagnostic{Severity: 0, Message: "", Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, File: path, Row: 1, EndRow: 1, Col: 1, EndCol: 2})[0].Anchor
 	if got.Basis != BasisRow || got.LineHash != RowHash(1) || got.Chars != nil {
 		t.Errorf("anchor of a file outside the root = %+v, want the row", got)
 	}
@@ -196,13 +214,20 @@ func TestAnnotateOutsideTheRoot(t *testing.T) {
 func TestGateFingerprintIsTheReports(t *testing.T) {
 	root := t.TempDir()
 	path := writeFile(t, root, "src/b.js", "let x = y == z;\n")
-	one := diagnostic.Diagnostic{File: path, Row: 1, EndRow: 1, Col: 11, EndCol: 13, Code: "eqeqeq", Source: "eslint", Message: "m", Severity: diagnostic.SeverityError}
+	one := diagnostic.Diagnostic{URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, File: path, Row: 1, EndRow: 1, Col: 11, EndCol: 13, Code: "eqeqeq", Source: "eslint", Message: "m", Severity: diagnostic.SeverityError}
 	two := one
 	two.Col, two.EndCol = 7, 8
 	ds := annotated(t, root, "eslint", "utf-16", one, two)
 
-	acc := NewAccumulator(Options{Root: root})
-	tr := &ToolRun{Name: "eslint", Invocations: []Invocation{{ID: "eslint::1#1"}}}
+	acc := NewAccumulator(Options{Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil, Root: root})
+	tr := &ToolRun{
+		RedactedReasons: nil,
+		App:             AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, mayHoldSecrets: false, Name: "eslint", Invocations: []Invocation{{
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, Changes: nil, OutputTail: "", ID: "eslint::1#1",
+		}},
+	}
 	for _, d := range ds {
 		tr.Invocations[0].Findings = append(tr.Invocations[0].Findings, acc.finding("eslint", d, tr))
 	}
@@ -219,11 +244,11 @@ func TestGateFingerprintIsTheReports(t *testing.T) {
 func TestAnnotateAcrossLines(t *testing.T) {
 	root := t.TempDir()
 	path := writeFile(t, root, "c.txt", "ab\né😀z\n")
-	got := annotated(t, root, "t", "utf-32", diagnostic.Diagnostic{File: path, Row: 1, EndRow: 2, Col: 2, EndCol: 3})[0].Anchor
+	got := annotated(t, root, "t", "utf-32", diagnostic.Diagnostic{Severity: 0, Message: "", Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, File: path, Row: 1, EndRow: 2, Col: 2, EndCol: 3})[0].Anchor
 	if *got.UTF16 != (textpos.Span{Start: 2, End: 4}) {
 		t.Errorf("UTF-16 span = %v, want the end after the emoji", *got.UTF16)
 	}
-	missing := annotated(t, root, "t", "utf-32", diagnostic.Diagnostic{File: path, Row: 1, EndRow: 9, Col: 1, EndCol: 2})[0].Anchor
+	missing := annotated(t, root, "t", "utf-32", diagnostic.Diagnostic{Severity: 0, Message: "", Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, File: path, Row: 1, EndRow: 9, Col: 1, EndCol: 2})[0].Anchor
 	if missing.Basis != BasisLine || missing.Chars != nil || missing.Precision != textpos.Unknown {
 		t.Errorf("anchor with a missing last line = %+v, want the line basis and no spans", missing)
 	}

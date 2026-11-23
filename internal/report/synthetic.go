@@ -17,13 +17,20 @@ import (
 // state or its findings already say why.
 func syntheticFinding(tool string, proc tooling.ProcessResult, category string) (Finding, bool) {
 	if proc.State != tooling.ProcessRan || proc.ExitCode == nil || *proc.ExitCode == 0 || len(proc.Diagnostics) > 0 {
-		return Finding{}, false
+		return Finding{Fingerprint: "", FingerprintBasis: "", Tool: "", Source: "", Code: "", RuleURL: "", Severity: "", Reported: false, Gates: false, Shown: false, Baselined: false, Kind: "", Message: "", Location: Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: ""}, Provenance: "", lineHash: ""}, false
 	}
 	msg := fmt.Sprintf("%s exited %d without parsable findings", tool, *proc.ExitCode)
 	if category == categorySecurity {
 		msg = fmt.Sprintf("%s failed (exit %d); output withheld for a security tool", tool, *proc.ExitCode)
 	}
 	return Finding{
+		Fingerprint:      "",
+		Code:             "",
+		RuleURL:          "",
+		Reported:         false,
+		Shown:            false,
+		Baselined:        false,
+		lineHash:         "",
 		FingerprintBasis: BasisNone,
 		Tool:             tool,
 		Source:           tool,
@@ -31,7 +38,7 @@ func syntheticFinding(tool string, proc tooling.ProcessResult, category string) 
 		Gates:            true,
 		Kind:             kindSynthetic,
 		Message:          msg,
-		Location:         Location{Precision: string(textpos.Unknown)},
+		Location:         Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: string(textpos.Unknown)},
 		Provenance:       provenanceSynthetic,
 	}, true
 }

@@ -41,7 +41,7 @@ globalThis.getConfig = () => ({version:"fixture",projectTypes:{fixture:{markers:
 	cfg := project.WriteFile("provision.config.js", config)
 	cache := t.TempDir()
 	args := []string{"--no-auto-config", "--config", cfg, "check", "--tools", "lint-only"}
-	options := clitest.RunOptions{Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="}}
+	options := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="}}
 
 	failed := clitest.Run(t, options, args...)
 	if failed.ExitCode != 1 {
@@ -175,7 +175,7 @@ globalThis.getConfig = () => ({version:"fixture",runtimes:{"fake-go":{kind:"go",
 globalThis.getMinVersion = () => "0.5.0";`, server.URL, digest.SHA256Of(payload).String(), runtime.GOOS, runtime.GOARCH,
 		app("shared", ""), app("alpha", "shared"), app("beta", "shared"))
 	cfg := project.WriteFile("runtime-progress.config.js", config)
-	opts := clitest.RunOptions{Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="}}
+	opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="}}
 	args := []string{"--no-auto-config", "--config", cfg, "install", "--no-verify"}
 	first := clitest.Start(t, opts, append(append([]string(nil), args...), "alpha")...)
 	var second *exec.Cmd
@@ -322,7 +322,7 @@ const pnpmBinary = {url:%q,hash:%q,contentType:"binary",binaryPath:"pnpm"};
 globalThis.getConfig = () => ({version:"fixture",runtimes:{node:{kind:"node",mode:"system",system:{command:"/bin/true",systemVersion:"26.0.0"},node:{nodeVersion:"26.0.0",pnpmRuntime:"pnpm"}},pnpm:{kind:"pnpm",mode:"managed",pnpm:{pnpmVersion:"12.0.0"},managed:{binaries:{%q:{%q:{glibc:pnpmBinary,musl:pnpmBinary,unknown:pnpmBinary}}}}}},apps:{"readable-tool":{node:{packageName:"fixture-pkg",version:"1.0.0",runtime:"node",binPath:"node_modules/fixture-pkg/entry.js",lockFile:%q},env:{INSTALL_LOG:%q}}},tools:{},managedConfigs:{}});
 globalThis.getMinVersion = () => "0.5.0";`, server.URL, digest.SHA256Of(payload).String(), runtime.GOOS, runtime.GOARCH, lock, installLog)
 	cfg := project.WriteFile("pnpm-progress.config.js", config)
-	opts := clitest.RunOptions{Dir: project.Dir, CacheDir: t.TempDir(), Env: []string{"DATAMITSU_OFFLINE="}}
+	opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: project.Dir, CacheDir: t.TempDir(), Env: []string{"DATAMITSU_OFFLINE="}}
 	args := []string{"--no-auto-config", "--config", cfg, "install", "--no-verify", "readable-tool"}
 	first := clitest.Run(t, opts, args...)
 	if first.ExitCode != 0 {

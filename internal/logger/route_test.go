@@ -37,7 +37,7 @@ func routeTo(t *testing.T, level zapcore.Level) *capture {
 	t.Helper()
 	previous := Level()
 	SetLevel(level)
-	c := &capture{}
+	c := &capture{mu: sync.Mutex{}, events: nil}
 	Route(c.emit)
 	t.Cleanup(func() {
 		Route(nil)
@@ -61,9 +61,18 @@ func TestRouteReachesLoggersDerivedBeforeIt(t *testing.T) {
 	named.Info("version check skipped")
 
 	want := []uievent.Event{
-		{Type: uievent.TypeLog, Level: uievent.LevelWarn, Msg: `failed to load cache {"component":"cache","error":"corrupt"}`},
-		{Type: uievent.TypeLog, Level: uievent.LevelDebug, Msg: `downloading {"binmanager":{"name":"shfmt"}}`},
-		{Type: uievent.TypeLog, Level: uievent.LevelInfo, Msg: `version check skipped`},
+		{
+			ThrottleID: "",
+			OpID:       "", TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, Level: uievent.LevelWarn, Msg: `failed to load cache {"component":"cache","error":"corrupt"}`,
+		},
+		{
+			ThrottleID: "",
+			OpID:       "", TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, Level: uievent.LevelDebug, Msg: `downloading {"binmanager":{"name":"shfmt"}}`,
+		},
+		{
+			ThrottleID: "",
+			OpID:       "", TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, Level: uievent.LevelInfo, Msg: `version check skipped`,
+		},
 	}
 	events := got.all()
 	if len(events) != len(want) {
@@ -131,8 +140,9 @@ func TestRoutedMessage(t *testing.T) {
 		fields []zapcore.Field
 		want   string
 	}{
-		{name: "no fields", want: "msg"},
+		{with: nil, fields: nil, name: "no fields", want: "msg"},
 		{
+			with:   nil,
 			name:   "call fields",
 			fields: []zapcore.Field{zap.String("file", "a.go"), zap.Int("n", 2), zap.Bool("ok", true)},
 			want:   `msg {"file":"a.go","n":2,"ok":true}`,
@@ -144,11 +154,13 @@ func TestRoutedMessage(t *testing.T) {
 			want:   `msg {"component":"cache","file":"a.go"}`,
 		},
 		{
-			name: "a namespace with no field in it is left out",
-			with: []zapcore.Field{zap.Namespace("cmd")},
-			want: "msg",
+			fields: nil,
+			name:   "a namespace with no field in it is left out",
+			with:   []zapcore.Field{zap.Namespace("cmd")},
+			want:   "msg",
 		},
 		{
+			with: nil,
 			name: "a tool's output and arguments are withheld",
 			fields: []zapcore.Field{
 				zap.String("tool", "gitleaks"), zap.String("output", "leak: found-value"),
@@ -163,11 +175,13 @@ func TestRoutedMessage(t *testing.T) {
 			want:   `msg {"top":"x","cmd":{"tool":"eslint"}}`,
 		},
 		{
+			with:   nil,
 			name:   "skipped fields add nothing",
 			fields: []zapcore.Field{zap.Skip(), zap.Error(nil)},
 			want:   "msg",
 		},
 		{
+			with:   nil,
 			name:   "errors and durations read as text",
 			fields: []zapcore.Field{zap.Error(errors.New(`bad "quote"`)), zap.Duration("took", 1500*time.Millisecond)},
 			want:   `msg {"error":"bad \"quote\"","took":"1.5s"}`,
@@ -202,7 +216,7 @@ func TestConsoleOutputWithoutARoute(t *testing.T) {
 	var plain, switched bytes.Buffer
 	logAll(zap.New(newConsoleCore(&plain)))
 
-	logger := zap.New(&switchCore{console: newConsoleCore(&switched)})
+	logger := zap.New(&switchCore{fields: nil, console: newConsoleCore(&switched)})
 	logAll(logger)
 	if switched.Len() != 0 {
 		t.Errorf("a routed entry reached the console: %q", switched.String())

@@ -23,8 +23,40 @@ var (
 )
 
 var lintCmd = &cobra.Command{
-	Use:   "lint [files...]",
-	Short: "Run lint operations on files",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	Args:                       nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "lint [files...]",
+	Short:                      "Run lint operations on files",
 	Long: `Runs configured lint tools on specified files or the entire project.
 Tools are executed based on priority and file patterns, with automatic parallelization
 for non-overlapping tasks.
@@ -54,7 +86,7 @@ func init() {
 }
 
 func runLint(cmd *cobra.Command, args []string) error {
-	opts := runner.Options{WidenTo: lintWidenTo, RequireCoverage: lintRequireCov}
+	opts := runner.Options{FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, WidenTo: lintWidenTo, RequireCoverage: lintRequireCov}
 	if err := applyFailOn(cmd, lintFailOn, &opts); err != nil {
 		return err
 	}

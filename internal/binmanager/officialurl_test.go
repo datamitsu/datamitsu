@@ -20,9 +20,9 @@ func binaryApp(urls ...string) App {
 		if index > 1 {
 			arch = syslist.ArchType("arm64")
 		}
-		binaries[osType][arch] = map[string]BinaryOsArchInfo{"unknown": {URL: url}}
+		binaries[osType][arch] = map[string]BinaryOsArchInfo{"unknown": {Auth: nil, Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false, URL: url}}
 	}
-	return App{Binary: &AppConfigBinary{Binaries: binaries}}
+	return App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &AppConfigBinary{Version: "", Binaries: binaries}}
 }
 
 func TestDeriveOfficialURLPerRule(t *testing.T) {
@@ -61,6 +61,7 @@ func TestDeriveOfficialURLPerRule(t *testing.T) {
 			want: "https://github.com/mvdan/sh",
 		},
 		{
+			want: "",
 			// Two platforms, two repositories: no single answer, so none.
 			app: binaryApp(
 				"https://github.com/mvdan/sh/releases/download/v3.8.0/shfmt_linux",
@@ -69,62 +70,68 @@ func TestDeriveOfficialURLPerRule(t *testing.T) {
 			name: "platforms disagree",
 		},
 		{
+			want: "",
 			app:  binaryApp("https://downloads.example.com/tool/1.0/tool-linux.tar.gz"),
 			name: "unknown host",
 		},
 		{
+			want: "",
 			app:  binaryApp("https://github.com/owner/repo/archive/refs/tags/v1.tar.gz"),
 			name: "github non-release path",
 		},
 		{
-			app:  App{Node: &AppConfigNode{PackageName: "eslint", Version: "9.0.0"}},
+			app:  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &AppConfigNode{BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, PackageName: "eslint", Version: "9.0.0"}},
 			name: "node package",
 			want: "https://www.npmjs.com/package/eslint",
 		},
 		{
-			app:  App{Bun: &AppConfigBun{PackageName: "@biomejs/biome", Version: "1.0.0"}},
+			app:  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: &AppConfigBun{BinPath: "", Runtime: "", LockFile: "", Dependencies: nil, PackageName: "@biomejs/biome", Version: "1.0.0"}},
 			name: "bun package",
 			want: "https://www.npmjs.com/package/@biomejs/biome",
 		},
 		{
-			app:  App{Uv: &AppConfigUV{PackageName: "ruff", Version: "0.6.0"}},
+			app:  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "ruff", Version: "0.6.0"}},
 			name: "uv package",
 			want: "https://pypi.org/project/ruff/",
 		},
 		{
-			app:  App{Go: &AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.3"}},
+			app:  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &AppConfigGo{Runtime: "", LockFile: "", PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.3"}},
 			name: "go module path",
 			want: "https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck",
 		},
 		{
-			app:  App{Go: &AppConfigGo{PackageName: "github.com/mgechev/revive@v1.3.7", Version: "v1.3.7"}},
+			app:  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &AppConfigGo{Runtime: "", LockFile: "", PackageName: "github.com/mgechev/revive@v1.3.7", Version: "v1.3.7"}},
 			name: "go module path with a version",
 			want: "https://pkg.go.dev/github.com/mgechev/revive",
 		},
 		{
-			app:  App{Go: &AppConfigGo{PackageName: "tool", Version: "v1"}},
+			want: "",
+			app:  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Go: &AppConfigGo{Runtime: "", LockFile: "", PackageName: "tool", Version: "v1"}},
 			name: "go path that is not a module path",
 		},
 		{
-			app:  App{Jvm: &AppConfigJVM{JarURL: "https://repo1.maven.org/maven2/com/pinterest/ktlint/ktlint-cli/1.3.1/ktlint-cli-1.3.1-all.jar"}},
+			app:  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &AppConfigJVM{JarHash: "", Version: "", Runtime: "", MainClass: "", JarURL: "https://repo1.maven.org/maven2/com/pinterest/ktlint/ktlint-cli/1.3.1/ktlint-cli-1.3.1-all.jar"}},
 			name: "maven central jar",
 			want: "https://central.sonatype.com/artifact/com.pinterest.ktlint/ktlint-cli",
 		},
 		{
-			app:  App{Jvm: &AppConfigJVM{JarURL: "https://github.com/facebook/ktfmt/releases/download/v0.51/ktfmt-0.51-jar-with-dependencies.jar"}},
+			app:  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &AppConfigJVM{JarHash: "", Version: "", Runtime: "", MainClass: "", JarURL: "https://github.com/facebook/ktfmt/releases/download/v0.51/ktfmt-0.51-jar-with-dependencies.jar"}},
 			name: "forge-hosted jar",
 			want: "https://github.com/facebook/ktfmt",
 		},
 		{
-			app:  App{Jvm: &AppConfigJVM{JarURL: "https://example.com/artifacts/tool.jar"}},
+			want: "",
+			app:  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Jvm: &AppConfigJVM{JarHash: "", Version: "", Runtime: "", MainClass: "", JarURL: "https://example.com/artifacts/tool.jar"}},
 			name: "jar from an unknown host",
 		},
 		{
-			app:  App{Shell: &AppConfigShell{Name: "git"}},
+			want: "",
+			app:  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &AppConfigShell{Args: nil, Name: "git"}},
 			name: "shell app",
 		},
 		{
-			app:  App{},
+			want: "",
+			app:  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil},
 			name: "app with no kind",
 		},
 	} {

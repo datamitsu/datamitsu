@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 func TestWorkerPoolLimiting(t *testing.T) {
@@ -23,11 +24,36 @@ func TestWorkerPoolLimiting(t *testing.T) {
 	tasks := make([]Task, 10)
 	for i := range 10 {
 		tasks[i] = Task{
-			ToolName:  "test",
-			Operation: config.OpLint,
+			perFileCache: "",
+			inherited:    zerovalue_toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			Files:        nil,
+			ProjectPath:  "",
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     "test",
+			Operation:    config.OpLint,
 			OpConfig: config.ToolOperation{
-				App:   "test",
-				Scope: config.ToolScopeRepository,
+				Args:              nil,
+				Arity:             "",
+				Granularity:       "",
+				Globs:             nil,
+				ExcludeGlobs:      nil,
+				Priority:          0,
+				Cache:             nil,
+				InvalidateOn:      nil,
+				Env:               nil,
+				InheritEnv:        nil,
+				FailOn:            "",
+				Input:             "",
+				LSP:               nil,
+				Output:            "",
+				ManagedConfigRefs: nil,
+				App:               "test",
+				Scope:             config.ToolScopeRepository,
 			},
 		}
 	}
@@ -51,9 +77,35 @@ func TestWorkerPoolLimiting(t *testing.T) {
 		concurrentCount.Add(-1)
 
 		return ExecutionResult{
-			ToolName: task.ToolName,
-			Success:  true,
-			Duration: 10,
+			TaskID:           "",
+			Output:           "",
+			Error:            nil,
+			Command:          "",
+			ExitCode:         0,
+			WorkingDir:       "",
+			RelativeDir:      "",
+			Scope:            "",
+			Batch:            false,
+			Cancelled:        false,
+			FailureReason:    0,
+			StartedAt:        time.Time{},
+			EndedAt:          time.Time{},
+			FilesNotRun:      0,
+			UnparsedFailures: nil,
+			CapturedStdout:   "",
+			Diagnostics:      nil,
+			Processes:        nil,
+			ParseFailed:      false,
+			FailOn:           "",
+			Files:            nil,
+			FileResults:      nil,
+			Cached:           false,
+			WholeUnit:        false,
+			UnitDir:          "",
+			cached:           nil,
+			ToolName:         task.ToolName,
+			Success:          true,
+			Duration:         10,
 		}
 	}
 
@@ -123,11 +175,36 @@ func TestWorkerPoolWithDifferentSizes(t *testing.T) {
 			tasks := make([]Task, tt.taskCount)
 			for i := range tt.taskCount {
 				tasks[i] = Task{
-					ToolName:  "test",
-					Operation: config.OpLint,
+					perFileCache: "",
+					inherited:    zerovalue_toolenv.Inherited{},
+					ID:           "",
+					Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+					Files:        nil,
+					ProjectPath:  "",
+					UnitDir:      "",
+					UnitMembers:  nil,
+					UnitGuards:   nil,
+					Coverage:     "",
+					ToolName:     "test",
+					Operation:    config.OpLint,
 					OpConfig: config.ToolOperation{
-						App:   "test",
-						Scope: config.ToolScopeRepository,
+						Args:              nil,
+						Arity:             "",
+						Granularity:       "",
+						Globs:             nil,
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						Env:               nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						App:               "test",
+						Scope:             config.ToolScopeRepository,
 					},
 				}
 			}
@@ -145,9 +222,35 @@ func TestWorkerPoolWithDifferentSizes(t *testing.T) {
 				concurrentCount.Add(-1)
 
 				return ExecutionResult{
-					ToolName: task.ToolName,
-					Success:  true,
-					Duration: 5,
+					TaskID:           "",
+					Output:           "",
+					Error:            nil,
+					Command:          "",
+					ExitCode:         0,
+					WorkingDir:       "",
+					RelativeDir:      "",
+					Scope:            "",
+					Batch:            false,
+					Cancelled:        false,
+					FailureReason:    0,
+					StartedAt:        time.Time{},
+					EndedAt:          time.Time{},
+					FilesNotRun:      0,
+					UnparsedFailures: nil,
+					CapturedStdout:   "",
+					Diagnostics:      nil,
+					Processes:        nil,
+					ParseFailed:      false,
+					FailOn:           "",
+					Files:            nil,
+					FileResults:      nil,
+					Cached:           false,
+					WholeUnit:        false,
+					UnitDir:          "",
+					cached:           nil,
+					ToolName:         task.ToolName,
+					Success:          true,
+					Duration:         5,
 				}
 			}
 

@@ -156,11 +156,11 @@ func TestNodeArchiveSpecs_FilenamesAndPaths(t *testing.T) {
 }
 
 func TestNodeBinaryPath(t *testing.T) {
-	xz := nodeArchiveSpec{filename: "node-v26.2.0-linux-x64.tar.xz", contentType: binmanager.BinContentTypeTarXz}
+	xz := nodeArchiveSpec{os: "", arch: "", libc: "", musl: false, filename: "node-v26.2.0-linux-x64.tar.xz", contentType: binmanager.BinContentTypeTarXz}
 	if got := nodeBinaryPath(xz); got != "node-v26.2.0-linux-x64/bin/node" {
 		t.Errorf("tar.xz binaryPath = %q", got)
 	}
-	zip := nodeArchiveSpec{filename: "node-v26.2.0-win-x64.zip", contentType: binmanager.BinContentTypeZip}
+	zip := nodeArchiveSpec{os: "", arch: "", libc: "", musl: false, filename: "node-v26.2.0-win-x64.zip", contentType: binmanager.BinContentTypeZip}
 	if got := nodeBinaryPath(zip); got != "node-v26.2.0-win-x64/node.exe" {
 		t.Errorf("zip binaryPath = %q", got)
 	}
@@ -194,6 +194,8 @@ func TestBuildNodeBinaries_AllTuples(t *testing.T) {
 	all := mergeShasums(dist, musl)
 
 	cfg := nodePullConfig{
+		keyring:     nil,
+		client:      nil,
 		version:     nodeTestVersion,
 		distBaseURL: nodeDistBaseURL,
 		muslBaseURL: nodeMuslBaseURL,
@@ -244,7 +246,7 @@ func TestBuildNodeBinaries_MissingMuslAsset(t *testing.T) {
 	// Drop one musl asset → should be a hard error (no hash, no entry).
 	delete(musl, "node-v"+nodeTestVersion+"-linux-x64-musl.tar.xz")
 
-	cfg := nodePullConfig{version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
+	cfg := nodePullConfig{keyring: nil, client: nil, version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
 	if _, err := buildNodeBinaries(cfg, dist, musl); err == nil {
 		t.Fatal("expected error for missing musl asset hash")
 	}
@@ -274,7 +276,7 @@ func TestBuildNodeBinaries_FailsClosedOnDroppedHash(t *testing.T) {
 		t.Fatalf("test setup: expected %s to be dropped by parseSHASUMS", dropped)
 	}
 
-	cfg := nodePullConfig{version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
+	cfg := nodePullConfig{keyring: nil, client: nil, version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
 	_, err := buildNodeBinaries(cfg, parsedDist, musl)
 	if err == nil {
 		t.Fatal("expected hard error when a required archive hash is absent from the SHASUMS map")
@@ -288,7 +290,7 @@ func TestBuildNodeBinaries_InvalidHash(t *testing.T) {
 	dist, musl := buildNodeTestShasums(nodeTestVersion)
 	dist["node-v"+nodeTestVersion+"-linux-x64.tar.xz"] = "not-a-valid-sha256"
 
-	cfg := nodePullConfig{version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
+	cfg := nodePullConfig{keyring: nil, client: nil, version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
 	if _, err := buildNodeBinaries(cfg, dist, musl); err == nil {
 		t.Fatal("expected error for malformed SHA-256 hash")
 	}
@@ -322,7 +324,7 @@ func TestBuildNodeBinaries_UppercaseHashNormalizedAndValid(t *testing.T) {
 	dist, musl := buildUppercaseNodeShasums(nodeTestVersion)
 	all := mergeShasums(dist, musl)
 
-	cfg := nodePullConfig{version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
+	cfg := nodePullConfig{keyring: nil, client: nil, version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
 	binaries, err := buildNodeBinaries(cfg, dist, musl)
 	if err != nil {
 		t.Fatalf("buildNodeBinaries: %v", err)
@@ -347,8 +349,14 @@ func TestBuildNodeBinaries_UppercaseHashNormalizedAndValid(t *testing.T) {
 	// The whole runtime entry must pass config validation (no "must be 64
 	// lowercase hex" errors).
 	rt := config.RuntimeConfig{
-		Kind: config.RuntimeKindNode,
-		Mode: config.RuntimeModeManaged,
+		System: nil,
+		Bun:    nil,
+		UV:     nil,
+		JVM:    nil,
+		Go:     nil,
+		PNPM:   nil,
+		Kind:   config.RuntimeKindNode,
+		Mode:   config.RuntimeModeManaged,
 		Node: &config.RuntimeConfigNode{
 			NodeVersion: nodeTestVersion,
 			PNPMRuntime: "pnpm",
@@ -367,7 +375,7 @@ func TestBuildNodeBinaries_InvalidUppercaseHashRejected(t *testing.T) {
 	dist, musl := buildNodeTestShasums(nodeTestVersion)
 	dist["node-v"+nodeTestVersion+"-linux-x64.tar.xz"] = strings.Repeat("G", 64)
 
-	cfg := nodePullConfig{version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
+	cfg := nodePullConfig{keyring: nil, client: nil, version: nodeTestVersion, distBaseURL: nodeDistBaseURL, muslBaseURL: nodeMuslBaseURL}
 	if _, err := buildNodeBinaries(cfg, dist, musl); err == nil {
 		t.Fatal("expected error for 64-char non-hex hash even after lowercasing")
 	}
@@ -386,7 +394,7 @@ func TestDetectNodeBinaries_MockServers(t *testing.T) {
 		distBaseURL: distBase,
 		muslBaseURL: muslBase,
 		keyring:     openpgp.EntityList{signer},
-		client:      &http.Client{},
+		client:      &http.Client{Transport: nil, CheckRedirect: nil, Jar: nil, Timeout: 0},
 	}
 
 	binaries, err := detectNodeBinaries(context.Background(), cfg)
@@ -432,7 +440,7 @@ func TestDetectNodeBinaries_BadSignature(t *testing.T) {
 		distBaseURL: distBase,
 		muslBaseURL: muslBase,
 		keyring:     openpgp.EntityList{stranger},
-		client:      &http.Client{},
+		client:      &http.Client{Transport: nil, CheckRedirect: nil, Jar: nil, Timeout: 0},
 	}
 
 	if _, err := detectNodeBinaries(context.Background(), cfg); err == nil {
@@ -453,7 +461,7 @@ func TestDetectNodeBinaries_MissingMuslAssetFromServer(t *testing.T) {
 		distBaseURL: distBase,
 		muslBaseURL: muslBase,
 		keyring:     openpgp.EntityList{signer},
-		client:      &http.Client{},
+		client:      &http.Client{Transport: nil, CheckRedirect: nil, Jar: nil, Timeout: 0},
 	}
 
 	if _, err := detectNodeBinaries(context.Background(), cfg); err == nil {
@@ -487,7 +495,15 @@ func TestBuildNodeRuntimeJSON(t *testing.T) {
 
 func TestRuntimeVersion_Node(t *testing.T) {
 	r := &RuntimeJSON{
-		Node: &NodeConfigJSON{NodeVersion: "26.2.0", PNPMRuntime: defaultPNPMRuntimeName},
+		Kind:    "",
+		Mode:    "",
+		Managed: nil,
+		Bun:     nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
+		PNPM:    nil,
+		Node:    &NodeConfigJSON{NodeVersion: "26.2.0", PNPMRuntime: defaultPNPMRuntimeName},
 	}
 	v := runtimeVersion(r)
 	if !strings.Contains(v, "node=26.2.0") {

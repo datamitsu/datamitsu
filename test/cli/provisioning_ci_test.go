@@ -43,7 +43,11 @@ kind:"go",mode:"managed",go:{goVersion:"1.23"},managed:{binaries:{%q:{%q:{glibc:
 }}});`, server.URL, digest.SHA256Of(payload).String(), "runtime-probe"+exeSuffix(), tc.runtimeName, runtime.GOOS, runtime.GOARCH)
 			configPath := project.WriteFile("runtime.config.js", config)
 			args := runtimeArgs(project, configPath, "run", tc.runtimeName, "--", "--record", filepath.Join(project.Dir, "run.json"))
-			result := clitest.Run(t, clitest.RunOptions{Dir: project.Dir, CacheDir: t.TempDir(), Env: []string{"DATAMITSU_OFFLINE=", tc.variable}}, args...)
+			result := clitest.Run(t, clitest.RunOptions{
+				Stdin:   "",
+				Timeout: 0,
+				Dir:     project.Dir, CacheDir: t.TempDir(), Env: []string{"DATAMITSU_OFFLINE=", tc.variable},
+			}, args...)
 			if result.ExitCode != 0 || result.Stdout != "probe stdout\n" || requests.Load() != 1 {
 				t.Fatalf("cold runtime did not execute: requests=%d, result=%+v", requests.Load(), result)
 			}

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/digest"
 
@@ -48,10 +49,12 @@ type tarEntry struct {
 	mode     int64
 }
 
-func dirEntry(name string) tarEntry { return tarEntry{name: name, typeflag: tar.TypeDir, mode: 0o755} }
+func dirEntry(name string) tarEntry {
+	return tarEntry{content: nil, linkname: "", name: name, typeflag: tar.TypeDir, mode: 0o755}
+}
 
 func fileEntry(name string, content []byte) tarEntry {
-	return tarEntry{name: name, typeflag: tar.TypeReg, content: content, mode: 0o755}
+	return tarEntry{linkname: "", name: name, typeflag: tar.TypeReg, content: content, mode: 0o755}
 }
 
 // buildLayer produces a gzip-compressed tar layer from entries.
@@ -62,11 +65,23 @@ func buildLayer(t *testing.T, entries []tarEntry) []byte {
 	tw := tar.NewWriter(gz)
 	for _, e := range entries {
 		hdr := &tar.Header{
-			Name:     e.name,
-			Typeflag: e.typeflag,
-			Mode:     e.mode,
-			Linkname: e.linkname,
-			Size:     int64(len(e.content)),
+			Uid:        0,
+			Gid:        0,
+			Uname:      "",
+			Gname:      "",
+			ModTime:    zerovalue_time.Time{},
+			AccessTime: zerovalue_time.Time{},
+			ChangeTime: zerovalue_time.Time{},
+			Devmajor:   0,
+			Devminor:   0,
+
+			PAXRecords: nil,
+			Format:     0,
+			Name:       e.name,
+			Typeflag:   e.typeflag,
+			Mode:       e.mode,
+			Linkname:   e.linkname,
+			Size:       int64(len(e.content)),
 		}
 		if hdr.Mode == 0 {
 			hdr.Mode = 0o644
@@ -144,9 +159,11 @@ type fakeSource struct {
 
 func newFakeSource() *fakeSource {
 	return &fakeSource{
-		manifests:  make(map[string][]byte),
-		blobs:      make(map[string][]byte),
-		blobErrors: make(map[string]error),
+		manifestCalls: atomic.Int64{},
+		blobCalls:     atomic.Int64{},
+		manifests:     make(map[string][]byte),
+		blobs:         make(map[string][]byte),
+		blobErrors:    make(map[string]error),
 	}
 }
 
@@ -187,9 +204,14 @@ func (s *fakeSource) addLayer(blob []byte, subtree string) ocispec.Descriptor {
 	dgst := sha256DigestOf(blob)
 	s.blobs[dgst] = blob
 	desc := ocispec.Descriptor{
-		MediaType: mediaTypeOCILayerGzip,
-		Digest:    godigest.Digest(dgst),
-		Size:      int64(len(blob)),
+		URLs:         nil,
+		Annotations:  nil,
+		Data:         nil,
+		Platform:     nil,
+		ArtifactType: "",
+		MediaType:    mediaTypeOCILayerGzip,
+		Digest:       godigest.Digest(dgst),
+		Size:         int64(len(blob)),
 	}
 	if subtree != "" {
 		desc.Annotations = map[string]string{AnnotationSubtree: subtree}
@@ -205,9 +227,13 @@ func (s *fakeSource) addManifest(t *testing.T, layers []ocispec.Descriptor, anno
 		annotations = map[string]string{AnnotationStoreRoot: testBuilderRoot}
 	}
 	manifest := ocispec.Manifest{
-		MediaType:   ocispec.MediaTypeImageManifest,
-		Layers:      layers,
-		Annotations: annotations,
+		SchemaVersion: 0,
+		ArtifactType:  "",
+		Config:        ocispec.Descriptor{MediaType: "", Digest: "", Size: 0, URLs: nil, Annotations: nil, Data: nil, Platform: nil, ArtifactType: ""},
+		Subject:       nil,
+		MediaType:     ocispec.MediaTypeImageManifest,
+		Layers:        layers,
+		Annotations:   annotations,
 	}
 	data, err := json.Marshal(manifest)
 	if err != nil {
@@ -233,12 +259,35 @@ func testBinaryConfig(t *testing.T, payloads map[string][]byte) (*config.Config,
 	apps := make(binmanager.MapOfApps)
 	for name, payload := range payloads {
 		apps[name] = binmanager.App{
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Binary: &binmanager.AppConfigBinary{
+				Version: "",
 				Binaries: binmanager.MapOfBinaries{
 					syslist.OsType(host.OS): {
 						syslist.ArchType(host.Arch): {
 							string(host.Libc): binmanager.BinaryOsArchInfo{
+								Auth:        nil,
+								BinaryPath:  nil,
+								ExtractDir:  false,
 								URL:         "https://example.invalid/" + name,
 								Hash:        sha256Hex(payload),
 								ContentType: binmanager.BinContentTypeBinary,
@@ -249,7 +298,7 @@ func testBinaryConfig(t *testing.T, payloads map[string][]byte) (*config.Config,
 			},
 		}
 	}
-	cfg := &config.Config{Apps: apps}
+	cfg := &config.Config{Name: "", Version: "", Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Apps: apps}
 
 	storeRoot := env.GetStorePath()
 	bm := binmanager.New(cfg.Apps, nil, nil)
@@ -288,7 +337,7 @@ func TestSeed_FullPullPlacesBinaryAndWritesMarker(t *testing.T) {
 	}
 	digest := src.addManifest(t, layers, nil)
 
-	changed, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	changed, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err != nil {
 		t.Fatalf("seedFrom: %v", err)
 	}
@@ -311,7 +360,7 @@ func TestSeed_FullPullPlacesBinaryAndWritesMarker(t *testing.T) {
 	// Repeat pull: the marker short-circuits before any source access.
 	src.manifestCalls.Store(0)
 	src.blobCalls.Store(0)
-	changed, err = seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	changed, err = seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err != nil {
 		t.Fatalf("repeat seedFrom: %v", err)
 	}
@@ -339,7 +388,7 @@ func TestSeed_DemandDrivenPullsOnlyNeededLayers(t *testing.T) {
 	}
 	digest := src.addManifest(t, layers, nil)
 
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: []string{"tool-one"}}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{NeededRuntimes: nil, RequireRequested: false, Needed: []string{"tool-one"}}); err != nil {
 		t.Fatalf("seedFrom: %v", err)
 	}
 
@@ -359,7 +408,7 @@ func TestSeed_DemandDrivenPullsOnlyNeededLayers(t *testing.T) {
 	// All needed subtrees present: the repeat run is a zero-network no-op.
 	src.manifestCalls.Store(0)
 	src.blobCalls.Store(0)
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: []string{"tool-one"}}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{NeededRuntimes: nil, RequireRequested: false, Needed: []string{"tool-one"}}); err != nil {
 		t.Fatalf("repeat seedFrom: %v", err)
 	}
 	if src.manifestCalls.Load() != 0 || src.blobCalls.Load() != 0 {
@@ -386,7 +435,7 @@ func TestSeed_WarmSubtreeSkipsBlobDownload(t *testing.T) {
 		src.addLayer(binaryLayer(t, subtrees["tool"], payload), subtrees["tool"]),
 	}, nil)
 
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("seedFrom: %v", err)
 	}
 	if src.blobCalls.Load() != 0 {
@@ -412,7 +461,7 @@ func TestSeed_StaleMarkerRePullsInsteadOfSkipping(t *testing.T) {
 		src.addLayer(binaryLayer(t, subtrees["tool"], payload), subtrees["tool"]),
 	}, nil)
 
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("first seedFrom: %v", err)
 	}
 	firstPull := src.blobCalls.Load()
@@ -421,7 +470,7 @@ func TestSeed_StaleMarkerRePullsInsteadOfSkipping(t *testing.T) {
 	}
 
 	// A second run over an intact store is still the cheap no-op it was.
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("second seedFrom: %v", err)
 	}
 	if src.blobCalls.Load() != firstPull {
@@ -437,7 +486,7 @@ func TestSeed_StaleMarkerRePullsInsteadOfSkipping(t *testing.T) {
 		t.Fatal("the marker should have survived removing the content")
 	}
 
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("third seedFrom: %v", err)
 	}
 	if src.blobCalls.Load() <= firstPull {
@@ -459,7 +508,7 @@ func TestSeed_ReVerificationCatchesSwappedBinary(t *testing.T) {
 		src.addLayer(binaryLayer(t, subtrees["tool"], swapped), subtrees["tool"]),
 	}, nil)
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil {
 		t.Fatal("expected re-verification failure, got nil")
 	}
@@ -479,13 +528,13 @@ func TestSeed_ReVerificationCatchesSwappedBinary(t *testing.T) {
 
 func TestSeed_MalformedSubtreeAnnotationIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	src := newFakeSource()
 
 	for _, bad := range []string{"../evil", "/abs/path", ".bin/../../evil", "outside/root"} {
 		blob := buildLayer(t, []tarEntry{fileEntry("dm/store/x", []byte("x"))})
 		digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(blob, bad)}, nil)
-		_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+		_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 		if err == nil {
 			t.Fatalf("subtree %q: expected fatal error, got nil", bad)
 		}
@@ -510,7 +559,7 @@ func TestSeed_EntryOutsideDeclaredSubtreeIsFatal(t *testing.T) {
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(evil, subtrees["tool"])}, nil)
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil {
 		t.Fatal("expected allowlist violation, got nil")
 	}
@@ -524,7 +573,7 @@ func TestSeed_EntryOutsideDeclaredSubtreeIsFatal(t *testing.T) {
 
 func TestSeed_RuntimeAppRelocation(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/uv/myapp/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
@@ -535,18 +584,20 @@ func TestSeed_RuntimeAppRelocation(t *testing.T) {
 		dirEntry(prefix + "/.venv/bin/"),
 		fileEntry(prefix+"/.venv/pyvenv.cfg", []byte(pyvenv)),
 		{
-			name: prefix + "/.venv/bin/python", typeflag: tar.TypeSymlink,
+			content: nil,
+			mode:    0,
+			name:    prefix + "/.venv/bin/python", typeflag: tar.TypeSymlink,
 			linkname: testBuilderRoot + "/.runtime-data/uv/" + strings.Repeat("a", 32) + "/python/bin/python3",
 		},
 		fileEntry(prefix+"/.venv/bin/mytool", []byte(script)),
 		fileEntry(prefix+"/data/original.txt", []byte("shared content")),
-		{name: prefix + "/data/link.txt", typeflag: tar.TypeLink, linkname: prefix + "/data/original.txt"},
-		{name: prefix + "/.venv/relative", typeflag: tar.TypeSymlink, linkname: "bin/python"},
+		{content: nil, mode: 0, name: prefix + "/data/link.txt", typeflag: tar.TypeLink, linkname: prefix + "/data/original.txt"},
+		{content: nil, mode: 0, name: prefix + "/.venv/relative", typeflag: tar.TypeSymlink, linkname: "bin/python"},
 	})
 
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("seedFrom: %v", err)
 	}
 
@@ -610,20 +661,22 @@ func TestSeed_RuntimeAppRelocation(t *testing.T) {
 
 func TestSeed_HardlinkOutsideSubtreeIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/node/myapp/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
 	layer := subtreeLayer(t, subtree, []tarEntry{
 		{
-			name: prefix + "/stolen", typeflag: tar.TypeLink,
+			content: nil,
+			mode:    0,
+			name:    prefix + "/stolen", typeflag: tar.TypeLink,
 			linkname: strings.TrimPrefix(testBuilderRoot, "/") + "/.pnpm-store/v3/files/ab/cdef",
 		},
 	})
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil {
 		t.Fatal("expected hardlink-outside-subtree error, got nil")
 	}
@@ -646,7 +699,7 @@ func TestSeed_PartialFailureWritesNoMarker(t *testing.T) {
 	src.blobErrors[badDesc.Digest.String()] = errors.New("network exploded")
 	digest := src.addManifest(t, []ocispec.Descriptor{okDesc, badDesc}, nil)
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil {
 		t.Fatal("expected partial failure, got nil")
 	}
@@ -657,13 +710,13 @@ func TestSeed_PartialFailureWritesNoMarker(t *testing.T) {
 
 func TestSeed_MissingStoreRootAnnotationIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	src := newFakeSource()
 	blob := buildLayer(t, []tarEntry{fileEntry("dm/store/.bin/x/h", []byte("x"))})
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(blob, ".bin/x/h")},
 		map[string]string{"some.other": "annotation"})
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil || !IsFatalSeedError(err) {
 		t.Fatalf("expected fatal missing store-root error, got %v", err)
 	}
@@ -671,14 +724,14 @@ func TestSeed_MissingStoreRootAnnotationIsFatal(t *testing.T) {
 
 func TestSeed_UnknownLayerMediaTypeIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	src := newFakeSource()
 	blob := buildLayer(t, []tarEntry{fileEntry("dm/store/.bin/x/h", []byte("x"))})
 	desc := src.addLayer(blob, ".bin/x/h")
 	desc.MediaType = "application/vnd.oci.image.layer.v1.tar+xz"
 	digest := src.addManifest(t, []ocispec.Descriptor{desc}, nil)
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil || !IsFatalSeedError(err) {
 		t.Fatalf("expected fatal media-type error, got %v", err)
 	}
@@ -686,12 +739,12 @@ func TestSeed_UnknownLayerMediaTypeIsFatal(t *testing.T) {
 
 func TestSeed_SignerIsUnsupported(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	src := newFakeSource()
 	digest := src.addManifest(t, nil, nil)
 
 	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest,
-		&config.OCISigner{Identity: "id", Issuer: "iss"}, Options{})
+		&config.OCISigner{Identity: "id", Issuer: "iss"}, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil || !IsFatalSeedError(err) {
 		t.Fatalf("expected fatal signer-unsupported error, got %v", err)
 	}
@@ -700,9 +753,14 @@ func TestSeed_SignerIsUnsupported(t *testing.T) {
 func TestSelectDescriptor_LibcDimension(t *testing.T) {
 	manifestDesc := func(os, arch, libc string) ocispec.Descriptor {
 		desc := ocispec.Descriptor{
-			MediaType: ocispec.MediaTypeImageManifest,
-			Digest:    godigest.Digest(sha256DigestOf([]byte(os + arch + libc))),
-			Platform:  &ocispec.Platform{OS: os, Architecture: arch},
+			Size:         0,
+			URLs:         nil,
+			Annotations:  nil,
+			Data:         nil,
+			ArtifactType: "",
+			MediaType:    ocispec.MediaTypeImageManifest,
+			Digest:       godigest.Digest(sha256DigestOf([]byte(os + arch + libc))),
+			Platform:     &ocispec.Platform{OSVersion: "", OSFeatures: nil, Variant: "", OS: os, Architecture: arch},
 		}
 		if libc != "" {
 			desc.Annotations = map[string]string{AnnotationLibc: libc}
@@ -710,7 +768,11 @@ func TestSelectDescriptor_LibcDimension(t *testing.T) {
 		return desc
 	}
 	idx := ocispec.Index{
-		MediaType: ocispec.MediaTypeImageIndex,
+		SchemaVersion: 0,
+		ArtifactType:  "",
+		Subject:       nil,
+		Annotations:   nil,
+		MediaType:     ocispec.MediaTypeImageIndex,
 		Manifests: []ocispec.Descriptor{
 			manifestDesc("unknown", "unknown", ""), // buildx attestation
 			manifestDesc("linux", "amd64", "glibc"),
@@ -782,16 +844,25 @@ func TestSeed_IndexSelectionEndToEnd(t *testing.T) {
 	}, nil)
 
 	childDesc := ocispec.Descriptor{
-		MediaType: ocispec.MediaTypeImageManifest,
-		Digest:    godigest.Digest(childDigest),
-		Platform:  &ocispec.Platform{OS: host.OS, Architecture: host.Arch},
+		Size:         0,
+		URLs:         nil,
+		Annotations:  nil,
+		Data:         nil,
+		ArtifactType: "",
+		MediaType:    ocispec.MediaTypeImageManifest,
+		Digest:       godigest.Digest(childDigest),
+		Platform:     &ocispec.Platform{OSVersion: "", OSFeatures: nil, Variant: "", OS: host.OS, Architecture: host.Arch},
 	}
 	if host.OS == "linux" {
 		childDesc.Annotations = map[string]string{AnnotationLibc: string(host.Libc)}
 	}
 	idx := ocispec.Index{
-		MediaType: ocispec.MediaTypeImageIndex,
-		Manifests: []ocispec.Descriptor{childDesc},
+		SchemaVersion: 0,
+		ArtifactType:  "",
+		Subject:       nil,
+		Annotations:   nil,
+		MediaType:     ocispec.MediaTypeImageIndex,
+		Manifests:     []ocispec.Descriptor{childDesc},
 	}
 	idxData, err := json.Marshal(idx)
 	if err != nil {
@@ -800,7 +871,7 @@ func TestSeed_IndexSelectionEndToEnd(t *testing.T) {
 	idxDigest := sha256DigestOf(idxData)
 	src.manifests[idxDigest] = idxData
 
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", idxDigest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", idxDigest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("seedFrom via index: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(storeRoot, filepath.FromSlash(subtrees["tool"]))); err != nil {
@@ -814,18 +885,27 @@ func TestSeed_NoPlatformMatchSurfacesTypedError(t *testing.T) {
 
 	src := newFakeSource()
 	idx := ocispec.Index{
-		MediaType: ocispec.MediaTypeImageIndex,
+		SchemaVersion: 0,
+		ArtifactType:  "",
+		Subject:       nil,
+		Annotations:   nil,
+		MediaType:     ocispec.MediaTypeImageIndex,
 		Manifests: []ocispec.Descriptor{{
-			MediaType: ocispec.MediaTypeImageManifest,
-			Digest:    godigest.Digest(sha256DigestOf([]byte("child"))),
-			Platform:  &ocispec.Platform{OS: "plan9", Architecture: "mips"},
+			Size:         0,
+			URLs:         nil,
+			Annotations:  nil,
+			Data:         nil,
+			ArtifactType: "",
+			MediaType:    ocispec.MediaTypeImageManifest,
+			Digest:       godigest.Digest(sha256DigestOf([]byte("child"))),
+			Platform:     &ocispec.Platform{OSVersion: "", OSFeatures: nil, Variant: "", OS: "plan9", Architecture: "mips"},
 		}},
 	}
 	idxData, _ := json.Marshal(idx)
 	idxDigest := sha256DigestOf(idxData)
 	src.manifests[idxDigest] = idxData
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", idxDigest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", idxDigest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if !errors.Is(err, ErrNoPlatformMatch) {
 		t.Fatalf("err = %v, want ErrNoPlatformMatch", err)
 	}
@@ -841,15 +921,32 @@ func TestAutoSeed_Gates(t *testing.T) {
 		if _, err := AutoSeed(context.Background(), nil, []string{"x"}, nil); err != nil {
 			t.Errorf("AutoSeed(nil cfg) = %v", err)
 		}
-		if _, err := AutoSeed(context.Background(), &config.Config{}, []string{"x"}, nil); err != nil {
+		if _, err := AutoSeed(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, []string{"x"}, nil); err != nil {
 			t.Errorf("AutoSeed(no oci) = %v", err)
 		}
 	})
 
-	cfgWithOCI := &config.Config{OCI: &config.OCIRef{
-		Ref:    "registry.invalid/owner/repo",
-		Digest: "sha256:" + strings.Repeat("ab", 32),
-	}}
+	cfgWithOCI := &config.Config{
+		Name:           "",
+		Version:        "",
+		Apps:           nil,
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		Parsers:        nil,
+		Lsp:            nil, OCI: &config.OCIRef{
+			Signer: nil,
+			Ref:    "registry.invalid/owner/repo",
+			Digest: "sha256:" + strings.Repeat("ab", 32),
+		},
+	}
 
 	t.Run("DATAMITSU_NO_OCI disables seeding", func(t *testing.T) {
 		t.Setenv("DATAMITSU_NO_OCI", "1")
@@ -883,10 +980,10 @@ func TestAutoSeed_Gates(t *testing.T) {
 func TestSeedBundle_OfflineExplicitFails(t *testing.T) {
 	testStore(t)
 	t.Setenv("DATAMITSU_OFFLINE", "1")
-	cfg := &config.Config{}
-	ref := &config.OCIRef{Ref: "registry.invalid/owner/repo", Digest: "sha256:" + strings.Repeat("ab", 32)}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	ref := &config.OCIRef{Signer: nil, Ref: "registry.invalid/owner/repo", Digest: "sha256:" + strings.Repeat("ab", 32)}
 
-	err := SeedBundle(context.Background(), cfg, ref, Options{})
+	err := SeedBundle(context.Background(), cfg, ref, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil {
 		t.Fatal("expected offline refusal, got nil")
 	}
@@ -918,7 +1015,7 @@ func TestSeedFromLayout_EndToEnd(t *testing.T) {
 	writeBlob(digest, src.manifests[digest])
 	writeBlob(desc.Digest.String(), src.blobs[desc.Digest.String()])
 
-	if err := SeedFromLayout(context.Background(), cfg, layoutDir, digest, nil, Options{}); err != nil {
+	if err := SeedFromLayout(context.Background(), cfg, layoutDir, digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("SeedFromLayout: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(storeRoot, filepath.FromSlash(subtrees["tool"])))
@@ -952,7 +1049,7 @@ func TestSeedFromLayout_TamperedBlobFails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := SeedFromLayout(context.Background(), cfg, layoutDir, digest, nil, Options{})
+	err := SeedFromLayout(context.Background(), cfg, layoutDir, digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil {
 		t.Fatal("expected tampered-blob failure, got nil")
 	}
@@ -989,18 +1086,18 @@ func TestValidateSubtreeTable(t *testing.T) {
 
 func TestSeed_AbsoluteSymlinkOutsideStoreRootIsSkipped(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/uv/skipped-link/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
 	layer := subtreeLayer(t, subtree, []tarEntry{
 		fileEntry(prefix+"/keep.txt", []byte("kept")),
-		{name: prefix + "/escape", typeflag: tar.TypeSymlink, linkname: "/etc/passwd"},
+		{content: nil, mode: 0, name: prefix + "/escape", typeflag: tar.TypeSymlink, linkname: "/etc/passwd"},
 	})
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
 
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("seedFrom: %v", err)
 	}
 	root := filepath.Join(storeRoot, filepath.FromSlash(subtree))
@@ -1014,20 +1111,22 @@ func TestSeed_AbsoluteSymlinkOutsideStoreRootIsSkipped(t *testing.T) {
 
 func TestSeed_RelocatedSymlinkTraversalIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/uv/evil/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
 	layer := subtreeLayer(t, subtree, []tarEntry{
 		{
-			name: prefix + "/sneaky", typeflag: tar.TypeSymlink,
+			content: nil,
+			mode:    0,
+			name:    prefix + "/sneaky", typeflag: tar.TypeSymlink,
 			linkname: testBuilderRoot + "/../../etc/passwd",
 		},
 	})
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil {
 		t.Fatal("expected traversal rejection, got nil")
 	}
@@ -1038,18 +1137,18 @@ func TestSeed_RelocatedSymlinkTraversalIsFatal(t *testing.T) {
 
 func TestSeed_RelativeSymlinkEscapingSubtreeIsSkipped(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/uv/relative-escape/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
 	layer := subtreeLayer(t, subtree, []tarEntry{
 		fileEntry(prefix+"/keep.txt", []byte("kept")),
-		{name: prefix + "/up", typeflag: tar.TypeSymlink, linkname: "../../../../outside"},
+		{content: nil, mode: 0, name: prefix + "/up", typeflag: tar.TypeSymlink, linkname: "../../../../outside"},
 	})
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
 
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("seedFrom: %v", err)
 	}
 	root := filepath.Join(storeRoot, filepath.FromSlash(subtree))
@@ -1060,19 +1159,19 @@ func TestSeed_RelativeSymlinkEscapingSubtreeIsSkipped(t *testing.T) {
 
 func TestSeed_HardlinkBeforeTargetIsRestored(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/node/ordering/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
 	// The hardlink entry precedes its target — legal in the tar format.
 	layer := subtreeLayer(t, subtree, []tarEntry{
-		{name: prefix + "/link.txt", typeflag: tar.TypeLink, linkname: prefix + "/original.txt"},
+		{content: nil, mode: 0, name: prefix + "/link.txt", typeflag: tar.TypeLink, linkname: prefix + "/original.txt"},
 		fileEntry(prefix+"/original.txt", []byte("content")),
 	})
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
 
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("seedFrom: %v", err)
 	}
 	root := filepath.Join(storeRoot, filepath.FromSlash(subtree))
@@ -1099,6 +1198,9 @@ func testUVConfig(t *testing.T) (*config.Config, map[string]string) {
 		syslist.OsType(host.OS): {
 			syslist.ArchType(host.Arch): {
 				string(host.Libc): binmanager.BinaryOsArchInfo{
+					Auth:        nil,
+					BinaryPath:  nil,
+					ExtractDir:  false,
 					URL:         "https://example.invalid/uv",
 					Hash:        sha256Hex([]byte("uv binary")),
 					ContentType: binmanager.BinContentTypeBinary,
@@ -1107,21 +1209,62 @@ func testUVConfig(t *testing.T) (*config.Config, map[string]string) {
 		},
 	}
 	cfg := &config.Config{
+		Name:           "",
+		Version:        "",
+		Bundles:        nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Tools:          nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Runtimes: config.MapOfRuntimes{
 			"uv": {
+				System:  nil,
+				Bun:     nil,
+				Node:    nil,
+				JVM:     nil,
+				Go:      nil,
+				PNPM:    nil,
 				Kind:    config.RuntimeKindUV,
 				Mode:    config.RuntimeModeManaged,
-				UV:      &config.RuntimeConfigUV{PythonVersion: "3.15.2"},
+				UV:      &config.RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.15.2"},
 				Managed: &config.RuntimeConfigManaged{Binaries: binaries},
 			},
 		},
 		Apps: binmanager.MapOfApps{
 			"mytool": {
-				Required: true,
+				Lazy:               false,
+				Description:        "",
+				VersionCheck:       nil,
+				DependsOn:          nil,
+				OfficialURL:        "",
+				OfficialURLDerived: false,
+				Binary:             nil,
+				Bun:                nil,
+				Node:               nil,
+				Jvm:                nil,
+				Go:                 nil,
+				Shell:              nil,
+				Env:                nil,
+				RuntimeEnv:         nil,
+				Caches:             nil,
+				Files:              nil,
+				Links:              nil,
+				Archives:           nil,
+				Prepare:            nil,
+				Required:           true,
 				Uv: &binmanager.AppConfigUV{
-					PackageName: "mytool",
-					Version:     "1.2.3",
-					LockFile:    "lock-content",
+					Runtime:        "",
+					RequiresPython: "",
+					PackageName:    "mytool",
+					Version:        "1.2.3",
+					LockFile:       "lock-content",
 				},
 			},
 		},
@@ -1177,7 +1320,7 @@ func TestSeed_DemandDrivenPullsRuntimeDependencies(t *testing.T) {
 
 	digest := src.addManifest(t, layers, nil)
 	t.Setenv("DATAMITSU_OFFLINE", "1")
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: []string{"mytool", "mytool-alt"}}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{NeededRuntimes: nil, RequireRequested: false, Needed: []string{"mytool", "mytool-alt"}}); err != nil {
 		t.Fatalf("offline seedFrom: %v", err)
 	}
 	if got := src.blobCalls.Load(); got != 4 {
@@ -1315,7 +1458,7 @@ func TestSeedFromLayout_OfflinePythonRuntimeData(t *testing.T) {
 		}
 	}
 	t.Setenv("DATAMITSU_OFFLINE", "1")
-	if err := SeedFromLayout(context.Background(), cfg, layoutDir, digest, nil, Options{}); err != nil {
+	if err := SeedFromLayout(context.Background(), cfg, layoutDir, digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("offline SeedFromLayout: %v", err)
 	}
 	if !subtreeReady(storeRoot, pythonSubtree) {
@@ -1342,7 +1485,7 @@ func TestClassifyLayersRejectsDuplicateAndOverlappingTargets(t *testing.T) {
 			for _, subtree := range subtrees {
 				layers = append(layers, src.addLayer([]byte("payload"), subtree))
 			}
-			manifest := &ocispec.Manifest{Layers: layers}
+			manifest := &ocispec.Manifest{SchemaVersion: 0, MediaType: "", ArtifactType: "", Config: ocispec.Descriptor{MediaType: "", Digest: "", Size: 0, URLs: nil, Annotations: nil, Data: nil, Platform: nil, ArtifactType: ""}, Subject: nil, Annotations: nil, Layers: layers}
 			if _, _, err := classifyLayers(manifest, storeRoot, nil); err == nil {
 				t.Fatal("classifyLayers accepted duplicate/overlapping target annotations")
 			}
@@ -1395,7 +1538,19 @@ func buildLayerZstd(t *testing.T, entries []tarEntry) []byte {
 	tw := tar.NewWriter(&tarBuf)
 	for _, e := range entries {
 		hdr := &tar.Header{
-			Name: e.name, Typeflag: e.typeflag, Mode: e.mode,
+			Uid:        0,
+			Gid:        0,
+			Uname:      "",
+			Gname:      "",
+			ModTime:    zerovalue_time.Time{},
+			AccessTime: zerovalue_time.Time{},
+			ChangeTime: zerovalue_time.Time{},
+			Devmajor:   0,
+			Devminor:   0,
+
+			PAXRecords: nil,
+			Format:     0,
+			Name:       e.name, Typeflag: e.typeflag, Mode: e.mode,
 			Linkname: e.linkname, Size: int64(len(e.content)),
 		}
 		if hdr.Mode == 0 {
@@ -1427,7 +1582,7 @@ func buildLayerZstd(t *testing.T, entries []tarEntry) []byte {
 
 func TestSeed_ZstdLayer(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".bin/zstd-tool/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/")
@@ -1443,14 +1598,18 @@ func TestSeed_ZstdLayer(t *testing.T) {
 	dgst := sha256DigestOf(blob)
 	src.blobs[dgst] = blob
 	desc := ocispec.Descriptor{
-		MediaType:   mediaTypeOCILayerZstd,
-		Digest:      godigest.Digest(dgst),
-		Size:        int64(len(blob)),
-		Annotations: map[string]string{AnnotationSubtree: subtree},
+		URLs:         nil,
+		Data:         nil,
+		Platform:     nil,
+		ArtifactType: "",
+		MediaType:    mediaTypeOCILayerZstd,
+		Digest:       godigest.Digest(dgst),
+		Size:         int64(len(blob)),
+		Annotations:  map[string]string{AnnotationSubtree: subtree},
 	}
 	digest := src.addManifest(t, []ocispec.Descriptor{desc}, nil)
 
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err != nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err != nil {
 		t.Fatalf("seedFrom: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(storeRoot, filepath.FromSlash(subtree)))
@@ -1464,7 +1623,7 @@ func TestSeed_ZstdLayer(t *testing.T) {
 
 func TestSeed_WhiteoutEntryIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".bin/wiped/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
@@ -1474,7 +1633,7 @@ func TestSeed_WhiteoutEntryIsFatal(t *testing.T) {
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil || !strings.Contains(err.Error(), "whiteout") {
 		t.Fatalf("expected whiteout rejection, got %v", err)
 	}
@@ -1482,17 +1641,17 @@ func TestSeed_WhiteoutEntryIsFatal(t *testing.T) {
 
 func TestSeed_UnsupportedEntryTypeIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".bin/fifo/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
 	layer := subtreeLayer(t, subtree, []tarEntry{
-		{name: prefix + "/pipe", typeflag: tar.TypeFifo, mode: 0o644},
+		{content: nil, linkname: "", name: prefix + "/pipe", typeflag: tar.TypeFifo, mode: 0o644},
 	})
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil || !strings.Contains(err.Error(), "unsupported tar entry type") {
 		t.Fatalf("expected unsupported-type rejection, got %v", err)
 	}
@@ -1500,7 +1659,7 @@ func TestSeed_UnsupportedEntryTypeIsFatal(t *testing.T) {
 
 func TestSeed_LayerWithoutSubtreeEntriesIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".bin/empty/0123456789abcdef0123456789abcdef"
 	// Only structural parents, no actual subtree content.
@@ -1508,7 +1667,7 @@ func TestSeed_LayerWithoutSubtreeEntriesIsFatal(t *testing.T) {
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil || !strings.Contains(err.Error(), "contains no entries") {
 		t.Fatalf("expected empty-subtree rejection, got %v", err)
 	}
@@ -1516,7 +1675,7 @@ func TestSeed_LayerWithoutSubtreeEntriesIsFatal(t *testing.T) {
 
 func TestSeed_RelativeBuilderStoreRootIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".bin/relative-root/0123456789abcdef0123456789abcdef"
 	layer := subtreeLayer(t, subtree, []tarEntry{
@@ -1526,7 +1685,7 @@ func TestSeed_RelativeBuilderStoreRootIsFatal(t *testing.T) {
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)},
 		map[string]string{AnnotationStoreRoot: "dm/store"})
 
-	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{})
+	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil || !IsFatalSeedError(err) {
 		t.Fatalf("expected fatal invalid store-root error, got %v", err)
 	}
@@ -1535,10 +1694,10 @@ func TestSeed_RelativeBuilderStoreRootIsFatal(t *testing.T) {
 func TestSeedBundle_MalformedRefIsRejected(t *testing.T) {
 	testStore(t)
 	for _, ref := range []*config.OCIRef{
-		{Ref: "ghcr.io/owner/repo", Digest: "sha256:short"},
-		{Ref: "owner-only", Digest: "sha256:" + strings.Repeat("ab", 32)},
+		{Signer: nil, Ref: "ghcr.io/owner/repo", Digest: "sha256:short"},
+		{Signer: nil, Ref: "owner-only", Digest: "sha256:" + strings.Repeat("ab", 32)},
 	} {
-		if err := SeedBundle(context.Background(), &config.Config{}, ref, Options{}); err == nil {
+		if err := SeedBundle(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, ref, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err == nil {
 			t.Errorf("SeedBundle(%+v) = nil, want validation error", ref)
 		}
 	}
@@ -1572,7 +1731,7 @@ func TestSeed_RequestedAppUnderADifferentHashIsReported(t *testing.T) {
 	digest := src.addManifest(t, []ocispec.Descriptor{layer}, nil)
 
 	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil,
-		Options{Needed: []string{"tool"}, RequireRequested: true})
+		Options{NeededRuntimes: nil, Needed: []string{"tool"}, RequireRequested: true})
 	if err == nil {
 		t.Fatal("seedFrom = nil, want an error: the requested tool was not seeded")
 	}
@@ -1605,7 +1764,7 @@ func TestSeed_RequestedAppAbsentFromBundleIsReported(t *testing.T) {
 	digest := src.addManifest(t, []ocispec.Descriptor{layer}, nil)
 
 	_, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil,
-		Options{Needed: []string{"tool"}, RequireRequested: true})
+		Options{NeededRuntimes: nil, Needed: []string{"tool"}, RequireRequested: true})
 	if err == nil {
 		t.Fatal("seedFrom = nil, want an error: the bundle carries no layer for the tool")
 	}
@@ -1630,14 +1789,14 @@ func TestSeed_UncoveredRequestWithoutRequireRequestedStillSucceeds(t *testing.T)
 	// AutoSeed's contract: the bundle is an accelerator, so a request it cannot
 	// cover is not an error — the network path installs the rest.
 	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil,
-		Options{Needed: []string{"tool"}}); err != nil {
+		Options{NeededRuntimes: nil, RequireRequested: false, Needed: []string{"tool"}}); err != nil {
 		t.Fatalf("seedFrom without RequireRequested = %v, want nil", err)
 	}
 }
 
 func TestSeed_RejectsSymlinkDestinationBeforeFollowing(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	subtree := ".apps/uv/symlink-file/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
 	victim := filepath.Join(storeRoot, ".apps", "uv", "neighbor", "victim")
@@ -1649,12 +1808,12 @@ func TestSeed_RejectsSymlinkDestinationBeforeFollowing(t *testing.T) {
 		t.Fatal(err)
 	}
 	layer := subtreeLayer(t, subtree, []tarEntry{
-		{name: prefix + "/owned", typeflag: tar.TypeSymlink, linkname: testBuilderRoot + "/.apps/uv/neighbor/victim"},
+		{content: nil, mode: 0, name: prefix + "/owned", typeflag: tar.TypeSymlink, linkname: testBuilderRoot + "/.apps/uv/neighbor/victim"},
 		fileEntry(prefix+"/folder/../owned", []byte("overwrite")),
 	})
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err == nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err == nil {
 		t.Fatal("symlink followed by duplicate file destination was accepted")
 	}
 	got, err := os.ReadFile(victim)
@@ -1665,7 +1824,7 @@ func TestSeed_RejectsSymlinkDestinationBeforeFollowing(t *testing.T) {
 
 func TestSeed_RejectsParentSymlinkBeforeCreatingDirectories(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	subtree := ".apps/uv/symlink-parent/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
 	victimDir := filepath.Join(storeRoot, ".apps", "uv", "neighbor")
@@ -1673,12 +1832,12 @@ func TestSeed_RejectsParentSymlinkBeforeCreatingDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 	layer := subtreeLayer(t, subtree, []tarEntry{
-		{name: prefix + "/outside", typeflag: tar.TypeSymlink, linkname: testBuilderRoot + "/.apps/uv/neighbor"},
+		{content: nil, mode: 0, name: prefix + "/outside", typeflag: tar.TypeSymlink, linkname: testBuilderRoot + "/.apps/uv/neighbor"},
 		fileEntry(prefix+"/outside/created/deep/file", []byte("no")),
 	})
 	src := newFakeSource()
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(layer, subtree)}, nil)
-	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{}); err == nil {
+	if _, err := seedFromChanged(context.Background(), cfg, src, "test/bundle", digest, nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err == nil {
 		t.Fatal("file under a symlink parent was accepted")
 	}
 	if _, err := os.Lstat(filepath.Join(victimDir, "created")); !errors.Is(err, os.ErrNotExist) {

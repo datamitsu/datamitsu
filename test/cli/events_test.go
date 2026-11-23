@@ -34,7 +34,7 @@ func eventsProject(t *testing.T) *execProject {
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec,
 		parsedTool(hadolintErrorAndWarning, 0),
-		clitest.ShellTool("broken", failScript, clitest.ToolOpSpec{}),
+		clitest.ShellTool("broken", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 	))
 	return e
 }
@@ -83,7 +83,7 @@ func TestEventsDiagnostics(t *testing.T) {
 		env  []string
 		args []string
 	}{
-		{name: "flag", args: []string{"lint", keepGoing, "--events", "diagnostics=all"}},
+		{env: nil, name: "flag", args: []string{"lint", keepGoing, "--events", "diagnostics=all"}},
 		{name: "env", env: []string{"DATAMITSU_EVENTS=diagnostics=all"}, args: []string{"lint", keepGoing}},
 		{name: "flag_wins", env: []string{"DATAMITSU_EVENTS=diagnostics=reported"}, args: []string{"lint", keepGoing, "--events=diagnostics=all"}},
 	} {
@@ -156,7 +156,7 @@ func TestEventsBrokenStream(t *testing.T) {
 		t.Skip("/dev/full is Linux's; the property that a failed stream fails the run is left unverified here")
 	}
 	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 	for _, args := range [][]string{{"lint"}, {"lint", "--explain"}, {"config", "runtime"}} {
 		t.Run(strings.Join(args, "_"), func(t *testing.T) {
 			full, err := os.OpenFile("/dev/full", os.O_WRONLY, 0)
@@ -217,7 +217,7 @@ func TestEventsClosedStream(t *testing.T) {
 		t.Skip("a closed pipe raises SIGPIPE on Unix only; the property is left unverified on Windows")
 	}
 	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}))
+		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 	reader, writer, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -285,7 +285,7 @@ func TestEventsMaskSecrets(t *testing.T) {
 
 	// A run that fails before it records anything — its configuration does
 	// not load — is masked with what the host environment names.
-	failed := clitest.Run(t, clitest.RunOptions{Dir: e.p.Dir, CacheDir: e.cache, Env: []string{"DATAMITSU_TEST_TOKEN=" + secret}},
+	failed := clitest.Run(t, clitest.RunOptions{Stdin: "", Timeout: 0, Dir: e.p.Dir, CacheDir: e.cache, Env: []string{"DATAMITSU_TEST_TOKEN=" + secret}},
 		"--no-auto-config", "--config", "missing-"+secret+".js", "--log-format", "jsonl", "lint", "--report", "json=run.json")
 	if failed.ExitCode != 1 || strings.Contains(failed.Stderr, secret) || !strings.Contains(failed.Stderr, "missing-***.js") {
 		t.Errorf("exit %d, stream:\n%s\nwant 1 and the config path masked", failed.ExitCode, failed.Stderr)

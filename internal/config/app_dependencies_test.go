@@ -15,23 +15,23 @@ func TestValidateAppDependencies(t *testing.T) {
 		empty   string
 		wantErr string
 	}{
-		{name: "missing", edges: map[string][]string{"a": {"missing"}}, wantErr: `app "a": dependency "missing" not found in apps`},
-		{name: "self", edges: map[string][]string{"a": {"a"}}, wantErr: `app "a": cannot depend on itself`},
-		{name: "duplicate", edges: map[string][]string{"a": {"b", "b"}, "b": nil}, wantErr: `app "a": duplicate dependency "b"`},
-		{name: "two node cycle", edges: map[string][]string{"b": {"a"}, "a": {"b"}}, wantErr: "a -> b -> a"},
-		{name: "three node cycle", edges: map[string][]string{"c": {"a"}, "a": {"b"}, "b": {"c"}}, wantErr: "a -> b -> c -> a"},
-		{name: "diamond", edges: map[string][]string{"a": {"c", "b"}, "b": {"d"}, "c": {"d"}, "d": nil}},
-		{name: "shell dependent", edges: map[string][]string{"a": {"b"}, "b": nil}, shell: "a"},
-		{name: "shell dependency", edges: map[string][]string{"a": {"b"}, "b": nil}, shell: "b", wantErr: `dependency "b" is a shell app and cannot be provisioned`},
-		{name: "empty dependency", edges: map[string][]string{"a": {"b"}, "b": nil}, empty: "b", wantErr: `dependency "b" has no installable configuration`},
+		{shell: "", empty: "", name: "missing", edges: map[string][]string{"a": {"missing"}}, wantErr: `app "a": dependency "missing" not found in apps`},
+		{shell: "", empty: "", name: "self", edges: map[string][]string{"a": {"a"}}, wantErr: `app "a": cannot depend on itself`},
+		{shell: "", empty: "", name: "duplicate", edges: map[string][]string{"a": {"b", "b"}, "b": nil}, wantErr: `app "a": duplicate dependency "b"`},
+		{shell: "", empty: "", name: "two node cycle", edges: map[string][]string{"b": {"a"}, "a": {"b"}}, wantErr: "a -> b -> a"},
+		{shell: "", empty: "", name: "three node cycle", edges: map[string][]string{"c": {"a"}, "a": {"b"}, "b": {"c"}}, wantErr: "a -> b -> c -> a"},
+		{shell: "", empty: "", wantErr: "", name: "diamond", edges: map[string][]string{"a": {"c", "b"}, "b": {"d"}, "c": {"d"}, "d": nil}},
+		{empty: "", wantErr: "", name: "shell dependent", edges: map[string][]string{"a": {"b"}, "b": nil}, shell: "a"},
+		{empty: "", name: "shell dependency", edges: map[string][]string{"a": {"b"}, "b": nil}, shell: "b", wantErr: `dependency "b" is a shell app and cannot be provisioned`},
+		{shell: "", name: "empty dependency", edges: map[string][]string{"a": {"b"}, "b": nil}, empty: "b", wantErr: `dependency "b" has no installable configuration`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{}
 			for name, deps := range tt.edges {
-				app := binmanager.App{Binary: &binmanager.AppConfigBinary{}, DependsOn: edges(deps...)}
+				app := binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}, DependsOn: edges(deps...)}
 				if name == tt.shell {
 					app.Binary = nil
-					app.Shell = &binmanager.AppConfigShell{Name: "echo"}
+					app.Shell = &binmanager.AppConfigShell{Args: nil, Name: "echo"}
 				}
 				if name == tt.empty {
 					app.Binary = nil

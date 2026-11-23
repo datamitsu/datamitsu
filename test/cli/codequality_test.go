@@ -17,7 +17,7 @@ import (
 // cannot place.
 var outsider = clitest.ShellTool("outsider",
 	settle+clitest.RecordRun+`; echo '[{"file":"/outside/Dockerfile","line":2,"column":1,"level":"error","code":"DL3000","message":"Use absolute WORKDIR"}]'`,
-	clitest.ToolOpSpec{Parser: "hadolint"})
+	clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Parser: "hadolint"})
 
 func TestReportCodeQuality(t *testing.T) {
 	t.Run("lint", func(t *testing.T) {

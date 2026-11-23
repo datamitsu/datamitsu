@@ -94,13 +94,13 @@ func CollectGitignoreRules(ctx context.Context, root, target string) (*Gitignore
 	target = filepath.Clean(target)
 
 	if !strings.HasPrefix(target, root) {
-		return &GitignoreMatcher{root: root}, nil
+		return &GitignoreMatcher{patterns: nil, root: root}, nil
 	}
 
 	paths := collectGitignorePaths(root, target)
 
 	if len(paths) == 0 {
-		return &GitignoreMatcher{root: root}, nil
+		return &GitignoreMatcher{patterns: nil, root: root}, nil
 	}
 
 	type result struct {

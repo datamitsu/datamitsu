@@ -10,12 +10,13 @@ import (
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 func findingsAt(levels ...diagnostic.Severity) []diagnostic.Diagnostic {
 	out := make([]diagnostic.Diagnostic, 0, len(levels))
 	for _, level := range levels {
-		out = append(out, diagnostic.Diagnostic{Message: "m", Severity: level})
+		out = append(out, diagnostic.Diagnostic{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m", Severity: level})
 	}
 	return out
 }
@@ -35,56 +36,106 @@ func TestThresholdGate(t *testing.T) {
 		ignored    bool
 	}{
 		{
-			name: "an error at the default threshold", contract: true, findings: findingsAt(diagnostic.SeverityError),
+			own:        "",
+			global:     "",
+			extraction: "",
+			ignored:    false,
+			name:       "an error at the default threshold", contract: true, findings: findingsAt(diagnostic.SeverityError),
 			wantFailed: true, wantReason: "1 finding at or above failOn=error", reported: []bool{true}, gates: []bool{true},
 		},
 		{
-			name: "a warning at the default threshold", contract: true, findings: findingsAt(diagnostic.SeverityWarning),
+			own:        "",
+			global:     "",
+			extraction: "",
+			wantFailed: false,
+			wantReason: "",
+			ignored:    false,
+			name:       "a warning at the default threshold", contract: true, findings: findingsAt(diagnostic.SeverityWarning),
 			reported: []bool{false}, gates: []bool{false},
 		},
 		{
-			name: "a baselined error", contract: true,
+			own:        "",
+			global:     "",
+			extraction: "",
+			ignored:    false,
+			name:       "a baselined error", contract: true,
 			findings: []diagnostic.Diagnostic{
-				{Message: "old", Severity: diagnostic.SeverityError, Baselined: true},
-				{Message: "new", Severity: diagnostic.SeverityError},
+				{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Anchor: nil, Message: "old", Severity: diagnostic.SeverityError, Baselined: true},
+				{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "new", Severity: diagnostic.SeverityError},
 			},
 			wantFailed: true, wantReason: "1 finding at or above failOn=error",
 			reported: []bool{false, true}, gates: []bool{false, true},
 		},
 		{
-			name: "only baselined errors", contract: true,
-			findings: []diagnostic.Diagnostic{{Message: "old", Severity: diagnostic.SeverityError, Baselined: true}},
+			own:        "",
+			global:     "",
+			extraction: "",
+			wantFailed: false,
+			wantReason: "",
+			ignored:    false,
+			name:       "only baselined errors", contract: true,
+			findings: []diagnostic.Diagnostic{{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Anchor: nil, Message: "old", Severity: diagnostic.SeverityError, Baselined: true}},
 			reported: []bool{false}, gates: []bool{false},
 		},
 		{
-			name: "failOn warning", own: config.SeverityWarning, contract: true,
+			global:     "",
+			extraction: "",
+			ignored:    false,
+			name:       "failOn warning", own: config.SeverityWarning, contract: true,
 			findings:   findingsAt(diagnostic.SeverityWarning, diagnostic.SeverityInfo, diagnostic.SeverityError),
 			wantFailed: true, wantReason: "2 findings at or above failOn=warning",
 			reported: []bool{true, false, true}, gates: []bool{true, false, true},
 		},
 		{
-			name: "the global value raises an operation", global: config.SeverityWarning, contract: true,
+			own:        "",
+			extraction: "",
+			ignored:    false,
+			name:       "the global value raises an operation", global: config.SeverityWarning, contract: true,
 			findings: findingsAt(diagnostic.SeverityWarning), wantFailed: true,
 			wantReason: "1 finding at or above failOn=warning", reported: []bool{true}, gates: []bool{true},
 		},
 		{
-			name: "the global value does not lower an operation", own: config.SeverityHint, global: config.SeverityWarning,
+			extraction: "",
+			ignored:    false,
+			name:       "the global value does not lower an operation", own: config.SeverityHint, global: config.SeverityWarning,
 			contract: true, findings: findingsAt(diagnostic.SeverityHint), wantFailed: true,
 			wantReason: "1 finding at or above failOn=hint", reported: []bool{true}, gates: []bool{true},
 		},
 		{
-			name: "a module before the contract", own: config.SeverityWarning, findings: findingsAt(diagnostic.SeverityError),
+			global:     "",
+			contract:   false,
+			extraction: "",
+			wantFailed: false,
+			wantReason: "",
+			name:       "a module before the contract", own: config.SeverityWarning, findings: findingsAt(diagnostic.SeverityError),
 			reported: []bool{true}, gates: []bool{false}, ignored: true,
 		},
 		{
-			name: "a module before the contract at the default threshold", findings: findingsAt(diagnostic.SeverityError),
+			own:        "",
+			global:     "",
+			contract:   false,
+			extraction: "",
+			wantFailed: false,
+			wantReason: "",
+			ignored:    false,
+			name:       "a module before the contract at the default threshold", findings: findingsAt(diagnostic.SeverityError),
 			reported: []bool{true}, gates: []bool{false},
 		},
 		{
-			name: "output nobody parsed", own: config.SeverityWarning, contract: true, extraction: ExtractionParserUnavailable,
+			global:     "",
+			findings:   nil,
+			wantFailed: false,
+			wantReason: "",
+			reported:   nil,
+			gates:      nil,
+			ignored:    false,
+			name:       "output nobody parsed", own: config.SeverityWarning, contract: true, extraction: ExtractionParserUnavailable,
 		},
 		{
-			name: "the findings kept from truncated output", contract: true, extraction: ExtractionTruncated,
+			own:     "",
+			global:  "",
+			ignored: false,
+			name:    "the findings kept from truncated output", contract: true, extraction: ExtractionTruncated,
 			findings: findingsAt(diagnostic.SeverityError), wantFailed: true,
 			wantReason: "1 finding at or above failOn=error", reported: []bool{true}, gates: []bool{true},
 		},
@@ -101,15 +152,25 @@ func TestThresholdGate(t *testing.T) {
 				return c.contract
 			}, func(tool string) { ignored = append(ignored, tool) })
 			task := Task{
-				ToolName: "tool",
-				Tool:     config.Tool{Name: "tool", OutputParser: &config.OutputParser{Module: "core", Parser: "tool"}},
-				OpConfig: config.ToolOperation{FailOn: c.own},
+				perFileCache: "",
+				inherited:    zerovalue_toolenv.Inherited{},
+				ID:           "",
+				Operation:    "",
+				Files:        nil,
+				ProjectPath:  "",
+				UnitDir:      "",
+				UnitMembers:  nil,
+				UnitGuards:   nil,
+				Coverage:     "",
+				ToolName:     "tool",
+				Tool:         config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "tool", OutputParser: &config.OutputParser{Module: "core", Parser: "tool"}},
+				OpConfig:     config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, FailOn: c.own},
 			}
 			extraction := c.extraction
 			if extraction == "" {
 				extraction = ExtractionParsedFindings
 			}
-			proc := ProcessResult{Extraction: extraction, Diagnostics: slices.Clone(c.findings)}
+			proc := ProcessResult{ID: "", Files: nil, State: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Extraction: extraction, Diagnostics: slices.Clone(c.findings)}
 			if extraction == ExtractionParsedFindings || extraction == ExtractionTruncated {
 				proc.ParserModule = "core"
 			}
@@ -151,7 +212,7 @@ func gatedProject(t *testing.T, failFast, contract bool, script string, levels m
 		var out []diagnostic.Diagnostic
 		for path := range strings.FieldsSeq(stdout) {
 			for _, level := range levels[filepath.Base(path)] {
-				out = append(out, diagnostic.Diagnostic{Message: "m", Severity: level, File: path})
+				out = append(out, diagnostic.Diagnostic{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m", Severity: level, File: path})
 			}
 		}
 		return out
@@ -162,7 +223,7 @@ func gatedProject(t *testing.T, failFast, contract bool, script string, levels m
 
 func gatedTask(root string, files []string, failOn config.Severity) Task {
 	task := loopTask(root, files)
-	task.Tool = config.Tool{Name: "tool", OutputParser: &config.OutputParser{Module: "core", Parser: "tool"}}
+	task.Tool = config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "tool", OutputParser: &config.OutputParser{Module: "core", Parser: "tool"}}
 	task.OpConfig.FailOn = failOn
 	return task
 }
@@ -189,9 +250,22 @@ func TestThresholdGateAsksTheModuleThatParsed(t *testing.T) {
 			asked = append(asked, module)
 			return module == EmbeddedParserModule
 		}, nil)
-		task := Task{ToolName: "ruff", Tool: config.Tool{Name: "ruff"}}
+		task := Task{perFileCache: "", inherited: zerovalue_toolenv.Inherited{}, ID: "", Operation: "", OpConfig: config.ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil}, Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "ruff", Tool: config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "ruff"}}
 		proc := ProcessResult{
-			Extraction: extraction, Provenance: "fallback:sarif", ParserModule: EmbeddedParserModule,
+			ID:              "",
+			Files:           nil,
+			State:           "",
+			ExitCode:        nil,
+			Success:         false,
+			ParseError:      "",
+			OutputTail:      nil,
+			DurationMs:      0,
+			FailOn:          "",
+			GateActive:      false,
+			ThresholdFailed: false,
+			edits:           nil,
+			patch:           "",
+			Extraction:      extraction, Provenance: "fallback:sarif", ParserModule: EmbeddedParserModule,
 			Diagnostics: findingsAt(diagnostic.SeverityError),
 		}
 		decision := gate(task, &proc)
@@ -217,36 +291,55 @@ func TestGateFailsAProcessThatExitedZero(t *testing.T) {
 		wantFiles  []bool
 	}{
 		{
-			name: "an error-level finding", script: echoAndPass, contract: true,
+			op:     "",
+			failOn: "",
+			wantOK: false,
+			name:   "an error-level finding", script: echoAndPass, contract: true,
 			levels:     map[string][]diagnostic.Severity{"a.txt": {diagnostic.SeverityError}},
 			wantReason: FailureReasonThreshold, wantFiles: []bool{false},
 		},
 		{
-			name: "a warning with failOn warning", script: echoAndPass, contract: true, failOn: config.SeverityWarning,
+			op:     "",
+			wantOK: false,
+			name:   "a warning with failOn warning", script: echoAndPass, contract: true, failOn: config.SeverityWarning,
 			levels:     map[string][]diagnostic.Severity{"a.txt": {diagnostic.SeverityWarning}},
 			wantReason: FailureReasonThreshold, wantFiles: []bool{false},
 		},
 		{
-			name: "a warning at the default threshold", script: echoAndPass, contract: true,
+			op:         "",
+			failOn:     "",
+			wantReason: 0,
+			name:       "a warning at the default threshold", script: echoAndPass, contract: true,
 			levels: map[string][]diagnostic.Severity{"a.txt": {diagnostic.SeverityWarning}},
 			wantOK: true, wantFiles: []bool{true},
 		},
 		{
-			name: "a failing tool without findings", script: `exit 1`, contract: true, failOn: config.SeverityHint,
+			op:     "",
+			levels: nil,
+			wantOK: false,
+			name:   "a failing tool without findings", script: `exit 1`, contract: true, failOn: config.SeverityHint,
 			wantReason: FailureReasonIndependent, wantFiles: []bool{false},
 		},
 		{
-			name: "a fix that leaves an error behind", script: echoAndPass, contract: true, op: config.OpFix,
+			failOn: "",
+			wantOK: false,
+			name:   "a fix that leaves an error behind", script: echoAndPass, contract: true, op: config.OpFix,
 			levels:     map[string][]diagnostic.Severity{"a.txt": {diagnostic.SeverityError}},
 			wantReason: FailureReasonThreshold, wantFiles: []bool{false},
 		},
 		{
-			name: "a module before the contract", script: echoAndPass, failOn: config.SeverityWarning,
+			contract:   false,
+			op:         "",
+			wantReason: 0,
+			name:       "a module before the contract", script: echoAndPass, failOn: config.SeverityWarning,
 			levels: map[string][]diagnostic.Severity{"a.txt": {diagnostic.SeverityError}},
 			wantOK: true, wantFiles: []bool{true},
 		},
 		{
-			name: "a failing tool whose findings do not reach the threshold", script: failBad, contract: true,
+			op:     "",
+			failOn: "",
+			wantOK: false,
+			name:   "a failing tool whose findings do not reach the threshold", script: failBad, contract: true,
 			levels:     map[string][]diagnostic.Severity{"bad.txt": {diagnostic.SeverityInfo}},
 			wantReason: FailureReasonIndependent, wantFiles: []bool{false},
 		},

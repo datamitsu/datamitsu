@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/parsermanager"
 	"github.com/datamitsu/datamitsu/internal/report"
@@ -39,12 +40,12 @@ func TestNeutralize(t *testing.T) {
 }
 
 func TestCommand(t *testing.T) {
-	a := github.Annotation{Level: github.LevelError, File: "src/a;b.ts", Line: 3, Col: 7, Source: "eslint", Code: "no-var", Message: "Unexpected var\n100% ]"}
+	a := github.Annotation{EndLine: 0, EndCol: 0, Fingerprint: "", Tool: "", RuleURL: "", Severity: "", Synthetic: false, Level: github.LevelError, File: "src/a;b.ts", Line: 3, Col: 7, Source: "eslint", Code: "no-var", Message: "Unexpected var\n100% ]"}
 	want := "##vso[task.logissue type=error;sourcepath=src/a%3Bb.ts;linenumber=3;columnnumber=7;code=eslint(no-var)]Unexpected var%0A100%AZP25 %5D"
 	if got := Command(a); got != want {
 		t.Errorf("Command =\n%s\nwant\n%s", got, want)
 	}
-	noFile := github.Annotation{Level: github.LevelError, Source: "tsc", Message: "tsc exited 2 without parsable findings", Synthetic: true}
+	noFile := github.Annotation{File: "", Line: 0, EndLine: 0, Col: 0, EndCol: 0, Code: "", Fingerprint: "", Tool: "", RuleURL: "", Severity: "", Level: github.LevelError, Source: "tsc", Message: "tsc exited 2 without parsable findings", Synthetic: true}
 	if got := Command(noFile); got != "##vso[task.logissue type=error;code=tsc]tsc exited 2 without parsable findings" {
 		t.Errorf("Command = %s", got)
 	}
@@ -52,9 +53,14 @@ func TestCommand(t *testing.T) {
 
 func finding(path string, row int, severity string) report.Finding {
 	return report.Finding{
-		Fingerprint: fmt.Sprintf("%s:%d:%s", path, row, severity), Tool: "eslint", Source: "eslint", Code: "r",
+		FingerprintBasis: "",
+		RuleURL:          "",
+		Gates:            false,
+		Baselined:        false,
+		Provenance:       "",
+		Fingerprint:      fmt.Sprintf("%s:%d:%s", path, row, severity), Tool: "eslint", Source: "eslint", Code: "r",
 		Severity: severity, Reported: true, Shown: true, Kind: "issue", Message: "m",
-		Location: report.Location{Path: path, Row: row, EndRow: row, Chars: &textpos.Span{Start: 1, End: 2}, Precision: "exact"},
+		Location: report.Location{Col: 0, EndCol: 0, Unit: "", Bytes: nil, Utf16: nil, Path: path, Row: row, EndRow: row, Chars: &textpos.Span{Start: 1, End: 2}, Precision: "exact"},
 	}
 }
 
@@ -66,10 +72,47 @@ func TestSelect(t *testing.T) {
 		fs = append(fs, finding(fmt.Sprintf("f%02d.ts", i), 1, "error"))
 	}
 	fs = append(fs, finding("w.ts", 1, "warning"), finding("i.ts", 1, "info"), finding("h.ts", 1, "hint"))
-	run := &report.Run{Operations: []report.Operation{{Name: "lint", Tools: []report.ToolRun{{
-		Name:        "eslint",
-		Invocations: []report.Invocation{{Findings: fs}},
-	}}}}}
+	run := &report.Run{
+		RedactedReasons: nil,
+
+		Fingerprint: "",
+		Datamitsu:   report.Producer{Version: "", Configuration: ""},
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		Selection:   report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:    false,
+		Complete:    false,
+		Incomplete:  nil,
+		Exports:     nil,
+		CI:          report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Operations: []report.Operation{{
+			Ran:             false,
+			Success:         false,
+			Duration:        0,
+			Skipped:         nil,
+			Cancelled:       nil,
+			ChangesObserved: false,
+			ChangesReason:   "",
+			ChangesDetail:   "",
+			ChangesScope:    nil,
+			Changes:         nil, Name: "lint", Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+
+				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+				Parser:     nil,
+				FailOn:     "",
+				GateActive: false,
+				Category:   "",
+				Complete:   false,
+				Incomplete: nil,
+				Name:       "eslint",
+				Invocations: []report.Invocation{{
+					RedactedState:      0,
+					RedactedExtraction: 0,
+					ID:                 "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", Findings: fs,
+				}},
+			}},
+		}},
+	}
 	candidates := Candidates(run)
 	if len(candidates) != 13 || !Overflows(candidates) {
 		t.Fatalf("candidates = %d, want 12 errors and a warning, overflowing", len(candidates))
@@ -92,8 +135,8 @@ func TestSelect(t *testing.T) {
 // reads back as the same findings.
 func TestRoundTrip(t *testing.T) {
 	candidates := []github.Annotation{
-		{Level: github.LevelError, File: "src/a;b.ts", Line: 3, Col: 7, Source: "eslint", Code: "no-var", Message: "Unexpected var\n100% ] ##vso[task.complete]"},
-		{Level: github.LevelWarning, File: "b.py", Line: 9, Source: "ruff", Code: "W291", Message: "Trailing whitespace"},
+		{EndLine: 0, EndCol: 0, Fingerprint: "", Tool: "", RuleURL: "", Severity: "", Synthetic: false, Level: github.LevelError, File: "src/a;b.ts", Line: 3, Col: 7, Source: "eslint", Code: "no-var", Message: "Unexpected var\n100% ] ##vso[task.complete]"},
+		{EndLine: 0, Col: 0, EndCol: 0, Fingerprint: "", Tool: "", RuleURL: "", Severity: "", Synthetic: false, Level: github.LevelWarning, File: "b.py", Line: 9, Source: "ruff", Code: "W291", Message: "Trailing whitespace"},
 	}
 	var out bytes.Buffer
 	if err := Print(&out, Select(candidates, nil), nil); err != nil {

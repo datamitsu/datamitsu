@@ -12,19 +12,37 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/report"
+
+	zerovalue_time "time"
 )
 
 func TestTargetWritesAtomically(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "out", "run.json")
-	target := Open(Spec{Format: "json", Path: path}, nil)
+	target := Open(Spec{
+		Options: nil,
+		Format:  "json", Path: path,
+	}, nil)
 	if target.Err != nil {
 		t.Fatal(target.Err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("the report exists before it is written: %v", err)
 	}
-	if err := target.Write(&report.Run{}); err != nil {
+	if err := target.Write(&report.Run{
+		Fingerprint:     "",
+		Datamitsu:       report.Producer{Version: "", Configuration: ""},
+		StartedAt:       zerovalue_time.Time{},
+		EndedAt:         zerovalue_time.Time{},
+		Selection:       report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:        false,
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Operations:      nil,
+		Exports:         nil,
+		CI:              report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -55,11 +73,27 @@ func TestTargetFailureKeepsTheOldReport(t *testing.T) {
 	if err := os.WriteFile(path, []byte("the old report"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	target := Open(Spec{Format: "failing", Path: path}, nil)
+	target := Open(Spec{
+		Options: nil,
+		Format:  "failing", Path: path,
+	}, nil)
 	if target.Err != nil {
 		t.Fatal(target.Err)
 	}
-	if err := target.Write(&report.Run{}); err == nil {
+	if err := target.Write(&report.Run{
+		Fingerprint:     "",
+		Datamitsu:       report.Producer{Version: "", Configuration: ""},
+		StartedAt:       zerovalue_time.Time{},
+		EndedAt:         zerovalue_time.Time{},
+		Selection:       report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:        false,
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Operations:      nil,
+		Exports:         nil,
+		CI:              report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	}); err == nil {
 		t.Fatal("a failed render wrote the report")
 	}
 	if got, _ := os.ReadFile(path); string(got) != "the old report" {
@@ -72,8 +106,24 @@ func TestTargetFailureKeepsTheOldReport(t *testing.T) {
 
 func TestTargetStdout(t *testing.T) {
 	var out bytes.Buffer
-	target := Open(Spec{Format: "json", Path: Stdout}, &out)
-	if err := target.Write(&report.Run{}); err != nil {
+	target := Open(Spec{
+		Options: nil,
+		Format:  "json", Path: Stdout,
+	}, &out)
+	if err := target.Write(&report.Run{
+		Fingerprint:     "",
+		Datamitsu:       report.Producer{Version: "", Configuration: ""},
+		StartedAt:       zerovalue_time.Time{},
+		EndedAt:         zerovalue_time.Time{},
+		Selection:       report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+		FailFast:        false,
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Operations:      nil,
+		Exports:         nil,
+		CI:              report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), `"schema": "datamitsu.report/1"`) {
@@ -92,21 +142,43 @@ func TestTargetCannotOpen(t *testing.T) {
 	tests := []struct {
 		name, path, want string
 	}{
-		{name: "a file in the way", path: filepath.Join(blocker, "run.json")},
+		{
+			want: "",
+			name: "a file in the way", path: filepath.Join(blocker, "run.json"),
+		},
 		{name: "a directory at the path", path: dir, want: "is a directory"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			target := Open(Spec{Format: "json", Path: tt.path}, nil)
+			target := Open(Spec{
+				Options: nil,
+				Format:  "json", Path: tt.path,
+			}, nil)
 			if target.Err == nil || !strings.Contains(target.Err.Error(), tt.want) {
 				t.Fatalf("Open error = %v, want one containing %q", target.Err, tt.want)
 			}
-			if err := target.Write(&report.Run{}); !errors.Is(err, target.Err) {
+			if err := target.Write(&report.Run{
+				Fingerprint:     "",
+				Datamitsu:       report.Producer{Version: "", Configuration: ""},
+				StartedAt:       zerovalue_time.Time{},
+				EndedAt:         zerovalue_time.Time{},
+				Selection:       report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+				FailFast:        false,
+				Complete:        false,
+				Incomplete:      nil,
+				RedactedReasons: nil,
+				Operations:      nil,
+				Exports:         nil,
+				CI:              report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+			}); !errors.Is(err, target.Err) {
 				t.Errorf("Write error = %v, want the open error", err)
 			}
 		})
 	}
-	if target := Open(Spec{Format: "yaml", Path: "x"}, nil); target.Err == nil {
+	if target := Open(Spec{
+		Options: nil,
+		Format:  "yaml", Path: "x",
+	}, nil); target.Err == nil {
 		t.Error("an unknown format opened")
 	}
 }
@@ -117,11 +189,27 @@ func TestTargetCannotOpen(t *testing.T) {
 func TestTargetAppends(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "trend", "history.jsonl")
 	for range 2 {
-		target := Open(Spec{Format: "history", Path: path}, nil)
+		target := Open(Spec{
+			Options: nil,
+			Format:  "history", Path: path,
+		}, nil)
 		if target.Err != nil {
 			t.Fatal(target.Err)
 		}
-		if err := target.Write(&report.Run{}); err != nil {
+		if err := target.Write(&report.Run{
+			Fingerprint:     "",
+			Datamitsu:       report.Producer{Version: "", Configuration: ""},
+			StartedAt:       zerovalue_time.Time{},
+			EndedAt:         zerovalue_time.Time{},
+			Selection:       report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil},
+			FailFast:        false,
+			Complete:        false,
+			Incomplete:      nil,
+			RedactedReasons: nil,
+			Operations:      nil,
+			Exports:         nil,
+			CI:              report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -137,7 +225,10 @@ func TestTargetAppends(t *testing.T) {
 	if len(entries) != 1 {
 		t.Errorf("the directory holds %d entries, want the file alone", len(entries))
 	}
-	if target := Open(Spec{Format: "history", Path: filepath.Dir(path)}, nil); target.Err == nil || !strings.Contains(target.Err.Error(), "is a directory") {
+	if target := Open(Spec{
+		Options: nil,
+		Format:  "history", Path: filepath.Dir(path),
+	}, nil); target.Err == nil || !strings.Contains(target.Err.Error(), "is a directory") {
 		t.Errorf("Open of a directory = %v, want is a directory", target.Err)
 	}
 }

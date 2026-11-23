@@ -47,19 +47,22 @@ func TestObservedNonDeterminism(t *testing.T) {
 			wantSource: sourceClock,
 		},
 		{
-			name:     "deterministic config",
-			script:   `var d = new Date(2020, 0, 1); var x = d.getFullYear() + 1;`,
-			wantFlag: false,
+			wantSource: "",
+			name:       "deterministic config",
+			script:     `var d = new Date(2020, 0, 1); var x = d.getFullYear() + 1;`,
+			wantFlag:   false,
 		},
 		{
-			name:     "parsed date is deterministic",
-			script:   `var d = new Date("2020-01-01T00:00:00Z"); var x = d.getTime();`,
-			wantFlag: false,
+			wantSource: "",
+			name:       "parsed date is deterministic",
+			script:     `var d = new Date("2020-01-01T00:00:00Z"); var x = d.getTime();`,
+			wantFlag:   false,
 		},
 		{
-			name:     "pure arithmetic",
-			script:   `var x = [1, 2, 3].map(function (n) { return n * 2; });`,
-			wantFlag: false,
+			wantSource: "",
+			name:       "pure arithmetic",
+			script:     `var x = [1, 2, 3].map(function (n) { return n * 2; });`,
+			wantFlag:   false,
 		},
 	}
 

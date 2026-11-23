@@ -57,7 +57,7 @@ func TestACurrentModuleIsNotReported(t *testing.T) {
 		if err := os.WriteFile(path, wasm, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "devtools", "parsers", "list", "--wasm", path)
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "devtools", "parsers", "list", "--wasm", path)
 		if res.ExitCode != 0 {
 			t.Fatalf("list --wasm %s: exit %d\n%s", module, res.ExitCode, res.Stderr)
 		}

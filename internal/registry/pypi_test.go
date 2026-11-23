@@ -98,7 +98,7 @@ func TestGetPyPIPackageInfo(t *testing.T) {
 }
 
 func isoFile(t time.Time, yanked bool) pypiReleaseFile {
-	return pypiReleaseFile{UploadTimeISO8601: t.Format(time.RFC3339), Yanked: yanked}
+	return pypiReleaseFile{UploadTime: "", UploadTimeISO8601: t.Format(time.RFC3339), Yanked: yanked}
 }
 
 func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
@@ -143,7 +143,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("selects older when latest too fresh", func(t *testing.T) {
 		setup(t, pypiFullResponse{
-			Info: pypiInfo{Name: "pkg", Version: "2.0.0"},
+			Info: pypiInfo{Summary: "", Name: "pkg", Version: "2.0.0"},
 			Releases: map[string][]pypiReleaseFile{
 				"2.0.0": {isoFile(fresh, false)},
 				"1.0.0": {isoFile(old, false)},
@@ -161,7 +161,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("skips PEP 440 pre-release versions", func(t *testing.T) {
 		setup(t, pypiFullResponse{
-			Info: pypiInfo{Name: "pkg", Version: "2.0.0rc1"},
+			Info: pypiInfo{Summary: "", Name: "pkg", Version: "2.0.0rc1"},
 			Releases: map[string][]pypiReleaseFile{
 				"2.0.0rc1":   {isoFile(old, false)},
 				"2.0.0b2":    {isoFile(old, false)},
@@ -182,7 +182,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("post-release is not skipped", func(t *testing.T) {
 		setup(t, pypiFullResponse{
-			Info: pypiInfo{Name: "pkg", Version: "1.0.0.post1"},
+			Info: pypiInfo{Summary: "", Name: "pkg", Version: "1.0.0.post1"},
 			Releases: map[string][]pypiReleaseFile{
 				"1.0.0.post1": {isoFile(old, false)},
 				"1.0.0":       {isoFile(old.Add(-time.Hour), false)},
@@ -200,7 +200,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("skips fully yanked releases", func(t *testing.T) {
 		setup(t, pypiFullResponse{
-			Info: pypiInfo{Name: "pkg", Version: "2.0.0"},
+			Info: pypiInfo{Summary: "", Name: "pkg", Version: "2.0.0"},
 			Releases: map[string][]pypiReleaseFile{
 				"2.0.0": {isoFile(old, true), isoFile(old, true)},
 				"1.0.0": {isoFile(old, false)},
@@ -218,7 +218,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("mixed yanked/non-yanked files is not skipped", func(t *testing.T) {
 		setup(t, pypiFullResponse{
-			Info: pypiInfo{Name: "pkg", Version: "2.0.0"},
+			Info: pypiInfo{Summary: "", Name: "pkg", Version: "2.0.0"},
 			Releases: map[string][]pypiReleaseFile{
 				"2.0.0": {isoFile(old, true), isoFile(old, false)},
 				"1.0.0": {isoFile(old.Add(-time.Hour), false)},
@@ -236,10 +236,10 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("legacy upload_time fallback", func(t *testing.T) {
 		setup(t, pypiFullResponse{
-			Info: pypiInfo{Name: "pkg", Version: "2.0.0"},
+			Info: pypiInfo{Summary: "", Name: "pkg", Version: "2.0.0"},
 			Releases: map[string][]pypiReleaseFile{
-				"2.0.0": {{UploadTime: fresh.UTC().Format("2006-01-02T15:04:05")}},
-				"1.0.0": {{UploadTime: old.UTC().Format("2006-01-02T15:04:05")}},
+				"2.0.0": {{UploadTimeISO8601: "", Yanked: false, UploadTime: fresh.UTC().Format("2006-01-02T15:04:05")}},
+				"1.0.0": {{UploadTimeISO8601: "", Yanked: false, UploadTime: old.UTC().Format("2006-01-02T15:04:05")}},
 			},
 		})
 
@@ -254,11 +254,11 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("version with no parsable upload time is skipped", func(t *testing.T) {
 		setup(t, pypiFullResponse{
-			Info: pypiInfo{Name: "pkg", Version: "2.0.0"},
+			Info: pypiInfo{Summary: "", Name: "pkg", Version: "2.0.0"},
 			Releases: map[string][]pypiReleaseFile{
 				// 2.0.0 has neither upload_time_iso_8601 nor a parsable
 				// upload_time, so pypiVersionReleaseTime returns ok=false.
-				"2.0.0": {{}},
+				"2.0.0": {{UploadTime: "", UploadTimeISO8601: "", Yanked: false}},
 				"1.0.0": {isoFile(old, false)},
 			},
 		})
@@ -274,7 +274,7 @@ func TestGetPyPIPackageInfoWithMinAge(t *testing.T) {
 
 	t.Run("no version old enough returns nil", func(t *testing.T) {
 		setup(t, pypiFullResponse{
-			Info: pypiInfo{Name: "pkg", Version: "2.0.0"},
+			Info: pypiInfo{Summary: "", Name: "pkg", Version: "2.0.0"},
 			Releases: map[string][]pypiReleaseFile{
 				"2.0.0": {isoFile(fresh, false)},
 				"1.0.0": {isoFile(fresh, false)},

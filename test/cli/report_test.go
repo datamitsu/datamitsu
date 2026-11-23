@@ -25,7 +25,7 @@ func reportProject(t *testing.T, extra ...string) *execProject {
 	spec := fixtureSpec
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	tools := append([]string{
-		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{}),
+		clitest.ShellTool("alpha", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 		parsedTool(hadolintFinding, 0),
 	}, extra...)
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, tools...))
@@ -83,7 +83,7 @@ func TestReportJSON(t *testing.T) {
 
 	// check writes one document for both of its operations.
 	t.Run("check", func(t *testing.T) {
-		e := reportProject(t, clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Operation: "fix"}))
+		e := reportProject(t, clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Operation: "fix"}))
 		res := e.run("", nil, "check", "--report", "json=run.json")
 		e.wantExit(res, 0)
 		doc, decoded := e.report("run.json")
@@ -96,7 +96,7 @@ func TestReportJSON(t *testing.T) {
 
 	// The run that fails is the one a pipeline uploads.
 	t.Run("tool_failed", func(t *testing.T) {
-		e := reportProject(t, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{}))
+		e := reportProject(t, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		res := e.run("", nil, "lint", "--report", "json=run.json")
 		e.wantExit(res, 1)
 		doc, decoded := e.report("run.json")
@@ -109,7 +109,7 @@ func TestReportJSON(t *testing.T) {
 	// A setup failure before the tools ran still names every planned task.
 	t.Run("setup_failed", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""},
-			clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")})
+			clitest.ShellConfigSpec{Parsers: "", ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")})
 		res := e.run("", nil, "lint", "--report", "json=run.json")
 		e.wantExit(res, 1)
 		doc, _ := e.report("run.json")
@@ -148,7 +148,21 @@ func TestReportBundledFixChanges(t *testing.T) {
 	e := newExecProject(t,
 		map[string]string{"fixture.marker": "", ".datamitsuignore": "*.go:cspell  \n"},
 		fixtureSpec,
-		clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{Operation: "fix"}),
+		clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{
+			Scope:        "",
+			Args:         nil,
+			Globs:        nil,
+			Priority:     0,
+			ProjectTypes: nil,
+			Parser:       "",
+			ParserModule: "",
+			Env:          nil,
+			InheritEnv:   nil,
+			FailOn:       "",
+			Input:        "",
+			Output:       "",
+			Operation:    "fix",
+		}),
 	)
 	res := e.run("", nil, "fix", "--report", "json=run.json")
 	e.wantExit(res, 0)
@@ -186,7 +200,7 @@ func TestReportNotWritten(t *testing.T) {
 	})
 
 	t.Run("tool_failure_wins", func(t *testing.T) {
-		e := reportProject(t, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{}))
+		e := reportProject(t, clitest.ShellTool("beta", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}))
 		e.p.WriteFile("blocker", "a file, not a directory\n")
 		res := e.run("", []string{"DATAMITSU_REPORT=json=ok.json"}, "lint", "--report", "json=blocker/run.json")
 		e.wantExit(res, 1)
@@ -218,9 +232,9 @@ func TestReportUsage(t *testing.T) {
 	}{
 		{name: "env_unknown_format", env: []string{"DATAMITSU_REPORT=yaml=out.yaml"}, args: []string{"lint"}},
 		{name: "env_no_path", env: []string{"DATAMITSU_REPORT=json"}, args: []string{"lint"}},
-		{name: "flag_unknown_option", args: []string{"lint", "--report", "json=out.json?category=x"}},
-		{name: "flag_twice", args: []string{"lint", "--report", "json=a.json", "--report", "json=b.json"}},
-		{name: "with_explain", args: []string{"lint", "--explain", "--report", "json=out.json"}},
+		{env: nil, name: "flag_unknown_option", args: []string{"lint", "--report", "json=out.json?category=x"}},
+		{env: nil, name: "flag_twice", args: []string{"lint", "--report", "json=a.json", "--report", "json=b.json"}},
+		{env: nil, name: "with_explain", args: []string{"lint", "--explain", "--report", "json=out.json"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -242,10 +256,10 @@ func TestReportNarrowedRun(t *testing.T) {
 		dir  string
 		args []string
 	}{
-		{name: "paths", args: []string{"lint", "Dockerfile"}},
+		{dir: "", name: "paths", args: []string{"lint", "Dockerfile"}},
 		{name: "subtree", dir: "sub", args: []string{"lint"}},
-		{name: "tools", args: []string{"lint", "--tools", "hadolint"}},
-		{name: "file_scoped", args: []string{"lint", "--file-scoped"}},
+		{dir: "", name: "tools", args: []string{"lint", "--tools", "hadolint"}},
+		{dir: "", name: "file_scoped", args: []string{"lint", "--file-scoped"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -308,8 +322,8 @@ func TestReportNarrowedRun(t *testing.T) {
 func TestReportKeepsGoing(t *testing.T) {
 	files := map[string]string{"fixture.marker": ""}
 	tools := []string{
-		clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Priority: 10}),
-		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Priority: 20}),
+		clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Priority: 10}),
+		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Priority: 20}),
 	}
 
 	t.Run("fail_fast_off", func(t *testing.T) {
@@ -337,7 +351,7 @@ func TestReportKeepsGoing(t *testing.T) {
 		env  []string
 		args []string
 	}{
-		{name: "flag", args: []string{"lint", "--fail-fast=true", "--report", "json=run.json"}},
+		{env: nil, name: "flag", args: []string{"lint", "--fail-fast=true", "--report", "json=run.json"}},
 		{name: "env", env: []string{"DATAMITSU_FAIL_FAST=true", "DATAMITSU_REPORT=json=run.json"}, args: []string{"lint"}},
 	} {
 		t.Run("explicit_"+tc.name, func(t *testing.T) {
@@ -362,12 +376,12 @@ func TestReportMasksSecrets(t *testing.T) {
 	leakyFinding := `[{"file":"Dockerfile","line":1,"column":1,"level":"warning","code":"DL3006",` +
 		`"message":"token '"$DATAMITSU_TEST_TOKEN"' in the image"}]`
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec,
-		clitest.ShellTool("leaky", settle+clitest.RecordRun+`; echo "using $DATAMITSU_TEST_TOKEN"; exit 3`, clitest.ToolOpSpec{}),
+		clitest.ShellTool("leaky", settle+clitest.RecordRun+`; echo "using $DATAMITSU_TEST_TOKEN"; exit 3`, clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: ""}),
 		parsedTool(leakyFinding, 0),
 		// The operation's env names a secret whose value exists only once
 		// {root} is expanded.
 		clitest.ShellTool("creds", settle+clitest.RecordRun+`; echo "reading $SERVICE_CREDENTIALS"; exit 4`,
-			clitest.ToolOpSpec{Env: map[string]string{"SERVICE_CREDENTIALS": "{root}/private/credentials.json"}}),
+			clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, Parser: "", ParserModule: "", InheritEnv: nil, FailOn: "", Input: "", Output: "", Env: map[string]string{"SERVICE_CREDENTIALS": "{root}/private/credentials.json"}}),
 	))
 	res := e.run("", []string{"DATAMITSU_TEST_TOKEN=" + secret}, "lint", "--report", "json=run.json")
 	e.wantExit(res, 1)
@@ -398,7 +412,7 @@ func TestReportSecurityTool(t *testing.T) {
 	spec.Parsers = clitest.SeedParserModule(t, e.cache, currentParserModule)
 	e.p.WriteFile("exec.config.js", clitest.ShellConfig(spec, clitest.ShellTool("gitleaks",
 		settle+clitest.RecordRun+`; echo "leak: found-secret-value"; exit 1`,
-		clitest.ToolOpSpec{Parser: "gitleaks"})))
+		clitest.ToolOpSpec{Operation: "", Scope: "", Args: nil, Globs: nil, Priority: 0, ProjectTypes: nil, ParserModule: "", Env: nil, InheritEnv: nil, FailOn: "", Input: "", Output: "", Parser: "gitleaks"})))
 	res := e.run("", nil, "lint", "--report", "json=run.json")
 	e.wantExit(res, 1)
 	doc, _ := e.report("run.json")

@@ -39,7 +39,7 @@ func (d *Display) Task(label string, total int64) *Task {
 	}
 	d.mu.Unlock()
 
-	t := &Task{d: d, total: total, lastPct: -1}
+	t := &Task{bar: nil, label: atomic.Value{}, release: sync.Once{}, mu: sync.Mutex{}, current: 0, lastAt: time.Time{}, done: false, d: d, total: total, lastPct: -1}
 	t.label.Store(label)
 
 	if prog != nil {

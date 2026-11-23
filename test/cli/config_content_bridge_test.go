@@ -29,7 +29,7 @@ globalThis.getConfig = input => {
   try { content({ again: content }); } catch (_) {}
   return input;
 };`)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, Timeout: 25 * time.Second},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Dir: p.Dir, Timeout: 25 * time.Second},
 		"--no-auto-config", "--before-config", base, "--config", consumer, "config", "show")
 	if res.ExitCode == 0 || !strings.Contains(res.Stderr, "execution timeout") {
 		t.Fatalf("reentrant callback escaped deadline: exit %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
@@ -49,7 +49,7 @@ globalThis.getMinVersion = () => "0.0.0";
 globalThis.getConfig = input => merge(input, {
   version: input.managedConfigs["child.json"].content.call({ value: "receiver-preserved" }, {})
 });`)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--before-config", base,
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "--no-auto-config", "--before-config", base,
 		"--config", consumer, "config", "show")
 	if res.ExitCode != 0 {
 		t.Fatalf("receiver callback: exit %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)
@@ -77,7 +77,7 @@ globalThis.getConfig = () => ({
 globalThis.getMinVersion = () => "0.0.0";
 globalThis.getConfig = input => ({ ...input });`)
 	p.WriteFile("child.json", `{"keep":"original"}`)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--before-config", base,
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "--no-auto-config", "--before-config", base,
 		"--config", consumer, "config", "reconcile", "--skip-fix")
 	if res.ExitCode == 0 || !strings.Contains(res.Stdout+res.Stderr, "content is not a callable function") {
 		t.Fatalf("invalid callback accepted: exit %d\n%s\n%s", res.ExitCode, res.Stdout, res.Stderr)

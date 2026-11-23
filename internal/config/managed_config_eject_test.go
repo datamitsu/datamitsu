@@ -11,22 +11,51 @@ import (
 
 func ejectFixture() *Config {
 	return &Config{
+		Name:          "",
+		Version:       "",
+		Apps:          nil,
+		Bundles:       nil,
+		Runtimes:      nil,
+		EjectConfigs:  nil,
+		ProjectTypes:  nil,
+		Execution:     nil,
+		InitCommands:  nil,
+		IgnoreRules:   nil,
+		SharedStorage: nil,
+		OCI:           nil,
+		Parsers:       nil,
+		Lsp:           nil,
 		Tools: MapOfTools{
-			"gitleaks": {Name: "gitleaks", Operations: map[OperationType]ToolOperation{
-				OpLint: {App: "gitleaks", Args: []string{"--config", "{managedConfig:.gitleaks.toml}", "{target}"}},
-			}},
-			"yamlfmt": {Name: "yamlfmt", Operations: map[OperationType]ToolOperation{
-				OpFix:  {App: "yamlfmt", Args: []string{"-conf={managedConfig:.yamlfmt.yaml}", "{files}"}},
-				OpLint: {App: "yamlfmt", Args: []string{"-lint", "{files}"}, Env: map[string]string{"YAMLFMT_CONF": "{managedConfig:.yamlfmt.yaml}"}},
-			}},
-			"eslint": {Name: "eslint", Operations: map[OperationType]ToolOperation{
-				OpLint: {App: "eslint", Args: []string{"-c", "{managedConfig:eslint.config.mjs}", "{files}"}},
-			}},
+			"gitleaks": {
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Name: "gitleaks", Operations: map[OperationType]ToolOperation{
+					OpLint: {Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "gitleaks", Args: []string{"--config", "{managedConfig:.gitleaks.toml}", "{target}"}},
+				},
+			},
+			"yamlfmt": {
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Name: "yamlfmt", Operations: map[OperationType]ToolOperation{
+					OpFix:  {Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "yamlfmt", Args: []string{"-conf={managedConfig:.yamlfmt.yaml}", "{files}"}},
+					OpLint: {Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "yamlfmt", Args: []string{"-lint", "{files}"}, Env: map[string]string{"YAMLFMT_CONF": "{managedConfig:.yamlfmt.yaml}"}},
+				},
+			},
+			"eslint": {
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Name: "eslint", Operations: map[OperationType]ToolOperation{
+					OpLint: {Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "eslint", Args: []string{"-c", "{managedConfig:eslint.config.mjs}", "{files}"}},
+				},
+			},
 		},
 		ManagedConfigs: MapOfManagedConfigs{
-			".gitleaks.toml":    {Tools: []string{"gitleaks"}, Scope: ScopeGitRoot, Ejectable: true, Content: "fn"},
-			".yamlfmt.yaml":     {Tools: []string{"yamlfmt"}, Scope: ScopeGitRoot, Ejectable: true, Content: "fn"},
-			"eslint.config.mjs": {Tools: []string{"eslint"}},
+			".gitleaks.toml":    {ProjectTypes: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Placement: "", Render: nil, Tools: []string{"gitleaks"}, Scope: ScopeGitRoot, Ejectable: true, Content: "fn"},
+			".yamlfmt.yaml":     {ProjectTypes: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Placement: "", Render: nil, Tools: []string{"yamlfmt"}, Scope: ScopeGitRoot, Ejectable: true, Content: "fn"},
+			"eslint.config.mjs": {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"eslint"}},
 		},
 	}
 }
@@ -85,16 +114,16 @@ func TestValidateEject(t *testing.T) {
 			c.ManagedConfigs[".gitleaks.toml"] = mc
 		}, "cannot be combined with deleteOnly"},
 		{"key inside .datamitsu", func(c *Config) {
-			c.ManagedConfigs[".datamitsu/x.toml"] = ManagedConfig{Tools: []string{"gitleaks"}, Scope: ScopeGitRoot, Ejectable: true}
+			c.ManagedConfigs[".datamitsu/x.toml"] = ManagedConfig{ProjectTypes: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Placement: "", Render: nil, Content: nil, Tools: []string{"gitleaks"}, Scope: ScopeGitRoot, Ejectable: true}
 		}, "clean relative path"},
 		{"keys differing only in case", func(c *Config) {
-			c.ManagedConfigs[".GITLEAKS.toml"] = ManagedConfig{Tools: []string{"gitleaks"}, Scope: ScopeGitRoot, Ejectable: true}
+			c.ManagedConfigs[".GITLEAKS.toml"] = ManagedConfig{ProjectTypes: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Placement: "", Render: nil, Content: nil, Tools: []string{"gitleaks"}, Scope: ScopeGitRoot, Ejectable: true}
 		}, "differ only in case"},
 		{"a key that is a directory of another", func(c *Config) {
-			c.ManagedConfigs[".gitleaks.toml/nested.toml"] = ManagedConfig{Tools: []string{"gitleaks"}, Scope: ScopeGitRoot, Ejectable: true}
+			c.ManagedConfigs[".gitleaks.toml/nested.toml"] = ManagedConfig{ProjectTypes: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Placement: "", Render: nil, Content: nil, Tools: []string{"gitleaks"}, Scope: ScopeGitRoot, Ejectable: true}
 		}, "is a directory of the other"},
 		{"key escaping the root", func(c *Config) {
-			c.ManagedConfigs["../x.toml"] = ManagedConfig{Tools: []string{"gitleaks"}, Scope: ScopeGitRoot, Ejectable: true}
+			c.ManagedConfigs["../x.toml"] = ManagedConfig{ProjectTypes: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Placement: "", Render: nil, Content: nil, Tools: []string{"gitleaks"}, Scope: ScopeGitRoot, Ejectable: true}
 		}, "clean relative path"},
 	}
 	for _, tt := range tests {
@@ -111,7 +140,7 @@ func TestValidateEject(t *testing.T) {
 
 func TestApplyManagedConfigPlacements(t *testing.T) {
 	cfg := ejectFixture()
-	cfg.ManagedConfigs["shared.toml"] = ManagedConfig{Tools: []string{"yamlfmt", "gitleaks"}, Scope: ScopeGitRoot, Ejectable: true}
+	cfg.ManagedConfigs["shared.toml"] = ManagedConfig{ProjectTypes: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Placement: "", Render: nil, Content: nil, Tools: []string{"yamlfmt", "gitleaks"}, Scope: ScopeGitRoot, Ejectable: true}
 	cfg.EjectConfigs = []string{"gitleaks"}
 	ApplyManagedConfigPlacements(cfg)
 
@@ -201,10 +230,10 @@ func TestRenderManagedConfigFromScratch(t *testing.T) {
 		return v
 	}
 	base := ManagedConfigLayer{Name: "base", VM: baseVM, Configs: MapOfManagedConfigs{
-		".gitleaks.toml": {Content: fn(baseVM, `(ctx) => [ctx.placement, ctx.originalContent ?? "none", ctx.datamitsuDir, ctx.datamitsuDirFromOutput, ctx.outputPath].join("|")`)},
+		".gitleaks.toml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: fn(baseVM, `(ctx) => [ctx.placement, ctx.originalContent ?? "none", ctx.datamitsuDir, ctx.datamitsuDirFromOutput, ctx.outputPath].join("|")`)},
 	}}
 	project := ManagedConfigLayer{Name: "project", VM: projectVM, Configs: MapOfManagedConfigs{
-		".gitleaks.toml": {Content: fn(projectVM, `(ctx) => ctx.existingContent + "+project"`)},
+		".gitleaks.toml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: fn(projectVM, `(ctx) => ctx.existingContent + "+project"`)},
 	}}
 
 	got, err := RenderManagedConfigFromScratch([]ManagedConfigLayer{base, project}, ".gitleaks.toml", root, PlacementInternal)
@@ -228,7 +257,7 @@ func TestRenderManagedConfigFromScratch(t *testing.T) {
 	t.Run("a throwing content is an error", func(t *testing.T) {
 		vm := goja.New()
 		layer := ManagedConfigLayer{Name: "broken", VM: vm, Configs: MapOfManagedConfigs{
-			"x.toml": {Content: fn(vm, `() => { throw new Error("boom") }`)},
+			"x.toml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: fn(vm, `() => { throw new Error("boom") }`)},
 		}}
 		if _, err := RenderManagedConfigFromScratch([]ManagedConfigLayer{layer}, "x.toml", root, PlacementInternal); err == nil || !strings.Contains(err.Error(), "broken") {
 			t.Fatalf("err = %v, want one naming the layer", err)
@@ -238,7 +267,7 @@ func TestRenderManagedConfigFromScratch(t *testing.T) {
 	t.Run("undefined from every layer renders nothing", func(t *testing.T) {
 		vm := goja.New()
 		layer := ManagedConfigLayer{Name: "undefined-only", VM: vm, Configs: MapOfManagedConfigs{
-			"x.toml": {Content: fn(vm, `() => undefined`)},
+			"x.toml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: fn(vm, `() => undefined`)},
 		}}
 		got, err := RenderManagedConfigFromScratch([]ManagedConfigLayer{layer}, "x.toml", root, PlacementInternal)
 		if err != nil || got != nil {

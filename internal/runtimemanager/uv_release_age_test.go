@@ -49,7 +49,9 @@ func TestUVLockWindow(t *testing.T) {
 		wantErr      string
 	}{
 		{
-			name: "span",
+			wantPackages: nil,
+			wantErr:      "",
+			name:         "span",
 			lock: `version = 1
 revision = 3
 requires-python = ">=3.12"
@@ -65,7 +67,9 @@ version = "2026.7.22"
 			wantExclude: "P7D",
 		},
 		{
-			name: "span in minutes keeps its unit",
+			wantPackages: nil,
+			wantErr:      "",
+			name:         "span in minutes keeps its unit",
 			lock: `version = 1
 
 [options]
@@ -75,7 +79,9 @@ exclude-newer-span = "PT10080M"
 			wantExclude: "PT10080M",
 		},
 		{
-			name: "absolute timestamp",
+			wantPackages: nil,
+			wantErr:      "",
+			name:         "absolute timestamp",
 			lock: `version = 1
 
 [options]
@@ -88,7 +94,10 @@ version = "3.10"
 			wantExclude: "2026-09-01T00:00:00Z",
 		},
 		{
-			name: "no options",
+			wantExclude:  "",
+			wantPackages: nil,
+			wantErr:      "",
+			name:         "no options",
 			lock: `version = 1
 requires-python = ">=3.12"
 
@@ -98,7 +107,8 @@ version = "3.10"
 `,
 		},
 		{
-			name: "package cutoffs in every recorded shape",
+			wantErr: "",
+			name:    "package cutoffs in every recorded shape",
 			lock: `version = 1
 
 [options]
@@ -115,12 +125,16 @@ charset-normalizer = { timestamp = "2026-09-20T00:00:00Z" }
 			wantPackages: []string{"certifi=P1D", "charset-normalizer=2026-09-20T00:00:00Z", "idna=2026-09-24T00:00:00Z", "urllib3=false"},
 		},
 		{
-			name:    "malformed",
-			lock:    "version = 1\n[options\nexclude-newer = \n",
-			wantErr: "failed to read [options] from uv.lock",
+			wantExclude:  "",
+			wantPackages: nil,
+			name:         "malformed",
+			lock:         "version = 1\n[options\nexclude-newer = \n",
+			wantErr:      "failed to read [options] from uv.lock",
 		},
 		{
-			name: "unsupported package value",
+			wantExclude:  "",
+			wantPackages: nil,
+			name:         "unsupported package value",
 			lock: `version = 1
 
 [options.exclude-newer-package]
@@ -234,17 +248,17 @@ func TestUVInheritedOverrideStripsOnlyOwnedVariables(t *testing.T) {
 func TestUVReleaseAgeHint(t *testing.T) {
 	refusal := "hint: `certifi` was filtered by `exclude-newer` to only include packages uploaded before 2026-09-18T00:00:00Z."
 
-	hint := uvReleaseAgeHint(refusal, uvWindow{excludeNewer: uvDefaultExcludeNewer()})
+	hint := uvReleaseAgeHint(refusal, uvWindow{packages: nil, excludeNewer: uvDefaultExcludeNewer()})
 	for _, want := range []string{"10080 minutes", "runtimeconfig.MinimumReleaseAgeMinutes", "--exclude-newer P7D", "exclude-newer-package"} {
 		if !strings.Contains(hint, want) {
 			t.Errorf("hint %q does not mention %q", hint, want)
 		}
 	}
 
-	if got := uvReleaseAgeHint("error: network unreachable", uvWindow{excludeNewer: "P7D"}); got != "" {
+	if got := uvReleaseAgeHint("error: network unreachable", uvWindow{packages: nil, excludeNewer: "P7D"}); got != "" {
 		t.Errorf("unrelated failure got a hint: %q", got)
 	}
-	if got := uvReleaseAgeHint(refusal, uvWindow{}); got != "" {
+	if got := uvReleaseAgeHint(refusal, uvWindow{excludeNewer: "", packages: nil}); got != "" {
 		t.Errorf("a window from the app's uv.toml got the default's hint: %q", got)
 	}
 }

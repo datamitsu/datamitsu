@@ -18,7 +18,7 @@ func TestCreateMissingCreatesOnlyMissingFiles(t *testing.T) {
 		return "managed content\n"
 	})
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{
-		"managed.yml": {Content: vm.Get("contentFunc")},
+		"managed.yml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: vm.Get("contentFunc")},
 	}, vm, nil)
 	installer.SetCreateMissingOnly(true)
 
@@ -65,11 +65,11 @@ func TestCreateMissingNeverTouchesExistingCustomContent(t *testing.T) {
 		return "managed content\n"
 	})
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{
-		"managed.yml": {Content: vm.Get("contentFunc")},
+		"managed.yml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: vm.Get("contentFunc")},
 	}, vm, nil)
 	installer.SetCreateMissingOnly(true)
 
-	result := installer.installConfig(context.Background(), "managed.yml", config.ManagedConfig{Content: vm.Get("contentFunc")}, false)
+	result := installer.installConfig(context.Background(), "managed.yml", config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: vm.Get("contentFunc")}, false)
 	if result.Error != nil {
 		t.Fatalf("installConfig() error = %v", result.Error)
 	}
@@ -93,7 +93,7 @@ func TestCreateMissingCreatesMainWhenOnlyVariantExists(t *testing.T) {
 	_ = vm.Set("contentFunc", func(ctx goja.Value) string {
 		return "managed content\n"
 	})
-	cfg := config.ManagedConfig{Content: vm.Get("contentFunc"), OtherFileNameList: []string{".variant.old"}}
+	cfg := config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: vm.Get("contentFunc"), OtherFileNameList: []string{".variant.old"}}
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{"renamed.yml": cfg}, vm, nil)
 	installer.SetCreateMissingOnly(true)
 
@@ -127,7 +127,7 @@ func TestCreateMissingCollisionWithDirectory(t *testing.T) {
 	_ = vm.Set("contentFunc", func(ctx goja.Value) string {
 		return "managed content\n"
 	})
-	cfg := config.ManagedConfig{Content: vm.Get("contentFunc")}
+	cfg := config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: vm.Get("contentFunc")}
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{"managed.yml": cfg}, vm, nil)
 	installer.SetCreateMissingOnly(true)
 
@@ -154,8 +154,8 @@ func TestCreateMissingSkipsDeleteOnlyAndInternal(t *testing.T) {
 	}
 
 	configs := config.MapOfManagedConfigs{
-		"delete.yml":   {Content: contentFunc, DeleteOnly: true},
-		"internal.yml": {Content: contentFunc, Placement: config.PlacementInternal},
+		"delete.yml":   {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: contentFunc, DeleteOnly: true},
+		"internal.yml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Render: nil, Content: contentFunc, Placement: config.PlacementInternal},
 	}
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, configs, vm, nil)
 	installer.SetCreateMissingOnly(true)
@@ -190,7 +190,7 @@ func TestCreateMissingSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := config.ManagedConfig{LinkTarget: "shared/real.yml"}
+	cfg := config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, LinkTarget: "shared/real.yml"}
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{"link.yml": cfg}, nil, nil)
 	installer.SetCreateMissingOnly(true)
 
@@ -211,7 +211,7 @@ func TestCreateMissingSymlink(t *testing.T) {
 	// A nested managed link whose parent directories do not exist yet gets
 	// them created — the exclusive path must not skip MkdirAll. The target is
 	// relative to the link's own directory, so it climbs one level.
-	nested := config.ManagedConfig{LinkTarget: "../shared/real.yml"}
+	nested := config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, LinkTarget: "../shared/real.yml"}
 	nestedInstaller := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{".config/tool.yml": nested}, nil, nil)
 	nestedInstaller.SetCreateMissingOnly(true)
 
@@ -237,7 +237,7 @@ func TestCreateMissingDryRunWritesNothing(t *testing.T) {
 	_ = vm.Set("contentFunc", func(ctx goja.Value) string {
 		return "content\n"
 	})
-	cfg := config.ManagedConfig{Content: vm.Get("contentFunc")}
+	cfg := config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: vm.Get("contentFunc")}
 	installer := NewInstaller(tmpDir, tmpDir, []string{}, nil, config.MapOfManagedConfigs{"managed.yml": cfg}, vm, nil)
 	installer.SetCreateMissingOnly(true)
 

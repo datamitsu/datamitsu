@@ -14,7 +14,7 @@ func TestConfigShow(t *testing.T) {
 	cfg := clitest.WriteMinimalConfig(p)
 	norm := clitest.NewNormalizer()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "show")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config show` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -27,7 +27,7 @@ func TestConfigShow(t *testing.T) {
 // the type surface); the contract under test is "exit 0, non-empty, starts with
 // the ambient `declare global` block".
 func TestConfigTypes(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "config", "types")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "config", "types")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config types` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -50,7 +50,7 @@ func TestConfigTypes(t *testing.T) {
 // not pinned to a value, per the runtimeconfig "required keys, not field count"
 // policy. offline/noOci are true because the harness runs hermetically offline.
 func TestConfigRuntime(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{}, "config", "runtime")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Env: nil, Stdin: "", Timeout: 0}, "config", "runtime")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config runtime` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -120,7 +120,7 @@ func TestConfigRuntimeEnvOverride(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			res := clitest.Run(t, clitest.RunOptions{Env: []string{tc.env}}, "config", "runtime")
+			res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Stdin: "", Timeout: 0, Env: []string{tc.env}}, "config", "runtime")
 			if res.ExitCode != 0 {
 				t.Fatalf("`config runtime` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 			}
@@ -142,7 +142,7 @@ func TestConfigRuntimeEnvOverride(t *testing.T) {
 // TestConfigRuntimeFailFast is the documented way to check what a run will do
 // after a failure: `DATAMITSU_FAIL_FAST=false datamitsu config runtime | jq .failFast`.
 func TestConfigRuntimeFailFast(t *testing.T) {
-	res := clitest.Run(t, clitest.RunOptions{Env: []string{"DATAMITSU_FAIL_FAST=false"}}, "config", "runtime")
+	res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Stdin: "", Timeout: 0, Env: []string{"DATAMITSU_FAIL_FAST=false"}}, "config", "runtime")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config runtime` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 	}
@@ -174,7 +174,7 @@ func TestConfigRuntimeExecutionVariables(t *testing.T) {
 		if tc.env != "" {
 			env = []string{tc.env}
 		}
-		res := clitest.Run(t, clitest.RunOptions{Env: env}, "config", "runtime")
+		res := clitest.Run(t, clitest.RunOptions{Dir: "", CacheDir: "", Stdin: "", Timeout: 0, Env: env}, "config", "runtime")
 		if res.ExitCode != 0 {
 			t.Fatalf("`config runtime` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
 		}
@@ -220,7 +220,7 @@ func TestConfigChainHashTable(t *testing.T) {
 	p, cfg := newChainHashProject(t)
 	norm := clitest.NewNormalizer()
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "chain-hash")
 	if res.ExitCode != 0 {
 		t.Fatalf("`config chain-hash` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -234,14 +234,14 @@ func TestConfigChainHashTable(t *testing.T) {
 func TestConfigChainHashSingle(t *testing.T) {
 	p, cfg := newChainHashProject(t)
 
-	table := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	table := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "chain-hash")
 	if table.ExitCode != 0 {
 		t.Fatalf("`config chain-hash` exit = %d, want 0\nstderr:\n%s", table.ExitCode, table.Stderr)
 	}
 	wantHash := hashFromTableRow(t, table.Stdout, "alpha.txt")
 
-	single := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	single := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "chain-hash", "alpha.txt")
 	if single.ExitCode != 0 {
 		t.Fatalf("`config chain-hash alpha.txt` exit = %d, want 0\nstderr:\n%s", single.ExitCode, single.Stderr)
@@ -263,7 +263,7 @@ func TestConfigChainHashSingle(t *testing.T) {
 func TestConfigChainHashUnknown(t *testing.T) {
 	p, cfg := newChainHashProject(t)
 
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 		"--no-auto-config", "--config", cfg, "config", "chain-hash", "does-not-exist.txt")
 	if res.ExitCode == 0 {
 		t.Fatalf("expected non-zero exit for unknown file, got 0\nstdout:\n%s", res.Stdout)
@@ -297,7 +297,7 @@ func TestConfigLockfile(t *testing.T) {
 	t.Run("list-empty", func(t *testing.T) {
 		p := clitest.NewProject(t)
 		cfg := clitest.WriteMinimalConfig(p)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "config", "lockfile")
 		if res.ExitCode != 0 {
 			t.Fatalf("`config lockfile` exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -313,7 +313,7 @@ func TestConfigLockfile(t *testing.T) {
 	t.Run("unknown-app", func(t *testing.T) {
 		p := clitest.NewProject(t)
 		cfg := clitest.WriteMinimalConfig(p)
-		res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir},
+		res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir},
 			"--no-auto-config", "--config", cfg, "config", "lockfile", "nonesuch")
 		if res.ExitCode == 0 {
 			t.Fatalf("expected non-zero exit for unknown app, got 0\nstdout:\n%s", res.Stdout)

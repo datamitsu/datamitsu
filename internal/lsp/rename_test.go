@@ -16,10 +16,10 @@ func TestRetryTransient(t *testing.T) {
 		wantErr   error
 		wantCalls int
 	}{
-		{name: "succeeds at once", wantCalls: 1},
-		{name: "retries a transient failure", failures: []error{transientErr, transientErr}, limit: time.Second, wantCalls: 3},
+		{failures: nil, limit: 0, wantErr: nil, name: "succeeds at once", wantCalls: 1},
+		{wantErr: nil, name: "retries a transient failure", failures: []error{transientErr, transientErr}, limit: time.Second, wantCalls: 3},
 		{name: "never retries another error", failures: []error{fatalErr}, limit: time.Second, wantErr: fatalErr, wantCalls: 1},
-		{name: "gives up at the limit", failures: []error{transientErr, transientErr}, wantErr: transientErr, wantCalls: 1},
+		{limit: 0, name: "gives up at the limit", failures: []error{transientErr, transientErr}, wantErr: transientErr, wantCalls: 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -20,9 +20,10 @@ type OSPattern struct {
 // indicator neither implicit rule in ScoreAsset would claim it.
 var OSPatterns = map[syslist.OsType]*OSPattern{
 	syslist.OsTypeDarwin: {
-		Name:        syslist.OsTypeDarwin,
-		Pattern:     regexp.MustCompile(`(?i)(darwin|macos|osx|mac[\s_-]?os|[_-]mac[_-])`),
-		AntiPattern: regexp.MustCompile(`(?i)(ios)`),
+		PriorityPattern: nil,
+		Name:            syslist.OsTypeDarwin,
+		Pattern:         regexp.MustCompile(`(?i)(darwin|macos|osx|mac[\s_-]?os|[_-]mac[_-])`),
+		AntiPattern:     regexp.MustCompile(`(?i)(ios)`),
 	},
 	syslist.OsTypeLinux: {
 		Name:            syslist.OsTypeLinux,
@@ -31,6 +32,7 @@ var OSPatterns = map[syslist.OsType]*OSPattern{
 		PriorityPattern: regexp.MustCompile(`(?i)\.appimage$`),
 	},
 	syslist.OsTypeWindows: {
+		AntiPattern: nil,
 		// A ".exe" suffix names Windows on its own ("snyk-win.exe" carries no
 		// other token), and so does a "win" token between separators — bounded
 		// so "darwin" does not qualify.
@@ -39,12 +41,16 @@ var OSPatterns = map[syslist.OsType]*OSPattern{
 		PriorityPattern: regexp.MustCompile(`(?i)\.exe$`),
 	},
 	syslist.OsTypeFreebsd: {
-		Name:    syslist.OsTypeFreebsd,
-		Pattern: regexp.MustCompile(`(?i)(freebsd)`),
+		AntiPattern:     nil,
+		PriorityPattern: nil,
+		Name:            syslist.OsTypeFreebsd,
+		Pattern:         regexp.MustCompile(`(?i)(freebsd)`),
 	},
 	syslist.OsTypeOpenbsd: {
-		Name:    syslist.OsTypeOpenbsd,
-		Pattern: regexp.MustCompile(`(?i)(openbsd)`),
+		AntiPattern:     nil,
+		PriorityPattern: nil,
+		Name:            syslist.OsTypeOpenbsd,
+		Pattern:         regexp.MustCompile(`(?i)(openbsd)`),
 	},
 }
 

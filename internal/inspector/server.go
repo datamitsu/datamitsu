@@ -34,7 +34,7 @@ func Handler(html []byte) http.Handler {
 
 // Serve shuts down when the CLI context is canceled, including while idle.
 func Serve(ctx context.Context, listener net.Listener, html []byte) error {
-	server := &http.Server{Handler: Handler(html), ReadHeaderTimeout: serverTimeout}
+	server := &http.Server{Addr: "", DisableGeneralOptionsHandler: false, TLSConfig: nil, ReadTimeout: 0, WriteTimeout: 0, IdleTimeout: 0, MaxHeaderBytes: 0, MaxHeaderValueCount: 0, TLSNextProto: nil, ConnState: nil, ErrorLog: nil, BaseContext: nil, ConnContext: nil, HTTP2: nil, Protocols: nil, DisableClientPriority: false, Handler: Handler(html), ReadHeaderTimeout: serverTimeout}
 	stopped := make(chan struct{})
 	go func() {
 		select {

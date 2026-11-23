@@ -17,9 +17,15 @@ import (
 func bunSystemRuntime(command string) config.MapOfRuntimes {
 	return config.MapOfRuntimes{
 		"bun": {
-			Kind:   config.RuntimeKindBun,
-			Mode:   config.RuntimeModeSystem,
-			System: &config.RuntimeConfigSystem{Command: command, SystemVersion: "1.4.1"},
+			Managed: nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindBun,
+			Mode:    config.RuntimeModeSystem,
+			System:  &config.RuntimeConfigSystem{Command: command, SystemVersion: "1.4.1"},
 			Bun: &config.RuntimeConfigBun{
 				BunVersion:  "1.4.1",
 				PNPMRuntime: testPNPMRuntimeName,
@@ -58,10 +64,12 @@ func TestResolveBunCommandInfo(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", storeRoot)
 	rm := New(bunSystemRuntime("bun"))
 	app := &binmanager.AppConfigBun{
-		PackageName: "eslint",
-		Version:     "10.9.0",
-		BinPath:     "node_modules/eslint/bin/eslint.js",
-		LockFile:    "lock",
+		Runtime:      "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "10.9.0",
+		BinPath:      "node_modules/eslint/bin/eslint.js",
+		LockFile:     "lock",
 	}
 
 	info, err := rm.resolveBunCommandInfo("eslint", app, nil, nil)
@@ -140,9 +148,12 @@ node lifecycle-probe
 	rm := New(runtimes)
 
 	app := &binmanager.AppConfigBun{
-		PackageName: "demo",
-		Version:     "1.0.0",
-		BinPath:     "node_modules/demo/cli.js",
+		Runtime:      "",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "demo",
+		Version:      "1.0.0",
+		BinPath:      "node_modules/demo/cli.js",
 	}
 	if err := rm.InstallBunApp(context.Background(), "demo", app, nil, nil, nil); err != nil {
 		t.Fatalf("InstallBunApp() error = %v", err)
@@ -306,10 +317,12 @@ printf '%s\n' "$@" > pnpm-args.txt
 		t.Fatalf("CompressLockFile() error = %v", err)
 	}
 	app := &binmanager.AppConfigBun{
-		PackageName: "demo",
-		Version:     "1.0.0",
-		BinPath:     "node_modules/demo/cli.js",
-		LockFile:    lock,
+		Runtime:      "",
+		Dependencies: nil,
+		PackageName:  "demo",
+		Version:      "1.0.0",
+		BinPath:      "node_modules/demo/cli.js",
+		LockFile:     lock,
 	}
 	if err := rm.InstallBunApp(context.Background(), "demo", app, nil, nil, nil); err != nil {
 		t.Fatalf("InstallBunApp() error = %v", err)
@@ -340,12 +353,14 @@ func TestGetCommandInfoBunMergesWorkspaceOnceOnCacheHit(t *testing.T) {
 	rm := New(bunSystemRuntime("bun"))
 	seedRuntimeTargets(t, rm, testPNPMRuntimeName)
 	appConfig := &binmanager.AppConfigBun{
-		PackageName: "eslint",
-		Version:     "10.9.0",
-		BinPath:     "node_modules/eslint/bin/eslint.js",
-		Runtime:     "bun",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "10.9.0",
+		BinPath:      "node_modules/eslint/bin/eslint.js",
+		Runtime:      "bun",
 	}
-	app := binmanager.App{Bun: appConfig}
+	app := binmanager.App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Bun: appConfig}
 
 	appEnvPath, err := rm.resolveBunAppEnvPath("eslint", appConfig, nil, nil)
 	if err != nil {
@@ -388,10 +403,12 @@ func TestGetCommandInfoBunMergesWorkspaceOnceOnCacheHit(t *testing.T) {
 func TestInstallBunAppRejectsInvalidWorkspaceYAML(t *testing.T) {
 	rm := New(bunSystemRuntime("bun"))
 	appConfig := &binmanager.AppConfigBun{
-		PackageName: "eslint",
-		Version:     "10.9.0",
-		BinPath:     "node_modules/eslint/bin/eslint.js",
-		Runtime:     "bun",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "10.9.0",
+		BinPath:      "node_modules/eslint/bin/eslint.js",
+		Runtime:      "bun",
 	}
 
 	err := rm.InstallBunApp(context.Background(), "eslint", appConfig, nil, invalidWorkspaceFiles(), nil)

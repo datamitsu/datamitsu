@@ -70,10 +70,32 @@ func stepAppRegistry(t *testing.T) (MapOfApps, string) {
 	no := false
 	apps := MapOfApps{
 		"stepper": {
-			Binary: &AppConfigBinary{Binaries: MapOfBinaries{
-				"linux": {"amd64": {"glibc": {URL: "https://example.invalid/stepper", Hash: "sha256:" + strings.Repeat("0", 64), ContentType: BinContentTypeBinary}}},
-			}},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Binary: &AppConfigBinary{
+				Version: "", Binaries: MapOfBinaries{
+					"linux": {"amd64": {"glibc": {Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.invalid/stepper", Hash: "sha256:" + strings.Repeat("0", 64), ContentType: BinContentTypeBinary}}},
+				},
+			},
 			Prepare: &AppPrepare{
+				BinPath: "",
+				Path:    "",
 				Args:    []string{"PREPARE"},
 				Env:     map[string]string{"STEP_OUT": "${APP_PREPARED}"},
 				Network: &no,
@@ -191,10 +213,29 @@ func TestResolveBindingPathByAlias(t *testing.T) {
 	pin := "sha256:" + strings.Repeat("0", 64)
 	apps := MapOfApps{
 		"root": {
-			Shell:     &AppConfigShell{Name: "echo"},
-			DependsOn: []AppDependency{{App: "dep", Alias: "validator"}},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Shell:              &AppConfigShell{Args: nil, Name: "echo"},
+			DependsOn:          []AppDependency{{App: "dep", Alias: "validator"}},
 		},
-		"dep": {Binary: testBinaryApp("https://example.invalid/dep", pin)},
+		"dep": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: testBinaryApp("https://example.invalid/dep", pin)},
 	}
 	bm := stepTestManager(t, apps)
 

@@ -10,6 +10,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/cache"
 	"github.com/datamitsu/datamitsu/internal/config"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 
 	"go.uber.org/zap"
 )
@@ -24,11 +25,11 @@ func TestUnchangedSince(t *testing.T) {
 		needsIdentity bool
 	}{
 		// A stat proves an old file unchanged; nothing is read again.
-		{name: "an old, untouched file", old: true, want: true, wantRehash: 0, needsIdentity: true},
+		{rewrite: "", name: "an old, untouched file", old: true, want: true, wantRehash: 0, needsIdentity: true},
 		// A file written inside the mtime tick could have been rewritten at the
 		// same length without a visible stat change, so it is read again.
-		{name: "a file written just now", want: true, wantRehash: 1},
-		{name: "a file rewritten during the run", old: true, rewrite: "b\n", want: false, wantRehash: 1},
+		{old: false, rewrite: "", needsIdentity: false, name: "a file written just now", want: true, wantRehash: 1},
+		{needsIdentity: false, name: "a file rewritten during the run", old: true, rewrite: "b\n", want: false, wantRehash: 1},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -84,23 +85,47 @@ func TestPerFileCacheRecordsAgainstTheBytesTheToolSaw(t *testing.T) {
 	root := t.TempDir()
 	file := filepath.Join(root, "f.txt")
 	marker := filepath.Join(root, "runs.log")
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
 	shell := func(name string) *binmanager.CommandInfo {
-		return &binmanager.CommandInfo{Type: "shell", Command: "/bin/sh", Args: []string{"-c", `echo "$0" >> "$MARKER"`, name}}
+		return &binmanager.CommandInfo{Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", `echo "$0" >> "$MARKER"`, name}}
 	}
-	e := NewExecutor(root, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"A": shell("A"), "B": shell("B"),
-	}}, c)
+	e := NewExecutor(root, false, false, &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"A": shell("A"), "B": shell("B"),
+		},
+	}, c)
 	run := func(tool string) {
 		t.Helper()
 		result := e.executeTask(context.Background(), Task{
-			ToolName:  tool,
-			Operation: config.OpLint,
+			perFileCache: "",
+			inherited:    zerovalue_toolenv.Inherited{},
+			ID:           "",
+			Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+			UnitDir:      "",
+			UnitMembers:  nil,
+			UnitGuards:   nil,
+			Coverage:     "",
+			ToolName:     tool,
+			Operation:    config.OpLint,
 			OpConfig: config.ToolOperation{
-				App: tool, Scope: config.ToolScopePerFile, Args: []string{"{file}"},
+				Arity:             "",
+				Granularity:       "",
+				Globs:             nil,
+				ExcludeGlobs:      nil,
+				Priority:          0,
+				Cache:             nil,
+				InvalidateOn:      nil,
+				InheritEnv:        nil,
+				FailOn:            "",
+				Input:             "",
+				LSP:               nil,
+				Output:            "",
+				ManagedConfigRefs: nil,
+				App:               tool, Scope: config.ToolScopePerFile, Args: []string{"{file}"},
 				Env: map[string]string{"MARKER": marker},
 			},
 			Files:       []string{file},
@@ -142,19 +167,30 @@ func TestLintPassIsNotRecordedForAFileThatChangedDuringTheRun(t *testing.T) {
 	if err := os.WriteFile(file, []byte("X\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := NewExecutor(root, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"edits": {Type: "shell", Command: "/bin/sh", Args: []string{"-c", `echo edited >> "$1"`, "edits"}},
-	}}, c)
+	e := NewExecutor(root, false, false, &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"edits": {Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", `echo edited >> "$1"`, "edits"}},
+		},
+	}, c)
 	task := Task{
-		ToolName:    "edits",
-		Operation:   config.OpLint,
-		OpConfig:    config.ToolOperation{App: "edits", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
-		Files:       []string{file},
-		ProjectPath: root,
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "edits",
+		Operation:    config.OpLint,
+		OpConfig:     config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "edits", Scope: config.ToolScopePerFile, Args: []string{"{file}"}},
+		Files:        []string{file},
+		ProjectPath:  root,
 	}
 	if result := e.executeTask(context.Background(), task); !result.Success {
 		t.Fatalf("the tool failed: %v", result.Error)

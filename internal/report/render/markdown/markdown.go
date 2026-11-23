@@ -107,7 +107,7 @@ type part struct {
 func document(run *report.Run) []part {
 	var parts []part
 	add := func(format string, args ...any) {
-		parts = append(parts, part{text: fmt.Sprintf(format, args...)})
+		parts = append(parts, part{findings: 0, text: fmt.Sprintf(format, args...)})
 	}
 	add("## datamitsu · %s\n\n", escape(run.Datamitsu.Configuration))
 	add("- **Selection:** %s\n", selection(run.Selection))
@@ -420,11 +420,11 @@ func byLevel(fs []report.Finding) []levelGroup {
 	for _, f := range fs {
 		level := string(config.Severity(f.Severity))
 		if len(out) == 0 || out[len(out)-1].level != level {
-			out = append(out, levelGroup{level: level})
+			out = append(out, levelGroup{files: nil, level: level})
 		}
 		g := &out[len(out)-1]
 		if len(g.files) == 0 || g.files[len(g.files)-1].path != f.Location.Path {
-			g.files = append(g.files, fileGroup{path: f.Location.Path})
+			g.files = append(g.files, fileGroup{findings: nil, path: f.Location.Path})
 		}
 		fg := &g.files[len(g.files)-1]
 		fg.findings = append(fg.findings, f)

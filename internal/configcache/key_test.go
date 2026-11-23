@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	zerovalue_cienv "github.com/datamitsu/datamitsu/internal/cienv"
 	"github.com/datamitsu/datamitsu/internal/engine"
 	"github.com/datamitsu/datamitsu/internal/facts"
 )
@@ -17,10 +18,11 @@ import (
 // the zero value.
 func baseInputs() Inputs {
 	return Inputs{
-		FormatVersion:  FormatVersion,
-		Version:        "1.2.3",
-		BinaryIdentity: "0123456789abcdef0123456789abcdef",
-		ColorEnabled:   true,
+		SkipRemoteConfig: false,
+		FormatVersion:    FormatVersion,
+		Version:          "1.2.3",
+		BinaryIdentity:   "0123456789abcdef0123456789abcdef",
+		ColorEnabled:     true,
 		ChainFiles: []ChainFile{
 			{Path: "/repo/datamitsu.config.js", ContentHash: "aaaa", Exists: true},
 			{Path: "/repo/pkg/datamitsu.config.js", ContentHash: "bbbb", Exists: true},
@@ -253,7 +255,7 @@ func TestHashChainFile(t *testing.T) {
 		in := baseInputs()
 		in.ChainFiles = []ChainFile{HashChainFile(empty)}
 		missing := baseInputs()
-		missing.ChainFiles = []ChainFile{{Path: empty}}
+		missing.ChainFiles = []ChainFile{{ContentHash: "", Exists: false, Path: empty}}
 		if Key(in) == Key(missing) {
 			t.Fatal("an empty file and a missing file produce the same key")
 		}
@@ -262,13 +264,14 @@ func TestHashChainFile(t *testing.T) {
 
 func TestFactsFrom(t *testing.T) {
 	t.Run("nil facts", func(t *testing.T) {
-		if got := FactsFrom(nil); got != (Facts{}) {
+		if got := FactsFrom(nil); got != (Facts{BinaryCommand: "", BinaryPath: "", PackageName: "", Version: "", OS: "", Arch: "", Libc: "", IsInGitRepo: false, IsMonorepo: false}) {
 			t.Fatalf("expected zero Facts, got %+v", got)
 		}
 	})
 
 	t.Run("projects the JS-visible fields", func(t *testing.T) {
 		f := &facts.Facts{
+			CI:          zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
 			PackageName: "datamitsu", Version: "1.2.3",
 			BinaryCommand: "datamitsu", BinaryPath: "/usr/bin/datamitsu",
 			OS: "linux", Arch: "amd64", Libc: "glibc",

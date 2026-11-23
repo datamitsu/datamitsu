@@ -2,6 +2,7 @@ package tooling
 
 import (
 	"context"
+	zerovalue_sync "sync"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -29,7 +30,7 @@ func TestNewSelection(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := NewSelection(tt.root, tt.cwd, tt.paths, tt.fileScoped)
 			if got.Mode != tt.want {
-				t.Errorf("Mode = %v, want %v", got, Selection{Mode: tt.want})
+				t.Errorf("Mode = %v, want %v", got, Selection{Dir: "", Paths: nil, Mode: tt.want})
 			}
 		})
 	}
@@ -37,13 +38,13 @@ func TestNewSelection(t *testing.T) {
 
 func TestSelectionFiles(t *testing.T) {
 	paths := []string{"/repo/a.go"}
-	if got := (Selection{Mode: SelectionPaths, Paths: paths}).Files(); len(got) != 1 {
+	if got := (Selection{Dir: "", Mode: SelectionPaths, Paths: paths}).Files(); len(got) != 1 {
 		t.Errorf("Files() = %v, want the named paths", got)
 	}
 	// Every other mode means "work it out from the repository walk", which is not
 	// the same as "these zero files".
 	for _, m := range []SelectionMode{SelectionAll, SelectionSubtree, SelectionEmpty} {
-		if got := (Selection{Mode: m, Paths: paths}).Files(); got != nil {
+		if got := (Selection{Dir: "", Mode: m, Paths: paths}).Files(); got != nil {
 			t.Errorf("mode %v: Files() = %v, want nil", m, got)
 		}
 	}
@@ -54,21 +55,49 @@ func TestSelectionFiles(t *testing.T) {
 // repository — for a fix operation, a rewrite of files the commit never touched.
 func TestCollectTasksEmptySelectionPlansNothing(t *testing.T) {
 	planner := &Planner{
-		rootPath: "/repo",
-		cwdPath:  "/repo",
+		detectedTypes:      nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		cachedProjects:     nil,
+		seedFiles:          nil,
+		globCacheMu:        zerovalue_sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        zerovalue_sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           "/repo",
+		cwdPath:            "/repo",
 		tools: config.MapOfTools{
-			"globbed": {Operations: map[config.OperationType]config.ToolOperation{
-				config.OpFix: {App: "fmt", Args: []string{"{files}"}, Scope: config.ToolScopeRepository, Globs: []string{"**/*.go"}},
-			}},
-			"whole-project": {Operations: map[config.OperationType]config.ToolOperation{
-				config.OpFix: {App: "tidy", Args: []string{"run"}, Scope: config.ToolScopeRepository},
-			}},
+			"globbed": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+					config.OpFix: {Arity: "", Granularity: "", ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "fmt", Args: []string{"{files}"}, Scope: config.ToolScopeRepository, Globs: []string{"**/*.go"}},
+				},
+			},
+			"whole-project": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+					config.OpFix: {Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "tidy", Args: []string{"run"}, Scope: config.ToolScopeRepository},
+				},
+			},
 		},
 		cachedFiles:      []string{"/repo/a.go", "/repo/b.go"},
 		cacheInitialized: true,
 	}
 
-	tasks, skipped := planner.collectTasks(context.Background(), config.OpFix, Selection{Mode: SelectionEmpty})
+	tasks, skipped := planner.collectTasks(context.Background(), config.OpFix, Selection{Dir: "", Paths: nil, Mode: SelectionEmpty})
 	if len(tasks) != 0 {
 		t.Errorf("empty selection planned %d tasks, want 0: %+v", len(tasks), tasks)
 	}
@@ -78,7 +107,7 @@ func TestCollectTasksEmptySelectionPlansNothing(t *testing.T) {
 
 	// The same planner with an "all" selection still plans both, so the zero
 	// result above is the selection talking and not a broken fixture.
-	tasks, _ = planner.collectTasks(context.Background(), config.OpFix, Selection{Mode: SelectionAll})
+	tasks, _ = planner.collectTasks(context.Background(), config.OpFix, Selection{Dir: "", Paths: nil, Mode: SelectionAll})
 	if len(tasks) != 2 {
 		t.Fatalf("all selection planned %d tasks, want 2", len(tasks))
 	}
@@ -91,23 +120,77 @@ func TestCollectTasksEmptySelectionPlansNothing(t *testing.T) {
 func TestCollectTasksNarrowableRepositoryToolRunsFromSubdirectory(t *testing.T) {
 	newPlanner := func() *Planner {
 		return &Planner{
-			rootPath: "/repo",
-			cwdPath:  "/repo/packages/api",
+			detectedTypes:      nil,
+			projectTypesConfig: nil,
+			platformChecker:    nil,
+			extraIgnoreRules:   nil,
+			cachedRel:          nil,
+			cachedProjects:     nil,
+			seedFiles:          nil,
+			globCacheMu:        zerovalue_sync.Mutex{},
+			globCache:          nil,
+			unitCacheMu:        zerovalue_sync.Mutex{},
+			memberCache:        nil,
+			guardCache:         nil,
+			ignoreMatcher:      nil,
+			execution:          nil,
+			widenOverride:      "",
+			timings:            nil,
+			rootPath:           "/repo",
+			cwdPath:            "/repo/packages/api",
 			tools: config.MapOfTools{
 				// A file list in argv: narrowing keeps the answer complete.
-				"oxfmt": {Operations: map[config.OperationType]config.ToolOperation{
-					config.OpFix: {
-						App: "oxfmt", Args: []string{"--write", "{files}"},
-						Scope: config.ToolScopeRepository, Globs: []string{"**/*.json"},
+				"oxfmt": {
+					Name:         "",
+					ProjectTypes: nil,
+					Skip:         false,
+					SkipReason:   "",
+					OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+						config.OpFix: {
+							Arity:             "",
+							Granularity:       "",
+							ExcludeGlobs:      nil,
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "oxfmt", Args: []string{"--write", "{files}"},
+							Scope: config.ToolScopeRepository, Globs: []string{"**/*.json"},
+						},
 					},
-				}},
+				},
 				// No file list: the verdict is about the repository as a whole.
-				"syncpack": {Operations: map[config.OperationType]config.ToolOperation{
-					config.OpFix: {
-						App: "syncpack", Args: []string{"fix"},
-						Scope: config.ToolScopeRepository, Globs: []string{"**/package.json"},
+				"syncpack": {
+					Name:         "",
+					ProjectTypes: nil,
+					Skip:         false,
+					SkipReason:   "",
+					OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+						config.OpFix: {
+							Arity:             "",
+							Granularity:       "",
+							ExcludeGlobs:      nil,
+							Priority:          0,
+							Cache:             nil,
+							InvalidateOn:      nil,
+							Env:               nil,
+							InheritEnv:        nil,
+							FailOn:            "",
+							Input:             "",
+							LSP:               nil,
+							Output:            "",
+							ManagedConfigRefs: nil,
+							App:               "syncpack", Args: []string{"fix"},
+							Scope: config.ToolScopeRepository, Globs: []string{"**/package.json"},
+						},
 					},
-				}},
+				},
 			},
 			cachedFiles: []string{
 				"/repo/packages/api/swagger.json",
@@ -118,7 +201,7 @@ func TestCollectTasksNarrowableRepositoryToolRunsFromSubdirectory(t *testing.T) 
 		}
 	}
 
-	sel := Selection{Mode: SelectionPaths, Paths: []string{"/repo/packages/api/swagger.json"}}
+	sel := Selection{Dir: "", Mode: SelectionPaths, Paths: []string{"/repo/packages/api/swagger.json"}}
 	tasks, skipped := newPlanner().collectTasks(context.Background(), config.OpFix, sel)
 
 	if len(tasks) != 1 || tasks[0].ToolName != "oxfmt" {
@@ -144,15 +227,50 @@ func TestCollectTasksNarrowableRepositoryToolRunsFromSubdirectory(t *testing.T) 
 // widenTo: "repo" is the opt-in that runs the whole-repository tools anyway.
 func TestCollectTasksWidenToRepoRunsNonNarrowableTools(t *testing.T) {
 	p := &Planner{
-		rootPath: "/repo",
-		cwdPath:  "/repo/packages/api",
+		detectedTypes:      nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		cachedProjects:     nil,
+		seedFiles:          nil,
+		globCacheMu:        zerovalue_sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        zerovalue_sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           "/repo",
+		cwdPath:            "/repo/packages/api",
 		tools: config.MapOfTools{
-			"syncpack": {Operations: map[config.OperationType]config.ToolOperation{
-				config.OpFix: {
-					App: "syncpack", Args: []string{"fix"},
-					Scope: config.ToolScopeRepository, Globs: []string{"**/package.json"},
+			"syncpack": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+					config.OpFix: {
+						Arity:             "",
+						Granularity:       "",
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						Env:               nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						App:               "syncpack", Args: []string{"fix"},
+						Scope: config.ToolScopeRepository, Globs: []string{"**/package.json"},
+					},
 				},
-			}},
+			},
 		},
 		cachedFiles:      []string{"/repo/package.json"},
 		cacheInitialized: true,
@@ -161,7 +279,7 @@ func TestCollectTasksWidenToRepoRunsNonNarrowableTools(t *testing.T) {
 		WidenTo: map[config.OperationType]config.WidenTo{config.OpFix: config.WidenToRepo},
 	}, "")
 
-	tasks, skipped := p.collectTasks(context.Background(), config.OpFix, Selection{Mode: SelectionSubtree, Dir: "/repo/packages/api"})
+	tasks, skipped := p.collectTasks(context.Background(), config.OpFix, Selection{Paths: nil, Mode: SelectionSubtree, Dir: "/repo/packages/api"})
 	if len(tasks) != 1 {
 		t.Fatalf("widenTo repo should run it, got %d tasks and %+v", len(tasks), skipped)
 	}
@@ -174,22 +292,57 @@ func TestCollectTasksWidenToRepoRunsNonNarrowableTools(t *testing.T) {
 // exact failure the skip entry was added to make visible.
 func TestCollectTasksWidenToRepoWidensAnExplicitPathSelection(t *testing.T) {
 	p := &Planner{
-		rootPath: "/repo",
-		cwdPath:  "/repo/packages/api",
+		detectedTypes:      nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		cachedProjects:     nil,
+		seedFiles:          nil,
+		globCacheMu:        zerovalue_sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        zerovalue_sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           "/repo",
+		cwdPath:            "/repo/packages/api",
 		tools: config.MapOfTools{
-			"syncpack": {Operations: map[config.OperationType]config.ToolOperation{
-				config.OpFix: {
-					App: "syncpack", Args: []string{"fix"},
-					Scope: config.ToolScopeRepository, Globs: []string{"**/package.json"},
+			"syncpack": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+					config.OpFix: {
+						Arity:             "",
+						Granularity:       "",
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						Env:               nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						App:               "syncpack", Args: []string{"fix"},
+						Scope: config.ToolScopeRepository, Globs: []string{"**/package.json"},
+					},
 				},
-			}},
+			},
 		},
 		cachedFiles:      []string{"/repo/package.json", "/repo/packages/api/swagger.json"},
 		cacheInitialized: true,
 	}
 	p.SetWidenPolicy(nil, config.WidenToRepo)
 
-	sel := Selection{Mode: SelectionPaths, Paths: []string{"/repo/packages/api/swagger.json"}}
+	sel := Selection{Dir: "", Mode: SelectionPaths, Paths: []string{"/repo/packages/api/swagger.json"}}
 	tasks, skipped := p.collectTasks(context.Background(), config.OpFix, sel)
 
 	if len(tasks) != 1 {
@@ -205,22 +358,57 @@ func TestCollectTasksWidenToRepoWidensAnExplicitPathSelection(t *testing.T) {
 // directory dropped it and reported nothing.
 func TestCollectTasksKeepsExplicitPathsOutsideCwd(t *testing.T) {
 	p := &Planner{
-		rootPath: "/repo",
-		cwdPath:  "/repo/services/api",
+		detectedTypes:      nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		cachedProjects:     nil,
+		seedFiles:          nil,
+		globCacheMu:        zerovalue_sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        zerovalue_sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           "/repo",
+		cwdPath:            "/repo/services/api",
 		tools: config.MapOfTools{
-			"shfmt": {Operations: map[config.OperationType]config.ToolOperation{
-				config.OpFix: {
-					App: "shfmt", Args: []string{"-w", "{file}"},
-					Scope: config.ToolScopePerFile, Globs: []string{"**/*.sh"},
+			"shfmt": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+					config.OpFix: {
+						Arity:             "",
+						Granularity:       "",
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						Env:               nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						App:               "shfmt", Args: []string{"-w", "{file}"},
+						Scope: config.ToolScopePerFile, Globs: []string{"**/*.sh"},
+					},
 				},
-			}},
+			},
 		},
 		cachedFiles:      []string{"/repo/services/api/a.sh", "/repo/services/web/b.sh"},
 		cacheInitialized: true,
 	}
 
 	tasks, _ := p.collectTasks(context.Background(), config.OpFix,
-		Selection{Mode: SelectionPaths, Paths: []string{"/repo/services/web/b.sh"}})
+		Selection{Dir: "", Mode: SelectionPaths, Paths: []string{"/repo/services/web/b.sh"}})
 
 	if len(tasks) != 1 {
 		t.Fatalf("naming a file outside cwd planned %d tasks, want 1", len(tasks))
@@ -235,15 +423,49 @@ func TestCollectTasksKeepsExplicitPathsOutsideCwd(t *testing.T) {
 // below and the run planned nothing and reported nothing.
 func TestCollectTasksFromBelowAProjectRoot(t *testing.T) {
 	p := &Planner{
-		rootPath: "/repo",
-		cwdPath:  "/repo/services/api/src",
+		detectedTypes:      nil,
+		projectTypesConfig: nil,
+		platformChecker:    nil,
+		extraIgnoreRules:   nil,
+		cachedRel:          nil,
+		seedFiles:          nil,
+		globCacheMu:        zerovalue_sync.Mutex{},
+		globCache:          nil,
+		unitCacheMu:        zerovalue_sync.Mutex{},
+		memberCache:        nil,
+		guardCache:         nil,
+		ignoreMatcher:      nil,
+		execution:          nil,
+		widenOverride:      "",
+		timings:            nil,
+		rootPath:           "/repo",
+		cwdPath:            "/repo/services/api/src",
 		tools: config.MapOfTools{
-			"eslint": {Operations: map[config.OperationType]config.ToolOperation{
-				config.OpFix: {
-					App: "eslint", Args: []string{"{files}"},
-					Scope: config.ToolScopePerProject, Globs: []string{"**/*.ts"},
+			"eslint": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[config.OperationType]config.ToolOperation{
+					config.OpFix: {
+						Arity:             "",
+						Granularity:       "",
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						Env:               nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						App:               "eslint", Args: []string{"{files}"},
+						Scope: config.ToolScopePerProject, Globs: []string{"**/*.ts"},
+					},
 				},
-			}},
+			},
 		},
 		cachedFiles:      []string{"/repo/services/api/src/a.ts"},
 		cachedProjects:   []project.ProjectLocation{{Type: "npm-package", Path: "/repo/services/api"}},
@@ -251,7 +473,7 @@ func TestCollectTasksFromBelowAProjectRoot(t *testing.T) {
 	}
 
 	tasks, _ := p.collectTasks(context.Background(), config.OpFix,
-		Selection{Mode: SelectionSubtree, Dir: "/repo/services/api/src"})
+		Selection{Paths: nil, Mode: SelectionSubtree, Dir: "/repo/services/api/src"})
 
 	if len(tasks) != 1 {
 		t.Fatalf("planned %d tasks from inside a project, want 1", len(tasks))

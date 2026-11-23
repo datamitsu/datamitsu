@@ -74,7 +74,24 @@ func (d *Display) RenderProvisionQueue(detail string) {
 	if p == nil {
 		return
 	}
-	row = &provisionRow{}
+	row = &provisionRow{
+		bar:             nil,
+		name:            "",
+		priority:        0,
+		detail:          atomic.Value{},
+		estimate:        atomic.Pointer[transferEstimate]{},
+		sampleAt:        time.Time{},
+		sampleBytes:     0,
+		bytesPerSecond:  0,
+		lastAt:          time.Time{},
+		lastPercent:     0,
+		waitingReported: false,
+		phase:           "",
+		determinate:     false,
+		owners:          nil,
+		waitOwner:       "",
+		waitUpdatedAt:   0,
+	}
 	row.detail.Store(detail)
 	row.bar = p.New(0, mpb.SpinnerStyle(" "), mpb.BarWidth(1), mpb.BarPriority(math.MaxInt), mpb.PrependDecorators(decor.Any(func(s decor.Statistics) string {
 		label, _ := row.detail.Load().(string)
@@ -109,7 +126,14 @@ func (d *Display) detachProvisionRowLocked(id string, completed bool) {
 // RenderProvisionEvent renders a provisioning event for humans only. It does not
 // forward the event to the typed event sink; emitters remain the sole publisher.
 func (d *Display) RenderProvisionEvent(event uievent.Event) {
-	d.RenderInstallProgress(provision.InstallProgress{Event: event})
+	d.RenderInstallProgress(provision.InstallProgress{
+		Owners:         nil,
+		WaitOwner:      "",
+		WaitUpdatedAt:  0,
+		WaitBytesDone:  0,
+		WaitBytesTotal: 0,
+		Event:          event,
+	})
 }
 
 // RenderInstallProgress uses private lease ownership to correlate visible work.
@@ -214,7 +238,22 @@ func (d *Display) renderInstallProgressLocked(progress provision.InstallProgress
 	isNew := row == nil
 	name := provisionName(event)
 	if isNew {
-		row = &provisionRow{name: name, priority: d.provisionNext, lastAt: now()}
+		row = &provisionRow{
+			bar:             nil,
+			detail:          atomic.Value{},
+			estimate:        atomic.Pointer[transferEstimate]{},
+			sampleAt:        time.Time{},
+			sampleBytes:     0,
+			bytesPerSecond:  0,
+			lastPercent:     0,
+			waitingReported: false,
+			phase:           "",
+			determinate:     false,
+			owners:          nil,
+			waitOwner:       "",
+			waitUpdatedAt:   0,
+			name:            name, priority: d.provisionNext, lastAt: now(),
+		}
 		row.waitUpdatedAt = progress.WaitUpdatedAt
 		d.provisionNext++
 		row.detail.Store("")

@@ -34,7 +34,10 @@ func (Renderer) Render(w io.Writer, run *report.Run, _ map[string]string) error 
 	document := struct {
 		documentHeader
 		*report.Run
-	}{Schema: report.SchemaVersion, Run: run}
+	}{
+		Schema: report.SchemaVersion,
+		Run:    run,
+	}
 	data, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode report: %w", err)

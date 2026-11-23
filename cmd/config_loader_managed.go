@@ -60,7 +60,7 @@ func finalizeManagedConfigPlacement(cfg *config.Config, layers []config.ManagedC
 			}
 			history, ok := layerMap[key]
 			if !ok {
-				history = &config.ManagedConfigLayerHistory{FileName: key}
+				history = &config.ManagedConfigLayerHistory{OriginalContent: nil, Layers: nil, FinalConfig: config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil}, PristineContent: nil, RenderFailed: false, SourceLayers: nil, FileName: key}
 				layerMap[key] = history
 			}
 			history.PristineContent = pristine

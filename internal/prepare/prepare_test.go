@@ -65,6 +65,7 @@ func main() {
 
 	key := "aaaa1111"
 	err := Run(context.Background(), Request{
+		Stderr:       nil,
 		App:          "app",
 		Key:          key,
 		Network:      false,
@@ -114,6 +115,7 @@ func main() {
 }
 `)
 	req := Request{
+		Stderr:       nil,
 		App:          "app",
 		Key:          "bbbb2222",
 		Network:      false,
@@ -150,6 +152,7 @@ func main() {
 }
 `)
 	err := Run(context.Background(), Request{
+		Stderr:       nil,
 		App:          "app",
 		Key:          "cccc3333",
 		Network:      false,
@@ -185,6 +188,7 @@ func main() {
 `)
 	start := time.Now()
 	err := Run(context.Background(), Request{
+		Stderr:       nil,
 		App:          "app",
 		Key:          "dddd4444",
 		Network:      false,
@@ -212,6 +216,9 @@ func TestRunOfflineRefusal(t *testing.T) {
 	t.Setenv("DATAMITSU_OFFLINE", "1")
 
 	err := Run(context.Background(), Request{
+		Env:          nil,
+		Stderr:       nil,
+		Timeout:      0,
 		App:          "app",
 		Key:          "eeee5555",
 		Network:      true,

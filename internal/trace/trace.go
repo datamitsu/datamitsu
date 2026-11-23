@@ -114,7 +114,7 @@ type Span struct {
 //	defer trace.Start(trace.CatPlan, "collectTasks").End()
 func Start(cat, name string) Span {
 	if !compiledIn || !enabled.Load() {
-		return Span{}
+		return Span{name: "", cat: "", start: 0}
 	}
 	return Span{name: name, cat: cat, start: nowNanos()}
 }
@@ -131,11 +131,12 @@ func (s Span) end(attrs []Attr) {
 		return
 	}
 	rec.addSpan(event{
-		Name:  s.name,
-		Cat:   s.cat,
-		Start: s.start,
-		Dur:   nowNanos() - s.start,
-		Attrs: attrs,
+		Instant: false,
+		Name:    s.name,
+		Cat:     s.cat,
+		Start:   s.start,
+		Dur:     nowNanos() - s.start,
+		Attrs:   attrs,
 	})
 }
 
@@ -171,7 +172,7 @@ type Counter struct {
 // NewCounter registers a counter. Call it from a package-level var so the
 // registration happens once, at init, rather than on the measured path.
 func NewCounter(name string) *Counter {
-	c := &Counter{name: name}
+	c := &Counter{n: atomic.Int64{}, name: name}
 	countersMu.Lock()
 	counters = append(counters, c)
 	countersMu.Unlock()
@@ -270,7 +271,7 @@ type recorder struct {
 // beyond any correctly instrumented invocation.
 const maxEvents = 200_000
 
-var rec = &recorder{}
+var rec = &recorder{mu: sync.Mutex{}, events: nil, dropped: 0}
 
 func (r *recorder) addSpan(e event) {
 	r.mu.Lock()

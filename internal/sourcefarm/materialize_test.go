@@ -30,8 +30,11 @@ func newFarmFixture(t *testing.T) farmFixture {
 	base := t.TempDir()
 
 	fx := farmFixture{
-		cacheRoot: filepath.Join(base, "cache"),
-		storeDir:  filepath.Join(base, "store"),
+		farmDir:    "",
+		parent:     "",
+		shimTarget: "",
+		cacheRoot:  filepath.Join(base, "cache"),
+		storeDir:   filepath.Join(base, "store"),
 	}
 	fx.parent = filepath.Join(fx.cacheRoot, "projects", "abc123")
 	fx.farmDir = filepath.Join(fx.parent, "bin")
@@ -61,6 +64,8 @@ func (fx farmFixture) executable(t *testing.T, name string) string {
 
 func (fx farmFixture) options() Options {
 	return Options{
+		ManifestPath: "",
+		LockPath:     "",
 		ShimTarget:   fx.shimTarget,
 		CacheRoot:    fx.cacheRoot,
 		LockTimeout:  2 * time.Second,
@@ -76,18 +81,25 @@ func (fx farmFixture) manifestPath() string {
 // plan builds a plan whose symlink entries point at freshly created store files.
 func (fx farmFixture) plan(t *testing.T, symlinked []string, shimmed []string) Plan {
 	t.Helper()
-	plan := Plan{Root: "/repo", FarmDir: fx.farmDir}
+	plan := Plan{Entries: nil, Excluded: nil, Shadowed: nil, Root: "/repo", FarmDir: fx.farmDir}
 	for _, name := range symlinked {
 		plan.Entries = append(plan.Entries, Entry{
-			Name:      name,
-			Kind:      "binary",
-			Strategy:  StrategySymlink,
-			Command:   fx.executable(t, name+".bin"),
-			Installed: true,
+			Provider:       "",
+			Args:           nil,
+			Artifact:       "",
+			ToolCacheDir:   "",
+			ToolCacheSlots: nil,
+			RequiredPaths:  nil,
+			Env:            nil,
+			Name:           name,
+			Kind:           "binary",
+			Strategy:       StrategySymlink,
+			Command:        fx.executable(t, name+".bin"),
+			Installed:      true,
 		})
 	}
 	for _, name := range shimmed {
-		plan.Entries = append(plan.Entries, Entry{Name: name, Kind: "node", Strategy: StrategyShim})
+		plan.Entries = append(plan.Entries, Entry{Provider: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false, Name: name, Kind: "node", Strategy: StrategyShim})
 	}
 	sort.Slice(plan.Entries, func(i, j int) bool { return plan.Entries[i].Name < plan.Entries[j].Name })
 	return plan
@@ -95,6 +107,12 @@ func (fx farmFixture) plan(t *testing.T, symlinked []string, shimmed []string) P
 
 func manifestFor(plan Plan, key string) Manifest {
 	return Manifest{
+		ConfigPaths:      nil,
+		ShimTarget:       "",
+		Watch:            nil,
+		ConfigArgs:       nil,
+		Excluded:         nil,
+		Shadowed:         nil,
 		FormatVersion:    ManifestFormatVersion,
 		Origin:           OriginGitRoot,
 		Root:             plan.Root,
@@ -381,7 +399,7 @@ func TestMaterializeRejectsPathOutsideCacheRoot(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plan := Plan{Root: "/repo", FarmDir: tt.farmDir}
+			plan := Plan{Entries: nil, Excluded: nil, Shadowed: nil, Root: "/repo", FarmDir: tt.farmDir}
 			if err := MaterializeWithOptions(plan, manifestFor(plan, "k1"), fx.options()); err == nil {
 				t.Errorf("Materialize(%q) = nil, want an error", tt.farmDir)
 			}
@@ -405,8 +423,8 @@ func TestMaterializeUsesDefaultCacheRoot(t *testing.T) {
 		t.Fatalf("write shim target: %v", err)
 	}
 
-	plan := Plan{Root: "/repo", FarmDir: farmDir, Entries: []Entry{{Name: "prettier", Kind: "node", Strategy: StrategyShim}}}
-	opts := Options{ShimTarget: shim, LockTimeout: time.Second, PollInterval: time.Millisecond, Warn: func(string) {}}
+	plan := Plan{Excluded: nil, Shadowed: nil, Root: "/repo", FarmDir: farmDir, Entries: []Entry{{Provider: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false, Name: "prettier", Kind: "node", Strategy: StrategyShim}}}
+	opts := Options{CacheRoot: "", ManifestPath: "", LockPath: "", ShimTarget: shim, LockTimeout: time.Second, PollInterval: time.Millisecond, Warn: func(string) {}}
 	if err := MaterializeWithOptions(plan, manifestFor(plan, "k1"), opts); err != nil {
 		t.Fatalf("Materialize() error = %v", err)
 	}
@@ -731,9 +749,11 @@ func TestMaterializeRejectsMissingShimTarget(t *testing.T) {
 func TestMaterializeRejectsEntryNameEscapingFarm(t *testing.T) {
 	fx := newFarmFixture(t)
 	plan := Plan{
-		Root:    "/repo",
-		FarmDir: fx.farmDir,
-		Entries: []Entry{{Name: "../escaped", Kind: "node", Strategy: StrategyShim}},
+		Excluded: nil,
+		Shadowed: nil,
+		Root:     "/repo",
+		FarmDir:  fx.farmDir,
+		Entries:  []Entry{{Provider: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false, Name: "../escaped", Kind: "node", Strategy: StrategyShim}},
 	}
 	if err := MaterializeWithOptions(plan, manifestFor(plan, "k1"), fx.options()); err == nil {
 		t.Fatal("Materialize() = nil, want an error for an escaping entry name")

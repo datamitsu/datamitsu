@@ -143,21 +143,23 @@ type Dispatcher struct {
 // New returns a Dispatcher wired to the real process.
 func New() *Dispatcher {
 	return &Dispatcher{
-		Args:         os.Args,
-		Getwd:        os.Getwd,
-		Executable:   os.Executable,
-		Environ:      os.Environ,
-		QuietFarm:    env.SourceQuietForFarm,
-		EvalSymlinks: filepath.EvalSymlinks,
-		ManifestPath: env.GetProjectManifestPath,
-		CacheRoot:    env.GetCachePath,
-		Load:         sourcefarm.Load,
-		Validate:     sourcefarm.Validate,
-		Superproject: superprojectOf,
-		Stat:         os.Stat,
-		Exec:         execProcess,
-		Spawn:        spawnDatamitsu,
-		Stderr:       os.Stderr,
+		throughFarm:    false,
+		invokedFarmDir: "",
+		Args:           os.Args,
+		Getwd:          os.Getwd,
+		Executable:     os.Executable,
+		Environ:        os.Environ,
+		QuietFarm:      env.SourceQuietForFarm,
+		EvalSymlinks:   filepath.EvalSymlinks,
+		ManifestPath:   env.GetProjectManifestPath,
+		CacheRoot:      env.GetCachePath,
+		Load:           sourcefarm.Load,
+		Validate:       sourcefarm.Validate,
+		Superproject:   superprojectOf,
+		Stat:           os.Stat,
+		Exec:           execProcess,
+		Spawn:          spawnDatamitsu,
+		Stderr:         os.Stderr,
 	}
 }
 
@@ -345,11 +347,11 @@ func (d *Dispatcher) loadManifest(nearest string) (string, sourcefarm.Manifest, 
 func (d *Dispatcher) tryLoad(root string) (string, sourcefarm.Manifest, bool) {
 	manifestPath, err := d.ManifestPath(root)
 	if err != nil {
-		return "", sourcefarm.Manifest{}, false
+		return "", sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil}, false
 	}
 	manifest, err := d.Load(manifestPath)
 	if err != nil {
-		return "", sourcefarm.Manifest{}, false
+		return "", sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil}, false
 	}
 	return manifestPath, manifest, true
 }
@@ -455,12 +457,12 @@ func (d *Dispatcher) computeThroughFarm() bool {
 // git-root path answers both.
 func (d *Dispatcher) explicitConfigFarm(name string) (string, sourcefarm.Manifest, bool, string) {
 	if !d.throughFarm {
-		return "", sourcefarm.Manifest{}, false, ""
+		return "", sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil}, false, ""
 	}
 	dir := filepath.Clean(d.invokedFarmDir)
 
 	if d.inNamespace(dir, projectsDirName) {
-		return "", sourcefarm.Manifest{}, false, ""
+		return "", sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil}, false, ""
 	}
 
 	manifestPath := filepath.Join(filepath.Dir(dir), env.ProjectManifestFileName)
@@ -478,26 +480,26 @@ func (d *Dispatcher) explicitConfigFarm(name string) (string, sourcefarm.Manifes
 				// case already refuses: send a machine-level tool name into git
 				// discovery, and evaluate the config of whatever repository the
 				// shell happened to be standing in.
-				return "", sourcefarm.Manifest{}, true, fmt.Sprintf(
+				return "", sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil}, true, fmt.Sprintf(
 					"datamitsu: %s: the explicit-config farm %s has a manifest recording a different origin (%q)\n"+
 						"datamitsu: re-activate it with `datamitsu source bash --config <path>` (or your shell)",
 					name, dir, manifest.Origin)
 			}
 			// A project farm answered the name. Its manifest records the
 			// authoritative root, and the ordinary path is where that is read.
-			return "", sourcefarm.Manifest{}, false, ""
+			return "", sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil}, false, ""
 		}
 		return manifestPath, manifest, true, ""
 	}
 	if knownConfigFarm {
-		return "", sourcefarm.Manifest{}, true, fmt.Sprintf(
+		return "", sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil}, true, fmt.Sprintf(
 			"datamitsu: %s: the explicit-config farm %s has no readable manifest: %v\n"+
 				"datamitsu: re-activate it with `datamitsu source bash --config <path>` (or your shell)",
 			name, dir, err)
 	}
 	// A farm only the activation variable identifies. Its origin is unknowable
 	// without the manifest, so the message names neither one.
-	return "", sourcefarm.Manifest{}, true, fmt.Sprintf(
+	return "", sourcefarm.Manifest{FormatVersion: 0, Origin: "", Root: "", ConfigPaths: nil, FarmDir: "", DatamitsuVersion: "", OS: "", Arch: "", ShimTarget: "", StalenessKey: "", Watch: nil, ConfigArgs: nil, Entries: nil, Excluded: nil, Shadowed: nil}, true, fmt.Sprintf(
 		"datamitsu: %s: the farm %s has no readable manifest: %v\n"+
 			"datamitsu: re-activate it with `datamitsu source bash` (add `--config <path>` for a machine-level farm)",
 		name, dir, err)
@@ -837,16 +839,16 @@ func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manif
 		// back would be permanent: every later invocation repeats the same rebake,
 		// finds the same manifest, and execs the same never-updated tools.
 		d.warn("datamitsu: the refreshed farm manifest is still one this " + ldflags.PackageName + " cannot use")
-		return rebakeResult{manifest: reloaded, retired: true}
+		return rebakeResult{entry: sourcefarm.Entry{Name: "", Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false}, found: false, manifest: reloaded, retired: true}
 	}
 	refreshed, found := lookupEntry(reloaded, name)
 	if !found {
 		// The name was removed from the config by whatever change made the
 		// manifest stale. Falling through to PATH here would run the system
 		// binary the project just stopped pinning.
-		return rebakeResult{manifest: reloaded}
+		return rebakeResult{entry: sourcefarm.Entry{Name: "", Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false}, found: false, retired: false, manifest: reloaded}
 	}
-	return rebakeResult{manifest: reloaded, entry: refreshed, found: true}
+	return rebakeResult{retired: false, manifest: reloaded, entry: refreshed, found: true}
 }
 
 // fallback decides whether the manifest that is still on disk may answer this
@@ -866,9 +868,9 @@ func (d *Dispatcher) rebake(manifestPath, name string, manifest sourcefarm.Manif
 // half-installed one.
 func (d *Dispatcher) fallback(manifest sourcefarm.Manifest, entry sourcefarm.Entry) rebakeResult {
 	if !sourcefarm.UsableStale(manifest) {
-		return rebakeResult{manifest: manifest, retired: true}
+		return rebakeResult{entry: sourcefarm.Entry{Name: "", Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false}, found: false, manifest: manifest, retired: true}
 	}
-	return rebakeResult{manifest: manifest, entry: entry, found: true}
+	return rebakeResult{retired: false, manifest: manifest, entry: entry, found: true}
 }
 
 // failRetired reports a farm that could neither be refreshed nor served.
@@ -1235,7 +1237,7 @@ func lookupEntry(m sourcefarm.Manifest, name string) (sourcefarm.Entry, bool) {
 			return e, true
 		}
 	}
-	return sourcefarm.Entry{}, false
+	return sourcefarm.Entry{Name: "", Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false}, false
 }
 
 // mergeEnv overlays an entry's environment on the inherited one. The result is

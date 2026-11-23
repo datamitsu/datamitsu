@@ -15,10 +15,11 @@ import (
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 func shellApp(script string) *binmanager.CommandInfo {
-	return &binmanager.CommandInfo{Type: "shell", Command: "/bin/sh", Args: []string{"-c", script}}
+	return &binmanager.CommandInfo{Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "shell", Command: "/bin/sh", Args: []string{"-c", script}}
 }
 
 func lintTask(t *testing.T, tool string, scope config.ToolScope, projectPath string, args ...string) Task {
@@ -29,10 +30,19 @@ func lintTask(t *testing.T, tool string, scope config.ToolScope, projectPath str
 		}
 	}
 	return Task{
-		ToolName:    tool,
-		Operation:   config.OpLint,
-		ProjectPath: projectPath,
-		OpConfig:    config.ToolOperation{App: tool, Scope: scope, Args: args},
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		Tool:         config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil},
+		Files:        nil,
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     tool,
+		Operation:    config.OpLint,
+		ProjectPath:  projectPath,
+		OpConfig:     config.ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: tool, Scope: scope, Args: args},
 	}
 }
 
@@ -54,21 +64,28 @@ func TestKeepGoingRunsEveryLevel(t *testing.T) {
 		t.Skip("the tools are sh scripts")
 	}
 	root := t.TempDir()
-	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"fails":   shellApp("exit 1"),
-		"slow":    shellApp("sleep 0.3"),
-		"later":   shellApp("exit 0"),
-		"overlap": shellApp("exit 0"),
-	}}
-	plan := &ExecutionPlan{Groups: []TaskGroup{
-		{Priority: 10, Tasks: []Task{
-			lintTask(t, "fails", config.ToolScopePerProject, filepath.Join(root, "a")),
-			lintTask(t, "slow", config.ToolScopePerProject, filepath.Join(root, "b")),
-			// Repository scope overlaps everything, so it forms a later sub-group.
-			lintTask(t, "overlap", config.ToolScopeRepository, ""),
-		}},
-		{Priority: 20, Tasks: []Task{lintTask(t, "later", config.ToolScopeRepository, "")}},
-	}}
+	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"fails":   shellApp("exit 1"),
+			"slow":    shellApp("sleep 0.3"),
+			"later":   shellApp("exit 0"),
+			"overlap": shellApp("exit 0"),
+		},
+	}
+	plan := &ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Skipped:    nil, Groups: []TaskGroup{
+			{Priority: 10, Tasks: []Task{
+				lintTask(t, "fails", config.ToolScopePerProject, filepath.Join(root, "a")),
+				lintTask(t, "slow", config.ToolScopePerProject, filepath.Join(root, "b")),
+				// Repository scope overlaps everything, so it forms a later sub-group.
+				lintTask(t, "overlap", config.ToolScopeRepository, ""),
+			}},
+			{Priority: 20, Tasks: []Task{lintTask(t, "later", config.ToolScopeRepository, "")}},
+		},
+	}
 
 	tests := []struct {
 		failFast bool
@@ -123,10 +140,13 @@ func TestKeepGoingDoesNotKillSiblings(t *testing.T) {
 	}
 	root := t.TempDir()
 	done := filepath.Join(root, "done")
-	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"fails": shellApp("sleep 0.1; exit 1"),
-		"slow":  shellApp("sleep 0.5; touch " + done),
-	}}
+	appManager := &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"fails": shellApp("sleep 0.1; exit 1"),
+			"slow":  shellApp("sleep 0.5; touch " + done),
+		},
+	}
 	t.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", "2")
 	e := NewExecutor(root, false, false, appManager, nil)
 	results := e.executeTasksParallel(context.Background(), []Task{
@@ -165,7 +185,7 @@ func TestKeepGoingPerFileRunsEveryFile(t *testing.T) {
 	marker := filepath.Join(root, "ran")
 	// sh -c hands the first argument after the script to it as $0.
 	script := `echo "$0" >> ` + marker + `; case "$0" in *bad1*) echo "bad1 failed"; exit 3;; *bad2*) echo "bad2 failed"; exit 4;; esac`
-	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(script)}}
+	appManager := &mockAppManager{binaries: nil, err: nil, commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(script)}}
 
 	tests := []struct {
 		failFast bool
@@ -175,7 +195,7 @@ func TestKeepGoingPerFileRunsEveryFile(t *testing.T) {
 		wantOut  []string
 		notRun   int
 	}{
-		{failFast: false, wantRuns: 3, wantExit: 4, wantFile: "bad2.txt", wantOut: []string{"bad1 failed", "bad2 failed"}},
+		{notRun: 0, failFast: false, wantRuns: 3, wantExit: 4, wantFile: "bad2.txt", wantOut: []string{"bad1 failed", "bad2 failed"}},
 		{failFast: true, wantRuns: 1, wantExit: 3, wantFile: "bad1.txt", wantOut: []string{"bad1 failed"}, notRun: 2},
 	}
 	for _, tt := range tests {
@@ -236,27 +256,27 @@ func TestJoinFileOutputs(t *testing.T) {
 	}{
 		{
 			name:    "one failure",
-			outputs: []fileOutput{{text: "warned"}, {text: "broken", label: "b.txt: exit code 1", failed: true}},
+			outputs: []fileOutput{{label: "", failed: false, explained: false, text: "warned"}, {explained: false, text: "broken", label: "b.txt: exit code 1", failed: true}},
 			want:    "warned\nbroken",
 		},
 		{
 			name: "a silent failure before a noisy one",
 			outputs: []fileOutput{
-				{text: "", label: "a.txt: exit code 7", failed: true},
-				{text: "broken", label: "b.txt: exit code 4", failed: true},
+				{explained: false, text: "", label: "a.txt: exit code 7", failed: true},
+				{explained: false, text: "broken", label: "b.txt: exit code 4", failed: true},
 			},
 			want: "a.txt: exit code 7\n\nb.txt: exit code 4\nbroken",
 		},
 		{
 			name:    "a failure no exit code explains",
-			outputs: []fileOutput{{text: "warned"}, {label: "b.txt: formatter produced empty stdout", failed: true, explained: true}},
+			outputs: []fileOutput{{label: "", failed: false, explained: false, text: "warned"}, {text: "", label: "b.txt: formatter produced empty stdout", failed: true, explained: true}},
 			want:    "warned\nb.txt: formatter produced empty stdout\n",
 		},
 		{
 			name: "a stdin failure and a failing run",
 			outputs: []fileOutput{
-				{text: "failed to prepare stdin for file a.txt", failed: true},
-				{text: "broken", label: "b.txt: exit code 1", failed: true},
+				{label: "", explained: false, text: "failed to prepare stdin for file a.txt", failed: true},
+				{explained: false, text: "broken", label: "b.txt: exit code 1", failed: true},
 			},
 			want: "failed to prepare stdin for file a.txt\nb.txt: exit code 1\nbroken",
 		},
@@ -287,7 +307,7 @@ func TestKeepGoingNamesFailuresWithoutAnExitCode(t *testing.T) {
 		}
 		files = append(files, path)
 	}
-	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"fmt": shellApp("exit 0")}}
+	appManager := &mockAppManager{binaries: nil, err: nil, commands: map[string]*binmanager.CommandInfo{"fmt": shellApp("exit 0")}}
 	task := lintTask(t, "fmt", config.ToolScopePerProject, root, "{file}")
 	task.Operation = config.OpFix
 	task.OpConfig.Output = config.ToolOutputStdout
@@ -314,14 +334,14 @@ func (lineParser) Parse(_ context.Context, _, parser, _ string, stdout, _ []byte
 	var found []diagnostic.Diagnostic
 	for line := range strings.Lines(string(stdout)) {
 		if line = strings.TrimSpace(line); line != "" {
-			found = append(found, diagnostic.Diagnostic{Message: line, Row: 1})
+			found = append(found, diagnostic.Diagnostic{File: "", Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: line, Row: 1})
 		}
 	}
-	return ParseAnswer{Diagnostics: found, Recognized: true, Format: parser}, nil
+	return ParseAnswer{FormatParser: false, Partial: false, Diagnostics: found, Recognized: true, Format: parser}, nil
 }
 
 func (lineParser) Fallback(context.Context, string, []byte, []byte, int32) (ParseAnswer, error) {
-	return ParseAnswer{}, nil
+	return ParseAnswer{Diagnostics: nil, Recognized: false, Format: "", FormatParser: false, Partial: false}, nil
 }
 
 func (lineParser) FellBack(string, config.OutputParser, string) {}
@@ -341,7 +361,7 @@ func TestKeepGoingStdinFailureKeepsItsCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	missing := filepath.Join(root, "missing.txt")
-	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(`cat >/dev/null; echo "$0 checked"`)}}
+	appManager := &mockAppManager{binaries: nil, err: nil, commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(`cat >/dev/null; echo "$0 checked"`)}}
 	task := lintTask(t, "alpha", config.ToolScopePerProject, root, "{file}")
 	task.OpConfig.Input = config.ToolInputStdin
 	task.Files = []string{missing, ok}
@@ -380,7 +400,7 @@ func TestKeepGoingKeepsFailuresWithoutFindings(t *testing.T) {
 	}
 	// lineParser reports stdout lines; the crash writes only to stderr.
 	script := `cat >/dev/null; case "$0" in *crash*) echo "crashed" >&2; exit 2;; *found*) echo "finding"; exit 1;; esac`
-	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(script)}}
+	appManager := &mockAppManager{binaries: nil, err: nil, commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(script)}}
 	task := lintTask(t, "alpha", config.ToolScopePerProject, root, "{file}")
 	task.OpConfig.Input = config.ToolInputStdin
 	task.Files = files
@@ -426,7 +446,7 @@ func TestInterruptedPerFileTaskKeepsItsFailure(t *testing.T) {
 	// runs the files in order, so slow.txt starting proves bad.txt has failed.
 	started := filepath.Join(root, "slow-started")
 	script := `case "$0" in *bad*) echo "bad failed"; exit 3;; *slow*) touch ` + started + `; sleep 5;; esac`
-	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(script)}}
+	appManager := &mockAppManager{binaries: nil, err: nil, commands: map[string]*binmanager.CommandInfo{"alpha": shellApp(script)}}
 	task := lintTask(t, "alpha", config.ToolScopePerProject, root, "{file}")
 	task.Files = files
 
@@ -459,11 +479,11 @@ type cancellingParser struct{ cancel context.CancelCauseFunc }
 
 func (p cancellingParser) Parse(context.Context, string, string, string, []byte, []byte, int32) (ParseAnswer, error) {
 	p.cancel(errFailFast)
-	return ParseAnswer{Diagnostics: []diagnostic.Diagnostic{{Message: "found it", Row: 1}}, Recognized: true}, nil
+	return ParseAnswer{Format: "", FormatParser: false, Partial: false, Diagnostics: []diagnostic.Diagnostic{{File: "", Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "found it", Row: 1}}, Recognized: true}, nil
 }
 
 func (cancellingParser) Fallback(context.Context, string, []byte, []byte, int32) (ParseAnswer, error) {
-	return ParseAnswer{}, nil
+	return ParseAnswer{Diagnostics: nil, Recognized: false, Format: "", FormatParser: false, Partial: false}, nil
 }
 
 func (cancellingParser) FellBack(string, config.OutputParser, string) {}
@@ -478,7 +498,7 @@ func TestFailureBeforeCancellationStaysAFailure(t *testing.T) {
 		t.Skip("the tools are sh scripts")
 	}
 	root := t.TempDir()
-	appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{"alpha": shellApp("exit 1")}}
+	appManager := &mockAppManager{binaries: nil, err: nil, commands: map[string]*binmanager.CommandInfo{"alpha": shellApp("exit 1")}}
 	tests := []struct {
 		name string
 		args []string
@@ -498,7 +518,7 @@ func TestFailureBeforeCancellationStaysAFailure(t *testing.T) {
 			e.SetParser(cancellingParser{cancel: cancel})
 			task := lintTask(t, "alpha", config.ToolScopePerProject, root, tt.args...)
 			task.Files = []string{file}
-			task.Tool = config.Tool{Name: "alpha", OutputParser: &config.OutputParser{Module: "core", Parser: "alpha"}}
+			task.Tool = config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "alpha", OutputParser: &config.OutputParser{Module: "core", Parser: "alpha"}}
 
 			result := e.executeTask(ctx, task)
 
@@ -560,9 +580,9 @@ func TestCancelledCommandResolutionIsACancellation(t *testing.T) {
 // cancellation when every failed chunk was cancelled.
 func TestMergeChunkResults(t *testing.T) {
 	chunks := [][]string{{"a.go", "b.go"}, {"c.go"}, {"d.go", "e.go", "f.go"}}
-	passed := ExecutionResult{Success: true}
-	failed := ExecutionResult{Success: false, Error: errors.New("exit status 1"), FailureReason: FailureReasonIndependent}
-	cancelled := ExecutionResult{Success: false, Error: errCancelled, Cancelled: true, FailureReason: FailureReasonCancelled}
+	passed := ExecutionResult{ToolName: "", TaskID: "", Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: time.Time{}, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", cached: nil, Success: true}
+	failed := ExecutionResult{ToolName: "", TaskID: "", Output: "", Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, StartedAt: time.Time{}, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", cached: nil, Success: false, Error: errors.New("exit status 1"), FailureReason: FailureReasonIndependent}
+	cancelled := ExecutionResult{ToolName: "", TaskID: "", Output: "", Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, StartedAt: time.Time{}, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", cached: nil, Success: false, Error: errCancelled, Cancelled: true, FailureReason: FailureReasonCancelled}
 
 	tests := []struct {
 		name          string
@@ -571,16 +591,16 @@ func TestMergeChunkResults(t *testing.T) {
 		wantCancelled bool
 		wantNotRun    int
 	}{
-		{name: "all passed", chunks: []ExecutionResult{passed, passed, passed}, wantSuccess: true},
-		{name: "a failure beside a cancellation", chunks: []ExecutionResult{failed, cancelled, passed}, wantNotRun: 1},
-		{name: "failures beside cancellations", chunks: []ExecutionResult{cancelled, failed, cancelled}, wantNotRun: 5},
-		{name: "only cancellations failed", chunks: []ExecutionResult{passed, cancelled, cancelled}, wantCancelled: true},
+		{wantCancelled: false, wantNotRun: 0, name: "all passed", chunks: []ExecutionResult{passed, passed, passed}, wantSuccess: true},
+		{wantSuccess: false, wantCancelled: false, name: "a failure beside a cancellation", chunks: []ExecutionResult{failed, cancelled, passed}, wantNotRun: 1},
+		{wantSuccess: false, wantCancelled: false, name: "failures beside cancellations", chunks: []ExecutionResult{cancelled, failed, cancelled}, wantNotRun: 5},
+		{wantSuccess: false, wantNotRun: 0, name: "only cancellations failed", chunks: []ExecutionResult{passed, cancelled, cancelled}, wantCancelled: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancelCause(context.Background())
 			cancel(errFailFast)
-			result := ExecutionResult{Success: true}
+			result := ExecutionResult{ToolName: "", TaskID: "", Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: time.Time{}, EndedAt: time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, Processes: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", cached: nil, Success: true}
 			for _, c := range tt.chunks {
 				if !c.Success {
 					result.Success = false
@@ -623,17 +643,24 @@ func TestFailFastKilledSiblingIsStartedAndCancelled(t *testing.T) {
 			root := t.TempDir()
 			// fails waits, at most five seconds, for slow's process to start.
 			started := filepath.Join(root, "slow-started")
-			appManager := &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-				"fails": shellApp(`i=0; while [ ! -f ` + started + ` ] && [ $i -lt 250 ]; do sleep 0.02; i=$((i+1)); done; exit 1`),
-				"slow":  shellApp(tt.slow(started)),
-			}}
+			appManager := &mockAppManager{
+				binaries: nil,
+				err:      nil, commands: map[string]*binmanager.CommandInfo{
+					"fails": shellApp(`i=0; while [ ! -f ` + started + ` ] && [ $i -lt 250 ]; do sleep 0.02; i=$((i+1)); done; exit 1`),
+					"slow":  shellApp(tt.slow(started)),
+				},
+			}
 			t.Setenv("DATAMITSU_MAX_PARALLEL_WORKERS", "2")
 			e := NewExecutor(root, false, true, appManager, nil)
 			start := time.Now()
-			groups, err := e.Execute(context.Background(), &ExecutionPlan{Groups: []TaskGroup{{Priority: 1, Tasks: []Task{
-				lintTask(t, "fails", config.ToolScopePerProject, filepath.Join(root, "a")),
-				lintTask(t, "slow", config.ToolScopePerProject, filepath.Join(root, "b")),
-			}}}})
+			groups, err := e.Execute(context.Background(), &ExecutionPlan{
+				ConfigName: "",
+				FailOn:     "",
+				Skipped:    nil, Groups: []TaskGroup{{Priority: 1, Tasks: []Task{
+					lintTask(t, "fails", config.ToolScopePerProject, filepath.Join(root, "a")),
+					lintTask(t, "slow", config.ToolScopePerProject, filepath.Join(root, "b")),
+				}}},
+			})
 			if err == nil {
 				t.Fatal("Execute() = nil, want the fail-fast error")
 			}

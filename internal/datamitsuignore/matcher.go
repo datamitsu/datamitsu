@@ -35,7 +35,7 @@ type Matcher struct {
 
 // NewMatcher creates an empty Matcher.
 func NewMatcher() *Matcher {
-	return &Matcher{}
+	return &Matcher{rules: nil}
 }
 
 // AddFile parses .datamitsuignore content and appends the resulting rules.

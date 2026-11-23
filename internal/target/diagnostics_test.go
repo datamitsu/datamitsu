@@ -10,8 +10,9 @@ func TestDiagnosticInfoStringExactMatch(t *testing.T) {
 		HostTarget:      Target{OS: "linux", Arch: "amd64", Libc: LibcMusl},
 		RequestedTarget: Target{OS: "linux", Arch: "amd64", Libc: LibcMusl},
 		ResolvedTarget: ResolvedTarget{
-			Target: Target{OS: "linux", Arch: "amd64", Libc: LibcMusl},
-			Source: ResolutionExact,
+			FallbackInfo: nil,
+			Target:       Target{OS: "linux", Arch: "amd64", Libc: LibcMusl},
+			Source:       ResolutionExact,
 		},
 		CachePath: "/cache/bin/app/abc123",
 	}
@@ -36,6 +37,7 @@ func TestDiagnosticInfoStringExactMatch(t *testing.T) {
 
 func TestDiagnosticInfoStringFallback(t *testing.T) {
 	d := DiagnosticInfo{
+		CachePath:       "",
 		HostTarget:      Target{OS: "linux", Arch: "amd64", Libc: LibcMusl},
 		RequestedTarget: Target{OS: "linux", Arch: "amd64", Libc: LibcMusl},
 		ResolvedTarget: ResolvedTarget{
@@ -65,11 +67,13 @@ func TestDiagnosticInfoStringFallback(t *testing.T) {
 
 func TestDiagnosticInfoStringNoCachePath(t *testing.T) {
 	d := DiagnosticInfo{
+		CachePath:       "",
 		HostTarget:      Target{OS: "darwin", Arch: "arm64", Libc: LibcUnknown},
 		RequestedTarget: Target{OS: "darwin", Arch: "arm64", Libc: LibcUnknown},
 		ResolvedTarget: ResolvedTarget{
-			Target: Target{OS: "darwin", Arch: "arm64", Libc: LibcUnknown},
-			Source: ResolutionExact,
+			FallbackInfo: nil,
+			Target:       Target{OS: "darwin", Arch: "arm64", Libc: LibcUnknown},
+			Source:       ResolutionExact,
 		},
 	}
 
@@ -147,8 +151,9 @@ func TestFallbackWarningUnknownLibc(t *testing.T) {
 
 func TestFallbackWarningExactMatchReturnsEmpty(t *testing.T) {
 	resolved := ResolvedTarget{
-		Target: Target{OS: "linux", Arch: "amd64", Libc: LibcMusl},
-		Source: ResolutionExact,
+		FallbackInfo: nil,
+		Target:       Target{OS: "linux", Arch: "amd64", Libc: LibcMusl},
+		Source:       ResolutionExact,
 	}
 
 	msg := FallbackWarning("typst", resolved)
@@ -159,8 +164,9 @@ func TestFallbackWarningExactMatchReturnsEmpty(t *testing.T) {
 
 func TestFallbackWarningNilFallbackInfoReturnsEmpty(t *testing.T) {
 	resolved := ResolvedTarget{
-		Target: Target{OS: "linux", Arch: "amd64", Libc: LibcMusl},
-		Source: ResolutionFallback,
+		FallbackInfo: nil,
+		Target:       Target{OS: "linux", Arch: "amd64", Libc: LibcMusl},
+		Source:       ResolutionFallback,
 	}
 
 	msg := FallbackWarning("typst", resolved)

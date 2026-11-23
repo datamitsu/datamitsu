@@ -64,7 +64,7 @@ func TestConfigShowIdenticalAcrossCacheMissAndHit(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
 	cacheDir := t.TempDir()
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir}
+	opts := clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheDir}
 
 	miss := clitest.Run(t, opts, "--no-auto-config", "--config", cfg, "config", "show")
 	if miss.ExitCode != 0 {
@@ -96,7 +96,7 @@ func TestConfigCacheSecondInvocationWritesNothing(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
 	cacheDir := t.TempDir()
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir}
+	opts := clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheDir}
 
 	if res := clitest.Run(t, opts, "--no-auto-config", "--config", cfg, "config", "show"); res.ExitCode != 0 {
 		t.Fatalf("cold run exit = %d, want 0\nstderr:\n%s", res.ExitCode, res.Stderr)
@@ -140,7 +140,7 @@ func TestConfigCacheTreeBoundedAcrossBranches(t *testing.T) {
 	p := clitest.NewProject(t)
 	p.WriteFile("datamitsu.config.js", autoDiscoveredMinimalConfigJS)
 	cacheDir := t.TempDir()
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir}
+	opts := clitest.RunOptions{Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheDir}
 
 	branches := []string{"cache-a", "cache-b", "cache-c"}
 	for _, branch := range branches {
@@ -168,7 +168,7 @@ func TestConfigCacheDisabledStoresNothing(t *testing.T) {
 	p := clitest.NewProject(t)
 	cfg := clitest.WriteMinimalConfig(p)
 	cacheDir := t.TempDir()
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cacheDir, Env: []string{"DATAMITSU_CONFIG_CACHE=0"}}
+	opts := clitest.RunOptions{Stdin: "", Timeout: 0, Dir: p.Dir, CacheDir: cacheDir, Env: []string{"DATAMITSU_CONFIG_CACHE=0"}}
 
 	for range 2 {
 		res := clitest.Run(t, opts, "--no-auto-config", "--config", cfg, "config", "show")

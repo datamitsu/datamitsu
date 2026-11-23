@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/digest"
 
@@ -35,6 +36,12 @@ func testPNPMRuntime() config.RuntimeConfig {
 
 func pnpmRuntimeWithVersion(version string) config.RuntimeConfig {
 	return config.RuntimeConfig{
+		System:  nil,
+		Bun:     nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
 		Kind:    config.RuntimeKindPNPM,
 		Mode:    config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{Binaries: testPNPMBinaries()},
@@ -46,10 +53,16 @@ func pnpmRuntimeWithVersion(version string) config.RuntimeConfig {
 // on the pnpm their host provides.
 func systemPNPMRuntime(command string) config.RuntimeConfig {
 	return config.RuntimeConfig{
-		Kind:   config.RuntimeKindPNPM,
-		Mode:   config.RuntimeModeSystem,
-		System: &config.RuntimeConfigSystem{Command: command},
-		PNPM:   &config.RuntimeConfigPNPM{PNPMVersion: "12.4.1"},
+		Managed: nil,
+		Bun:     nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
+		Kind:    config.RuntimeKindPNPM,
+		Mode:    config.RuntimeModeSystem,
+		System:  &config.RuntimeConfigSystem{SystemVersion: "", Command: command},
+		PNPM:    &config.RuntimeConfigPNPM{PNPMVersion: "12.4.1"},
 	}
 }
 
@@ -59,6 +72,7 @@ func systemPNPMRuntime(command string) config.RuntimeConfig {
 func testPNPMBinaries() binmanager.MapOfBinaries {
 	entry := func(file, binaryPath, hash string, contentType binmanager.BinContentType) binmanager.BinaryOsArchInfo {
 		return binmanager.BinaryOsArchInfo{
+			Auth:        nil,
 			URL:         "https://github.com/pnpm/pnpm/releases/download/v12.4.1/" + file,
 			Hash:        hash,
 			ContentType: contentType,
@@ -104,6 +118,7 @@ func hostPNPMRuntime(t *testing.T, url, hash string, libcKeys ...string) config.
 	libcMap := map[string]binmanager.BinaryOsArchInfo{}
 	for _, k := range libcKeys {
 		libcMap[k] = binmanager.BinaryOsArchInfo{
+			Auth:        nil,
 			URL:         url,
 			Hash:        hash,
 			ContentType: binmanager.BinContentTypeTarGz,
@@ -112,6 +127,12 @@ func hostPNPMRuntime(t *testing.T, url, hash string, libcKeys ...string) config.
 		}
 	}
 	return config.RuntimeConfig{
+		System:  nil,
+		Bun:     nil,
+		Node:    nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
 		Kind:    config.RuntimeKindPNPM,
 		Mode:    config.RuntimeModeManaged,
 		Managed: &config.RuntimeConfigManaged{Binaries: binmanager.MapOfBinaries{osType: {archType: libcMap}}},
@@ -138,7 +159,7 @@ func makePNPMArchive(t *testing.T) ([]byte, string) {
 		{"dist/node_modules/node-gyp/package.json", `{"name":"node-gyp"}`, 0o644},
 	}
 	for _, f := range files {
-		hdr := &tar.Header{Name: f.name, Mode: f.mode, Size: int64(len(f.body)), Typeflag: tar.TypeReg}
+		hdr := &tar.Header{Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: f.name, Mode: f.mode, Size: int64(len(f.body)), Typeflag: tar.TypeReg}
 		if err := tw.WriteHeader(hdr); err != nil {
 			t.Fatalf("write tar header %s: %v", f.name, err)
 		}
@@ -334,9 +355,16 @@ func TestGetAppPath_PNPMRuntimeIdentity(t *testing.T) {
 func TestCollectRequiredRuntimes_PNPM(t *testing.T) {
 	nodeRef := func(ref string) config.RuntimeConfig {
 		return config.RuntimeConfig{
-			Kind: config.RuntimeKindNode,
-			Mode: config.RuntimeModeManaged,
-			Node: &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: ref},
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindNode,
+			Mode:    config.RuntimeModeManaged,
+			Node:    &config.RuntimeConfigNode{NodeVersion: "26.2.0", PNPMRuntime: ref},
 		}
 	}
 	runtimes := config.MapOfRuntimes{
@@ -344,18 +372,25 @@ func TestCollectRequiredRuntimes_PNPM(t *testing.T) {
 		"node-default":  nodeRef(""),
 		"node-dangling": nodeRef("ghost"),
 		"bun-explicit": {
-			Kind: config.RuntimeKindBun,
-			Mode: config.RuntimeModeManaged,
-			Bun:  &config.RuntimeConfigBun{BunVersion: "1.4.1", PNPMRuntime: "pnpm-b"},
+			Managed: nil,
+			System:  nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    config.RuntimeKindBun,
+			Mode:    config.RuntimeModeManaged,
+			Bun:     &config.RuntimeConfigBun{BunVersion: "1.4.1", PNPMRuntime: "pnpm-b"},
 		},
 		"pnpm-a": pnpmRuntimeWithVersion("12.4.1"),
 		"pnpm-b": pnpmRuntimeWithVersion("12.5.0"),
-		"uv":     {Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged},
-		"jvm":    {Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeManaged, JVM: &config.RuntimeConfigJVM{JavaVersion: "21"}},
-		"go":     {Kind: config.RuntimeKindGo, Mode: config.RuntimeModeManaged, Go: &config.RuntimeConfigGo{GoVersion: "1.22.0"}},
+		"uv":     {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindUV, Mode: config.RuntimeModeManaged},
+		"jvm":    {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, Go: nil, PNPM: nil, Kind: config.RuntimeKindJVM, Mode: config.RuntimeModeManaged, JVM: &config.RuntimeConfigJVM{JavaVersion: "21"}},
+		"go":     {Managed: nil, System: nil, Bun: nil, Node: nil, UV: nil, JVM: nil, PNPM: nil, Kind: config.RuntimeKindGo, Mode: config.RuntimeModeManaged, Go: &config.RuntimeConfigGo{GoVersion: "1.22.0"}},
 	}
 	nodeApp := func(runtimeRef string) binmanager.App {
-		return binmanager.App{Required: true, Node: &binmanager.AppConfigNode{PackageName: "x", Version: "1", BinPath: "b", Runtime: runtimeRef}}
+		return binmanager.App{Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Node: &binmanager.AppConfigNode{LockFile: "", Dependencies: nil, PackageName: "x", Version: "1", BinPath: "b", Runtime: runtimeRef}}
 	}
 
 	tests := []struct {
@@ -366,7 +401,7 @@ func TestCollectRequiredRuntimes_PNPM(t *testing.T) {
 		{"explicit pnpmRuntime", binmanager.MapOfApps{"a": nodeApp("node-explicit")}, []string{"node-explicit", "pnpm-b"}},
 		{
 			"bun follows its pnpmRuntime",
-			binmanager.MapOfApps{"a": {Required: true, Bun: &binmanager.AppConfigBun{PackageName: "x", Version: "1", BinPath: "b", Runtime: "bun-explicit"}}},
+			binmanager.MapOfApps{"a": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Bun: &binmanager.AppConfigBun{LockFile: "", Dependencies: nil, PackageName: "x", Version: "1", BinPath: "b", Runtime: "bun-explicit"}}},
 			[]string{"bun-explicit", "pnpm-b"},
 		},
 		{"empty pnpmRuntime falls back to the first pnpm runtime by name", binmanager.MapOfApps{"a": nodeApp("node-default")}, []string{"node-default", "pnpm-a"}},
@@ -374,9 +409,9 @@ func TestCollectRequiredRuntimes_PNPM(t *testing.T) {
 		{
 			"uv, jvm and go apps need no pnpm",
 			binmanager.MapOfApps{
-				"u": {Required: true, Uv: &binmanager.AppConfigUV{PackageName: "x", Version: "1", Runtime: "uv"}},
-				"j": {Required: true, Jvm: &binmanager.AppConfigJVM{JarURL: "https://x/x.jar", JarHash: "h", Version: "1", Runtime: "jvm"}},
-				"g": {Required: true, Go: &binmanager.AppConfigGo{PackageName: "x", Version: "1", Runtime: "go"}},
+				"u": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Uv: &binmanager.AppConfigUV{LockFile: "", RequiresPython: "", PackageName: "x", Version: "1", Runtime: "uv"}},
+				"j": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Jvm: &binmanager.AppConfigJVM{MainClass: "", JarURL: "https://x/x.jar", JarHash: "h", Version: "1", Runtime: "jvm"}},
+				"g": {Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Required: true, Go: &binmanager.AppConfigGo{LockFile: "", PackageName: "x", Version: "1", Runtime: "go"}},
 			},
 			[]string{"go", "jvm", "uv"},
 		},
@@ -980,13 +1015,21 @@ func TestPNPMAppInstallReportsMissingConfiguredPNPMRuntime(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	appPath := filepath.Join(env.GetStorePath(), ".apps", "node", "tool", "identity")
 	runtimeConfig := config.RuntimeConfig{
-		Kind: config.RuntimeKindNode, Mode: config.RuntimeModeSystem,
+		Managed: nil,
+		Bun:     nil,
+		UV:      nil,
+		JVM:     nil,
+		Go:      nil,
+		PNPM:    nil,
+		Kind:    config.RuntimeKindNode, Mode: config.RuntimeModeSystem,
 		System: &config.RuntimeConfigSystem{Command: "go", SystemVersion: "22.0.0"},
 		Node:   &config.RuntimeConfigNode{NodeVersion: "22.0.0", PNPMRuntime: "missing-pnpm"},
 	}
 	rm := New(config.MapOfRuntimes{"node": runtimeConfig})
 	err := rm.installPNPMAppOnce(context.Background(), pnpmAppInstallSpec{
-		appName: "tool", packageName: "tool", version: "1.0.0", binPath: "bin/tool",
+		lockFile:     "",
+		dependencies: nil,
+		appName:      "tool", packageName: "tool", version: "1.0.0", binPath: "bin/tool",
 		runtimeKind: "node", runtimeName: "node", runtimeVersion: "22.0.0",
 		pnpmRuntime: "missing-pnpm", appEnvPath: appPath, runtimeConfig: runtimeConfig,
 	}, nil, nil, nil, "")

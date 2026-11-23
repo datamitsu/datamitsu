@@ -9,7 +9,10 @@ func TestPythonCatalogRejectsMalformedInterpreterDeclarations(t *testing.T) {
 	for _, scenario := range []string{"invalid version text", "empty key", "different interpreter", "missing platform", "negative version", "non-HTTP artifact"} {
 		t.Run(scenario, func(t *testing.T) {
 			entry := PythonDownload{
-				Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+				Prerelease: "",
+				Variant:    "",
+				Build:      "",
+				Name:       "cpython", Arch: PythonDownloadArch{Variant: "", Family: "x86_64"}, OS: "linux", LibC: "gnu",
 				Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst",
 				Hash: "sha256:" + strings.Repeat("a", 64),
 			}
@@ -33,7 +36,7 @@ func TestPythonCatalogRejectsMalformedInterpreterDeclarations(t *testing.T) {
 			if scenario == "invalid version text" {
 				downloads = nil
 			}
-			runtime := RuntimeConfig{Kind: RuntimeKindUV, UV: &RuntimeConfigUV{PythonVersion: version, PythonDownloads: downloads}}
+			runtime := RuntimeConfig{Mode: "", Managed: nil, System: nil, Bun: nil, Node: nil, JVM: nil, Go: nil, PNPM: nil, Kind: RuntimeKindUV, UV: &RuntimeConfigUV{PythonVersion: version, PythonDownloads: downloads}}
 			if errs := validateUVRuntimeKind("python", runtime); len(errs) == 0 {
 				t.Fatalf("invalid Python catalog accepted: %+v", runtime.UV)
 			}

@@ -19,7 +19,10 @@ const formatOp = "format"
 // stdout for JSON-RPC and must add no notifications there, so stderr is where an
 // editor finds out what the server decided.
 func emitLog(opID, level, msg string) {
-	ui.Emit(uievent.Event{Type: uievent.TypeLog, OpID: opID, Level: level, Msg: msg})
+	ui.Emit(uievent.Event{
+		ThrottleID: "",
+		TS:         0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeLog, OpID: opID, Level: level, Msg: msg,
+	})
 }
 
 // formatTally is what a formatting request's done event summarizes.
@@ -62,17 +65,54 @@ func emitFormatDone(opID string, started time.Time, tally formatTally, err error
 		msg = errRequestCancelled.Error()
 	}
 	ui.Emit(uievent.Event{
-		Type:       uievent.TypeDone,
-		OpID:       opID,
-		Status:     terminalStatus(success),
-		Op:         formatOp,
-		Success:    new(success),
-		DurationMs: time.Since(started).Milliseconds(),
-		Msg:        msg,
-		Tools:      len(tally.tools),
-		Runs:       tally.runs,
-		Failed:     len(tally.failed),
-		Skipped:    tally.skipped,
+		ThrottleID: "",
+
+		TS:              0,
+		Tool:            "",
+		Dir:             "",
+		Name:            "",
+		BytesDone:       0,
+		BytesTotal:      0,
+		Percent:         0,
+		Index:           0,
+		Total:           0,
+		Level:           "",
+		Cancelled:       nil,
+		Complete:        nil,
+		Format:          "",
+		Path:            "",
+		File:            "",
+		Row:             0,
+		Col:             0,
+		EndRow:          0,
+		EndCol:          0,
+		Severity:        "",
+		Code:            "",
+		Source:          "",
+		Fingerprint:     "",
+		Provenance:      "",
+		Reported:        nil,
+		Gates:           nil,
+		Baselined:       false,
+		FindingsError:   nil,
+		FindingsWarning: nil,
+		FindingsInfo:    nil,
+		FindingsHint:    nil,
+		Cached:          nil,
+		Schema:          "",
+		Events:          "",
+		Annotations:     "",
+		Type:            uievent.TypeDone,
+		OpID:            opID,
+		Status:          terminalStatus(success),
+		Op:              formatOp,
+		Success:         new(success),
+		DurationMs:      time.Since(started).Milliseconds(),
+		Msg:             msg,
+		Tools:           len(tally.tools),
+		Runs:            tally.runs,
+		Failed:          len(tally.failed),
+		Skipped:         tally.skipped,
 	})
 }
 

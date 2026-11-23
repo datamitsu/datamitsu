@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/releaseprovider"
 
@@ -114,24 +115,26 @@ func TestRunPullGithub_ReportsFailuresAndExitsNonZero(t *testing.T) {
 	if err := runtimeconfig.Init(); err != nil {
 		t.Fatalf("runtimeconfig.Init: %v", err)
 	}
-	api := &fakeGitHub{attempts: map[string]int{}, handle: func(repo string, attempt int, w http.ResponseWriter) {
-		switch repo {
-		case "flaky":
-			if attempt == 1 {
-				w.WriteHeader(http.StatusBadGateway)
-				return
+	api := &fakeGitHub{
+		mu: sync.Mutex{}, attempts: map[string]int{}, handle: func(repo string, attempt int, w http.ResponseWriter) {
+			switch repo {
+			case "flaky":
+				if attempt == 1 {
+					w.WriteHeader(http.StatusBadGateway)
+					return
+				}
+				releaseJSON(w, "v1", true)
+			case "gone":
+				w.WriteHeader(http.StatusNotFound)
+			case "limited":
+				w.WriteHeader(http.StatusForbidden)
+			case "undigested":
+				releaseJSON(w, "v1", false)
+			default:
+				releaseJSON(w, "v1", true)
 			}
-			releaseJSON(w, "v1", true)
-		case "gone":
-			w.WriteHeader(http.StatusNotFound)
-		case "limited":
-			w.WriteHeader(http.StatusForbidden)
-		case "undigested":
-			releaseJSON(w, "v1", false)
-		default:
-			releaseJSON(w, "v1", true)
-		}
-	}}
+		},
+	}
 	srv := httptest.NewServer(api)
 	defer srv.Close()
 
@@ -144,14 +147,15 @@ func TestRunPullGithub_ReportsFailuresAndExitsNonZero(t *testing.T) {
 
 	// "gone" was recorded by an earlier run; its entry must survive untouched.
 	previous := &appstate.BinariesEntry{
+		Source:      nil,
 		ConfigHash:  "old",
 		Description: "old description",
-		Binaries:    binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": binmanager.BinaryOsArchInfo{URL: "https://example.test/v0/gone", Hash: strings.Repeat("cd", 32), ContentType: binmanager.BinContentTypeTarGz}}}},
+		Binaries:    binmanager.MapOfBinaries{"linux": {"amd64": {"glibc": binmanager.BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.test/v0/gone", Hash: strings.Repeat("cd", 32), ContentType: binmanager.BinContentTypeTarGz}}}},
 	}
 	path := filepath.Join(t.TempDir(), "binaryApps.json")
-	state := &appstate.State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Apps: map[string]*appstate.AppMetadata{}, Binaries: map[string]*appstate.BinariesEntry{"gone": previous}}
+	state := &appstate.State{Platforms: nil, Sources: map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}}, Apps: map[string]*appstate.AppMetadata{}, Binaries: map[string]*appstate.BinariesEntry{"gone": previous}}
 	for _, name := range []string{"fine", "flaky", "gone", "limited", "undigested"} {
-		state.Apps[name] = &appstate.AppMetadata{Source: "github", Repository: "o" + "/" + name, Tag: "v0"}
+		state.Apps[name] = &appstate.AppMetadata{Hashes: nil, Checksums: nil, Source: "github", Repository: "o" + "/" + name, Tag: "v0"}
 	}
 	if err := appstate.Save(path, state); err != nil {
 		t.Fatal(err)
@@ -205,9 +209,11 @@ func TestRunPullGithub_AllSucceedExitsZero(t *testing.T) {
 	if err := runtimeconfig.Init(); err != nil {
 		t.Fatalf("runtimeconfig.Init: %v", err)
 	}
-	api := &fakeGitHub{attempts: map[string]int{}, handle: func(_ string, _ int, w http.ResponseWriter) {
-		releaseJSON(w, "v1", true)
-	}}
+	api := &fakeGitHub{
+		mu: sync.Mutex{}, attempts: map[string]int{}, handle: func(_ string, _ int, w http.ResponseWriter) {
+			releaseJSON(w, "v1", true)
+		},
+	}
 	srv := httptest.NewServer(api)
 	defer srv.Close()
 	githubBaseURL = srv.URL
@@ -215,9 +221,10 @@ func TestRunPullGithub_AllSucceedExitsZero(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "binaryApps.json")
 	state := &appstate.State{
-		Sources:  map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}},
-		Apps:     map[string]*appstate.AppMetadata{"fine": {Source: "github", Repository: "o/fine", Tag: "v1"}},
-		Binaries: map[string]*appstate.BinariesEntry{},
+		Platforms: nil,
+		Sources:   map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}},
+		Apps:      map[string]*appstate.AppMetadata{"fine": {Hashes: nil, Checksums: nil, Source: "github", Repository: "o/fine", Tag: "v1"}},
+		Binaries:  map[string]*appstate.BinariesEntry{},
 	}
 	if err := appstate.Save(path, state); err != nil {
 		t.Fatal(err)
@@ -241,9 +248,11 @@ func TestRunPullGithub_ProcessesAppsAlphabetically(t *testing.T) {
 	if err := runtimeconfig.Init(); err != nil {
 		t.Fatalf("runtimeconfig.Init: %v", err)
 	}
-	api := &fakeGitHub{attempts: map[string]int{}, handle: func(_ string, _ int, w http.ResponseWriter) {
-		releaseJSON(w, "v1", true)
-	}}
+	api := &fakeGitHub{
+		mu: sync.Mutex{}, attempts: map[string]int{}, handle: func(_ string, _ int, w http.ResponseWriter) {
+			releaseJSON(w, "v1", true)
+		},
+	}
 	srv := httptest.NewServer(api)
 	defer srv.Close()
 	githubBaseURL = srv.URL
@@ -284,7 +293,7 @@ func TestRunPullGithub_ProcessesAppsAlphabetically(t *testing.T) {
 }
 
 func TestIsRateLimited(t *testing.T) {
-	if !isRateLimited(&github.RateLimitError{}) || isRateLimited(io.EOF) {
+	if !isRateLimited(&github.RateLimitError{Wait: 0, Reset: zerovalue_time.Time{}}) || isRateLimited(io.EOF) {
 		t.Error("isRateLimited misclassifies")
 	}
 }
@@ -314,8 +323,8 @@ func TestRunPullNode_ReportsFailedPackages(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	path := writeNodeApps(t, t.TempDir(), nodeAppsJSON{
-		"demo":   {PackageName: "demo", Version: "0.9.0"},
-		"broken": {PackageName: "broken", Version: "0.1.0"},
+		"demo":   {Description: "", PackageName: "demo", Version: "0.9.0"},
+		"broken": {Description: "", PackageName: "broken", Version: "0.1.0"},
 	})
 	*pullNodeMinAge = 0
 	defer func() { *pullNodeMinAge = minAgeFlagDefault }()

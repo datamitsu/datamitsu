@@ -85,7 +85,7 @@ type policyResolution struct {
 // warns and leaves its key on the environment or default. isTool reports
 // whether a name is a configured tool.
 func resolveFormatPolicy(raw json.RawMessage, base formatPolicy, isTool func(string) bool) policyResolution {
-	res := policyResolution{Policy: base}
+	res := policyResolution{FromOptions: nil, Warnings: nil, Policy: base}
 	res.Policy.Tools = map[string]bool{}
 
 	if isNull(raw) {

@@ -7,7 +7,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
+	zerovalue_cienv "github.com/datamitsu/datamitsu/internal/cienv"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/exitcode"
 	"github.com/datamitsu/datamitsu/internal/timing"
@@ -42,8 +44,8 @@ func TestPrintOperationFooterShowsSkipped(t *testing.T) {
 
 func TestPrintSkippedTools(t *testing.T) {
 	skipped := []tooling.SkippedTool{
-		{ToolName: "trufflehog", Reason: tooling.SkipReasonConfig, Detail: "runs in CI only"},
-		{ToolName: "typstyle", Reason: tooling.SkipReasonUnsupportedPlatform, Detail: "linux/arm64/musl"},
+		{Operation: "", ToolName: "trufflehog", Reason: tooling.SkipReasonConfig, Detail: "runs in CI only"},
+		{Operation: "", ToolName: "typstyle", Reason: tooling.SkipReasonUnsupportedPlatform, Detail: "linux/arm64/musl"},
 	}
 	out := captureStdout(t, func() { printSkippedTools(skipped, 12) })
 	for _, want := range []string{"⊘", "trufflehog", "runs in CI only", "typstyle", "no binary for linux/arm64/musl"} {
@@ -54,11 +56,20 @@ func TestPrintSkippedTools(t *testing.T) {
 }
 
 func TestRecordSkipsOnlyPlatform(t *testing.T) {
-	sc := &sharedContext{platformSkipped: map[string]struct{}{}}
+	sc := &sharedContext{
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		cfg:                  nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, platformSkipped: map[string]struct{}{},
+	}
 	sc.recordSkips([]tooling.SkippedTool{
-		{ToolName: "trufflehog", Reason: tooling.SkipReasonConfig},
-		{ToolName: "typstyle", Reason: tooling.SkipReasonUnsupportedPlatform},
-		{ToolName: "syncpack", Reason: tooling.SkipReasonNotNarrowable},
+		{Operation: "", Detail: "", ToolName: "trufflehog", Reason: tooling.SkipReasonConfig},
+		{Operation: "", Detail: "", ToolName: "typstyle", Reason: tooling.SkipReasonUnsupportedPlatform},
+		{Operation: "", Detail: "", ToolName: "syncpack", Reason: tooling.SkipReasonNotNarrowable},
 	})
 	if _, ok := sc.platformSkipped["typstyle"]; !ok {
 		t.Error("platform skip should be recorded")
@@ -78,17 +89,44 @@ func TestRecordSkipsOnlyPlatform(t *testing.T) {
 
 func TestSkipFailure(t *testing.T) {
 	// failOnSkip off: never errors, even with platform skips.
-	sc := &sharedContext{failOnSkip: false, platformSkipped: map[string]struct{}{"typstyle": {}}}
+	sc := &sharedContext{
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		cfg:                  nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, failOnSkip: false, platformSkipped: map[string]struct{}{"typstyle": {}},
+	}
 	if err := sc.skipFailure(); err != nil {
 		t.Errorf("failOnSkip off should not error: %v", err)
 	}
 	// failOnSkip on, only config skips (none recorded): no error.
-	sc = &sharedContext{failOnSkip: true, platformSkipped: map[string]struct{}{}}
+	sc = &sharedContext{
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		cfg:                  nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, failOnSkip: true, platformSkipped: map[string]struct{}{},
+	}
 	if err := sc.skipFailure(); err != nil {
 		t.Errorf("no platform skips should not error: %v", err)
 	}
 	// failOnSkip on with a platform skip: error names the tool.
-	sc = &sharedContext{failOnSkip: true, platformSkipped: map[string]struct{}{"typstyle": {}}}
+	sc = &sharedContext{
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		cfg:                  nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, failOnSkip: true, platformSkipped: map[string]struct{}{"typstyle": {}},
+	}
 	err := sc.skipFailure()
 	if err == nil || !strings.Contains(err.Error(), "typstyle") {
 		t.Errorf("expected error naming typstyle, got %v", err)
@@ -100,18 +138,60 @@ func TestRunSingleOperationRendersAndRecordsSkips(t *testing.T) {
 
 	var order []string
 	plan := &tooling.ExecutionPlan{
-		Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{
-			{ToolName: "shellcheck", OpConfig: config.ToolOperation{App: "shellcheck", Scope: config.ToolScopeRepository}},
-		}}},
+		ConfigName: "",
+		FailOn:     "",
+		Groups: []tooling.TaskGroup{{
+			Priority: 0, Tasks: []tooling.Task{
+				{ID: "", Tool: config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}, Operation: "", Files: nil, ProjectPath: "", UnitDir: "", UnitMembers: nil, UnitGuards: nil, Coverage: "", ToolName: "shellcheck", OpConfig: config.ToolOperation{Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "shellcheck", Scope: config.ToolScopeRepository}},
+			},
+		}},
 		Skipped: []tooling.SkippedTool{
 			{ToolName: "trufflehog", Operation: config.OpLint, Reason: tooling.SkipReasonConfig, Detail: "runs in CI only"},
 			{ToolName: "typstyle", Operation: config.OpLint, Reason: tooling.SkipReasonUnsupportedPlatform, Detail: "linux/arm64/musl"},
 		},
 	}
 	sc := &sharedContext{
-		planner:         &fakePlanner{plan: plan},
-		executor:        &fakeExecutor{order: &order},
-		binMgr:          &fakeEnsurer{order: &order},
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+
+		cfg:             nil,
+		rootPath:        "",
+		cwdPath:         "",
+		selection:       tooling.Selection{Mode: 0, Dir: "", Paths: nil},
+		opts:            Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		files:           nil,
+		selectedTools:   nil,
+		explainLevel:    "",
+		projectCache:    nil,
+		parserMgr:       nil,
+		parseProblems:   nil,
+		ignoredFailOn:   nil,
+		failOnSkip:      false,
+		narrowed:        nil,
+		failFast:        false,
+		afterFailedFix:  false,
+		summaries:       nil,
+		fileScoped:      false,
+		report:          nil,
+		secrets:         nil,
+		annotator:       nil,
+		baselineMatcher: nil,
+		placement:       nil, startedAt: zerovalue_time.Time{},
+		ci:          zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:   zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+		planner: &fakePlanner{
+			planFn: nil,
+			calls:  0,
+			plan:   plan,
+		},
+		executor:        &fakeExecutor{called: false, results: nil, onResult: nil, order: &order},
+		binMgr:          &fakeEnsurer{names: nil, called: false, err: nil, order: &order},
 		timings:         timing.New(),
 		platformSkipped: map[string]struct{}{},
 		nameWidth:       10,
@@ -144,14 +224,55 @@ func TestRunSingleOperationAllSkipped(t *testing.T) {
 
 	var order []string
 	plan := &tooling.ExecutionPlan{
+		ConfigName: "",
+		FailOn:     "",
+		Groups:     nil,
 		Skipped: []tooling.SkippedTool{
 			{ToolName: "typstyle", Operation: config.OpLint, Reason: tooling.SkipReasonUnsupportedPlatform, Detail: "linux/arm64/musl"},
 		},
 	}
 	sc := &sharedContext{
-		planner:         &fakePlanner{plan: plan},
-		executor:        &fakeExecutor{order: &order},
-		binMgr:          &fakeEnsurer{order: &order},
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+
+		cfg:             nil,
+		rootPath:        "",
+		cwdPath:         "",
+		selection:       tooling.Selection{Mode: 0, Dir: "", Paths: nil},
+		opts:            Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
+		files:           nil,
+		selectedTools:   nil,
+		explainLevel:    "",
+		projectCache:    nil,
+		parserMgr:       nil,
+		parseProblems:   nil,
+		ignoredFailOn:   nil,
+		failOnSkip:      false,
+		narrowed:        nil,
+		failFast:        false,
+		afterFailedFix:  false,
+		summaries:       nil,
+		fileScoped:      false,
+		report:          nil,
+		secrets:         nil,
+		annotator:       nil,
+		baselineMatcher: nil,
+		placement:       nil, startedAt: zerovalue_time.Time{},
+		ci:          zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		ciRuntime:   zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+		annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+		planner: &fakePlanner{
+			planFn: nil,
+			calls:  0,
+			plan:   plan,
+		},
+		executor:        &fakeExecutor{called: false, results: nil, onResult: nil, order: &order},
+		binMgr:          &fakeEnsurer{names: nil, called: false, err: nil, order: &order},
 		timings:         timing.New(),
 		platformSkipped: map[string]struct{}{},
 		nameWidth:       10,
@@ -181,21 +302,48 @@ func TestCoverageFailure(t *testing.T) {
 	}
 
 	t.Run("no flag never fails", func(t *testing.T) {
-		sc := &sharedContext{narrowed: narrowed("syncpack")}
+		sc := &sharedContext{
+			preparedTools:        false,
+			parserPrewarmed:      false,
+			bundledFixFindings:   nil,
+			bundledFixChanges:    nil,
+			bundledLintFindings:  nil,
+			bundledLintErr:       nil,
+			completedBundledLint: false,
+			cfg:                  nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, narrowed: narrowed("syncpack"),
+		}
 		if err := sc.coverageFailure(); err != nil {
 			t.Errorf("expected no error, got: %v", err)
 		}
 	})
 
 	t.Run("unit fails on an incomplete answer", func(t *testing.T) {
-		sc := &sharedContext{opts: Options{RequireCoverage: "unit"}, narrowed: narrowed("syncpack")}
+		sc := &sharedContext{
+			preparedTools:        false,
+			parserPrewarmed:      false,
+			bundledFixFindings:   nil,
+			bundledFixChanges:    nil,
+			bundledLintFindings:  nil,
+			bundledLintErr:       nil,
+			completedBundledLint: false,
+			cfg:                  nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, opts: Options{WidenTo: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, RequireCoverage: "unit"}, narrowed: narrowed("syncpack"),
+		}
 		if err := sc.coverageFailure(); err == nil {
 			t.Error("expected a failure")
 		}
 	})
 
 	t.Run("unit passes a complete one", func(t *testing.T) {
-		sc := &sharedContext{opts: Options{RequireCoverage: "unit"}, narrowed: narrowed()}
+		sc := &sharedContext{
+			preparedTools:        false,
+			parserPrewarmed:      false,
+			bundledFixFindings:   nil,
+			bundledFixChanges:    nil,
+			bundledLintFindings:  nil,
+			bundledLintErr:       nil,
+			completedBundledLint: false,
+			cfg:                  nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, opts: Options{WidenTo: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, RequireCoverage: "unit"}, narrowed: narrowed(),
+		}
 		if err := sc.coverageFailure(); err != nil {
 			t.Errorf("expected no error, got: %v", err)
 		}
@@ -205,9 +353,46 @@ func TestCoverageFailure(t *testing.T) {
 	// nine: per-task coverage only speaks for the units that ran.
 	t.Run("repo requires the whole repository as the target", func(t *testing.T) {
 		sc := &sharedContext{
-			opts:      Options{RequireCoverage: "repo"},
-			narrowed:  narrowed(),
-			selection: tooling.Selection{Mode: tooling.SelectionPaths},
+			preparedTools:        false,
+			parserPrewarmed:      false,
+			bundledFixFindings:   nil,
+			bundledFixChanges:    nil,
+			bundledLintFindings:  nil,
+			bundledLintErr:       nil,
+			completedBundledLint: false,
+
+			cfg:             nil,
+			rootPath:        "",
+			cwdPath:         "",
+			files:           nil,
+			selectedTools:   nil,
+			explainLevel:    "",
+			planner:         nil,
+			projectCache:    nil,
+			executor:        nil,
+			binMgr:          nil,
+			timings:         nil,
+			parserMgr:       nil,
+			parseProblems:   nil,
+			ignoredFailOn:   nil,
+			nameWidth:       0,
+			failOnSkip:      false,
+			platformSkipped: nil,
+			failFast:        false,
+			afterFailedFix:  false,
+			summaries:       nil,
+			fileScoped:      false,
+			report:          nil,
+			secrets:         nil,
+			annotator:       nil,
+			baselineMatcher: nil,
+			placement:       nil, startedAt: zerovalue_time.Time{},
+			ci:          zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+			ciRuntime:   zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+			annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+			opts:        Options{WidenTo: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, RequireCoverage: "repo"},
+			narrowed:    narrowed(),
+			selection:   tooling.Selection{Dir: "", Paths: nil, Mode: tooling.SelectionPaths},
 		}
 		if err := sc.coverageFailure(); err == nil {
 			t.Error("a narrowed selection cannot satisfy repo coverage")
@@ -216,9 +401,46 @@ func TestCoverageFailure(t *testing.T) {
 
 	t.Run("repo passes on a full run", func(t *testing.T) {
 		sc := &sharedContext{
-			opts:      Options{RequireCoverage: "repo"},
-			narrowed:  narrowed(),
-			selection: tooling.Selection{Mode: tooling.SelectionAll},
+			preparedTools:        false,
+			parserPrewarmed:      false,
+			bundledFixFindings:   nil,
+			bundledFixChanges:    nil,
+			bundledLintFindings:  nil,
+			bundledLintErr:       nil,
+			completedBundledLint: false,
+
+			cfg:             nil,
+			rootPath:        "",
+			cwdPath:         "",
+			files:           nil,
+			selectedTools:   nil,
+			explainLevel:    "",
+			planner:         nil,
+			projectCache:    nil,
+			executor:        nil,
+			binMgr:          nil,
+			timings:         nil,
+			parserMgr:       nil,
+			parseProblems:   nil,
+			ignoredFailOn:   nil,
+			nameWidth:       0,
+			failOnSkip:      false,
+			platformSkipped: nil,
+			failFast:        false,
+			afterFailedFix:  false,
+			summaries:       nil,
+			fileScoped:      false,
+			report:          nil,
+			secrets:         nil,
+			annotator:       nil,
+			baselineMatcher: nil,
+			placement:       nil, startedAt: zerovalue_time.Time{},
+			ci:          zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+			ciRuntime:   zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""},
+			annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false},
+			opts:        Options{WidenTo: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, RequireCoverage: "repo"},
+			narrowed:    narrowed(),
+			selection:   tooling.Selection{Dir: "", Paths: nil, Mode: tooling.SelectionAll},
 		}
 		if err := sc.coverageFailure(); err != nil {
 			t.Errorf("expected no error, got: %v", err)
@@ -228,7 +450,16 @@ func TestCoverageFailure(t *testing.T) {
 	// A coverage failure must be distinguishable from a tool failure, or a
 	// pipeline cannot act on either.
 	t.Run("carries its own exit code", func(t *testing.T) {
-		sc := &sharedContext{opts: Options{RequireCoverage: "unit"}, narrowed: narrowed("syncpack")}
+		sc := &sharedContext{
+			preparedTools:        false,
+			parserPrewarmed:      false,
+			bundledFixFindings:   nil,
+			bundledFixChanges:    nil,
+			bundledLintFindings:  nil,
+			bundledLintErr:       nil,
+			completedBundledLint: false,
+			cfg:                  nil, rootPath: "", cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, opts: Options{WidenTo: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil, RequireCoverage: "unit"}, narrowed: narrowed("syncpack"),
+		}
 		err := sc.coverageFailure()
 		var coded interface{ ExitCode() int }
 		if !errors.As(err, &coded) {

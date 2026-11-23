@@ -13,6 +13,12 @@ import (
 
 func pickAsset(name string) github.Asset {
 	return github.Asset{
+		APIURL:             "",
+		UUID:               "",
+		MetadataURL:        "",
+		Auth:               nil,
+		Size:               0,
+		ContentType:        "",
 		Name:               name,
 		BrowserDownloadURL: "https://example.test/" + name,
 		Digest:             "sha256:" + strings.Repeat("a", 64),
@@ -77,8 +83,8 @@ func TestPickBinaryForPlatform_NoVerifierKeepsTopCandidate(t *testing.T) {
 
 func TestPickBinaryForPlatform_NoHashWhenNoCandidateHasDigest(t *testing.T) {
 	candidates := []github.Asset{
-		{Name: "yq_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.test/a"},
-		{Name: "yq_linux_amd64", BrowserDownloadURL: "https://example.test/b"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "yq_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.test/a"},
+		{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "yq_linux_amd64", BrowserDownloadURL: "https://example.test/b"},
 	}
 	pick, status, err := pickBinaryForPlatform(
 		context.Background(), "yq", candidates, glibcAmd64, nil, nil)

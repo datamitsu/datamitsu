@@ -57,7 +57,7 @@ func (m *Manager) MaybePrint(machineOutput bool) {
 	path := statePath(m.cacheDir)
 	state, err := loadState(path)
 	if err != nil {
-		state = &State{}
+		state = &State{Activated: false, SuccessfulRuns: 0, LastShown: time.Time{}}
 	}
 
 	// ui.Muted() covers JSON-L mode, where a sponsor line written to stderr would inject

@@ -65,7 +65,7 @@ type pathMask struct {
 // NewNormalizer returns a Normalizer with the built-in rules enabled and no
 // path masks. Chain MaskPath / SortLines to configure it.
 func NewNormalizer() *Normalizer {
-	return &Normalizer{}
+	return &Normalizer{paths: nil, sortLines: false}
 }
 
 // MaskPath registers an absolute path to replace with placeholder (e.g. the

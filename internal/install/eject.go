@@ -123,7 +123,7 @@ func (i *Installer) ejectRemovals(name string, cfg config.ManagedConfig) []eject
 	mainPath := filepath.Join(i.cwdPath, name)
 	var removals []ejectRemoval
 	if cfg.Placement == config.PlacementInternal {
-		removals = append(removals, ejectRemoval{path: mainPath})
+		removals = append(removals, ejectRemoval{alternate: false, path: mainPath})
 	}
 	for _, alt := range cfg.OtherFileNameList {
 		altPath := filepath.Join(i.cwdPath, alt)

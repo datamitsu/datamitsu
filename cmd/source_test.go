@@ -18,8 +18,11 @@ import (
 // a space, a single quote, a glob character and a dollar sign.
 func hostilePlan() sourcefarm.Plan {
 	return sourcefarm.Plan{
-		Root:    "/tmp/my repo's [work]/$dir",
-		FarmDir: "/tmp/my repo's [work]/$dir/farm bin",
+		Entries:  nil,
+		Excluded: nil,
+		Shadowed: nil,
+		Root:     "/tmp/my repo's [work]/$dir",
+		FarmDir:  "/tmp/my repo's [work]/$dir/farm bin",
 	}
 }
 
@@ -34,7 +37,7 @@ func realHostilePlan(t *testing.T) sourcefarm.Plan {
 	if err := os.MkdirAll(farm, 0o700); err != nil {
 		t.Fatalf("create farm directory: %v", err)
 	}
-	return sourcefarm.Plan{Root: root, FarmDir: farm}
+	return sourcefarm.Plan{Entries: nil, Excluded: nil, Shadowed: nil, Root: root, FarmDir: farm}
 }
 
 // writeFarmEntries creates a file per entry name in farm. loadSourcePlan checks
@@ -50,7 +53,7 @@ func writeFarmEntries(t *testing.T, farm string, names ...string) {
 }
 
 func simplePlan() sourcefarm.Plan {
-	return sourcefarm.Plan{Root: "/repo", FarmDir: "/cache/projects/abc/bin"}
+	return sourcefarm.Plan{Entries: nil, Excluded: nil, Shadowed: nil, Root: "/repo", FarmDir: "/cache/projects/abc/bin"}
 }
 
 // gitRootTarget is the target a plain `datamitsu source` inside root resolves
@@ -66,6 +69,7 @@ func gitRootTarget(t *testing.T, root string) sourceTarget {
 		t.Fatalf("GetProjectManifestPath() error = %v", err)
 	}
 	return sourceTarget{
+		ConfigPaths:  nil,
 		Origin:       sourcefarm.OriginGitRoot,
 		Root:         root,
 		FarmDir:      farmDir,
@@ -87,7 +91,7 @@ func configTarget(t *testing.T, configPaths ...string) sourceTarget {
 
 // activationOf is what runSource hands a renderer for a git-root farm.
 func activationOf(plan sourcefarm.Plan) sourceActivation {
-	return activationFor(sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: plan.Root}, plan)
+	return activationFor(sourceTarget{ConfigPaths: nil, FarmDir: "", ManifestPath: "", Origin: sourcefarm.OriginGitRoot, Root: plan.Root}, plan)
 }
 
 // countPathAssignments counts the lines that assign PATH itself. The scratch
@@ -167,7 +171,7 @@ func TestRenderersAreDeterministic(t *testing.T) {
 // load, no filesystem access, no git. A plan describing directories that do not
 // exist renders exactly like one that does.
 func TestRenderersArePure(t *testing.T) {
-	missing := sourcefarm.Plan{Root: "/no/such/root", FarmDir: "/no/such/root/bin"}
+	missing := sourcefarm.Plan{Entries: nil, Excluded: nil, Shadowed: nil, Root: "/no/such/root", FarmDir: "/no/such/root/bin"}
 	for name, render := range map[string]func(sourceActivation) string{"bash": renderBash, "fish": renderFish} {
 		t.Run(name, func(t *testing.T) {
 			got := render(activationOf(missing))
@@ -274,11 +278,12 @@ func TestRenderFishRunsInRealFish(t *testing.T) {
 // prose into the stream the shell is about to execute.
 func TestWarningsNeverReachStdout(t *testing.T) {
 	plan := sourcefarm.Plan{
-		Root:    "/repo",
-		FarmDir: "/cache/bin",
+		Excluded: nil,
+		Root:     "/repo",
+		FarmDir:  "/cache/bin",
 		Entries: []sourcefarm.Entry{
-			{Name: "tofu", Strategy: sourcefarm.StrategySymlink, Installed: true},
-			{Name: "tflint", Strategy: sourcefarm.StrategyShim, Installed: false},
+			{Provider: "", Kind: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Strategy: sourcefarm.StrategySymlink, Installed: true},
+			{Provider: "", Kind: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tflint", Strategy: sourcefarm.StrategyShim, Installed: false},
 		},
 		Shadowed: []sourcefarm.Shadow{{Name: "tofu", Path: "/usr/local/bin/tofu"}},
 	}
@@ -313,7 +318,11 @@ func TestWarningsNeverReachStdout(t *testing.T) {
 // not print on every new terminal.
 func TestWarnSourceFarmSilentWhenClean(t *testing.T) {
 	plan := sourcefarm.Plan{
-		Entries: []sourcefarm.Entry{{Name: "tofu", Installed: true}},
+		Root:     "",
+		FarmDir:  "",
+		Excluded: nil,
+		Shadowed: nil,
+		Entries:  []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Installed: true}},
 	}
 	var stderr bytes.Buffer
 	warnSourceFarm(&stderr, plan, false)
@@ -333,10 +342,10 @@ func TestConfigChainFilesRecordsOnlyFilePaths(t *testing.T) {
 	t.Cleanup(func() { setConfigChainFiles(nil) })
 
 	setConfigChainFiles([]configSource{
-		{name: "default", isDefault: true},
-		{name: "/repo/base.config.ts", path: "/repo/base.config.ts"},
-		{name: "https://example.com/c.js", content: "…", isRemote: true},
-		{name: "auto", path: "/repo/datamitsu.config.ts"},
+		{path: "", content: "", isRemote: false, name: "default", isDefault: true},
+		{content: "", isDefault: false, isRemote: false, name: "/repo/base.config.ts", path: "/repo/base.config.ts"},
+		{path: "", isDefault: false, name: "https://example.com/c.js", content: "…", isRemote: true},
+		{content: "", isDefault: false, isRemote: false, name: "auto", path: "/repo/datamitsu.config.ts"},
 	})
 
 	got := ConfigChainFiles()
@@ -375,7 +384,7 @@ func TestFarmOnDiskRequiresBothHalves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetProjectManifestPath() error = %v", err)
 	}
-	plan := sourcefarm.Plan{Root: root, FarmDir: farm}
+	plan := sourcefarm.Plan{Entries: nil, Excluded: nil, Shadowed: nil, Root: root, FarmDir: farm}
 
 	if farmOnDisk(plan, gitRootTarget(t, root)) {
 		t.Error("a root that was never baked reported a usable farm")
@@ -450,9 +459,10 @@ func TestFreshSourcePlanServesTheManifest(t *testing.T) {
 		t.Fatalf("write watched file: %v", err)
 	}
 	plan := sourcefarm.Plan{
+		Excluded: nil,
 		Root:     root,
 		FarmDir:  farm,
-		Entries:  []sourcefarm.Entry{{Name: "tofu", Installed: true}},
+		Entries:  []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Installed: true}},
 		Shadowed: []sourcefarm.Shadow{{Name: "tofu", Path: "/usr/local/bin/tofu"}},
 	}
 	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchSet(sourcefarm.WatchPaths(root, []string{watched})))
@@ -578,9 +588,11 @@ func TestPreviousSourcePlanServesAStaleFarm(t *testing.T) {
 		t.Fatalf("write watched file: %v", err)
 	}
 	plan := sourcefarm.Plan{
-		Root:    root,
-		FarmDir: farm,
-		Entries: []sourcefarm.Entry{{Name: "tofu", Installed: true}},
+		Excluded: nil,
+		Shadowed: nil,
+		Root:     root,
+		FarmDir:  farm,
+		Entries:  []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Installed: true}},
 	}
 	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchSet(sourcefarm.WatchPaths(root, []string{watched})))
 	data, err := sourcefarm.Encode(m)
@@ -642,9 +654,11 @@ func TestPreviousSourcePlanRefusesARetiredManifest(t *testing.T) {
 	}
 
 	plan := sourcefarm.Plan{
-		Root:    root,
-		FarmDir: farm,
-		Entries: []sourcefarm.Entry{{Name: "tofu", Installed: true}},
+		Excluded: nil,
+		Shadowed: nil,
+		Root:     root,
+		FarmDir:  farm,
+		Entries:  []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Installed: true}},
 	}
 	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, nil)
 	m.FormatVersion = sourcefarm.ManifestFormatVersion - 1
@@ -790,7 +804,7 @@ func TestFlaggedFarmIsNotServedToAPlainInvocation(t *testing.T) {
 		t.Fatalf("write other config: %v", err)
 	}
 	ConfigPaths = []string{other}
-	plan := sourcefarm.Plan{Root: root, FarmDir: farm, Entries: []sourcefarm.Entry{{Name: "from-other-chain"}}}
+	plan := sourcefarm.Plan{Excluded: nil, Shadowed: nil, Root: root, FarmDir: farm, Entries: []sourcefarm.Entry{{Provider: "", Kind: "", Strategy: "", Command: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Installed: false, Name: "from-other-chain"}}}
 	m := sourcefarm.BuildManifest(plan, sourcefarm.OriginGitRoot, sourcefarm.WatchSet(sourcefarm.WatchPaths(root, []string{other})))
 	m.ConfigArgs = configChainArgs()
 	if len(m.ConfigArgs) == 0 {
@@ -840,9 +854,9 @@ func TestConfigChainFilesAreAbsolute(t *testing.T) {
 	t.Chdir(dir)
 
 	setConfigChainFiles([]configSource{
-		{name: "default", isDefault: true},
-		{name: "shared.js", path: "shared.js"},
-		{name: "auto", path: filepath.Join(dir, "datamitsu.config.ts")},
+		{path: "", content: "", isRemote: false, name: "default", isDefault: true},
+		{content: "", isDefault: false, isRemote: false, name: "shared.js", path: "shared.js"},
+		{content: "", isDefault: false, isRemote: false, name: "auto", path: filepath.Join(dir, "datamitsu.config.ts")},
 	})
 
 	got := ConfigChainFiles()

@@ -115,7 +115,7 @@ func TestSaveState_CreatesDirectory(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nested", "dir", "state.json")
 
-	state := &State{SuccessfulRuns: 5}
+	state := &State{Activated: false, LastShown: time.Time{}, SuccessfulRuns: 5}
 	if err := saveState(path, state); err != nil {
 		t.Fatalf("saveState() returned error: %v", err)
 	}
@@ -129,12 +129,12 @@ func TestSaveState_AtomicOverwrite(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
 
-	first := &State{SuccessfulRuns: 10}
+	first := &State{Activated: false, LastShown: time.Time{}, SuccessfulRuns: 10}
 	if err := saveState(path, first); err != nil {
 		t.Fatalf("first saveState() returned error: %v", err)
 	}
 
-	second := &State{SuccessfulRuns: 20, Activated: true}
+	second := &State{LastShown: time.Time{}, SuccessfulRuns: 20, Activated: true}
 	if err := saveState(path, second); err != nil {
 		t.Fatalf("second saveState() returned error: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestSaveState_NoTempFileLeftOver(t *testing.T) {
 	sponsorDir := filepath.Join(dir, ".sponsor")
 	path := filepath.Join(sponsorDir, "state.json")
 
-	state := &State{SuccessfulRuns: 1}
+	state := &State{Activated: false, LastShown: time.Time{}, SuccessfulRuns: 1}
 	if err := saveState(path, state); err != nil {
 		t.Fatalf("saveState() returned error: %v", err)
 	}

@@ -23,20 +23,42 @@ func anchorCoreFindings(findings []diagnostic.Diagnostic) error {
 		}
 		lines := bytes.Split(content, []byte{'\n'})
 		if d.Row > len(lines) {
-			d.Anchor = &diagnostic.Anchor{Basis: report.BasisRow, LineHash: report.RowHash(d.Row), Precision: textpos.Unknown}
+			d.Anchor = &diagnostic.Anchor{
+				Fingerprint: "",
+				Chars:       nil,
+				Bytes:       nil,
+				UTF16:       nil,
+				Basis:       report.BasisRow, LineHash: report.RowHash(d.Row), Precision: textpos.Unknown,
+			}
 			continue
 		}
-		d.Anchor = &diagnostic.Anchor{Basis: report.BasisLine, LineHash: report.LineHash(lines[d.Row-1]), Precision: textpos.Unknown}
+		d.Anchor = &diagnostic.Anchor{
+			Fingerprint: "",
+			Chars:       nil,
+			Bytes:       nil,
+			UTF16:       nil,
+			Basis:       report.BasisLine, LineHash: report.LineHash(lines[d.Row-1]), Precision: textpos.Unknown,
+		}
 	}
 	return nil
 }
 
 func coreFixFinding(root, relative string) diagnostic.Diagnostic {
 	return diagnostic.Diagnostic{
+		URL:       "",
+		Gates:     false,
+		Baselined: false,
+
 		File: filepath.Join(root, filepath.FromSlash(relative)), Row: 1, Col: 1, EndRow: 1, EndCol: 1,
 		Severity: diagnostic.SeverityInfo, Source: placementTool, Code: "datamitsuignore-normalized",
 		Message: "normalized .datamitsuignore formatting", Reported: true,
-		Anchor: &diagnostic.Anchor{Basis: report.BasisRow, LineHash: report.RowHash(1), Precision: textpos.Unknown},
+		Anchor: &diagnostic.Anchor{
+			Fingerprint: "",
+			Chars:       nil,
+			Bytes:       nil,
+			UTF16:       nil,
+			Basis:       report.BasisRow, LineHash: report.RowHash(1), Precision: textpos.Unknown,
+		},
 	}
 }
 

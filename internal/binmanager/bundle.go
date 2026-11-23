@@ -145,7 +145,7 @@ func (bm *BinManager) InstallBundles(ctx context.Context, skipExternalArchives b
 	}
 	defer releaseLease()
 	ctx = leaseCtx
-	stats := BundleInstallStats{}
+	stats := BundleInstallStats{AlreadyCached: nil, Installed: nil, Skipped: nil, Failed: nil}
 
 	if len(bm.mapOfBundles) == 0 {
 		return stats, nil

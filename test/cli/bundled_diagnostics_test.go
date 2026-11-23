@@ -17,8 +17,36 @@ import (
 func TestDatamitsuIgnoreFindingUsesOperationFrame(t *testing.T) {
 	input := "*.go:cspell\n"
 	e := newExecProject(t, map[string]string{"fixture.marker": "", ".datamitsuignore": input}, fixtureSpec,
-		clitest.ShellTool("formatter", passScript, clitest.ToolOpSpec{Operation: "fix"}),
-		clitest.ShellTool("cspell", passScript, clitest.ToolOpSpec{Operation: "lint"}))
+		clitest.ShellTool("formatter", passScript, clitest.ToolOpSpec{
+			Scope:        "",
+			Args:         nil,
+			Globs:        nil,
+			Priority:     0,
+			ProjectTypes: nil,
+			Parser:       "",
+			ParserModule: "",
+			Env:          nil,
+			InheritEnv:   nil,
+			FailOn:       "",
+			Input:        "",
+			Output:       "",
+			Operation:    "fix",
+		}),
+		clitest.ShellTool("cspell", passScript, clitest.ToolOpSpec{
+			Scope:        "",
+			Args:         nil,
+			Globs:        nil,
+			Priority:     0,
+			ProjectTypes: nil,
+			Parser:       "",
+			ParserModule: "",
+			Env:          nil,
+			InheritEnv:   nil,
+			FailOn:       "",
+			Input:        "",
+			Output:       "",
+			Operation:    "lint",
+		}))
 
 	lint := e.run("", nil, "lint", "--fail-fast=false")
 	e.wantExit(lint, 1)
@@ -80,7 +108,10 @@ func TestBundledLintSeesConfiguredFixFileChanges(t *testing.T) {
 		wantFinding              bool
 	}{
 		{name: "rewrite", initial: "*.go:cspell\n", fixScript: `printf '*.go:  cspell  \n' > .datamitsuignore`, wantFinding: true},
-		{name: "create", fixScript: `printf '*.go:cspell\n' > .datamitsuignore`, wantFinding: true},
+		{
+			initial: "",
+			name:    "create", fixScript: `printf '*.go:cspell\n' > .datamitsuignore`, wantFinding: true,
+		},
 		{name: "delete", initial: "*.go:cspell\n", fixScript: `rm -f .datamitsuignore`, wantFinding: false},
 	}
 	for _, tt := range tests {
@@ -91,8 +122,28 @@ func TestBundledLintSeesConfiguredFixFileChanges(t *testing.T) {
 				p.WriteFile(".datamitsuignore", tt.initial)
 			}
 			cfg := p.WriteFile("exec.config.js", clitest.ShellConfig(fixtureSpec,
-				clitest.ShellTool("fixer", tt.fixScript, clitest.ToolOpSpec{Operation: "fix"})))
-			result := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--config", cfg, "check", "--fail-fast=false")
+				clitest.ShellTool("fixer", tt.fixScript, clitest.ToolOpSpec{
+					Scope:        "",
+					Args:         nil,
+					Globs:        nil,
+					Priority:     0,
+					ProjectTypes: nil,
+					Parser:       "",
+					ParserModule: "",
+					Env:          nil,
+					InheritEnv:   nil,
+					FailOn:       "",
+					Input:        "",
+					Output:       "",
+					Operation:    "fix",
+				})))
+			result := clitest.Run(t, clitest.RunOptions{
+				CacheDir: "",
+				Env:      nil,
+				Stdin:    "",
+				Timeout:  0,
+				Dir:      p.Dir,
+			}, "--no-auto-config", "--config", cfg, "check", "--fail-fast=false")
 			if tt.wantFinding && (result.ExitCode != 1 || !strings.Contains(result.Stdout, "[datamitsuignore-format]")) {
 				t.Fatalf("post-fix bundled finding missing: exit=%d\n%s\n%s", result.ExitCode, result.Stdout, result.Stderr)
 			}
@@ -136,9 +187,39 @@ func TestBundledLintUsesPostFixIgnoreRules(t *testing.T) {
 			build := fmt.Sprintf(`{url:%q,hash:%q,contentType:"binary"}`, server.URL, hash)
 			spec.Extra = fmt.Sprintf(`c.apps.cspell = {binary:{binaries:{%q:{%q:{glibc:%s,musl:%s,unknown:%s}}}}};`, runtime.GOOS, runtime.GOARCH, build, build, build)
 			cfg := p.WriteFile("exec.config.js", clitest.ShellConfig(spec,
-				clitest.ShellTool("fixer", tt.fixScript, clitest.ToolOpSpec{Operation: "fix"}),
-				clitest.ShellTool("cspell", passScript, clitest.ToolOpSpec{Scope: "per-file", Globs: []string{"*.go"}, Args: []string{"{file}"}})))
-			result := clitest.Run(t, clitest.RunOptions{Dir: p.Dir, CacheDir: t.TempDir(), Env: []string{"DATAMITSU_OFFLINE="}}, "--no-auto-config", "--config", cfg, "check", "--fail-fast=false")
+				clitest.ShellTool("fixer", tt.fixScript, clitest.ToolOpSpec{
+					Scope:        "",
+					Args:         nil,
+					Globs:        nil,
+					Priority:     0,
+					ProjectTypes: nil,
+					Parser:       "",
+					ParserModule: "",
+					Env:          nil,
+					InheritEnv:   nil,
+					FailOn:       "",
+					Input:        "",
+					Output:       "",
+					Operation:    "fix",
+				}),
+				clitest.ShellTool("cspell", passScript, clitest.ToolOpSpec{
+					Operation:    "",
+					Priority:     0,
+					ProjectTypes: nil,
+					Parser:       "",
+					ParserModule: "",
+					Env:          nil,
+					InheritEnv:   nil,
+					FailOn:       "",
+					Input:        "",
+					Output:       "",
+					Scope:        "per-file", Globs: []string{"*.go"}, Args: []string{"{file}"},
+				})))
+			result := clitest.Run(t, clitest.RunOptions{
+				Stdin:   "",
+				Timeout: 0,
+				Dir:     p.Dir, CacheDir: t.TempDir(), Env: []string{"DATAMITSU_OFFLINE="},
+			}, "--no-auto-config", "--config", cfg, "check", "--fail-fast=false")
 			if tt.wantFinding && (result.ExitCode != 0 || !strings.Contains(result.Stdout, "┃ ✓ cspell") || !strings.Contains(result.Stdout, "prepare tools")) {
 				t.Fatalf("post-fix lint plan did not include newly unignored app: exit=%d\n%s\n%s", result.ExitCode, result.Stdout, result.Stderr)
 			}
@@ -151,7 +232,21 @@ func TestBundledLintUsesPostFixIgnoreRules(t *testing.T) {
 
 func TestCheckKeepsFixFailureWhenLintSetupFails(t *testing.T) {
 	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
-		clitest.ShellTool("fixer", `printf 'malformed\n' > .datamitsuignore; exit 1`, clitest.ToolOpSpec{Operation: "fix"}))
+		clitest.ShellTool("fixer", `printf 'malformed\n' > .datamitsuignore; exit 1`, clitest.ToolOpSpec{
+			Scope:        "",
+			Args:         nil,
+			Globs:        nil,
+			Priority:     0,
+			ProjectTypes: nil,
+			Parser:       "",
+			ParserModule: "",
+			Env:          nil,
+			InheritEnv:   nil,
+			FailOn:       "",
+			Input:        "",
+			Output:       "",
+			Operation:    "fix",
+		}))
 	res := e.run("", nil, "check", "--fail-fast=false")
 	e.wantExit(res, 1)
 	if !strings.Contains(res.Stderr, "operation failed") || !strings.Contains(res.Stderr, "missing colon separator") {
@@ -164,7 +259,13 @@ func TestDatamitsuIgnoreFindingUsesOperationFrameWithoutExternalTools(t *testing
 	p.WriteFile("fixture.marker", "")
 	p.WriteFile(".datamitsuignore", "*.go:cspell\n")
 	cfg := p.WriteFile("exec.config.js", clitest.ShellConfig(fixtureSpec))
-	result := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--config", cfg, "lint")
+	result := clitest.Run(t, clitest.RunOptions{
+		CacheDir: "",
+		Env:      nil,
+		Stdin:    "",
+		Timeout:  0,
+		Dir:      p.Dir,
+	}, "--no-auto-config", "--config", cfg, "lint")
 	if result.ExitCode != 1 || !strings.Contains(result.Stdout, "┏━ lint") || !strings.Contains(result.Stdout, "┃ ✗ datamitsu") || strings.Contains(result.Stdout, "No applicable tools found") {
 		t.Fatalf("built-in-only lint was not rendered as an operation: exit=%d (stdout=%q, stderr=%q)", result.ExitCode, result.Stdout, result.Stderr)
 	}
@@ -173,7 +274,13 @@ func TestDatamitsuIgnoreFindingUsesOperationFrameWithoutExternalTools(t *testing
 		project.WriteFile("fixture.marker", "")
 		project.WriteFile(".datamitsuignore", "*.go:cspell\n")
 		cfg := project.WriteFile("exec.config.js", clitest.ShellConfig(fixtureSpec))
-		result := clitest.Run(t, clitest.RunOptions{Dir: project.Dir}, "--no-auto-config", "--config", cfg, "lint", "--annotations", "github")
+		result := clitest.Run(t, clitest.RunOptions{
+			CacheDir: "",
+			Env:      nil,
+			Stdin:    "",
+			Timeout:  0,
+			Dir:      project.Dir,
+		}, "--no-auto-config", "--config", cfg, "lint", "--annotations", "github")
 		if result.ExitCode != 1 {
 			t.Fatalf("core-only annotation exit = %d, want 1\n%s\n%s", result.ExitCode, result.Stdout, result.Stderr)
 		}

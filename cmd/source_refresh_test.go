@@ -18,7 +18,7 @@ import (
 // declared names were refused.
 func TestSummarizeRefreshCounts(t *testing.T) {
 	var buf bytes.Buffer
-	summarizeRefresh(&buf, bakeResult{Plan: statusPlan(t)}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, false)
+	summarizeRefresh(&buf, bakeResult{MaterializeErr: nil, Plan: statusPlan(t)}, sourceTarget{ConfigPaths: nil, FarmDir: "", ManifestPath: "", Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, false)
 
 	line := buf.String()
 	if strings.Count(line, "\n") != 1 {
@@ -35,7 +35,7 @@ func TestSummarizeRefreshCounts(t *testing.T) {
 // summary. Silence would be indistinguishable from the command not running.
 func TestSummarizeRefreshEmptyFarm(t *testing.T) {
 	var buf bytes.Buffer
-	summarizeRefresh(&buf, bakeResult{Plan: sourcefarm.Plan{Root: "/repo"}}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, false)
+	summarizeRefresh(&buf, bakeResult{MaterializeErr: nil, Plan: sourcefarm.Plan{FarmDir: "", Entries: nil, Excluded: nil, Shadowed: nil, Root: "/repo"}}, sourceTarget{ConfigPaths: nil, FarmDir: "", ManifestPath: "", Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, false)
 
 	if !strings.Contains(buf.String(), "baked 0 tool(s)") {
 		t.Errorf("empty farm produced no usable summary:\n%s", buf.String())
@@ -51,7 +51,7 @@ func TestSummarizeRefreshReportsFailedBake(t *testing.T) {
 	summarizeRefresh(&buf, bakeResult{
 		Plan:           statusPlan(t),
 		MaterializeErr: errors.New("no space left on device"),
-	}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, false)
+	}, sourceTarget{ConfigPaths: nil, FarmDir: "", ManifestPath: "", Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, false)
 
 	out := buf.String()
 	if strings.Contains(out, "tool(s)") {
@@ -72,7 +72,7 @@ func TestSummarizeRefreshReportsFailedBake(t *testing.T) {
 
 func TestSummarizeRefreshQuietSuppressesSuccess(t *testing.T) {
 	var buf bytes.Buffer
-	summarizeRefresh(&buf, bakeResult{Plan: statusPlan(t)}, sourceTarget{Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, true)
+	summarizeRefresh(&buf, bakeResult{MaterializeErr: nil, Plan: statusPlan(t)}, sourceTarget{ConfigPaths: nil, FarmDir: "", ManifestPath: "", Origin: sourcefarm.OriginGitRoot, Root: "/repo"}, true)
 	if buf.Len() != 0 {
 		t.Fatalf("quiet successful refresh printed %q", buf.String())
 	}
@@ -120,7 +120,7 @@ func TestSourceFarmIsFresh(t *testing.T) {
 	if err := os.WriteFile(watched, []byte("//\n"), 0o600); err != nil {
 		t.Fatalf("write watched file: %v", err)
 	}
-	m := sourcefarm.BuildManifest(sourcefarm.Plan{Root: root, FarmDir: farmDir}, sourcefarm.OriginGitRoot,
+	m := sourcefarm.BuildManifest(sourcefarm.Plan{Entries: nil, Excluded: nil, Shadowed: nil, Root: root, FarmDir: farmDir}, sourcefarm.OriginGitRoot,
 		sourcefarm.WatchSet(sourcefarm.WatchPaths(root, []string{watched})))
 	data, err := sourcefarm.Encode(m)
 	if err != nil {

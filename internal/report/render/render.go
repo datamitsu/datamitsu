@@ -118,7 +118,7 @@ func ParseSpec(raw string) (Spec, error) {
 	if path == "" {
 		return Spec{}, fmt.Errorf("report %s needs a path: %s=<path>, or %s=- for stdout", format, format, format)
 	}
-	spec := Spec{Format: format, Path: path}
+	spec := Spec{Options: nil, Format: format, Path: path}
 	if _, split := r.(DirRenderer); spec.Dir() && !split {
 		return Spec{}, fmt.Errorf("report %s is one file, and %s names a directory", format, path)
 	}

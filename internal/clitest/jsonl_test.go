@@ -177,7 +177,7 @@ func TestAssertChains(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseJSONL: %v", err)
 			}
-			rec := &errorsTB{}
+			rec := &errorsTB{TB: nil, errs: nil}
 			AssertChains(rec, events)
 			got := strings.Join(rec.errs, "\n")
 			switch {

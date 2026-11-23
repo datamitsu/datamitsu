@@ -9,6 +9,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	zerovalue_sync "sync"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -50,7 +51,7 @@ func readFrame(t *testing.T, r *bufio.Reader) map[string]json.RawMessage {
 // no loader and no session — fine for protocol/lifecycle tests that never reach
 // formatting.
 func newTestServer(buf *bytes.Buffer) *Server {
-	return &Server{conn: newConn(strings.NewReader(""), buf), docs: make(map[string][]byte)}
+	return &Server{loader: nil, launchDir: "", root: "", loaded: nil, supersededKeys: nil, watch: nil, loadedInputs: "", failedInputs: "", noSession: "", noSessionReported: "", refused: nil, options: nil, optionsInvalid: false, policy: formatPolicy{WidenTo: "", TimeoutMs: 0, Tools: nil}, now: nil, initialized: false, shutdownReceived: false, exitCode: 0, active: nil, runMu: zerovalue_sync.Mutex{}, stopping: false, transport: nil, conn: newConn(strings.NewReader(""), buf), docs: make(map[string][]byte)}
 }
 
 func TestConnFramingRoundTripWithNewlineBody(t *testing.T) {
@@ -118,7 +119,7 @@ func TestRunRecoversFromInvalidJSONFrame(t *testing.T) {
 		frameStr(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
 		frameStr(`{"jsonrpc":"2.0","id":2,"method":"shutdown"}`) +
 		frameStr(`{"jsonrpc":"2.0","method":"exit"}`)
-	s := &Server{conn: newConn(strings.NewReader(in), &out), docs: make(map[string][]byte)}
+	s := &Server{loader: nil, launchDir: "", root: "", loaded: nil, supersededKeys: nil, watch: nil, loadedInputs: "", failedInputs: "", noSession: "", noSessionReported: "", refused: nil, options: nil, optionsInvalid: false, policy: formatPolicy{WidenTo: "", TimeoutMs: 0, Tools: nil}, now: nil, initialized: false, shutdownReceived: false, exitCode: 0, active: nil, runMu: zerovalue_sync.Mutex{}, stopping: false, transport: nil, conn: newConn(strings.NewReader(in), &out), docs: make(map[string][]byte)}
 
 	if err := s.Run(context.Background()); err != nil {
 		t.Fatalf("Run returned fatal error on a recoverable bad frame: %v", err)
@@ -199,7 +200,7 @@ func msg(t *testing.T, id, method string, params any) *message {
 		}
 		raw = b
 	}
-	m := &message{JSONRPC: "2.0", Method: method, Params: raw}
+	m := &message{ID: nil, JSONRPC: "2.0", Method: method, Params: raw}
 	if id != "" {
 		m.ID = json.RawMessage(id)
 	}
@@ -351,10 +352,11 @@ func TestInitializeEchoesTheFormatPolicy(t *testing.T) {
 		wantWarns int
 	}{
 		{
-			name:     "no options",
-			params:   map[string]any{},
-			want:     `{"datamitsu":{"format":{"widenTo":"unit","timeoutMs":15000,"tools":{}}}}`,
-			wantInfo: "format policy: widenTo=unit timeoutMs=15000 tools={} (from initializationOptions: none)",
+			wantWarns: 0,
+			name:      "no options",
+			params:    map[string]any{},
+			want:      `{"datamitsu":{"format":{"widenTo":"unit","timeoutMs":15000,"tools":{}}}}`,
+			wantInfo:  "format policy: widenTo=unit timeoutMs=15000 tools={} (from initializationOptions: none)",
 		},
 		{
 			name: "options override, rejected entries are left out",
@@ -374,7 +376,7 @@ func TestInitializeEchoesTheFormatPolicy(t *testing.T) {
 			sink := captureEvents(t)
 			var buf bytes.Buffer
 			s := newTestServer(&buf)
-			s.loaded = &session{tools: config.MapOfTools{"eslint": {Name: "eslint"}}}
+			s.loaded = &session{planner: nil, binMgr: nil, executor: nil, cache: nil, parsers: nil, fixWidenTo: "", managedConfigs: nil, foreignCacheReported: false, tools: config.MapOfTools{"eslint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "eslint"}}}
 
 			s.handle(context.Background(), msg(t, "1", "initialize", tt.params))
 

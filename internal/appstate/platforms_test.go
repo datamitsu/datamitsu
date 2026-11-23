@@ -56,7 +56,7 @@ func TestLoadPlatformSelection(t *testing.T) {
 }
 
 func TestPlatformSelectionHash(t *testing.T) {
-	metadata := &AppMetadata{Source: "github", Repository: "o/r", Tag: "v1"}
+	metadata := &AppMetadata{Hashes: nil, Checksums: nil, Source: "github", Repository: "o/r", Tag: "v1"}
 	a := []string{"darwin/arm64", "linux/amd64/musl"}
 	b := []string{"linux/amd64/musl", "darwin/arm64", "darwin/arm64"}
 	if ComputeConfigHash(metadata, a) != ComputeConfigHash(metadata, b) {
@@ -75,11 +75,11 @@ func TestPlatformSelectionHash(t *testing.T) {
 
 func TestFilterPlatforms(t *testing.T) {
 	bins := binmanager.MapOfBinaries{
-		"darwin":  {"arm64": {"unknown": {URL: "keep"}}, "amd64": {"unknown": {URL: "remove"}}},
-		"linux":   {"amd64": {"glibc": {URL: "remove"}, "musl": {URL: "keep"}}},
-		"windows": {"arm64": {"unknown": {URL: "remove"}}},
+		"darwin":  {"arm64": {"unknown": {Auth: nil, Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "keep"}}, "amd64": {"unknown": {Auth: nil, Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "remove"}}},
+		"linux":   {"amd64": {"glibc": {Auth: nil, Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "remove"}, "musl": {Auth: nil, Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "keep"}}},
+		"windows": {"arm64": {"unknown": {Auth: nil, Hash: "", ContentType: "", BinaryPath: nil, ExtractDir: false, URL: "remove"}}},
 	}
-	state := &State{Sources: map[string]releaseprovider.Source{"github": {Type: "github", URL: "https://github.com"}}, Binaries: map[string]*BinariesEntry{"orphan": {ConfigHash: "old", Binaries: bins}, "nil": nil}}
+	state := &State{Platforms: nil, Apps: nil, Sources: map[string]releaseprovider.Source{"github": {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://github.com"}}, Binaries: map[string]*BinariesEntry{"orphan": {Source: nil, Description: "", ConfigHash: "old", Binaries: bins}, "nil": nil}}
 	if state.FilterPlatforms() {
 		t.Fatal("absent selector filtered binaries")
 	}

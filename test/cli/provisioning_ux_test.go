@@ -53,7 +53,11 @@ globalThis.getConfig = () => ({
   }
 });`, runtime.GOOS, runtime.GOARCH, server.URL+"/fix", digest.SHA256Of(payload).String(), runtime.GOOS, runtime.GOARCH, server.URL+"/lint", digest.SHA256Of(payload).String()))
 	cache := t.TempDir()
-	opts := clitest.RunOptions{Dir: p.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="}}
+	opts := clitest.RunOptions{
+		Stdin:   "",
+		Timeout: 0,
+		Dir:     p.Dir, CacheDir: cache, Env: []string{"DATAMITSU_OFFLINE="},
+	}
 	cold := clitest.Run(t, opts, "check")
 	if cold.ExitCode != 0 {
 		t.Fatalf("cold check: exit %d\n%s\n%s", cold.ExitCode, cold.Stdout, cold.Stderr)

@@ -12,7 +12,7 @@ func pos(line int) textdiff.Position { return textdiff.Position{Line: line, Char
 func TestToTextEdits_MapsLineEdits(t *testing.T) {
 	edits := []textdiff.Edit{
 		// delete before[1:3]
-		{Range: textdiff.Range{Start: pos(1), End: pos(3)}},
+		{NewText: "", Range: textdiff.Range{Start: pos(1), End: pos(3)}},
 		// insert "x\n" at line 5
 		{Range: textdiff.Range{Start: pos(5), End: pos(5)}, NewText: "x\n"},
 	}

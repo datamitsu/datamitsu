@@ -71,7 +71,7 @@ type CollectOptions struct {
 // Collect gathers all facts about the current environment.
 // Returns Facts, the git root path (empty if not in a git repo), and any error.
 func Collect(ctx context.Context, binaryCommandOverride string) (*Facts, string, error) {
-	return CollectWithOptions(ctx, binaryCommandOverride, CollectOptions{})
+	return CollectWithOptions(ctx, binaryCommandOverride, CollectOptions{TolerateGitFailure: false})
 }
 
 // CollectWithOptions is Collect with explicit CollectOptions.
@@ -84,11 +84,17 @@ func CollectWithOptions(ctx context.Context, binaryCommandOverride string, opts 
 	host := target.HostTarget()
 
 	facts := &Facts{
-		PackageName: ldflags.PackageName,
-		Version:     ldflags.Version,
-		OS:          runtime.GOOS,
-		Arch:        runtime.GOARCH,
-		Libc:        string(host.Libc),
+		BinaryCommand: "",
+		BinaryPath:    "",
+		IsInGitRepo:   false,
+		IsMonorepo:    false,
+		Env:           nil,
+		CI:            cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		PackageName:   ldflags.PackageName,
+		Version:       ldflags.Version,
+		OS:            runtime.GOOS,
+		Arch:          runtime.GOARCH,
+		Libc:          string(host.Libc),
 	}
 
 	// Get binary path
@@ -288,7 +294,7 @@ func GetGitRoot(ctx context.Context) (string, error) {
 	if entry == nil {
 		gitRootMu.Lock()
 		if entry = gitRootCache[cwd]; entry == nil {
-			entry = &gitRootEntry{}
+			entry = &gitRootEntry{once: sync.Once{}, root: "", err: nil}
 			gitRootCache[cwd] = entry
 		}
 		gitRootMu.Unlock()

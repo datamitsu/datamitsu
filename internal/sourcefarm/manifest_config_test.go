@@ -33,8 +33,11 @@ func configFixture(t *testing.T) (chain []string, m Manifest) {
 	chain = []string{main, before}
 
 	plan := Plan{
-		FarmDir: filepath.Join(dir, "farm"),
-		Entries: []Entry{{Name: "tofu", Kind: "binary", Strategy: StrategyShim, Command: "/store/.bin/tofu/abc", Installed: true}},
+		Root:     "",
+		Excluded: nil,
+		Shadowed: nil,
+		FarmDir:  filepath.Join(dir, "farm"),
+		Entries:  []Entry{{Provider: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Env: nil, Name: "tofu", Kind: "binary", Strategy: StrategyShim, Command: "/store/.bin/tofu/abc", Installed: true}},
 	}
 	m = BuildConfigManifest(plan, chain, WatchSet(ConfigWatchPaths(chain)))
 	if !Validate(m) {
@@ -66,7 +69,7 @@ func TestBuildConfigManifest(t *testing.T) {
 
 	t.Run("does not alias the caller's slice", func(t *testing.T) {
 		mutated := append([]string(nil), chain...)
-		built := BuildConfigManifest(Plan{}, mutated, nil)
+		built := BuildConfigManifest(Plan{Root: "", FarmDir: "", Entries: nil, Excluded: nil, Shadowed: nil}, mutated, nil)
 		mutated[0] = "/somewhere/else"
 		if built.ConfigPaths[0] == "/somewhere/else" {
 			t.Error("BuildConfigManifest kept a reference to the caller's slice")
@@ -91,7 +94,7 @@ func TestBuildConfigManifest(t *testing.T) {
 	})
 
 	t.Run("a git-root manifest carries no config paths", func(t *testing.T) {
-		plain := BuildManifest(Plan{Root: "/repo"}, OriginGitRoot, nil)
+		plain := BuildManifest(Plan{FarmDir: "", Entries: nil, Excluded: nil, Shadowed: nil, Root: "/repo"}, OriginGitRoot, nil)
 		if plain.ConfigPaths != nil {
 			t.Errorf("ConfigPaths = %v, want nil for a git-root farm", plain.ConfigPaths)
 		}

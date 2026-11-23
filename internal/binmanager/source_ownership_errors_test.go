@@ -18,12 +18,12 @@ func TestInstalledSourceRejectsUnavailableOwnershipAndUnhealthyPayload(t *testin
 		t.Run(scenario, func(t *testing.T) {
 			t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 			payload := []byte("preserved")
-			info := BinaryOsArchInfo{URL: "https://example.invalid/tool", Hash: digest.SHA256Of(payload).String(), ContentType: BinContentTypeBinary}
+			info := BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.invalid/tool", Hash: digest.SHA256Of(payload).String(), ContentType: BinContentTypeBinary}
 			if scenario == "directory payload" {
 				command := "bin/tool"
 				info.ExtractDir, info.BinaryPath, info.ContentType = true, &command, BinContentTypeTarGz
 			}
-			manager := New(MapOfApps{"tool": {Binary: &AppConfigBinary{Binaries: cpHostBinaries(t, info)}}}, nil, nil)
+			manager := New(MapOfApps{"tool": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &AppConfigBinary{Version: "", Binaries: cpHostBinaries(t, info)}}}, nil, nil)
 			installPath, err := manager.getInstallPath("tool")
 			if err != nil {
 				t.Fatal(err)

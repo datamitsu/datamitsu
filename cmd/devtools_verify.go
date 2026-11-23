@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -35,8 +36,39 @@ var (
 )
 
 var verifyAllCmd = &cobra.Command{
-	Use:   "verify-all",
-	Short: "Verify all apps and runtimes across all configured platforms",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "verify-all",
+	Short:                      "Verify all apps and runtimes across all configured platforms",
 	Long: `Downloads and hash-verifies binary apps and managed runtimes for all
 configured platforms. Installs runtime-managed apps (UV/Node/JVM/Go) on the
 current platform. Optionally runs each app's version command and compares
@@ -447,6 +479,7 @@ func runVerifyAll(cmd *cobra.Command, args []string) error {
 		if loadErr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to load verify state: %v\n", loadErr)
 			state = &verifycache.VerifyState{
+				LastRun: zerovalue_time.Time{},
 				Version: 1,
 				CWD:     cwd,
 				Entries: map[string]verifycache.VerifyEntry{},
@@ -457,6 +490,7 @@ func runVerifyAll(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		state = &verifycache.VerifyState{
+			LastRun: zerovalue_time.Time{},
 			Version: 1,
 			CWD:     cwd,
 			Entries: map[string]verifycache.VerifyEntry{},
@@ -586,12 +620,13 @@ func runPhase1BinaryApps(ctx context.Context, cfg *config.Config, concurrency in
 		jobsToRun, skippedJobs = filterSkippedBinaryJobs(allJobs, sm)
 		for _, j := range skippedJobs {
 			r := binaryVerifyResult{
-				AppName: j.appName,
-				Version: j.version,
-				Os:      j.os,
-				Arch:    j.arch,
-				Libc:    j.libc,
-				Status:  "cached",
+				ErrorMsg: "",
+				AppName:  j.appName,
+				Version:  j.version,
+				Os:       j.os,
+				Arch:     j.arch,
+				Libc:     j.libc,
+				Status:   "cached",
 			}
 			results = append(results, r)
 			if showProgress {
@@ -618,12 +653,13 @@ func runPhase1BinaryApps(ctx context.Context, cfg *config.Config, concurrency in
 				j := item.job
 				err := verifyBinaryOrDir(ctx, j.info)
 				r := binaryVerifyResult{
-					AppName: j.appName,
-					Version: j.version,
-					Os:      j.os,
-					Arch:    j.arch,
-					Libc:    j.libc,
-					Status:  "ok",
+					ErrorMsg: "",
+					AppName:  j.appName,
+					Version:  j.version,
+					Os:       j.os,
+					Arch:     j.arch,
+					Libc:     j.libc,
+					Status:   "ok",
 				}
 				if err != nil {
 					r.Status = "failed"
@@ -790,6 +826,7 @@ func runPhase2ManagedRuntimes(ctx context.Context, cfg *config.Config, concurren
 		jobsToRun, skippedJobs = filterSkippedRuntimeJobs(allJobs, sm)
 		for _, j := range skippedJobs {
 			r := runtimeVerifyResult{
+				ErrorMsg:    "",
 				RuntimeName: j.runtimeName,
 				Os:          j.os,
 				Arch:        j.arch,
@@ -821,6 +858,7 @@ func runPhase2ManagedRuntimes(ctx context.Context, cfg *config.Config, concurren
 				j := item.job
 				err := verifyBinaryOrDir(ctx, j.info)
 				r := runtimeVerifyResult{
+					ErrorMsg:    "",
 					RuntimeName: j.runtimeName,
 					Os:          j.os,
 					Arch:        j.arch,
@@ -920,10 +958,11 @@ func runPhase3RuntimeApps(ctx context.Context, cfg *config.Config, currentOs, cu
 		for _, entry := range skippedEntries {
 			version := runtimeAppVersion(entry.app)
 			r := runtimeAppResult{
-				AppName: entry.name,
-				Kind:    entry.kind,
-				Version: version,
-				Status:  "cached",
+				ErrorMsg: "",
+				AppName:  entry.name,
+				Kind:     entry.kind,
+				Version:  version,
+				Status:   "cached",
 			}
 			results = append(results, r)
 			if showProgress {
@@ -939,10 +978,11 @@ func runPhase3RuntimeApps(ctx context.Context, cfg *config.Config, currentOs, cu
 
 		_, err := bm.GetCommandInfoInstallOnly(ctx, entry.name)
 		r := runtimeAppResult{
-			AppName: entry.name,
-			Kind:    entry.kind,
-			Version: version,
-			Status:  "ok",
+			ErrorMsg: "",
+			AppName:  entry.name,
+			Kind:     entry.kind,
+			Version:  version,
+			Status:   "ok",
 		}
 		if err != nil {
 			r.Status = "failed"
@@ -1008,6 +1048,7 @@ func runPhaseBundleInstalls(cfg *config.Config, showProgress bool, sm *verifycac
 		entriesToRun, skippedEntries = filterSkippedBundleEntries(entries, sm)
 		for _, e := range skippedEntries {
 			r := bundleVerifyResult{
+				ErrorMsg:   "",
 				BundleName: e.name,
 				Version:    e.bundle.Version,
 				Status:     "cached",
@@ -1030,6 +1071,7 @@ func runPhaseBundleInstalls(cfg *config.Config, showProgress bool, sm *verifycac
 		_, err := bm.GetBundleRoot(entry.name)
 
 		r := bundleVerifyResult{
+			ErrorMsg:   "",
 			BundleName: entry.name,
 			Version:    entry.bundle.Version,
 			Status:     "ok",
@@ -1125,9 +1167,12 @@ func runPhase5VersionChecks(ctx context.Context, cfg *config.Config, bm *binmana
 				versionArgs = entry.app.VersionCheck.Args
 			}
 			r := versionCheckResult{
-				AppName: entry.name,
-				Args:    versionArgs,
-				Status:  "cached",
+				Expected: "",
+				Actual:   "",
+				ErrorMsg: "",
+				AppName:  entry.name,
+				Args:     versionArgs,
+				Status:   "cached",
 			}
 			results = append(results, r)
 			if showProgress {
@@ -1141,9 +1186,12 @@ func runPhase5VersionChecks(ctx context.Context, cfg *config.Config, bm *binmana
 		if entry.app.VersionCheck != nil {
 			if entry.app.VersionCheck.Disabled {
 				r := versionCheckResult{
-					AppName: entry.name,
-					Args:    versionArgs,
-					Status:  "skipped",
+					Expected: "",
+					Actual:   "",
+					ErrorMsg: "",
+					AppName:  entry.name,
+					Args:     versionArgs,
+					Status:   "skipped",
 				}
 				if entry.app.VersionCheck.Args != nil {
 					r.Args = entry.app.VersionCheck.Args
@@ -1170,6 +1218,7 @@ func runPhase5VersionChecks(ctx context.Context, cfg *config.Config, bm *binmana
 		execCmd, err := bm.GetExecCmdInstallOnly(ctx, entry.name, versionArgs)
 		if err != nil || execCmd == nil {
 			r := versionCheckResult{
+				Actual:   "",
 				AppName:  entry.name,
 				Args:     versionArgs,
 				Expected: expectedVersion,
@@ -1212,6 +1261,7 @@ func runPhase5VersionChecks(ctx context.Context, cfg *config.Config, bm *binmana
 		status, actual := evaluateVersionCheck(expectedVersion, string(output))
 
 		r := versionCheckResult{
+			ErrorMsg: "",
 			AppName:  entry.name,
 			Args:     versionArgs,
 			Expected: expectedVersion,
@@ -1370,7 +1420,7 @@ func computeSummary(
 	bundleResults []bundleVerifyResult,
 	versionResults []versionCheckResult,
 ) jsonSummary {
-	s := jsonSummary{}
+	s := jsonSummary{BinaryDownloads: jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0}, RuntimeDownloads: jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0}, RuntimeInstalls: jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0}, BundleInstalls: jsonCountOkFailed{Ok: 0, Failed: 0, Cached: 0}, VersionChecks: jsonCountVersionChecks{Ok: 0, Mismatch: 0, Skipped: 0, ExecFailed: 0, ParseFailed: 0, Cached: 0}}
 
 	for _, r := range binaryResults {
 		switch r.Status {
@@ -1485,12 +1535,14 @@ func buildJSONOutput(
 	for _, r := range binaryResults {
 		if _, ok := binaryByApp[r.AppName]; !ok {
 			binaryByApp[r.AppName] = &jsonBinaryApp{
-				Name:    r.AppName,
-				Version: r.Version,
+				Platforms: nil,
+				Name:      r.AppName,
+				Version:   r.Version,
 			}
 			binaryAppOrder = append(binaryAppOrder, r.AppName)
 		}
 		pr := jsonPlatformResult{
+			Error:  "",
 			Os:     string(r.Os),
 			Arch:   string(r.Arch),
 			Libc:   r.Libc,
@@ -1513,11 +1565,13 @@ func buildJSONOutput(
 	for _, r := range runtimeResults {
 		if _, ok := runtimeByName[r.RuntimeName]; !ok {
 			runtimeByName[r.RuntimeName] = &jsonManagedRuntime{
-				Name: r.RuntimeName,
+				Platforms: nil,
+				Name:      r.RuntimeName,
 			}
 			runtimeOrder = append(runtimeOrder, r.RuntimeName)
 		}
 		pr := jsonPlatformResult{
+			Error:  "",
 			Os:     string(r.Os),
 			Arch:   string(r.Arch),
 			Libc:   r.Libc,
@@ -1538,6 +1592,7 @@ func buildJSONOutput(
 	runtimeApps := make([]jsonRuntimeApp, 0, len(runtimeAppResults))
 	for _, r := range runtimeAppResults {
 		ra := jsonRuntimeApp{
+			Error:   "",
 			Name:    r.AppName,
 			Kind:    r.Kind,
 			Version: r.Version,
@@ -1553,6 +1608,7 @@ func buildJSONOutput(
 	bundles := make([]jsonBundle, 0, len(bundleResults))
 	for _, r := range bundleResults {
 		jb := jsonBundle{
+			Error:   "",
 			Name:    r.BundleName,
 			Version: r.Version,
 			Status:  r.Status,
@@ -1567,9 +1623,12 @@ func buildJSONOutput(
 	versionChecks := make([]jsonVersionCheck, 0, len(versionResults))
 	for _, r := range versionResults {
 		vc := jsonVersionCheck{
-			Name:   r.AppName,
-			Args:   r.Args,
-			Status: r.Status,
+			Expected: "",
+			Actual:   "",
+			Error:    "",
+			Name:     r.AppName,
+			Args:     r.Args,
+			Status:   r.Status,
 		}
 		if r.Expected != "" {
 			vc.Expected = r.Expected

@@ -14,7 +14,12 @@ func mkHistory(upstream, pin string) *config.ManagedConfigLayerHistory {
 	up := upstream
 	out := "root-output"
 	return &config.ManagedConfigLayerHistory{
-		FinalConfig: config.ManagedConfig{ExpectChainHash: pin},
+		FileName:        "",
+		OriginalContent: nil,
+		PristineContent: nil,
+		RenderFailed:    false,
+		SourceLayers:    nil,
+		FinalConfig:     config.ManagedConfig{ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", Ejectable: false, Placement: "", Render: nil, Content: nil, ExpectChainHash: pin},
 		Layers: []config.ManagedConfigLayerEntry{
 			{LayerName: "base", GeneratedContent: &up},
 			{LayerName: "root", GeneratedContent: &out},

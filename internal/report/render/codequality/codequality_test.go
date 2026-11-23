@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/report"
 	"github.com/datamitsu/datamitsu/internal/report/render/common"
@@ -60,41 +61,204 @@ func TestSchemaRejects(t *testing.T) {
 
 func finding(tool, code, path string, row int, severity string) report.Finding {
 	return report.Finding{
-		Fingerprint: report.Fingerprint(tool, code, path, report.RowHash(row), 0),
-		Tool:        tool, Source: tool, Code: code, Severity: severity, Kind: "issue", Message: tool + " says <so>",
-		Location: report.Location{Path: path, Row: row, EndRow: row, Chars: &textpos.Span{Start: 2, End: 5}, Precision: "exact"},
+		FingerprintBasis: "",
+		RuleURL:          "",
+		Reported:         false,
+		Gates:            false,
+		Shown:            false,
+		Baselined:        false,
+		Provenance:       "",
+		Fingerprint:      report.Fingerprint(tool, code, path, report.RowHash(row), 0),
+		Tool:             tool, Source: tool, Code: code, Severity: severity, Kind: "issue", Message: tool + " says <so>",
+		Location: report.Location{Col: 0, EndCol: 0, Unit: "", Bytes: nil, Utf16: nil, Path: path, Row: row, EndRow: row, Chars: &textpos.Span{Start: 2, End: 5}, Precision: "exact"},
 	}
 }
 
 func sampleRun() *report.Run {
 	imprecise := finding("eslint", "no-var", "src/a.ts", 3, "hint")
-	imprecise.Location = report.Location{Path: "src/a.ts", Row: 3, EndRow: 4, Precision: "unknown"}
+	imprecise.Location = report.Location{Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Path: "src/a.ts", Row: 3, EndRow: 4, Precision: "unknown"}
 	point := finding("eslint", "", "src/b.ts", 1, "info")
 	point.Location.Chars = &textpos.Span{Start: 4, End: 4}
 	return &report.Run{
-		Selection: report.Selection{Mode: "all"},
-		Exports:   []report.Export{{Format: "codequality", Path: "gl-code-quality.json", Status: "written"}},
+		RedactedReasons: nil,
+
+		Fingerprint: "",
+		Datamitsu:   report.Producer{Version: "", Configuration: ""},
+		StartedAt:   zerovalue_time.Time{},
+		EndedAt:     zerovalue_time.Time{},
+		FailFast:    false,
+		Complete:    false,
+		Incomplete:  nil,
+		CI:          report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		Selection:   report.Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"},
+		Exports:     []report.Export{{Detail: "", Companion: "", Omitted: nil, Format: "codequality", Path: "gl-code-quality.json", Status: "written"}},
 		Operations: []report.Operation{
-			{Name: "fix", Ran: true, Tools: []report.ToolRun{{Name: "prettier", Complete: true, Invocations: []report.Invocation{{
-				Findings: []report.Finding{finding("prettier", "x", "a.md", 1, "error")},
-			}}}}},
-			{Name: "lint", Ran: true, Tools: []report.ToolRun{
-				{Name: "eslint", Complete: true, Invocations: []report.Invocation{{Findings: []report.Finding{
-					finding("eslint", "no-unused-vars", "src/a.ts", 1, "warning"), imprecise, point,
-					finding("eslint", "no-var", "/elsewhere/c.ts", 2, "error"),
-				}}}},
-				{Name: "gitleaks", Category: "security", Complete: true, Invocations: []report.Invocation{{Findings: []report.Finding{
-					func() report.Finding {
-						f := finding("gitleaks", "aws-key", "keys.txt", 7, "error")
-						f.Kind = "security"
-						return f
-					}(),
-				}}}},
-				{Name: "tsc", Incomplete: []report.Reason{"cancelled"}, Invocations: []report.Invocation{{Findings: []report.Finding{
-					finding("tsc", "TS2322", "src/a.ts", 9, "error"),
-					{Tool: "tsc", Source: "tsc", Severity: "error", Gates: true, Kind: "synthetic", Message: "tsc exited 2 without parsable findings", Location: report.Location{Precision: "unknown"}},
-				}}}},
-			}},
+			{
+				Success:         false,
+				Duration:        0,
+				Skipped:         nil,
+				Cancelled:       nil,
+				ChangesObserved: false,
+				ChangesReason:   "",
+				ChangesDetail:   "",
+				ChangesScope:    nil,
+				Changes:         nil, Name: "fix", Ran: true, Tools: []report.ToolRun{{
+					RedactedReasons: nil,
+
+					App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+					Parser:     nil,
+					FailOn:     "",
+					GateActive: false,
+					Category:   "",
+					Incomplete: nil, Name: "prettier", Complete: true, Invocations: []report.Invocation{{
+						RedactedState:      0,
+						RedactedExtraction: 0,
+
+						ID:          "",
+						TaskID:      "",
+						Dir:         "",
+						Scope:       "",
+						Granularity: "",
+						Arity:       "",
+						Coverage:    "",
+						WholeUnit:   false,
+						State:       "",
+						ExitCode:    nil,
+						Success:     false,
+						FailureKind: "",
+						Duration:    0,
+						Extraction:  "",
+						Provenance:  "",
+						Files:       nil,
+						Step:        0,
+						Changes:     nil,
+						OutputTail:  "",
+						Findings:    []report.Finding{finding("prettier", "x", "a.md", 1, "error")},
+					}},
+				}},
+			},
+			{
+				Success:         false,
+				Duration:        0,
+				Skipped:         nil,
+				Cancelled:       nil,
+				ChangesObserved: false,
+				ChangesReason:   "",
+				ChangesDetail:   "",
+				ChangesScope:    nil,
+				Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{
+					{
+						RedactedReasons: nil,
+
+						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+						Parser:     nil,
+						FailOn:     "",
+						GateActive: false,
+						Category:   "",
+						Incomplete: nil, Name: "eslint", Complete: true, Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+
+							ID:          "",
+							TaskID:      "",
+							Dir:         "",
+							Scope:       "",
+							Granularity: "",
+							Arity:       "",
+							Coverage:    "",
+							WholeUnit:   false,
+							State:       "",
+							ExitCode:    nil,
+							Success:     false,
+							FailureKind: "",
+							Duration:    0,
+							Extraction:  "",
+							Provenance:  "",
+							Files:       nil,
+							Step:        0,
+							Changes:     nil,
+							OutputTail:  "", Findings: []report.Finding{
+								finding("eslint", "no-unused-vars", "src/a.ts", 1, "warning"), imprecise, point,
+								finding("eslint", "no-var", "/elsewhere/c.ts", 2, "error"),
+							},
+						}},
+					},
+					{
+						RedactedReasons: nil,
+
+						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+						Parser:     nil,
+						FailOn:     "",
+						GateActive: false,
+						Incomplete: nil, Name: "gitleaks", Category: "security", Complete: true, Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+
+							ID:          "",
+							TaskID:      "",
+							Dir:         "",
+							Scope:       "",
+							Granularity: "",
+							Arity:       "",
+							Coverage:    "",
+							WholeUnit:   false,
+							State:       "",
+							ExitCode:    nil,
+							Success:     false,
+							FailureKind: "",
+							Duration:    0,
+							Extraction:  "",
+							Provenance:  "",
+							Files:       nil,
+							Step:        0,
+							Changes:     nil,
+							OutputTail:  "", Findings: []report.Finding{
+								func() report.Finding {
+									f := finding("gitleaks", "aws-key", "keys.txt", 7, "error")
+									f.Kind = "security"
+									return f
+								}(),
+							},
+						}},
+					},
+					{
+						RedactedReasons: nil,
+
+						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+						Parser:     nil,
+						FailOn:     "",
+						GateActive: false,
+						Category:   "",
+						Complete:   false, Name: "tsc", Incomplete: []report.Reason{"cancelled"}, Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+
+							ID:          "",
+							TaskID:      "",
+							Dir:         "",
+							Scope:       "",
+							Granularity: "",
+							Arity:       "",
+							Coverage:    "",
+							WholeUnit:   false,
+							State:       "",
+							ExitCode:    nil,
+							Success:     false,
+							FailureKind: "",
+							Duration:    0,
+							Extraction:  "",
+							Provenance:  "",
+							Files:       nil,
+							Step:        0,
+							Changes:     nil,
+							OutputTail:  "", Findings: []report.Finding{
+								finding("tsc", "TS2322", "src/a.ts", 9, "error"),
+								{Fingerprint: "", FingerprintBasis: "", Code: "", RuleURL: "", Reported: false, Shown: false, Baselined: false, Provenance: "", Tool: "tsc", Source: "tsc", Severity: "error", Gates: true, Kind: "synthetic", Message: "tsc exited 2 without parsable findings", Location: report.Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "unknown"}},
+							},
+						}},
+					},
+				},
+			},
 		},
 	}
 }
@@ -133,7 +297,7 @@ func TestRender(t *testing.T) {
 	want := Issue{
 		Type: "issue", CheckName: "eslint/no-unused-vars", Description: "eslint says <so>", Categories: []string{"Style"}, Severity: "minor",
 		Fingerprint: sampleRun().Operations[1].Tools[0].Invocations[0].Findings[0].Fingerprint,
-		Location:    Location{Path: "src/a.ts", Positions: &Positions{Begin: Position{Line: 1, Column: 2}, End: Position{Line: 1, Column: 5}}},
+		Location:    Location{Lines: nil, Path: "src/a.ts", Positions: &Positions{Begin: Position{Line: 1, Column: 2}, End: Position{Line: 1, Column: 5}}},
 	}
 	if !reflect.DeepEqual(unused, want) {
 		t.Errorf("issue = %+v\nwant %+v", unused, want)
@@ -176,7 +340,11 @@ func TestCompanion(t *testing.T) {
 
 func TestEmpty(t *testing.T) {
 	var b bytes.Buffer
-	if err := (Renderer{}).Render(&b, &report.Run{}, nil); err != nil {
+	if err := (Renderer{}).Render(&b, &report.Run{
+		RedactedReasons: nil,
+
+		Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if b.String() != "[]\n" {

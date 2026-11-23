@@ -45,7 +45,7 @@ func TestLoadWASMBytes_ValidHashStoresAndLoads(t *testing.T) {
 	srv, hits := serveWASM(t, body)
 
 	m := New(config.MapOfParsers{
-		"echo": {URL: srv.URL, Hash: sha256Hex(body)},
+		"echo": {OCI: nil, URL: srv.URL, Hash: sha256Hex(body)},
 	})
 
 	got, err := m.LoadWASMBytes(context.Background(), "echo")
@@ -73,7 +73,7 @@ func TestLoadWASMBytes_WrongHashFails(t *testing.T) {
 	srv, _ := serveWASM(t, body)
 
 	m := New(config.MapOfParsers{
-		"echo": {URL: srv.URL, Hash: sha256Hex([]byte("different-bytes"))},
+		"echo": {OCI: nil, URL: srv.URL, Hash: sha256Hex([]byte("different-bytes"))},
 	})
 
 	_, err := m.LoadWASMBytes(context.Background(), "echo")
@@ -94,7 +94,7 @@ func TestLoadWASMBytes_MissingHashIsError(t *testing.T) {
 	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
 
 	m := New(config.MapOfParsers{
-		"echo": {URL: "https://example.test/echo.wasm"},
+		"echo": {Hash: "", OCI: nil, URL: "https://example.test/echo.wasm"},
 	})
 
 	_, err := m.LoadWASMBytes(context.Background(), "echo")
@@ -120,7 +120,7 @@ func TestLoadWASMBytes_SecondLoadIsCached(t *testing.T) {
 	srv, hits := serveWASM(t, body)
 
 	m := New(config.MapOfParsers{
-		"echo": {URL: srv.URL, Hash: sha256Hex(body)},
+		"echo": {OCI: nil, URL: srv.URL, Hash: sha256Hex(body)},
 	})
 
 	// Two references to the same parser (e.g. two tools) must download once.
@@ -144,7 +144,7 @@ func TestLoadWASMBytes_PrePlantedWrongBytesAreRejected(t *testing.T) {
 	t.Setenv("DATAMITSU_PARSERS_DIR", parsersDir)
 
 	body := []byte("the declared module")
-	declared := config.Parser{URL: "https://example.invalid/module.wasm", Hash: sha256Hex(body)}
+	declared := config.Parser{OCI: nil, URL: "https://example.invalid/module.wasm", Hash: sha256Hex(body)}
 
 	// Plant something else at exactly the path the declaration resolves to.
 	dir := ModuleStorePath("echo", declared)
@@ -176,9 +176,9 @@ func TestModuleStorePath_SameHashDifferentSources(t *testing.T) {
 	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
 
 	hash := sha256Hex([]byte("one module, several ways to get it"))
-	release := config.Parser{URL: "https://github.com/datamitsu/datamitsu/releases/download/v1/m.wasm", Hash: hash}
-	mirror := config.Parser{URL: "https://mirror.corp.example/datamitsu/m.wasm", Hash: hash}
-	local := config.Parser{URL: "file:///home/dev/datamitsu/parsers/m.wasm", Hash: hash}
+	release := config.Parser{OCI: nil, URL: "https://github.com/datamitsu/datamitsu/releases/download/v1/m.wasm", Hash: hash}
+	mirror := config.Parser{OCI: nil, URL: "https://mirror.corp.example/datamitsu/m.wasm", Hash: hash}
+	local := config.Parser{OCI: nil, URL: "file:///home/dev/datamitsu/parsers/m.wasm", Hash: hash}
 
 	want := ModuleStorePath("core", release)
 	for _, p := range []config.Parser{mirror, local} {
@@ -188,7 +188,7 @@ func TestModuleStorePath_SameHashDifferentSources(t *testing.T) {
 	}
 
 	// A different module still gets its own directory.
-	other := config.Parser{URL: release.URL, Hash: sha256Hex([]byte("a different module"))}
+	other := config.Parser{OCI: nil, URL: release.URL, Hash: sha256Hex([]byte("a different module"))}
 	if got := ModuleStorePath("core", other); got == want {
 		t.Error("two different modules share a store directory")
 	}
@@ -220,8 +220,10 @@ func fakeOCIFetch(t *testing.T, body []byte) *int {
 
 func ociParser(hash string) config.Parser {
 	return config.Parser{
+		URL:  "",
 		Hash: hash,
 		OCI: &config.ParserOCI{
+			Signer: nil,
 			Ref:    "ghcr.io/datamitsu/datamitsu-parsers",
 			Digest: "sha256:" + strings.Repeat("ab", 32),
 		},
@@ -285,7 +287,7 @@ func TestEnsureModule_SourceIsExactlyOne(t *testing.T) {
 		parser  config.Parser
 		wantMsg string
 	}{
-		"neither": {config.Parser{Hash: hash}, "no source"},
+		"neither": {config.Parser{URL: "", OCI: nil, Hash: hash}, "no source"},
 		"both": {config.Parser{
 			URL:  "https://example.com/core.wasm",
 			Hash: hash,
@@ -364,7 +366,7 @@ func TestLoadWASMBytes_ConcurrentLoadsDeduplicate(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	m := New(config.MapOfParsers{
-		"echo": {URL: srv.URL, Hash: sha256Hex(body)},
+		"echo": {OCI: nil, URL: srv.URL, Hash: sha256Hex(body)},
 	})
 
 	const n = 8
@@ -404,7 +406,7 @@ func TestLoadWASMBytes_LocalFileSource(t *testing.T) {
 
 	t.Run("released build refuses", func(t *testing.T) {
 		t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
-		m := New(config.MapOfParsers{"core": {URL: "file://" + src, Hash: sha256Hex(body)}})
+		m := New(config.MapOfParsers{"core": {OCI: nil, URL: "file://" + src, Hash: sha256Hex(body)}})
 		if _, err := m.LoadWASMBytes(context.Background(), "core"); err == nil {
 			t.Fatal("a build without the dev-link flag must refuse a file:// module")
 		}
@@ -416,7 +418,7 @@ func TestLoadWASMBytes_LocalFileSource(t *testing.T) {
 		ldflags.LocalArtifacts = "1"
 		t.Cleanup(func() { ldflags.LocalArtifacts = orig })
 
-		m := New(config.MapOfParsers{"core": {URL: "file://" + src, Hash: sha256Hex(body)}})
+		m := New(config.MapOfParsers{"core": {OCI: nil, URL: "file://" + src, Hash: sha256Hex(body)}})
 		got, err := m.LoadWASMBytes(context.Background(), "core")
 		if err != nil {
 			t.Fatalf("LoadWASMBytes() error = %v", err)
@@ -437,12 +439,12 @@ func TestLoadWASMBytes_LocalFileSource(t *testing.T) {
 		ldflags.LocalArtifacts = "1"
 		t.Cleanup(func() { ldflags.LocalArtifacts = orig })
 
-		missing := New(config.MapOfParsers{"core": {URL: "file://" + src}})
+		missing := New(config.MapOfParsers{"core": {Hash: "", OCI: nil, URL: "file://" + src}})
 		if _, err := missing.LoadWASMBytes(context.Background(), "core"); err == nil {
 			t.Error("a file:// module with no hash must be a configuration error")
 		}
 
-		wrong := New(config.MapOfParsers{"core": {URL: "file://" + src, Hash: strings.Repeat("0", 64)}})
+		wrong := New(config.MapOfParsers{"core": {OCI: nil, URL: "file://" + src, Hash: strings.Repeat("0", 64)}})
 		if _, err := wrong.LoadWASMBytes(context.Background(), "core"); err == nil {
 			t.Error("a file:// module with the wrong hash must be rejected")
 		}

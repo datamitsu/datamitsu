@@ -61,15 +61,15 @@ func TestRunsPerFile(t *testing.T) {
 		files int
 		want  bool
 	}{
-		{"per-file with {file}", ToolOperation{Scope: ToolScopePerFile, Args: []string{"{file}"}}, 1, true},
+		{"per-file with {file}", ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: ToolScopePerFile, Args: []string{"{file}"}}, 1, true},
 		// sort-package-json: per-file, reads the file from cwd, no path in argv.
-		{"per-file with no path", ToolOperation{Scope: ToolScopePerFile, Args: []string{"--quiet"}}, 1, true},
+		{"per-file with no path", ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: ToolScopePerFile, Args: []string{"--quiet"}}, 1, true},
 		// dotenv-linter: per-file scope but an explicit list shape.
-		{"per-file with {files}", ToolOperation{Scope: ToolScopePerFile, Args: []string{"{files}"}}, 1, false},
-		{"repository with {files}", ToolOperation{Scope: ToolScopeRepository, Args: []string{"{files}"}}, 9, false},
-		{"repository with no path", ToolOperation{Scope: ToolScopeRepository, Args: []string{"run"}}, 9, false},
-		{"repository with {target}", ToolOperation{Scope: ToolScopeRepository, Args: []string{"{target}"}}, 9, false},
-		{"no files never runs per file", ToolOperation{Scope: ToolScopePerFile, Args: []string{"{file}"}}, 0, false},
+		{"per-file with {files}", ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: ToolScopePerFile, Args: []string{"{files}"}}, 1, false},
+		{"repository with {files}", ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: ToolScopeRepository, Args: []string{"{files}"}}, 9, false},
+		{"repository with no path", ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: ToolScopeRepository, Args: []string{"run"}}, 9, false},
+		{"repository with {target}", ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: ToolScopeRepository, Args: []string{"{target}"}}, 9, false},
+		{"no files never runs per file", ToolOperation{App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Scope: ToolScopePerFile, Args: []string{"{file}"}}, 0, false},
 	}
 
 	for _, tt := range tests {
@@ -83,24 +83,24 @@ func TestRunsPerFile(t *testing.T) {
 
 func TestValidateToolsArity(t *testing.T) {
 	validate := func(op ToolOperation) error {
-		return ValidateTools(MapOfTools{"t": {Operations: map[OperationType]ToolOperation{OpFix: op}}}, nil, nil)
+		return ValidateTools(MapOfTools{"t": {Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Operations: map[OperationType]ToolOperation{OpFix: op}}}, nil, nil)
 	}
 
 	t.Run("declared arity matching the inference passes", func(t *testing.T) {
-		if err := validate(ToolOperation{App: "a", Scope: ToolScopeRepository, Arity: ArityDir, Args: []string{"dir", "{target}"}}); err != nil {
+		if err := validate(ToolOperation{Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "a", Scope: ToolScopeRepository, Arity: ArityDir, Args: []string{"dir", "{target}"}}); err != nil {
 			t.Errorf("expected no error, got: %v", err)
 		}
 	})
 
 	t.Run("declared arity disagreeing with the inference fails", func(t *testing.T) {
-		err := validate(ToolOperation{App: "a", Scope: ToolScopeRepository, Arity: ArityDir, Args: []string{"{files}"}})
+		err := validate(ToolOperation{Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "a", Scope: ToolScopeRepository, Arity: ArityDir, Args: []string{"{files}"}})
 		if err == nil || !strings.Contains(err.Error(), "cannot override it") {
 			t.Errorf("expected an assertion failure, got: %v", err)
 		}
 	})
 
 	t.Run("target and a file list together fail", func(t *testing.T) {
-		err := validate(ToolOperation{App: "a", Scope: ToolScopeRepository, Args: []string{"{target}", "{files}"}})
+		err := validate(ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "a", Scope: ToolScopeRepository, Args: []string{"{target}", "{files}"}})
 		if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
 			t.Errorf("expected a mutual-exclusion error, got: %v", err)
 		}
@@ -108,7 +108,7 @@ func TestValidateToolsArity(t *testing.T) {
 
 	t.Run("omitted arity never fails", func(t *testing.T) {
 		for _, args := range [][]string{{"{files}"}, {"{file}"}, {"{target}"}, {"run"}} {
-			if err := validate(ToolOperation{App: "a", Scope: ToolScopeRepository, Args: args}); err != nil {
+			if err := validate(ToolOperation{Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "a", Scope: ToolScopeRepository, Args: args}); err != nil {
 				t.Errorf("args %q: expected no error, got: %v", args, err)
 			}
 		}

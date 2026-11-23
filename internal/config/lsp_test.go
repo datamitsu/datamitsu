@@ -34,7 +34,7 @@ func TestConfig_LspJSONRoundTrip(t *testing.T) {
 }
 
 func TestConfig_LspOmitEmpty(t *testing.T) {
-	data, err := json.Marshal(Config{})
+	data, err := json.Marshal(Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil})
 	if err != nil {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
@@ -53,10 +53,10 @@ func TestValidateLsp_NilAndEmptyAreValid(t *testing.T) {
 }
 
 func TestValidateLsp_ValidProxyAndDerived(t *testing.T) {
-	tools := MapOfTools{"golangci-lint": {Name: "golangci-lint"}}
+	tools := MapOfTools{"golangci-lint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"}}
 	lsp := MapOfLsp{
-		"langserver": {Type: LspTypeProxy, App: "langserver", ProjectTypes: []string{"go"}, Order: 10},
-		"golangci":   {Type: LspTypeDerived, Tool: "golangci-lint"},
+		"langserver": {Tool: "", Type: LspTypeProxy, App: "langserver", ProjectTypes: []string{"go"}, Order: 10},
+		"golangci":   {App: "", ProjectTypes: nil, Order: 0, Type: LspTypeDerived, Tool: "golangci-lint"},
 	}
 	if err := ValidateLsp(lsp, tools); err != nil {
 		t.Errorf("ValidateLsp() unexpected error: %v", err)
@@ -64,7 +64,7 @@ func TestValidateLsp_ValidProxyAndDerived(t *testing.T) {
 }
 
 func TestValidateLsp_MissingType(t *testing.T) {
-	lsp := MapOfLsp{"x": {App: "langserver", ProjectTypes: []string{"go"}}}
+	lsp := MapOfLsp{"x": {Type: "", Tool: "", Order: 0, App: "langserver", ProjectTypes: []string{"go"}}}
 	err := ValidateLsp(lsp, nil)
 	if err == nil {
 		t.Fatal("ValidateLsp() expected error for missing type, got nil")
@@ -75,7 +75,7 @@ func TestValidateLsp_MissingType(t *testing.T) {
 }
 
 func TestValidateLsp_InvalidType(t *testing.T) {
-	lsp := MapOfLsp{"x": {Type: "bogus"}}
+	lsp := MapOfLsp{"x": {App: "", ProjectTypes: nil, Tool: "", Order: 0, Type: "bogus"}}
 	err := ValidateLsp(lsp, nil)
 	if err == nil {
 		t.Fatal("ValidateLsp() expected error for invalid type, got nil")
@@ -86,7 +86,7 @@ func TestValidateLsp_InvalidType(t *testing.T) {
 }
 
 func TestValidateLsp_ProxyMissingApp(t *testing.T) {
-	lsp := MapOfLsp{"x": {Type: LspTypeProxy, ProjectTypes: []string{"go"}}}
+	lsp := MapOfLsp{"x": {App: "", Tool: "", Order: 0, Type: LspTypeProxy, ProjectTypes: []string{"go"}}}
 	err := ValidateLsp(lsp, nil)
 	if err == nil {
 		t.Fatal("ValidateLsp() expected error for proxy missing app, got nil")
@@ -97,7 +97,7 @@ func TestValidateLsp_ProxyMissingApp(t *testing.T) {
 }
 
 func TestValidateLsp_ProxyEmptyProjectTypes(t *testing.T) {
-	lsp := MapOfLsp{"x": {Type: LspTypeProxy, App: "langserver"}}
+	lsp := MapOfLsp{"x": {ProjectTypes: nil, Tool: "", Order: 0, Type: LspTypeProxy, App: "langserver"}}
 	err := ValidateLsp(lsp, nil)
 	if err == nil {
 		t.Fatal("ValidateLsp() expected error for proxy with empty projectTypes, got nil")
@@ -108,7 +108,7 @@ func TestValidateLsp_ProxyEmptyProjectTypes(t *testing.T) {
 }
 
 func TestValidateLsp_DerivedMissingTool(t *testing.T) {
-	lsp := MapOfLsp{"x": {Type: LspTypeDerived}}
+	lsp := MapOfLsp{"x": {App: "", ProjectTypes: nil, Tool: "", Order: 0, Type: LspTypeDerived}}
 	err := ValidateLsp(lsp, nil)
 	if err == nil {
 		t.Fatal("ValidateLsp() expected error for derived missing tool, got nil")
@@ -119,8 +119,8 @@ func TestValidateLsp_DerivedMissingTool(t *testing.T) {
 }
 
 func TestValidateLsp_DerivedDanglingTool(t *testing.T) {
-	lsp := MapOfLsp{"x": {Type: LspTypeDerived, Tool: "nonexistent"}}
-	err := ValidateLsp(lsp, MapOfTools{"golangci-lint": {Name: "golangci-lint"}})
+	lsp := MapOfLsp{"x": {App: "", ProjectTypes: nil, Order: 0, Type: LspTypeDerived, Tool: "nonexistent"}}
+	err := ValidateLsp(lsp, MapOfTools{"golangci-lint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"}})
 	if err == nil {
 		t.Fatal("ValidateLsp() expected error for dangling derived tool, got nil")
 	}
@@ -131,9 +131,9 @@ func TestValidateLsp_DerivedDanglingTool(t *testing.T) {
 
 func TestValidateLsp_AggregatesAllErrors(t *testing.T) {
 	lsp := MapOfLsp{
-		"a": {Type: "bogus"},
-		"b": {Type: LspTypeProxy},
-		"c": {Type: LspTypeDerived, Tool: "missing"},
+		"a": {App: "", ProjectTypes: nil, Tool: "", Order: 0, Type: "bogus"},
+		"b": {App: "", ProjectTypes: nil, Tool: "", Order: 0, Type: LspTypeProxy},
+		"c": {App: "", ProjectTypes: nil, Order: 0, Type: LspTypeDerived, Tool: "missing"},
 	}
 	err := ValidateLsp(lsp, nil)
 	if err == nil {

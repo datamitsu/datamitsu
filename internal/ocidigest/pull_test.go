@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	zerovalue_sync "sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -245,6 +246,9 @@ func TestPullBlob_SlowStreamSurvivesManifestDeadline(t *testing.T) {
 
 	u, _ := url.Parse(srv.URL)
 	r := &Resolver{
+		token:        "",
+		bearerMu:     zerovalue_sync.Mutex{},
+		bearerTokens: nil,
 		// Manifest client with a deadline far shorter than the ~1s stream.
 		httpClient: httpx.NewHardenedClient(300 * time.Millisecond),
 		blobClient: httpx.NewHardenedClient(0),

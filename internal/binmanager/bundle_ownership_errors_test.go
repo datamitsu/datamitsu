@@ -25,7 +25,7 @@ func TestFailedBundleStagingNeverPublishesReadiness(t *testing.T) {
 			files := map[string]string{filename: contents}
 			t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 			manager := New(nil, nil, nil)
-			manager.mapOfBundles = MapOfBundles{"probe": {Files: files}}
+			manager.mapOfBundles = MapOfBundles{"probe": {Version: "", Archives: nil, Links: nil, Files: files}}
 			target, err := manager.ComputeBundlePath("probe")
 			if err != nil {
 				t.Fatal(err)
@@ -52,7 +52,7 @@ func TestFailedBundleStagingNeverPublishesReadiness(t *testing.T) {
 func TestBundleTargetWaitCancellationReleasesStoreLease(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	manager := New(nil, nil, nil)
-	manager.mapOfBundles = MapOfBundles{"probe": {Files: map[string]string{"config": "value"}}}
+	manager.mapOfBundles = MapOfBundles{"probe": {Version: "", Archives: nil, Links: nil, Files: map[string]string{"config": "value"}}}
 	target, err := manager.ComputeBundlePath("probe")
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestBundlePublishConflictPreservesNewDestination(t *testing.T) {
 		_, _ = w.Write(archive)
 	}))
 	defer server.Close()
-	bundle := &Bundle{Archives: map[string]*ArchiveSpec{"payload": {URL: server.URL, Hash: digest.SHA256Of(archive).String(), Format: BinContentTypeTarGz}}}
+	bundle := &Bundle{Version: "", Files: nil, Links: nil, Archives: map[string]*ArchiveSpec{"payload": {Inline: "", URL: server.URL, Hash: digest.SHA256Of(archive).String(), Format: BinContentTypeTarGz}}}
 	manager := New(nil, nil, nil)
 	manager.mapOfBundles = MapOfBundles{"probe": bundle}
 	var err error

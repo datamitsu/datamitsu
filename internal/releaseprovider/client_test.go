@@ -30,13 +30,13 @@ func TestForgeAdapters(t *testing.T) {
 						return
 					}
 				} else if strings.Contains(r.URL.Path, "/releases/") {
-					_ = json.NewEncoder(w).Encode(releaseasset.Release{TagName: "v1.0.0", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.test/tool.tar.gz", Digest: "sha256:" + strings.Repeat("a", 64)}}})
+					_ = json.NewEncoder(w).Encode(releaseasset.Release{Prerelease: false, Draft: false, TagName: "v1.0.0", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), Assets: []releaseasset.Asset{{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Name: "tool-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.test/tool.tar.gz", Digest: "sha256:" + strings.Repeat("a", 64)}}})
 					return
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"description": "tool", "id": 42, "private": false, "visibility": "public"})
 			}))
 			defer srv.Close()
-			c, err := New(Source{Type: kind, URL: srv.URL, APIURL: srv.URL})
+			c, err := New(Source{TokenEnv: "", DownloadAuth: "", Type: kind, URL: srv.URL, APIURL: srv.URL})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -67,15 +67,15 @@ func TestLatestAcrossPages(t *testing.T) {
 		}
 		rows := make([]releaseasset.Release, 100)
 		for i := range rows {
-			rows[i] = releaseasset.Release{TagName: "v1.0.0", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)}
+			rows[i] = releaseasset.Release{Assets: nil, Prerelease: false, Draft: false, TagName: "v1.0.0", PublishedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)}
 		}
 		if r.URL.Query().Get("page") == "2" {
-			rows = []releaseasset.Release{{TagName: "v2.0.0", PublishedAt: time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC)}}
+			rows = []releaseasset.Release{{Assets: nil, Prerelease: false, Draft: false, TagName: "v2.0.0", PublishedAt: time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC)}}
 		}
 		_ = json.NewEncoder(w).Encode(rows)
 	}))
 	defer srv.Close()
-	c, err := New(Source{Type: "forgejo", URL: srv.URL})
+	c, err := New(Source{APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "forgejo", URL: srv.URL})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,8 +90,8 @@ func TestPinnedChecksumAndMissingHash(t *testing.T) {
 	requests := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests++; _, _ = w.Write(payload) }))
 	defer srv.Close()
-	c, _ := New(Source{Type: "gitea", URL: srv.URL})
-	assets := []releaseasset.Asset{{Name: "tool-linux-amd64", BrowserDownloadURL: srv.URL + "/binary"}, {Name: "checksums.txt", BrowserDownloadURL: srv.URL + "/checksums"}}
+	c, _ := New(Source{APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "gitea", URL: srv.URL})
+	assets := []releaseasset.Asset{{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "tool-linux-amd64", BrowserDownloadURL: srv.URL + "/binary"}, {APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "checksums.txt", BrowserDownloadURL: srv.URL + "/checksums"}}
 	asset := assets[0]
 	if err := c.ResolveDigest(context.Background(), "group/tool", assets, &asset, nil, nil); err == nil {
 		t.Fatal("missing digest accepted")
@@ -136,15 +136,15 @@ func TestGitLabPackageMetadataDigest(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": 42})
 	}))
 	defer srv.Close()
-	c, _ := New(Source{Type: "gitlab", URL: srv.URL})
-	asset := releaseasset.Asset{Name: "tool_linux_amd64.tar.gz", BrowserDownloadURL: srv.URL + "/api/v4/projects/42/packages/generic/tool/1%2E0%2E0/tool_linux_amd64.tar.gz"}
+	c, _ := New(Source{APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "gitlab", URL: srv.URL})
+	asset := releaseasset.Asset{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: "tool_linux_amd64.tar.gz", BrowserDownloadURL: srv.URL + "/api/v4/projects/42/packages/generic/tool/1%2E0%2E0/tool_linux_amd64.tar.gz"}
 	if err := c.ResolveDigest(context.Background(), "group/tool", nil, &asset, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if asset.Digest != "sha256:"+strings.Repeat("a", 64) {
 		t.Fatal("missing GitLab digest")
 	}
-	foreign := releaseasset.Asset{Name: asset.Name, BrowserDownloadURL: strings.Replace(asset.BrowserDownloadURL, "/42/", "/43/", 1)}
+	foreign := releaseasset.Asset{APIURL: "", UUID: "", MetadataURL: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: asset.Name, BrowserDownloadURL: strings.Replace(asset.BrowserDownloadURL, "/42/", "/43/", 1)}
 	if err := c.ResolveDigest(context.Background(), "group/tool", nil, &foreign, nil, nil); err == nil {
 		t.Fatal("foreign project accepted")
 	}
@@ -166,7 +166,7 @@ func TestCredentialNotForwardedOnRedirect(t *testing.T) {
 		http.Redirect(w, r, destination.URL, http.StatusFound)
 	}))
 	defer source.Close()
-	c, err := New(Source{Type: "gitlab", URL: source.URL, TokenEnv: "TEST_FORGE_TOKEN"})
+	c, err := New(Source{APIURL: "", DownloadAuth: "", Type: "gitlab", URL: source.URL, TokenEnv: "TEST_FORGE_TOKEN"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestCredentialNotForwardedOnRedirect(t *testing.T) {
 }
 
 func TestValidationAndChecksumAmbiguity(t *testing.T) {
-	for _, s := range []Source{{Type: "unknown", URL: "https://example.test"}, {Type: "gitea", URL: "http://example.test"}, {Type: "github", URL: "https://u:p@example.test"}, {Type: "forgejo", URL: "https://example.test", TokenEnv: "DATAMITSU_TOKEN"}} {
+	for _, s := range []Source{{APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "unknown", URL: "https://example.test"}, {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "gitea", URL: "http://example.test"}, {APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: "https://u:p@example.test"}, {APIURL: "", DownloadAuth: "", Type: "forgejo", URL: "https://example.test", TokenEnv: "DATAMITSU_TOKEN"}} {
 		if _, err := New(s); err == nil {
 			t.Fatalf("accepted source %+v", s)
 		}
@@ -209,7 +209,7 @@ func TestTransientMetadataRetry(t *testing.T) {
 		_, _ = w.Write([]byte(`{"tag_name":"v1"}`))
 	}))
 	defer srv.Close()
-	c, _ := New(Source{Type: "gitea", URL: srv.URL})
+	c, _ := New(Source{APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "gitea", URL: srv.URL})
 	if _, err := c.GetRelease(context.Background(), "group/tool", "v1"); err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestLatestRejectsUnflaggedPrereleaseAndYoungRelease(t *testing.T) {
 				_ = json.NewEncoder(w).Encode([]map[string]any{{"tag_name": tc.tag, "published_at": tc.date}})
 			}))
 			defer srv.Close()
-			c, _ := New(Source{Type: "forgejo", URL: srv.URL})
+			c, _ := New(Source{APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "forgejo", URL: srv.URL})
 			r, err := c.GetLatestReleaseWithMinAge(context.Background(), "group/tool", tc.age)
 			if err != nil || r != nil {
 				t.Fatalf("ineligible release=%+v err=%v", r, err)
@@ -243,13 +243,13 @@ func TestLatestRejectsUnflaggedPrereleaseAndYoungRelease(t *testing.T) {
 
 func TestPublicGitHubDefaultOriginAndTagMismatch(t *testing.T) {
 	for _, raw := range []string{"https://github.com", "https://GITHUB.com:443/"} {
-		if got := (Source{Type: "github", URL: raw}).APIBase(); got != "https://api.github.com" {
+		if got := (Source{APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "github", URL: raw}).APIBase(); got != "https://api.github.com" {
 			t.Fatalf("API root=%s", got)
 		}
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{"tag_name":"v2"}`)) }))
 	defer srv.Close()
-	c, _ := New(Source{Type: "gitea", URL: srv.URL})
+	c, _ := New(Source{APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "gitea", URL: srv.URL})
 	if _, err := c.GetRelease(context.Background(), "group/tool", "v1"); err == nil {
 		t.Fatal("mismatched pinned tag accepted")
 	}
@@ -266,7 +266,7 @@ func TestLatestRejectsUnusableTagMetadata(t *testing.T) {
 				_ = json.NewEncoder(w).Encode([]map[string]string{{"tag_name": tag, "published_at": "2020-01-01T00:00:00Z"}})
 			}))
 			defer srv.Close()
-			c, _ := New(Source{Type: "gitea", URL: srv.URL})
+			c, _ := New(Source{APIURL: "", TokenEnv: "", DownloadAuth: "", Type: "gitea", URL: srv.URL})
 			if r, err := c.GetLatestReleaseWithMinAge(context.Background(), "group/tool", 0); err == nil || r != nil {
 				t.Fatalf("unusable tag accepted: release=%v err=%v", r, err)
 			}

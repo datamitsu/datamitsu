@@ -121,6 +121,10 @@ func (sc *sharedContext) beginReportOperation(operation config.OperationType, pl
 // reportSelection is the run's selection as the report states it.
 func (sc *sharedContext) reportSelection() report.Selection {
 	sel := report.Selection{
+		Dir:           "",
+		Paths:         nil,
+		ExcludedTools: nil,
+
 		Mode:       sc.selection.String(),
 		FileScoped: sc.fileScoped,
 		Tools:      append([]string(nil), sc.selectedTools...),
@@ -194,6 +198,36 @@ func (sc *sharedContext) emitDiagnostics(runOpID string, found []report.ToolFind
 			continue
 		}
 		e := uievent.Event{
+			TS:              0,
+			Status:          "",
+			ThrottleID:      "",
+			Op:              "",
+			Name:            "",
+			BytesDone:       0,
+			BytesTotal:      0,
+			Percent:         0,
+			Index:           0,
+			Total:           0,
+			Success:         nil,
+			DurationMs:      0,
+			Level:           "",
+			Tools:           0,
+			Runs:            0,
+			Failed:          0,
+			Skipped:         0,
+			Cancelled:       nil,
+			Complete:        nil,
+			Format:          "",
+			Path:            "",
+			FindingsError:   nil,
+			FindingsWarning: nil,
+			FindingsInfo:    nil,
+			FindingsHint:    nil,
+			Cached:          nil,
+			Schema:          "",
+			Events:          "",
+			Annotations:     "",
+
 			Type:        uievent.TypeDiagnostic,
 			OpID:        toolOpID(runOpID, tf.TaskID),
 			Tool:        f.Tool,
@@ -234,6 +268,8 @@ func (sc *sharedContext) buildReport(operations []config.OperationType) (*report
 	}
 	targets := make([]reportTarget, 0, len(sc.opts.Reports))
 	run := sc.report.Build(report.BuildInfo{
+		Exports: nil,
+
 		Version:       ldflags.Version,
 		Configuration: sc.cfg.DisplayName(),
 		StartedAt:     sc.startedAt,
@@ -245,7 +281,12 @@ func (sc *sharedContext) buildReport(operations []config.OperationType) (*report
 		},
 	})
 	for _, spec := range sc.opts.Reports {
-		e := report.Export{Format: spec.Format, Path: spec.Path, Status: report.ExportWritten}
+		e := report.Export{
+			Detail:    "",
+			Companion: "",
+			Omitted:   nil,
+			Format:    spec.Format, Path: spec.Path, Status: report.ExportWritten,
+		}
 		if err := render.CheckRunCapacity(spec, run); err != nil {
 			e.Status, e.Detail = report.ExportRefused, err.Error()
 			if cleanupErr := render.RemoveStaleFile(spec); cleanupErr != nil {
@@ -409,7 +450,11 @@ func crowdedReport(specs []render.Spec, plan *tooling.ExecutionPlan) (render.Spe
 			return spec, err
 		}
 	}
-	return render.Spec{}, nil
+	return render.Spec{
+		Format:  "",
+		Path:    "",
+		Options: nil,
+	}, nil
 }
 
 // omitReports says, for a run that could not start, that none of its reports
@@ -424,6 +469,48 @@ func omitReports(specs []render.Spec, cause error) {
 // and its message come from the user and the file system.
 func emitReport(spec render.Spec, status, msg string, secrets []string) {
 	e := uievent.Event{
+		TS:              0,
+		ThrottleID:      "",
+		Op:              "",
+		Tool:            "",
+		Dir:             "",
+		Name:            "",
+		BytesDone:       0,
+		BytesTotal:      0,
+		Percent:         0,
+		Index:           0,
+		Total:           0,
+		Success:         nil,
+		DurationMs:      0,
+		Level:           "",
+		Tools:           0,
+		Runs:            0,
+		Failed:          0,
+		Skipped:         0,
+		Cancelled:       nil,
+		Complete:        nil,
+		File:            "",
+		Row:             0,
+		Col:             0,
+		EndRow:          0,
+		EndCol:          0,
+		Severity:        "",
+		Code:            "",
+		Source:          "",
+		Fingerprint:     "",
+		Provenance:      "",
+		Reported:        nil,
+		Gates:           nil,
+		Baselined:       false,
+		FindingsError:   nil,
+		FindingsWarning: nil,
+		FindingsInfo:    nil,
+		FindingsHint:    nil,
+		Cached:          nil,
+		Schema:          "",
+		Events:          "",
+		Annotations:     "",
+
 		Type:   uievent.TypeReport,
 		OpID:   uievent.NextOpID("report"),
 		Status: status,

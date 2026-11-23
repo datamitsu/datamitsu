@@ -39,7 +39,7 @@ type npmVersionMeta struct {
 	Description string `json:"description"`
 }
 
-var npmHTTPClient = &http.Client{Timeout: 15 * time.Second}
+var npmHTTPClient = &http.Client{Transport: nil, CheckRedirect: nil, Jar: nil, Timeout: 15 * time.Second}
 
 // npmRegistryBaseURL is the registry root; overridable in tests.
 var npmRegistryBaseURL = "https://registry.npmjs.org"

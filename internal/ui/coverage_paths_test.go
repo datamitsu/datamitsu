@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"strings"
+	zerovalue_sync "sync"
 	"testing"
 	"time"
 
@@ -14,7 +15,14 @@ import (
 // renders into the given buffer (no TTY required), exercising the bar-backed
 // branches of Task/Spinner/Download without asserting on escape bytes.
 func newInteractiveDisplay(buf io.Writer) *Display {
-	return &Display{mode: term.Interactive, out: buf, err: buf}
+	return &Display{
+		closing:       false,
+		provision:     nil,
+		hiddenWaits:   nil,
+		waitSnapshots: nil,
+		provisionNext: 0,
+		quiet:         false, mu: zerovalue_sync.Mutex{}, prog: nil, bars: 0, mode: term.Interactive, out: buf, err: buf,
+	}
 }
 
 func TestSymbolRenderAllBranches(t *testing.T) {

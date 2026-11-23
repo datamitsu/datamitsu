@@ -135,7 +135,7 @@ func CopyProject(cacheDir, srcRoot, dstRoot string, opts CopyOptions) (CopyRepor
 			return CopyReport{}, fmt.Errorf("failed to create the destination cache directory: %w", err)
 		}
 	}
-	report := CopyReport{}
+	report := CopyReport{Toolstate: "", ImportedEntries: 0, ImportedVerdicts: 0, ToolCacheFiles: 0, ToolCacheBytes: 0, SkippedExisting: 0, SkippedSpecial: 0, Warnings: nil}
 	if srcHasState {
 		if err := copyToolstate(filepath.Join(srcDir, cacheFileName), filepath.Join(dstDir, cacheFileName), dstRoot, opts.DryRun, &report); err != nil {
 			return report, err

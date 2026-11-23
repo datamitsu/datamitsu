@@ -26,23 +26,23 @@ func TestRuntimeEnvCommandResolution(t *testing.T) {
 			root.RuntimeEnv = map[string]string{"EXACT": "${APP_BIN:dep}", "PATHS": "${STORE}:${APP_DIR}", "RESERVED": "user"}
 			if kind == "shell" {
 				root.Binary = nil
-				root.Shell = &AppConfigShell{Name: "echo"}
+				root.Shell = &AppConfigShell{Args: nil, Name: "echo"}
 			}
 			appDir := filepath.Join(cache, "runtime")
 			installCalls := 0
 			mock := &mockRuntimeAppManager{
 				computeAppPathFunc: func(string, App) (string, error) { return appDir, nil },
 				resolveCommandInfoFunc: func(string, App) (*CommandInfo, error) {
-					return &CommandInfo{Command: filepath.Join(appDir, "tool"), Env: map[string]string{"RESERVED": "runtime"}}, nil
+					return &CommandInfo{Type: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Command: filepath.Join(appDir, "tool"), Env: map[string]string{"RESERVED": "runtime"}}, nil
 				},
 				getCommandInfoFunc: func(context.Context, string, App) (*CommandInfo, error) {
 					installCalls++
-					return &CommandInfo{Command: filepath.Join(appDir, "tool"), Env: map[string]string{"RESERVED": "runtime"}}, nil
+					return &CommandInfo{Type: "", Args: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Command: filepath.Join(appDir, "tool"), Env: map[string]string{"RESERVED": "runtime"}}, nil
 				},
 			}
 			if kind == "runtime" {
 				root.Binary = nil
-				root.Uv = &AppConfigUV{}
+				root.Uv = &AppConfigUV{PackageName: "", Version: "", Runtime: "", LockFile: "", RequiresPython: ""}
 			}
 			apps["root"] = root
 			bm := New(apps, nil, mock)
@@ -123,8 +123,8 @@ func TestRuntimeEnvResolutionErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 			apps := binaryAppFixture(t, "dep")
-			apps["unsupported"] = App{Binary: &AppConfigBinary{}}
-			app := App{Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges(tt.deps...), RuntimeEnv: map[string]string{"BIN": tt.value}}
+			apps["unsupported"] = App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &AppConfigBinary{Binaries: nil, Version: ""}}
+			app := App{Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &AppConfigShell{Args: nil, Name: "echo"}, DependsOn: edges(tt.deps...), RuntimeEnv: map[string]string{"BIN": tt.value}}
 			apps["root"] = app
 			bm := New(apps, nil, nil)
 			if _, err := bm.getCommandInfo(context.Background(), "root"); err == nil || !strings.Contains(err.Error(), tt.want) {
@@ -140,10 +140,10 @@ func TestAppBinaryBindingStrictness(t *testing.T) {
 		err               error
 		want              string
 	}{
-		{name: "empty resolution", value: "${APP_BIN:dep}", want: "empty path"},
-		{name: "resolution failure", value: "${APP_BIN:dep}", err: errors.New("missing target"), want: "missing target"},
-		{name: "unterminated", value: "${APP_BIN:dep", want: "unterminated"},
-		{name: "unknown form", value: "${FOO:dep}", want: "unknown placeholder"},
+		{path: "", err: nil, name: "empty resolution", value: "${APP_BIN:dep}", want: "empty path"},
+		{path: "", name: "resolution failure", value: "${APP_BIN:dep}", err: errors.New("missing target"), want: "missing target"},
+		{path: "", err: nil, name: "unterminated", value: "${APP_BIN:dep", want: "unterminated"},
+		{path: "", err: nil, name: "unknown form", value: "${FOO:dep}", want: "unknown placeholder"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ExpandAppBinaryBindings(tt.value, func(string) (string, error) { return tt.path, tt.err })
@@ -178,16 +178,18 @@ func TestResolveDependencyRuntimeHealth(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	dir := t.TempDir()
 	apps := MapOfApps{
-		"root":   {Shell: &AppConfigShell{Name: "echo"}, DependsOn: edges("middle")},
-		"middle": {Uv: &AppConfigUV{}, DependsOn: edges("leaf")},
-		"leaf":   {Node: &AppConfigNode{}},
+		"root":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &AppConfigShell{Args: nil, Name: "echo"}, DependsOn: edges("middle")},
+		"middle": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &AppConfigUV{PackageName: "", Version: "", Runtime: "", LockFile: "", RequiresPython: ""}, DependsOn: edges("leaf")},
+		"leaf":   {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Node: &AppConfigNode{PackageName: "", Version: "", BinPath: "", Runtime: "", LockFile: "", Dependencies: nil}},
 	}
-	mock := &mockRuntimeAppManager{resolveCommandInfoFunc: func(name string, _ App) (*CommandInfo, error) {
-		return &CommandInfo{Command: filepath.Join(dir, name), RequiredPaths: []string{filepath.Join(dir, name+"-runtime")}}, nil
-	}, getCommandInfoFunc: func(context.Context, string, App) (*CommandInfo, error) {
-		t.Fatal("read-only resolution called installer")
-		return nil, errors.New("unexpected installation")
-	}}
+	mock := &mockRuntimeAppManager{
+		computeAppPathFunc: nil, resolveCommandInfoFunc: func(name string, _ App) (*CommandInfo, error) {
+			return &CommandInfo{Type: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, Command: filepath.Join(dir, name), RequiredPaths: []string{filepath.Join(dir, name+"-runtime")}}, nil
+		}, getCommandInfoFunc: func(context.Context, string, App) (*CommandInfo, error) {
+			t.Fatal("read-only resolution called installer")
+			return nil, errors.New("unexpected installation")
+		},
+	}
 	bm := New(apps, nil, mock)
 	want := []string{filepath.Join(dir, "leaf"), filepath.Join(dir, "leaf-runtime"), filepath.Join(dir, "middle"), filepath.Join(dir, "middle-runtime")}
 	for _, present := range []bool{false, true} {

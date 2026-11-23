@@ -20,7 +20,7 @@ func TestConfigAppDependencies(t *testing.T) {
 globalThis.getConfig = () => ({version: "1.0.0", apps: {`+tt.apps+`}, runtimes: {}, managedConfigs: {}, tools: {}});
 globalThis.getMinVersion = () => "0.0.0";
 `)
-			res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--config", cfg, "config", "show")
+			res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "--no-auto-config", "--config", cfg, "config", "show")
 			wantExit := 0
 			if tt.wantErr != "" {
 				wantExit = 1
@@ -40,7 +40,7 @@ func TestInstallAppDependency(t *testing.T) {
 	p := clitest.NewProject(t)
 	js := strings.Replace(installBinaryConfigJS, `"mytool": { binary: mkBin() }`, `"mytool": { binary: mkBin(), lazy: true }, "proxy": { shell: {name: "echo"}, dependsOn: ["mytool"] }`, 1)
 	cfg := p.WriteFile("apps.config.js", js)
-	res := clitest.Run(t, clitest.RunOptions{Dir: p.Dir}, "--no-auto-config", "--config", cfg, "install", "proxy", "--no-verify")
+	res := clitest.Run(t, clitest.RunOptions{CacheDir: "", Env: nil, Stdin: "", Timeout: 0, Dir: p.Dir}, "--no-auto-config", "--config", cfg, "install", "proxy", "--no-verify")
 	if res.ExitCode != 1 || !strings.Contains(res.Stderr, "failed to install mytool") || !strings.Contains(res.Stderr, "offline") {
 		t.Fatalf("dependency was not installed: exit=%d stderr=%s", res.ExitCode, res.Stderr)
 	}

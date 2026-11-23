@@ -13,7 +13,7 @@ import (
 // per-file/globbed tools; this is the cheap regression guard.)
 func TestNewSessionWiresCache(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir()) // isolate from the real cache
-	ss := newSession(&config.Config{}, t.TempDir())
+	ss := newSession(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, t.TempDir())
 	if ss.cache == nil {
 		t.Fatal("newSession must wire a non-nil execution cache (it was built with nil)")
 	}

@@ -53,7 +53,7 @@ func (r *errReader) Read(b []byte) (int, error) {
 }
 
 func TestDownloadEmitsDoneOnEOF(t *testing.T) {
-	cs := &captureSink{}
+	cs := &captureSink{mu: sync.Mutex{}, events: nil}
 	SetEventSink(cs, true)
 	defer SetEventSink(nil, false)
 
@@ -70,12 +70,12 @@ func TestDownloadEmitsDoneOnEOF(t *testing.T) {
 }
 
 func TestDownloadEmitsFailOnAbort(t *testing.T) {
-	cs := &captureSink{}
+	cs := &captureSink{mu: sync.Mutex{}, events: nil}
 	SetEventSink(cs, true)
 	defer SetEventSink(nil, false)
 
 	d := New(term.Plain)
-	rc := d.Download("artifact", 100, &errReader{data: []byte("part"), err: errors.New("boom")})
+	rc := d.Download("artifact", 100, &errReader{pos: 0, data: []byte("part"), err: errors.New("boom")})
 	// Drain until the non-EOF error surfaces (no done emitted), then close.
 	_, _ = io.ReadAll(rc)
 	_ = rc.Close()

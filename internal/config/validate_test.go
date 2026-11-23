@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 )
@@ -12,7 +13,25 @@ import (
 func TestValidateApps_Valid(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Files: map[string]string{
 				"eslint-base.js": "module.exports = {};",
 			},
@@ -30,7 +49,27 @@ func TestValidateApps_Valid(t *testing.T) {
 func TestValidateApps_NoLinksNoFiles(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"lefthook": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 		},
 	}
 
@@ -42,6 +81,26 @@ func TestValidateApps_NoLinksNoFiles(t *testing.T) {
 func TestValidateApps_FilesWithoutLinks(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"config.js": "module.exports = {};",
 			},
@@ -56,7 +115,26 @@ func TestValidateApps_FilesWithoutLinks(t *testing.T) {
 func TestValidateApps_LinkPathIsRelative(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Links: map[string]string{
 				"eslint-base.js": "dist/eslint.config.js",
 			},
@@ -71,7 +149,26 @@ func TestValidateApps_LinkPathIsRelative(t *testing.T) {
 func TestValidateApps_LinkWithNilFiles(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Links: map[string]string{
 				"eslint-base.js": "eslint-base.js",
 			},
@@ -87,6 +184,25 @@ func TestValidateApps_LinkWithNilFiles(t *testing.T) {
 func TestValidateApps_DuplicateLinkName(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"base.js": "module.exports = {};",
 			},
@@ -95,6 +211,25 @@ func TestValidateApps_DuplicateLinkName(t *testing.T) {
 			},
 		},
 		"prettier": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"base.js": "module.exports = {};",
 			},
@@ -119,13 +254,51 @@ func TestValidateApps_DuplicateLinkName(t *testing.T) {
 func TestValidateApps_MultipleErrors(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Links: map[string]string{
 				"config.js": "../escape",
 			},
 		},
 		"prettier": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Links: map[string]string{
 				"prettier.js": "../../also-escape",
 			},
@@ -148,7 +321,25 @@ func TestValidateApps_MultipleErrors(t *testing.T) {
 func TestValidateApps_MultipleLinksValid(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Files: map[string]string{
 				"base.js":    "module.exports = {};",
 				"react.js":   "module.exports = {};",
@@ -161,7 +352,25 @@ func TestValidateApps_MultipleLinksValid(t *testing.T) {
 			},
 		},
 		"prettier": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Files: map[string]string{
 				"config.js": "module.exports = {};",
 			},
@@ -191,6 +400,26 @@ func TestValidateApps_NilApps(t *testing.T) {
 func TestValidateApps_FileKeyPathTraversal(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"evil": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"../../etc/passwd": "malicious",
 			},
@@ -209,7 +438,26 @@ func TestValidateApps_FileKeyPathTraversal(t *testing.T) {
 func TestValidateApps_LinkPathTraversal(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"evil": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Links: map[string]string{
 				"link.js": "../../etc/passwd",
 			},
@@ -228,6 +476,26 @@ func TestValidateApps_LinkPathTraversal(t *testing.T) {
 func TestValidateApps_FileKeyAbsolutePath(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"evil": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"/etc/passwd": "malicious",
 			},
@@ -246,6 +514,25 @@ func TestValidateApps_FileKeyAbsolutePath(t *testing.T) {
 func TestValidateApps_EmptyLinkName(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"app": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"config.js": "content",
 			},
@@ -267,6 +554,25 @@ func TestValidateApps_EmptyLinkName(t *testing.T) {
 func TestValidateApps_LinkNamePathTraversal(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"evil": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"config.js": "content",
 			},
@@ -288,6 +594,25 @@ func TestValidateApps_LinkNamePathTraversal(t *testing.T) {
 func TestValidateApps_LinkNameAbsolutePath(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"evil": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"config.js": "content",
 			},
@@ -309,6 +634,25 @@ func TestValidateApps_LinkNameAbsolutePath(t *testing.T) {
 func TestValidateApps_ReservedGitignoreLinkName(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"myapp": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"config.js": "content",
 			},
@@ -330,6 +674,25 @@ func TestValidateApps_ReservedGitignoreLinkName(t *testing.T) {
 func TestValidateApps_ReservedTypeDefinitionsLinkName(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"myapp": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"config.js": "content",
 			},
@@ -351,7 +714,25 @@ func TestValidateApps_ReservedTypeDefinitionsLinkName(t *testing.T) {
 func TestValidateApps_BinaryAppWithFilesRejected(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"tool": {
-			Binary: &binmanager.AppConfigBinary{},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Binary:             &binmanager.AppConfigBinary{Binaries: nil, Version: ""},
 			Files: map[string]string{
 				"config.js": "content",
 			},
@@ -373,7 +754,26 @@ func TestValidateApps_BinaryAppWithFilesRejected(t *testing.T) {
 func TestValidateApps_ShellAppWithFilesRejected(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"tool": {
-			Shell: &binmanager.AppConfigShell{Name: "echo"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Shell:              &binmanager.AppConfigShell{Args: nil, Name: "echo"},
 			Files: map[string]string{
 				"config.js": "content",
 			},
@@ -392,7 +792,25 @@ func TestValidateApps_ShellAppWithFilesRejected(t *testing.T) {
 func TestValidateApps_LinksWithRequiredFalse(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           false,
 			Files: map[string]string{
 				"base.js": "module.exports = {};",
 			},
@@ -410,6 +828,25 @@ func TestValidateApps_LinksWithRequiredFalse(t *testing.T) {
 func TestValidateApps_LinksWithNoRequiredField(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"base.js": "module.exports = {};",
 			},
@@ -427,7 +864,25 @@ func TestValidateApps_LinksWithNoRequiredField(t *testing.T) {
 func TestValidateApps_LinksWithRequiredTrue(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Files: map[string]string{
 				"base.js": "module.exports = {};",
 			},
@@ -457,7 +912,26 @@ func TestValidateApps_LinkPathValidCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{
 				"app": {
-					Required: true,
+					Lazy:               false,
+					Description:        "",
+					VersionCheck:       nil,
+					DependsOn:          nil,
+					OfficialURL:        "",
+					OfficialURLDerived: false,
+					Binary:             nil,
+					Bun:                nil,
+					Uv:                 nil,
+					Node:               nil,
+					Jvm:                nil,
+					Go:                 nil,
+					Shell:              nil,
+					Env:                nil,
+					RuntimeEnv:         nil,
+					Caches:             nil,
+					Files:              nil,
+					Archives:           nil,
+					Prepare:            nil,
+					Required:           true,
 					Links: map[string]string{
 						"link": tt.linkPath,
 					},
@@ -488,7 +962,26 @@ func TestValidateApps_LinkPathInvalidCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{
 				"app": {
-					Required: true,
+					Lazy:               false,
+					Description:        "",
+					VersionCheck:       nil,
+					DependsOn:          nil,
+					OfficialURL:        "",
+					OfficialURLDerived: false,
+					Binary:             nil,
+					Bun:                nil,
+					Uv:                 nil,
+					Node:               nil,
+					Jvm:                nil,
+					Go:                 nil,
+					Shell:              nil,
+					Env:                nil,
+					RuntimeEnv:         nil,
+					Caches:             nil,
+					Files:              nil,
+					Archives:           nil,
+					Prepare:            nil,
+					Required:           true,
 					Links: map[string]string{
 						"link": tt.linkPath,
 					},
@@ -509,6 +1002,26 @@ func TestValidateApps_LinkPathInvalidCases(t *testing.T) {
 func TestValidateApps_EmptyFileKey(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"app": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Files: map[string]string{
 				"": "content",
 			},
@@ -533,6 +1046,12 @@ func testManagedConfig() *RuntimeConfigManaged {
 func TestValidateRuntimes_Valid(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
 			Kind:    RuntimeKindNode,
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
@@ -542,6 +1061,13 @@ func TestValidateRuntimes_Valid(t *testing.T) {
 			},
 		},
 		"uv": {
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
 			Kind:    RuntimeKindUV,
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
@@ -557,6 +1083,12 @@ func TestValidateRuntimes_Valid(t *testing.T) {
 func TestValidateRuntimes_Node_Valid(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
 			Kind:    RuntimeKindNode,
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
@@ -576,8 +1108,16 @@ func TestValidateRuntimes_Node_Valid(t *testing.T) {
 func TestValidateRuntimes_Node_MissingConfig(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
-			Kind: RuntimeKindNode,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindNode,
+			Mode:    RuntimeModeManaged,
 		},
 	}
 
@@ -593,9 +1133,17 @@ func TestValidateRuntimes_Node_MissingConfig(t *testing.T) {
 func TestValidateRuntimes_Node_MissingNodeVersion(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
-			Kind: RuntimeKindNode,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindNode,
+			Mode:    RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
+				NodeVersion: "",
 				PNPMRuntime: "pnpm",
 			},
 		},
@@ -615,9 +1163,17 @@ func TestValidateRuntimes_Node_MissingNodeVersion(t *testing.T) {
 func TestValidateRuntimes_Node_MissingPNPMRuntime(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
-			Kind: RuntimeKindNode,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindNode,
+			Mode:    RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
+				PNPMRuntime: "",
 				NodeVersion: "26.2.0",
 			},
 		},
@@ -647,8 +1203,15 @@ func TestValidateRuntimes_Node_InvalidNodeVersion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			runtimes := MapOfRuntimes{
 				"node": {
-					Kind: RuntimeKindNode,
-					Mode: RuntimeModeManaged,
+					Managed: nil,
+					System:  nil,
+					Bun:     nil,
+					UV:      nil,
+					JVM:     nil,
+					Go:      nil,
+					PNPM:    nil,
+					Kind:    RuntimeKindNode,
+					Mode:    RuntimeModeManaged,
 					Node: &RuntimeConfigNode{
 						NodeVersion: tt.nodeVersion,
 						PNPMRuntime: "pnpm",
@@ -700,6 +1263,12 @@ func TestValidateRuntimes_Node_ValidVersionFormats(t *testing.T) {
 		t.Run(v, func(t *testing.T) {
 			runtimes := MapOfRuntimes{
 				"node": {
+					System:  nil,
+					Bun:     nil,
+					UV:      nil,
+					JVM:     nil,
+					Go:      nil,
+					PNPM:    nil,
 					Kind:    RuntimeKindNode,
 					Mode:    RuntimeModeManaged,
 					Managed: testManagedConfig(),
@@ -709,6 +1278,12 @@ func TestValidateRuntimes_Node_ValidVersionFormats(t *testing.T) {
 					},
 				},
 				"pnpm": {
+					System:  nil,
+					Bun:     nil,
+					Node:    nil,
+					UV:      nil,
+					JVM:     nil,
+					Go:      nil,
 					Kind:    RuntimeKindPNPM,
 					Mode:    RuntimeModeManaged,
 					Managed: testManagedConfig(),
@@ -732,6 +1307,13 @@ func TestValidateRuntimes_Node_ValidVersionFormats(t *testing.T) {
 func TestValidateRuntimes_UnrecognizedKindSkipped(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"legacy": {
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
 			Kind:    "legacy-removed",
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
@@ -758,6 +1340,13 @@ func TestValidateRuntimes_Nil(t *testing.T) {
 func TestValidateRuntimes_UV_NoPythonVersionOK(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
 			Kind:    RuntimeKindUV,
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
@@ -771,14 +1360,23 @@ func TestValidateRuntimes_UV_NoPythonVersionOK(t *testing.T) {
 
 func TestValidateRuntimes_UVPythonDownloadsRequirePinnedStableEntry(t *testing.T) {
 	runtimeConfig := RuntimeConfig{
-		Kind:   RuntimeKindUV,
-		Mode:   RuntimeModeSystem,
-		System: &RuntimeConfigSystem{Command: "uv"},
+		Managed: nil,
+		Bun:     nil,
+		Node:    nil,
+		JVM:     nil,
+		Go:      nil,
+		PNPM:    nil,
+		Kind:    RuntimeKindUV,
+		Mode:    RuntimeModeSystem,
+		System:  &RuntimeConfigSystem{SystemVersion: "", Command: "uv"},
 		UV: &RuntimeConfigUV{
 			PythonVersion: "3.14.6",
 			PythonDownloads: map[string]PythonDownload{
 				"cpython-3.14.6-x86_64-unknown-linux-gnu": {
-					Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+					Prerelease: "",
+					Variant:    "",
+					Build:      "",
+					Name:       "cpython", Arch: PythonDownloadArch{Variant: "", Family: "x86_64"}, OS: "linux", LibC: "gnu",
 					Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst",
 					Hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 				},
@@ -790,7 +1388,11 @@ func TestValidateRuntimes_UVPythonDownloadsRequirePinnedStableEntry(t *testing.T
 	}
 
 	runtimeConfig.UV.PythonDownloads["cpython-3.14.6-x86_64-unknown-linux-gnu"] = PythonDownload{
-		Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+		Prerelease: "",
+		Variant:    "",
+		Build:      "",
+		Hash:       "",
+		Name:       "cpython", Arch: PythonDownloadArch{Variant: "", Family: "x86_64"}, OS: "linux", LibC: "gnu",
 		Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst",
 	}
 	if err := ValidateRuntimes(MapOfRuntimes{"uv": runtimeConfig}); err == nil || !strings.Contains(err.Error(), "hash is required") {
@@ -798,7 +1400,9 @@ func TestValidateRuntimes_UVPythonDownloadsRequirePinnedStableEntry(t *testing.T
 	}
 
 	runtimeConfig.UV.PythonDownloads["cpython-3.14.6-x86_64-unknown-linux-gnu"] = PythonDownload{
-		Name: "cpython", Arch: PythonDownloadArch{Family: "x86_64"}, OS: "linux", LibC: "gnu",
+		Prerelease: "",
+		Build:      "",
+		Name:       "cpython", Arch: PythonDownloadArch{Variant: "", Family: "x86_64"}, OS: "linux", LibC: "gnu",
 		Major: 3, Minor: 14, Patch: 6, URL: "https://example.invalid/python.tar.zst",
 		Variant: "freethreaded", Hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}
@@ -810,15 +1414,46 @@ func TestValidateRuntimes_UVPythonDownloadsRequirePinnedStableEntry(t *testing.T
 func TestValidateApps_Lockfile_UV_Missing(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind: RuntimeKindUV,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeManaged,
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"yamllint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &binmanager.AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.35.1",
+				Runtime:        "",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.35.1",
 			},
 		},
 	}
@@ -835,16 +1470,46 @@ func TestValidateApps_Lockfile_UV_Missing(t *testing.T) {
 func TestValidateApps_Lockfile_UV_Present(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind: RuntimeKindUV,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeManaged,
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"yamllint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &binmanager.AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.35.1",
-				LockFile:    "br:some-compressed-content",
+				Runtime:        "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.35.1",
+				LockFile:       "br:some-compressed-content",
 			},
 		},
 	}
@@ -857,15 +1522,46 @@ func TestValidateApps_Lockfile_UV_Present(t *testing.T) {
 func TestValidateAppsSkipLockfile_AllowsMissingLockfile(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind: RuntimeKindUV,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeManaged,
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"yamllint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &binmanager.AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.35.1",
+				Runtime:        "",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.35.1",
 			},
 		},
 	}
@@ -878,8 +1574,15 @@ func TestValidateAppsSkipLockfile_AllowsMissingLockfile(t *testing.T) {
 func TestValidateAppsSkipLockfile_AllowsMissingLockfile_Node(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
-			Kind: RuntimeKindNode,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindNode,
+			Mode:    RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMRuntime: "pnpm",
@@ -888,10 +1591,33 @@ func TestValidateAppsSkipLockfile_AllowsMissingLockfile_Node(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Node: &binmanager.AppConfigNode{
-				PackageName: "eslint",
-				Version:     "9.0.0",
-				BinPath:     "node_modules/.bin/eslint",
+				Runtime:      "",
+				LockFile:     "",
+				Dependencies: nil,
+				PackageName:  "eslint",
+				Version:      "9.0.0",
+				BinPath:      "node_modules/.bin/eslint",
 			},
 		},
 	}
@@ -904,8 +1630,15 @@ func TestValidateAppsSkipLockfile_AllowsMissingLockfile_Node(t *testing.T) {
 func TestValidateApps_Lockfile_Node_Missing(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
-			Kind: RuntimeKindNode,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindNode,
+			Mode:    RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMRuntime: "pnpm",
@@ -914,10 +1647,33 @@ func TestValidateApps_Lockfile_Node_Missing(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Node: &binmanager.AppConfigNode{
-				PackageName: "eslint",
-				Version:     "9.0.0",
-				BinPath:     "node_modules/.bin/eslint",
+				Runtime:      "",
+				LockFile:     "",
+				Dependencies: nil,
+				PackageName:  "eslint",
+				Version:      "9.0.0",
+				BinPath:      "node_modules/.bin/eslint",
 			},
 		},
 	}
@@ -934,8 +1690,15 @@ func TestValidateApps_Lockfile_Node_Missing(t *testing.T) {
 func TestValidateApps_Lockfile_Node_Present(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
-			Kind: RuntimeKindNode,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindNode,
+			Mode:    RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMRuntime: "pnpm",
@@ -944,11 +1707,33 @@ func TestValidateApps_Lockfile_Node_Present(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Node: &binmanager.AppConfigNode{
-				PackageName: "eslint",
-				Version:     "9.0.0",
-				BinPath:     "node_modules/.bin/eslint",
-				LockFile:    "br:some-lock-content",
+				Runtime:      "",
+				Dependencies: nil,
+				PackageName:  "eslint",
+				Version:      "9.0.0",
+				BinPath:      "node_modules/.bin/eslint",
+				LockFile:     "br:some-lock-content",
 			},
 		},
 	}
@@ -961,16 +1746,46 @@ func TestValidateApps_Lockfile_Node_Present(t *testing.T) {
 func TestValidateApps_Lockfile_ExplicitRuntime(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv-main": {
-			Kind: RuntimeKindUV,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeManaged,
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"yamllint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &binmanager.AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.35.1",
-				Runtime:     "uv-main",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.35.1",
+				Runtime:        "uv-main",
 			},
 		},
 	}
@@ -987,10 +1802,32 @@ func TestValidateApps_Lockfile_ExplicitRuntime(t *testing.T) {
 func TestValidateApps_JVM_Valid(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"openapi-generator": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Jvm: &binmanager.AppConfigJVM{
-				JarURL:  "https://example.com/openapi-generator.jar",
-				JarHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-				Version: "7.0.0",
+				Runtime:   "",
+				MainClass: "",
+				JarURL:    "https://example.com/openapi-generator.jar",
+				JarHash:   "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				Version:   "7.0.0",
 			},
 		},
 	}
@@ -1003,9 +1840,32 @@ func TestValidateApps_JVM_Valid(t *testing.T) {
 func TestValidateApps_JVM_MissingJarUrl(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"openapi-generator": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Jvm: &binmanager.AppConfigJVM{
-				JarHash: "abc123",
-				Version: "7.0.0",
+				JarURL:    "",
+				Runtime:   "",
+				MainClass: "",
+				JarHash:   "abc123",
+				Version:   "7.0.0",
 			},
 		},
 	}
@@ -1022,9 +1882,32 @@ func TestValidateApps_JVM_MissingJarUrl(t *testing.T) {
 func TestValidateApps_JVM_MissingJarHash(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"openapi-generator": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Jvm: &binmanager.AppConfigJVM{
-				JarURL:  "https://example.com/openapi-generator.jar",
-				Version: "7.0.0",
+				JarHash:   "",
+				Runtime:   "",
+				MainClass: "",
+				JarURL:    "https://example.com/openapi-generator.jar",
+				Version:   "7.0.0",
 			},
 		},
 	}
@@ -1041,9 +1924,32 @@ func TestValidateApps_JVM_MissingJarHash(t *testing.T) {
 func TestValidateApps_JVM_MissingVersion(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"openapi-generator": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Jvm: &binmanager.AppConfigJVM{
-				JarURL:  "https://example.com/openapi-generator.jar",
-				JarHash: "abc123",
+				Version:   "",
+				Runtime:   "",
+				MainClass: "",
+				JarURL:    "https://example.com/openapi-generator.jar",
+				JarHash:   "abc123",
 			},
 		},
 	}
@@ -1060,10 +1966,31 @@ func TestValidateApps_JVM_MissingVersion(t *testing.T) {
 func TestValidateApps_JVM_FilesLinksRejected(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"openapi-generator": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Jvm: &binmanager.AppConfigJVM{
-				JarURL:  "https://example.com/openapi-generator.jar",
-				JarHash: "abc123",
-				Version: "7.0.0",
+				Runtime:   "",
+				MainClass: "",
+				JarURL:    "https://example.com/openapi-generator.jar",
+				JarHash:   "abc123",
+				Version:   "7.0.0",
 			},
 			Files: map[string]string{
 				"config.yaml": "content",
@@ -1083,6 +2010,12 @@ func TestValidateApps_JVM_FilesLinksRejected(t *testing.T) {
 func TestValidateRuntimes_JVM_Valid(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"jvm": {
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			Go:      nil,
+			PNPM:    nil,
 			Kind:    RuntimeKindJVM,
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
@@ -1100,8 +2033,16 @@ func TestValidateRuntimes_JVM_Valid(t *testing.T) {
 func TestValidateRuntimes_JVM_MissingConfig(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"jvm": {
-			Kind: RuntimeKindJVM,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindJVM,
+			Mode:    RuntimeModeManaged,
 		},
 	}
 
@@ -1117,16 +2058,46 @@ func TestValidateRuntimes_JVM_MissingConfig(t *testing.T) {
 func TestValidateApps_UnknownRuntimeRef_UV(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind: RuntimeKindUV,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeManaged,
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"yamllint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &binmanager.AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.35.1",
-				Runtime:     "nonexistent",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.35.1",
+				Runtime:        "nonexistent",
 			},
 		},
 	}
@@ -1143,8 +2114,15 @@ func TestValidateApps_UnknownRuntimeRef_UV(t *testing.T) {
 func TestValidateApps_WrongKindRuntimeRef_UV(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
-			Kind: RuntimeKindNode,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindNode,
+			Mode:    RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMRuntime: "pnpm",
@@ -1153,10 +2131,32 @@ func TestValidateApps_WrongKindRuntimeRef_UV(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"yamllint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &binmanager.AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.35.1",
-				Runtime:     "node",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.35.1",
+				Runtime:        "node",
 			},
 		},
 	}
@@ -1173,8 +2173,15 @@ func TestValidateApps_WrongKindRuntimeRef_UV(t *testing.T) {
 func TestValidateApps_UnknownRuntimeRef_Node(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
-			Kind: RuntimeKindNode,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindNode,
+			Mode:    RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMRuntime: "pnpm",
@@ -1183,11 +2190,33 @@ func TestValidateApps_UnknownRuntimeRef_Node(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Node: &binmanager.AppConfigNode{
-				PackageName: "eslint",
-				Version:     "9.0.0",
-				BinPath:     "node_modules/.bin/eslint",
-				Runtime:     "missing-runtime",
+				LockFile:     "",
+				Dependencies: nil,
+				PackageName:  "eslint",
+				Version:      "9.0.0",
+				BinPath:      "node_modules/.bin/eslint",
+				Runtime:      "missing-runtime",
 			},
 		},
 	}
@@ -1204,8 +2233,15 @@ func TestValidateApps_UnknownRuntimeRef_Node(t *testing.T) {
 func TestValidateApps_UnknownRuntimeRef_JVM(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"jvm": {
-			Kind: RuntimeKindJVM,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindJVM,
+			Mode:    RuntimeModeManaged,
 			JVM: &RuntimeConfigJVM{
 				JavaVersion: "21",
 			},
@@ -1213,11 +2249,32 @@ func TestValidateApps_UnknownRuntimeRef_JVM(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"openapi-generator": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Jvm: &binmanager.AppConfigJVM{
-				JarURL:  "https://example.com/openapi-generator.jar",
-				JarHash: "abc123",
-				Version: "7.0.0",
-				Runtime: "nonexistent-jvm",
+				MainClass: "",
+				JarURL:    "https://example.com/openapi-generator.jar",
+				JarHash:   "abc123",
+				Version:   "7.0.0",
+				Runtime:   "nonexistent-jvm",
 			},
 		},
 	}
@@ -1234,17 +2291,46 @@ func TestValidateApps_UnknownRuntimeRef_JVM(t *testing.T) {
 func TestValidateApps_WrongKindRuntimeRef_JVM(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind: RuntimeKindUV,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeManaged,
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"openapi-generator": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Jvm: &binmanager.AppConfigJVM{
-				JarURL:  "https://example.com/openapi-generator.jar",
-				JarHash: "abc123",
-				Version: "7.0.0",
-				Runtime: "uv",
+				MainClass: "",
+				JarURL:    "https://example.com/openapi-generator.jar",
+				JarHash:   "abc123",
+				Version:   "7.0.0",
+				Runtime:   "uv",
 			},
 		},
 	}
@@ -1261,20 +2347,42 @@ func TestValidateApps_WrongKindRuntimeRef_JVM(t *testing.T) {
 func TestValidateApps_ValidExplicitRuntimeRef(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind: RuntimeKindUV,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeManaged,
 		},
 		"node": {
-			Kind: RuntimeKindNode,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindNode,
+			Mode:    RuntimeModeManaged,
 			Node: &RuntimeConfigNode{
 				NodeVersion: "22.14.0",
 				PNPMRuntime: "pnpm",
 			},
 		},
 		"jvm": {
-			Kind: RuntimeKindJVM,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindJVM,
+			Mode:    RuntimeModeManaged,
 			JVM: &RuntimeConfigJVM{
 				JavaVersion: "21",
 			},
@@ -1282,28 +2390,91 @@ func TestValidateApps_ValidExplicitRuntimeRef(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"yamllint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &binmanager.AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.35.1",
-				Runtime:     "uv",
-				LockFile:    "br:fakeLockFileContent",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.35.1",
+				Runtime:        "uv",
+				LockFile:       "br:fakeLockFileContent",
 			},
 		},
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Node: &binmanager.AppConfigNode{
-				PackageName: "eslint",
-				Version:     "9.0.0",
-				BinPath:     "node_modules/.bin/eslint",
-				Runtime:     "node",
-				LockFile:    "br:fakeLockFileContent",
+				Dependencies: nil,
+				PackageName:  "eslint",
+				Version:      "9.0.0",
+				BinPath:      "node_modules/.bin/eslint",
+				Runtime:      "node",
+				LockFile:     "br:fakeLockFileContent",
 			},
 		},
 		"openapi-generator": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Jvm: &binmanager.AppConfigJVM{
-				JarURL:  "https://example.com/openapi-generator.jar",
-				JarHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-				Version: "7.0.0",
-				Runtime: "jvm",
+				MainClass: "",
+				JarURL:    "https://example.com/openapi-generator.jar",
+				JarHash:   "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				Version:   "7.0.0",
+				Runtime:   "jvm",
 			},
 		},
 	}
@@ -1316,9 +2487,16 @@ func TestValidateApps_ValidExplicitRuntimeRef(t *testing.T) {
 func TestValidateRuntimes_JVM_MissingJavaVersion(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"jvm": {
-			Kind: RuntimeKindJVM,
-			Mode: RuntimeModeManaged,
-			JVM:  &RuntimeConfigJVM{},
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindJVM,
+			Mode:    RuntimeModeManaged,
+			JVM:     &RuntimeConfigJVM{JavaVersion: ""},
 		},
 	}
 
@@ -1334,17 +2512,46 @@ func TestValidateRuntimes_JVM_MissingJavaVersion(t *testing.T) {
 func TestValidateApps_UVSystemModeWarning_NoUVConfig(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind:   RuntimeKindUV,
-			Mode:   RuntimeModeSystem,
-			System: &RuntimeConfigSystem{Command: "/usr/bin/uv"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeSystem,
+			System:  &RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/uv"},
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"yamllint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &binmanager.AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.35.1",
-				LockFile:    "br:fakeLockFileContent",
+				Runtime:        "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.35.1",
+				LockFile:       "br:fakeLockFileContent",
 			},
 		},
 	}
@@ -1371,10 +2578,16 @@ func TestValidateApps_UVSystemModeWarning_NoUVConfig(t *testing.T) {
 func TestValidateApps_UVSystemModeWarning_EmptyPythonVersion(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind:   RuntimeKindUV,
-			Mode:   RuntimeModeSystem,
-			System: &RuntimeConfigSystem{Command: "/usr/bin/uv"},
-			UV:     &RuntimeConfigUV{PythonVersion: ""},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeSystem,
+			System:  &RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/uv"},
+			UV:      &RuntimeConfigUV{PythonDownloads: nil, PythonVersion: ""},
 		},
 	}
 	apps := binmanager.MapOfApps{}
@@ -1391,10 +2604,16 @@ func TestValidateApps_UVSystemModeWarning_EmptyPythonVersion(t *testing.T) {
 func TestValidateApps_UVSystemModeNoWarning_WithPythonVersion(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind:   RuntimeKindUV,
-			Mode:   RuntimeModeSystem,
-			System: &RuntimeConfigSystem{Command: "/usr/bin/uv"},
-			UV:     &RuntimeConfigUV{PythonVersion: "3.12"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeSystem,
+			System:  &RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/uv"},
+			UV:      &RuntimeConfigUV{PythonDownloads: nil, PythonVersion: "3.12"},
 		},
 	}
 	apps := binmanager.MapOfApps{}
@@ -1411,8 +2630,16 @@ func TestValidateApps_UVSystemModeNoWarning_WithPythonVersion(t *testing.T) {
 func TestValidateApps_UVManagedModeNoWarning(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind: RuntimeKindUV,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeManaged,
 		},
 	}
 	apps := binmanager.MapOfApps{}
@@ -1439,8 +2666,15 @@ func TestValidateRuntimes_JVM_InvalidJavaVersion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			runtimes := MapOfRuntimes{
 				"jvm": {
-					Kind: RuntimeKindJVM,
-					Mode: RuntimeModeManaged,
+					Managed: nil,
+					System:  nil,
+					Bun:     nil,
+					Node:    nil,
+					UV:      nil,
+					Go:      nil,
+					PNPM:    nil,
+					Kind:    RuntimeKindJVM,
+					Mode:    RuntimeModeManaged,
 					JVM: &RuntimeConfigJVM{
 						JavaVersion: tt.javaVersion,
 					},
@@ -1461,10 +2695,16 @@ func TestValidateRuntimes_JVM_InvalidJavaVersion(t *testing.T) {
 func TestValidateApps_NodeSystemModeNoWarning(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"node": {
-			Kind:   RuntimeKindNode,
-			Mode:   RuntimeModeSystem,
-			System: &RuntimeConfigSystem{Command: "/usr/bin/node"},
-			Node:   &RuntimeConfigNode{NodeVersion: "22.14.0", PNPMRuntime: "pnpm"},
+			Managed: nil,
+			Bun:     nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindNode,
+			Mode:    RuntimeModeSystem,
+			System:  &RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/node"},
+			Node:    &RuntimeConfigNode{NodeVersion: "22.14.0", PNPMRuntime: "pnpm"},
 		},
 	}
 	apps := binmanager.MapOfApps{}
@@ -1485,14 +2725,43 @@ func TestValidateApps_NodeSystemModeNoWarning(t *testing.T) {
 func TestValidateApps_Lockfile_Go_Missing(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind: RuntimeKindGo,
-			Mode: RuntimeModeManaged,
-			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Go:      &RuntimeConfigGo{GoVersion: "1.22.0"},
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"govulncheck": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &binmanager.AppConfigGo{
+				Runtime:     "",
+				LockFile:    "",
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
 			},
@@ -1511,14 +2780,42 @@ func TestValidateApps_Lockfile_Go_Missing(t *testing.T) {
 func TestValidateApps_Lockfile_Go_Present(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind: RuntimeKindGo,
-			Mode: RuntimeModeManaged,
-			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Go:      &RuntimeConfigGo{GoVersion: "1.22.0"},
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"govulncheck": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &binmanager.AppConfigGo{
+				Runtime:     "",
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
 				LockFile:    "br:some-compressed-content",
@@ -1534,14 +2831,43 @@ func TestValidateApps_Lockfile_Go_Present(t *testing.T) {
 func TestValidateAppsSkipLockfile_AllowsMissingLockfile_Go(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind: RuntimeKindGo,
-			Mode: RuntimeModeManaged,
-			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Go:      &RuntimeConfigGo{GoVersion: "1.22.0"},
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"govulncheck": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &binmanager.AppConfigGo{
+				Runtime:     "",
+				LockFile:    "",
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
 			},
@@ -1556,13 +2882,40 @@ func TestValidateAppsSkipLockfile_AllowsMissingLockfile_Go(t *testing.T) {
 func TestValidateApps_UnknownRuntimeRef_Go(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind: RuntimeKindGo,
-			Mode: RuntimeModeManaged,
-			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Go:      &RuntimeConfigGo{GoVersion: "1.22.0"},
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"govulncheck": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &binmanager.AppConfigGo{
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
@@ -1584,12 +2937,40 @@ func TestValidateApps_UnknownRuntimeRef_Go(t *testing.T) {
 func TestValidateApps_WrongKindRuntimeRef_Go(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"uv": {
-			Kind: RuntimeKindUV,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindUV,
+			Mode:    RuntimeModeManaged,
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"govulncheck": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &binmanager.AppConfigGo{
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
@@ -1611,6 +2992,12 @@ func TestValidateApps_WrongKindRuntimeRef_Go(t *testing.T) {
 func TestValidateApps_ValidGoRuntimeRef(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
 			Kind:    RuntimeKindGo,
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
@@ -1619,6 +3006,26 @@ func TestValidateApps_ValidGoRuntimeRef(t *testing.T) {
 	}
 	apps := binmanager.MapOfApps{
 		"govulncheck": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &binmanager.AppConfigGo{
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
@@ -1636,14 +3043,40 @@ func TestValidateApps_ValidGoRuntimeRef(t *testing.T) {
 func TestValidateApps_Go_FilesLinksArchivesAccepted(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind: RuntimeKindGo,
-			Mode: RuntimeModeManaged,
-			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Go:      &RuntimeConfigGo{GoVersion: "1.22.0"},
 		},
 	}
 	apps := binmanager.MapOfApps{
 		"govulncheck": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &binmanager.AppConfigGo{
+				Runtime:     "",
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
 				LockFile:    "br:fakeLockFileContent",
@@ -1668,9 +3101,16 @@ func TestValidateApps_Go_FilesLinksArchivesAccepted(t *testing.T) {
 func TestValidateApps_Go_PackageNameAndVersion(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind: RuntimeKindGo,
-			Mode: RuntimeModeManaged,
-			Go:   &RuntimeConfigGo{GoVersion: "1.22.0"},
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Go:      &RuntimeConfigGo{GoVersion: "1.22.0"},
 		},
 	}
 
@@ -1746,6 +3186,26 @@ func TestValidateApps_Go_PackageNameAndVersion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			apps := binmanager.MapOfApps{
 				"govulncheck": {
+					Required:           false,
+					Lazy:               false,
+					Description:        "",
+					VersionCheck:       nil,
+					DependsOn:          nil,
+					OfficialURL:        "",
+					OfficialURLDerived: false,
+					Binary:             nil,
+					Bun:                nil,
+					Uv:                 nil,
+					Node:               nil,
+					Jvm:                nil,
+					Shell:              nil,
+					Env:                nil,
+					RuntimeEnv:         nil,
+					Caches:             nil,
+					Files:              nil,
+					Links:              nil,
+					Archives:           nil,
+					Prepare:            nil,
 					Go: &binmanager.AppConfigGo{
 						PackageName: tt.packageName,
 						Version:     tt.version,
@@ -1775,6 +3235,12 @@ func TestValidateApps_Go_PackageNameAndVersion(t *testing.T) {
 func TestValidateRuntimes_Go_Valid(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
 			Kind:    RuntimeKindGo,
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
@@ -1792,8 +3258,16 @@ func TestValidateRuntimes_Go_Valid(t *testing.T) {
 func TestValidateRuntimes_Go_MissingConfig(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind: RuntimeKindGo,
-			Mode: RuntimeModeManaged,
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
 		},
 	}
 
@@ -1809,9 +3283,16 @@ func TestValidateRuntimes_Go_MissingConfig(t *testing.T) {
 func TestValidateRuntimes_Go_MissingGoVersion(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind: RuntimeKindGo,
-			Mode: RuntimeModeManaged,
-			Go:   &RuntimeConfigGo{},
+			Managed: nil,
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeManaged,
+			Go:      &RuntimeConfigGo{GoVersion: ""},
 		},
 	}
 
@@ -1839,8 +3320,15 @@ func TestValidateRuntimes_Go_InvalidGoVersion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			runtimes := MapOfRuntimes{
 				"go": {
-					Kind: RuntimeKindGo,
-					Mode: RuntimeModeManaged,
+					Managed: nil,
+					System:  nil,
+					Bun:     nil,
+					Node:    nil,
+					UV:      nil,
+					JVM:     nil,
+					PNPM:    nil,
+					Kind:    RuntimeKindGo,
+					Mode:    RuntimeModeManaged,
 					Go: &RuntimeConfigGo{
 						GoVersion: tt.goVersion,
 					},
@@ -1873,6 +3361,12 @@ func TestValidateRuntimes_Go_ValidVersionFormats(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			runtimes := MapOfRuntimes{
 				"go": {
+					System:  nil,
+					Bun:     nil,
+					Node:    nil,
+					UV:      nil,
+					JVM:     nil,
+					PNPM:    nil,
 					Kind:    RuntimeKindGo,
 					Mode:    RuntimeModeManaged,
 					Managed: testManagedConfig(),
@@ -1897,17 +3391,23 @@ func TestValidateRuntimes_Go_SystemModeWithoutGoVersion(t *testing.T) {
 		goCfg *RuntimeConfigGo
 	}{
 		{"nil go config", nil},
-		{"empty goVersion", &RuntimeConfigGo{}},
+		{"empty goVersion", &RuntimeConfigGo{GoVersion: ""}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			runtimes := MapOfRuntimes{
 				"go": {
-					Kind:   RuntimeKindGo,
-					Mode:   RuntimeModeSystem,
-					System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
-					Go:     tt.goCfg,
+					Managed: nil,
+					Bun:     nil,
+					Node:    nil,
+					UV:      nil,
+					JVM:     nil,
+					PNPM:    nil,
+					Kind:    RuntimeKindGo,
+					Mode:    RuntimeModeSystem,
+					System:  &RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/go"},
+					Go:      tt.goCfg,
 				},
 			}
 
@@ -1922,10 +3422,16 @@ func TestValidateRuntimes_Go_SystemModeInvalidGoVersion(t *testing.T) {
 	// When goVersion IS provided in system mode it must still be valid.
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind:   RuntimeKindGo,
-			Mode:   RuntimeModeSystem,
-			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
-			Go:     &RuntimeConfigGo{GoVersion: "../../evil"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeSystem,
+			System:  &RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/go"},
+			Go:      &RuntimeConfigGo{GoVersion: "../../evil"},
 		},
 	}
 
@@ -1941,9 +3447,16 @@ func TestValidateRuntimes_Go_SystemModeInvalidGoVersion(t *testing.T) {
 func TestValidateApps_GoSystemModeWarning_NoGoConfig(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind:   RuntimeKindGo,
-			Mode:   RuntimeModeSystem,
-			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			Go:      nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeSystem,
+			System:  &RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/go"},
 		},
 	}
 	apps := binmanager.MapOfApps{}
@@ -1967,10 +3480,16 @@ func TestValidateApps_GoSystemModeWarning_NoGoConfig(t *testing.T) {
 func TestValidateApps_GoSystemModeWarning_EmptyGoVersion(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind:   RuntimeKindGo,
-			Mode:   RuntimeModeSystem,
-			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
-			Go:     &RuntimeConfigGo{GoVersion: ""},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeSystem,
+			System:  &RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/go"},
+			Go:      &RuntimeConfigGo{GoVersion: ""},
 		},
 	}
 	apps := binmanager.MapOfApps{}
@@ -1987,10 +3506,16 @@ func TestValidateApps_GoSystemModeWarning_EmptyGoVersion(t *testing.T) {
 func TestValidateApps_GoSystemModeNoWarning_WithGoVersion(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
-			Kind:   RuntimeKindGo,
-			Mode:   RuntimeModeSystem,
-			System: &RuntimeConfigSystem{Command: "/usr/bin/go"},
-			Go:     &RuntimeConfigGo{GoVersion: "1.22.0"},
+			Managed: nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
+			Kind:    RuntimeKindGo,
+			Mode:    RuntimeModeSystem,
+			System:  &RuntimeConfigSystem{SystemVersion: "", Command: "/usr/bin/go"},
+			Go:      &RuntimeConfigGo{GoVersion: "1.22.0"},
 		},
 	}
 	apps := binmanager.MapOfApps{}
@@ -2007,6 +3532,12 @@ func TestValidateApps_GoSystemModeNoWarning_WithGoVersion(t *testing.T) {
 func TestValidateApps_GoManagedModeNoWarning(t *testing.T) {
 	runtimes := MapOfRuntimes{
 		"go": {
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
 			Kind:    RuntimeKindGo,
 			Mode:    RuntimeModeManaged,
 			Managed: testManagedConfig(),
@@ -2029,7 +3560,7 @@ func makeTestInlineArchive(t *testing.T) string {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	content := []byte("module.exports = {};")
-	if err := tw.WriteHeader(&tar.Header{Name: "config.js", Mode: 0o644, Size: int64(len(content))}); err != nil {
+	if err := tw.WriteHeader(&tar.Header{Typeflag: 0, Linkname: "", Uid: 0, Gid: 0, Uname: "", Gname: "", ModTime: zerovalue_time.Time{}, AccessTime: zerovalue_time.Time{}, ChangeTime: zerovalue_time.Time{}, Devmajor: 0, Devminor: 0, PAXRecords: nil, Format: 0, Name: "config.js", Mode: 0o644, Size: int64(len(content))}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tw.Write(content); err != nil {
@@ -2048,9 +3579,27 @@ func makeTestInlineArchive(t *testing.T) string {
 func TestValidateApps_Archives_ValidInline(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Prepare:            nil,
+			Required:           true,
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"dist": {Inline: makeTestInlineArchive(t)},
+				"dist": {URL: "", Hash: "", Format: "", Inline: makeTestInlineArchive(t)},
 			},
 			Links: map[string]string{
 				"eslint-config": "dist",
@@ -2066,9 +3615,28 @@ func TestValidateApps_Archives_ValidInline(t *testing.T) {
 func TestValidateApps_Archives_ValidExternal(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Prepare:            nil,
+			Required:           true,
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"dist": {
+					Inline: "",
 					URL:    "https://example.com/dist.tar.gz",
 					Hash:   "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 					Format: binmanager.BinContentTypeTarGz,
@@ -2088,8 +3656,28 @@ func TestValidateApps_Archives_ValidExternal(t *testing.T) {
 func TestValidateApps_Archives_EmptyName(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"": {Inline: makeTestInlineArchive(t)},
+				"": {URL: "", Hash: "", Format: "", Inline: makeTestInlineArchive(t)},
 			},
 		},
 	}
@@ -2106,8 +3694,28 @@ func TestValidateApps_Archives_EmptyName(t *testing.T) {
 func TestValidateApps_Archives_PathTraversal(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"../../evil": {Inline: makeTestInlineArchive(t)},
+				"../../evil": {URL: "", Hash: "", Format: "", Inline: makeTestInlineArchive(t)},
 			},
 		},
 	}
@@ -2124,8 +3732,28 @@ func TestValidateApps_Archives_PathTraversal(t *testing.T) {
 func TestValidateApps_Archives_AbsolutePath(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"/etc/config": {Inline: makeTestInlineArchive(t)},
+				"/etc/config": {URL: "", Hash: "", Format: "", Inline: makeTestInlineArchive(t)},
 			},
 		},
 	}
@@ -2142,6 +3770,26 @@ func TestValidateApps_Archives_AbsolutePath(t *testing.T) {
 func TestValidateApps_Archives_NilSpec(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"dist": nil,
 			},
@@ -2160,8 +3808,28 @@ func TestValidateApps_Archives_NilSpec(t *testing.T) {
 func TestValidateApps_Archives_NeitherInlineNorExternal(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"dist": {},
+				"dist": {Inline: "", URL: "", Hash: "", Format: ""},
 			},
 		},
 	}
@@ -2178,8 +3846,30 @@ func TestValidateApps_Archives_NeitherInlineNorExternal(t *testing.T) {
 func TestValidateApps_Archives_BothInlineAndExternal(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"dist": {
+					Hash:   "",
+					Format: "",
 					Inline: makeTestInlineArchive(t),
 					URL:    "https://example.com/dist.tar.gz",
 				},
@@ -2199,8 +3889,28 @@ func TestValidateApps_Archives_BothInlineAndExternal(t *testing.T) {
 func TestValidateApps_Archives_InlineMissingPrefix(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"dist": {Inline: "invalid-data"},
+				"dist": {URL: "", Hash: "", Format: "", Inline: "invalid-data"},
 			},
 		},
 	}
@@ -2217,8 +3927,28 @@ func TestValidateApps_Archives_InlineMissingPrefix(t *testing.T) {
 func TestValidateApps_Archives_InlineInvalidContent(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"dist": {Inline: "tar.br:not-valid-base64!!!"},
+				"dist": {URL: "", Hash: "", Format: "", Inline: "tar.br:not-valid-base64!!!"},
 			},
 		},
 	}
@@ -2235,8 +3965,30 @@ func TestValidateApps_Archives_InlineInvalidContent(t *testing.T) {
 func TestValidateApps_Archives_ExternalMissingHash(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"dist": {
+					Inline: "",
+					Hash:   "",
 					URL:    "https://example.com/dist.tar.gz",
 					Format: binmanager.BinContentTypeTarGz,
 				},
@@ -2256,8 +4008,29 @@ func TestValidateApps_Archives_ExternalMissingHash(t *testing.T) {
 func TestValidateApps_Archives_ExternalInvalidHash(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"dist": {
+					Inline: "",
 					URL:    "https://example.com/dist.tar.gz",
 					Hash:   "not-a-valid-sha256",
 					Format: binmanager.BinContentTypeTarGz,
@@ -2278,10 +4051,32 @@ func TestValidateApps_Archives_ExternalInvalidHash(t *testing.T) {
 func TestValidateApps_Archives_ExternalMissingFormat(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"dist": {
-					URL:  "https://example.com/dist.tar.gz",
-					Hash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+					Inline: "",
+					Format: "",
+					URL:    "https://example.com/dist.tar.gz",
+					Hash:   "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				},
 			},
 		},
@@ -2299,8 +4094,29 @@ func TestValidateApps_Archives_ExternalMissingFormat(t *testing.T) {
 func TestValidateApps_Archives_ExternalInvalidFormat(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"dist": {
+					Inline: "",
 					URL:    "https://example.com/dist.zip",
 					Hash:   "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 					Format: binmanager.BinContentTypeZip,
@@ -2321,9 +4137,28 @@ func TestValidateApps_Archives_ExternalInvalidFormat(t *testing.T) {
 func TestValidateApps_Archives_BinaryAppRejected(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"tool": {
-			Binary: &binmanager.AppConfigBinary{},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Prepare:            nil,
+			Binary:             &binmanager.AppConfigBinary{Binaries: nil, Version: ""},
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"dist": {Inline: makeTestInlineArchive(t)},
+				"dist": {URL: "", Hash: "", Format: "", Inline: makeTestInlineArchive(t)},
 			},
 		},
 	}
@@ -2340,9 +4175,27 @@ func TestValidateApps_Archives_BinaryAppRejected(t *testing.T) {
 func TestValidateApps_Archives_LinkReferencesArchive(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Prepare:            nil,
+			Required:           true,
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"dist": {Inline: makeTestInlineArchive(t)},
+				"dist": {URL: "", Hash: "", Format: "", Inline: makeTestInlineArchive(t)},
 			},
 			Links: map[string]string{
 				"eslint-config": "dist",
@@ -2358,9 +4211,27 @@ func TestValidateApps_Archives_LinkReferencesArchive(t *testing.T) {
 func TestValidateApps_Archives_LinkWithRelativePath(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Prepare:            nil,
+			Required:           true,
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"dist": {Inline: makeTestInlineArchive(t)},
+				"dist": {URL: "", Hash: "", Format: "", Inline: makeTestInlineArchive(t)},
 			},
 			Links: map[string]string{
 				"eslint-config": "dist/eslint.config.js",
@@ -2377,12 +4248,29 @@ func TestValidateApps_Archives_LinkWithRelativePath(t *testing.T) {
 func TestValidateApps_Archives_LinkReferencesFileNotArchive(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Prepare:            nil,
+			Required:           true,
 			Files: map[string]string{
 				"config.js": "module.exports = {};",
 			},
 			Archives: map[string]*binmanager.ArchiveSpec{
-				"dist": {Inline: makeTestInlineArchive(t)},
+				"dist": {URL: "", Hash: "", Format: "", Inline: makeTestInlineArchive(t)},
 			},
 			Links: map[string]string{
 				"eslint-config": "config.js",
@@ -2403,7 +4291,8 @@ func TestValidateApps_Archives_LinkReferencesFileNotArchive(t *testing.T) {
 func TestValidateBundles_Valid(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
 		"agent-skills": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"agents.md": "# Agent instructions",
 			},
@@ -2421,9 +4310,11 @@ func TestValidateBundles_Valid(t *testing.T) {
 func TestValidateBundles_ValidWithArchives(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
 		"skills": {
+			Files:   nil,
 			Version: "2.0",
 			Archives: map[string]*binmanager.ArchiveSpec{
 				"data": {
+					Inline: "",
 					URL:    "https://example.com/data.tar.gz",
 					Hash:   "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 					Format: binmanager.BinContentTypeTarGz,
@@ -2443,7 +4334,9 @@ func TestValidateBundles_ValidWithArchives(t *testing.T) {
 func TestValidateBundles_EmptyBundleNoFilesNoArchives(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
 		"empty": {
-			Version: "1.0",
+			Files:    nil,
+			Archives: nil,
+			Version:  "1.0",
 			Links: map[string]string{
 				"some-link": "file.txt",
 			},
@@ -2462,6 +4355,26 @@ func TestValidateBundles_EmptyBundleNoFilesNoArchives(t *testing.T) {
 func TestValidateBundles_LinkNameCollisionWithApp(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Links: map[string]string{
 				"shared-link": "config.js",
 			},
@@ -2470,7 +4383,8 @@ func TestValidateBundles_LinkNameCollisionWithApp(t *testing.T) {
 
 	bundles := binmanager.MapOfBundles{
 		"my-bundle": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"data.txt": "content",
 			},
@@ -2492,7 +4406,8 @@ func TestValidateBundles_LinkNameCollisionWithApp(t *testing.T) {
 func TestValidateBundles_LinkNameCollisionBetweenBundles(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
 		"bundle-a": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"a.txt": "content a",
 			},
@@ -2501,7 +4416,8 @@ func TestValidateBundles_LinkNameCollisionBetweenBundles(t *testing.T) {
 			},
 		},
 		"bundle-b": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"b.txt": "content b",
 			},
@@ -2523,7 +4439,8 @@ func TestValidateBundles_LinkNameCollisionBetweenBundles(t *testing.T) {
 func TestValidateBundles_LinkPathTraversal(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
 		"bad-bundle": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"data.txt": "content",
 			},
@@ -2545,7 +4462,8 @@ func TestValidateBundles_LinkPathTraversal(t *testing.T) {
 func TestValidateBundles_EmptyLinkPath(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
 		"bad-bundle": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"data.txt": "content",
 			},
@@ -2576,7 +4494,25 @@ func TestValidateBundles_EmptyMap(t *testing.T) {
 func TestValidateBundles_ExistingAppValidationUnaffected(t *testing.T) {
 	apps := binmanager.MapOfApps{
 		"eslint": {
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Files: map[string]string{
 				"eslint-base.js": "module.exports = {};",
 			},
@@ -2594,7 +4530,8 @@ func TestValidateBundles_ExistingAppValidationUnaffected(t *testing.T) {
 func TestValidateBundles_DotLinkPath(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
 		"full-dir-bundle": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"readme.md": "# Hello",
 			},
@@ -2612,7 +4549,8 @@ func TestValidateBundles_DotLinkPath(t *testing.T) {
 func TestValidateBundles_AbsoluteLinkName(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
 		"bad-bundle": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"data.txt": "content",
 			},
@@ -2634,7 +4572,8 @@ func TestValidateBundles_AbsoluteLinkName(t *testing.T) {
 func TestValidateBundles_ReservedGitignoreLinkName(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
 		"bad-bundle": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"data.txt": "content",
 			},
@@ -2656,7 +4595,8 @@ func TestValidateBundles_ReservedGitignoreLinkName(t *testing.T) {
 func TestValidateBundles_ReservedTypeDefinitionsLinkName(t *testing.T) {
 	bundles := binmanager.MapOfBundles{
 		"bad-bundle": {
-			Version: "1.0",
+			Archives: nil,
+			Version:  "1.0",
 			Files: map[string]string{
 				"data.txt": "content",
 			},
@@ -2688,7 +4628,7 @@ func TestValidateInit_ValidScopes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			managedConfigs := MapOfManagedConfigs{
-				"test.yml": {Scope: tt.scope},
+				"test.yml": {ProjectTypes: nil, Tools: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Scope: tt.scope},
 			}
 			if err := ValidateManagedConfigs(managedConfigs); err != nil {
 				t.Errorf("ValidateManagedConfigs() unexpected error for scope %q: %v", tt.scope, err)
@@ -2699,7 +4639,7 @@ func TestValidateInit_ValidScopes(t *testing.T) {
 
 func TestValidateInit_UnknownScope(t *testing.T) {
 	managedConfigs := MapOfManagedConfigs{
-		"test.yml": {Scope: "invalid-scope"},
+		"test.yml": {ProjectTypes: nil, Tools: nil, OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Scope: "invalid-scope"},
 	}
 	err := ValidateManagedConfigs(managedConfigs)
 	if err == nil {
@@ -2712,15 +4652,15 @@ func TestValidateInit_UnknownScope(t *testing.T) {
 
 func TestValidateInitToolRefs(t *testing.T) {
 	tools := MapOfTools{
-		"golangci-lint": {Name: "golangci-lint"},
-		"prettier":      {Name: "prettier"},
+		"golangci-lint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"},
+		"prettier":      {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "prettier"},
 	}
 
 	t.Run("known tool refs pass", func(t *testing.T) {
 		managedConfigs := MapOfManagedConfigs{
-			".golangci.yml": {Tools: []string{"golangci-lint"}},
-			".prettierrc":   {Tools: []string{"prettier"}},
-			".gitignore":    {},
+			".golangci.yml": {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"golangci-lint"}},
+			".prettierrc":   {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"prettier"}},
+			".gitignore":    {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil},
 		}
 		if err := ValidateManagedConfigToolRefs(managedConfigs, tools); err != nil {
 			t.Errorf("expected no error, got %v", err)
@@ -2729,7 +4669,7 @@ func TestValidateInitToolRefs(t *testing.T) {
 
 	t.Run("unknown tool ref is an error", func(t *testing.T) {
 		managedConfigs := MapOfManagedConfigs{
-			".golangci.yml": {Tools: []string{"golangci"}},
+			".golangci.yml": {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"golangci"}},
 		}
 		err := ValidateManagedConfigToolRefs(managedConfigs, tools)
 		if err == nil {
@@ -2742,8 +4682,8 @@ func TestValidateInitToolRefs(t *testing.T) {
 
 	t.Run("multiple unknown refs are reported in config-name order", func(t *testing.T) {
 		managedConfigs := MapOfManagedConfigs{
-			"b.yml": {Tools: []string{"nope"}},
-			"a.yml": {Tools: []string{"bogus"}},
+			"b.yml": {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"nope"}},
+			"a.yml": {ProjectTypes: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: nil, Tools: []string{"bogus"}},
 		}
 		err := ValidateManagedConfigToolRefs(managedConfigs, tools)
 		if err == nil {
@@ -2760,11 +4700,30 @@ func TestValidateTools(t *testing.T) {
 	t.Run("supported placeholders pass", func(t *testing.T) {
 		tools := MapOfTools{
 			"golangci-lint": {
-				Name: "golangci-lint",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil,
+				Name:         "golangci-lint",
 				Operations: map[OperationType]ToolOperation{
 					OpFix: {
-						Args: []string{"run", "--fix", "{cwd}/x", "{files}", "{file}", "{root}"},
-						Env:  map[string]string{"GOLANGCI_LINT_CACHE": "{toolCache}"},
+						App:               "",
+						Scope:             "",
+						Arity:             "",
+						Granularity:       "",
+						Globs:             nil,
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						Args:              []string{"run", "--fix", "{cwd}/x", "{files}", "{file}", "{root}"},
+						Env:               map[string]string{"GOLANGCI_LINT_CACHE": "{toolCache}"},
 					},
 				},
 			},
@@ -2776,9 +4735,15 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("unsupported placeholder in args fails", func(t *testing.T) {
 		tools := MapOfTools{
-			"t": {Operations: map[OperationType]ToolOperation{
-				OpLint: {Args: []string{"--cache={toolcache}"}}, // wrong case
-			}},
+			"t": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					OpLint: {App: "", Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Args: []string{"--cache={toolcache}"}}, // wrong case
+				},
+			},
 		}
 		err := ValidateTools(tools, nil, nil)
 		if err == nil {
@@ -2791,9 +4756,15 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("unsupported placeholder in env fails", func(t *testing.T) {
 		tools := MapOfTools{
-			"t": {Operations: map[OperationType]ToolOperation{
-				OpFix: {Env: map[string]string{"CACHE": "{cache}"}},
-			}},
+			"t": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					OpFix: {App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Env: map[string]string{"CACHE": "{cache}"}},
+				},
+			},
 		}
 		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "{cache}") {
@@ -2803,9 +4774,15 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("args-only placeholder rejected in env", func(t *testing.T) {
 		tools := MapOfTools{
-			"t": {Operations: map[OperationType]ToolOperation{
-				OpFix: {Env: map[string]string{"F": "{file}"}},
-			}},
+			"t": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					OpFix: {App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Env: map[string]string{"F": "{file}"}},
+				},
+			},
 		}
 		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "{file}") {
@@ -2815,12 +4792,33 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("shell globs and go templates are not flagged", func(t *testing.T) {
 		tools := MapOfTools{
-			"t": {Operations: map[OperationType]ToolOperation{
-				OpLint: {
-					Args: []string{"**/*.{js,ts}", "--format={{.Path}}", "{{Field}}"},
-					Env:  map[string]string{"GLOB": "a.{go,mod}"},
+			"t": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					OpLint: {
+						App:               "",
+						Scope:             "",
+						Arity:             "",
+						Granularity:       "",
+						Globs:             nil,
+						ExcludeGlobs:      nil,
+						Priority:          0,
+						Cache:             nil,
+						InvalidateOn:      nil,
+						InheritEnv:        nil,
+						FailOn:            "",
+						Input:             "",
+						LSP:               nil,
+						Output:            "",
+						ManagedConfigRefs: nil,
+						Args:              []string{"**/*.{js,ts}", "--format={{.Path}}", "{{Field}}"},
+						Env:               map[string]string{"GLOB": "a.{go,mod}"},
+					},
 				},
-			}},
+			},
 		}
 		if err := ValidateTools(tools, nil, nil); err != nil {
 			t.Errorf("globs/templates should not be flagged, got: %v", err)
@@ -2829,12 +4827,24 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("valid input/output modes pass", func(t *testing.T) {
 		tools := MapOfTools{
-			"fmt": {Operations: map[OperationType]ToolOperation{
-				OpFix: {Input: ToolInputStdin, Output: ToolOutputStdout, Scope: ToolScopePerFile},
-			}},
-			"lint": {Operations: map[OperationType]ToolOperation{
-				OpLint: {Input: ToolInputFile, Output: ToolOutputInplace},
-			}},
+			"fmt": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					OpFix: {App: "", Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", LSP: nil, ManagedConfigRefs: nil, Input: ToolInputStdin, Output: ToolOutputStdout, Scope: ToolScopePerFile},
+				},
+			},
+			"lint": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					OpLint: {App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", LSP: nil, ManagedConfigRefs: nil, Input: ToolInputFile, Output: ToolOutputInplace},
+				},
+			},
 		}
 		if err := ValidateTools(tools, nil, nil); err != nil {
 			t.Errorf("valid input/output modes should pass, got: %v", err)
@@ -2843,10 +4853,16 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("stdin/stdout without per-file scope fails", func(t *testing.T) {
 		tools := MapOfTools{
-			"fmt": {Operations: map[OperationType]ToolOperation{
-				// No scope → batched → formatting would silently no-op.
-				OpFix: {Input: ToolInputStdin, Output: ToolOutputStdout},
-			}},
+			"fmt": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					// No scope → batched → formatting would silently no-op.
+					OpFix: {App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", LSP: nil, ManagedConfigRefs: nil, Input: ToolInputStdin, Output: ToolOutputStdout},
+				},
+			},
 		}
 		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "require scope") {
@@ -2856,9 +4872,15 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("stdout with repository scope fails", func(t *testing.T) {
 		tools := MapOfTools{
-			"fmt": {Operations: map[OperationType]ToolOperation{
-				OpFix: {Output: ToolOutputStdout, Scope: ToolScopeRepository},
-			}},
+			"fmt": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					OpFix: {App: "", Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, ManagedConfigRefs: nil, Output: ToolOutputStdout, Scope: ToolScopeRepository},
+				},
+			},
 		}
 		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "require scope") {
@@ -2870,9 +4892,15 @@ func TestValidateTools(t *testing.T) {
 		// The stdin/stdout contract feeds one file per process. {files} infers
 		// arity "many", which is one process for the whole list.
 		tools := MapOfTools{
-			"fmt": {Operations: map[OperationType]ToolOperation{
-				OpFix: {Output: ToolOutputStdout, Scope: ToolScopePerFile, Args: []string{"{files}"}},
-			}},
+			"fmt": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					OpFix: {App: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, ManagedConfigRefs: nil, Output: ToolOutputStdout, Scope: ToolScopePerFile, Args: []string{"{files}"}},
+				},
+			},
 		}
 		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), `infer arity "many"`) {
@@ -2882,10 +4910,16 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("stdout output on a lint operation fails", func(t *testing.T) {
 		tools := MapOfTools{
-			"lint": {Operations: map[OperationType]ToolOperation{
-				// output:stdout rewrites files; never allowed on read-only lint.
-				OpLint: {Output: ToolOutputStdout, Scope: ToolScopePerFile},
-			}},
+			"lint": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					// output:stdout rewrites files; never allowed on read-only lint.
+					OpLint: {App: "", Args: nil, Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, ManagedConfigRefs: nil, Output: ToolOutputStdout, Scope: ToolScopePerFile},
+				},
+			},
 		}
 		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "only valid on the \"fix\" operation") {
@@ -2895,9 +4929,15 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("invalid input mode fails", func(t *testing.T) {
 		tools := MapOfTools{
-			"t": {Operations: map[OperationType]ToolOperation{
-				OpFix: {Input: ToolInputMode("pipe")},
-			}},
+			"t": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					OpFix: {App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Input: ToolInputMode("pipe")},
+				},
+			},
 		}
 		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "invalid input mode") {
@@ -2907,9 +4947,15 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("invalid output mode fails", func(t *testing.T) {
 		tools := MapOfTools{
-			"t": {Operations: map[OperationType]ToolOperation{
-				OpLint: {Output: ToolOutputMode("file")},
-			}},
+			"t": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					OpLint: {App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, ManagedConfigRefs: nil, Output: ToolOutputMode("file")},
+				},
+			},
 		}
 		err := ValidateTools(tools, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), "invalid output mode") {
@@ -2920,15 +4966,18 @@ func TestValidateTools(t *testing.T) {
 	t.Run("valid outputParser reference passes", func(t *testing.T) {
 		tools := MapOfTools{
 			"hadolint": {
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
 				Name:         "hadolint",
 				OutputParser: &OutputParser{Module: "hadolint", Parser: "hadolint"},
 				Operations: map[OperationType]ToolOperation{
-					OpLint: {Args: []string{"{file}"}},
+					OpLint: {App: "", Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Args: []string{"{file}"}},
 				},
 			},
 		}
 		parsers := MapOfParsers{
-			"hadolint": {URL: "https://example.com/h.wasm", Hash: strings.Repeat("a", 64)},
+			"hadolint": {OCI: nil, URL: "https://example.com/h.wasm", Hash: strings.Repeat("a", 64)},
 		}
 		if err := ValidateTools(tools, parsers, nil); err != nil {
 			t.Errorf("ValidateTools() = %v, want nil", err)
@@ -2938,10 +4987,13 @@ func TestValidateTools(t *testing.T) {
 	t.Run("dangling outputParser reference fails", func(t *testing.T) {
 		tools := MapOfTools{
 			"hadolint": {
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
 				Name:         "hadolint",
 				OutputParser: &OutputParser{Module: "missing", Parser: "missing"},
 				Operations: map[OperationType]ToolOperation{
-					OpLint: {Args: []string{"{file}"}},
+					OpLint: {App: "", Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Args: []string{"{file}"}},
 				},
 			},
 		}
@@ -2956,9 +5008,15 @@ func TestValidateTools(t *testing.T) {
 
 	t.Run("empty outputParser is ignored", func(t *testing.T) {
 		tools := MapOfTools{
-			"t": {Operations: map[OperationType]ToolOperation{
-				OpFix: {Args: []string{"{file}"}},
-			}},
+			"t": {
+				Name:         "",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil, Operations: map[OperationType]ToolOperation{
+					OpFix: {App: "", Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Args: []string{"{file}"}},
+				},
+			},
 		}
 		if err := ValidateTools(tools, nil, nil); err != nil {
 			t.Errorf("ValidateTools() = %v, want nil", err)

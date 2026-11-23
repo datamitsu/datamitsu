@@ -23,18 +23,30 @@ import (
 func makeTestGoRuntimes() config.MapOfRuntimes {
 	return config.MapOfRuntimes{
 		"go": {
-			Kind: config.RuntimeKindGo,
-			Mode: config.RuntimeModeManaged,
-			Go:   &config.RuntimeConfigGo{GoVersion: "1.22.0"},
+			System: nil,
+			Bun:    nil,
+			Node:   nil,
+			UV:     nil,
+			JVM:    nil,
+			PNPM:   nil,
+			Kind:   config.RuntimeKindGo,
+			Mode:   config.RuntimeModeManaged,
+			Go:     &config.RuntimeConfigGo{GoVersion: "1.22.0"},
 			Managed: &config.RuntimeConfigManaged{
 				Binaries: binmanager.MapOfBinaries{
 					syslist.OsTypeDarwin: {
 						syslist.ArchTypeAmd64: {"unknown": binmanager.BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         "https://example.com/go-darwin-amd64.tar.gz",
 							Hash:        "go123",
 							ContentType: binmanager.BinContentTypeTarGz,
 						}},
 						syslist.ArchTypeArm64: {"unknown": binmanager.BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         "https://example.com/go-darwin-arm64.tar.gz",
 							Hash:        "go123arm",
 							ContentType: binmanager.BinContentTypeTarGz,
@@ -42,6 +54,9 @@ func makeTestGoRuntimes() config.MapOfRuntimes {
 					},
 					syslist.OsTypeLinux: {
 						syslist.ArchTypeAmd64: {testLibc: binmanager.BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         "https://example.com/go-linux-amd64.tar.gz",
 							Hash:        "go456",
 							ContentType: binmanager.BinContentTypeTarGz,
@@ -385,6 +400,7 @@ func TestInstallGoApp_MissingLockFileIsRejected(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
 
 	appConfig := &binmanager.AppConfigGo{
+		LockFile:    "",
 		PackageName: "golang.org/x/vuln/cmd/govulncheck",
 		Version:     "v1.1.4",
 		Runtime:     "go",
@@ -404,6 +420,12 @@ func TestInstallGoAppCleansPartialTargetAfterInvalidLock(t *testing.T) {
 	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
 	runtimes := config.MapOfRuntimes{
 		"go": {
+			System:  nil,
+			Bun:     nil,
+			Node:    nil,
+			UV:      nil,
+			JVM:     nil,
+			PNPM:    nil,
 			Kind:    config.RuntimeKindGo,
 			Mode:    config.RuntimeModeManaged,
 			Go:      &config.RuntimeConfigGo{GoVersion: "1.22.0"},
@@ -518,7 +540,7 @@ func TestGetGoGenEnvVars(t *testing.T) {
 
 func TestGenerateGoLockFiles_MissingPackageName(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
-	appConfig := &binmanager.AppConfigGo{Version: "v1.1.4", Runtime: "go"}
+	appConfig := &binmanager.AppConfigGo{PackageName: "", LockFile: "", Version: "v1.1.4", Runtime: "go"}
 
 	err := rm.GenerateGoLockFiles(context.Background(), "govulncheck", appConfig, t.TempDir(), 0)
 	if err == nil {
@@ -531,7 +553,7 @@ func TestGenerateGoLockFiles_MissingPackageName(t *testing.T) {
 
 func TestGenerateGoLockFiles_MissingVersion(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
-	appConfig := &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Runtime: "go"}
+	appConfig := &binmanager.AppConfigGo{Version: "", LockFile: "", PackageName: "golang.org/x/vuln/cmd/govulncheck", Runtime: "go"}
 
 	err := rm.GenerateGoLockFiles(context.Background(), "govulncheck", appConfig, t.TempDir(), 0)
 	if err == nil {
@@ -545,6 +567,7 @@ func TestGenerateGoLockFiles_MissingVersion(t *testing.T) {
 func TestGenerateGoLockFiles_InvalidRuntime(t *testing.T) {
 	rm := New(makeTestGoRuntimes())
 	appConfig := &binmanager.AppConfigGo{
+		LockFile:    "",
 		PackageName: "golang.org/x/vuln/cmd/govulncheck",
 		Version:     "v1.1.4",
 		Runtime:     "nonexistent",
@@ -691,6 +714,7 @@ func TestGetGoCommandInfo(t *testing.T) {
 
 	t.Run("returns go command info", func(t *testing.T) {
 		appConfig := &binmanager.AppConfigGo{
+			LockFile:    "",
 			PackageName: "golang.org/x/vuln/cmd/govulncheck",
 			Version:     "v1.1.4",
 			Runtime:     "go",
@@ -713,6 +737,7 @@ func TestGetGoCommandInfo(t *testing.T) {
 
 	t.Run("invalid runtime returns error", func(t *testing.T) {
 		appConfig := &binmanager.AppConfigGo{
+			LockFile:    "",
 			PackageName: "golang.org/x/vuln/cmd/govulncheck",
 			Version:     "v1.1.4",
 			Runtime:     "nonexistent",
@@ -724,6 +749,7 @@ func TestGetGoCommandInfo(t *testing.T) {
 
 	t.Run("deterministic paths", func(t *testing.T) {
 		appConfig := &binmanager.AppConfigGo{
+			LockFile:    "",
 			PackageName: "golang.org/x/vuln/cmd/govulncheck",
 			Version:     "v1.1.4",
 			Runtime:     "go",
@@ -742,8 +768,8 @@ func TestGetGoCommandInfo(t *testing.T) {
 	})
 
 	t.Run("different versions produce different paths", func(t *testing.T) {
-		config1 := &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.4", Runtime: "go"}
-		config2 := &binmanager.AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.5", Runtime: "go"}
+		config1 := &binmanager.AppConfigGo{LockFile: "", PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.4", Runtime: "go"}
+		config2 := &binmanager.AppConfigGo{LockFile: "", PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.5", Runtime: "go"}
 
 		info1, err := rm.GetGoCommandInfo("govulncheck", config1, nil, nil)
 		if err != nil {

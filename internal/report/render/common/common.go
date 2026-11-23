@@ -117,9 +117,9 @@ var (
 // Region for a location without a row.
 func RegionOf(loc report.Location, unit Span) Region {
 	if loc.Row <= 0 {
-		return Region{}
+		return Region{Line: 0, Col: 0, EndLine: 0, EndCol: 0}
 	}
-	r := Region{Line: loc.Row, EndLine: max(loc.EndRow, loc.Row)}
+	r := Region{Col: 0, EndCol: 0, Line: loc.Row, EndLine: max(loc.EndRow, loc.Row)}
 	span := unit(loc)
 	if !Precise(loc) || span == nil || span.Start <= 0 {
 		return r

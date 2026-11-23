@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
@@ -15,14 +16,30 @@ import (
 func finding(level diagnostic.Severity, failOn config.Severity, active bool, message string) diagnostic.Diagnostic {
 	reported := level <= diagnostic.Severity(failOn.Level())
 	return diagnostic.Diagnostic{
-		File: "/w/a.txt", Row: 1, Col: 1, Severity: level, Message: message,
+		EndRow:    0,
+		EndCol:    0,
+		Source:    "",
+		Code:      "",
+		URL:       "",
+		Baselined: false,
+		Anchor:    nil,
+		File:      "/w/a.txt", Row: 1, Col: 1, Severity: level, Message: message,
 		Reported: reported, Gates: reported && active,
 	}
 }
 
 func process(ok, active bool, failOn config.Severity, findings ...diagnostic.Diagnostic) tooling.ProcessResult {
 	return tooling.ProcessResult{
-		State: tooling.ProcessRan, Success: ok, GateActive: active, FailOn: failOn,
+		ID:              "",
+		Files:           nil,
+		ExitCode:        nil,
+		ParseError:      "",
+		Provenance:      "",
+		ParserModule:    "",
+		OutputTail:      nil,
+		DurationMs:      0,
+		ThresholdFailed: false,
+		State:           tooling.ProcessRan, Success: ok, GateActive: active, FailOn: failOn,
 		Extraction: tooling.ExtractionParsedFindings, Diagnostics: findings,
 	}
 }
@@ -70,7 +87,7 @@ func TestVisibleFindings(t *testing.T) {
 		},
 		{
 			"a process no gate saw shows what it always did",
-			tooling.ProcessResult{State: tooling.ProcessRan, Diagnostics: []diagnostic.Diagnostic{{Message: "m"}}},
+			tooling.ProcessResult{ID: "", Files: nil, ExitCode: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, State: tooling.ProcessRan, Diagnostics: []diagnostic.Diagnostic{{File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m"}}},
 			[]string{"m"},
 		},
 	}
@@ -101,8 +118,18 @@ func frameOf(t *testing.T, result tooling.ExecutionResult) string {
 	t.Helper()
 	t.Setenv("CI", "true")
 	group := toolExecutionGroup{
-		toolName: result.ToolName, totalRuns: 1, minTime: -1, maxTime: -1,
-		executions: []executionInstance{{result: result}},
+		scope:          "",
+		succeededRuns:  0,
+		failedRuns:     0,
+		totalTime:      0,
+		wallTime:       0,
+		minDir:         "",
+		maxDir:         "",
+		wallStart:      zerovalue_time.Time{},
+		wallEnd:        zerovalue_time.Time{},
+		firstSeenIndex: 0,
+		toolName:       result.ToolName, totalRuns: 1, minTime: -1, maxTime: -1,
+		executions: []executionInstance{{relativeDir: "", result: result}},
 	}
 	if result.Success {
 		group.succeededRuns = 1
@@ -121,7 +148,7 @@ func frameOf(t *testing.T, result tooling.ExecutionResult) string {
 func TestFramesFollowTheThreshold(t *testing.T) {
 	e, w := config.SeverityError, config.SeverityWarning
 	withProcesses := func(ok bool, failOn config.Severity, processes ...tooling.ProcessResult) tooling.ExecutionResult {
-		r := tooling.ExecutionResult{ToolName: "tool", Success: ok, ExitCode: 1, FailOn: failOn, Processes: processes}
+		r := tooling.ExecutionResult{TaskID: "", Output: "", Error: nil, Duration: 0, Command: "", WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, ParseFailed: false, Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", ToolName: "tool", Success: ok, ExitCode: 1, FailOn: failOn, Processes: processes}
 		for _, p := range processes {
 			r.Diagnostics = append(r.Diagnostics, p.Diagnostics...)
 		}
@@ -204,9 +231,9 @@ func TestFramesFollowTheThreshold(t *testing.T) {
 // those below the threshold, and a passed process shows none of them.
 func TestViewCountsBaselined(t *testing.T) {
 	e := config.SeverityError
-	held := diagnostic.Diagnostic{File: "/w/a.txt", Row: 1, Severity: diagnostic.SeverityError, Message: "old", Baselined: true}
+	held := diagnostic.Diagnostic{Col: 0, EndRow: 0, EndCol: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Anchor: nil, File: "/w/a.txt", Row: 1, Severity: diagnostic.SeverityError, Message: "old", Baselined: true}
 	proc := process(true, true, e, held, finding(diagnostic.SeverityWarning, e, true, "warn"))
-	v := viewOf(tooling.ExecutionResult{Success: true, Processes: []tooling.ProcessResult{proc}})
+	v := viewOf(tooling.ExecutionResult{ToolName: "", TaskID: "", Output: "", Error: nil, Duration: 0, Command: "", ExitCode: 0, WorkingDir: "", RelativeDir: "", Scope: "", Batch: false, Cancelled: false, FailureReason: 0, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FilesNotRun: 0, UnparsedFailures: nil, CapturedStdout: "", Diagnostics: nil, ParseFailed: false, FailOn: "", Files: nil, FileResults: nil, Cached: false, WholeUnit: false, UnitDir: "", Success: true, Processes: []tooling.ProcessResult{proc}})
 	if len(v.shown) != 0 || v.baselined != 1 || v.hidden.total() != 1 {
 		t.Errorf("view = %+v, want nothing shown, one baselined and one hidden", v)
 	}

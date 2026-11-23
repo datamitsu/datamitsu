@@ -13,25 +13,25 @@ func TestParse(t *testing.T) {
 		wantRepo string
 		wantErr  error
 	}{
-		{name: "ghcr", ref: "ghcr.io/datamitsu/datamitsu-parsers", wantHost: "ghcr.io", wantRepo: "datamitsu/datamitsu-parsers"},
-		{name: "ported localhost", ref: "localhost:5000/dm/parsers", wantHost: "localhost:5000", wantRepo: "dm/parsers"},
-		{name: "plain localhost", ref: "localhost/dm/parsers", wantHost: "localhost", wantRepo: "dm/parsers"},
-		{name: "corporate mirror", ref: "harbor.corp.example/dm/parsers", wantHost: "harbor.corp.example", wantRepo: "dm/parsers"},
-		{name: "deep path", ref: "ghcr.io/a/b/c/d", wantHost: "ghcr.io", wantRepo: "a/b/c/d"},
+		{wantErr: nil, name: "ghcr", ref: "ghcr.io/datamitsu/datamitsu-parsers", wantHost: "ghcr.io", wantRepo: "datamitsu/datamitsu-parsers"},
+		{wantErr: nil, name: "ported localhost", ref: "localhost:5000/dm/parsers", wantHost: "localhost:5000", wantRepo: "dm/parsers"},
+		{wantErr: nil, name: "plain localhost", ref: "localhost/dm/parsers", wantHost: "localhost", wantRepo: "dm/parsers"},
+		{wantErr: nil, name: "corporate mirror", ref: "harbor.corp.example/dm/parsers", wantHost: "harbor.corp.example", wantRepo: "dm/parsers"},
+		{wantErr: nil, name: "deep path", ref: "ghcr.io/a/b/c/d", wantHost: "ghcr.io", wantRepo: "a/b/c/d"},
 
 		// Syntax: the reference itself is malformed.
-		{name: "host only", ref: "ghcr.io", wantErr: ErrRefSyntax},
-		{name: "empty", ref: "", wantErr: ErrRefSyntax},
-		{name: "tag suffix", ref: "ghcr.io/a/b:latest", wantErr: ErrRefSyntax},
-		{name: "digest suffix", ref: "ghcr.io/a/b@sha256:abc", wantErr: ErrRefSyntax},
-		{name: "uppercase", ref: "GHCR.io/a/b", wantErr: ErrRefSyntax},
-		{name: "non-numeric port", ref: "ghcr.io:port/a/b", wantErr: ErrRefSyntax},
-		{name: "trailing slash", ref: "ghcr.io/a/", wantErr: ErrRefSyntax},
-		{name: "leading slash", ref: "/a/b", wantErr: ErrRefSyntax},
+		{wantHost: "", wantRepo: "", name: "host only", ref: "ghcr.io", wantErr: ErrRefSyntax},
+		{wantHost: "", wantRepo: "", name: "empty", ref: "", wantErr: ErrRefSyntax},
+		{wantHost: "", wantRepo: "", name: "tag suffix", ref: "ghcr.io/a/b:latest", wantErr: ErrRefSyntax},
+		{wantHost: "", wantRepo: "", name: "digest suffix", ref: "ghcr.io/a/b@sha256:abc", wantErr: ErrRefSyntax},
+		{wantHost: "", wantRepo: "", name: "uppercase", ref: "GHCR.io/a/b", wantErr: ErrRefSyntax},
+		{wantHost: "", wantRepo: "", name: "non-numeric port", ref: "ghcr.io:port/a/b", wantErr: ErrRefSyntax},
+		{wantHost: "", wantRepo: "", name: "trailing slash", ref: "ghcr.io/a/", wantErr: ErrRefSyntax},
+		{wantHost: "", wantRepo: "", name: "leading slash", ref: "/a/b", wantErr: ErrRefSyntax},
 
 		// Host: syntactically fine, but no registry host.
-		{name: "no host", ref: "owner/repo", wantErr: ErrRefNoHost},
-		{name: "single segment path", ref: "parsers/core", wantErr: ErrRefNoHost},
+		{wantHost: "", wantRepo: "", name: "no host", ref: "owner/repo", wantErr: ErrRefNoHost},
+		{wantHost: "", wantRepo: "", name: "single segment path", ref: "parsers/core", wantErr: ErrRefNoHost},
 	}
 
 	for _, tt := range tests {
@@ -79,8 +79,8 @@ func TestSplitTag(t *testing.T) {
 		// The bug this function exists for: cutting at the first colon made the
 		// port the tag, so --resolve-tag could never work with a ported host.
 		{name: "ported host", in: "localhost:5000/o/r:latest", wantRef: "localhost:5000/o/r", wantTag: "latest", wantOK: true},
-		{name: "ported host no tag", in: "localhost:5000/o/r", wantRef: "localhost:5000/o/r", wantOK: false},
-		{name: "no tag", in: "ghcr.io/a/b", wantRef: "ghcr.io/a/b", wantOK: false},
+		{wantTag: "", name: "ported host no tag", in: "localhost:5000/o/r", wantRef: "localhost:5000/o/r", wantOK: false},
+		{wantTag: "", name: "no tag", in: "ghcr.io/a/b", wantRef: "ghcr.io/a/b", wantOK: false},
 	}
 
 	for _, tt := range tests {

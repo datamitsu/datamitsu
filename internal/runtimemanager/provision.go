@@ -28,7 +28,13 @@ func (rm *RuntimeManager) dispatchAppInstall(ctx context.Context, name string, a
 		return false, nil
 	}
 	request := binmanager.ProvisionRequest{
-		StoreRoot: env.GetStorePath(), CacheRoot: env.GetCachePath(),
+		ToolCacheRoot:   "",
+		Bundles:         nil,
+		Names:           nil,
+		IncludeOptional: false,
+		Concurrency:     0,
+		FailOnError:     false,
+		StoreRoot:       env.GetStorePath(), CacheRoot: env.GetCachePath(),
 		Apps: binmanager.MapOfApps{name: app}, RuntimeDefinitions: rm.RuntimeDefinitions(),
 		Action: "install-runtime-app", AppName: name,
 	}

@@ -7,15 +7,17 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	zerovalue_atomic "sync/atomic"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/binmanager"
 	"github.com/datamitsu/datamitsu/internal/config"
 	"github.com/datamitsu/datamitsu/internal/diagnostic"
+	zerovalue_toolenv "github.com/datamitsu/datamitsu/internal/toolenv"
 )
 
 func sniffedAs(format string, diags ...diagnostic.Diagnostic) *ParseAnswer {
-	return &ParseAnswer{Diagnostics: diags, Recognized: true, Format: format, FormatParser: true}
+	return &ParseAnswer{Partial: false, Diagnostics: diags, Recognized: true, Format: format, FormatParser: true}
 }
 
 // TestTheParsersReadAnOutputInTurn pins the orchestration of §2.6: which
@@ -28,7 +30,7 @@ func TestTheParsersReadAnOutputInTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	unavailable := &ParserUnavailableError{Err: errors.New("module did not load")}
-	finding := diagnostic.Diagnostic{Message: "m", File: "real.c"}
+	finding := diagnostic.Diagnostic{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m", File: "real.c"}
 	cases := []struct {
 		name         string
 		declared     bool
@@ -43,92 +45,211 @@ func TestTheParsersReadAnOutputInTurn(t *testing.T) {
 		fallbackRuns int
 	}{
 		{
-			name: "a declared tool parser that recognized the output decides", declared: true,
-			parser: &fakeParser{diags: []diagnostic.Diagnostic{finding}}, stdout: "x",
+			fellBack:     nil,
+			readNothing:  nil,
+			fallbackRuns: 0,
+			name:         "a declared tool parser that recognized the output decides", declared: true,
+			parser: &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, diags: []diagnostic.Diagnostic{finding}}, stdout: "x",
 			want: ExtractionParsedFindings, provenance: ProvenanceParser, module: "core", findings: 1,
 		},
 		{
-			name: "a declared format parser", declared: true,
-			parser: &fakeParser{format: true}, stdout: "x",
+			findings:     0,
+			fellBack:     nil,
+			readNothing:  nil,
+			fallbackRuns: 0,
+			name:         "a declared format parser", declared: true,
+			parser: &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, format: true}, stdout: "x",
 			want: ExtractionParsedClean, provenance: ProvenanceFormat, module: "core",
 		},
 		{
-			name: "the fallback reads what the declared parser did not", declared: true,
-			parser: &fakeParser{unrecognized: true, fallback: sniffedAs("sarif", finding)}, stdout: "{}",
+			readNothing: nil,
+			name:        "the fallback reads what the declared parser did not", declared: true,
+			parser: &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, format: false, partial: false, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, unrecognized: true, fallback: sniffedAs("sarif", finding)}, stdout: "{}",
 			want: ExtractionParsedFindings, provenance: "fallback:sarif", module: EmbeddedParserModule, findings: 1,
 			fellBack: []string{"eslint/core/eslint->sarif"}, fallbackRuns: 1,
 		},
 		{
-			name: "neither recognizes the output of a declared parser", declared: true,
-			parser: &fakeParser{unrecognized: true}, stdout: "prose",
+			provenance: "",
+			module:     "",
+			findings:   0,
+			fellBack:   nil,
+			name:       "neither recognizes the output of a declared parser", declared: true,
+			parser: &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, unrecognized: true}, stdout: "prose",
 			want: ExtractionParseFailed, readNothing: []string{"eslint/core/eslint"}, fallbackRuns: 1,
 		},
 		{
-			name: "a parse error falls back and is reported by the parser alone", declared: true,
-			parser: &fakeParser{err: errors.New("boom"), fallback: sniffedAs("checkstyle-xml")}, stdout: "<checkstyle/>",
+			findings:    0,
+			readNothing: nil,
+			name:        "a parse error falls back and is reported by the parser alone", declared: true,
+			parser: &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, unrecognized: false, format: false, partial: false, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, err: errors.New("boom"), fallback: sniffedAs("checkstyle-xml")}, stdout: "<checkstyle/>",
 			want: ExtractionParsedClean, provenance: "fallback:checkstyle-xml", module: EmbeddedParserModule,
 			fellBack: []string{"eslint/core/eslint->checkstyle-xml"}, fallbackRuns: 1,
 		},
 		{
-			name: "an unavailable parser stays unavailable with the fallback's findings", declared: true,
-			parser: &fakeParser{err: unavailable, fallback: sniffedAs("sarif", finding)}, stdout: "{}",
+			readNothing: nil,
+			name:        "an unavailable parser stays unavailable with the fallback's findings", declared: true,
+			parser: &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, unrecognized: false, format: false, partial: false, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, err: unavailable, fallback: sniffedAs("sarif", finding)}, stdout: "{}",
 			want: ExtractionParserUnavailable, provenance: "fallback:sarif", module: EmbeddedParserModule, findings: 1,
 			fellBack: []string{"eslint/core/eslint->sarif"}, fallbackRuns: 1,
 		},
 		{
-			name:   "a tool without a parser, read by the fallback",
-			parser: &fakeParser{fallback: sniffedAs("gcc", finding)}, stdout: "real.c:1:1: error: m",
+			declared:    false,
+			fellBack:    nil,
+			readNothing: nil,
+			name:        "a tool without a parser, read by the fallback",
+			parser:      &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, fallback: sniffedAs("gcc", finding)}, stdout: "real.c:1:1: error: m",
 			want: ExtractionParsedFindings, provenance: "fallback:gcc", module: EmbeddedParserModule, findings: 1,
 			fallbackRuns: 1,
 		},
 		{
-			name:   "a tool without a parser whose output nothing recognizes",
-			parser: &fakeParser{}, stdout: "All good", want: ExtractionNone, fallbackRuns: 1,
+			declared:    false,
+			provenance:  "",
+			module:      "",
+			findings:    0,
+			fellBack:    nil,
+			readNothing: nil,
+			name:        "a tool without a parser whose output nothing recognizes",
+			parser:      &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil}, stdout: "All good", want: ExtractionNone, fallbackRuns: 1,
 		},
 		{
-			name:   "empty output is not sniffed",
-			parser: &fakeParser{fallback: sniffedAs("gcc", finding)}, stdout: " \n", want: ExtractionNone,
+			declared:     false,
+			provenance:   "",
+			module:       "",
+			findings:     0,
+			fellBack:     nil,
+			readNothing:  nil,
+			fallbackRuns: 0,
+			name:         "empty output is not sniffed",
+			parser:       &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, fallback: sniffedAs("gcc", finding)}, stdout: " \n", want: ExtractionNone,
 		},
 		{
-			name: "a line format naming no file that exists is prose",
-			parser: &fakeParser{fallback: sniffedAs("gcc",
-				diagnostic.Diagnostic{Message: "m", File: "2024-01-02 10"})}, stdout: "2024-01-02 10:20:30: started",
+			declared:    false,
+			provenance:  "",
+			module:      "",
+			findings:    0,
+			fellBack:    nil,
+			readNothing: nil,
+			name:        "a line format naming no file that exists is prose",
+			parser: &fakeParser{
+				gotModule:      "",
+				gotParser:      "",
+				gotTool:        "",
+				gotStdout:      nil,
+				gotStderr:      nil,
+				gotExit:        0,
+				diags:          nil,
+				err:            nil,
+				unrecognized:   false,
+				format:         false,
+				partial:        false,
+				fallbackFails:  nil,
+				formats:        nil,
+				formatsAsked:   nil,
+				fallbackStdout: nil,
+				fallbackErr:    nil,
+				fallbackCalls:  0,
+				fellBack:       nil,
+				readNothing:    nil, fallback: sniffedAs("gcc",
+					diagnostic.Diagnostic{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m", File: "2024-01-02 10"}),
+			}, stdout: "2024-01-02 10:20:30: started",
 			want: ExtractionNone, fallbackRuns: 1,
 		},
 		{
-			name: "a line format keeps the findings on files that exist",
-			parser: &fakeParser{fallback: sniffedAs("gcc", finding,
-				diagnostic.Diagnostic{Message: "gone", File: "gone.c"})}, stdout: "real.c:1:1: e",
+			declared:    false,
+			fellBack:    nil,
+			readNothing: nil,
+			name:        "a line format keeps the findings on files that exist",
+			parser: &fakeParser{
+				gotModule:      "",
+				gotParser:      "",
+				gotTool:        "",
+				gotStdout:      nil,
+				gotStderr:      nil,
+				gotExit:        0,
+				diags:          nil,
+				err:            nil,
+				unrecognized:   false,
+				format:         false,
+				partial:        false,
+				fallbackFails:  nil,
+				formats:        nil,
+				formatsAsked:   nil,
+				fallbackStdout: nil,
+				fallbackErr:    nil,
+				fallbackCalls:  0,
+				fellBack:       nil,
+				readNothing:    nil, fallback: sniffedAs("gcc", finding,
+					diagnostic.Diagnostic{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "gone", File: "gone.c"}),
+			}, stdout: "real.c:1:1: e",
 			want: ExtractionParsedFindings, provenance: "fallback:gcc", module: EmbeddedParserModule, findings: 1,
 			fallbackRuns: 1,
 		},
 		{
-			name: "a declared parser's partial answer is truncated", declared: true,
-			parser: &fakeParser{diags: []diagnostic.Diagnostic{finding}, partial: true}, stdout: "[{",
+			fellBack:     nil,
+			readNothing:  nil,
+			fallbackRuns: 0,
+			name:         "a declared parser's partial answer is truncated", declared: true,
+			parser: &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, err: nil, unrecognized: false, format: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, diags: []diagnostic.Diagnostic{finding}, partial: true}, stdout: "[{",
 			want: ExtractionTruncated, provenance: ProvenanceParser, module: "core", findings: 1,
 		},
 		{
-			name:   "the fallback's findings in a partial output are truncated",
-			parser: &fakeParser{fallback: &ParseAnswer{Diagnostics: []diagnostic.Diagnostic{finding}, Recognized: true, Format: "sarif", Partial: true}},
-			stdout: "{}", want: ExtractionTruncated, provenance: "fallback:sarif", module: EmbeddedParserModule, findings: 1,
+			declared:    false,
+			fellBack:    nil,
+			readNothing: nil,
+			name:        "the fallback's findings in a partial output are truncated",
+			parser:      &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, fallback: &ParseAnswer{FormatParser: false, Diagnostics: []diagnostic.Diagnostic{finding}, Recognized: true, Format: "sarif", Partial: true}},
+			stdout:      "{}", want: ExtractionTruncated, provenance: "fallback:sarif", module: EmbeddedParserModule, findings: 1,
 			fallbackRuns: 1,
 		},
 		{
-			name:   "a document cut off that nothing read leaves a tool without a parser truncated",
-			parser: &fakeParser{fallback: &ParseAnswer{Format: "fallback", Partial: true}}, stdout: `{"runs":[`,
+			declared:    false,
+			provenance:  "",
+			module:      "",
+			findings:    0,
+			fellBack:    nil,
+			readNothing: nil,
+			name:        "a document cut off that nothing read leaves a tool without a parser truncated",
+			parser:      &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, fallback: &ParseAnswer{Diagnostics: nil, Recognized: false, FormatParser: false, Format: "fallback", Partial: true}}, stdout: `{"runs":[`,
 			want: ExtractionTruncated, fallbackRuns: 1,
 		},
 		{
-			name:   "a fallback that fails leaves a tool without a parser parse-failed",
-			parser: &fakeParser{fallbackFails: errors.New("trap")}, stdout: "x",
+			declared:    false,
+			provenance:  "",
+			module:      "",
+			findings:    0,
+			fellBack:    nil,
+			readNothing: nil,
+			name:        "a fallback that fails leaves a tool without a parser parse-failed",
+			parser:      &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, fallbackFails: errors.New("trap")}, stdout: "x",
 			want: ExtractionParseFailed, fallbackRuns: 1,
 		},
 		{
-			name: "a line format that named no file leaves the later ones their turn",
+			declared:    false,
+			fellBack:    nil,
+			readNothing: nil,
+			name:        "a line format that named no file leaves the later ones their turn",
 			parser: &fakeParser{
-				fallback: sniffedAs("github-annotations", diagnostic.Diagnostic{Message: "noise", File: "/no/such/source.xyz"}),
+				gotModule:      "",
+				gotParser:      "",
+				gotTool:        "",
+				gotStdout:      nil,
+				gotStderr:      nil,
+				gotExit:        0,
+				diags:          nil,
+				err:            nil,
+				unrecognized:   false,
+				format:         false,
+				partial:        false,
+				fallbackFails:  nil,
+				formatsAsked:   nil,
+				fallbackStdout: nil,
+				fallbackErr:    nil,
+				fallbackCalls:  0,
+				fellBack:       nil,
+				readNothing:    nil,
+				fallback:       sniffedAs("github-annotations", diagnostic.Diagnostic{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "noise", File: "/no/such/source.xyz"}),
 				formats: map[string]ParseAnswer{
-					"gcc": {Diagnostics: []diagnostic.Diagnostic{finding}, Recognized: true, Format: "gcc"},
+					"gcc": {FormatParser: false, Partial: false, Diagnostics: []diagnostic.Diagnostic{finding}, Recognized: true, Format: "gcc"},
 				},
 			},
 			stdout: "::warning file=/no/such/source.xyz,line=1::noise\nreal.c:1:1: error: m",
@@ -136,16 +257,39 @@ func TestTheParsersReadAnOutputInTurn(t *testing.T) {
 			fallbackRuns: 1,
 		},
 		{
-			name: "a structured format keeps a finding on a path that is not there",
-			parser: &fakeParser{fallback: sniffedAs("sarif",
-				diagnostic.Diagnostic{Message: "m", File: "gone.py"})}, stdout: "{}",
+			declared:    false,
+			fellBack:    nil,
+			readNothing: nil,
+			name:        "a structured format keeps a finding on a path that is not there",
+			parser: &fakeParser{
+				gotModule:      "",
+				gotParser:      "",
+				gotTool:        "",
+				gotStdout:      nil,
+				gotStderr:      nil,
+				gotExit:        0,
+				diags:          nil,
+				err:            nil,
+				unrecognized:   false,
+				format:         false,
+				partial:        false,
+				fallbackFails:  nil,
+				formats:        nil,
+				formatsAsked:   nil,
+				fallbackStdout: nil,
+				fallbackErr:    nil,
+				fallbackCalls:  0,
+				fellBack:       nil,
+				readNothing:    nil, fallback: sniffedAs("sarif",
+					diagnostic.Diagnostic{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m", File: "gone.py"}),
+			}, stdout: "{}",
 			want: ExtractionParsedFindings, provenance: "fallback:sarif", module: EmbeddedParserModule, findings: 1,
 			fallbackRuns: 1,
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := &Executor{parser: c.parser}
+			e := &Executor{rootPath: "", dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, cache: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: zerovalue_atomic.Pointer[commandInfoMemo]{}, parser: c.parser}
 			task := parseTask("core", "eslint")
 			var proc ProcessResult
 			e.parseFileDiagnostics(context.Background(), &proc, task, dir, []byte(c.stdout), nil, 1, c.declared)
@@ -172,8 +316,8 @@ func TestTheParsersReadAnOutputInTurn(t *testing.T) {
 // never recorded over what the cut left unread.
 func TestOutputCutShortIsTruncatedWhateverReadIt(t *testing.T) {
 	for _, declared := range []bool{false, true} {
-		fp := &fakeParser{unrecognized: true}
-		e := &Executor{parser: fp}
+		fp := &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, format: false, partial: false, fallback: nil, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, unrecognized: true}
+		e := &Executor{rootPath: "", dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, cache: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: zerovalue_atomic.Pointer[commandInfoMemo]{}, parser: fp}
 		e.SetParseLimits(ParseLimits{InputBytes: 8, Findings: 10})
 		var proc ProcessResult
 		e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), t.TempDir(),
@@ -195,17 +339,40 @@ func TestAFormattersStdoutReachesNoParser(t *testing.T) {
 	if err := os.WriteFile(file, []byte("package x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	fp := &fakeParser{fallback: sniffedAs("gcc", diagnostic.Diagnostic{Message: "y", File: file})}
-	e := NewExecutor(dir, false, false, &mockAppManager{commands: map[string]*binmanager.CommandInfo{
-		"fmt": shellApp(`printf 'package x\n// x.go:1:2: error: y\n'; echo 'note' >&2`),
-	}}, nil)
+	fp := &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, fallback: sniffedAs("gcc", diagnostic.Diagnostic{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "y", File: file})}
+	e := NewExecutor(dir, false, false, &mockAppManager{
+		binaries: nil,
+		err:      nil, commands: map[string]*binmanager.CommandInfo{
+			"fmt": shellApp(`printf 'package x\n// x.go:1:2: error: y\n'; echo 'note' >&2`),
+		},
+	}, nil)
 	e.SetParser(fp)
 	e.executeTask(context.Background(), Task{
-		ToolName:  "fmt",
-		Operation: config.OpFix,
-		Tool:      config.Tool{Name: "fmt", OutputParser: &config.OutputParser{Module: "core", Parser: "gcc"}},
+		perFileCache: "",
+		inherited:    zerovalue_toolenv.Inherited{},
+		ID:           "",
+		UnitDir:      "",
+		UnitMembers:  nil,
+		UnitGuards:   nil,
+		Coverage:     "",
+		ToolName:     "fmt",
+		Operation:    config.OpFix,
+		Tool:         config.Tool{ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, Name: "fmt", OutputParser: &config.OutputParser{Module: "core", Parser: "gcc"}},
 		OpConfig: config.ToolOperation{
-			App: "fmt", Scope: config.ToolScopePerFile, Args: []string{"{file}"}, Output: config.ToolOutputStdout,
+			Arity:             "",
+			Granularity:       "",
+			Globs:             nil,
+			ExcludeGlobs:      nil,
+			Priority:          0,
+			Cache:             nil,
+			InvalidateOn:      nil,
+			Env:               nil,
+			InheritEnv:        nil,
+			FailOn:            "",
+			Input:             "",
+			LSP:               nil,
+			ManagedConfigRefs: nil,
+			App:               "fmt", Scope: config.ToolScopePerFile, Args: []string{"{file}"}, Output: config.ToolOutputStdout,
 		},
 		Files:       []string{file},
 		ProjectPath: dir,
@@ -223,10 +390,10 @@ func TestAFormattersStdoutReachesNoParser(t *testing.T) {
 // pass though it exited 0.
 func TestNoPassOverOutputTheFallbackCouldNotRead(t *testing.T) {
 	for name, fp := range map[string]*fakeParser{
-		"failed":  {fallbackFails: errors.New("trap")},
-		"partial": {fallback: &ParseAnswer{Format: "fallback", Partial: true}},
+		"failed":  {gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallback: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, fallbackFails: errors.New("trap")},
+		"partial": {gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, fallback: &ParseAnswer{Diagnostics: nil, Recognized: false, FormatParser: false, Format: "fallback", Partial: true}},
 	} {
-		e := &Executor{parser: fp}
+		e := &Executor{rootPath: "", dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, cache: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: zerovalue_atomic.Pointer[commandInfoMemo]{}, parser: fp}
 		var proc ProcessResult
 		e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), t.TempDir(), []byte("x"), nil, 0, false)
 		if got := passesOf(proc, []string{"a.go"}); len(got) != 0 {
@@ -238,8 +405,8 @@ func TestNoPassOverOutputTheFallbackCouldNotRead(t *testing.T) {
 // TestTheLaterLineFormatsRunInTheSniffersOrder: when the sniffer's line format
 // named no file, the core asks the ones after it, in order, until one does.
 func TestTheLaterLineFormatsRunInTheSniffersOrder(t *testing.T) {
-	fp := &fakeParser{fallback: sniffedAs("azure-logissue", diagnostic.Diagnostic{Message: "m", File: "/nowhere"})}
-	e := &Executor{parser: fp}
+	fp := &fakeParser{gotModule: "", gotParser: "", gotTool: "", gotStdout: nil, gotStderr: nil, gotExit: 0, diags: nil, err: nil, unrecognized: false, format: false, partial: false, fallbackFails: nil, formats: nil, formatsAsked: nil, fallbackStdout: nil, fallbackErr: nil, fallbackCalls: 0, fellBack: nil, readNothing: nil, fallback: sniffedAs("azure-logissue", diagnostic.Diagnostic{Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: 0, Source: "", Code: "", URL: "", Reported: false, Gates: false, Baselined: false, Anchor: nil, Message: "m", File: "/nowhere"})}
+	e := &Executor{rootPath: "", dryRun: false, failFast: false, appManager: nil, resultCallback: nil, taskStartCallback: nil, fileProgressCallback: nil, cache: nil, parserModules: nil, gate: nil, envObserver: nil, stepCallback: nil, steps: 0, capturePatches: false, limits: ParseLimits{InputBytes: 0, Findings: 0}, cmdInfos: zerovalue_atomic.Pointer[commandInfoMemo]{}, parser: fp}
 	var proc ProcessResult
 	e.parseFileDiagnostics(context.Background(), &proc, parseTask("core", "eslint"), t.TempDir(), []byte("x"), nil, 0, false)
 	if want := []string{"msvc", "gcc"}; !slices.Equal(fp.formatsAsked, want) {

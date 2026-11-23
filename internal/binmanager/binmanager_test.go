@@ -45,7 +45,7 @@ func (m *mockRuntimeAppManager) ResolveCommandInfo(appName string, app App) (*Co
 	}
 	// Default: a read-only answer that records nothing — PATH assembly only
 	// needs a path, and tests count GetCommandInfo calls.
-	return &CommandInfo{Command: filepath.Join(os.TempDir(), "mock-"+appName)}, nil
+	return &CommandInfo{Type: "", Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Command: filepath.Join(os.TempDir(), "mock-"+appName)}, nil
 }
 
 func (m *mockRuntimeAppManager) ComputeAppPath(appName string, app App) (string, error) {
@@ -85,11 +85,34 @@ func TestConcurrentDownloadSameBinary(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"testbin": App{
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					osType: {
 						archType: {"unknown": BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         server.URL,
 							Hash:        expectedHash,
 							ContentType: BinContentTypeBinary,
@@ -162,11 +185,34 @@ func TestGetBinaryPath_SingleFlight(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"testbin": App{
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					osType: {
 						archType: {"unknown": BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         server.URL,
 							Hash:        expectedHash,
 							ContentType: BinContentTypeBinary,
@@ -236,11 +282,34 @@ func TestGetBinaryPath_AlreadyInstalled(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"testbin": App{
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					osType: {
 						archType: {"unknown": BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         server.URL,
 							Hash:        expectedHash,
 							ContentType: BinContentTypeBinary,
@@ -298,19 +367,44 @@ func TestEnsureTools_InstallsDistinctOnceMixedKinds(t *testing.T) {
 
 	var uvCalls atomic.Int64
 	mock := &mockRuntimeAppManager{
+		resolveCommandInfoFunc: nil,
+		computeAppPathFunc:     nil,
 		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			uvCalls.Add(1)
-			return &CommandInfo{Type: "uv", Command: "/cache/uv/" + appName}, nil
+			return &CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "uv", Command: "/cache/uv/" + appName}, nil
 		},
 	}
 
 	bm := New(MapOfApps{
 		"testbin": App{
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					osType: {
 						archType: {"unknown": BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         server.URL,
 							Hash:        expectedHash,
 							ContentType: BinContentTypeBinary,
@@ -320,7 +414,27 @@ func TestEnsureTools_InstallsDistinctOnceMixedKinds(t *testing.T) {
 			},
 		},
 		"yamllint": App{
-			Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.38.0"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Uv:                 &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.38.0"},
 		},
 	}, nil, mock)
 
@@ -350,18 +464,20 @@ func TestEnsureTools_InstallsDistinctOnceMixedKinds(t *testing.T) {
 func TestEnsureTools_AggregatesErrors(t *testing.T) {
 	var goodCalls atomic.Int64
 	mock := &mockRuntimeAppManager{
+		resolveCommandInfoFunc: nil,
+		computeAppPathFunc:     nil,
 		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			if appName == "bad" {
 				return nil, errors.New("boom")
 			}
 			goodCalls.Add(1)
-			return &CommandInfo{Type: "uv", Command: "/cache/uv/" + appName}, nil
+			return &CommandInfo{Args: nil, Env: nil, Artifact: "", ToolCacheDir: "", ToolCacheSlots: nil, RequiredPaths: nil, Type: "uv", Command: "/cache/uv/" + appName}, nil
 		},
 	}
 
 	bm := New(MapOfApps{
-		"good": App{Uv: &AppConfigUV{PackageName: "good", Version: "1.0.0"}},
-		"bad":  App{Uv: &AppConfigUV{PackageName: "bad", Version: "1.0.0"}},
+		"good": App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "good", Version: "1.0.0"}},
+		"bad":  App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Uv: &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "bad", Version: "1.0.0"}},
 	}, nil, mock)
 
 	err := bm.EnsureTools(context.Background(), []string{"good", "bad"})
@@ -460,6 +576,25 @@ func TestMergeExecEnv_BaseUnchanged(t *testing.T) {
 func TestGetCommandInfo_ShellApp(t *testing.T) {
 	bm := New(MapOfApps{
 		"myshell": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Shell: &AppConfigShell{
 				Name: "bash",
 				Args: []string{"-c", "echo hello"},
@@ -492,8 +627,27 @@ func TestGetCommandInfo_MergesAppEnv_ShellExpandsStore(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"myshell": App{
-			Shell: &AppConfigShell{Name: "bash"},
-			Env:   map[string]string{"BROWSERS": "${STORE}/.playwright"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Shell:              &AppConfigShell{Args: nil, Name: "bash"},
+			Env:                map[string]string{"BROWSERS": "${STORE}/.playwright"},
 		},
 	}, nil, nil)
 
@@ -509,11 +663,17 @@ func TestGetCommandInfo_MergesAppEnv_ShellExpandsStore(t *testing.T) {
 
 func TestGetCommandInfo_MergesAppEnv_RuntimeKeyWins(t *testing.T) {
 	mock := &mockRuntimeAppManager{
+		resolveCommandInfoFunc: nil,
 		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			return &CommandInfo{
-				Type:    "uv",
-				Command: "/bin/yamllint",
-				Env:     map[string]string{"UV_PYTHON_INSTALL_DIR": "/runtime/python"},
+				Args:           nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "uv",
+				Command:        "/bin/yamllint",
+				Env:            map[string]string{"UV_PYTHON_INSTALL_DIR": "/runtime/python"},
 			}, nil
 		},
 		computeAppPathFunc: func(appName string, app App) (string, error) {
@@ -523,7 +683,26 @@ func TestGetCommandInfo_MergesAppEnv_RuntimeKeyWins(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"yamllint": App{
-			Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.0.0"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Uv:                 &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.0.0"},
 			Env: map[string]string{
 				"UV_PYTHON_INSTALL_DIR": "/user/override",
 				"CUSTOM":                "${APP_DIR}/data",
@@ -545,10 +724,18 @@ func TestGetCommandInfo_MergesAppEnv_RuntimeKeyWins(t *testing.T) {
 
 func TestGetCommandInfo_MergesAppEnv_NilEnvUnchanged(t *testing.T) {
 	expectedInfo := &CommandInfo{
-		Type:    "go",
-		Command: "/bin/govulncheck",
+		Args:           nil,
+		Env:            nil,
+		Artifact:       "",
+		ToolCacheDir:   "",
+		ToolCacheSlots: nil,
+		RequiredPaths:  nil,
+		Type:           "go",
+		Command:        "/bin/govulncheck",
 	}
 	mock := &mockRuntimeAppManager{
+		resolveCommandInfoFunc: nil,
+		computeAppPathFunc:     nil,
 		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			return expectedInfo, nil
 		},
@@ -556,7 +743,27 @@ func TestGetCommandInfo_MergesAppEnv_NilEnvUnchanged(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"govulncheck": App{
-			Go: &AppConfigGo{PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "latest"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Go:                 &AppConfigGo{Runtime: "", LockFile: "", PackageName: "golang.org/x/vuln/cmd/govulncheck", Version: "latest"},
 		},
 	}, nil, mock)
 
@@ -594,10 +801,32 @@ func TestGetCommandInfo_MergesAppEnv_Binary(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"testbin": App{
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					osType: {archType: {"unknown": BinaryOsArchInfo{
+						Auth:        nil,
+						BinaryPath:  nil,
+						ExtractDir:  false,
 						URL:         server.URL,
 						Hash:        expectedHash,
 						ContentType: BinContentTypeBinary,
@@ -620,8 +849,27 @@ func TestGetCommandInfo_MergesAppEnv_Binary(t *testing.T) {
 
 func TestApp_EnvJSONRoundTrip(t *testing.T) {
 	app := App{
-		Shell: &AppConfigShell{Name: "bash"},
-		Env:   map[string]string{"FOO": "bar", "BAZ": "${STORE}/x"},
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Jvm:                nil,
+		Go:                 nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
+		Shell:              &AppConfigShell{Args: nil, Name: "bash"},
+		Env:                map[string]string{"FOO": "bar", "BAZ": "${STORE}/x"},
 	}
 	data, err := json.Marshal(app)
 	if err != nil {
@@ -641,7 +889,7 @@ func TestApp_EnvJSONRoundTrip(t *testing.T) {
 }
 
 func TestApp_EnvOmittedWhenNil(t *testing.T) {
-	data, err := json.Marshal(App{Shell: &AppConfigShell{Name: "bash"}})
+	data, err := json.Marshal(App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &AppConfigShell{Args: nil, Name: "bash"}})
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
@@ -652,14 +900,21 @@ func TestApp_EnvOmittedWhenNil(t *testing.T) {
 
 func TestGetCommandInfo_UVApp_DelegatesToRuntimeManager(t *testing.T) {
 	expectedInfo := &CommandInfo{
-		Type:    "uv",
-		Command: "/cache/apps/uv/yamllint/abc123/bin/yamllint",
+		Args:           nil,
+		Artifact:       "",
+		ToolCacheDir:   "",
+		ToolCacheSlots: nil,
+		RequiredPaths:  nil,
+		Type:           "uv",
+		Command:        "/cache/apps/uv/yamllint/abc123/bin/yamllint",
 		Env: map[string]string{
 			"UV_TOOL_DIR": "/cache/apps/uv/yamllint/abc123/tools",
 		},
 	}
 
 	mock := &mockRuntimeAppManager{
+		resolveCommandInfoFunc: nil,
+		computeAppPathFunc:     nil,
 		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			if appName != "yamllint" {
 				t.Errorf("expected appName 'yamllint', got %q", appName)
@@ -676,9 +931,32 @@ func TestGetCommandInfo_UVApp_DelegatesToRuntimeManager(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"yamllint": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.38.0",
+				Runtime:        "",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.38.0",
 			},
 		},
 	}, nil, mock)
@@ -695,9 +973,32 @@ func TestGetCommandInfo_UVApp_DelegatesToRuntimeManager(t *testing.T) {
 func TestGetCommandInfo_UVApp_NoRuntimeManager(t *testing.T) {
 	bm := New(MapOfApps{
 		"yamllint": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.38.0",
+				Runtime:        "",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.38.0",
 			},
 		},
 	}, nil, nil)
@@ -740,9 +1041,12 @@ func TestAppConfigNode_Fields(t *testing.T) {
 
 func TestAppConfigNode_OptionalFields(t *testing.T) {
 	cfg := AppConfigNode{
-		PackageName: "eslint",
-		Version:     "9.0.0",
-		BinPath:     "node_modules/.bin/eslint",
+		Runtime:      "",
+		LockFile:     "",
+		Dependencies: nil,
+		PackageName:  "eslint",
+		Version:      "9.0.0",
+		BinPath:      "node_modules/.bin/eslint",
 	}
 
 	if cfg.Runtime != "" {
@@ -758,11 +1062,33 @@ func TestAppConfigNode_OptionalFields(t *testing.T) {
 
 func TestApp_NodeField(t *testing.T) {
 	app := App{
-		Required: true,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
+		Required:           true,
 		Node: &AppConfigNode{
-			PackageName: "@mermaid-js/mermaid-cli",
-			Version:     "11.12.0",
-			BinPath:     "node_modules/.bin/mmdc",
+			Runtime:      "",
+			LockFile:     "",
+			Dependencies: nil,
+			PackageName:  "@mermaid-js/mermaid-cli",
+			Version:      "11.12.0",
+			BinPath:      "node_modules/.bin/mmdc",
 		},
 	}
 
@@ -782,15 +1108,21 @@ func TestApp_NodeField(t *testing.T) {
 
 func TestGetCommandInfo_NodeApp_DelegatesToRuntimeManager(t *testing.T) {
 	expectedInfo := &CommandInfo{
-		Type:    "node",
-		Command: "/cache/runtimes/node/v22.14.0/installation/bin/node",
-		Args:    []string{"/cache/apps/node/mmdc/xyz789/node_modules/.bin/mmdc"},
+		Artifact:       "",
+		ToolCacheDir:   "",
+		ToolCacheSlots: nil,
+		RequiredPaths:  nil,
+		Type:           "node",
+		Command:        "/cache/runtimes/node/v22.14.0/installation/bin/node",
+		Args:           []string{"/cache/apps/node/mmdc/xyz789/node_modules/.bin/mmdc"},
 		Env: map[string]string{
 			"npm_config_store_dir": "/cache/apps/node/mmdc/xyz789/.pnpm-store",
 		},
 	}
 
 	mock := &mockRuntimeAppManager{
+		resolveCommandInfoFunc: nil,
+		computeAppPathFunc:     nil,
 		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			if appName != "mmdc" {
 				t.Errorf("expected appName 'mmdc', got %q", appName)
@@ -807,9 +1139,32 @@ func TestGetCommandInfo_NodeApp_DelegatesToRuntimeManager(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"mmdc": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Node: &AppConfigNode{
-				PackageName: "@mermaid-js/mermaid-cli",
-				Version:     "11.12.0",
+				Runtime:      "",
+				LockFile:     "",
+				Dependencies: nil,
+				PackageName:  "@mermaid-js/mermaid-cli",
+				Version:      "11.12.0",
 
 				BinPath: "node_modules/.bin/mmdc",
 			},
@@ -828,9 +1183,32 @@ func TestGetCommandInfo_NodeApp_DelegatesToRuntimeManager(t *testing.T) {
 func TestGetCommandInfo_NodeApp_NoRuntimeManager(t *testing.T) {
 	bm := New(MapOfApps{
 		"mmdc": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Node: &AppConfigNode{
-				PackageName: "@mermaid-js/mermaid-cli",
-				Version:     "11.12.0",
+				Runtime:      "",
+				LockFile:     "",
+				Dependencies: nil,
+				PackageName:  "@mermaid-js/mermaid-cli",
+				Version:      "11.12.0",
 
 				BinPath: "node_modules/.bin/mmdc",
 			},
@@ -846,10 +1224,33 @@ func TestGetCommandInfo_NodeApp_NoRuntimeManager(t *testing.T) {
 func TestGetAppsList_NodeApp(t *testing.T) {
 	bm := New(MapOfApps{
 		"eslint": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Node: &AppConfigNode{
-				PackageName: "eslint",
-				Version:     "9.0.0",
-				BinPath:     "node_modules/.bin/eslint",
+				Runtime:      "",
+				LockFile:     "",
+				Dependencies: nil,
+				PackageName:  "eslint",
+				Version:      "9.0.0",
+				BinPath:      "node_modules/.bin/eslint",
 			},
 		},
 	}, nil, nil)
@@ -875,10 +1276,33 @@ func TestGetAppsList_NodeApp(t *testing.T) {
 func TestGetAppsList_BunApp(t *testing.T) {
 	bm := New(MapOfApps{
 		"eslint": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Bun: &AppConfigBun{
-				PackageName: "eslint",
-				Version:     "10.9.0",
-				BinPath:     "node_modules/eslint/bin/eslint.js",
+				Runtime:      "",
+				LockFile:     "",
+				Dependencies: nil,
+				PackageName:  "eslint",
+				Version:      "10.9.0",
+				BinPath:      "node_modules/eslint/bin/eslint.js",
 			},
 		},
 	}, nil, nil)
@@ -901,9 +1325,29 @@ func TestGetAppsList_BunApp(t *testing.T) {
 func TestGetAppsList_BinaryApp(t *testing.T) {
 	bm := New(MapOfApps{
 		"golangci-lint": App{
-			Description: "Go linter",
+			Required:           false,
+			Lazy:               false,
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Description:        "Go linter",
 			Binary: &AppConfigBinary{
-				Version: "v2.7.2",
+				Binaries: nil,
+				Version:  "v2.7.2",
 			},
 		},
 	}, nil, nil)
@@ -926,9 +1370,32 @@ func TestGetAppsList_BinaryApp(t *testing.T) {
 func TestGetAppsList_UVApp(t *testing.T) {
 	bm := New(MapOfApps{
 		"yamllint": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.38.0",
+				Runtime:        "",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.38.0",
 			},
 		},
 	}, nil, nil)
@@ -951,7 +1418,28 @@ func TestGetAppsList_UVApp(t *testing.T) {
 func TestGetAppsList_ShellApp(t *testing.T) {
 	bm := New(MapOfApps{
 		"echo": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Shell: &AppConfigShell{
+				Args: nil,
 				Name: "echo",
 			},
 		},
@@ -975,20 +1463,103 @@ func TestGetAppsList_ShellApp(t *testing.T) {
 func TestGetAppsList_AllTypes(t *testing.T) {
 	bm := New(MapOfApps{
 		"golangci-lint": App{
-			Binary: &AppConfigBinary{Version: "v2.7.2"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Binary:             &AppConfigBinary{Binaries: nil, Version: "v2.7.2"},
 		},
 		"yamllint": App{
-			Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.38.0"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Uv:                 &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.38.0"},
 		},
 		"mmdc": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Node: &AppConfigNode{
-				PackageName: "@mermaid-js/mermaid-cli",
-				Version:     "11.12.0",
-				BinPath:     "node_modules/.bin/mmdc",
+				Runtime:      "",
+				LockFile:     "",
+				Dependencies: nil,
+				PackageName:  "@mermaid-js/mermaid-cli",
+				Version:      "11.12.0",
+				BinPath:      "node_modules/.bin/mmdc",
 			},
 		},
 		"echo": App{
-			Shell: &AppConfigShell{Name: "echo"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Shell:              &AppConfigShell{Args: nil, Name: "echo"},
 		},
 	}, nil, nil)
 
@@ -1018,7 +1589,26 @@ func TestGetAppsList_AllTypes(t *testing.T) {
 
 func TestAppConfigNode_JSONRoundTrip(t *testing.T) {
 	original := App{
-		Required: true,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
+		Required:           true,
 		Node: &AppConfigNode{
 			PackageName: "@mermaid-js/mermaid-cli",
 			Version:     "11.12.0",
@@ -1059,9 +1649,32 @@ func TestAppConfigNode_JSONRoundTrip(t *testing.T) {
 
 func TestAppConfigNode_JSONOmitsEmpty(t *testing.T) {
 	app := App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
 		Node: &AppConfigNode{
-			PackageName: "eslint",
-			Version:     "9.0.0",
+			Runtime:      "",
+			LockFile:     "",
+			Dependencies: nil,
+			PackageName:  "eslint",
+			Version:      "9.0.0",
 
 			BinPath: "node_modules/.bin/eslint",
 		},
@@ -1093,10 +1706,30 @@ func TestAppConfigNode_JSONOmitsEmpty(t *testing.T) {
 
 func TestApp_FilesAndLinks_JSONRoundTrip(t *testing.T) {
 	original := App{
-		Required: true,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Archives:           nil,
+		Prepare:            nil,
+		Required:           true,
 		Node: &AppConfigNode{
-			PackageName: "eslint",
-			Version:     "9.0.0",
+			Runtime:      "",
+			LockFile:     "",
+			Dependencies: nil,
+			PackageName:  "eslint",
+			Version:      "9.0.0",
 
 			BinPath: "node_modules/.bin/eslint",
 		},
@@ -1143,9 +1776,32 @@ func TestApp_FilesAndLinks_JSONRoundTrip(t *testing.T) {
 
 func TestApp_FilesAndLinks_OmittedWhenEmpty(t *testing.T) {
 	app := App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
 		Node: &AppConfigNode{
-			PackageName: "eslint",
-			Version:     "9.0.0",
+			Runtime:      "",
+			LockFile:     "",
+			Dependencies: nil,
+			PackageName:  "eslint",
+			Version:      "9.0.0",
 
 			BinPath: "node_modules/.bin/eslint",
 		},
@@ -1171,9 +1827,31 @@ func TestApp_FilesAndLinks_OmittedWhenEmpty(t *testing.T) {
 
 func TestApp_FilesWithoutLinks_JSONRoundTrip(t *testing.T) {
 	original := App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
 		Node: &AppConfigNode{
-			PackageName: "eslint",
-			Version:     "9.0.0",
+			Runtime:      "",
+			LockFile:     "",
+			Dependencies: nil,
+			PackageName:  "eslint",
+			Version:      "9.0.0",
 
 			BinPath: "node_modules/.bin/eslint",
 		},
@@ -1202,9 +1880,31 @@ func TestApp_FilesWithoutLinks_JSONRoundTrip(t *testing.T) {
 
 func TestAppConfigNode_LockFile_JSONRoundTrip(t *testing.T) {
 	original := App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
 		Node: &AppConfigNode{
-			PackageName: "eslint",
-			Version:     "9.0.0",
+			Runtime:      "",
+			Dependencies: nil,
+			PackageName:  "eslint",
+			Version:      "9.0.0",
 
 			BinPath:  "node_modules/.bin/eslint",
 			LockFile: "lockfileVersion: '9.0'\npackages:\n  eslint@9.0.0:\n    resolution: {integrity: sha512-abc}",
@@ -1228,10 +1928,32 @@ func TestAppConfigNode_LockFile_JSONRoundTrip(t *testing.T) {
 
 func TestAppConfigUV_LockFile_JSONRoundTrip(t *testing.T) {
 	original := App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Node:               nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
 		Uv: &AppConfigUV{
-			PackageName: "yamllint",
-			Version:     "1.38.0",
-			LockFile:    "version = 1\nrequires-python = \">=3.8\"\n\n[[package]]\nname = \"yamllint\"",
+			Runtime:        "",
+			RequiresPython: "",
+			PackageName:    "yamllint",
+			Version:        "1.38.0",
+			LockFile:       "version = 1\nrequires-python = \">=3.8\"\n\n[[package]]\nname = \"yamllint\"",
 		},
 	}
 
@@ -1252,15 +1974,40 @@ func TestAppConfigUV_LockFile_JSONRoundTrip(t *testing.T) {
 
 func TestAppConfigLockFile_OmittedWhenEmpty(t *testing.T) {
 	app := App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Jvm:                nil,
+		Go:                 nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
 		Node: &AppConfigNode{
-			PackageName: "eslint",
-			Version:     "9.0.0",
+			Runtime:      "",
+			LockFile:     "",
+			Dependencies: nil,
+			PackageName:  "eslint",
+			Version:      "9.0.0",
 
 			BinPath: "node_modules/.bin/eslint",
 		},
 		Uv: &AppConfigUV{
-			PackageName: "yamllint",
-			Version:     "1.38.0",
+			Runtime:        "",
+			LockFile:       "",
+			RequiresPython: "",
+			PackageName:    "yamllint",
+			Version:        "1.38.0",
 		},
 	}
 
@@ -1299,6 +2046,8 @@ func TestAppConfigGo_Fields(t *testing.T) {
 
 func TestAppConfigGo_OptionalFields(t *testing.T) {
 	cfg := AppConfigGo{
+		Runtime:     "",
+		LockFile:    "",
 		PackageName: "golang.org/x/vuln/cmd/govulncheck",
 		Version:     "v1.1.4",
 	}
@@ -1313,8 +2062,29 @@ func TestAppConfigGo_OptionalFields(t *testing.T) {
 
 func TestApp_GoField(t *testing.T) {
 	app := App{
-		Required: true,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Jvm:                nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
+		Required:           true,
 		Go: &AppConfigGo{
+			Runtime:     "",
+			LockFile:    "",
 			PackageName: "golang.org/x/vuln/cmd/govulncheck",
 			Version:     "v1.1.4",
 		},
@@ -1339,7 +2109,26 @@ func TestApp_GoField(t *testing.T) {
 
 func TestAppConfigGo_JSONRoundTrip(t *testing.T) {
 	original := App{
-		Required: true,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Jvm:                nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
+		Required:           true,
 		Go: &AppConfigGo{
 			PackageName: "golang.org/x/vuln/cmd/govulncheck",
 			Version:     "v1.1.4",
@@ -1380,7 +2169,29 @@ func TestAppConfigGo_JSONRoundTrip(t *testing.T) {
 
 func TestAppConfigGo_JSONOmitsEmpty(t *testing.T) {
 	app := App{
+		Required:           false,
+		Lazy:               false,
+		Description:        "",
+		VersionCheck:       nil,
+		DependsOn:          nil,
+		OfficialURL:        "",
+		OfficialURLDerived: false,
+		Binary:             nil,
+		Bun:                nil,
+		Uv:                 nil,
+		Node:               nil,
+		Jvm:                nil,
+		Shell:              nil,
+		Env:                nil,
+		RuntimeEnv:         nil,
+		Caches:             nil,
+		Files:              nil,
+		Links:              nil,
+		Archives:           nil,
+		Prepare:            nil,
 		Go: &AppConfigGo{
+			Runtime:     "",
+			LockFile:    "",
 			PackageName: "golang.org/x/vuln/cmd/govulncheck",
 			Version:     "v1.1.4",
 		},
@@ -1416,14 +2227,21 @@ func TestAppConfigGo_JSONOmitsEmpty(t *testing.T) {
 
 func TestGetCommandInfo_GoApp_DelegatesToRuntimeManager(t *testing.T) {
 	expectedInfo := &CommandInfo{
-		Type:    "go",
-		Command: "/cache/apps/go/govulncheck/abc123/bin/govulncheck",
+		Args:           nil,
+		Artifact:       "",
+		ToolCacheDir:   "",
+		ToolCacheSlots: nil,
+		RequiredPaths:  nil,
+		Type:           "go",
+		Command:        "/cache/apps/go/govulncheck/abc123/bin/govulncheck",
 		Env: map[string]string{
 			"GOFLAGS": "-mod=readonly -trimpath",
 		},
 	}
 
 	mock := &mockRuntimeAppManager{
+		resolveCommandInfoFunc: nil,
+		computeAppPathFunc:     nil,
 		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			if appName != "govulncheck" {
 				t.Errorf("expected appName 'govulncheck', got %q", appName)
@@ -1440,7 +2258,29 @@ func TestGetCommandInfo_GoApp_DelegatesToRuntimeManager(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"govulncheck": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &AppConfigGo{
+				Runtime:     "",
+				LockFile:    "",
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
 			},
@@ -1459,7 +2299,29 @@ func TestGetCommandInfo_GoApp_DelegatesToRuntimeManager(t *testing.T) {
 func TestGetCommandInfo_GoApp_NoRuntimeManager(t *testing.T) {
 	bm := New(MapOfApps{
 		"govulncheck": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &AppConfigGo{
+				Runtime:     "",
+				LockFile:    "",
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
 			},
@@ -1474,6 +2336,8 @@ func TestGetCommandInfo_GoApp_NoRuntimeManager(t *testing.T) {
 
 func TestComputeInstallPath_GoApp(t *testing.T) {
 	mock := &mockRuntimeAppManager{
+		getCommandInfoFunc:     nil,
+		resolveCommandInfoFunc: nil,
 		computeAppPathFunc: func(appName string, app App) (string, error) {
 			if app.Go == nil {
 				t.Error("expected app.Go to be non-nil")
@@ -1484,7 +2348,29 @@ func TestComputeInstallPath_GoApp(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"govulncheck": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &AppConfigGo{
+				Runtime:     "",
+				LockFile:    "",
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
 			},
@@ -1503,7 +2389,29 @@ func TestComputeInstallPath_GoApp(t *testing.T) {
 func TestComputeInstallPath_GoApp_NoRuntimeManager(t *testing.T) {
 	bm := New(MapOfApps{
 		"govulncheck": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &AppConfigGo{
+				Runtime:     "",
+				LockFile:    "",
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
 			},
@@ -1519,8 +2427,29 @@ func TestComputeInstallPath_GoApp_NoRuntimeManager(t *testing.T) {
 func TestGetAppsList_GoApp(t *testing.T) {
 	bm := New(MapOfApps{
 		"govulncheck": App{
-			Description: "Go vulnerability scanner",
+			Required:           false,
+			Lazy:               false,
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Description:        "Go vulnerability scanner",
 			Go: &AppConfigGo{
+				Runtime:     "",
+				LockFile:    "",
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
 			},
@@ -1551,13 +2480,75 @@ func TestGetAppsList_GoApp(t *testing.T) {
 func TestGetAppsList_AllTypesWithGo(t *testing.T) {
 	bm := New(MapOfApps{
 		"golangci-lint": App{
-			Binary: &AppConfigBinary{Version: "v2.7.2"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Binary:             &AppConfigBinary{Binaries: nil, Version: "v2.7.2"},
 		},
 		"yamllint": App{
-			Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.38.0"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Uv:                 &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.38.0"},
 		},
 		"govulncheck": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Go: &AppConfigGo{
+				Runtime:     "",
+				LockFile:    "",
 				PackageName: "golang.org/x/vuln/cmd/govulncheck",
 				Version:     "v1.1.4",
 			},
@@ -1592,6 +2583,8 @@ func TestGetCommandInfo_AppNotFound(t *testing.T) {
 
 func TestGetCommandInfo_RuntimeManagerError(t *testing.T) {
 	mock := &mockRuntimeAppManager{
+		resolveCommandInfoFunc: nil,
+		computeAppPathFunc:     nil,
 		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			return nil, errors.New("runtime not found")
 		},
@@ -1599,9 +2592,32 @@ func TestGetCommandInfo_RuntimeManagerError(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"yamllint": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.38.0",
+				Runtime:        "",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.38.0",
 			},
 		},
 	}, nil, mock)
@@ -1614,7 +2630,7 @@ func TestGetCommandInfo_RuntimeManagerError(t *testing.T) {
 
 func TestGetCommandInfo_NoValidConfig(t *testing.T) {
 	bm := New(MapOfApps{
-		"empty": App{},
+		"empty": App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil},
 	}, nil, nil)
 
 	_, err := bm.GetCommandInfo(context.Background(), "empty")
@@ -1639,11 +2655,34 @@ func TestComputeInstallPath_BinaryApp(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"testbin": App{
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					osType: {
 						archType: {libc: BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         "https://example.com/testbin",
 							Hash:        "abc123",
 							ContentType: BinContentTypeBinary,
@@ -1674,6 +2713,8 @@ func TestComputeInstallPath_BinaryApp(t *testing.T) {
 
 func TestComputeInstallPath_RuntimeApp(t *testing.T) {
 	mock := &mockRuntimeAppManager{
+		getCommandInfoFunc:     nil,
+		resolveCommandInfoFunc: nil,
 		computeAppPathFunc: func(appName string, app App) (string, error) {
 			return "/mock/apps/uv/yamllint/hash123", nil
 		},
@@ -1681,9 +2722,32 @@ func TestComputeInstallPath_RuntimeApp(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"yamllint": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.38.0",
+				Runtime:        "",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.38.0",
 			},
 		},
 	}, nil, mock)
@@ -1700,9 +2764,32 @@ func TestComputeInstallPath_RuntimeApp(t *testing.T) {
 func TestComputeInstallPath_NoRuntimeManager(t *testing.T) {
 	bm := New(MapOfApps{
 		"yamllint": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.38.0",
+				Runtime:        "",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.38.0",
 			},
 		},
 	}, nil, nil)
@@ -1723,7 +2810,7 @@ func TestComputeInstallPath_AppNotFound(t *testing.T) {
 
 func TestComputeInstallPath_NoValidConfig(t *testing.T) {
 	bm := New(MapOfApps{
-		"empty": App{},
+		"empty": App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil},
 	}, nil, nil)
 
 	_, err := bm.ComputeInstallPath("empty")
@@ -1748,11 +2835,34 @@ func TestGetInstallRoot_Exists(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"testbin": App{
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					osType: {
 						archType: {libc: BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         "https://example.com/testbin",
 							Hash:        "abc123",
 							ContentType: BinContentTypeBinary,
@@ -1793,11 +2903,34 @@ func TestGetInstallRoot_NotInstalled(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"testbin": App{
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					osType: {
 						archType: {libc: BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         "https://example.com/testbin",
 							Hash:        "abc123",
 							ContentType: BinContentTypeBinary,
@@ -1840,11 +2973,34 @@ func TestGetExecCmd_BinaryApp(t *testing.T) {
 
 	bm := New(MapOfApps{
 		"testbin": App{
-			Required: true,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Required:           true,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					osType: {
 						archType: {libc: BinaryOsArchInfo{
+							Auth:        nil,
+							BinaryPath:  nil,
+							ExtractDir:  false,
 							URL:         server.URL,
 							Hash:        expectedHash,
 							ContentType: BinContentTypeBinary,
@@ -1884,6 +3040,26 @@ func TestGetExecCmd_BinaryApp(t *testing.T) {
 func TestGetExecCmd_ShellApp_ReturnsNil(t *testing.T) {
 	bm := New(MapOfApps{
 		"myshell": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Shell: &AppConfigShell{
 				Name: "bash",
 				Args: []string{"-c", "echo hello"},
@@ -1902,20 +3078,50 @@ func TestGetExecCmd_ShellApp_ReturnsNil(t *testing.T) {
 
 func TestGetExecCmd_RuntimeApp(t *testing.T) {
 	mock := &mockRuntimeAppManager{
+		resolveCommandInfoFunc: nil,
+		computeAppPathFunc:     nil,
 		getCommandInfoFunc: func(_ context.Context, appName string, app App) (*CommandInfo, error) {
 			return &CommandInfo{
-				Type:    "uv",
-				Command: "/mock/bin/yamllint",
-				Env:     map[string]string{"UV_TOOL_DIR": "/mock/tools"},
+				Args:           nil,
+				Artifact:       "",
+				ToolCacheDir:   "",
+				ToolCacheSlots: nil,
+				RequiredPaths:  nil,
+				Type:           "uv",
+				Command:        "/mock/bin/yamllint",
+				Env:            map[string]string{"UV_TOOL_DIR": "/mock/tools"},
 			}, nil
 		},
 	}
 
 	bm := New(MapOfApps{
 		"yamllint": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Uv: &AppConfigUV{
-				PackageName: "yamllint",
-				Version:     "1.38.0",
+				Runtime:        "",
+				LockFile:       "",
+				RequiresPython: "",
+				PackageName:    "yamllint",
+				Version:        "1.38.0",
 			},
 		},
 	}, nil, mock)
@@ -2044,7 +3250,7 @@ func TestWriteAppFiles_WithInlineArchive(t *testing.T) {
 	}
 
 	archives := map[string]*ArchiveSpec{
-		"configs": {Inline: compressed},
+		"configs": {URL: "", Hash: "", Format: "", Inline: compressed},
 	}
 
 	err = WriteAppFiles(context.Background(), installPath, nil, archives)
@@ -2082,7 +3288,7 @@ func TestWriteAppFiles_FilesOverwriteArchives(t *testing.T) {
 	}
 
 	archives := map[string]*ArchiveSpec{
-		"configs": {Inline: compressed},
+		"configs": {URL: "", Hash: "", Format: "", Inline: compressed},
 	}
 	files := map[string]string{
 		"config.js": "from files",
@@ -2127,8 +3333,8 @@ func TestWriteAppFiles_ArchivesExtractedAlphabetically(t *testing.T) {
 	}
 
 	archives := map[string]*ArchiveSpec{
-		"beta":  {Inline: compressedBeta},
-		"alpha": {Inline: compressedAlpha},
+		"beta":  {URL: "", Hash: "", Format: "", Inline: compressedBeta},
+		"alpha": {URL: "", Hash: "", Format: "", Inline: compressedAlpha},
 	}
 
 	err = WriteAppFiles(context.Background(), installPath, nil, archives)
@@ -2178,7 +3384,7 @@ func TestWriteAppFiles_ArchivesBeforeFiles(t *testing.T) {
 	}
 
 	archives := map[string]*ArchiveSpec{
-		"base": {Inline: compressed},
+		"base": {URL: "", Hash: "", Format: "", Inline: compressed},
 	}
 	files := map[string]string{
 		"shared.js":     "from files",
@@ -2236,6 +3442,7 @@ func TestWriteAppFiles_ExternalArchiveWithServer(t *testing.T) {
 
 	archives := map[string]*ArchiveSpec{
 		"remote": {
+			Inline: "",
 			URL:    server.URL + "/test.tar",
 			Hash:   hashHex,
 			Format: BinContentTypeTar,
@@ -2271,6 +3478,7 @@ func TestWriteAppFiles_ExternalArchiveBadHash(t *testing.T) {
 
 	archives := map[string]*ArchiveSpec{
 		"remote": {
+			Inline: "",
 			URL:    server.URL + "/test.tar",
 			Hash:   "0000000000000000000000000000000000000000000000000000000000000000",
 			Format: BinContentTypeTar,
@@ -2291,7 +3499,7 @@ func TestWriteAppFiles_InvalidArchiveSpec(t *testing.T) {
 	installPath := tmpDir + "/app-install"
 
 	archives := map[string]*ArchiveSpec{
-		"bad": {},
+		"bad": {Inline: "", URL: "", Hash: "", Format: ""},
 	}
 
 	err := WriteAppFiles(context.Background(), installPath, nil, archives)
@@ -2309,9 +3517,23 @@ func createTestTarData(t *testing.T, files map[string]string) []byte {
 	tw := tar.NewWriter(&buf)
 	for name, content := range files {
 		hdr := &tar.Header{
-			Name: name,
-			Mode: 0o644,
-			Size: int64(len(content)),
+			Typeflag:   0,
+			Linkname:   "",
+			Uid:        0,
+			Gid:        0,
+			Uname:      "",
+			Gname:      "",
+			ModTime:    time.Time{},
+			AccessTime: time.Time{},
+			ChangeTime: time.Time{},
+			Devmajor:   0,
+			Devminor:   0,
+
+			PAXRecords: nil,
+			Format:     0,
+			Name:       name,
+			Mode:       0o644,
+			Size:       int64(len(content)),
 		}
 		if err := tw.WriteHeader(hdr); err != nil {
 			t.Fatalf("tar write header: %v", err)
@@ -2407,24 +3629,57 @@ func TestNestedStorageParsing(t *testing.T) {
 func TestNestedStorageNonLinuxUsesUnknownLibc(t *testing.T) {
 	apps := MapOfApps{
 		"testbin": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					"darwin": {
 						"amd64": {"unknown": BinaryOsArchInfo{
-							URL: "https://example.com/darwin-amd64", Hash: "abc", ContentType: BinContentTypeBinary,
+							Auth:       nil,
+							BinaryPath: nil,
+							ExtractDir: false,
+							URL:        "https://example.com/darwin-amd64", Hash: "abc", ContentType: BinContentTypeBinary,
 						}},
 						"arm64": {"unknown": BinaryOsArchInfo{
-							URL: "https://example.com/darwin-arm64", Hash: "def", ContentType: BinContentTypeBinary,
+							Auth:       nil,
+							BinaryPath: nil,
+							ExtractDir: false,
+							URL:        "https://example.com/darwin-arm64", Hash: "def", ContentType: BinContentTypeBinary,
 						}},
 					},
 					"windows": {
 						"amd64": {"unknown": BinaryOsArchInfo{
-							URL: "https://example.com/windows-amd64", Hash: "ghi", ContentType: BinContentTypeBinary,
+							Auth:       nil,
+							BinaryPath: nil,
+							ExtractDir: false,
+							URL:        "https://example.com/windows-amd64", Hash: "ghi", ContentType: BinContentTypeBinary,
 						}},
 					},
 					"freebsd": {
 						"amd64": {"unknown": BinaryOsArchInfo{
-							URL: "https://example.com/freebsd-amd64", Hash: "jkl", ContentType: BinContentTypeBinary,
+							Auth:       nil,
+							BinaryPath: nil,
+							ExtractDir: false,
+							URL:        "https://example.com/freebsd-amd64", Hash: "jkl", ContentType: BinContentTypeBinary,
 						}},
 					},
 				},
@@ -2471,15 +3726,42 @@ func TestNestedStorageNonLinuxUsesUnknownLibc(t *testing.T) {
 func TestNestedStorageLinuxLibcLookup(t *testing.T) {
 	apps := MapOfApps{
 		"testbin": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					"linux": {
 						"amd64": {
 							"glibc": BinaryOsArchInfo{
-								URL: "https://example.com/linux-amd64-glibc", Hash: "abc", ContentType: BinContentTypeBinary,
+								Auth:       nil,
+								BinaryPath: nil,
+								ExtractDir: false,
+								URL:        "https://example.com/linux-amd64-glibc", Hash: "abc", ContentType: BinContentTypeBinary,
 							},
 							"musl": BinaryOsArchInfo{
-								URL: "https://example.com/linux-amd64-musl", Hash: "def", ContentType: BinContentTypeBinary,
+								Auth:       nil,
+								BinaryPath: nil,
+								ExtractDir: false,
+								URL:        "https://example.com/linux-amd64-musl", Hash: "def", ContentType: BinContentTypeBinary,
 							},
 						},
 					},
@@ -2532,13 +3814,13 @@ func TestNestedStorageJSONRoundTrip(t *testing.T) {
 	original := MapOfBinaries{
 		"linux": {
 			"amd64": {
-				"glibc": BinaryOsArchInfo{URL: "https://example.com/glibc", Hash: "abc123", ContentType: BinContentTypeTarGz},
-				"musl":  BinaryOsArchInfo{URL: "https://example.com/musl", Hash: "def456", ContentType: BinContentTypeTarGz},
+				"glibc": BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/glibc", Hash: "abc123", ContentType: BinContentTypeTarGz},
+				"musl":  BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/musl", Hash: "def456", ContentType: BinContentTypeTarGz},
 			},
 		},
 		"darwin": {
 			"arm64": {
-				"unknown": BinaryOsArchInfo{URL: "https://example.com/darwin", Hash: "ghi789", ContentType: BinContentTypeZip},
+				"unknown": BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/darwin", Hash: "ghi789", ContentType: BinContentTypeZip},
 			},
 		},
 	}
@@ -2569,16 +3851,16 @@ func TestParseBinaryCandidates(t *testing.T) {
 	binaries := MapOfBinaries{
 		"linux": {
 			"amd64": {
-				"glibc": BinaryOsArchInfo{URL: "https://example.com/glibc", Hash: "abc", ContentType: BinContentTypeBinary},
-				"musl":  BinaryOsArchInfo{URL: "https://example.com/musl", Hash: "def", ContentType: BinContentTypeBinary},
+				"glibc": BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/glibc", Hash: "abc", ContentType: BinContentTypeBinary},
+				"musl":  BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/musl", Hash: "def", ContentType: BinContentTypeBinary},
 			},
 			"arm64": {
-				"glibc": BinaryOsArchInfo{URL: "https://example.com/arm-glibc", Hash: "ghi", ContentType: BinContentTypeBinary},
+				"glibc": BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/arm-glibc", Hash: "ghi", ContentType: BinContentTypeBinary},
 			},
 		},
 		"darwin": {
 			"arm64": {
-				"unknown": BinaryOsArchInfo{URL: "https://example.com/darwin", Hash: "jkl", ContentType: BinContentTypeBinary},
+				"unknown": BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/darwin", Hash: "jkl", ContentType: BinContentTypeBinary},
 			},
 		},
 	}
@@ -2614,12 +3896,33 @@ func TestParseBinaryCandidates(t *testing.T) {
 func TestGetBinaryInfoMuslExactMatch(t *testing.T) {
 	apps := MapOfApps{
 		"testbin": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					"linux": {
 						"amd64": {
-							"glibc": BinaryOsArchInfo{URL: "https://example.com/glibc", Hash: "abc", ContentType: BinContentTypeBinary},
-							"musl":  BinaryOsArchInfo{URL: "https://example.com/musl", Hash: "def", ContentType: BinContentTypeBinary},
+							"glibc": BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/glibc", Hash: "abc", ContentType: BinContentTypeBinary},
+							"musl":  BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/musl", Hash: "def", ContentType: BinContentTypeBinary},
 						},
 					},
 				},
@@ -2648,11 +3951,32 @@ func TestGetBinaryInfoMuslExactMatch(t *testing.T) {
 func TestGetBinaryInfoGlibcFallback(t *testing.T) {
 	apps := MapOfApps{
 		"testbin": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					"linux": {
 						"amd64": {
-							"glibc": BinaryOsArchInfo{URL: "https://example.com/glibc", Hash: "abc", ContentType: BinContentTypeBinary},
+							"glibc": BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/glibc", Hash: "abc", ContentType: BinContentTypeBinary},
 						},
 					},
 				},
@@ -2687,11 +4011,32 @@ func TestGetBinaryInfoGlibcFallback(t *testing.T) {
 func TestGetBinaryInfoNoMatchReturnsError(t *testing.T) {
 	apps := MapOfApps{
 		"testbin": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
 			Binary: &AppConfigBinary{
+				Version: "",
 				Binaries: MapOfBinaries{
 					"linux": {
 						"amd64": {
-							"glibc": BinaryOsArchInfo{URL: "https://example.com/glibc", Hash: "abc", ContentType: BinContentTypeBinary},
+							"glibc": BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "https://example.com/glibc", Hash: "abc", ContentType: BinContentTypeBinary},
 						},
 					},
 				},
@@ -2722,7 +4067,27 @@ func TestGetBinaryInfoNotFoundApp(t *testing.T) {
 func TestGetBinaryInfoNotBinaryApp(t *testing.T) {
 	apps := MapOfApps{
 		"uvapp": App{
-			Uv: &AppConfigUV{PackageName: "yamllint", Version: "1.0"},
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Binary:             nil,
+			Bun:                nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil,
+			Uv:                 &AppConfigUV{Runtime: "", LockFile: "", RequiresPython: "", PackageName: "yamllint", Version: "1.0"},
 		},
 	}
 	bm := New(apps, nil, nil)
@@ -2752,15 +4117,61 @@ func TestBinaryAvailable(t *testing.T) {
 		t.Fatalf("other OS: %v", err)
 	}
 
-	info := BinaryOsArchInfo{URL: "http://example/x", Hash: "deadbeef", ContentType: BinContentTypeBinary}
+	info := BinaryOsArchInfo{Auth: nil, BinaryPath: nil, ExtractDir: false, URL: "http://example/x", Hash: "deadbeef", ContentType: BinContentTypeBinary}
 	bm := New(MapOfApps{
-		"available": App{Binary: &AppConfigBinary{Binaries: MapOfBinaries{
-			hostOS: {hostArch: {"unknown": info}},
-		}}},
-		"unavailable": App{Binary: &AppConfigBinary{Binaries: MapOfBinaries{
-			otherOS: {hostArch: {"unknown": info}},
-		}}},
-		"shellapp": App{Shell: &AppConfigShell{Name: "bash"}},
+		"available": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil, Binary: &AppConfigBinary{
+				Version: "", Binaries: MapOfBinaries{
+					hostOS: {hostArch: {"unknown": info}},
+				},
+			},
+		},
+		"unavailable": App{
+			Required:           false,
+			Lazy:               false,
+			Description:        "",
+			VersionCheck:       nil,
+			DependsOn:          nil,
+			OfficialURL:        "",
+			OfficialURLDerived: false,
+			Bun:                nil,
+			Uv:                 nil,
+			Node:               nil,
+			Jvm:                nil,
+			Go:                 nil,
+			Shell:              nil,
+			Env:                nil,
+			RuntimeEnv:         nil,
+			Caches:             nil,
+			Files:              nil,
+			Links:              nil,
+			Archives:           nil,
+			Prepare:            nil, Binary: &AppConfigBinary{
+				Version: "", Binaries: MapOfBinaries{
+					otherOS: {hostArch: {"unknown": info}},
+				},
+			},
+		},
+		"shellapp": App{Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Binary: nil, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Shell: &AppConfigShell{Args: nil, Name: "bash"}},
 	}, nil, nil)
 
 	if ok, _ := bm.BinaryAvailable("available"); !ok {

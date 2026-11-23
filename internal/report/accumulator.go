@@ -48,7 +48,11 @@ type Accumulator struct {
 
 // NewAccumulator starts recording a run.
 func NewAccumulator(opts Options) *Accumulator {
-	return &Accumulator{opts: opts}
+	return &Accumulator{
+		mu:   sync.Mutex{},
+		ops:  nil,
+		opts: opts,
+	}
 }
 
 // OperationRecord collects one operation.
@@ -93,6 +97,14 @@ type changeLog struct {
 // for the tasks the run never reached.
 func (a *Accumulator) BeginOperation(name string, plan *tooling.ExecutionPlan, taskDir func(tooling.Task) string) *OperationRecord {
 	rec := &OperationRecord{
+		stopped:      nil,
+		steps:        nil,
+		changes:      changeLog{observed: false, reason: "", detail: "", byStep: nil},
+		coreToolRuns: nil,
+		coreChanges:  nil,
+		success:      false,
+		duration:     0,
+
 		acc:     a,
 		name:    name,
 		ran:     true,
@@ -125,7 +137,22 @@ func (a *Accumulator) NotRun(name string) {
 			return
 		}
 	}
-	a.ops = append(a.ops, &OperationRecord{acc: a, name: name})
+	a.ops = append(a.ops, &OperationRecord{
+		ran:          false,
+		plan:         nil,
+		taskDir:      nil,
+		results:      nil,
+		stopped:      nil,
+		pending:      nil,
+		flushed:      nil,
+		steps:        nil,
+		changes:      changeLog{observed: false, reason: "", detail: "", byStep: nil},
+		coreToolRuns: nil,
+		coreChanges:  nil,
+		success:      false,
+		duration:     0,
+		acc:          a, name: name,
+	})
 }
 
 // ToolFinding is a finding with the task that reported it, as the event
@@ -214,6 +241,21 @@ func (o *OperationRecord) AddCoreFindings(tool string, diags []diagnostic.Diagno
 	tr := o.acc.newToolRun(o.name, tool)
 	gated := false
 	inv := Invocation{
+		Dir:                "",
+		Scope:              "",
+		Granularity:        "",
+		Arity:              "",
+		WholeUnit:          false,
+		RedactedState:      0,
+		ExitCode:           nil,
+		Success:            false,
+		FailureKind:        "",
+		Duration:           0,
+		RedactedExtraction: 0,
+		Step:               0,
+		Changes:            nil,
+		OutputTail:         "",
+
 		ID:         tool + "#0",
 		TaskID:     "builtin",
 		Coverage:   string(tooling.CoverageComplete),
@@ -351,7 +393,20 @@ func (o *OperationRecord) ChangesNotObserved(reason, detail string) {
 // was called. It is not masked.
 func (o *OperationRecord) Operation() Operation {
 	if o == nil {
-		return Operation{}
+		return Operation{
+			Name:            "",
+			Ran:             false,
+			Success:         false,
+			Duration:        0,
+			Skipped:         nil,
+			Cancelled:       nil,
+			Tools:           nil,
+			ChangesObserved: false,
+			ChangesReason:   "",
+			ChangesDetail:   "",
+			ChangesScope:    nil,
+			Changes:         nil,
+		}
 	}
 	o.acc.mu.Lock()
 	defer o.acc.mu.Unlock()
@@ -404,6 +459,10 @@ func (a *Accumulator) Build(info BuildInfo) *Run {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	run := &Run{
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+
 		Fingerprint: FingerprintVersion,
 		Datamitsu:   Producer{Version: info.Version, Configuration: info.Configuration},
 		StartedAt:   info.StartedAt.UTC(),
@@ -426,6 +485,12 @@ func (a *Accumulator) Build(info BuildInfo) *Run {
 
 func (a *Accumulator) buildOperation(o *OperationRecord) Operation {
 	op := Operation{
+		ChangesObserved: false,
+		ChangesReason:   "",
+		ChangesDetail:   "",
+		ChangesScope:    nil,
+		Changes:         nil,
+
 		Name:      o.name,
 		Ran:       o.ran,
 		Success:   o.success,
@@ -519,12 +584,19 @@ func recordChanges(o *OperationRecord, op *Operation) {
 	for _, step := range steps {
 		for _, c := range log.byStep[step] {
 			if !attributeChange(op, step, c) {
-				op.Changes = append(op.Changes, Change{Path: c.Path, Kind: c.Kind, Step: step})
+				op.Changes = append(op.Changes, Change{
+					Patch: false,
+					Path:  c.Path, Kind: c.Kind, Step: step,
+				})
 			}
 		}
 	}
 	for _, c := range o.coreChanges {
-		op.Changes = append(op.Changes, Change{Path: c.Path, Kind: c.Kind})
+		op.Changes = append(op.Changes, Change{
+			Patch: false,
+			Step:  0,
+			Path:  c.Path, Kind: c.Kind,
+		})
 	}
 }
 
@@ -573,6 +645,14 @@ func (a *Accumulator) newToolRun(op, name string) *ToolRun {
 	tool := a.opts.Tools[name]
 	toolOp := tool.Operations[config.OperationType(op)]
 	tr := &ToolRun{
+		Parser:          nil,
+		GateActive:      false,
+		Category:        "",
+		Complete:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		mayHoldSecrets:  false,
+
 		Name:        name,
 		App:         a.appRef(toolOp.App),
 		FailOn:      string(config.EffectiveFailOn(toolOp, a.opts.FailOn)),
@@ -580,7 +660,12 @@ func (a *Accumulator) newToolRun(op, name string) *ToolRun {
 	}
 	tr.mayHoldSecrets = withholdsOutput(tool, a.opts.Parsers)
 	if p := tool.OutputParser; p != nil {
-		tr.Parser = &ParserRef{Module: p.Module, Parser: p.Parser}
+		tr.Parser = &ParserRef{
+			Version:    "",
+			Schema:     0,
+			ColumnUnit: "",
+			Module:     p.Module, Parser: p.Parser,
+		}
 		if a.opts.Parsers != nil {
 			if facts, ok := a.opts.Parsers(p.Module, p.Parser); ok {
 				tr.Parser.Version = facts.Version
@@ -613,7 +698,12 @@ func withholdsOutput(tool config.Tool, parsers ParserFacts) bool {
 func (a *Accumulator) appRef(name string) AppRef {
 	app, ok := a.opts.Apps[name]
 	if !ok {
-		return AppRef{Name: name}
+		return AppRef{
+			Kind:        "",
+			Version:     "",
+			OfficialURL: "",
+			Name:        name,
+		}
 	}
 	info := binmanager.DescribeApp(name, app)
 	return AppRef{Name: name, Kind: info.Type, Version: info.Version, OfficialURL: app.OfficialURL}
@@ -624,6 +714,21 @@ func (a *Accumulator) appRef(name string) AppRef {
 // that spawned nothing.
 func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionResult, taskDir func(tooling.Task) string, tr *ToolRun) []Invocation {
 	base := Invocation{
+		ID:                 "",
+		Dir:                "",
+		State:              "",
+		RedactedState:      0,
+		ExitCode:           nil,
+		Success:            false,
+		FailureKind:        "",
+		Duration:           0,
+		Extraction:         "",
+		RedactedExtraction: 0,
+		Provenance:         "",
+		Step:               0,
+		Changes:            nil,
+		OutputTail:         "",
+
 		TaskID:      task.ID,
 		Scope:       string(task.OpConfig.Scope),
 		Granularity: string(config.InferGranularity(task.OpConfig)),
@@ -644,7 +749,13 @@ func (a *Accumulator) invocations(task tooling.Task, result *tooling.ExecutionRe
 		inv.State = string(tooling.ProcessNotStarted)
 		inv.Extraction, inv.Provenance = string(tooling.ExtractionNone), provenanceNone
 		for _, file := range plannedFiles(task) {
-			inv.Files = append(inv.Files, FileResult{Path: a.rel(file), State: string(tooling.FileNotStarted)})
+			inv.Files = append(inv.Files, FileResult{
+				RedactedState: 0,
+				Success:       false,
+				ExitCode:      nil,
+				Patch:         "",
+				Path:          a.rel(file), State: string(tooling.FileNotStarted),
+			})
 		}
 		sortFiles(inv.Files)
 		return []Invocation{inv}
@@ -776,11 +887,18 @@ func standInState(result *tooling.ExecutionResult, rest []tooling.FileResult) st
 }
 
 func (a *Accumulator) fileResult(fr tooling.FileResult) FileResult {
-	return FileResult{Path: a.rel(fr.File), State: string(fr.State), Success: fr.Success, ExitCode: fr.ExitCode, Patch: fr.Patch}
+	return FileResult{
+		RedactedState: 0,
+		Path:          a.rel(fr.File), State: string(fr.State), Success: fr.Success, ExitCode: fr.ExitCode, Patch: fr.Patch,
+	}
 }
 
 func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun) Finding {
 	f := Finding{
+		Fingerprint: "",
+		Shown:       false,
+		lineHash:    "",
+
 		FingerprintBasis: BasisNone,
 		Tool:             tool,
 		Source:           d.Source,
@@ -794,6 +912,11 @@ func (a *Accumulator) finding(tool string, d diagnostic.Diagnostic, tr *ToolRun)
 		Message:          string(tooling.StripCSI([]byte(d.Message))),
 		Provenance:       provenanceParser,
 		Location: Location{
+			Unit:  "",
+			Chars: nil,
+			Bytes: nil,
+			Utf16: nil,
+
 			Path:      a.rel(d.File),
 			Row:       d.Row,
 			EndRow:    d.EndRow,

@@ -174,11 +174,23 @@ func NewExecutor(
 	cache *cache.Cache,
 ) *Executor {
 	return &Executor{
-		rootPath:   rootPath,
-		dryRun:     dryRun,
-		failFast:   failFast,
-		appManager: appManager,
-		cache:      cache,
+		resultCallback:       nil,
+		taskStartCallback:    nil,
+		fileProgressCallback: nil,
+		parser:               nil,
+		parserModules:        nil,
+		gate:                 nil,
+		envObserver:          nil,
+		stepCallback:         nil,
+		steps:                0,
+		capturePatches:       false,
+		limits:               ParseLimits{InputBytes: 0, Findings: 0},
+		cmdInfos:             atomic.Pointer[commandInfoMemo]{},
+		rootPath:             rootPath,
+		dryRun:               dryRun,
+		failFast:             failFast,
+		appManager:           appManager,
+		cache:                cache,
 	}
 }
 
@@ -397,8 +409,10 @@ func (e *Executor) executeGroup(ctx context.Context, group TaskGroup, failFast f
 	startTime := time.Now()
 	log.Debug("executeGroup start", zap.Int("priority", group.Priority), zap.Int("tasks", len(group.Tasks)))
 	result = GroupExecutionResult{
-		Priority: group.Priority,
-		Success:  true,
+		Results:           nil,
+		WallClockDuration: 0,
+		Priority:          group.Priority,
+		Success:           true,
 	}
 
 	// Recorded in a defer, not at the bottom of the function: the two fail-fast
@@ -604,15 +618,35 @@ func (e *Executor) executeTasksParallel(ctx context.Context, tasks []Task, failF
 func (e *Executor) unstartedResult(ctx context.Context, task Task) ExecutionResult {
 	workingDir := e.getWorkingDir(task)
 	result := ExecutionResult{
-		ToolName:      task.ToolName,
-		TaskID:        task.ID,
-		Success:       false,
-		Error:         errCancelled,
-		WorkingDir:    workingDir,
-		RelativeDir:   e.getRelativeDir(workingDir),
-		Scope:         task.OpConfig.Scope,
-		Cancelled:     true,
-		FailureReason: cancelReason(ctx),
+		Output:           "",
+		Duration:         0,
+		Command:          "",
+		ExitCode:         0,
+		Batch:            false,
+		StartedAt:        time.Time{},
+		EndedAt:          time.Time{},
+		FilesNotRun:      0,
+		UnparsedFailures: nil,
+		CapturedStdout:   "",
+		Diagnostics:      nil,
+		Processes:        nil,
+		ParseFailed:      false,
+		FailOn:           "",
+		Files:            nil,
+		FileResults:      nil,
+		Cached:           false,
+		WholeUnit:        false,
+		UnitDir:          "",
+		cached:           nil,
+		ToolName:         task.ToolName,
+		TaskID:           task.ID,
+		Success:          false,
+		Error:            errCancelled,
+		WorkingDir:       workingDir,
+		RelativeDir:      e.getRelativeDir(workingDir),
+		Scope:            task.OpConfig.Scope,
+		Cancelled:        true,
+		FailureReason:    cancelReason(ctx),
 	}
 	describeFiles(task, &result, FileNotStarted)
 	return result
@@ -649,9 +683,35 @@ func (e *Executor) executeTask(ctx context.Context, task Task) ExecutionResult {
 	}
 
 	result := ExecutionResult{
-		ToolName: task.ToolName,
-		TaskID:   task.ID,
-		Success:  true,
+		Output:           "",
+		Error:            nil,
+		Duration:         0,
+		Command:          "",
+		ExitCode:         0,
+		WorkingDir:       "",
+		RelativeDir:      "",
+		Scope:            "",
+		Batch:            false,
+		Cancelled:        false,
+		FailureReason:    0,
+		StartedAt:        time.Time{},
+		EndedAt:          time.Time{},
+		FilesNotRun:      0,
+		UnparsedFailures: nil,
+		CapturedStdout:   "",
+		Diagnostics:      nil,
+		Processes:        nil,
+		ParseFailed:      false,
+		FailOn:           "",
+		Files:            nil,
+		FileResults:      nil,
+		Cached:           false,
+		WholeUnit:        false,
+		UnitDir:          "",
+		cached:           nil,
+		ToolName:         task.ToolName,
+		TaskID:           task.ID,
+		Success:          true,
 	}
 
 	// Get command info
@@ -1047,7 +1107,7 @@ var lineFormats = []string{"github-annotations", "azure-logissue", "msvc", "gcc"
 // Without a declaration, output the fallback does not recognize has no
 // extraction (none), and the exit status decides as it always did.
 func (e *Executor) extract(ctx context.Context, task Task, files []string, workingDir string, stdout, stderr []byte, exitCode int, declared bool) extracted {
-	x := extracted{outcome: ExtractionNone}
+	x := extracted{diags: nil, parseError: "", provenance: "", module: "", partial: false, outcome: ExtractionNone}
 	op := task.Tool.OutputParser
 	//nolint:gosec // G115: a process exit code is small; the int32 cast is intentional.
 	code := int32(exitCode)
@@ -1076,6 +1136,7 @@ func (e *Executor) extract(ctx context.Context, task Task, files []string, worki
 				provenance = ProvenanceFormat
 			}
 			return extracted{
+				parseError: "",
 				diags:      located(answer.Diagnostics, files, workingDir),
 				outcome:    ExtractionParsedClean,
 				provenance: provenance,
@@ -1127,14 +1188,14 @@ type sniffed struct {
 // cut off. Of a line format it keeps only the findings on files that exist.
 func (e *Executor) fallback(ctx context.Context, task Task, files []string, workingDir string, stdout, stderr []byte, code int32) (sniffed, bool, error) {
 	if len(bytes.TrimSpace(stdout)) == 0 && len(bytes.TrimSpace(stderr)) == 0 {
-		return sniffed{}, false, nil
+		return sniffed{x: extracted{diags: nil, outcome: "", parseError: "", provenance: "", module: "", partial: false}, format: ""}, false, nil
 	}
 	answer, err := e.parser.Fallback(ctx, task.ToolName, stdout, stderr, code)
 	if err != nil {
 		log.Debug("the fallback parser failed", zap.String("tool", task.ToolName), zap.Error(err))
 		return sniffed{}, false, err
 	}
-	partial := sniffed{x: extracted{partial: answer.Partial}}
+	partial := sniffed{format: "", x: extracted{diags: nil, outcome: "", parseError: "", provenance: "", module: "", partial: answer.Partial}}
 	if !answer.Recognized {
 		return partial, false, nil
 	}
@@ -1161,6 +1222,8 @@ func (e *Executor) fallback(ctx context.Context, task Task, files []string, work
 	}
 	return sniffed{
 		x: extracted{
+			outcome:    "",
+			parseError: "",
 			diags:      diags,
 			provenance: ProvenanceFallbackPrefix + answer.Format,
 			module:     EmbeddedParserModule,
@@ -1221,14 +1284,35 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 	}
 
 	result := ExecutionResult{
-		ToolName:    task.ToolName,
-		Success:     true,
-		WorkingDir:  workingDir,
-		RelativeDir: e.getRelativeDir(workingDir),
-		ExitCode:    0,
-		Scope:       task.OpConfig.Scope,
-		Batch:       false,
-		cached:      cachedOf(task.Files, filesToProcess),
+		TaskID:           "",
+		Output:           "",
+		Error:            nil,
+		Duration:         0,
+		Command:          "",
+		Cancelled:        false,
+		FailureReason:    0,
+		StartedAt:        time.Time{},
+		EndedAt:          time.Time{},
+		FilesNotRun:      0,
+		UnparsedFailures: nil,
+		CapturedStdout:   "",
+		Diagnostics:      nil,
+		Processes:        nil,
+		ParseFailed:      false,
+		FailOn:           "",
+		Files:            nil,
+		FileResults:      nil,
+		Cached:           false,
+		WholeUnit:        false,
+		UnitDir:          "",
+		ToolName:         task.ToolName,
+		Success:          true,
+		WorkingDir:       workingDir,
+		RelativeDir:      e.getRelativeDir(workingDir),
+		ExitCode:         0,
+		Scope:            task.OpConfig.Scope,
+		Batch:            false,
+		cached:           cachedOf(task.Files, filesToProcess),
 	}
 
 	// If all files are cached, return success immediately
@@ -1301,9 +1385,23 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 
 		if e.dryRun {
 			log.Debug("dry-run mode", zap.String("file", file), zap.Strings("args", args))
-			outputs = append(outputs, fileOutput{text: "[DRY-RUN] " + cmdString})
+			outputs = append(outputs, fileOutput{label: "", failed: false, explained: false, text: "[DRY-RUN] " + cmdString})
 			result.addProcess(ProcessResult{
-				Files: []string{filepath.Clean(file)}, State: ProcessNotStarted, Extraction: ExtractionNone,
+				ID:              "",
+				ExitCode:        nil,
+				Success:         false,
+				ParseError:      "",
+				Provenance:      "",
+				ParserModule:    "",
+				OutputTail:      nil,
+				Diagnostics:     nil,
+				DurationMs:      0,
+				FailOn:          "",
+				GateActive:      false,
+				ThresholdFailed: false,
+				edits:           nil,
+				patch:           "",
+				Files:           []string{filepath.Clean(file)}, State: ProcessNotStarted, Extraction: ExtractionNone,
 			})
 
 			// Call progress callback for dry-run files (offset by cached count)
@@ -1336,12 +1434,25 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 			// The frame shows the joined output, not Error, once any file wrote
 			// some: without this line a later file's output would stand in for
 			// a failure no process reported.
-			outputs = append(outputs, fileOutput{text: stdinFailure.Error(), failed: true})
+			outputs = append(outputs, fileOutput{label: "", explained: false, text: stdinFailure.Error(), failed: true})
 			if parseMode {
 				result.UnparsedFailures = append(result.UnparsedFailures, stdinFailure.Error())
 			}
 			result.addProcess(ProcessResult{
-				Files: []string{filepath.Clean(file)}, State: ProcessSetupFailed, Extraction: ExtractionNone,
+				ID:              "",
+				ExitCode:        nil,
+				Success:         false,
+				ParseError:      "",
+				Provenance:      "",
+				ParserModule:    "",
+				Diagnostics:     nil,
+				DurationMs:      0,
+				FailOn:          "",
+				GateActive:      false,
+				ThresholdFailed: false,
+				edits:           nil,
+				patch:           "",
+				Files:           []string{filepath.Clean(file)}, State: ProcessSetupFailed, Extraction: ExtractionNone,
 				OutputTail: outputTail([]byte(stdinFailure.Error())),
 			})
 			if e.fileProgressCallback != nil {
@@ -1373,13 +1484,27 @@ func (e *Executor) executePerFile(ctx context.Context, task Task, cmdInfo *binma
 		default:
 			output = stdoutBytes
 		}
-		outputs = append(outputs, fileOutput{text: string(output)})
+		outputs = append(outputs, fileOutput{label: "", failed: false, explained: false, text: string(output)})
 
 		exitCode := getExitCode(err)
 		lastExitCode = exitCode
 
 		proc := ProcessResult{
-			Files: []string{filepath.Clean(file)}, OutputTail: outputTail(output), DurationMs: procDuration,
+			ID:              "",
+			State:           "",
+			ExitCode:        nil,
+			Success:         false,
+			Extraction:      "",
+			ParseError:      "",
+			Provenance:      "",
+			ParserModule:    "",
+			Diagnostics:     nil,
+			FailOn:          "",
+			GateActive:      false,
+			ThresholdFailed: false,
+			edits:           nil,
+			patch:           "",
+			Files:           []string{filepath.Clean(file)}, OutputTail: outputTail(output), DurationMs: procDuration,
 		}
 		proc.Extraction, proc.ParseError = e.unparsed(task, formatMode)
 		if parseMode {
@@ -1553,13 +1678,35 @@ func (e *Executor) executeBatch(ctx context.Context, task Task, cmdInfo *binmana
 	}
 
 	result := ExecutionResult{
-		ToolName:    task.ToolName,
-		Success:     true,
-		Scope:       task.OpConfig.Scope,
-		Batch:       true,
-		WorkingDir:  workingDir,
-		RelativeDir: e.getRelativeDir(workingDir),
-		cached:      cachedOf(task.Files, filesToProcess),
+		TaskID:           "",
+		Output:           "",
+		Error:            nil,
+		Duration:         0,
+		Command:          "",
+		ExitCode:         0,
+		Cancelled:        false,
+		FailureReason:    0,
+		StartedAt:        time.Time{},
+		EndedAt:          time.Time{},
+		FilesNotRun:      0,
+		UnparsedFailures: nil,
+		CapturedStdout:   "",
+		Diagnostics:      nil,
+		Processes:        nil,
+		ParseFailed:      false,
+		FailOn:           "",
+		Files:            nil,
+		FileResults:      nil,
+		Cached:           false,
+		WholeUnit:        false,
+		UnitDir:          "",
+		ToolName:         task.ToolName,
+		Success:          true,
+		Scope:            task.OpConfig.Scope,
+		Batch:            true,
+		WorkingDir:       workingDir,
+		RelativeDir:      e.getRelativeDir(workingDir),
+		cached:           cachedOf(task.Files, filesToProcess),
 	}
 
 	// If files were specified but all are cached, return success immediately.
@@ -1668,13 +1815,35 @@ func argsReferenceFiles(args []string) bool {
 // executeBatchChunk executes a single chunk of files in batch mode
 func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *binmanager.CommandInfo, workingDir string, files []string, startTime time.Time) ExecutionResult {
 	result := ExecutionResult{
-		ToolName:    task.ToolName,
-		Success:     true,
-		WorkingDir:  workingDir,
-		RelativeDir: e.getRelativeDir(workingDir),
-		ExitCode:    0,
-		Scope:       task.OpConfig.Scope,
-		Batch:       true,
+		TaskID:           "",
+		Output:           "",
+		Error:            nil,
+		Duration:         0,
+		Command:          "",
+		Cancelled:        false,
+		FailureReason:    0,
+		StartedAt:        time.Time{},
+		EndedAt:          time.Time{},
+		FilesNotRun:      0,
+		UnparsedFailures: nil,
+		CapturedStdout:   "",
+		Diagnostics:      nil,
+		Processes:        nil,
+		ParseFailed:      false,
+		FailOn:           "",
+		Files:            nil,
+		FileResults:      nil,
+		Cached:           false,
+		WholeUnit:        false,
+		UnitDir:          "",
+		cached:           nil,
+		ToolName:         task.ToolName,
+		Success:          true,
+		WorkingDir:       workingDir,
+		RelativeDir:      e.getRelativeDir(workingDir),
+		ExitCode:         0,
+		Scope:            task.OpConfig.Scope,
+		Batch:            true,
 	}
 
 	args := e.replacePlaceholders(ctx, task.OpConfig.Args, "", files, task.ProjectPath, task.ToolName, task.OpConfig.App)
@@ -1685,7 +1854,21 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 		log.Debug("dry-run mode", zap.Strings("args", args))
 		result.Output = "[DRY-RUN] " + cmdString
 		result.addProcess(ProcessResult{
-			Files: absolutePaths(files, workingDir), State: ProcessNotStarted, Extraction: ExtractionNone,
+			ID:              "",
+			ExitCode:        nil,
+			Success:         false,
+			ParseError:      "",
+			Provenance:      "",
+			ParserModule:    "",
+			OutputTail:      nil,
+			Diagnostics:     nil,
+			DurationMs:      0,
+			FailOn:          "",
+			GateActive:      false,
+			ThresholdFailed: false,
+			edits:           nil,
+			patch:           "",
+			Files:           absolutePaths(files, workingDir), State: ProcessNotStarted, Extraction: ExtractionNone,
 		})
 		result.recordTiming(startTime)
 		return result
@@ -1726,7 +1909,19 @@ func (e *Executor) executeBatchChunk(ctx context.Context, task Task, cmdInfo *bi
 	result.ExitCode = exitCode
 
 	proc := ProcessResult{
-		Files: absolutePaths(files, workingDir), State: processState(err), Success: err == nil,
+		ID:              "",
+		ExitCode:        nil,
+		Extraction:      "",
+		ParseError:      "",
+		Provenance:      "",
+		ParserModule:    "",
+		Diagnostics:     nil,
+		FailOn:          "",
+		GateActive:      false,
+		ThresholdFailed: false,
+		edits:           nil,
+		patch:           "",
+		Files:           absolutePaths(files, workingDir), State: processState(err), Success: err == nil,
 		OutputTail: outputTail(output), DurationMs: procDuration,
 	}
 	proc.Extraction, proc.ParseError = e.unparsed(task, formatMode)
@@ -1774,12 +1969,35 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 		zap.Int("maxWorkers", maxWorkers))
 
 	result := ExecutionResult{
-		ToolName:    task.ToolName,
-		Success:     true,
-		Scope:       task.OpConfig.Scope,
-		Batch:       true,
-		WorkingDir:  workingDir,
-		RelativeDir: e.getRelativeDir(workingDir),
+		TaskID:           "",
+		Output:           "",
+		Error:            nil,
+		Duration:         0,
+		Command:          "",
+		ExitCode:         0,
+		Cancelled:        false,
+		FailureReason:    0,
+		StartedAt:        time.Time{},
+		EndedAt:          time.Time{},
+		FilesNotRun:      0,
+		UnparsedFailures: nil,
+		CapturedStdout:   "",
+		Diagnostics:      nil,
+		Processes:        nil,
+		ParseFailed:      false,
+		FailOn:           "",
+		Files:            nil,
+		FileResults:      nil,
+		Cached:           false,
+		WholeUnit:        false,
+		UnitDir:          "",
+		cached:           nil,
+		ToolName:         task.ToolName,
+		Success:          true,
+		Scope:            task.OpConfig.Scope,
+		Batch:            true,
+		WorkingDir:       workingDir,
+		RelativeDir:      e.getRelativeDir(workingDir),
 	}
 
 	// Execute chunks in parallel with worker pool
@@ -1857,13 +2075,37 @@ func (e *Executor) executeBatchChunksParallel(ctx context.Context, task Task, cm
 // given.
 func unstartedChunk(ctx context.Context, task Task, workingDir string, files []string) ExecutionResult {
 	result := ExecutionResult{
-		ToolName:      task.ToolName,
-		Success:       false,
-		Error:         errCancelled,
-		Cancelled:     true,
-		FailureReason: cancelReason(ctx),
+		TaskID:           "",
+		Output:           "",
+		Duration:         0,
+		Command:          "",
+		ExitCode:         0,
+		WorkingDir:       "",
+		RelativeDir:      "",
+		Scope:            "",
+		Batch:            false,
+		StartedAt:        time.Time{},
+		EndedAt:          time.Time{},
+		FilesNotRun:      0,
+		UnparsedFailures: nil,
+		CapturedStdout:   "",
+		Diagnostics:      nil,
+		Processes:        nil,
+		ParseFailed:      false,
+		FailOn:           "",
+		Files:            nil,
+		FileResults:      nil,
+		Cached:           false,
+		WholeUnit:        false,
+		UnitDir:          "",
+		cached:           nil,
+		ToolName:         task.ToolName,
+		Success:          false,
+		Error:            errCancelled,
+		Cancelled:        true,
+		FailureReason:    cancelReason(ctx),
 	}
-	result.addProcess(ProcessResult{Files: absolutePaths(files, workingDir), State: ProcessNotStarted, Extraction: ExtractionNone})
+	result.addProcess(ProcessResult{ID: "", ExitCode: nil, Success: false, ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, edits: nil, patch: "", Files: absolutePaths(files, workingDir), State: ProcessNotStarted, Extraction: ExtractionNone})
 	return result
 }
 
@@ -2215,7 +2457,7 @@ func getExitCode(err error) int {
 		return 0
 	}
 
-	exitErr := &exec.ExitError{}
+	exitErr := &exec.ExitError{ProcessState: nil, Stderr: nil}
 	if errors.As(err, &exitErr) {
 		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
 			return status.ExitStatus()

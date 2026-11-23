@@ -46,13 +46,17 @@ func NewInstaller(
 	layerMap *config.ManagedConfigLayerMap,
 ) *Installer {
 	return &Installer{
-		rootPath:      rootPath,
-		cwdPath:       cwdPath,
-		projectTypes:  projectTypes,
-		selectedTools: selectedTools,
-		configs:       configs,
-		vm:            vm,
-		layerMap:      layerMap,
+		projectLocations:  nil,
+		repoProjectTypes:  nil,
+		force:             false,
+		createMissingOnly: false,
+		rootPath:          rootPath,
+		cwdPath:           cwdPath,
+		projectTypes:      projectTypes,
+		selectedTools:     selectedTools,
+		configs:           configs,
+		vm:                vm,
+		layerMap:          layerMap,
 	}
 }
 
@@ -119,6 +123,10 @@ func (i *Installer) InstallAll(ctx context.Context, dryRun bool) ([]InstallResul
 // installConfig installs a single configuration file
 func (i *Installer) installConfig(ctx context.Context, name string, cfg config.ManagedConfig, dryRun bool) InstallResult {
 	result := InstallResult{
+		FilePath:     "",
+		Action:       "",
+		LinkTarget:   "",
+		Error:        nil,
 		ConfigName:   name,
 		DeletedFiles: []string{},
 		Scope:        cfg.Scope,
@@ -226,7 +234,10 @@ func (i *Installer) installConfig(ctx context.Context, name string, cfg config.M
 	if i.force && i.layerMap != nil {
 		if history := (*i.layerMap)[name]; history != nil && len(history.SourceLayers) > 0 {
 			cc := config.ContentContext{
-				RootPath: i.rootPath, CwdPath: i.cwdPath, Placement: config.PlacementRepo,
+				ExistingContent: nil,
+				OriginalContent: nil,
+				ExistingPath:    nil,
+				RootPath:        i.rootPath, CwdPath: i.cwdPath, Placement: config.PlacementRepo,
 				OutputPath: mainPath, ProjectTypes: i.projectTypes, ProjectLocations: i.projectLocations,
 			}
 			if cfg.Ejectable {

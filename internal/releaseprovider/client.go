@@ -43,7 +43,7 @@ func New(source Source) (*Client, error) {
 	if err := source.Validate(); err != nil {
 		return nil, err
 	}
-	c := &Client{source: source, http: httpx.NewHardenedClient(apiTimeout), packageFiles: make(map[string]map[string]string), projectIDs: make(map[string]int64), repositories: make(map[string]releaseasset.Repository)}
+	c := &Client{RetryNotifier: nil, token: "", source: source, http: httpx.NewHardenedClient(apiTimeout), packageFiles: make(map[string]map[string]string), projectIDs: make(map[string]int64), repositories: make(map[string]releaseasset.Repository)}
 	if source.TokenEnv != "" {
 		var err error
 		c.token, err = env.Credential(source.TokenEnv)
@@ -88,13 +88,13 @@ type gitlabRelease struct {
 }
 
 func (r gitlabRelease) release() releaseasset.Release {
-	out := releaseasset.Release{TagName: r.TagName, PublishedAt: r.ReleasedAt, Draft: r.Upcoming}
+	out := releaseasset.Release{Assets: nil, Prerelease: false, TagName: r.TagName, PublishedAt: r.ReleasedAt, Draft: r.Upcoming}
 	for _, link := range r.Assets.Links {
 		raw := link.URL
 		if raw == "" {
 			raw = link.DirectURL
 		}
-		out.Assets = append(out.Assets, releaseasset.Asset{Name: link.Name, BrowserDownloadURL: raw, MetadataURL: link.URL})
+		out.Assets = append(out.Assets, releaseasset.Asset{APIURL: "", UUID: "", Auth: nil, Size: 0, ContentType: "", Digest: "", Name: link.Name, BrowserDownloadURL: raw, MetadataURL: link.URL})
 	}
 	return out
 }
@@ -206,7 +206,7 @@ func (c *Client) GetRepository(ctx context.Context, repository string) (*release
 	if err := c.getJSON(ctx, repoRoute(c.source.Type, repository), &raw); err != nil {
 		return nil, err
 	}
-	repo := releaseasset.Repository{Description: raw.Description, PackageAccess: raw.PackageAccess}
+	repo := releaseasset.Repository{Visibility: "", Private: false, Description: raw.Description, PackageAccess: raw.PackageAccess}
 	if c.source.Type == "gitlab" {
 		switch raw.Visibility {
 		case "public", "internal", "private":

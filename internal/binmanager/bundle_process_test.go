@@ -32,7 +32,7 @@ func TestBundleInstallRaceHelper(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	bm := New(MapOfApps{}, MapOfBundles{"probe": {Version: "v1", Files: map[string]string{"payload": "complete"}}}, nil)
+	bm := New(MapOfApps{}, MapOfBundles{"probe": {Archives: nil, Links: nil, Version: "v1", Files: map[string]string{"payload": "complete"}}}, nil)
 	stats, err := bm.InstallBundles(context.Background(), false)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ func TestBundleInstallRaceHelper(t *testing.T) {
 func TestConcurrentProcessesRepairPartialBundleOnce(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("DATAMITSU_CACHE_DIR", root)
-	bundles := MapOfBundles{"probe": {Version: "v1", Files: map[string]string{"payload": "complete"}}}
+	bundles := MapOfBundles{"probe": {Archives: nil, Links: nil, Version: "v1", Files: map[string]string{"payload": "complete"}}}
 	bm := New(MapOfApps{}, bundles, nil)
 	target, err := bm.ComputeBundlePath("probe")
 	if err != nil {
@@ -112,7 +112,7 @@ func TestConcurrentProcessesRepairPartialBundleOnce(t *testing.T) {
 func TestConcurrentClearWaitsForBundleProvisioning(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("DATAMITSU_CACHE_DIR", root)
-	bundles := MapOfBundles{"probe": {Version: "v1", Files: map[string]string{"payload": "complete"}}}
+	bundles := MapOfBundles{"probe": {Archives: nil, Links: nil, Version: "v1", Files: map[string]string{"payload": "complete"}}}
 	bm := New(MapOfApps{}, bundles, nil)
 	clearRelease, err := storelock.Clear(context.Background(), env.GetStorePath())
 	if err != nil {

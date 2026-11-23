@@ -15,7 +15,7 @@ func TestToolingStrategyRecordingsThroughWASM(t *testing.T) {
 	t.Setenv("DATAMITSU_PARSERS_DIR", t.TempDir())
 	wasm := echoWASM(t)
 	server, _ := serveWASM(t, wasm)
-	manager := New(config.MapOfParsers{"core": {URL: server.URL, Hash: sha256Hex(wasm)}})
+	manager := New(config.MapOfParsers{"core": {OCI: nil, URL: server.URL, Hash: sha256Hex(wasm)}})
 	t.Cleanup(func() { _ = manager.Close(context.Background()) })
 	ctx := context.Background()
 	for _, parser := range []string{"ty", "sqruff", "vacuum"} {

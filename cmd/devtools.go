@@ -30,14 +30,78 @@ var (
 )
 
 var devtoolsCmd = &cobra.Command{
-	Use:   "devtools",
-	Short: "Development tools for maintaining datamitsu",
-	Long:  `Development tools for maintaining datamitsu binary configurations`,
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	Args:                       nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	RunE:                       nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "devtools",
+	Short:                      "Development tools for maintaining datamitsu",
+	Long:                       `Development tools for maintaining datamitsu binary configurations`,
 }
 
 var pullReleasesCmd = &cobra.Command{
-	Use:   "pull-releases <file>",
-	Short: "Update binary configurations from forge releases",
+	Aliases:                    nil,
+	SuggestFor:                 nil,
+	GroupID:                    "",
+	Example:                    "",
+	ValidArgs:                  nil,
+	ValidArgsFunction:          nil,
+	ArgAliases:                 nil,
+	BashCompletionFunction:     "",
+	Deprecated:                 "",
+	Annotations:                nil,
+	Version:                    "",
+	PersistentPreRun:           nil,
+	PersistentPreRunE:          nil,
+	PreRun:                     nil,
+	PreRunE:                    nil,
+	Run:                        nil,
+	PostRun:                    nil,
+	PostRunE:                   nil,
+	PersistentPostRun:          nil,
+	PersistentPostRunE:         nil,
+	FParseErrWhitelist:         cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0},
+	CompletionOptions:          cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil},
+	TraverseChildren:           false,
+	Hidden:                     false,
+	SilenceErrors:              false,
+	SilenceUsage:               false,
+	DisableFlagParsing:         false,
+	DisableAutoGenTag:          false,
+	DisableFlagsInUseLine:      false,
+	DisableSuggestions:         false,
+	SuggestionsMinimumDistance: 0,
+	Use:                        "pull-releases <file>",
+	Short:                      "Update binary configurations from forge releases",
 	Long: `Update binary configurations from forge releases using auto-detection.
 
 Requires a file argument pointing to the binary apps JSON file.
@@ -193,7 +257,7 @@ type pullFailure struct {
 func pullReleasesApp(ctx context.Context, client releaseprovider.Provider, state *appstate.State, binaryAppsPath, appName string, minAge int, history ...*appstate.State) []pullFailure {
 	metadata := state.Apps[appName]
 	fail := func(stage string, err error) []pullFailure {
-		return []pullFailure{{app: appName, stage: stage, err: err}}
+		return []pullFailure{{fatal: false, app: appName, stage: stage, err: err}}
 	}
 
 	if err := appstate.Validate(appName, metadata); err != nil {
@@ -287,7 +351,7 @@ func pullReleasesApp(ctx context.Context, client releaseprovider.Provider, state
 		if unverified, ok := errors.AsType[*verificationError](err); ok {
 			failures := make([]pullFailure, 0, len(unverified.platforms))
 			for _, p := range unverified.platforms {
-				failures = append(failures, pullFailure{app: appName, stage: "verify " + p.platform, err: p.err})
+				failures = append(failures, pullFailure{fatal: false, app: appName, stage: "verify " + p.platform, err: p.err})
 			}
 			return failures
 		}
@@ -401,7 +465,7 @@ func selectedPlatformTuples(selection []string) []platformTuple {
 		return platforms
 	}
 	return slices.DeleteFunc(platforms, func(p platformTuple) bool {
-		return !slices.Contains(selection, formatPlatformLabel(detectionResult{os: p.os, arch: p.arch, libc: p.libc}))
+		return !slices.Contains(selection, formatPlatformLabel(detectionResult{status: "", assetName: "", contentType: "", binaryPath: nil, err: nil, os: p.os, arch: p.arch, libc: p.libc}))
 	})
 }
 
@@ -421,7 +485,10 @@ func buildBinariesForApp(ctx context.Context, appName string, release *releaseas
 
 	// Build into a fresh entry to avoid mutating shared state on failure
 	entry := &appstate.BinariesEntry{
-		Binaries: make(binmanager.MapOfBinaries),
+		Source:      nil,
+		ConfigHash:  "",
+		Description: "",
+		Binaries:    make(binmanager.MapOfBinaries),
 	}
 
 	// Use existing binaries for historical learning only (read-only)
@@ -469,11 +536,14 @@ func buildBinariesForApp(ctx context.Context, appName string, release *releaseas
 		candidates, err := detector.DetectBinaryCandidates(appName, release.Assets, platform.os, platform.arch, platform.libc)
 		if err != nil {
 			results = append(results, detectionResult{
-				os:     platform.os,
-				arch:   platform.arch,
-				libc:   platform.libc,
-				status: "not_available",
-				err:    err,
+				assetName:   "",
+				contentType: "",
+				binaryPath:  nil,
+				os:          platform.os,
+				arch:        platform.arch,
+				libc:        platform.libc,
+				status:      "not_available",
+				err:         err,
 			})
 			notAvailableCount++
 			continue
@@ -487,7 +557,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *releaseas
 		case "success":
 			// fall through to dedup + store below
 		case "no_hash":
-			result := detectionResult{os: platform.os, arch: platform.arch, libc: platform.libc, status: "no_hash", assetName: candidates[0].Name, err: pickErr}
+			result := detectionResult{contentType: "", binaryPath: nil, os: platform.os, arch: platform.arch, libc: platform.libc, status: "no_hash", assetName: candidates[0].Name, err: pickErr}
 			if failure, ok := errors.AsType[*candidateError](pickErr); ok {
 				result.assetName, result.err = failure.asset, failure.err
 			}
@@ -496,7 +566,9 @@ func buildBinariesForApp(ctx context.Context, appName string, release *releaseas
 			continue
 		case "verification_failed":
 			result := detectionResult{
-				os: platform.os, arch: platform.arch, libc: platform.libc,
+				contentType: "",
+				binaryPath:  nil,
+				os:          platform.os, arch: platform.arch, libc: platform.libc,
 				status: "verification_failed", assetName: candidates[0].Name, err: pickErr,
 			}
 			if failure, ok := errors.AsType[*candidateError](pickErr); ok {
@@ -507,7 +579,10 @@ func buildBinariesForApp(ctx context.Context, appName string, release *releaseas
 			continue
 		default: // "not_available" — e.g. every candidate was a libc mismatch
 			results = append(results, detectionResult{
-				os: platform.os, arch: platform.arch, libc: platform.libc,
+				assetName:   "",
+				contentType: "",
+				binaryPath:  nil,
+				os:          platform.os, arch: platform.arch, libc: platform.libc,
 				status: "not_available", err: pickErr,
 			})
 			notAvailableCount++
@@ -522,10 +597,14 @@ func buildBinariesForApp(ctx context.Context, appName string, release *releaseas
 					if seen.url == pick.asset.BrowserDownloadURL && seen.hash == pick.hash {
 						fmt.Printf("  Skipping musl for %s/%s: same binary as glibc\n", platform.os, platform.arch)
 						results = append(results, detectionResult{
-							os:     platform.os,
-							arch:   platform.arch,
-							libc:   platform.libc,
-							status: "deduplicated",
+							assetName:   "",
+							contentType: "",
+							binaryPath:  nil,
+							err:         nil,
+							os:          platform.os,
+							arch:        platform.arch,
+							libc:        platform.libc,
+							status:      "deduplicated",
 						})
 						deduplicatedCount++
 						continue
@@ -536,6 +615,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *releaseas
 
 		// Create binary info
 		binInfo := binmanager.BinaryOsArchInfo{
+			ExtractDir:  false,
 			URL:         pick.asset.BrowserDownloadURL,
 			Hash:        pick.hash,
 			Auth:        pick.asset.Auth,
@@ -565,6 +645,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *releaseas
 		}
 
 		results = append(results, detectionResult{
+			err:         nil,
 			os:          platform.os,
 			arch:        platform.arch,
 			libc:        platform.libc,
@@ -583,7 +664,7 @@ func buildBinariesForApp(ctx context.Context, appName string, release *releaseas
 	if verificationFailedCount > 0 {
 		fmt.Printf("\nSummary: %d detected, %d not available, %d deduplicated, %d verification failed\n",
 			successCount, notAvailableCount, deduplicatedCount, verificationFailedCount)
-		unverified := &verificationError{}
+		unverified := &verificationError{platforms: nil}
 		for _, r := range results {
 			if r.status == "verification_failed" {
 				unverified.platforms = append(unverified.platforms, platformVerification{

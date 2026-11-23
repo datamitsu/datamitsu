@@ -46,7 +46,7 @@ type startupRecorder struct {
 	printed bool
 }
 
-var startup = &startupRecorder{phases: make(map[string]*StartupPhase)}
+var startup = &startupRecorder{mu: sync.Mutex{}, order: nil, printed: false, phases: make(map[string]*StartupPhase)}
 
 // startupEnabled reports whether startup instrumentation is active. The env var
 // is read on every call rather than cached so tests can toggle it with
@@ -79,7 +79,7 @@ func (r *startupRecorder) record(name string, d time.Duration) {
 
 	p, ok := r.phases[name]
 	if !ok {
-		p = &StartupPhase{Name: name}
+		p = &StartupPhase{Count: 0, Total: 0, Longest: 0, Name: name}
 		r.phases[name] = p
 		r.order = append(r.order, name)
 	}

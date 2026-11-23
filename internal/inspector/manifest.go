@@ -119,7 +119,7 @@ func Snapshot(cfg *config.Config, version string) Manifest {
 		m.ProjectTypes = append(m.ProjectTypes, ProjectType{ID: id, Description: p.Description, Markers: list(p.Markers)})
 	}
 	for name, c := range cfg.ManagedConfigs {
-		mc := ManagedConfig{Name: name, Tools: list(c.Tools), ProjectTypes: list(c.ProjectTypes), Scope: c.Scope, DeleteOnly: c.DeleteOnly}
+		mc := ManagedConfig{Ejectable: false, Placement: "", Name: name, Tools: list(c.Tools), ProjectTypes: list(c.ProjectTypes), Scope: c.Scope, DeleteOnly: c.DeleteOnly}
 		if c.Ejectable {
 			mc.Ejectable, mc.Placement = true, string(c.Placement)
 		}

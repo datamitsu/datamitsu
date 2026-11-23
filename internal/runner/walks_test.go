@@ -59,11 +59,25 @@ func runWithWalkCount(t *testing.T, ops []config.OperationType, wantFailure bool
 		trace.Reset()
 	})
 
-	err := RunSequential(ops, nil, "", false, "", false, Options{},
+	err := RunSequential(ops, nil, "", false, "", false, Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil},
 		func() (*config.Config, string, error) {
 			return &config.Config{
-				Tools:        config.MapOfTools{"golangci-lint": {Name: "golangci-lint"}},
-				ProjectTypes: config.MapOfProjectTypes{},
+				Name:           "",
+				Version:        "",
+				Apps:           nil,
+				Bundles:        nil,
+				Runtimes:       nil,
+				ManagedConfigs: nil,
+				EjectConfigs:   nil,
+				Execution:      nil,
+				InitCommands:   nil,
+				IgnoreRules:    nil,
+				SharedStorage:  nil,
+				OCI:            nil,
+				Parsers:        nil,
+				Lsp:            nil,
+				Tools:          config.MapOfTools{"golangci-lint": {ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil, Name: "golangci-lint"}},
+				ProjectTypes:   config.MapOfProjectTypes{},
 			}, "", nil
 		},
 	)

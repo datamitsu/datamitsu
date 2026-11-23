@@ -5,14 +5,6 @@ edition = "2021"
 description = "Signed Rust→WASM modules that parse third-party tool output into raw, nullable diagnostics for the datamitsu core."
 publish = false
 
-[lib]
-# cdylib for the wasm32-unknown-unknown artifact; rlib so `cargo test` can link
-# the native test harness against the same crate.
-crate-type = ["cdylib", "rlib"]
-
-[dependencies]
-tinyjson = "2.5.1"
-
 # Two builds of one crate: the public module (the default, both features) and
 # the fallback the core embeds (`--no-default-features --features format`).
 [features]
@@ -21,3 +13,11 @@ default = ["format", "tools"]
 format = []
 # One parser per tool; several share the format parsers' implementations.
 tools = ["format"]
+
+[lib]
+# cdylib for the wasm32-unknown-unknown artifact; rlib so `cargo test` can link
+# the native test harness against the same crate.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+tinyjson = "2.5.1"

@@ -32,23 +32,23 @@ func TestParseSpec(t *testing.T) {
 		want    Spec
 		wantErr string
 	}{
-		{raw: "json=out/run.json", want: Spec{Format: "json", Path: "out/run.json"}},
-		{raw: " json=- ", want: Spec{Format: "json", Path: "-"}},
-		{raw: `json=C:\out\run.json`, want: Spec{Format: "json", Path: `C:\out\run.json`}},
-		{raw: "fake=r.sarif?category=ci", want: Spec{Format: "fake", Path: "r.sarif", Options: map[string]string{"category": "ci"}}},
-		{raw: "fake=r.sarif?category=", want: Spec{Format: "fake", Path: "r.sarif", Options: map[string]string{"category": ""}}},
-		{raw: "json", wantErr: `"json" is not <format>=<path>`},
-		{raw: "=out.json", wantErr: "is not <format>=<path>"},
-		{raw: "yaml=out.yaml", wantErr: `unknown report format "yaml" (must be checkstyle, codequality, fake, history, json, junit, markdown, patch, rdjsonl, sarif)`},
-		{raw: "json=", wantErr: "report json needs a path"},
-		{raw: "json=?x=1", wantErr: "report json needs a path"},
-		{raw: "json=a.json?x=1", wantErr: `report json takes no option, got "x"`},
-		{raw: "fake=a?x=1", wantErr: `report fake has no option "x" (must be category)`},
-		{raw: "fake=a?category=1&category=2", wantErr: `names option "category" twice`},
-		{raw: "sarif=out/", want: Spec{Format: "sarif", Path: "out/"}},
-		{raw: "sarif=out/?category=linux", want: Spec{Format: "sarif", Path: "out/", Options: map[string]string{"category": "linux"}}},
-		{raw: "sarif=a.sarif?category=", wantErr: "report sarif: category needs a name"},
-		{raw: "json=out/", wantErr: "report json is one file, and out/ names a directory"},
+		{wantErr: "", raw: "json=out/run.json", want: Spec{Options: nil, Format: "json", Path: "out/run.json"}},
+		{wantErr: "", raw: " json=- ", want: Spec{Options: nil, Format: "json", Path: "-"}},
+		{wantErr: "", raw: `json=C:\out\run.json`, want: Spec{Options: nil, Format: "json", Path: `C:\out\run.json`}},
+		{wantErr: "", raw: "fake=r.sarif?category=ci", want: Spec{Format: "fake", Path: "r.sarif", Options: map[string]string{"category": "ci"}}},
+		{wantErr: "", raw: "fake=r.sarif?category=", want: Spec{Format: "fake", Path: "r.sarif", Options: map[string]string{"category": ""}}},
+		{want: Spec{Format: "", Path: "", Options: nil}, raw: "json", wantErr: `"json" is not <format>=<path>`},
+		{want: Spec{Format: "", Path: "", Options: nil}, raw: "=out.json", wantErr: "is not <format>=<path>"},
+		{want: Spec{Format: "", Path: "", Options: nil}, raw: "yaml=out.yaml", wantErr: `unknown report format "yaml" (must be checkstyle, codequality, fake, history, json, junit, markdown, patch, rdjsonl, sarif)`},
+		{want: Spec{Format: "", Path: "", Options: nil}, raw: "json=", wantErr: "report json needs a path"},
+		{want: Spec{Format: "", Path: "", Options: nil}, raw: "json=?x=1", wantErr: "report json needs a path"},
+		{want: Spec{Format: "", Path: "", Options: nil}, raw: "json=a.json?x=1", wantErr: `report json takes no option, got "x"`},
+		{want: Spec{Format: "", Path: "", Options: nil}, raw: "fake=a?x=1", wantErr: `report fake has no option "x" (must be category)`},
+		{want: Spec{Format: "", Path: "", Options: nil}, raw: "fake=a?category=1&category=2", wantErr: `names option "category" twice`},
+		{wantErr: "", raw: "sarif=out/", want: Spec{Options: nil, Format: "sarif", Path: "out/"}},
+		{wantErr: "", raw: "sarif=out/?category=linux", want: Spec{Format: "sarif", Path: "out/", Options: map[string]string{"category": "linux"}}},
+		{want: Spec{Format: "", Path: "", Options: nil}, raw: "sarif=a.sarif?category=", wantErr: "report sarif: category needs a name"},
+		{want: Spec{Format: "", Path: "", Options: nil}, raw: "json=out/", wantErr: "report json is one file, and out/ names a directory"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.raw, func(t *testing.T) {
@@ -75,26 +75,31 @@ func TestParseSpecs(t *testing.T) {
 		want    []Spec
 		wantErr string
 	}{
-		{name: "nothing", want: nil},
-		{name: "env", env: "json=a.json,fake=b", want: []Spec{{Format: "json", Path: "a.json"}, {Format: "fake", Path: "b"}}},
+		{flags: nil, env: "", wantErr: "", name: "nothing", want: nil},
+		{flags: nil, wantErr: "", name: "env", env: "json=a.json,fake=b", want: []Spec{{Options: nil, Format: "json", Path: "a.json"}, {Options: nil, Format: "fake", Path: "b"}}},
 		{
-			name: "a flag wins for its format", flags: []string{"json=flag.json"}, env: "fake=b,json=env.json",
-			want: []Spec{{Format: "json", Path: "flag.json"}, {Format: "fake", Path: "b"}},
+			wantErr: "",
+			name:    "a flag wins for its format", flags: []string{"json=flag.json"}, env: "fake=b,json=env.json",
+			want: []Spec{{Options: nil, Format: "json", Path: "flag.json"}, {Options: nil, Format: "fake", Path: "b"}},
 		},
-		{name: "blank env", env: "  ", want: nil},
-		{name: "a format twice in flags", flags: []string{"json=a", "json=b"}, wantErr: "invalid --report value: report json is named twice"},
-		{name: "a format twice in env", env: "json=a,json=b", wantErr: "invalid DATAMITSU_REPORT value: report json is named twice"},
-		{name: "a bad env entry", env: "json=a,", wantErr: "invalid DATAMITSU_REPORT value"},
-		{name: "two on stdout", flags: []string{"json=-"}, env: "fake=-", wantErr: "only one report can be written to stdout"},
-		{name: "one path twice", flags: []string{"json=out/a", "markdown=out/./a"}, wantErr: "reports json and markdown would both write"},
+		{flags: nil, wantErr: "", name: "blank env", env: "  ", want: nil},
+		{env: "", want: nil, name: "a format twice in flags", flags: []string{"json=a", "json=b"}, wantErr: "invalid --report value: report json is named twice"},
+		{flags: nil, want: nil, name: "a format twice in env", env: "json=a,json=b", wantErr: "invalid DATAMITSU_REPORT value: report json is named twice"},
+		{flags: nil, want: nil, name: "a bad env entry", env: "json=a,", wantErr: "invalid DATAMITSU_REPORT value"},
+		{want: nil, name: "two on stdout", flags: []string{"json=-"}, env: "fake=-", wantErr: "only one report can be written to stdout"},
+		{env: "", want: nil, name: "one path twice", flags: []string{"json=out/a", "markdown=out/./a"}, wantErr: "reports json and markdown would both write"},
 		{
+			env:  "",
+			want: nil,
 			name: "a report where another's companion goes", flags: []string{"json=out/r.xml.completeness.json", "junit=out/r.xml"},
 			wantErr: "reports json and junit (its completeness companion) would both write",
 		},
-		{name: "a file a split format owns", flags: []string{"sarif=out/", "json=out/datamitsu-1.sarif"}, wantErr: "reports json and sarif would both write"},
+		{env: "", want: nil, name: "a file a split format owns", flags: []string{"sarif=out/", "json=out/datamitsu-1.sarif"}, wantErr: "reports json and sarif would both write"},
 		{
-			name: "a directory beside its own files", flags: []string{"sarif=out/", "json=out/run.json", "junit=out/junit.xml"},
-			want: []Spec{{Format: "sarif", Path: "out/"}, {Format: "json", Path: "out/run.json"}, {Format: "junit", Path: "out/junit.xml"}},
+			env:     "",
+			wantErr: "",
+			name:    "a directory beside its own files", flags: []string{"sarif=out/", "json=out/run.json", "junit=out/junit.xml"},
+			want: []Spec{{Options: nil, Format: "sarif", Path: "out/"}, {Options: nil, Format: "json", Path: "out/run.json"}, {Options: nil, Format: "junit", Path: "out/junit.xml"}},
 		},
 	}
 	for _, tt := range tests {
@@ -124,11 +129,11 @@ func TestNamesAndLookup(t *testing.T) {
 	}
 	// SARIF leaves an incomplete tool out instead of listing it: a narrowed
 	// run writes it.
-	if got := Listing([]Spec{{Format: "sarif"}}); len(got) != 0 {
+	if got := Listing([]Spec{{Path: "", Options: nil, Format: "sarif"}}); len(got) != 0 {
 		t.Errorf("Listing(sarif) = %v, want it written for a narrowed run", got)
 	}
 	// Markdown lists findings: a narrowed run refuses it as it refuses json.
-	if got := Listing([]Spec{{Format: "markdown"}}); !reflect.DeepEqual(got, []string{"markdown"}) {
+	if got := Listing([]Spec{{Path: "", Options: nil, Format: "markdown"}}); !reflect.DeepEqual(got, []string{"markdown"}) {
 		t.Errorf("Listing(markdown) = %v, want it listed", got)
 	}
 }
@@ -149,13 +154,13 @@ func TestListsFindings(t *testing.T) {
 	for _, tt := range tests {
 		specs := make([]Spec, 0, len(tt.formats))
 		for _, f := range tt.formats {
-			specs = append(specs, Spec{Format: f})
+			specs = append(specs, Spec{Path: "", Options: nil, Format: f})
 		}
 		if got := ListsFindings(specs); got != tt.want {
 			t.Errorf("ListsFindings(%v) = %v, want %v", tt.formats, got, tt.want)
 		}
 	}
-	if got := Listing([]Spec{{Format: "history"}}); len(got) != 0 {
+	if got := Listing([]Spec{{Path: "", Options: nil, Format: "history"}}); len(got) != 0 {
 		t.Errorf("Listing(history) = %v, want it written for a narrowed run", got)
 	}
 }

@@ -7,7 +7,7 @@ import (
 
 func validateOp(op ToolOperation) error {
 	op.App, op.Scope = "x", ToolScopeRepository
-	return ValidateTools(MapOfTools{"tool": {Operations: map[OperationType]ToolOperation{OpLint: op}}}, nil, nil)
+	return ValidateTools(MapOfTools{"tool": {Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", OutputParser: nil, Operations: map[OperationType]ToolOperation{OpLint: op}}}, nil, nil)
 }
 
 func TestValidateToolsInheritEnv(t *testing.T) {
@@ -16,19 +16,19 @@ func TestValidateToolsInheritEnv(t *testing.T) {
 		op      ToolOperation
 		wantErr string
 	}{
-		{"a stripped name", ToolOperation{InheritEnv: []string{"GITHUB_ACTIONS"}}, ""},
-		{"a name nothing strips", ToolOperation{InheritEnv: []string{"MY_TOOL_MODE", "_X1"}}, ""},
-		{"lower case", ToolOperation{InheritEnv: []string{"github_actions"}}, "not a variable name"},
-		{"leading digit", ToolOperation{InheritEnv: []string{"1PASSWORD"}}, "not a variable name"},
-		{"an assignment", ToolOperation{InheritEnv: []string{"CI=true"}}, "not a variable name"},
-		{"empty", ToolOperation{InheritEnv: []string{""}}, "not a variable name"},
-		{"duplicate", ToolOperation{InheritEnv: []string{"AI_AGENT", "AI_AGENT"}}, "listed more than once"},
-		{"NO_COLOR", ToolOperation{InheritEnv: []string{"NO_COLOR"}}, "cannot be inherited"},
-		{"PATH", ToolOperation{InheritEnv: []string{"PATH"}}, "PATH cannot be inherited"},
-		{"datamitsu's own", ToolOperation{InheritEnv: []string{"DATAMITSU_CACHE_DIR"}}, "datamitsu's own variables cannot be named"},
-		{"NO_COLOR in env", ToolOperation{Env: map[string]string{"NO_COLOR": ""}}, `env "NO_COLOR"`},
-		{"NO_COLOR in env, any case", ToolOperation{Env: map[string]string{"No_Color": "1"}}, `env "No_Color"`},
-		{"other env", ToolOperation{Env: map[string]string{"GITHUB_ACTIONS": "false"}}, ""},
+		{"a stripped name", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, InheritEnv: []string{"GITHUB_ACTIONS"}}, ""},
+		{"a name nothing strips", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, InheritEnv: []string{"MY_TOOL_MODE", "_X1"}}, ""},
+		{"lower case", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, InheritEnv: []string{"github_actions"}}, "not a variable name"},
+		{"leading digit", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, InheritEnv: []string{"1PASSWORD"}}, "not a variable name"},
+		{"an assignment", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, InheritEnv: []string{"CI=true"}}, "not a variable name"},
+		{"empty", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, InheritEnv: []string{""}}, "not a variable name"},
+		{"duplicate", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, InheritEnv: []string{"AI_AGENT", "AI_AGENT"}}, "listed more than once"},
+		{"NO_COLOR", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, InheritEnv: []string{"NO_COLOR"}}, "cannot be inherited"},
+		{"PATH", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, InheritEnv: []string{"PATH"}}, "PATH cannot be inherited"},
+		{"datamitsu's own", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, InheritEnv: []string{"DATAMITSU_CACHE_DIR"}}, "datamitsu's own variables cannot be named"},
+		{"NO_COLOR in env", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Env: map[string]string{"NO_COLOR": ""}}, `env "NO_COLOR"`},
+		{"NO_COLOR in env, any case", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Env: map[string]string{"No_Color": "1"}}, `env "No_Color"`},
+		{"other env", ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, Env: map[string]string{"GITHUB_ACTIONS": "false"}}, ""},
 	}
 
 	for _, tt := range tests {
@@ -47,7 +47,7 @@ func TestValidateToolsInheritEnv(t *testing.T) {
 }
 
 func TestValidateToolsInheritEnvReportsEveryName(t *testing.T) {
-	err := validateOp(ToolOperation{InheritEnv: []string{"PATH", "NO_COLOR", "ok"}})
+	err := validateOp(ToolOperation{App: "", Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, InheritEnv: []string{"PATH", "NO_COLOR", "ok"}})
 	if err == nil {
 		t.Fatal("ValidateTools accepted three invalid names")
 	}

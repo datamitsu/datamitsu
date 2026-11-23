@@ -24,18 +24,41 @@ func TestCreateCacheDedupesInvalidateOn(t *testing.T) {
 	}
 
 	cfg := config.Config{
+		Name:           "",
+		Version:        "",
+		Apps:           nil,
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Tools: config.MapOfTools{
 			"eslint": config.Tool{
-				Name: "eslint",
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil,
+				Name:         "eslint",
 				Operations: map[config.OperationType]config.ToolOperation{
-					config.OpLint: {App: "eslint", InvalidateOn: []string{".eslintrc", "package.json"}},
-					config.OpFix:  {App: "eslint", InvalidateOn: []string{".eslintrc"}},
+					config.OpLint: {Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "eslint", InvalidateOn: []string{".eslintrc", "package.json"}},
+					config.OpFix:  {Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "eslint", InvalidateOn: []string{".eslintrc"}},
 				},
 			},
 			// Tool with no invalidateOn must not appear in the map.
 			"prettier": config.Tool{
-				Name:       "prettier",
-				Operations: map[config.OperationType]config.ToolOperation{config.OpFix: {App: "prettier"}},
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil,
+				Name:         "prettier",
+				Operations:   map[config.OperationType]config.ToolOperation{config.OpFix: {Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "prettier"}},
 			},
 		},
 	}
@@ -59,10 +82,29 @@ func TestCreateCacheNoInvalidateOn(t *testing.T) {
 	}
 
 	cfg := config.Config{
+		Name:           "",
+		Version:        "",
+		Apps:           nil,
+		Bundles:        nil,
+		Runtimes:       nil,
+		ManagedConfigs: nil,
+		EjectConfigs:   nil,
+		ProjectTypes:   nil,
+		Execution:      nil,
+		InitCommands:   nil,
+		IgnoreRules:    nil,
+		SharedStorage:  nil,
+		OCI:            nil,
+		Parsers:        nil,
+		Lsp:            nil,
 		Tools: config.MapOfTools{
 			"gofmt": config.Tool{
-				Name:       "gofmt",
-				Operations: map[config.OperationType]config.ToolOperation{config.OpFix: {App: "gofmt"}},
+				ProjectTypes: nil,
+				Skip:         false,
+				SkipReason:   "",
+				OutputParser: nil,
+				Name:         "gofmt",
+				Operations:   map[config.OperationType]config.ToolOperation{config.OpFix: {Args: nil, Scope: "", Arity: "", Granularity: "", Globs: nil, ExcludeGlobs: nil, Priority: 0, Cache: nil, InvalidateOn: nil, Env: nil, InheritEnv: nil, FailOn: "", Input: "", LSP: nil, Output: "", ManagedConfigRefs: nil, App: "gofmt"}},
 			},
 		},
 	}

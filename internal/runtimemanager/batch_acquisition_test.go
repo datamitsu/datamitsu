@@ -37,9 +37,15 @@ func TestBatchRuntimeAcquisitionReportsVerifiedInstallAndOfflineReuse(t *testing
 	}
 	binaryPath := "probe"
 	pin := digest.SHA256Of(payload).String()
-	artifact := binmanager.BinaryOsArchInfo{URL: server.URL, Hash: pin, ContentType: binmanager.BinContentTypeBinary, BinaryPath: &binaryPath}
+	artifact := binmanager.BinaryOsArchInfo{Auth: nil, ExtractDir: false, URL: server.URL, Hash: pin, ContentType: binmanager.BinContentTypeBinary, BinaryPath: &binaryPath}
 	manager := New(config.MapOfRuntimes{"probe": {
-		Kind: config.RuntimeKindGo, Mode: config.RuntimeModeManaged, Go: &config.RuntimeConfigGo{GoVersion: "1.23"},
+		System: nil,
+		Bun:    nil,
+		Node:   nil,
+		UV:     nil,
+		JVM:    nil,
+		PNPM:   nil,
+		Kind:   config.RuntimeKindGo, Mode: config.RuntimeModeManaged, Go: &config.RuntimeConfigGo{GoVersion: "1.23"},
 		Managed: &config.RuntimeConfigManaged{Binaries: binmanager.MapOfBinaries{osType: {archType: {"glibc": artifact, "musl": artifact, "unknown": artifact}}}},
 	}})
 	first, err := manager.InstallRuntimes(context.Background(), []string{"probe"}, 2)

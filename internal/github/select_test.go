@@ -47,7 +47,7 @@ func TestSelectLatestStableRelease(t *testing.T) {
 	pre := func(r *Release) { r.Prerelease = true }
 	draft := func(r *Release) { r.Draft = true }
 	rel := func(tag string, published time.Time, opts ...func(*Release)) Release {
-		r := Release{TagName: tag, PublishedAt: published}
+		r := Release{Assets: nil, Prerelease: false, Draft: false, TagName: tag, PublishedAt: published}
 		for _, o := range opts {
 			o(&r)
 		}

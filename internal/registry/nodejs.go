@@ -19,7 +19,7 @@ type nodejsRelease struct {
 	EOL    any    `json:"eol"`
 }
 
-var nodejsHTTPClient = &http.Client{Timeout: 15 * time.Second}
+var nodejsHTTPClient = &http.Client{Transport: nil, CheckRedirect: nil, Jar: nil, Timeout: 15 * time.Second}
 
 // GetLatestNodeLTSVersion returns the latest non-EOL Node.js LTS version from
 // endoflife.date, falling back to a pinned version on failure.

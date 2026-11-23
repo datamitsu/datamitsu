@@ -128,6 +128,7 @@ func orNone(op string) string {
 // whole repository; otherwise it is unknown, with the tool's reasons.
 func Diff(before, after *report.Run) Result {
 	res := Result{
+		Summary:     Counts{New: 0, Fixed: 0, Unchanged: 0, Moved: 0, Unknown: 0, Unobserved: 0},
 		Schema:      Schema,
 		Fingerprint: after.Fingerprint,
 		Before:      side(before),
@@ -168,6 +169,7 @@ func Diff(before, after *report.Run) Result {
 
 func side(run *report.Run) Side {
 	s := Side{
+		Operation: "",
 		StartedAt: run.StartedAt, Selection: run.Selection.Mode, Complete: run.Complete,
 		Incomplete: append([]report.Reason{}, run.Incomplete...),
 	}
@@ -249,7 +251,10 @@ func compare(name string, before, after toolFindings, lookedEverywhere bool) Too
 
 func newTool(name, status string, tr report.ToolRun) Tool {
 	return Tool{
-		Name: name, Status: status, Complete: tr.Complete, Incomplete: append([]report.Reason{}, tr.Incomplete...),
+		BeforeComplete:   false,
+		BeforeIncomplete: nil,
+		Counts:           Counts{New: 0, Fixed: 0, Unchanged: 0, Moved: 0, Unknown: 0, Unobserved: 0},
+		Name:             name, Status: status, Complete: tr.Complete, Incomplete: append([]report.Reason{}, tr.Incomplete...),
 		New: []Entry{}, Fixed: []Entry{}, Unchanged: []Entry{}, Moved: []Entry{}, Unknown: []Entry{}, Unobserved: []Entry{},
 	}
 }
@@ -260,6 +265,7 @@ func entry(f report.Finding) Entry {
 		source = f.Tool
 	}
 	return Entry{
+		BeforeRow:   0,
 		Fingerprint: f.Fingerprint, Severity: f.Severity, Source: source, Code: f.Code, Message: f.Message,
 		Path: f.Location.Path, Row: f.Location.Row,
 	}

@@ -179,14 +179,19 @@ func TestPullJVMRuntime_TemurinLookupError(t *testing.T) {
 func TestSelectUVPythonDownloadsFiltersAndCanonicalizes(t *testing.T) {
 	entries := map[string]registry.UVPythonDownload{
 		"linux-x86_64": {
-			Name: "cpython", Arch: registry.UVPythonArch{Family: "amd64"}, OS: "linux", Libc: "gnu",
+			Prerelease: "",
+			Variant:    "",
+			Name:       "cpython", Arch: registry.UVPythonArch{Variant: "", Family: "amd64"}, OS: "linux", Libc: "gnu",
 			Major: 3, Minor: 14, Patch: 8, URL: "https://example.invalid/python.tar.gz", SHA256: strings.Repeat("A", 64), Build: "build-1",
 		},
 		"free-threaded": {
-			Name: "cpython", Arch: registry.UVPythonArch{Family: "amd64", Variant: "freethreaded"}, OS: "linux", Libc: "gnu",
+			Prerelease: "",
+			Variant:    "",
+			Build:      "",
+			Name:       "cpython", Arch: registry.UVPythonArch{Family: "amd64", Variant: "freethreaded"}, OS: "linux", Libc: "gnu",
 			Major: 3, Minor: 14, Patch: 8, URL: "https://example.invalid/python-ft.tar.gz", SHA256: strings.Repeat("b", 64),
 		},
-		"other-version": {Name: "cpython", Major: 3, Minor: 13, Patch: 9, URL: "https://example.invalid/old.tar.gz", SHA256: strings.Repeat("c", 64)},
+		"other-version": {Arch: registry.UVPythonArch{Family: "", Variant: ""}, OS: "", Libc: "", Prerelease: "", Variant: "", Build: "", Name: "cpython", Major: 3, Minor: 13, Patch: 9, URL: "https://example.invalid/old.tar.gz", SHA256: strings.Repeat("c", 64)},
 	}
 	selected, err := selectUVPythonDownloads(entries, "3.14.8")
 	if err != nil {
@@ -204,13 +209,16 @@ func TestSelectUVPythonDownloadsFiltersAndCanonicalizes(t *testing.T) {
 
 func TestSelectUVPythonDownloadsRejectsMissingInvalidOrUnsupportedEntries(t *testing.T) {
 	base := registry.UVPythonDownload{
-		Name: "cpython", Arch: registry.UVPythonArch{Family: "definitely-unsupported"}, OS: "impossible", Libc: "none",
+		Prerelease: "",
+		Variant:    "",
+		Build:      "",
+		Name:       "cpython", Arch: registry.UVPythonArch{Variant: "", Family: "definitely-unsupported"}, OS: "impossible", Libc: "none",
 		Major: 3, Minor: 14, Patch: 8, URL: "https://example.invalid/python.tar.gz", SHA256: strings.Repeat("a", 64),
 	}
 	if got, err := selectUVPythonDownloads(map[string]registry.UVPythonDownload{"unsupported": base}, "3.14.8"); err == nil || got != nil {
 		t.Fatalf("unsupported platform selection = %#v, %v; want an error and no entries", got, err)
 	}
-	base.Arch = registry.UVPythonArch{Family: "amd64"}
+	base.Arch = registry.UVPythonArch{Variant: "", Family: "amd64"}
 	base.OS, base.Libc = string(syslist.OsTypeLinux), "gnu"
 	base.SHA256 = ""
 	if got, err := selectUVPythonDownloads(map[string]registry.UVPythonDownload{"missing-pin": base}, "3.14.8"); err == nil || got != nil || !strings.Contains(err.Error(), "missing its URL or SHA-256") {
@@ -269,13 +277,13 @@ func TestRunPullRuntimesWritesOnlyChangedResults(t *testing.T) {
 	pullRuntimesUpdateFlag, pullRuntimesDryRunFlag, pullRuntimesRuntimeFlag = true, false, "uv"
 	minAge := 0
 	pullRuntimesMinAge = &minAge
-	current := &RuntimeJSON{Kind: "uv", Mode: "managed", UV: &UVConfigJSON{PythonVersion: "3.14.8"}}
+	current := &RuntimeJSON{Managed: nil, Bun: nil, JVM: nil, Node: nil, Go: nil, PNPM: nil, Kind: "uv", Mode: "managed", UV: &UVConfigJSON{PythonDownloads: nil, PythonVersion: "3.14.8"}}
 	pullOneRuntime = func(context.Context, string, int) (*RuntimeJSON, error) { return current, nil }
 	if err := runtimeconfig.Init(); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(t.TempDir(), "runtimes.json")
-	cmd := &cobra.Command{}
+	cmd := &cobra.Command{Use: "", Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0}
 	if err := runPullRuntimes(cmd, []string{path}); err != nil {
 		t.Fatalf("initial pull error = %v", err)
 	}
@@ -286,7 +294,7 @@ func TestRunPullRuntimesWritesOnlyChangedResults(t *testing.T) {
 	if err := runPullRuntimes(cmd, []string{path}); err != nil {
 		t.Fatalf("unchanged pull error = %v", err)
 	}
-	current = &RuntimeJSON{Kind: "uv", Mode: "managed", UV: &UVConfigJSON{PythonVersion: "3.14.9"}}
+	current = &RuntimeJSON{Managed: nil, Bun: nil, JVM: nil, Node: nil, Go: nil, PNPM: nil, Kind: "uv", Mode: "managed", UV: &UVConfigJSON{PythonDownloads: nil, PythonVersion: "3.14.9"}}
 	pullRuntimesDryRunFlag = true
 	if err := runPullRuntimes(cmd, []string{path}); err != nil {
 		t.Fatalf("dry-run pull error = %v", err)
@@ -311,7 +319,7 @@ func TestRunPullRuntimesReportsPullFailures(t *testing.T) {
 	if err := runtimeconfig.Init(); err != nil {
 		t.Fatal(err)
 	}
-	err := runPullRuntimes(&cobra.Command{}, []string{filepath.Join(t.TempDir(), "runtimes.json")})
+	err := runPullRuntimes(&cobra.Command{Use: "", Aliases: nil, SuggestFor: nil, Short: "", GroupID: "", Long: "", Example: "", ValidArgs: nil, ValidArgsFunction: nil, Args: nil, ArgAliases: nil, BashCompletionFunction: "", Deprecated: "", Annotations: nil, Version: "", PersistentPreRun: nil, PersistentPreRunE: nil, PreRun: nil, PreRunE: nil, Run: nil, RunE: nil, PostRun: nil, PostRunE: nil, PersistentPostRun: nil, PersistentPostRunE: nil, FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: false, UnknownFlagsHandling: 0}, CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: false, DisableNoDescFlag: false, DisableDescriptions: false, HiddenDefaultCmd: false, DefaultShellCompDirective: nil}, TraverseChildren: false, Hidden: false, SilenceErrors: false, SilenceUsage: false, DisableFlagParsing: false, DisableAutoGenTag: false, DisableFlagsInUseLine: false, DisableSuggestions: false, SuggestionsMinimumDistance: 0}, []string{filepath.Join(t.TempDir(), "runtimes.json")})
 	if err == nil || !strings.Contains(err.Error(), "uv") || !strings.Contains(err.Error(), "1 of 1") {
 		t.Fatalf("runPullRuntimes() error = %v, want failed-runtime summary", err)
 	}
