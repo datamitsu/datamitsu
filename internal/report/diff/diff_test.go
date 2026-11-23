@@ -21,7 +21,7 @@ func finding(tool string, c byte, row int) report.Finding {
 // run is a lint run whose tools report the given findings, complete over the
 // whole repository.
 func run(tools map[string][]report.Finding) *report.Run {
-	r := &report.Run{Schema: report.SchemaVersion, Selection: report.Selection{Mode: "all"}, Complete: true}
+	r := &report.Run{Selection: report.Selection{Mode: "all"}, Complete: true}
 	op := report.Operation{Name: "lint", Ran: true}
 	for name, fs := range tools {
 		op.Tools = append(op.Tools, report.ToolRun{

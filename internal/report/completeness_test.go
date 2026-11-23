@@ -3,6 +3,7 @@ package report
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -18,20 +19,19 @@ func TestToolReasons(t *testing.T) {
 	tests := []struct {
 		name        string
 		sel         Selection
-		parsed      bool
 		invocations []Invocation
 		want        []Reason
 	}{
 		{
-			name: "parsed clean and with findings", sel: all, parsed: true,
+			name: "parsed clean and with findings", sel: all,
 			invocations: []Invocation{ran(tooling.ExtractionParsedClean), ran(tooling.ExtractionParsedFindings)}, want: []Reason{},
 		},
 		{
-			name: "a narrowed selection", sel: Selection{Mode: "paths"}, parsed: true,
+			name: "a narrowed selection", sel: Selection{Mode: "paths"},
 			invocations: []Invocation{ran(tooling.ExtractionParsedClean)}, want: []Reason{ReasonNarrowedSelection},
 		},
 		{
-			name: "a task over part of its unit", sel: all, parsed: true,
+			name: "a task over part of its unit", sel: all,
 			invocations: []Invocation{{State: "ran", Coverage: "partial", Extraction: "parsed-clean"}}, want: []Reason{ReasonPartialUnit},
 		},
 		{
@@ -39,12 +39,12 @@ func TestToolReasons(t *testing.T) {
 			invocations: []Invocation{ran(tooling.ExtractionNone)}, want: []Reason{ReasonNoExtraction},
 		},
 		{
-			name: "every extraction failure", sel: all, parsed: true,
+			name: "every extraction failure", sel: all,
 			invocations: []Invocation{ran(tooling.ExtractionParseFailed), ran(tooling.ExtractionParserUnavailable), ran(tooling.ExtractionTruncated)},
 			want:        []Reason{ReasonParseFailed, ReasonParserUnavailable, ReasonTruncated},
 		},
 		{
-			name: "a failed process its parser found nothing in", sel: all, parsed: true,
+			name: "a failed process its parser found nothing in", sel: all,
 			invocations: []Invocation{
 				{State: "ran", Coverage: "complete", Extraction: "parsed-clean", ExitCode: new(2)},
 				{State: "ran", Coverage: "complete", Extraction: "parsed-clean", ExitCode: new(0)},
@@ -53,23 +53,23 @@ func TestToolReasons(t *testing.T) {
 			want: []Reason{ReasonFailedWithoutFindings},
 		},
 		{
-			name: "a cache hit of a parsed tool replays a parsed-clean pass", sel: all, parsed: true,
-			invocations: []Invocation{{State: "cached"}, {State: "verdict-hit"}}, want: []Reason{},
+			name: "a parsed-clean cache hit", sel: all,
+			invocations: []Invocation{{State: "cached", Extraction: "parsed-clean"}, {State: "verdict-hit", Extraction: "parsed-clean"}},
 		},
 		{
 			name: "a cache hit of a tool without a parser", sel: all,
 			invocations: []Invocation{{State: "cached"}}, want: []Reason{ReasonUnparsedCacheHit},
 		},
 		{
-			name: "tasks that did not run to the end", sel: all, parsed: true,
+			name: "tasks that did not run to the end", sel: all,
 			invocations: []Invocation{{State: "cancelled"}, {State: "not-started"}, {State: "setup-failed"}},
 			want:        []Reason{ReasonCancelled, ReasonNotStarted, ReasonSetupFailed},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toolReasons(&ToolRun{Invocations: tt.invocations}, tt.sel, tt.parsed)
-			if !reflect.DeepEqual(got, tt.want) {
+			got := toolReasons(&ToolRun{Invocations: tt.invocations}, tt.sel, true)
+			if !slices.Equal(got, tt.want) {
 				t.Errorf("toolReasons() = %v, want %v", got, tt.want)
 			}
 		})
@@ -80,7 +80,7 @@ func TestToolReasons(t *testing.T) {
 // its processes failed while its parser found nothing; read back, it is not.
 func TestRevise(t *testing.T) {
 	two := 2
-	run := &Run{Complete: true, Operations: []Operation{{Name: "lint", Ran: true, Tools: []ToolRun{
+	run := &Run{Complete: true, Selection: Selection{Mode: modeAll}, Operations: []Operation{{Name: "lint", Ran: true, Tools: []ToolRun{
 		{Name: "a", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{State: "ran", Extraction: "parsed-clean", ExitCode: &two}}},
 		{Name: "b", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{State: "ran", Extraction: "parsed-findings", ExitCode: &two}}},
 	}}}}
@@ -100,7 +100,6 @@ func TestRevise(t *testing.T) {
 // nothing was left out at run level; --tools leaves the listed tools' own runs
 // complete.
 func TestJudge(t *testing.T) {
-	tools := config.MapOfTools{"a": {OutputParser: &config.OutputParser{}}, "b": {}}
 	clean := []Invocation{ran(tooling.ExtractionParsedClean)}
 	tests := []struct {
 		name         string
@@ -141,7 +140,7 @@ func TestJudge(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			run := tt.run
-			judge(&run, tools)
+			judge(&run)
 			if run.Complete != tt.wantComplete || !reflect.DeepEqual(run.Incomplete, tt.wantRun) {
 				t.Errorf("run complete = %v %v, want %v %v", run.Complete, run.Incomplete, tt.wantComplete, tt.wantRun)
 			}
@@ -166,12 +165,12 @@ func TestJudgeCachedStdoutFormatter(t *testing.T) {
 			config.OpLint: {},
 		},
 	}}
-	cached := []Invocation{{State: "cached"}}
+	cleanCache := []Invocation{{State: "cached", Extraction: "parsed-clean"}}
 	run := Run{Selection: Selection{Mode: "all"}, Operations: []Operation{
-		{Name: "fix", Ran: true, Tools: []ToolRun{{Name: "fmt", Invocations: cached}}},
-		{Name: "lint", Ran: true, Tools: []ToolRun{{Name: "fmt", Invocations: cached}}},
+		{Name: "fix", Ran: true, Tools: []ToolRun{{Name: "fmt", Invocations: []Invocation{{State: "cached", Extraction: "none"}}}}},
+		{Name: "lint", Ran: true, Tools: []ToolRun{{Name: "fmt", Invocations: cleanCache}}},
 	}}
-	judge(&run, tools)
+	judge(&run)
 	if fix := run.Operations[0].Tools[0]; !reflect.DeepEqual(fix.Incomplete, []Reason{ReasonUnparsedCacheHit}) {
 		t.Errorf("the formatter's fix = %v, want unparsed-cache-hit", fix.Incomplete)
 	}
@@ -180,6 +179,7 @@ func TestJudgeCachedStdoutFormatter(t *testing.T) {
 	}
 
 	task := perFileTask("fmt::1", "a")
+	task.Tool = tools["fmt"]
 	task.OpConfig.Output = config.ToolOutputStdout
 	result := tooling.ExecutionResult{
 		TaskID: task.ID, Success: true, Cached: true,

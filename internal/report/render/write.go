@@ -70,13 +70,15 @@ func Open(spec Spec, stdout io.Writer) *Target {
 // Write renders run into the target and moves it into place. On failure
 // nothing is left at the path that was not there before; a directory keeps
 // the files written before the one that failed. A format that declines the
-// run writes nothing and returns a DeclinedError.
+// run returns DeclinedError only after removing its previous output.
 func (t *Target) Write(run *report.Run) error {
 	if t.Err != nil {
 		return t.Err
 	}
 	if why := declines(t.Spec, run); why != "" {
-		t.clear()
+		if err := t.clear(); err != nil {
+			return fmt.Errorf("clear previous report: %w", err)
+		}
 		return DeclinedError{Reason: why}
 	}
 	switch {
@@ -133,25 +135,48 @@ func (t *Target) Write(run *report.Run) error {
 // clear leaves nothing at a declined target that an earlier run wrote: a
 // file there, or a split format's files in its directory, would be read as
 // this run's.
-func (t *Target) clear() {
+func (t *Target) clear() error {
+	var err error
 	if t.appendTo != nil {
-		_ = t.appendTo.Close()
+		err = t.appendTo.Close()
 	}
 	if t.tmp != nil {
-		_ = t.tmp.Close()
-		_ = os.Remove(t.tmp.Name())
-		if info, err := os.Lstat(t.Spec.Path); err == nil && info.Mode().IsRegular() {
-			_ = os.Remove(t.Spec.Path)
-		}
+		err = errors.Join(err, t.tmp.Close(), removeIfPresent(t.tmp.Name()), RemoveStaleFile(t.Spec))
 	}
 	if t.companion != nil {
-		_ = t.companion.Close()
-		_ = os.Remove(t.companion.Name())
-		_ = os.Remove(common.CompanionPath(t.Spec.Path))
+		err = errors.Join(err, t.companion.Close(), removeIfPresent(t.companion.Name()), removeIfPresent(common.CompanionPath(t.Spec.Path)))
 	}
 	if d, ok := t.renderer.(DirRenderer); ok && t.Spec.Dir() {
-		_ = t.removeOwned(d, nil)
+		err = errors.Join(err, t.removeOwned(d, nil))
 	}
+	return err
+}
+
+func removeIfPresent(path string) error {
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("remove report file: %w", err)
+	}
+	return nil
+}
+
+// RemoveStaleFile removes an earlier report at an explicitly selected file
+// target. It never follows a symlink or removes a directory or special file.
+func RemoveStaleFile(spec Spec) error {
+	if spec.Stdout() || spec.Dir() {
+		return nil
+	}
+	info, err := os.Lstat(spec.Path)
+	if err == nil {
+		if info.Mode().IsRegular() || info.Mode()&fs.ModeSymlink != 0 {
+			err = os.Remove(spec.Path)
+		} else {
+			err = errors.New("not a regular file or symlink")
+		}
+	}
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("remove stale %s report %s: %w", spec.Format, spec.Path, unwrapPathError(err))
+	}
+	return nil
 }
 
 // GuardCommands rewrites, in a document of format, every command a CI that

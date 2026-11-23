@@ -219,7 +219,7 @@ func TestRenderCountsBaselined(t *testing.T) {
 
 func TestRenderChangedFiles(t *testing.T) {
 	fix := report.Operation{
-		Name: "fix", Ran: true, ChangesObserved: true, Changes: []report.Change{{Path: "b.ts", Kind: "created"}},
+		Name: "fix", Ran: true, ChangesObserved: true, Changes: []report.Change{{Path: "b.ts", Kind: "created"}, {Path: "config.json", Kind: "reverted"}},
 		Tools: []report.ToolRun{{Name: "prettier", Invocations: []report.Invocation{{
 			State: "ran", Success: true,
 			Changes: []report.Change{{Path: "a.ts", Kind: "modified", Patch: true}},
@@ -232,8 +232,8 @@ func TestRenderChangedFiles(t *testing.T) {
 	if err := (Renderer{}).Render(&out, run, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "#### Changed files\n\n- `a.ts` modified\n- `b.ts` created\n") || strings.Count(out.String(), "Changed files") != 1 {
-		t.Errorf("want the fix's changed files, and none for lint:\n%s", out.String())
+	if !strings.Contains(out.String(), "#### Changed files\n\n- `a.ts` modified\n- `b.ts` created\n- `config.json` reverted\n") || strings.Count(out.String(), "Changed files") != 1 {
+		t.Errorf("want tool and bundled changes in the fix's changed files, and none for lint:\n%s", out.String())
 	}
 	out.Reset()
 	run.Operations = []report.Operation{unobserved}

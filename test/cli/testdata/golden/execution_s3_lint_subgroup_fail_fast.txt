@@ -6,6 +6,7 @@ exit code: 1
 
 ┏━ lint <RULE>
 ┃ fixture
+┃ ⊘ beta   not started (fail-fast)
 ┃
 ┃ ✗ alpha  <DUR> (1 failed)
   ┌─ alpha [repository] (run #1) <RULE>
@@ -17,7 +18,6 @@ exit code: 1
   │  alpha: failed
   └<RULE>
 
-┃ ⊘ beta   not started (fail-fast)
 ┗━ 1 tools · 1 runs · done in <DUR> · 1 failed · 1 cancelled <RULE>
 
 ===STDERR===

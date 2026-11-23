@@ -95,10 +95,11 @@ const (
 // a struct per type) is intentional: events are emitted from many call sites
 // that each populate only a few fields, and consumers discriminate on Type.
 type Event struct {
-	Type   Type   `json:"type"`             // discriminator, always set
-	OpID   string `json:"op_id"`            // correlation id, always set
-	TS     int64  `json:"ts"`               // unix milliseconds
-	Status string `json:"status,omitempty"` // start | progress | done | fail | skip; a report: written | failed | refused | omitted
+	Type       Type   `json:"type"`             // discriminator, always set
+	OpID       string `json:"op_id"`            // correlation id, always set
+	TS         int64  `json:"ts"`               // unix milliseconds
+	Status     string `json:"status,omitempty"` // start | progress | done | fail | skip; a report: written | failed | refused | omitted
+	ThrottleID string `json:"-"`                // operation identity before output masking
 
 	// Identity.
 	Op   string `json:"op,omitempty"`   // operation name for phase/done (fix, lint)

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/gitenv"
@@ -85,6 +86,7 @@ func status(ctx context.Context, root string, env []string) ([]byte, error) {
 		"--untracked-files=all", "--ignore-submodules=all", "--no-renames")
 	cmd.Dir = root
 	cmd.Env = env
+	cmd.WaitDelay = time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {

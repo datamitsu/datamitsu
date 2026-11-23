@@ -25,7 +25,7 @@ import (
 const (
 	// placementTool is the pseudo tool name the check reports under. Fingerprints
 	// namespace by it, so code alone stays unambiguous.
-	placementTool = "datamitsu"
+	placementTool = config.BuiltinToolName
 	// placementCode is the rule code; full name on tool+code surfaces:
 	// datamitsu/config-placement.
 	placementCode = "config-placement"
@@ -57,6 +57,7 @@ func reservedDirCollector() (func(string), func() []string) {
 // on the path.
 func (sc *sharedContext) checkConfigPlacement(violations []string) {
 	if len(violations) == 0 {
+		sc.placement = nil
 		return
 	}
 	diags := make([]diagnostic.Diagnostic, 0, len(violations))
@@ -83,14 +84,13 @@ func (sc *sharedContext) checkConfigPlacement(violations []string) {
 	sc.placement = diags
 }
 
-// printCoreFindings renders core-bundled diagnostics as the first result in
-// the operation block, through the same finding formatter used by tools.
+// printCoreFindings renders built-in results using the tool diagnostic format.
 func printCoreFindings(diags []diagnostic.Diagnostic, nameWidth int, baseDir string) {
 	if ui.Muted() {
 		return
 	}
 	shown := make([]diagnostic.Diagnostic, 0, len(diags))
-	baselined, warnings, changes := 0, 0, 0
+	baselined, changes := 0, 0
 	gated, placementOnly := false, true
 	for _, d := range diags {
 		if d.Baselined {
@@ -101,7 +101,6 @@ func printCoreFindings(diags []diagnostic.Diagnostic, nameWidth int, baseDir str
 			continue
 		}
 		gated = gated || d.Gates
-		warnings += boolInt(d.Severity == diagnostic.SeverityWarning)
 		changes += boolInt(d.Severity == diagnostic.SeverityInfo)
 		placementOnly = placementOnly && d.Code == placementCode
 		shown = append(shown, d)
@@ -113,8 +112,6 @@ func printCoreFindings(diags []diagnostic.Diagnostic, nameWidth int, baseDir str
 	status, nameDisplay := clr.Green("✓"), clr.Bold(placementTool)
 	if gated {
 		status, nameDisplay = clr.Red("✗"), clr.Red(placementTool)
-	} else if warnings > 0 {
-		status = clr.Yellow("!")
 	}
 	pad := max(nameWidth-utf8.RuneCountInString(placementTool), 0) + 2
 	line := clr.Faint("┃ ") + status + " " + nameDisplay + strings.Repeat(" ", pad) + ui.FormatDurationShort(0)
@@ -124,8 +121,6 @@ func printCoreFindings(diags []diagnostic.Diagnostic, nameWidth int, baseDir str
 		coloredLabel = clr.Faint("config placement")
 	case gated:
 		coloredLabel = clr.Red(fmt.Sprintf("%d finding(s)", len(shown)))
-	case warnings > 0:
-		coloredLabel = clr.Yellow(fmt.Sprintf("%d warning(s)", warnings))
 	case changes > 0:
 		coloredLabel = clr.Cyan(fmt.Sprintf("%d change(s)", changes))
 	}
@@ -135,6 +130,16 @@ func printCoreFindings(diags []diagnostic.Diagnostic, nameWidth int, baseDir str
 	}
 	fmt.Println(toolText(line))
 	for _, d := range shown {
+		if strings.ContainsAny(d.File+d.Message, "\r\n") {
+			head, detail, _ := strings.Cut(d.Message, "\n")
+			d.Message = head
+			text := formatDiagnosticRelativeTo(d, baseDir)
+			if detail != "" {
+				text += "\n" + detail
+			}
+			printFramed(clr.Faint, "", text)
+			continue
+		}
 		fmt.Println(toolText(clr.Faint("┃ ") + "    " + formatDiagnosticRelativeTo(d, baseDir)))
 	}
 }

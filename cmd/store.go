@@ -334,13 +334,18 @@ func runStoreClear(cmd *cobra.Command, args []string) error {
 		(home != "" && strings.HasPrefix(strings.ToLower(home), strings.ToLower(storePath+sep))) {
 		return fmt.Errorf("refusing to clear dangerous path: %s", storePath)
 	}
+	stopWaiting := ui.Current().SlowStatus("Waiting for exclusive store access (active installations must finish)")
 	release, err := storelock.Clear(cmd.Context(), storePath)
+	stopWaiting()
 	if err != nil {
 		return fmt.Errorf("failed to acquire store clear lease: %w", err)
 	}
 	defer release()
 	// os.RemoveAll then fails with EACCES. ForceRemoveAll restores write bits first.
-	if err := runtimemanager.ForceRemoveAll(storePath); err != nil {
+	stopClearing := ui.Current().SlowStatus("Removing store contents")
+	err = runtimemanager.ForceRemoveAll(storePath)
+	stopClearing()
+	if err != nil {
 		return fmt.Errorf("failed to clear store: %w", err)
 	}
 	fmt.Printf("Cleared store: %s\n", storePath)

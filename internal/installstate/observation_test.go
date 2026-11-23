@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/env"
+	"github.com/datamitsu/datamitsu/internal/provision"
 )
 
 func TestWaitStatusReportsOnlyFreshTrustedCounters(t *testing.T) {
@@ -103,6 +105,58 @@ func TestWaitStatusReportsOnlyFreshTrustedCounters(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestWaitStatusReportsReplacementOwner(t *testing.T) {
+	t.Setenv("DATAMITSU_CACHE_DIR", t.TempDir())
+	if err := os.MkdirAll(env.GetCachePath(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	completed, total := int64(3), int64(10)
+	writeStatus := func(owner string) {
+		w := &statusWriter{path: "probe.json", owner: owner, label: "probe", target: "apps/probe"}
+		w.write("download", &completed, &total, "bytes", true)
+	}
+	writeStatus("first")
+	clientConn, serverConn := net.Pipe()
+	defer func() { _ = serverConn.Close() }()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	events := make(chan json.RawMessage, 8)
+	client := provision.NewClient(clientConn, func(event json.RawMessage) {
+		select {
+		case events <- event:
+		case <-ctx.Done():
+		}
+	})
+	defer func() { _ = client.Close() }()
+	go func() {
+		_ = provision.ServeContext(ctx, serverConn, func(requestCtx context.Context, _ string, _ json.RawMessage) (any, error) {
+			waitStatus(requestCtx, "probe.json", "probe")
+			return struct{}{}, nil
+		})
+	}()
+	go func() { _ = client.Call(ctx, "wait", nil, nil) }()
+	receive := func() provision.InstallProgress {
+		t.Helper()
+		select {
+		case raw := <-events:
+			var progress provision.InstallProgress
+			if err := json.Unmarshal(raw, &progress); err != nil {
+				t.Fatal(err)
+			}
+			return progress
+		case <-ctx.Done():
+			t.Fatal("wait progress did not reach the worker client")
+			return provision.InstallProgress{}
+		}
+	}
+	first := receive()
+	writeStatus("second")
+	second := receive()
+	if first.WaitOwner != "first" || second.WaitOwner != "second" || first.OpID != second.OpID || first.Msg != second.Msg || second.WaitBytesDone != completed || second.WaitBytesTotal != total {
+		t.Fatalf("expected owner handover with unchanged download progress: first=%+v second=%+v", first, second)
 	}
 }
 

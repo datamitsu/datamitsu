@@ -200,8 +200,7 @@ func fixFile(path, rootPath string, changed []func(string)) error {
 
 // RunLint validates the given .datamitsuignore files (as returned by
 // FindIgnoreFiles). Parse errors cause an immediate error return.
-// Formatting and unknown-tool findings are advisory and emitted only when a
-// callback is provided.
+// Rule violations use the structured finding path when a callback is provided.
 func RunLint(rootPath string, tools config.MapOfTools, files []string, emitters ...func(diagnostic.Diagnostic)) error {
 	for _, path := range files {
 		if err := lintFile(path, tools, rootPath, emitters); err != nil {
@@ -225,9 +224,9 @@ func lintFile(path string, tools config.MapOfTools, rootPath string, findings []
 		lines = lines[:len(lines)-1]
 	}
 
-	warn := func(row int, code, message string) {
+	reportError := func(row int, code, message string) {
 		for _, emit := range findings {
-			emit(diagnostic.Diagnostic{File: path, Row: row, Col: 1, Severity: diagnostic.SeverityWarning, Source: "datamitsu", Code: "datamitsuignore-" + code, Message: message, Reported: true, Gates: false})
+			emit(diagnostic.Diagnostic{File: path, Row: row, Col: 1, Severity: diagnostic.SeverityError, Source: "datamitsu", Code: "datamitsuignore-" + code, Message: message, Reported: true, Gates: true})
 		}
 	}
 
@@ -237,13 +236,13 @@ func lintFile(path string, tools config.MapOfTools, rootPath string, findings []
 		isEmpty := trimmed == ""
 
 		if isEmpty && line != "" {
-			warn(i+1, "format", "whitespace-only line")
+			reportError(i+1, "format", "whitespace-only line")
 		}
 		if isEmpty && i == 0 {
-			warn(i+1, "format", "leading empty line")
+			reportError(i+1, "format", "leading empty line")
 		}
 		if isEmpty && prevEmpty {
-			warn(i+1, "format", "consecutive empty line")
+			reportError(i+1, "format", "consecutive empty line")
 		}
 		prevEmpty = isEmpty
 
@@ -267,7 +266,7 @@ func lintFile(path string, tools config.MapOfTools, rootPath string, findings []
 		rule := rules[0]
 		canonical := normalizeRule(rule)
 		if line != canonical {
-			warn(i+1, "format", fmt.Sprintf("formatting differs from canonical form; have %q, want %q", line, canonical))
+			reportError(i+1, "format", fmt.Sprintf("Use canonical spacing\n  have: %q\n  want: %q", line, canonical))
 		}
 
 		for _, toolName := range rule.Tools {
@@ -275,7 +274,7 @@ func lintFile(path string, tools config.MapOfTools, rootPath string, findings []
 				continue
 			}
 			if _, ok := tools[toolName]; !ok {
-				warn(i+1, "tool", fmt.Sprintf("unknown tool %q", toolName))
+				reportError(i+1, "tool", fmt.Sprintf("unknown tool %q", toolName))
 			}
 		}
 	}

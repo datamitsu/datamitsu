@@ -110,7 +110,7 @@ func frameOf(t *testing.T, result tooling.ExecutionResult) string {
 		group.failedRuns = 1
 	}
 	return captureStdout(t, func() {
-		printGroupedResults([]toolExecutionGroup{group}, 10, false)
+		printGroupedResults([]toolExecutionGroup{group}, 10, false, nil)
 		printOperationFooter([]toolExecutionGroup{group}, 0, 0, 0, 0, 0, "", 0, 0)
 	})
 }

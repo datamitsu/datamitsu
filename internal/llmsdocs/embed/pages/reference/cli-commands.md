@@ -125,6 +125,10 @@ Must be run from the git repository root.
 
 Download concurrency is controlled via the `DATAMITSU_CONCURRENCY` env var (default: 3).
 
+On an interactive terminal, installation progress is temporary: `init` clears
+it before printing the next summary. Pipes and CI get append-only progress on
+stderr instead.
+
 `init --quiet` omits banners, progress and cache-hit messages. It reports meaningful changes to datamitsu-managed state, including newly installed components, preparation and repaired project artifacts. Rewriting identical content is not a change. Initialization commands still run with their existing output handling: successful captured output stays hidden, while failure diagnostics remain visible. Changes made by arbitrary initialization commands are not included in datamitsu's change summary. `--dry-run --quiet` still shows the proposed work; explicit `--verbose` diagnostics and JSONL events remain available.
 
 **What init does:**
@@ -2333,6 +2337,8 @@ datamitsu store path
 Remove the entire global store directory, including binaries, runtimes, app
 environments, bundles, parsers, package-manager data, managed Python
 installations, and remote configs.
+If exclusive store access is delayed by ongoing provisioning, the command
+reports that it is waiting before removing anything.
 
 ```bash
 datamitsu store clear

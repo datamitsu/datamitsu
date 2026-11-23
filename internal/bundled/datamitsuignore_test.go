@@ -247,20 +247,7 @@ func TestRunLintValidFileNoError(t *testing.T) {
 	}
 }
 
-func TestRunLintFormattingWarning(t *testing.T) {
-	root := t.TempDir()
-	path := filepath.Join(root, ".datamitsuignore")
-	writeTestFile(t, path, "*.go:  golangci-lint ,  gofmt\n")
-	tools := config.MapOfTools{
-		"golangci-lint": config.Tool{Name: "golangci-lint"},
-		"gofmt":         config.Tool{Name: "gofmt"},
-	}
-	if err := RunLint(root, tools, discoverForTest(t, root)); err != nil {
-		t.Fatalf("expected no error for formatting warning, got: %v", err)
-	}
-}
-
-func TestRunLintStructuredAdvisories(t *testing.T) {
+func TestRunLintStructuredErrors(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, ".datamitsuignore")
 	writeTestFile(t, path, "*.go:  known-tool , unknown-tool\n")
@@ -273,20 +260,11 @@ func TestRunLintStructuredAdvisories(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []diagnostic.Diagnostic{
-		{File: path, Row: 1, Col: 1, Severity: diagnostic.SeverityWarning, Source: "datamitsu", Code: "datamitsuignore-format", Message: `formatting differs from canonical form; have "*.go:  known-tool , unknown-tool", want "*.go: known-tool, unknown-tool"`, Reported: true},
-		{File: path, Row: 1, Col: 1, Severity: diagnostic.SeverityWarning, Source: "datamitsu", Code: "datamitsuignore-tool", Message: `unknown tool "unknown-tool"`, Reported: true},
+		{File: path, Row: 1, Col: 1, Severity: diagnostic.SeverityError, Source: "datamitsu", Code: "datamitsuignore-format", Message: "Use canonical spacing\n  have: \"*.go:  known-tool , unknown-tool\"\n  want: \"*.go: known-tool, unknown-tool\"", Reported: true, Gates: true},
+		{File: path, Row: 1, Col: 1, Severity: diagnostic.SeverityError, Source: "datamitsu", Code: "datamitsuignore-tool", Message: `unknown tool "unknown-tool"`, Reported: true, Gates: true},
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("advisories differ:\n got: %#v\nwant: %#v", got, want)
-	}
-}
-
-func TestRunLintAdvisoriesWithoutCallbackAreQuiet(t *testing.T) {
-	root := t.TempDir()
-	path := filepath.Join(root, ".datamitsuignore")
-	writeTestFile(t, path, "*.go: unknown-tool\n")
-	if err := RunLint(root, config.MapOfTools{}, []string{path}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("findings differ:\n got: %#v\nwant: %#v", got, want)
 	}
 }
 

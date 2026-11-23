@@ -6,9 +6,9 @@ exit code: 4
 
 ┏━ lint <RULE>
 ┃ fixture
+┃ ⊘ native  skipped (no binary for <HOST>)
 ┃
 ┃ ✓ alpha   <DUR>
-┃ ⊘ native  skipped (no binary for <HOST>)
 ┗━ 1 tools · 1 runs · done in <DUR> · 1 skipped <RULE>
 
 ===STDERR===

@@ -564,7 +564,7 @@ func TestPrintGroupedResultsShowsScope(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	printGroupedResults(toolGroups, 20, false)
+	printGroupedResults(toolGroups, 20, false, nil)
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1367,7 +1367,7 @@ func TestPrintGroupedResultsOutputOnce(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	printGroupedResults(toolGroups, 20, false)
+	printGroupedResults(toolGroups, 20, false, nil)
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1417,6 +1417,10 @@ func TestRunSequentialInvalidExplainMode(t *testing.T) {
 }
 
 func TestRunSequentialConfigLoadedOnce(t *testing.T) {
+	root := walkFixture(t)
+	if err := os.Remove(filepath.Join(root, ".datamitsuignore")); err != nil {
+		t.Fatal(err)
+	}
 	loadCount := 0
 	err := RunSequential(
 		[]config.OperationType{config.OpFix, config.OpLint},
@@ -1473,6 +1477,7 @@ func (f *fakePlanner) Plan(_ context.Context, operation config.OperationType, _ 
 // SeedFiles discards the list: these tests drive runSingleOperation with a
 // pre-built plan, so nothing downstream reads the repository walk.
 func (f *fakePlanner) SeedFiles(_ []string)              {}
+func (f *fakePlanner) Invalidate()                       {}
 func (f *fakePlanner) GetDetectedProjectTypes() []string { return []string{"go"} }
 func (f *fakePlanner) GetTimings() *timing.Timings       { return timing.New() }
 
@@ -1636,14 +1641,8 @@ func TestRunOperationsReplansLintAfterBundledFix(t *testing.T) {
 	if err := sc.runOperations(context.Background(), []config.OperationType{config.OpFix, config.OpLint}); err != nil {
 		t.Fatalf("runOperations: %v", err)
 	}
-	if planner.calls != 4 {
-		t.Fatalf("Plan called %d times, want two preflight plans and fresh fix/lint plans", planner.calls)
-	}
-	if observed[0] == observed[2] || observed[1] == observed[3] {
-		t.Fatalf("post-fix plans saw unchanged ignore contents: %q", observed)
-	}
-	if observed[2] != "*.ts: eslint, prettier\n" || observed[3] != observed[2] {
-		t.Fatalf("post-fix plan inputs = %q, want normalized ignore contents", observed[2:])
+	if len(observed) != 3 || observed[0] == observed[1] || observed[1] != "*.ts: eslint, prettier\n" || observed[2] != observed[1] {
+		t.Fatalf("expected preflight followed by fresh fix and lint plans; inputs = %q", observed)
 	}
 }
 

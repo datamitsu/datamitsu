@@ -22,6 +22,12 @@
     },
     {
       "operation": "lint",
+      "name": "datamitsu",
+      "complete": true,
+      "incomplete": []
+    },
+    {
+      "operation": "lint",
       "name": "hadolint",
       "complete": true,
       "incomplete": []

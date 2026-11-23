@@ -25,9 +25,17 @@ func (Renderer) Options() []string { return nil }
 // completeness, instead of leaving one out.
 func (Renderer) OmitsIncompleteTools() bool { return false }
 
+type documentHeader struct {
+	Schema string `json:"schema"`
+}
+
 // Render writes the document indented by two spaces, with a final newline.
 func (Renderer) Render(w io.Writer, run *report.Run, _ map[string]string) error {
-	data, err := json.MarshalIndent(run, "", "  ")
+	document := struct {
+		documentHeader
+		*report.Run
+	}{Schema: report.SchemaVersion, Run: run}
+	data, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode report: %w", err)
 	}
@@ -40,16 +48,24 @@ func (Renderer) Render(w io.Writer, run *report.Run, _ map[string]string) error 
 
 // Decode reads a document the renderer wrote, refusing any other schema.
 func Decode(r io.Reader) (*report.Run, error) {
-	var run report.Run
+	var data json.RawMessage
 	dec := json.NewDecoder(r)
-	if err := dec.Decode(&run); err != nil {
+	if err := dec.Decode(&data); err != nil {
 		return nil, fmt.Errorf("decode report: %w", err)
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return nil, errors.New("decode report: data after the document")
 	}
-	if run.Schema != report.SchemaVersion {
-		return nil, fmt.Errorf("unsupported report schema %q (want %q)", run.Schema, report.SchemaVersion)
+	var header documentHeader
+	if err := json.Unmarshal(data, &header); err != nil {
+		return nil, fmt.Errorf("decode report: %w", err)
+	}
+	if header.Schema != report.SchemaVersion {
+		return nil, fmt.Errorf("unsupported report schema %q (want %q)", header.Schema, report.SchemaVersion)
+	}
+	var run report.Run
+	if err := json.Unmarshal(data, &run); err != nil {
+		return nil, fmt.Errorf("decode report: %w", err)
 	}
 	return &run, nil
 }

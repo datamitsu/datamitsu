@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/config"
@@ -16,6 +17,33 @@ var takeSnapshot = gitutil.Take
 // snapshotGrace is how long a snapshot may still run once the run was
 // interrupted, before or while it runs; a variable so a test can shorten it.
 var snapshotGrace = 10 * time.Second
+
+func (sc *sharedContext) observeBundledFix(ctx context.Context, files []string, fix func() error) error {
+	sc.bundledFixChanges = nil
+	if sc.report == nil || len(files) == 0 {
+		return fix()
+	}
+	env := gitutil.Environ()
+	before, beforeErr := takeSnapshot(ctx, sc.rootPath, env)
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("before bundled fix: %w", err)
+	}
+	err := fix()
+	if beforeErr == nil && len(sc.bundledFixFindings) > 0 {
+		if after, afterErr := sc.snapshotAfterWrite(ctx, env); afterErr == nil {
+			sc.bundledFixChanges = before.Diff(after)
+		}
+	}
+	return err
+}
+
+func (sc *sharedContext) snapshotAfterWrite(ctx context.Context, env []string) (gitutil.Snapshot, error) {
+	snapCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancel()
+	stop := context.AfterFunc(ctx, func() { time.AfterFunc(snapshotGrace, cancel) })
+	defer stop()
+	return takeSnapshot(snapCtx, sc.rootPath, env)
+}
 
 // stepCallback observes what a fix operation changes: a snapshot of the
 // working tree before its first step and after every step — the tasks of one
@@ -33,11 +61,7 @@ func (sc *sharedContext) stepCallback(ctx context.Context, operation config.Oper
 	snapshot := func() (gitutil.Snapshot, error) {
 		// A snapshot after an interruption must still run — a formatter may
 		// have written part of its files — but for a while only.
-		snapCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-		defer cancel()
-		stop := context.AfterFunc(ctx, func() { time.AfterFunc(snapshotGrace, cancel) })
-		defer stop()
-		return takeSnapshot(snapCtx, sc.rootPath, env)
+		return sc.snapshotAfterWrite(ctx, env)
 	}
 	before, err := snapshot()
 	observing := err == nil

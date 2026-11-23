@@ -14,13 +14,13 @@ import (
 func baselineRun() *Run {
 	f := func(fp string, kind string) Finding { return Finding{Fingerprint: fp, Kind: kind, Severity: "error"} }
 	return &Run{
-		Schema:     SchemaVersion,
 		Datamitsu:  Producer{Version: "1.0.0", Configuration: "cfg"},
 		StartedAt:  time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
 		CI:         CIEnvironment{Vendor: "github", SHA: "abc", Ref: "refs/heads/main"},
+		Selection:  Selection{Mode: modeAll},
 		Incomplete: []Reason{ReasonToolsFilter},
 		Operations: []Operation{
-			{Name: "fix", Ran: true, Tools: []ToolRun{{Name: "prettier", Invocations: []Invocation{{Findings: []Finding{
+			{Name: "fix", Ran: true, Tools: []ToolRun{{Name: "prettier", Complete: true, Incomplete: []Reason{}, Invocations: []Invocation{{State: "ran", Extraction: "parsed-findings", Findings: []Finding{
 				f(strings.Repeat("b", 64), kindIssue),
 			}}}}}},
 			{Name: "lint", Ran: true, Tools: []ToolRun{{Name: "eslint", Incomplete: []Reason{ReasonCancelled}, Invocations: []Invocation{{Findings: []Finding{
@@ -85,7 +85,11 @@ func TestLoadBaseline(t *testing.T) {
 		}
 	})
 	t.Run("report", func(t *testing.T) {
-		b, err := LoadBaseline(write("r.json", baselineRun()))
+		b, err := LoadBaseline(write("r.json", struct {
+			*Run
+
+			Schema string `json:"schema"`
+		}{Run: baselineRun(), Schema: SchemaVersion}))
 		if err != nil || b.Version != FingerprintVersion || !reflect.DeepEqual(b.Set, want) || !b.FromReport ||
 			!reflect.DeepEqual(b.Incomplete, []Reason{ReasonCancelled, ReasonToolsFilter}) {
 			t.Errorf("LoadBaseline = %+v, %v", b, err)

@@ -9,9 +9,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/datamitsu/datamitsu/internal/provision"
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/uievent"
 )
+
+func TestTransferEstimateExpiresAndResumes(t *testing.T) {
+	var row provisionRow
+	start := time.Unix(100, 0)
+	sample := func(seconds int, done int64) {
+		row.observeTransfer(uievent.Event{BytesDone: done << 20, BytesTotal: 10 << 20}, start.Add(time.Duration(seconds)*time.Second))
+	}
+	check := func(seconds int, want string) {
+		t.Helper()
+		if got := row.transferDetail(start.Add(time.Duration(seconds) * time.Second)); got != want {
+			t.Fatalf("estimate at %ds = %q, want %q", seconds, got, want)
+		}
+	}
+	sample(0, 0)
+	sample(1, 1)
+	check(3, "1.0 MiB/s ~9s")
+	check(4, "")
+	sample(5, 1)
+	check(5, "")
+	sample(6, 2)
+	check(6, "204.8 KiB/s ~40s")
+	sample(7, 4)
+	check(7, "849.9 KiB/s ~8s")
+}
 
 // newPlainDisplay builds a Plain-mode Display writing to the given buffers.
 func newPlainDisplay(out, errOut io.Writer) *Display {
@@ -118,16 +143,13 @@ func TestPlainTask(t *testing.T) {
 	}
 }
 
-// TestInteractiveLineDirectWhenNoActiveBar locks in the fix for the dropped
-// "Installed …" line: once a bar has completed (no active bars), a status/log
-// line must be written straight to the stream, not buffered through mpb where a
-// subsequent direct write by non-ui code would drop it.
+// A completed group of bars gives back the terminal before the next status line.
 func TestInteractiveLineDirectWhenNoActiveBar(t *testing.T) {
 	var buf bytes.Buffer
 	d := &Display{mode: term.Interactive, out: &buf, err: &buf}
 
 	task := d.Task("work", 2) // creates the mpb container, bars == 1
-	task.Complete()           // bars == 0, container still alive
+	task.Complete()           // bars == 0; the last repaint is drained
 	d.Println("after-bar-line")
 	d.Close()
 
@@ -192,6 +214,121 @@ func TestProvisionInteractivePhaseTransitions(t *testing.T) {
 		t.Fatalf("terminal event left provision state: rows=%d bars=%d", remaining, bars)
 	}
 	d.Close()
+}
+
+func TestProvisionInstallDetail(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		msg      string
+		want     string
+		artifact string
+	}{
+		{"installer", "publish", "finalizing install", "binary fixture"},
+		{"waiter", "Waiting for installation: binary fixture (publish)", "Waiting: (finalizing install)", "binary fixture"},
+		{"incomplete runtime download", "Waiting for installation: runtime bun (download 999/1000 bytes)", "Waiting: download 99%", "runtime bun"},
+		{"complete runtime download", "Waiting for installation: runtime bun (download 1000/1000 bytes)", "Waiting: download 100%", "runtime bun"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			d := &Display{mode: term.Interactive, out: &out, err: &out}
+			t.Cleanup(d.Close)
+			d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "fixture", Status: uievent.StatusProgress, Name: tc.artifact, Msg: tc.msg})
+			row := d.provision["fixture"]
+			if row == nil || row.bar == nil {
+				t.Fatal("expected a visible install row")
+			}
+			if got := row.detail.Load(); got != tc.want {
+				t.Fatalf("visible detail = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestProvisionWaitSharesOnlyMatchingOwner(t *testing.T) {
+	d := &Display{mode: term.Interactive, out: io.Discard, err: io.Discard}
+	t.Cleanup(d.Close)
+	wait := provision.InstallProgress{
+		Type: uievent.TypeInstall, OpID: "wait", Status: uievent.StatusProgress, Name: "runtime bun",
+		WaitOwner: "runtime-lease", WaitBytesDone: 1, WaitBytesTotal: 2,
+	}
+	d.RenderInstallProgress(wait)
+	if row := d.provision["wait"]; row == nil || !row.determinate || row.bar == nil {
+		t.Fatal("external owner with known bytes must show a download bar")
+	}
+	owner := provision.InstallProgress{Type: uievent.TypeDownload, OpID: "app", Name: "bun", BytesTotal: 2, Owners: []string{"unrelated"}}
+	d.RenderInstallProgress(owner)
+	if d.provision["wait"] == nil {
+		t.Fatal("a same-name app hid an unrelated runtime wait")
+	}
+	fresh := wait
+	fresh.OpID = "fresh-waiter"
+	fresh.WaitUpdatedAt, fresh.WaitBytesDone = 20, 2
+	d.RenderInstallProgress(fresh)
+	owner.OpID = "runtime-binary"
+	owner.Owners = []string{"runtime-lease", "nested-binary-lease"}
+	d.RenderInstallProgress(owner)
+	d.RenderInstallProgress(wait)
+	if d.provision["wait"] != nil || d.provision["runtime-binary"] == nil {
+		t.Fatal("a nested owner and its waiter must share one visible indicator")
+	}
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: fresh.OpID, Status: uievent.StatusSkip})
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: owner.OpID, Status: uievent.StatusSkip})
+	if row := d.provision["wait"]; row == nil || !row.determinate || row.bar.Current() != 2 {
+		t.Fatal("ending the nested owner must restore the latest wait progress")
+	}
+}
+
+func TestProvisionWaitBarSurvivesFirstWaiter(t *testing.T) {
+	d := &Display{mode: term.Interactive, out: io.Discard, err: io.Discard}
+	t.Cleanup(d.Close)
+	wait := provision.InstallProgress{
+		Type: uievent.TypeInstall, OpID: "first", Status: uievent.StatusProgress, Name: "runtime bun",
+		WaitOwner: "external-owner",
+	}
+	d.RenderInstallProgress(wait)
+	wait.OpID = "second"
+	d.RenderInstallProgress(wait)
+	if row := d.provision["second"]; row == nil || row.determinate || row.bar == nil || d.provision["first"] != row || d.bars != 1 {
+		t.Fatal("unknown download size must show one shared spinner")
+	}
+	wait.WaitBytesDone, wait.WaitBytesTotal = 1, 2
+	d.RenderInstallProgress(wait)
+	row := d.provision["second"]
+	if row == nil || !row.determinate || row.bar == nil || d.provision["first"] != row || d.bars != 1 {
+		t.Fatal("both waiters must have one download bar")
+	}
+	wait.WaitUpdatedAt = 20
+	d.RenderInstallProgress(wait)
+	older := wait
+	older.OpID = "first"
+	older.WaitUpdatedAt, older.WaitBytesDone = 10, 0
+	d.RenderInstallProgress(older)
+	if got := row.bar.Current(); got != 1 {
+		t.Fatalf("delayed snapshot rolled progress back to %d", got)
+	}
+	wait.WaitBytesDone = wait.WaitBytesTotal
+	d.RenderInstallProgress(wait)
+	if row.bar.AbortedOrCompleted() {
+		t.Fatal("100% transferred must not end a wait")
+	}
+	wait.WaitOwner = "replacement-owner"
+	d.RenderInstallProgress(wait)
+	if d.provision["first"] != row || d.provision["second"] == row || d.bars != 2 {
+		t.Fatal("a waiter changing owners must not take the old owner's bar with it")
+	}
+	wait.WaitOwner = "external-owner"
+	d.RenderInstallProgress(wait)
+	if d.provision["second"] != row || d.bars != 1 {
+		t.Fatal("returning to the same owner must reuse its bar")
+	}
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "first", Status: uievent.StatusSkip})
+	if d.provision["first"] != nil || d.provision["second"] != row || d.bars != 1 {
+		t.Fatal("ending one wait must leave the other wait and its bar active")
+	}
+	d.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, OpID: "second", Status: uievent.StatusSkip})
+	if d.provision["second"] != nil || d.bars != 0 {
+		t.Fatal("ending the last wait must remove the shared bar")
+	}
 }
 
 func TestProvisionEventsCorrelateConcurrently(t *testing.T) {

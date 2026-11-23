@@ -114,7 +114,7 @@ func TestRuleAndSource(t *testing.T) {
 
 func TestCompanion(t *testing.T) {
 	lint := report.Operation{Name: "lint", Ran: true, Tools: []report.ToolRun{
-		{Name: "eslint", Complete: true},
+		{Name: "eslint", Complete: true, Invocations: []report.Invocation{{State: "ran", Extraction: "parsed-clean"}}},
 		{Name: "tsc", Incomplete: []report.Reason{"cancelled"}},
 	}}
 	fixNotRun := report.Operation{Name: "fix"}
@@ -150,6 +150,17 @@ func TestCompanion(t *testing.T) {
 		!reflect.DeepEqual(c.Incomplete, []report.Reason{"operation-skipped"}) {
 		t.Errorf("companion of both operations = %+v, want operation-skipped", c)
 	}
+
+	report.Mask(run, []string{"operation-skipped"})
+	report.Revise(run)
+	if c := NewCompanion(run, "codequality", []*report.Operation{&run.Operations[1]}, nil); !c.Complete {
+		t.Errorf("masked reason from an unlisted operation affected completeness: %+v", c)
+	}
+	if c := NewCompanion(run, "junit", []*report.Operation{&run.Operations[0], &run.Operations[1]}, nil); c.Complete ||
+		!reflect.DeepEqual(c.Incomplete, []report.Reason{report.Masked}) {
+		t.Errorf("companion should preserve just the masked reason: %+v", c)
+	}
+
 	run.Selection.Mode = ""
 	if c := NewCompanion(run, "codequality", []*report.Operation{&run.Operations[1]}, nil); c.Complete {
 		t.Errorf("a document without its selection read as complete: %+v", c)

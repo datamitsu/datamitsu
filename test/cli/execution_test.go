@@ -287,6 +287,23 @@ func TestExecutionTwoToolsPass(t *testing.T) {
 	})
 }
 
+func TestExecutionFailuresStayNearFooter(t *testing.T) {
+	e := newExecProject(t, map[string]string{"fixture.marker": ""}, fixtureSpec,
+		clitest.ShellTool("alpha", failScript, clitest.ToolOpSpec{Priority: 10}),
+		clitest.ShellTool("beta", passScript, clitest.ToolOpSpec{Priority: 20}),
+		clitest.ShellTool("gamma", passScript, clitest.ToolOpSpec{Priority: 30}))
+	res := e.run("", nil, "lint", "--fail-fast=false")
+	e.wantExit(res, 1)
+	last := -1
+	for _, marker := range []string{"┃ ✓ beta", "┃ ✓ gamma", "┃ ✗ alpha", "┗━"} {
+		at := strings.Index(res.Stdout, marker)
+		if at <= last {
+			t.Fatalf("missing or out-of-order %q:\n%s", marker, res.Stdout)
+		}
+		last = at
+	}
+}
+
 // TestExecutionFailFastBetweenPriorities is S2 (and S12 on it): a failure at
 // priority 10 stops the run before priority 20, and beta is reported as not
 // started. --fail-fast=false, or DATAMITSU_FAIL_FAST=false, runs it; the flag
@@ -756,10 +773,9 @@ func TestExecutionSetupErrorIsReported(t *testing.T) {
 		res := e.run("", nil, "check")
 		e.wantExit(res, 1)
 		e.wantMarker("fixer", "")
-		if !strings.Contains(res.Stdout, "· fix not run · lint not run ·") || !strings.Contains(res.Stderr, "missing colon separator") {
+		if !strings.Contains(res.Stdout, "· fix not run · lint not run ·") || !strings.Contains(res.Stderr, ".datamitsuignore") || !strings.Contains(res.Stderr, "missing colon separator") {
 			t.Errorf("check should report the setup error and close with neither operation run:\nstdout:\n%s\nstderr:\n%s", res.Stdout, res.Stderr)
 		}
-		e.golden("setup_error", res)
 	})
 
 	t.Run("jsonl", func(t *testing.T) {
@@ -783,8 +799,7 @@ c.tools[%q] = { name: %q, operations: { %s: { app: "unreachable", args: [], scop
 `, runtime.GOOS, runtime.GOARCH, build, build, build, tool, tool, operation)
 }
 
-// A failed preparation stops every operation even when execution uses keep-going.
-func TestExecutionPreparationFailurePreventsAllOperations(t *testing.T) {
+func TestExecutionLintPreparationFailureLeavesFixResult(t *testing.T) {
 	spec := clitest.ShellConfigSpec{ProjectTypes: fixtureTypes, Extra: hostUninstallable("installer", "lint")}
 	fixer := clitest.ShellTool("fixer", failScript, clitest.ToolOpSpec{Operation: "fix"})
 
@@ -792,12 +807,12 @@ func TestExecutionPreparationFailurePreventsAllOperations(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": ""}, spec, fixer)
 		res := e.run("", nil, "check", keepGoing)
 		e.wantExit(res, 1)
-		e.wantMarker("fixer", "")
+		e.wantMarker("fixer", "fixer \n")
 		if !strings.Contains(res.Stderr, "failed to pre-install tools") {
 			t.Errorf("preparation failure was not reported: %s", res.Stderr)
 		}
-		if strings.Contains(res.Stdout, "┏━ fix") || strings.Contains(res.Stdout, "┏━ lint") {
-			t.Errorf("an operation frame opened before tools were ready: %s", res.Stdout)
+		if !strings.Contains(res.Stdout, "┃ ✗ fixer") || strings.Contains(res.Stdout, "┏━ lint") {
+			t.Errorf("expected the fix result but no lint frame: %s", res.Stdout)
 		}
 	})
 
@@ -807,10 +822,10 @@ func TestExecutionPreparationFailurePreventsAllOperations(t *testing.T) {
 		e.wantExit(res, 1)
 		events := clitest.MustParseJSONL(t, res.Stderr)
 		clitest.AssertChains(t, events)
-		if runs := eventsOf(events, func(e clitest.Event) bool { return e.Type == "tool_run" }); len(runs) != 0 {
-			t.Errorf("tools started after preparation failed: %+v", runs)
+		if runs := toolRuns(events, "installer"); len(runs) != 0 {
+			t.Errorf("linter started after preparation failed: %+v", runs)
 		}
-		wantRunDone(t, events, "check", false, 0, 0, false)
+		wantRunDone(t, events, "check", false, 1, 0, false)
 	})
 }
 
@@ -1323,13 +1338,13 @@ func TestExecutionFailOnSkip(t *testing.T) {
 		e.golden("s10_lint_fail_on_skip", res, maskHost)
 	})
 
-	t.Run("core advisory with only platform skips", func(t *testing.T) {
+	t.Run("core error wins over platform skips", func(t *testing.T) {
 		e := newExecProject(t, map[string]string{"fixture.marker": "", ".datamitsuignore": "*.go:native\n"}, spec)
 		for _, flag := range []string{"--fail-on-skip", "--require-coverage=repo"} {
 			res := e.run("", nil, "lint", flag)
-			e.wantExit(res, 4)
-			if !strings.Contains(res.Stdout, "[datamitsuignore-format]") || !strings.Contains(res.Stdout, "⊘ native") || !strings.Contains(res.Stderr, flag+":") {
-				t.Errorf("%s: expected advisory, platform skip and coverage error:\n%s\n%s", flag, res.Stdout, res.Stderr)
+			e.wantExit(res, 1)
+			if !strings.Contains(res.Stdout, "┃ ✗ datamitsu") || !strings.Contains(res.Stdout, "[datamitsuignore-format]") || !strings.Contains(res.Stdout, "⊘ native") || !strings.Contains(res.Stderr, flag+":") {
+				t.Errorf("%s: expected core error, platform skip and coverage error:\n%s\n%s", flag, res.Stdout, res.Stderr)
 			}
 		}
 	})

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/config"
+	"github.com/datamitsu/datamitsu/internal/diagnostic"
 	"github.com/datamitsu/datamitsu/internal/gitutil"
 	"github.com/datamitsu/datamitsu/internal/tooling"
 )
@@ -139,5 +140,82 @@ func TestChangesSkipInvocationsThatNeverRan(t *testing.T) {
 	op := acc.Build(BuildInfo{}).Operations[0]
 	if inv := op.Tools[0].Invocations[0]; inv.State != "not-started" || len(inv.Changes) != 0 || len(op.Changes) != 1 {
 		t.Errorf("invocation %s changes %v, operation changes %v; want the change on the operation", inv.State, inv.Changes, op.Changes)
+	}
+}
+
+func TestEndUnstartedRetainsPlannedTasks(t *testing.T) {
+	task := perFileTask("hadolint:a:1", "a/Dockerfile")
+	plan := &tooling.ExecutionPlan{Groups: []tooling.TaskGroup{{Tasks: []tooling.Task{task}}}}
+	acc := NewAccumulator(testOptions())
+	rec := acc.BeginOperation(string(config.OpFix), plan, nil)
+	rec.EndUnstarted()
+	op := acc.Build(BuildInfo{}).Operations[0]
+	if op.Ran || len(op.Tools) != 1 || len(op.Tools[0].Invocations) != 1 {
+		t.Fatalf("operation = %+v; want unstarted operation retaining planned task", op)
+	}
+	if inv := op.Tools[0].Invocations[0]; inv.State != "not-started" {
+		t.Errorf("planned invocation state = %q, want not-started", inv.State)
+	}
+	if op.ChangesReason != ChangesNotRun {
+		t.Errorf("changes reason = %q, want %q", op.ChangesReason, ChangesNotRun)
+	}
+}
+
+func TestBundledNormalizationKeepsItsChangeKind(t *testing.T) {
+	acc := NewAccumulator(testOptions())
+	rec := acc.BeginOperation(string(config.OpFix), nil, nil)
+	rec.AddCoreFindings("datamitsu", []diagnostic.Diagnostic{placementDiag("sub/.datamitsuignore")})
+	rec.ClassifyCoreChanges([]gitutil.Change{{Path: "sub/.datamitsuignore", Kind: gitutil.Reverted}})
+
+	op := rec.Operation()
+	want := []Change{{Path: "sub/.datamitsuignore", Kind: gitutil.Reverted}}
+	if !reflect.DeepEqual(op.Changes, want) {
+		t.Fatalf("bundled change = %v, want %v", op.Changes, want)
+	}
+	if got := op.AllChanges(); !reflect.DeepEqual(got, want) {
+		t.Errorf("net bundled change = %v, want %v", got, want)
+	}
+
+	// A later observation that restores the index must not erase what the
+	// bundled fixer did from the operation's net change.
+	rec.ObserveChanges()
+	rec.Changed(1, []gitutil.Change{{Path: "sub/.datamitsuignore", Kind: gitutil.Reverted}})
+	op = rec.Operation()
+	want[0].Step = 1
+	if got := op.AllChanges(); !reflect.DeepEqual(got, want) {
+		t.Errorf("net change after index restoration = %v, want %v", got, want)
+	}
+}
+
+func TestAddCoreFixFindingsAndExternalChanges(t *testing.T) {
+	diag := diagnostic.Diagnostic{File: abs(".datamitsuignore")}
+	for _, tc := range []struct {
+		name        string
+		observed    bool
+		external    []gitutil.Change
+		wantChanges []Change
+		wantReason  string
+	}{
+		{name: "core only", wantChanges: []Change{{Path: ".datamitsuignore", Kind: "modified"}}, wantReason: ChangesNotExecuted},
+		{name: "mixed", observed: true, external: []gitutil.Change{{Path: "other.txt", Kind: gitutil.Created}}, wantChanges: []Change{{Path: ".datamitsuignore", Kind: "modified"}, {Path: "other.txt", Kind: "created", Step: 1}}},
+		{name: "deduplicated", observed: true, external: []gitutil.Change{{Path: ".datamitsuignore", Kind: gitutil.Modified}}, wantChanges: []Change{{Path: ".datamitsuignore", Kind: "modified", Step: 1}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			acc := NewAccumulator(testOptions())
+			rec := acc.BeginOperation(string(config.OpFix), nil, nil)
+			rec.ChangesNotObserved(ChangesNotExecuted, "")
+			rec.AddCoreFindings("datamitsu", []diagnostic.Diagnostic{diag})
+			if tc.observed {
+				rec.ObserveChanges()
+				rec.Changed(1, tc.external)
+			}
+			op := acc.Build(BuildInfo{}).Operations[0]
+			if op.ChangesObserved != tc.observed || op.ChangesReason != tc.wantReason {
+				t.Errorf("observation = %v, reason %q; want %v, %q", op.ChangesObserved, op.ChangesReason, tc.observed, tc.wantReason)
+			}
+			if got := op.AllChanges(); !reflect.DeepEqual(got, tc.wantChanges) {
+				t.Errorf("all changes = %v, want %v", got, tc.wantChanges)
+			}
+		})
 	}
 }

@@ -9,6 +9,7 @@
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `alpha` | ✓ passed | 1 | 0 | 0 | 0 | 0 | 0 |
 | `beta` | ✗ failed | 1 | 0 | 0 | 0 | 0 | 0 |
+| `datamitsu` | ✓ passed | 1 | 0 | 0 | 0 | 0 | 0 |
 | `hadolint` | ✓ passed | 1 | 0 | 0 | 1 | 0 | 0 |
 
 #### Findings

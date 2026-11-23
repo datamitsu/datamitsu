@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -399,14 +400,67 @@ func Execute() {
 		activeProvisionWorker = worker
 		if startErr == nil {
 			provision.Select(worker.Client)
-			worker.Client.SetProgress(func(data json.RawMessage) {
-				var event uievent.Event
-				if json.Unmarshal(data, &event) != nil {
+			type requestDisplay struct {
+				display *ui.Display
+				rows    map[string]struct{}
+				queue   string
+			}
+			requests := make(map[uint64]*requestDisplay)
+			refreshQueue := func(display *ui.Display) {
+				var queues []string
+				for _, req := range requests {
+					if req.display == display && req.queue != "" {
+						queues = append(queues, req.queue)
+					}
+				}
+				slices.Sort(queues)
+				display.RenderProvisionQueue(strings.Join(queues, " · "))
+			}
+			worker.Client.SetRequestProgress(func(id uint64, data json.RawMessage) {
+				req := requests[id]
+				if data == nil {
+					if req != nil {
+						delete(requests, id)
+						for op := range req.rows {
+							ui.ForgetProgress(op)
+							req.display.RenderProvisionEvent(uievent.Event{Type: uievent.TypeInstall, Status: uievent.StatusSkip, OpID: op})
+						}
+						refreshQueue(req.display)
+					}
+					return
+				}
+				var progress provision.InstallProgress
+				if json.Unmarshal(data, &progress) != nil {
+					return
+				}
+				event := progress.Event
+				if req == nil {
+					req = &requestDisplay{display: ui.Current(), rows: make(map[string]struct{})}
+					requests[id] = req
+				}
+				if event.Type == provision.QueueProgressType {
+					report.RewriteAll(&event, ciText)
+					req.queue = event.Msg
+					refreshQueue(req.display)
+					return
+				}
+				if event.Type == provision.CleanupProgressType {
+					ui.ForgetProgress(event.OpID)
+					event.Type, event.Status = uievent.TypeInstall, uievent.StatusSkip
+					delete(req.rows, event.OpID)
+					req.display.RenderProvisionEvent(event)
 					return
 				}
 				ui.Emit(event)
 				report.RewriteAll(&event, ciText)
-				ui.Current().RenderProvisionEvent(event)
+				progress.Event = event
+				switch event.Status {
+				case uievent.StatusSkip, uievent.StatusDone, uievent.StatusFail:
+					delete(req.rows, event.OpID)
+				default:
+					req.rows[event.OpID] = struct{}{}
+				}
+				req.display.RenderInstallProgress(progress)
 			})
 			rootCmd.SetContext(context.Background())
 		}

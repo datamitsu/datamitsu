@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "a95ecc93b00af8a36284a370f2cc0fe7",
+  "pageSetHash": "037b34cc3767bb5a1a1b6074843dda6b",
   "pages": [
     {
       "slug": "about",
@@ -224,8 +224,8 @@
       "url": "https://datamitsu.com/docs/guides/architecture/execution.md",
       "title": "Parallel Execution",
       "description": "How datamitsu runs task groups sequentially while parallelizing tasks within each group, with fail-fast by default and a keep-going mode",
-      "bytes": 23695,
-      "contentHash": "591d2595cdfba67a33f0c35e5cbdeb03"
+      "bytes": 25870,
+      "contentHash": "1a9d9878d2288866bcdae58d63abf095"
     },
     {
       "slug": "guides/architecture",
@@ -325,8 +325,8 @@
       "url": "https://datamitsu.com/docs/guides/reports.md",
       "title": "Reports",
       "description": "One record of a fix, lint or check run — what it holds, what it never contains, how complete it says it is, and how its findings keep their identity across runs",
-      "bytes": 45685,
-      "contentHash": "696531d46e862bb53a081c04c05ff45a"
+      "bytes": 47464,
+      "contentHash": "81ffa1b02fb1b7487b755a35683c9caf"
     },
     {
       "slug": "guides/runtime-management",
@@ -460,8 +460,8 @@
       "url": "https://datamitsu.com/docs/reference/cli-commands.md",
       "title": "CLI Commands",
       "description": "Complete reference for all datamitsu CLI commands",
-      "bytes": 198273,
-      "contentHash": "508048be23d9c4c29a68a45e31ea8349"
+      "bytes": 198573,
+      "contentHash": "a1a9b61b96c494eaf964af36b1e5a0e2"
     },
     {
       "slug": "reference/comparison",
@@ -478,8 +478,8 @@
       "url": "https://datamitsu.com/docs/reference/configuration-api.md",
       "title": "Configuration API",
       "description": "Complete reference for the datamitsu configuration API",
-      "bytes": 93806,
-      "contentHash": "5e010c2c1517fb37066daee4164a1731"
+      "bytes": 94127,
+      "contentHash": "374b7de6e53df0a52e32a8d34480d094"
     },
     {
       "slug": "reference/ignore-rules",
@@ -487,8 +487,8 @@
       "url": "https://datamitsu.com/docs/reference/ignore-rules.md",
       "title": "Ignore Rules",
       "description": "Reference for .datamitsuignore syntax and usage",
-      "bytes": 8586,
-      "contentHash": "17b7b552a1eb5d151833a968cc952f83"
+      "bytes": 8594,
+      "contentHash": "4778f350a541c1d75df2b668a9ce06db"
     },
     {
       "slug": "reference/js-api",

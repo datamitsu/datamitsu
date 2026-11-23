@@ -15,39 +15,50 @@ import (
 // complete task in one unit says nothing about the units the selection left
 // out, which is why scope needs the whole repository.
 
-// toolReasons judges one tool run from its invocations.
-func toolReasons(tr *ToolRun, sel Selection, parsed bool) []Reason {
-	set := map[Reason]bool{}
-	if sel.Mode != modeAll {
-		set[ReasonNarrowedSelection] = true
+// toolReasons judges the same recorded evidence for a live run and for replay.
+func toolReasons(tr *ToolRun, sel Selection, ran bool) []Reason {
+	var reasons []Reason
+	add := func(r Reason) {
+		if r != "" && !slices.Contains(reasons, r) {
+			reasons = append(reasons, r)
+		}
+	}
+	if !sel.RepositoryWide() {
+		add(ReasonNarrowedSelection)
+	}
+	if !ran {
+		add(ReasonOperationSkipped)
+	}
+	if len(tr.Invocations) == 0 {
+		add(ReasonMissingCompleteness)
 	}
 	for _, inv := range tr.Invocations {
 		if inv.Coverage == string(tooling.CoveragePartial) {
-			set[ReasonPartialUnit] = true
+			add(ReasonPartialUnit)
 		}
-		switch inv.State {
+		switch inv.ExecutionState() {
 		case string(tooling.ProcessRan):
-			if r, ok := extractionReason(tooling.Extraction(inv.Extraction)); ok {
-				set[r] = true
+			if r, ok := extractionReason(inv.ExtractionState()); ok {
+				add(r)
 			} else if failedWithoutFindings(inv) {
-				set[ReasonFailedWithoutFindings] = true
+				add(ReasonFailedWithoutFindings)
 			}
 		case string(tooling.FileCached), string(tooling.FileVerdictHit):
-			// A pass is recorded for a parsed tool only when its parser ran and
-			// found nothing, so a hit of one replays a parsed-clean pass; a hit of
-			// a tool without a parser replays an exit code.
-			if !parsed {
-				set[ReasonUnparsedCacheHit] = true
+			if inv.ExtractionState() != tooling.ExtractionParsedClean {
+				add(ReasonUnparsedCacheHit)
 			}
 		case string(tooling.ProcessCancelled):
-			set[ReasonCancelled] = true
+			add(ReasonCancelled)
 		case string(tooling.ProcessNotStarted):
-			set[ReasonNotStarted] = true
+			add(ReasonNotStarted)
 		case string(tooling.ProcessSetupFailed):
-			set[ReasonSetupFailed] = true
+			add(ReasonSetupFailed)
+		default:
+			add(ReasonMissingCompleteness)
 		}
 	}
-	return sortedReasons(set)
+	slices.Sort(reasons)
+	return reasons
 }
 
 // failedWithoutFindings reports a process that failed on its own and whose
@@ -56,16 +67,12 @@ func toolReasons(tr *ToolRun, sel Selection, parsed bool) []Reason {
 // service that tracks alerts would close every alert of the tool on. The
 // fallback parser runs on exactly this answer once it exists.
 func failedWithoutFindings(inv Invocation) bool {
-	return inv.Extraction == string(tooling.ExtractionParsedClean) && inv.ExitCode != nil && *inv.ExitCode != 0
+	return inv.ExtractionState() == tooling.ExtractionParsedClean && inv.ExitCode != nil && *inv.ExitCode != 0
 }
 
-// Revise applies to a document read back the completeness rules an earlier
-// build did not know, from the invocation facts the document records: a tool
-// with a process that failed while its parser found nothing was complete
-// before failed-without-findings existed. It also names what an earlier
-// document leaves unsaid: its fingerprints are the first version's, and an
-// operation whose changes it does not state was not-recorded. A document this
-// build wrote is left as it is.
+// Revise fills in evidence omitted by earlier producers and downgrades claims
+// that contradict the recorded scope, execution or extraction. It never promotes
+// an incomplete run or tool.
 func Revise(run *Run) {
 	if run.Fingerprint == "" {
 		run.Fingerprint = FingerprintVersion
@@ -75,21 +82,7 @@ func Revise(run *Run) {
 			op.ChangesReason = ChangesNotRecorded
 		}
 	}
-	for i := range run.Operations {
-		for j := range run.Operations[i].Tools {
-			tr := &run.Operations[i].Tools[j]
-			if slices.Contains(tr.Incomplete, ReasonFailedWithoutFindings) ||
-				!slices.ContainsFunc(tr.Invocations, func(inv Invocation) bool {
-					return inv.State == string(tooling.ProcessRan) && failedWithoutFindings(inv)
-				}) {
-				continue
-			}
-			tr.Incomplete = append(tr.Incomplete, ReasonFailedWithoutFindings)
-			slices.Sort(tr.Incomplete)
-			tr.Complete = false
-			run.Complete = false
-		}
-	}
+	checkCompleteness(run)
 }
 
 func extractionReason(e tooling.Extraction) (Reason, bool) {
@@ -112,10 +105,10 @@ func extractionReason(e tooling.Extraction) (Reason, bool) {
 // matched no tool is not complete either.
 func runReasons(run *Run) []Reason {
 	set := map[Reason]bool{}
-	if run.Selection.Mode != modeAll {
+	if !run.Selection.RepositoryWide() {
 		set[ReasonNarrowedSelection] = true
 	}
-	if len(run.Selection.Tools) > 0 {
+	if len(run.Selection.Tools) > 0 || len(run.Selection.ExcludedTools) > 0 {
 		set[ReasonToolsFilter] = true
 	}
 	for _, op := range run.Operations {
@@ -131,30 +124,69 @@ func runReasons(run *Run) []Reason {
 	return sortedReasons(set)
 }
 
-// judge sets the completeness of every tool run and of the run.
-func judge(run *Run, tools config.MapOfTools) {
-	complete := true
+// judge starts a live run with optimistic claims, subject to recorded evidence.
+func judge(run *Run) {
+	run.Complete = true
+	run.Incomplete = []Reason{}
 	for i := range run.Operations {
-		op := &run.Operations[i]
-		complete = complete && op.Ran
-		for j := range op.Tools {
-			tr := &op.Tools[j]
-			set := map[Reason]bool{}
-			for _, r := range tr.Incomplete {
-				set[r] = true
-			}
-			tool := tools[tr.Name]
-			parsed := parsesOutput(tool, tool.Operations[config.OperationType(op.Name)])
-			for _, r := range toolReasons(tr, run.Selection, parsed) {
-				set[r] = true
-			}
-			tr.Incomplete = sortedReasons(set)
+		for j := range run.Operations[i].Tools {
+			tr := &run.Operations[i].Tools[j]
 			tr.Complete = len(tr.Incomplete) == 0
-			complete = complete && tr.Complete
+			if tr.Incomplete == nil {
+				tr.Incomplete = []Reason{}
+			}
 		}
 	}
-	run.Incomplete = runReasons(run)
-	run.Complete = complete && len(run.Incomplete) == 0
+	checkCompleteness(run)
+}
+
+func checkCompleteness(run *Run) {
+	for _, reason := range runReasons(run) {
+		addReason(&run.Incomplete, run.RedactedReasons, reason)
+	}
+	run.Complete = run.Complete && len(run.Incomplete) == 0
+	for i := range run.Operations {
+		op := &run.Operations[i]
+		for j := range op.Tools {
+			tr := &op.Tools[j]
+			if tr.Complete && len(tr.Incomplete) == 0 {
+				if reasons := toolReasons(tr, run.Selection, op.Ran); len(reasons) > 0 {
+					tr.Incomplete = reasons
+				}
+			} else {
+				// Preserve existing diagnostics on incomplete tools. Also recognize
+				// the failed-clean case in reports that predate that reason.
+				if !op.Ran {
+					addReason(&tr.Incomplete, tr.RedactedReasons, ReasonOperationSkipped)
+				}
+				if slices.ContainsFunc(tr.Invocations, func(inv Invocation) bool {
+					return inv.ExecutionState() == string(tooling.ProcessRan) && failedWithoutFindings(inv)
+				}) {
+					addReason(&tr.Incomplete, tr.RedactedReasons, ReasonFailedWithoutFindings)
+				}
+			}
+			tr.Complete = tr.Complete && len(tr.Incomplete) == 0
+			run.Complete = run.Complete && tr.Complete
+		}
+	}
+}
+
+func addReason(reasons *[]Reason, redacted []uint16, reason Reason) {
+	for i, label := range *reasons {
+		if effectiveReason(label, redacted, i) == reason {
+			return
+		}
+	}
+	*reasons = append(*reasons, reason)
+	// Sorting would move labels away from their redaction codes.
+	if len(redacted) == 0 {
+		slices.Sort(*reasons)
+	}
+}
+
+// IncompleteReason returns the reason's identity for decisions, not for display.
+func (r *Run) IncompleteReason(i int) Reason {
+	return effectiveReason(r.Incomplete[i], r.RedactedReasons, i)
 }
 
 // excludedTools are the configured tools with one of operations that are not

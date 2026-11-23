@@ -6,7 +6,7 @@
 ┃
 ┃
 ┃ ✗ datamitsu  <DUR>  4 finding(s)
-┃     .datamitsuignore:1:1 warning unknown tool "eslint" [datamitsuignore-tool]
+┃     .datamitsuignore:1:1 error unknown tool "eslint" [datamitsuignore-tool]
 ┃     deep/nest/.datamitsuignore:1:1 error Datamitsu config must be located at the repository git root [config-placement]
 ┃     pkg/datamitsu.config.js:1:1 error Datamitsu config must be located at the repository git root [config-placement]
 ┃     sub/.datamitsu:1:1 error Datamitsu config must be located at the repository git root [config-placement]

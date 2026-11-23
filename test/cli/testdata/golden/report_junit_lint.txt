@@ -28,6 +28,15 @@
 beta: failed</error>
     </testcase>
   </testsuite>
+  <testsuite name="lint/datamitsu" tests="0" failures="0" errors="0" skipped="0" time="<DUR>" timestamp="<TS>">
+    <properties>
+      <property name="complete" value="true"/>
+      <property name="incomplete" value=""/>
+      <property name="cached" value="0"/>
+      <property name="run.complete" value="false"/>
+      <property name="run.incomplete" value=""/>
+    </properties>
+  </testsuite>
   <testsuite name="lint/hadolint" tests="1" failures="0" errors="0" skipped="0" time="<DUR>" timestamp="<TS>">
     <properties>
       <property name="complete" value="true"/>

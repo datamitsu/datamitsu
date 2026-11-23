@@ -10,10 +10,11 @@ The executor is the third stage of datamitsu's execution pipeline. It takes the 
 ## Pre-Install Phase
 
 Before bundled fixes or tool operations begin, the runner prepares the apps
-needed by every requested operation. For `check`, this is the sorted union of
-the initial fix and lint plans, not just the tools fix happens to use. Selection,
-tool filters, disabled tools and platform skips still decide what enters those
-plans. App references come from planned tasks, not tool registry keys.
+needed by the initial fix plan. For `check`, lint tools are deliberately left
+until after the bundled fix, even when no configured fixer exists, so a cold
+check does not provision its analyzers before the tree is finalized. Selection,
+tool filters, disabled tools and platform skips still decide what enters plans.
+App references come from planned tasks, not tool registry keys.
 
 Both OCI auto-seeding and installation expand those roots to their transitive
 `dependsOn` closure, including dependencies that are lazy or not required.
@@ -23,12 +24,40 @@ even under `--fail-fast=false`. Reports retain the planned tasks as not started.
 Explain mode never provisions tools.
 
 A cold run shows a separate **prepare tools** phase before the fix or lint
-frame. Terminals show byte progress when a total is known and activity spinners
-otherwise; transient rows disappear when preparation ends. Pipes and CI receive
-sparse progress on stderr. Ready apps do not produce a warm-run preparation frame.
+frame. Terminals show compact byte progress when a total is known and activity
+spinners otherwise. Active rows keep their relative order across phase changes
+and disappear as work finishes. Pipes and CI receive sparse progress on stderr.
+Ready apps do not produce a warm-run preparation frame. If startup takes longer
+without live terminal progress, a status line identifies what is taking time.
+Live download rows keep bars and byte counters aligned. The fixed-width
+percentage is accented when terminal colors are enabled.
+Live rows sit inside the preparation frame, with activity indicators after the
+name and progress details.
+Transferred and total bytes occupy separate right-aligned columns, keeping the
+separator and units in place as counts change. Waiting rows show the artifact
+name next to the wait status. A download already visible in the same terminal
+does not get a second wait row for the same installation. When another process
+holds the lock, local waiters share one progress bar when the download size is
+known. Waiters regroup if the holder changes, even when byte counts are unchanged.
+The bar disappears when the last local wait ends. Active downloads show a smoothed
+transfer rate and an estimated time to finish downloading. After three seconds
+without progress the estimate clears without moving the bar. Narrow terminals
+omit estimates first, then byte counters as needed to keep the bar visible.
+One live queue row lists up to three not-yet-dispatched apps and the total
+pending count; apps already installed are excluded.
+`finalizing install` refers to making the artifact available in the local store,
+not uploading it.
 
-The early lint plan discovers provisioning roots only. Lint is planned again
-after fix, so file changes and execution-cache decisions use the updated inputs.
+After bundled fixes, lint tools and parsers are prepared from a fresh plan,
+after refreshing file discovery, ignore rules, and placement checks. After the
+operations finish, each single-file export is checked against the tool runs it
+would actually write, including eligible built-in results. A late refusal
+leaves tool execution and other reports intact and removes the previous file
+at the refused target. Built-in findings also remain visible if external tool
+setup fails. Standalone lint checks placement and ignore rules before preparing
+external tools. A late report refusal exits 5 unless a tool or built-in check
+failed (1) or a coverage requirement failed (4).
+An early capacity refusal still exits 2.
 
 ## Store Provisioning
 
@@ -149,6 +178,8 @@ Not all failures are equal. The executor classifies each failed task:
 | **Interrupted** | The task was stopped because the run was interrupted        | As `cancelled` or `not started` |
 
 A cancelled task is not a failure: it never counts toward `(N failed)`, and its output is not shown. It is not hidden either. The runner lists every planned task the run stopped — `cancelled (fail-fast)` if it had started, `not started (fail-fast)` if it had not, including the tasks of groups the run never reached — and counts them in the footer, so a reader never takes "no output" for "clean". The JSON-L stream ends each such task with a `tool_run` event of status `skip`.
+The terminal lists skipped and stopped work first, then successful results,
+then core and tool failures so their details stay close to the footer.
 
 A task counts as stopped when the stop reached it while it was still running, whatever it then exits with: a tool that catches the signal and exits 1 is cancelled, not failed. A tool that had already exited when the stop went out keeps its own result.
 

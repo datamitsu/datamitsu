@@ -36,7 +36,6 @@ func TestMask(t *testing.T) {
 	code := 3
 	stamp := time.Date(2023, 11, 14, 22, 13, 20, 0, time.UTC)
 	run := &Run{
-		Schema:    SchemaVersion,
 		StartedAt: stamp,
 		Selection: Selection{Mode: "paths", Paths: []string{"dir-" + secret + "/a"}},
 		Operations: []Operation{{
@@ -87,10 +86,10 @@ func TestMaskJSONSpelling(t *testing.T) {
 }
 
 func TestMaskNothing(t *testing.T) {
-	run := &Run{Schema: SchemaVersion}
+	run := &Run{Fingerprint: FingerprintVersion}
 	Mask(run, nil)
 	Mask(nil, []string{"abcdefgh"})
-	if run.Schema != SchemaVersion {
+	if run.Fingerprint != FingerprintVersion {
 		t.Error("masking with no secret changed the document")
 	}
 }

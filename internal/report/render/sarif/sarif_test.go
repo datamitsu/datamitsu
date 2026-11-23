@@ -90,7 +90,6 @@ func sampleRun() *report.Run {
 	outside.Location.Chars, outside.Location.Precision = nil, "unknown"
 	noFile := report.Finding{Tool: "eslint", Source: "eslint", Code: "config", Severity: "info", Kind: "issue", Message: "no file", Location: report.Location{Precision: "unknown"}}
 	return &report.Run{
-		Schema:    report.SchemaVersion,
 		Selection: report.Selection{Mode: "all"},
 		Operations: []report.Operation{
 			{Name: "fix", Ran: true, Tools: []report.ToolRun{{Name: "prettier", Complete: true}}},
@@ -326,8 +325,15 @@ func names(files []common.File) []string {
 func TestTooManyResults(t *testing.T) {
 	run := manyTools(2)
 	tr := &run.Operations[0].Tools[0]
-	for i := range ResultsPerRun {
+	for i := range ResultsPerRun - 1 {
 		tr.Invocations[0].Findings = append(tr.Invocations[0].Findings, finding(tr.Name, "R2", "a.go", i+2, "warning", "m"))
+	}
+	if got := (Renderer{}).WrittenTools(run, nil); got != 2 {
+		t.Errorf("WrittenTools = %d at the result limit, want 2", got)
+	}
+	tr.Invocations[0].Findings = append(tr.Invocations[0].Findings, finding(tr.Name, "R2", "a.go", ResultsPerRun+1, "warning", "m"))
+	if got := (Renderer{}).WrittenTools(run, nil); got != 1 {
+		t.Errorf("WrittenTools = %d over the result limit, want 1", got)
 	}
 	log, _ := render(t, run, nil)
 	if len(log.Runs) != 1 || log.Runs[0].Tool.Driver.Name != "tool01" {
@@ -409,7 +415,6 @@ func TestCorePlacementToolRun(t *testing.T) {
 	one := 1
 	fp := report.Fingerprint("datamitsu", "config-placement", "pkg/datamitsu.config.js", "row:1", 0)
 	run := &report.Run{
-		Schema:    report.SchemaVersion,
 		Selection: report.Selection{Mode: "all"},
 		Operations: []report.Operation{
 			{Name: "lint", Ran: true, Tools: []report.ToolRun{{
@@ -417,6 +422,7 @@ func TestCorePlacementToolRun(t *testing.T) {
 				Invocations: []report.Invocation{{
 					ID: "datamitsu#0", TaskID: "builtin", State: "ran", ExitCode: &one,
 					Success: false, FailureKind: "threshold", Extraction: "parsed-findings",
+					Provenance: "core",
 					Findings: []report.Finding{{
 						Fingerprint: fp, FingerprintBasis: report.BasisRow,
 						Tool: "datamitsu", Source: "datamitsu", Code: "config-placement",

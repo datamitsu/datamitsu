@@ -16,7 +16,7 @@ import (
 	"github.com/datamitsu/datamitsu/internal/digest"
 )
 
-func TestCheckProvisionsLintBeforeFixAndKeepsWarmRunQuiet(t *testing.T) {
+func TestCheckProvisionsLintAfterFixAndKeepsWarmRunQuiet(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fixture commands use a Unix shell")
 	}
@@ -58,8 +58,8 @@ globalThis.getConfig = () => ({
 	if cold.ExitCode != 0 {
 		t.Fatalf("cold check: exit %d\n%s\n%s", cold.ExitCode, cold.Stdout, cold.Stderr)
 	}
-	if lateLint.Load() || requests.Load() != 2 {
-		t.Fatalf("plan provisioning did not finish before fix: late lint=%v, requests=%d", lateLint.Load(), requests.Load())
+	if !lateLint.Load() || requests.Load() != 2 {
+		t.Fatalf("check did not defer lint provisioning until after the fix: late lint=%v, requests=%d", lateLint.Load(), requests.Load())
 	}
 	invocations, err := os.ReadFile(filepath.Join(p.Dir, ".invocations"))
 	if err != nil || string(invocations) != "fix\nlint\n" {
@@ -86,7 +86,7 @@ globalThis.getConfig = () => ({
 				args = []string{"--log-format", "jsonl", "check"}
 			}
 			result := clitest.Run(t, machineOpts, args...)
-			if result.ExitCode != 0 || lateLint.Load() || requests.Load() != wantRequests {
+			if result.ExitCode != 0 || !lateLint.Load() || requests.Load() != wantRequests {
 				t.Fatalf("cold %s check: exit %d, late lint=%v\n%s\n%s", mode, result.ExitCode, lateLint.Load(), result.Stdout, result.Stderr)
 			}
 			if strings.Contains(result.Stdout+result.Stderr, "\x1b[") || strings.Contains(result.Stdout+result.Stderr, "Downloading") || strings.Contains(result.Stdout+result.Stderr, "Installing") {

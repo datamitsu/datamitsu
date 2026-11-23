@@ -78,16 +78,30 @@ func (Renderer) ToolsPerFile() int { return RunsPerFile }
 // Declines a run without a tool to write: code scanning refuses a SARIF file
 // that holds no run, so an upload of one fails, where no upload changes no
 // alert.
-func (Renderer) Declines(run *report.Run, options map[string]string) string {
-	if len(Runs(run, options)) > 0 {
-		return ""
+func (Renderer) Declines(run *report.Run, _ map[string]string) string {
+	if op := common.ListedOperation(run); op != nil {
+		for i := range op.Tools {
+			if omission(&op.Tools[i]) == writeTool {
+				return ""
+			}
+		}
 	}
 	return "it would hold no tool run, which code scanning refuses; every alert stays as it is"
 }
 
-// WrittenTools is how many runs the file holds: one per tool written.
-func (Renderer) WrittenTools(run *report.Run, options map[string]string) int {
-	return len(Runs(run, options))
+// WrittenTools counts eligible tool runs without constructing the SARIF document.
+func (Renderer) WrittenTools(run *report.Run, _ map[string]string) int {
+	op := common.ListedOperation(run)
+	if op == nil {
+		return 0
+	}
+	n := 0
+	for i := range op.Tools {
+		if omission(&op.Tools[i]) == writeTool {
+			n++
+		}
+	}
+	return n
 }
 
 // CheckOptions refuses an empty category.
@@ -101,7 +115,10 @@ func (Renderer) CheckOptions(options map[string]string) error {
 // Render writes the whole run as one file; a run with more tools than one
 // file holds needs a directory target.
 func (Renderer) Render(w io.Writer, run *report.Run, options map[string]string) error {
-	runs := Runs(run, options)
+	runs, err := Runs(run, options)
+	if err != nil {
+		return err
+	}
 	if len(runs) > RunsPerFile {
 		return fmt.Errorf("%d tools do not fit one SARIF file, which GitHub reads at most %d runs of: write it to a directory", len(runs), RunsPerFile)
 	}
@@ -112,7 +129,10 @@ func (Renderer) Render(w io.Writer, run *report.Run, options map[string]string) 
 // sorted by name, named datamitsu-1.sarif, datamitsu-2.sarif and so on; a run
 // without a tool to write is no file.
 func (Renderer) RenderFiles(run *report.Run, options map[string]string) ([]common.File, error) {
-	runs := Runs(run, options)
+	runs, err := Runs(run, options)
+	if err != nil {
+		return nil, err
+	}
 	var files []common.File
 	for start := 0; start < len(runs); start += RunsPerFile {
 		var b bytes.Buffer
@@ -142,45 +162,68 @@ func (Renderer) Omitted(run *report.Run, _ map[string]string) []report.OmittedTo
 	var out []report.OmittedTool
 	for i := range op.Tools {
 		tr := &op.Tools[i]
-		if reasons, omit := omission(tr); omit {
-			out = append(out, report.OmittedTool{Operation: op.Name, Tool: tr.Name, Reasons: reasons})
+		var reasons []string
+		switch omission(tr) {
+		case writeTool:
+			continue
+		case omitIncomplete:
+			reasons = make([]string, len(tr.Incomplete))
+			for i, r := range tr.Incomplete {
+				reasons[i] = string(r)
+			}
+		case omitTooManyResults:
+			reasons = []string{common.ReasonTooManyResults}
 		}
+		out = append(out, report.OmittedTool{Operation: op.Name, Tool: tr.Name, Reasons: reasons})
 	}
 	return out
 }
 
-func omission(tr *report.ToolRun) ([]string, bool) {
+type toolDisposition uint8
+
+const (
+	writeTool toolDisposition = iota
+	omitIncomplete
+	omitTooManyResults
+)
+
+func omission(tr *report.ToolRun) toolDisposition {
 	if !tr.Complete {
-		reasons := make([]string, len(tr.Incomplete))
-		for i, r := range tr.Incomplete {
-			reasons[i] = string(r)
-		}
-		return reasons, true
+		return omitIncomplete
 	}
-	if countResults(tr) > ResultsPerRun {
-		return []string{common.ReasonTooManyResults}, true
+	if exceedsResultLimit(tr) {
+		return omitTooManyResults
 	}
-	return nil, false
+	return writeTool
 }
 
 // Runs builds the SARIF runs of the listed operation: one per tool that is
 // written, sorted by tool name.
-func Runs(run *report.Run, options map[string]string) []Run {
+func Runs(run *report.Run, options map[string]string) ([]Run, error) {
 	op := common.ListedOperation(run)
 	if op == nil {
-		return []Run{}
+		return []Run{}, nil
 	}
 	id := category(options) + "/"
 	runs := []Run{}
 	for i := range op.Tools {
 		tr := &op.Tools[i]
-		if _, omit := omission(tr); omit {
+		if omission(tr) != writeTool {
 			continue
 		}
-		runs = append(runs, toolRun(tr, id))
+		// Older JSON reports may contain configured tools with reserved names.
+		if tr.Name == config.BuiltinFixDriverName || (tr.Name == config.BuiltinToolName && !tr.IsBuiltin()) {
+			return nil, fmt.Errorf("tool %q uses a reserved SARIF driver name; rename the tool and rerun the check", tr.Name)
+		}
+		driverName := tr.Name
+		if op.Name == string(config.OpFix) && tr.IsBuiltin() {
+			// Categories are user-selected; distinguish fixes by driver instead.
+			driverName = config.BuiltinFixDriverName
+		}
+		runs = append(runs, toolRun(tr, id, driverName))
 	}
 	sort.SliceStable(runs, func(i, j int) bool { return runs[i].Tool.Driver.Name < runs[j].Tool.Driver.Name })
-	return runs
+	return runs, nil
 }
 
 func category(options map[string]string) string {
@@ -192,24 +235,32 @@ func category(options map[string]string) string {
 	return DefaultCategory
 }
 
-func countResults(tr *report.ToolRun) int {
+func exceedsResultLimit(tr *report.ToolRun) bool {
 	n := 0
-	for _, inv := range tr.Invocations {
-		for _, f := range inv.Findings {
-			if !common.Synthetic(f) && f.Location.Path != "" {
+	for i := range tr.Invocations {
+		findings := tr.Invocations[i].Findings
+		for j := range findings {
+			if isResult(&findings[j]) {
 				n++
+				if n > ResultsPerRun {
+					return true
+				}
 			}
 		}
 	}
-	return n
+	return false
 }
 
-func toolRun(tr *report.ToolRun, automationID string) Run {
+func isResult(f *report.Finding) bool {
+	return f.Location.Path != "" && !common.Synthetic(*f)
+}
+
+func toolRun(tr *report.ToolRun, automationID, driverName string) Run {
 	r := Run{
 		AutomationDetails: AutomationDetails{ID: automationID},
 		ColumnKind:        "unicodeCodePoints",
 		Tool: Tool{Driver: Driver{
-			Name:           tr.Name,
+			Name:           driverName,
 			Version:        tr.App.Version,
 			InformationURI: tr.App.OfficialURL,
 			Rules:          []Rule{},
@@ -220,9 +271,10 @@ func toolRun(tr *report.ToolRun, automationID string) Run {
 	var findings []report.Finding
 	for _, inv := range tr.Invocations {
 		r.Invocations = append(r.Invocations, invocation(inv))
-		for _, f := range inv.Findings {
-			if !common.Synthetic(f) && f.Location.Path != "" {
-				findings = append(findings, f)
+		for i := range inv.Findings {
+			f := &inv.Findings[i]
+			if isResult(f) {
+				findings = append(findings, *f)
 			}
 		}
 	}
@@ -301,7 +353,7 @@ func invocation(inv report.Invocation) Invocation {
 // exits non-zero on its findings, or fails the threshold, analyzed; one that
 // failed without a parsable finding did not.
 func analyzed(inv report.Invocation) bool {
-	switch inv.State {
+	switch inv.ExecutionState() {
 	case string(tooling.FileCached), string(tooling.FileVerdictHit):
 		return true
 	case string(tooling.ProcessRan):

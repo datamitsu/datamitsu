@@ -28,12 +28,14 @@ import (
 	"github.com/datamitsu/datamitsu/internal/installstate"
 	"github.com/datamitsu/datamitsu/internal/logger"
 	"github.com/datamitsu/datamitsu/internal/prepare"
+	"github.com/datamitsu/datamitsu/internal/provision"
 	"github.com/datamitsu/datamitsu/internal/runtimeconfig"
 	"github.com/datamitsu/datamitsu/internal/storelock"
 	"github.com/datamitsu/datamitsu/internal/syslist"
 	"github.com/datamitsu/datamitsu/internal/target"
 	"github.com/datamitsu/datamitsu/internal/trace"
 	"github.com/datamitsu/datamitsu/internal/ui"
+	"github.com/datamitsu/datamitsu/internal/uievent"
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 )
@@ -597,8 +599,34 @@ func (bm *BinManager) EnsureTools(ctx context.Context, names []string) error {
 		})
 	}
 
+	var pending []string
+	if provision.HasProgress(ctx) {
+		for _, name := range distinct {
+			if !bm.AppInstalled(name) {
+				pending = append(pending, name)
+			}
+		}
+	}
+	reportQueue := func() {
+		var detail string
+		if n := len(pending); n != 0 {
+			shown := min(n, 3)
+			detail = fmt.Sprintf("queued %d: %s", n, strings.Join(pending[:shown], ", "))
+			if n > shown {
+				detail += fmt.Sprintf(" +%d", n-shown)
+			}
+		}
+		_ = provision.Progress(ctx, uievent.Event{Type: provision.QueueProgressType, Msg: detail})
+	}
+	if len(pending) > 0 {
+		reportQueue()
+	}
 	for _, name := range distinct {
 		jobs <- name
+		if len(pending) > 0 && pending[0] == name {
+			pending = pending[1:]
+			reportQueue()
+		}
 	}
 	close(jobs)
 	wg.Wait()

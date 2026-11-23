@@ -144,6 +144,32 @@ func TestReportJSON(t *testing.T) {
 	})
 }
 
+func TestReportBundledFixChanges(t *testing.T) {
+	e := newExecProject(t,
+		map[string]string{"fixture.marker": "", ".datamitsuignore": "*.go:cspell  \n"},
+		fixtureSpec,
+		clitest.ShellTool("fixer", passScript, clitest.ToolOpSpec{Operation: "fix"}),
+	)
+	res := e.run("", nil, "fix", "--report", "json=run.json")
+	e.wantExit(res, 0)
+	_, doc := e.report("run.json")
+	ops := operationsOf(t, doc)
+	if len(ops) != 1 {
+		t.Fatalf("operations = %v, want one fix", ops)
+	}
+	changes, _ := ops[0]["changes"].([]any)
+	if len(changes) != 1 {
+		t.Fatalf("bundled fix changes = %v, want .datamitsuignore", changes)
+	}
+	change, _ := changes[0].(map[string]any)
+	if change["path"] != ".datamitsuignore" || change["kind"] != "modified" {
+		t.Errorf("bundled fix change = %v, want modified .datamitsuignore", change)
+	}
+	if ops[0]["changesObserved"] != true {
+		t.Errorf("changesObserved = %v, want external observation status preserved", ops[0]["changesObserved"])
+	}
+}
+
 // TestReportNotWritten: a report that cannot be written exits 5 when nothing
 // else failed and leaves the exit code of a failed tool alone, printing why
 // either way.
