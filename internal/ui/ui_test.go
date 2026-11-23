@@ -7,12 +7,15 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/datamitsu/datamitsu/internal/provision"
 	"github.com/datamitsu/datamitsu/internal/term"
 	"github.com/datamitsu/datamitsu/internal/uievent"
 )
+
+// cspell:ignore synctest
 
 func TestTransferEstimateExpiresAndResumes(t *testing.T) {
 	var row provisionRow
@@ -186,6 +189,31 @@ func TestProvisionRowsTerminalAndClose(t *testing.T) {
 	if strings.Count(errOut.String(), "Preparing tool") != 1 || out.Len() != 0 {
 		t.Fatalf("closed renderer accepted a late event or polluted stdout: stdout=%q stderr=%q", out.String(), errOut.String())
 	}
+}
+
+func TestPlainProvisionProgressUsesByteAndPercentMilestones(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var stderr bytes.Buffer
+		d := newPlainDisplay(io.Discard, &stderr)
+		t.Cleanup(d.Close)
+		progress := func(done, total int64, percent int) {
+			d.RenderProvisionEvent(uievent.Event{
+				Type: uievent.TypeDownload, OpID: "download", Status: uievent.StatusProgress,
+				Name: "fixture", BytesDone: done, BytesTotal: total, Percent: percent,
+			})
+		}
+		progress(64, 0, 0)
+		time.Sleep(plainMinInterval)
+		progress(128, 0, 0)
+		progress(192, 0, 0)
+		progress(200, 1000, 20)
+		progress(250, 1000, 25)
+		progress(300, 1000, 30)
+		const want = "Downloading fixture\nDownloading fixture: 128 bytes\nDownloading fixture: 20%\nDownloading fixture: 30%\n"
+		if got := stderr.String(); got != want {
+			t.Errorf("plain download milestones = %q, want %q", got, want)
+		}
+	})
 }
 
 func TestProvisionInteractivePhaseTransitions(t *testing.T) {
