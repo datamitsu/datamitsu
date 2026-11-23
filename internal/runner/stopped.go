@@ -104,6 +104,7 @@ func unreachedTasks(plan *tooling.ExecutionPlan, results []tooling.GroupExecutio
 func emitStopped(runOpID string, t stoppedTask) {
 	ui.Emit(uievent.Event{
 		TS:              0,
+		ThrottleID:      "",
 		Op:              "",
 		Name:            "",
 		BytesDone:       0,

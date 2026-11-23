@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## Built-in Check Outcomes
+
+- Built-in Datamitsu checks have two outcomes: success or failure. Report
+  violations as gating errors, not warnings; honor explicit baselines. A
+  successful fix may report changes without introducing a third outcome.
+
 ## Initialization and Managed Config Safety
 
 - After editing `datamitsu.config.*`, run `datamitsu init`. It provisions apps,

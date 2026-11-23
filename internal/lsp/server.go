@@ -159,7 +159,10 @@ func (s *Server) ExitCode() int { return s.exitCode }
 func (s *Server) FormatFile(ctx context.Context, absPath string, content []byte) (edits []TextEdit, err error) {
 	opID := uievent.NextOpID("fmt")
 	started := time.Now()
-	ui.Emit(uievent.Event{TS: 0, Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypePhase, OpID: opID, Status: uievent.StatusStart, Op: formatOp})
+	ui.Emit(uievent.Event{
+		ThrottleID: "",
+		TS:         0, Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypePhase, OpID: opID, Status: uievent.StatusStart, Op: formatOp,
+	})
 	var tally formatTally
 	defer func() { emitFormatDone(opID, started, tally, err) }()
 
@@ -341,6 +344,8 @@ func (s *Server) executeGroups(
 func (s *Server) wireToolEvents(opID string) {
 	s.loaded.executor.SetTaskStartCallback(func(taskID, tool, dir string) {
 		ui.Emit(uievent.Event{
+			ThrottleID: "",
+
 			TS:              0,
 			Op:              "",
 			Name:            "",
@@ -395,6 +400,8 @@ func (s *Server) wireToolEvents(opID string) {
 		}
 		runID := toolRunOpID(opID, result.TaskID)
 		ui.Emit(uievent.Event{
+			ThrottleID: "",
+
 			TS:              0,
 			Op:              "",
 			Name:            "",
@@ -446,6 +453,8 @@ func (s *Server) wireToolEvents(opID string) {
 			// Without this a failing formatter is invisible: the request still
 			// succeeds with whatever the other tools left on disk.
 			ui.Emit(uievent.Event{
+				ThrottleID: "",
+
 				TS:              0,
 				Status:          "",
 				Op:              "",

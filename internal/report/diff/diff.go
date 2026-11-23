@@ -148,7 +148,7 @@ func Diff(before, after *report.Run) Result {
 		sorted = append(sorted, name)
 	}
 	sort.Strings(sorted)
-	lookedEverywhere := after.Selection.Mode == "all"
+	lookedEverywhere := after.Selection.RepositoryWide()
 	for _, name := range sorted {
 		bt, inBefore := b[name]
 		at, inAfter := a[name]

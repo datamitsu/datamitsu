@@ -173,7 +173,8 @@ func finding(file string, row int, severity string) report.Finding {
 func failedRun(findings ...report.Finding) *report.Run {
 	code := 1
 	return &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   zerovalue_time.Time{},
@@ -195,13 +196,19 @@ func failedRun(findings ...report.Finding) *report.Run {
 			Changes:         nil,
 			Name:            "lint", Ran: true,
 			Tools: []report.ToolRun{{
+				RedactedReasons: nil,
+
 				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 				Parser:     nil,
 				Category:   "",
 				Complete:   false,
 				Incomplete: nil,
 				Name:       "t", FailOn: "error", GateActive: true,
-				Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", ExitCode: &code, Findings: findings}},
+				Invocations: []report.Invocation{{
+					RedactedState:      0,
+					RedactedExtraction: 0,
+					ID:                 "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", ExitCode: &code, Findings: findings,
+				}},
 			}},
 		}},
 	}
@@ -298,7 +305,11 @@ func TestCandidates(t *testing.T) {
 	run := failedRun(finding("a.go", 1, "error"), warn)
 	code := 2
 	run.Operations[0].Tools[0].Invocations = append(run.Operations[0].Tools[0].Invocations,
-		report.Invocation{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", ExitCode: &code, Findings: []report.Finding{dup, synthetic}})
+		report.Invocation{
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			ID:                 "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", ExitCode: &code, Findings: []report.Finding{dup, synthetic},
+		})
 	candidates := Candidates(run)
 	got := make([]string, 0, len(candidates))
 	for _, a := range candidates {

@@ -1371,7 +1371,8 @@ func (p *Planner) initializeCache(ctx context.Context) error {
 // A malformed user .datamitsuignore is a hard error rather than a warning: a
 // parse failure drops every rule in that file, which would silently let tools
 // run on paths the user meant to exclude (e.g. a formatter rewriting a file).
-// Unknown tool names are warned (the intended tool simply never gets disabled).
+// Unknown tool names remain in the matcher; the bundled linter reports them in
+// the lint operation instead of logging a second warning during planning.
 //
 // The files scanned here and the ones internal/bundled lints and fixes are the
 // same set, so the rules validated are the rules applied. That used to be two
@@ -1393,11 +1394,6 @@ func (p *Planner) buildIgnoreMatcher() (*datamitsuignore.Matcher, error) {
 		}
 	}
 
-	known := make(map[string]bool, len(p.tools))
-	for name := range p.tools {
-		known[name] = true
-	}
-
 	// Only the .datamitsuignore at the git root applies. A .datamitsuignore
 	// anywhere below is a dead artifact — the core config-placement check
 	// reports it; the planner must not silently resurrect its rules.
@@ -1415,12 +1411,6 @@ func (p *Planner) buildIgnoreMatcher() (*datamitsuignore.Matcher, error) {
 		rules, err := datamitsuignore.Parse(string(content))
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", f, err)
-		}
-		for _, tool := range datamitsuignore.UnknownTools(rules, known) {
-			log.Warn("unknown tool in .datamitsuignore",
-				zap.String("file", f),
-				zap.String("tool", tool),
-			)
 		}
 		m.AddRules(rules)
 	}

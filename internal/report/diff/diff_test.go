@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	zerovalue_time "time"
 
 	"github.com/datamitsu/datamitsu/internal/report"
+
+	zerovalue_time "time"
 )
 
 func fp(c byte) string { return strings.Repeat(string(c), 64) }
@@ -21,25 +22,91 @@ func finding(tool string, c byte, row int) report.Finding {
 		Shown:            false,
 		Baselined:        false,
 		Provenance:       "",
-		Fingerprint:      fp(c), Tool: tool, Source: tool, Code: "R" + string(c), Severity: "error", Kind: "issue",
-		Message: "finding " + string(c), Location: report.Location{EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "", Path: "src/a.ts", Row: row},
+
+		Fingerprint: fp(c), Tool: tool, Source: tool, Code: "R" + string(c), Severity: "error", Kind: "issue",
+		Message: "finding " + string(c), Location: report.Location{
+			EndRow:    0,
+			Col:       0,
+			EndCol:    0,
+			Unit:      "",
+			Chars:     nil,
+			Bytes:     nil,
+			Utf16:     nil,
+			Precision: "",
+			Path:      "src/a.ts", Row: row,
+		},
 	}
 }
 
 // run is a lint run whose tools report the given findings, complete over the
 // whole repository.
 func run(tools map[string][]report.Finding) *report.Run {
-	r := &report.Run{Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, FailFast: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, Schema: report.SchemaVersion, Selection: report.Selection{Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil, Mode: "all"}, Complete: true}
-	op := report.Operation{Success: false, Duration: 0, Skipped: nil, Cancelled: nil, Tools: nil, ChangesObserved: false, ChangesReason: "", ChangesDetail: "", ChangesScope: nil, Changes: nil, Name: "lint", Ran: true}
+	r := &report.Run{
+		Fingerprint:     "",
+		Datamitsu:       report.Producer{Version: "", Configuration: ""},
+		StartedAt:       zerovalue_time.Time{},
+		EndedAt:         zerovalue_time.Time{},
+		FailFast:        false,
+		Incomplete:      nil,
+		RedactedReasons: nil,
+		Operations:      nil,
+		Exports:         nil,
+		CI:              report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+		Selection: report.Selection{
+			Dir:           "",
+			Paths:         nil,
+			Tools:         nil,
+			FileScoped:    false,
+			ExcludedTools: nil,
+			Mode:          "all",
+		}, Complete: true,
+	}
+	op := report.Operation{
+		Success:         false,
+		Duration:        0,
+		Skipped:         nil,
+		Cancelled:       nil,
+		Tools:           nil,
+		ChangesObserved: false,
+		ChangesReason:   "",
+		ChangesDetail:   "",
+		ChangesScope:    nil,
+		Changes:         nil,
+		Name:            "lint", Ran: true,
+	}
 	for name, fs := range tools {
 		op.Tools = append(op.Tools, report.ToolRun{
-			App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
-			Parser:     nil,
-			FailOn:     "",
-			GateActive: false,
-			Category:   "",
-			Name:       name, Complete: true, Incomplete: []report.Reason{},
-			Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", State: "ran", Findings: fs}},
+			App:             report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+			Parser:          nil,
+			FailOn:          "",
+			GateActive:      false,
+			Category:        "",
+			RedactedReasons: nil,
+
+			Name: name, Complete: true, Incomplete: []report.Reason{},
+			Invocations: []report.Invocation{{
+				ID:                 "",
+				TaskID:             "",
+				Dir:                "",
+				Scope:              "",
+				Granularity:        "",
+				Arity:              "",
+				Coverage:           "",
+				WholeUnit:          false,
+				RedactedState:      0,
+				ExitCode:           nil,
+				Success:            false,
+				FailureKind:        "",
+				Duration:           0,
+				Extraction:         "",
+				RedactedExtraction: 0,
+				Provenance:         "",
+				Files:              nil,
+				Step:               0,
+				Changes:            nil,
+				OutputTail:         "",
+				State:              "ran", Findings: fs,
+			}},
 		})
 	}
 	r.Operations = []report.Operation{op}
@@ -56,7 +123,10 @@ func TestDiffClasses(t *testing.T) {
 		"fresh":  {finding("fresh", 'f', 1)},
 	})
 	res := Diff(before, after)
-	want := Counts{Unknown: 0, New: 1, Fixed: 1, Unchanged: 1, Moved: 1, Unobserved: 2}
+	want := Counts{
+		Unknown: 0,
+		New:     1, Fixed: 1, Unchanged: 1, Moved: 1, Unobserved: 2,
+	}
 	if res.Summary != want {
 		t.Fatalf("summary = %+v, want %+v", res.Summary, want)
 	}
@@ -119,9 +189,29 @@ func TestDiffSymmetric(t *testing.T) {
 // TestDiffIgnoresSynthetic: a synthetic finding stands for a failure, not a
 // finding of the code.
 func TestDiffIgnoresSynthetic(t *testing.T) {
-	synthetic := report.Finding{FingerprintBasis: "", Source: "", Code: "", RuleURL: "", Reported: false, Gates: false, Shown: false, Baselined: false, Message: "", Location: report.Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: ""}, Provenance: "", Fingerprint: fp('s'), Tool: "tsc", Kind: "synthetic", Severity: "error"}
+	synthetic := report.Finding{
+		FingerprintBasis: "",
+		Source:           "",
+		Code:             "",
+		RuleURL:          "",
+		Reported:         false,
+		Gates:            false,
+		Shown:            false,
+		Baselined:        false,
+		Message:          "",
+		Location:         report.Location{Path: "", Row: 0, EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: ""},
+		Provenance:       "",
+		Fingerprint:      fp('s'), Tool: "tsc", Kind: "synthetic", Severity: "error",
+	}
 	res := Diff(run(map[string][]report.Finding{"tsc": {synthetic}}), run(map[string][]report.Finding{"tsc": nil}))
-	if res.Summary != (Counts{New: 0, Fixed: 0, Unchanged: 0, Moved: 0, Unknown: 0, Unobserved: 0}) {
+	if res.Summary != (Counts{
+		New:        0,
+		Fixed:      0,
+		Unchanged:  0,
+		Moved:      0,
+		Unknown:    0,
+		Unobserved: 0,
+	}) {
 		t.Errorf("summary = %+v, want nothing", res.Summary)
 	}
 }

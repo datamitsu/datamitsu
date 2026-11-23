@@ -139,6 +139,18 @@ func CheckCapacity(spec Spec, tools int) error {
 		spec.Format, tools, where, limit, spec.Format, limit)
 }
 
+// CheckRunCapacity tests only the tool runs the renderer will actually write.
+func CheckRunCapacity(spec Spec, run *report.Run) error {
+	if spec.Dir() {
+		return nil
+	}
+	r, _ := Lookup(spec.Format)
+	if capped, ok := r.(Capped); ok {
+		return CheckCapacity(spec, capped.WrittenTools(run, spec.Options))
+	}
+	return nil
+}
+
 // Describe records in run's exports what each report beside its status is:
 // the companion written beside it, and the tools it leaves out.
 func Describe(run *report.Run, specs []Spec) {
@@ -149,7 +161,7 @@ func Describe(run *report.Run, specs []Spec) {
 		}
 		for i := range run.Exports {
 			e := &run.Exports[i]
-			if e.Format != spec.Format || e.Path != spec.Path {
+			if e.Format != spec.Format || e.Path != spec.Path || e.Status == report.ExportRefused {
 				continue
 			}
 			if _, companioned := r.(Companioned); companioned && !spec.Stdout() {

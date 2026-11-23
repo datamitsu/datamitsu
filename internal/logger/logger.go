@@ -133,6 +133,8 @@ func (c *switchCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore
 func (c *switchCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 	if emit := route.Load(); emit != nil {
 		(*emit)(uievent.Event{
+			ThrottleID: "",
+
 			TS:              0,
 			Status:          "",
 			Op:              "",

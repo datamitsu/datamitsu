@@ -927,6 +927,12 @@ func placeholderList(names []string) string {
 	return strings.Join(quoted, ", ")
 }
 
+// BuiltinToolName identifies Datamitsu's own checks in reports, not an app.
+const BuiltinToolName = "datamitsu"
+
+// BuiltinFixDriverName is reserved for built-in fixes in SARIF.
+const BuiltinFixDriverName = "datamitsu-fix"
+
 // ValidateTools fails fast when a tool argument or environment value uses a
 // {placeholder} datamitsu does not substitute. Passing an unknown placeholder
 // through unchanged silently breaks the tool (e.g. GOLANGCI_LINT_CACHE={toolcache}
@@ -948,6 +954,10 @@ func ValidateTools(tools MapOfTools, parsers MapOfParsers, apps binmanager.MapOf
 
 	var errs []string
 	for _, toolName := range toolNames {
+		if toolName == BuiltinToolName || toolName == BuiltinFixDriverName {
+			errs = append(errs, fmt.Sprintf("tool %q: the key is reserved for built-in checks; rename the tools entry and its references", toolName))
+			continue
+		}
 		tool := tools[toolName]
 
 		if tool.OutputParser != nil {

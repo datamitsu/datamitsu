@@ -44,21 +44,42 @@ func TestPrintRunClosing(t *testing.T) {
 		want      string
 	}{
 		{
-			name:      "both ran",
-			summaries: []opSummary{{tools: 0, runs: 0, failed: 0, skipped: 0, cancelled: 0, partial: 0, op: config.OpFix, durationMs: 400}, {tools: 0, runs: 0, failed: 0, skipped: 0, cancelled: 0, partial: 0, op: config.OpLint, durationMs: 1500}},
-			elapsed:   2300,
-			want:      "┗━ check · done in 2.30s · fix 400ms · lint 1.50s · setup 400ms",
+			name: "both ran",
+			summaries: []opSummary{{
+				incomplete: false,
+				unstarted:  false,
+				tools:      0, runs: 0, failed: 0, skipped: 0, cancelled: 0, partial: 0, op: config.OpFix, durationMs: 400,
+			}, {
+				incomplete: false,
+				unstarted:  false,
+				tools:      0, runs: 0, failed: 0, skipped: 0, cancelled: 0, partial: 0, op: config.OpLint, durationMs: 1500,
+			}},
+			elapsed: 2300,
+			want:    "┗━ check · done in 2.30s · fix 400ms · lint 1.50s · setup 400ms",
 		},
 		{
-			name:      "lint not run",
-			summaries: []opSummary{{tools: 0, runs: 0, failed: 0, skipped: 0, cancelled: 0, partial: 0, op: config.OpFix, durationMs: 400}},
-			elapsed:   700,
-			want:      "┗━ check · done in 700ms · fix 400ms · lint not run · setup 300ms",
+			name: "lint not run",
+			summaries: []opSummary{{
+				incomplete: false,
+				unstarted:  false,
+				tools:      0, runs: 0, failed: 0, skipped: 0, cancelled: 0, partial: 0, op: config.OpFix, durationMs: 400,
+			}},
+			elapsed: 700,
+			want:    "┗━ check · done in 700ms · fix 400ms · lint not run · setup 300ms",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc := &sharedContext{cfg: nil, rootPath: "", cwdPath: "", selection: zerovalue_tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, narrowed: nil, failFast: false, afterFailedFix: false, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, placementGated: false, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, summaries: tt.summaries}
+			sc := &sharedContext{
+				preparedTools:        false,
+				parserPrewarmed:      false,
+				bundledFixFindings:   nil,
+				bundledFixChanges:    nil,
+				bundledLintFindings:  nil,
+				bundledLintErr:       nil,
+				completedBundledLint: false,
+				cfg:                  nil, rootPath: "", cwdPath: "", selection: zerovalue_tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, narrowed: nil, failFast: false, afterFailedFix: false, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, summaries: tt.summaries,
+			}
 			out := captureStdout(t, func() { sc.printRunClosing("check", ops, tt.elapsed) })
 			if !strings.HasPrefix(out, "\n"+tt.want+" ━") {
 				t.Errorf("printRunClosing() printed %q, want %q", out, tt.want)
@@ -95,8 +116,16 @@ func TestEmitRunDone(t *testing.T) {
 			wantCancel: 0,
 			name:       "complete",
 			summaries: []opSummary{
-				{failed: 0, cancelled: 0, partial: 0, durationMs: 0, op: config.OpFix, tools: 1, runs: 2, skipped: 1},
-				{skipped: 0, cancelled: 0, partial: 0, durationMs: 0, op: config.OpLint, tools: 2, runs: 3, failed: 1},
+				{
+					incomplete: false,
+					unstarted:  false,
+					failed:     0, cancelled: 0, partial: 0, durationMs: 0, op: config.OpFix, tools: 1, runs: 2, skipped: 1,
+				},
+				{
+					incomplete: false,
+					unstarted:  false,
+					skipped:    0, cancelled: 0, partial: 0, durationMs: 0, op: config.OpLint, tools: 2, runs: 3, failed: 1,
+				},
 			},
 			wantComplete: true, wantRuns: 5,
 		},
@@ -105,8 +134,12 @@ func TestEmitRunDone(t *testing.T) {
 			wantComplete: false,
 			wantCancel:   0,
 			name:         "an operation did not run",
-			summaries:    []opSummary{{skipped: 0, cancelled: 0, partial: 0, durationMs: 0, op: config.OpFix, tools: 1, runs: 1, failed: 1}},
-			wantRuns:     1,
+			summaries: []opSummary{{
+				incomplete: false,
+				unstarted:  false,
+				skipped:    0, cancelled: 0, partial: 0, durationMs: 0, op: config.OpFix, tools: 1, runs: 1, failed: 1,
+			}},
+			wantRuns: 1,
 		},
 		{
 			success:      false,
@@ -114,8 +147,16 @@ func TestEmitRunDone(t *testing.T) {
 			wantCancel:   0,
 			name:         "a per-file task stopped at a failing file",
 			summaries: []opSummary{
-				{failed: 0, skipped: 0, cancelled: 0, partial: 0, durationMs: 0, op: config.OpFix, tools: 1, runs: 1},
-				{skipped: 0, cancelled: 0, durationMs: 0, op: config.OpLint, tools: 1, runs: 1, failed: 1, partial: 1},
+				{
+					incomplete: false,
+					unstarted:  false,
+					failed:     0, skipped: 0, cancelled: 0, partial: 0, durationMs: 0, op: config.OpFix, tools: 1, runs: 1,
+				},
+				{
+					incomplete: false,
+					unstarted:  false,
+					skipped:    0, cancelled: 0, durationMs: 0, op: config.OpLint, tools: 1, runs: 1, failed: 1, partial: 1,
+				},
 			},
 			wantRuns: 2,
 		},
@@ -124,8 +165,16 @@ func TestEmitRunDone(t *testing.T) {
 			wantComplete: false,
 			name:         "a task was stopped",
 			summaries: []opSummary{
-				{failed: 0, skipped: 0, cancelled: 0, partial: 0, durationMs: 0, op: config.OpFix, tools: 1, runs: 1},
-				{failed: 0, skipped: 0, partial: 0, durationMs: 0, op: config.OpLint, tools: 1, runs: 1, cancelled: 2},
+				{
+					incomplete: false,
+					unstarted:  false,
+					failed:     0, skipped: 0, cancelled: 0, partial: 0, durationMs: 0, op: config.OpFix, tools: 1, runs: 1,
+				},
+				{
+					incomplete: false,
+					unstarted:  false,
+					failed:     0, skipped: 0, partial: 0, durationMs: 0, op: config.OpLint, tools: 1, runs: 1, cancelled: 2,
+				},
 			},
 			wantRuns: 2, wantCancel: 2,
 		},
@@ -136,7 +185,16 @@ func TestEmitRunDone(t *testing.T) {
 			ui.SetEventSink(sink, true)
 			defer ui.SetEventSink(nil, false)
 
-			sc := &sharedContext{cfg: nil, rootPath: "", cwdPath: "", selection: zerovalue_tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, narrowed: nil, failFast: false, afterFailedFix: false, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, placementGated: false, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, summaries: tt.summaries}
+			sc := &sharedContext{
+				preparedTools:        false,
+				parserPrewarmed:      false,
+				bundledFixFindings:   nil,
+				bundledFixChanges:    nil,
+				bundledLintFindings:  nil,
+				bundledLintErr:       nil,
+				completedBundledLint: false,
+				cfg:                  nil, rootPath: "", cwdPath: "", selection: zerovalue_tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, narrowed: nil, failFast: false, afterFailedFix: false, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: zerovalue_time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, summaries: tt.summaries,
+			}
 			sc.emitRunDone("check", ops, 1234, tt.success)
 
 			if len(sink.events) != 1 {

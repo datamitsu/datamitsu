@@ -199,7 +199,18 @@ func TestOutputTailOfAToolOfUnknownCategory(t *testing.T) {
 // distinct fingerprints.
 func TestSyntheticFindingsAreNotMerged(t *testing.T) {
 	f, _ := syntheticFinding("tsc", tooling.ProcessResult{ID: "", Files: nil, Success: false, Extraction: "", ParseError: "", Provenance: "", ParserModule: "", OutputTail: nil, Diagnostics: nil, DurationMs: 0, FailOn: "", GateActive: false, ThresholdFailed: false, State: tooling.ProcessRan, ExitCode: new(2)}, "")
-	tr := &ToolRun{Name: "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, mayHoldSecrets: false, Invocations: []Invocation{{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "tsc:a:1#1", Findings: []Finding{f}}, {TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "tsc:b:2#1", Findings: []Finding{f}}}}
+	tr := &ToolRun{
+		RedactedReasons: nil,
+		Name:            "", App: AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, mayHoldSecrets: false, Invocations: []Invocation{{
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "tsc:a:1#1", Findings: []Finding{f},
+		}, {
+			RedactedState:      0,
+			RedactedExtraction: 0,
+			TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "tsc:b:2#1", Findings: []Finding{f},
+		}},
+	}
 	settleFindings(tr)
 	a, b := tr.Invocations[0].Findings, tr.Invocations[1].Findings
 	if len(a) != 1 || len(b) != 1 || a[0].Fingerprint == b[0].Fingerprint {

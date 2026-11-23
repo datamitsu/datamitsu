@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/datamitsu/datamitsu/internal/digest"
 	"github.com/datamitsu/datamitsu/internal/gitenv"
@@ -59,20 +60,28 @@ func Environ() []string {
 func Take(ctx context.Context, root string, env []string) (Snapshot, error) {
 	out, err := status(ctx, root, env)
 	if err != nil {
-		return Snapshot{}, err
+		return Snapshot{
+			entries: nil,
+		}, err
 	}
 	paths, err := parse(out)
 	if err != nil {
-		return Snapshot{}, err
+		return Snapshot{
+			entries: nil,
+		}, err
 	}
 	s := Snapshot{entries: make(map[string]entry, len(paths))}
 	for path, tracked := range paths {
 		if err := ctx.Err(); err != nil {
-			return Snapshot{}, fmt.Errorf("hash dirty files: %w", err)
+			return Snapshot{
+				entries: nil,
+			}, fmt.Errorf("hash dirty files: %w", err)
 		}
 		e, err := entryOf(ctx, filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {
-			return Snapshot{}, fmt.Errorf("hash %s: %w", path, err)
+			return Snapshot{
+				entries: nil,
+			}, fmt.Errorf("hash %s: %w", path, err)
 		}
 		e.tracked = tracked
 		s.entries[path] = e
@@ -85,6 +94,7 @@ func status(ctx context.Context, root string, env []string) ([]byte, error) {
 		"--untracked-files=all", "--ignore-submodules=all", "--no-renames")
 	cmd.Dir = root
 	cmd.Env = env
+	cmd.WaitDelay = time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
@@ -158,13 +168,21 @@ func entryOf(ctx context.Context, path string) (entry, error) {
 		return entry{tracked: false, hash: "", executable: false}, nil
 	}
 	if err != nil {
-		return entry{}, fmt.Errorf("stat: %w", err)
+		return entry{
+			tracked:    false,
+			hash:       "",
+			executable: false,
+		}, fmt.Errorf("stat: %w", err)
 	}
 	switch {
 	case info.Mode()&os.ModeSymlink != 0:
 		target, err := os.Readlink(path)
 		if err != nil {
-			return entry{}, fmt.Errorf("read link: %w", err)
+			return entry{
+				tracked:    false,
+				hash:       "",
+				executable: false,
+			}, fmt.Errorf("read link: %w", err)
 		}
 		return entry{tracked: false, executable: false, hash: "link:" + digest.XXH3Of([]byte(target)).Hex()}, nil
 	case info.IsDir():
@@ -176,12 +194,20 @@ func entryOf(ctx context.Context, path string) (entry, error) {
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return entry{}, fmt.Errorf("open: %w", err)
+		return entry{
+			tracked:    false,
+			hash:       "",
+			executable: false,
+		}, fmt.Errorf("open: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 	d, err := digest.XXH3Reader(stoppableReader{stopped: ctx.Err, r: f})
 	if err != nil {
-		return entry{}, fmt.Errorf("read: %w", err)
+		return entry{
+			tracked:    false,
+			hash:       "",
+			executable: false,
+		}, fmt.Errorf("read: %w", err)
 	}
 	return entry{tracked: false, hash: d.Hex(), executable: info.Mode()&0o111 != 0}, nil
 }

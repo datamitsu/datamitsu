@@ -7,6 +7,7 @@ exit code: 1
 ┏━ lint <RULE>
 ┃ pkg
 ┃
+┃ ✓ beta   <DUR>
 ┃ ✗ alpha  <DUR> (1 failed)
   ┌─ alpha [per-project] (run #1) <RULE>
   │  Dir:       pkg/a
@@ -18,7 +19,6 @@ exit code: 1
   │  alpha: failed
   └<RULE>
 
-┃ ✓ beta   <DUR>
 ┗━ 2 tools · 2 runs · done in <DUR> · 1 failed · cache 0% <RULE>
 
 ===STDERR===

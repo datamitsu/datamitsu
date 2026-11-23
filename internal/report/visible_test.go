@@ -103,6 +103,9 @@ func TestShownOf(t *testing.T) {
 
 func TestVisible(t *testing.T) {
 	inv := Invocation{
+		RedactedState:      0,
+		RedactedExtraction: 0,
+
 		ID:          "",
 		TaskID:      "",
 		Dir:         "",
@@ -168,6 +171,8 @@ func TestSettleKeepsWhatWasShown(t *testing.T) {
 		Location: Location{EndRow: 0, Col: 0, EndCol: 0, Unit: "", Chars: nil, Bytes: nil, Utf16: nil, Precision: "", Path: "a.go", Row: 2},
 	}
 	tr := &ToolRun{
+		RedactedReasons: nil,
+
 		App:            AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 		Parser:         nil,
 		FailOn:         "",
@@ -176,8 +181,16 @@ func TestSettleKeepsWhatWasShown(t *testing.T) {
 		Complete:       false,
 		Incomplete:     nil,
 		mayHoldSecrets: false, Name: "t", Invocations: []Invocation{
-			{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#1", State: "ran", ExitCode: &code, Findings: []Finding{dup(false)}},
-			{TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#2", State: "ran", ExitCode: &code, Findings: []Finding{dup(true), warning}},
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#1", State: "ran", ExitCode: &code, Findings: []Finding{dup(false)},
+			},
+			{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				TaskID:             "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", ID: "t::1#2", State: "ran", ExitCode: &code, Findings: []Finding{dup(true), warning},
+			},
 		},
 	}
 	settleFindings(tr)

@@ -80,7 +80,8 @@ func sampleRun() *report.Run {
 	point := finding("eslint", "", "src/b.ts", 1, "info")
 	point.Location.Chars = &textpos.Span{Start: 4, End: 4}
 	return &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   zerovalue_time.Time{},
@@ -102,12 +103,17 @@ func sampleRun() *report.Run {
 				ChangesDetail:   "",
 				ChangesScope:    nil,
 				Changes:         nil, Name: "fix", Ran: true, Tools: []report.ToolRun{{
+					RedactedReasons: nil,
+
 					App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 					Parser:     nil,
 					FailOn:     "",
 					GateActive: false,
 					Category:   "",
 					Incomplete: nil, Name: "prettier", Complete: true, Invocations: []report.Invocation{{
+						RedactedState:      0,
+						RedactedExtraction: 0,
+
 						ID:          "",
 						TaskID:      "",
 						Dir:         "",
@@ -142,12 +148,17 @@ func sampleRun() *report.Run {
 				ChangesScope:    nil,
 				Changes:         nil, Name: "lint", Ran: true, Tools: []report.ToolRun{
 					{
+						RedactedReasons: nil,
+
 						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 						Parser:     nil,
 						FailOn:     "",
 						GateActive: false,
 						Category:   "",
 						Incomplete: nil, Name: "eslint", Complete: true, Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+
 							ID:          "",
 							TaskID:      "",
 							Dir:         "",
@@ -173,11 +184,16 @@ func sampleRun() *report.Run {
 						}},
 					},
 					{
+						RedactedReasons: nil,
+
 						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 						Parser:     nil,
 						FailOn:     "",
 						GateActive: false,
 						Incomplete: nil, Name: "gitleaks", Category: "security", Complete: true, Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+
 							ID:          "",
 							TaskID:      "",
 							Dir:         "",
@@ -206,12 +222,17 @@ func sampleRun() *report.Run {
 						}},
 					},
 					{
+						RedactedReasons: nil,
+
 						App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 						Parser:     nil,
 						FailOn:     "",
 						GateActive: false,
 						Category:   "",
 						Complete:   false, Name: "tsc", Incomplete: []report.Reason{"cancelled"}, Invocations: []report.Invocation{{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+
 							ID:          "",
 							TaskID:      "",
 							Dir:         "",
@@ -319,7 +340,11 @@ func TestCompanion(t *testing.T) {
 
 func TestEmpty(t *testing.T) {
 	var b bytes.Buffer
-	if err := (Renderer{}).Render(&b, &report.Run{Schema: "", Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""}}, nil); err != nil {
+	if err := (Renderer{}).Render(&b, &report.Run{
+		RedactedReasons: nil,
+
+		Fingerprint: "", Datamitsu: report.Producer{Version: "", Configuration: ""}, StartedAt: zerovalue_time.Time{}, EndedAt: zerovalue_time.Time{}, Selection: report.Selection{Mode: "", Dir: "", Paths: nil, Tools: nil, FileScoped: false, ExcludedTools: nil}, FailFast: false, Complete: false, Incomplete: nil, Operations: nil, Exports: nil, CI: report.CIEnvironment{Vendor: "", SHA: "", Ref: "", BaseRef: "", PRNumber: ""},
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if b.String() != "[]\n" {

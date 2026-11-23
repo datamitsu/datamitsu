@@ -55,7 +55,10 @@ func TestPackageProgressEmissionIsIndependentOfStatusWriteThrottle(t *testing.T)
 			return event
 		default:
 			t.Fatal("expected progress event was not emitted")
-			return uievent.Event{Type: "", OpID: "", TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: ""}
+			return uievent.Event{
+				ThrottleID: "",
+				Type:       "", OpID: "", TS: 0, Status: "", Op: "", Tool: "", Dir: "", Name: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Msg: "", Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "",
+			}
 		}
 	}
 	initial := readEvent()
@@ -69,6 +72,10 @@ func TestPackageProgressEmissionIsIndependentOfStatusWriteThrottle(t *testing.T)
 	second := readEvent()
 	if second.Msg != string(PhaseVerify) || second.Index != 0 || second.Total != 0 {
 		t.Fatalf("phase transition lost its event or retained obsolete package counters: %+v", second)
+	}
+	cleanup := readEvent()
+	if cleanup.Type != provision.CleanupProgressType || cleanup.OpID != initial.OpID || cleanup.Status != "" {
+		t.Fatalf("expected private cleanup for the install, got %+v", cleanup)
 	}
 	select {
 	case data := <-events:

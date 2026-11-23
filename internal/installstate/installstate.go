@@ -116,7 +116,22 @@ func Acquire(ctx context.Context, storeRoot, target, label string) (context.Cont
 		return nil, nil, err
 	}
 	owner := fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
-	writer := &statusWriter{mu: sync.Mutex{}, last: time.Time{}, lastEvent: time.Time{}, lastEventPhase: "", lastEventUnit: "", lastEventCompleted: 0, lastEventTotal: 0, hasEventCounters: false, closed: false, phase: "", completed: nil, total: nil, unit: "", path: path, owner: owner, target: target, label: label, opID: uievent.NextOpID("install")}
+	writer := &statusWriter{
+		mu:                 sync.Mutex{},
+		last:               time.Time{},
+		lastEvent:          time.Time{},
+		lastEventPhase:     "",
+		lastEventUnit:      "",
+		lastEventCompleted: 0,
+		lastEventTotal:     0,
+		hasEventCounters:   false,
+		closed:             false,
+		phase:              "",
+		completed:          nil,
+		total:              nil,
+		unit:               "",
+		path:               path, owner: owner, target: target, label: label, opID: uievent.NextOpID("install"),
+	}
 	writer.write("install", nil, nil, "", true)
 	heartbeatDone := make(chan struct{})
 	heartbeatCtx, stopHeartbeat := context.WithCancel(ctx)
@@ -138,10 +153,61 @@ func Acquire(ctx context.Context, storeRoot, target, label string) (context.Cont
 		once.Do(func() {
 			writer.mu.Lock()
 			writer.closed = true
+			emitted := !writer.lastEvent.IsZero()
 			writer.mu.Unlock()
 			stopHeartbeat()
 			<-heartbeatDone
 			_ = writer.remove()
+			if emitted {
+				_ = provision.Progress(ctx, uievent.Event{
+					TS:              0,
+					Status:          "",
+					ThrottleID:      "",
+					Op:              "",
+					Tool:            "",
+					Dir:             "",
+					Name:            "",
+					BytesDone:       0,
+					BytesTotal:      0,
+					Percent:         0,
+					Index:           0,
+					Total:           0,
+					Success:         nil,
+					DurationMs:      0,
+					Msg:             "",
+					Level:           "",
+					Tools:           0,
+					Runs:            0,
+					Failed:          0,
+					Skipped:         0,
+					Cancelled:       nil,
+					Complete:        nil,
+					Format:          "",
+					Path:            "",
+					File:            "",
+					Row:             0,
+					Col:             0,
+					EndRow:          0,
+					EndCol:          0,
+					Severity:        "",
+					Code:            "",
+					Source:          "",
+					Fingerprint:     "",
+					Provenance:      "",
+					Reported:        nil,
+					Gates:           nil,
+					Baselined:       false,
+					FindingsError:   nil,
+					FindingsWarning: nil,
+					FindingsInfo:    nil,
+					FindingsHint:    nil,
+					Cached:          nil,
+					Schema:          "",
+					Events:          "",
+					Annotations:     "",
+					Type:            provision.CleanupProgressType, OpID: writer.opID,
+				})
+			}
 			release()
 		})
 	}
@@ -162,8 +228,58 @@ func validPhase(phase string) bool {
 func waitStatus(ctx context.Context, path, label string) {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
-	last := ""
+	var last, lastOwner string
+	workerProgress := provision.HasProgress(ctx)
 	opID := uievent.NextOpID("install-wait")
+	defer func() {
+		if last != "" {
+			_ = provision.Progress(ctx, uievent.Event{
+				ThrottleID:      "",
+				Op:              "",
+				Tool:            "",
+				Dir:             "",
+				BytesDone:       0,
+				BytesTotal:      0,
+				Percent:         0,
+				Index:           0,
+				Total:           0,
+				Success:         nil,
+				DurationMs:      0,
+				Msg:             "",
+				Level:           "",
+				Tools:           0,
+				Runs:            0,
+				Failed:          0,
+				Skipped:         0,
+				Cancelled:       nil,
+				Complete:        nil,
+				Format:          "",
+				Path:            "",
+				File:            "",
+				Row:             0,
+				Col:             0,
+				EndRow:          0,
+				EndCol:          0,
+				Severity:        "",
+				Code:            "",
+				Source:          "",
+				Fingerprint:     "",
+				Provenance:      "",
+				Reported:        nil,
+				Gates:           nil,
+				Baselined:       false,
+				FindingsError:   nil,
+				FindingsWarning: nil,
+				FindingsInfo:    nil,
+				FindingsHint:    nil,
+				Cached:          nil,
+				Schema:          "",
+				Events:          "",
+				Annotations:     "",
+				Type:            uievent.TypeInstall, OpID: opID, TS: time.Now().UnixMilli(), Status: uievent.StatusSkip, Name: label,
+			})
+		}
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -182,10 +298,16 @@ func waitStatus(ctx context.Context, path, label string) {
 				err = rootErr
 			}
 			var current status
+			var progress provision.InstallProgress
 			if err == nil && json.Unmarshal(data, &current) == nil && current.Schema == schema && current.Owner != "" && current.PID > 0 && validPhase(current.Phase) && time.Since(current.UpdatedAt) >= 0 && time.Since(current.UpdatedAt) <= 5*time.Second {
+				progress.WaitOwner = current.Owner
+				progress.WaitUpdatedAt = current.UpdatedAt.UnixNano()
 				message += " (" + current.Phase
 				if current.Completed != nil && *current.Completed >= 0 && (current.Unit == "bytes" || current.Unit == "packages") {
 					if current.Total != nil && *current.Total > 0 && *current.Completed <= *current.Total {
+						if current.Phase == string(PhaseDownload) && current.Unit == "bytes" {
+							progress.WaitBytesDone, progress.WaitBytesTotal = *current.Completed, *current.Total
+						}
 						message += fmt.Sprintf(" %d/%d %s", *current.Completed, *current.Total, current.Unit)
 					} else {
 						message += fmt.Sprintf(" %d %s", *current.Completed, current.Unit)
@@ -193,13 +315,57 @@ func waitStatus(ctx context.Context, path, label string) {
 				}
 				message += ")"
 			}
-			if message == last {
+			if message == last && (!workerProgress || progress.WaitOwner == lastOwner) {
 				continue
 			}
-			last = message
-			event := uievent.Event{Op: "", Tool: "", Dir: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeInstall, OpID: opID, TS: time.Now().UnixMilli(), Status: uievent.StatusProgress, Name: label, Msg: message}
-			_ = provision.Progress(ctx, event)
-			if !provision.HasProgress(ctx) {
+			last, lastOwner = message, progress.WaitOwner
+			if workerProgress {
+				progress.Event = uievent.Event{
+					ThrottleID:      "",
+					Op:              "",
+					Tool:            "",
+					Dir:             "",
+					BytesDone:       0,
+					BytesTotal:      0,
+					Percent:         0,
+					Index:           0,
+					Total:           0,
+					Success:         nil,
+					DurationMs:      0,
+					Level:           "",
+					Tools:           0,
+					Runs:            0,
+					Failed:          0,
+					Skipped:         0,
+					Cancelled:       nil,
+					Complete:        nil,
+					Format:          "",
+					Path:            "",
+					File:            "",
+					Row:             0,
+					Col:             0,
+					EndRow:          0,
+					EndCol:          0,
+					Severity:        "",
+					Code:            "",
+					Source:          "",
+					Fingerprint:     "",
+					Provenance:      "",
+					Reported:        nil,
+					Gates:           nil,
+					Baselined:       false,
+					FindingsError:   nil,
+					FindingsWarning: nil,
+					FindingsInfo:    nil,
+					FindingsHint:    nil,
+					Cached:          nil,
+					Schema:          "",
+					Events:          "",
+					Annotations:     "",
+					Type:            uievent.TypeInstall, OpID: opID, TS: time.Now().UnixMilli(), Status: uievent.StatusProgress, Name: label, Msg: message,
+				}
+				_ = provision.Progress(ctx, progress)
+			} else {
 				_, _ = fmt.Fprintln(os.Stderr, message)
 			}
 		}
@@ -223,6 +389,7 @@ func Progress(ctx context.Context, phase Phase, completed, total int64, unit str
 		return
 	}
 	phaseName := string(phase)
+	resetDownload := phase == PhaseDownload && unit == "bytes" && completed < 0 && total < 0
 	var phaseTransition bool
 	for _, writer := range chain {
 		c, t := completed, total
@@ -230,13 +397,15 @@ func Progress(ctx context.Context, phase Phase, completed, total int64, unit str
 		transition := writer.phase != phaseName
 		phaseTransition = phaseTransition || transition
 		writer.mu.Unlock()
-		writer.write(phaseName, &c, &t, unit, transition)
+		writer.write(phaseName, &c, &t, unit, transition || resetDownload)
 	}
 	writer.mu.Lock()
 	now := time.Now()
-	hasCounters := unit == "bytes" || unit == "packages"
+	hasCounters := completed >= 0 && (unit == "bytes" || unit == "packages")
 	changedCounters := hasCounters && (!writer.hasEventCounters || writer.lastEventPhase != phaseName || writer.lastEventCompleted != completed || writer.lastEventTotal != total || writer.lastEventUnit != unit)
-	emit := !writer.closed && (writer.lastEvent.IsZero() || phaseTransition || changedCounters && (!writer.hasEventCounters || now.Sub(writer.lastEvent) >= time.Second))
+	sizeChanged := unit == "bytes" && total != writer.lastEventTotal && (total > 0 || writer.lastEventTotal > 0)
+	restarted := resetDownload && writer.hasEventCounters
+	emit := !writer.closed && (writer.lastEvent.IsZero() || phaseTransition || sizeChanged || restarted || changedCounters && (!writer.hasEventCounters || now.Sub(writer.lastEvent) >= time.Second))
 	if emit {
 		writer.lastEvent = now
 		writer.lastEventPhase = phaseName
@@ -249,7 +418,50 @@ func Progress(ctx context.Context, phase Phase, completed, total int64, unit str
 	if !emit {
 		return
 	}
-	event := uievent.Event{Op: "", Tool: "", Dir: "", BytesDone: 0, BytesTotal: 0, Percent: 0, Index: 0, Total: 0, Success: nil, DurationMs: 0, Level: "", Tools: 0, Runs: 0, Failed: 0, Skipped: 0, Cancelled: nil, Complete: nil, Format: "", Path: "", File: "", Row: 0, Col: 0, EndRow: 0, EndCol: 0, Severity: "", Code: "", Source: "", Fingerprint: "", Provenance: "", Reported: nil, Gates: nil, Baselined: false, FindingsError: nil, FindingsWarning: nil, FindingsInfo: nil, FindingsHint: nil, Cached: nil, Schema: "", Events: "", Annotations: "", Type: uievent.TypeInstall, OpID: writer.opID, TS: now.UnixMilli(), Status: uievent.StatusProgress, Name: writer.label, Msg: phaseName}
+	event := uievent.Event{
+		ThrottleID:      "",
+		Op:              "",
+		Tool:            "",
+		Dir:             "",
+		BytesDone:       0,
+		BytesTotal:      0,
+		Percent:         0,
+		Index:           0,
+		Total:           0,
+		Success:         nil,
+		DurationMs:      0,
+		Level:           "",
+		Tools:           0,
+		Runs:            0,
+		Failed:          0,
+		Skipped:         0,
+		Cancelled:       nil,
+		Complete:        nil,
+		Format:          "",
+		Path:            "",
+		File:            "",
+		Row:             0,
+		Col:             0,
+		EndRow:          0,
+		EndCol:          0,
+		Severity:        "",
+		Code:            "",
+		Source:          "",
+		Fingerprint:     "",
+		Provenance:      "",
+		Reported:        nil,
+		Gates:           nil,
+		Baselined:       false,
+		FindingsError:   nil,
+		FindingsWarning: nil,
+		FindingsInfo:    nil,
+		FindingsHint:    nil,
+		Cached:          nil,
+		Schema:          "",
+		Events:          "",
+		Annotations:     "",
+		Type:            uievent.TypeInstall, OpID: writer.opID, TS: now.UnixMilli(), Status: uievent.StatusProgress, Name: writer.label, Msg: phaseName,
+	}
 	if phase == PhaseDownload {
 		event.Type = uievent.TypeDownload
 		if completed >= 0 {
@@ -269,7 +481,17 @@ func Progress(ctx context.Context, phase Phase, completed, total int64, unit str
 			event.Total = int(total)
 		}
 	}
-	_ = provision.Progress(ctx, event)
+	owners := make([]string, 0, len(chain))
+	for _, lease := range chain {
+		owners = append(owners, lease.owner)
+	}
+	_ = provision.Progress(ctx, provision.InstallProgress{
+		WaitOwner:      "",
+		WaitUpdatedAt:  0,
+		WaitBytesDone:  0,
+		WaitBytesTotal: 0,
+		Event:          event, Owners: owners,
+	})
 }
 
 func (w *statusWriter) write(phase string, completed, total *int64, unit string, transition bool) {

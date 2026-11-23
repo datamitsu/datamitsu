@@ -12,10 +12,14 @@ import (
 // that applied them ran, whatever the order of the tools in the report.
 func TestRenderInApplicationOrder(t *testing.T) {
 	file := func(path, patch string) report.FileResult {
-		return report.FileResult{State: "", Success: false, ExitCode: nil, Path: path, Patch: patch}
+		return report.FileResult{
+			RedactedState: 0,
+			State:         "", Success: false, ExitCode: nil, Path: path, Patch: patch,
+		}
 	}
 	run := &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   zerovalue_time.Time{},
@@ -37,8 +41,17 @@ func TestRenderInApplicationOrder(t *testing.T) {
 			Changes:         nil,
 			Name:            "fix", Ran: true,
 			Tools: []report.ToolRun{
-				{App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Name: "a-second", Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Changes: nil, OutputTail: "", Step: 2, Files: []report.FileResult{file("x.txt", "2\n")}}}},
 				{
+					RedactedReasons: nil,
+					App:             report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Name: "a-second", Invocations: []report.Invocation{{
+						RedactedState:      0,
+						RedactedExtraction: 0,
+						ID:                 "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Changes: nil, OutputTail: "", Step: 2, Files: []report.FileResult{file("x.txt", "2\n")},
+					}},
+				},
+				{
+					RedactedReasons: nil,
+
 					App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
 					Parser:     nil,
 					FailOn:     "",
@@ -46,8 +59,16 @@ func TestRenderInApplicationOrder(t *testing.T) {
 					Category:   "",
 					Complete:   false,
 					Incomplete: nil, Name: "b-first", Invocations: []report.Invocation{
-						{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Changes: nil, OutputTail: "", Step: 1, Files: []report.FileResult{file("y.txt", "1y\n"), file("z.txt", "")}},
-						{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Changes: nil, OutputTail: "", Step: 1, Files: []report.FileResult{file("x.txt", "1x\n")}},
+						{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+							ID:                 "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Changes: nil, OutputTail: "", Step: 1, Files: []report.FileResult{file("y.txt", "1y\n"), file("z.txt", "")},
+						},
+						{
+							RedactedState:      0,
+							RedactedExtraction: 0,
+							ID:                 "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Findings: nil, Changes: nil, OutputTail: "", Step: 1, Files: []report.FileResult{file("x.txt", "1x\n")},
+						},
 					},
 				},
 			},

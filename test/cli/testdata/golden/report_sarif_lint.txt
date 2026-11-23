@@ -9,6 +9,36 @@
       "columnKind": "unicodeCodePoints",
       "tool": {
         "driver": {
+          "name": "datamitsu",
+          "rules": []
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "exitCode": 0,
+          "workingDirectory": {
+            "uri": "./",
+            "uriBaseId": "%SRCROOT%"
+          },
+          "properties": {
+            "datamitsu": {
+              "id": "datamitsu#0",
+              "state": "ran",
+              "extraction": "parsed-clean"
+            }
+          }
+        }
+      ],
+      "results": []
+    },
+    {
+      "automationDetails": {
+        "id": "datamitsu/"
+      },
+      "columnKind": "unicodeCodePoints",
+      "tool": {
+        "driver": {
           "name": "hadolint",
           "informationUri": "https://example.com/hadolint",
           "rules": [

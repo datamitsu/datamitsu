@@ -6,6 +6,7 @@ exit code: 1
 
 ┏━ lint <RULE>
 ┃ pkg
+┃ ⊘ beta [pkg/b]  cancelled (fail-fast)
 ┃
 ┃ ✗ alpha  <DUR> (1 failed)
   ┌─ alpha [per-project] (run #1) <RULE>
@@ -18,7 +19,6 @@ exit code: 1
   │  alpha: failed
   └<RULE>
 
-┃ ⊘ beta [pkg/b]  cancelled (fail-fast)
 ┗━ 1 tools · 1 runs · done in <DUR> · 1 failed · 1 cancelled · cache 0% <RULE>
 
 ===STDERR===

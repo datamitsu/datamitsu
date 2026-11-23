@@ -346,7 +346,13 @@ func parseSeedArg(arg string) (seedArg, error) {
 	if ref, digest, ok := strings.Cut(arg, "@"); ok {
 		pinned := &config.OCIRef{Signer: nil, Ref: ref, Digest: digest}
 		if err := config.ValidateOCI(pinned); err != nil {
-			return seedArg{}, exitcode.UsageErrorf("reference %q: %w", arg, err)
+			return seedArg{
+				pinned: nil,
+				ref:    "",
+				tag:    "",
+				host:   "",
+				repo:   "",
+			}, exitcode.UsageErrorf("reference %q: %w", arg, err)
 		}
 		return seedArg{ref: "", tag: "", host: "", repo: "", pinned: pinned}, nil
 	}
@@ -358,14 +364,32 @@ func parseSeedArg(arg string) (seedArg, error) {
 	// could never work against a registry on a port.
 	ref, tag, ok := ociref.SplitTag(arg)
 	if !ok {
-		return seedArg{}, exitcode.UsageErrorf("reference %q must be pinned as <ref>@sha256:<digest> (or <ref>:<tag> with --resolve-tag)", arg)
+		return seedArg{
+			pinned: nil,
+			ref:    "",
+			tag:    "",
+			host:   "",
+			repo:   "",
+		}, exitcode.UsageErrorf("reference %q must be pinned as <ref>@sha256:<digest> (or <ref>:<tag> with --resolve-tag)", arg)
 	}
 	if !storeSeedResolveTag {
-		return seedArg{}, exitcode.UsageErrorf("a tag reference does not pin content; pass <ref>@sha256:<digest>, or use --resolve-tag to resolve %q and print the digest", arg)
+		return seedArg{
+			pinned: nil,
+			ref:    "",
+			tag:    "",
+			host:   "",
+			repo:   "",
+		}, exitcode.UsageErrorf("a tag reference does not pin content; pass <ref>@sha256:<digest>, or use --resolve-tag to resolve %q and print the digest", arg)
 	}
 	host, repo, err := ociref.Parse(ref)
 	if err != nil {
-		return seedArg{}, exitcode.UsageErrorf("reference %q %w", ref, err)
+		return seedArg{
+			pinned: nil,
+			ref:    "",
+			tag:    "",
+			host:   "",
+			repo:   "",
+		}, exitcode.UsageErrorf("reference %q %w", ref, err)
 	}
 	return seedArg{pinned: nil, ref: ref, tag: tag, host: host, repo: repo}, nil
 }
@@ -524,13 +548,18 @@ func runStoreClear(cmd *cobra.Command, args []string) error {
 		(home != "" && strings.HasPrefix(strings.ToLower(home), strings.ToLower(storePath+sep))) {
 		return fmt.Errorf("refusing to clear dangerous path: %s", storePath)
 	}
+	stopWaiting := ui.Current().SlowStatus("Waiting for exclusive store access (active installations must finish)")
 	release, err := storelock.Clear(cmd.Context(), storePath)
+	stopWaiting()
 	if err != nil {
 		return fmt.Errorf("failed to acquire store clear lease: %w", err)
 	}
 	defer release()
 	// os.RemoveAll then fails with EACCES. ForceRemoveAll restores write bits first.
-	if err := runtimemanager.ForceRemoveAll(storePath); err != nil {
+	stopClearing := ui.Current().SlowStatus("Removing store contents")
+	err = runtimemanager.ForceRemoveAll(storePath)
+	stopClearing()
+	if err != nil {
 		return fmt.Errorf("failed to clear store: %w", err)
 	}
 	fmt.Printf("Cleared store: %s\n", storePath)

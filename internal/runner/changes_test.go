@@ -45,7 +45,16 @@ func TestStepCallbackStopsObservingOnAFailedSnapshot(t *testing.T) {
 
 			acc := report.NewAccumulator(report.Options{Root: "", Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil})
 			rec := acc.BeginOperation(string(config.OpFix), plan, nil)
-			sc := &sharedContext{cfg: nil, cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, placementGated: false, startedAt: time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, rootPath: t.TempDir()}
+			sc := &sharedContext{
+				preparedTools:        false,
+				parserPrewarmed:      false,
+				bundledFixFindings:   nil,
+				bundledFixChanges:    nil,
+				bundledLintFindings:  nil,
+				bundledLintErr:       nil,
+				completedBundledLint: false,
+				cfg:                  nil, cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, rootPath: t.TempDir(),
+			}
 			cb := sc.stepCallback(context.Background(), config.OpFix, rec)
 			cb(1, plan.Groups[0].Tasks)
 			op := rec.Operation()
@@ -73,7 +82,14 @@ func TestAgentChanges(t *testing.T) {
 		ChangesScope:  nil,
 		Name:          "fix", Ran: true, ChangesObserved: true,
 		Changes: []report.Change{{Patch: false, Step: 0, Path: "gen/out.txt", Kind: "created"}},
-		Tools:   []report.ToolRun{{Name: "", App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, OutputTail: "", Changes: []report.Change{{Patch: false, Step: 0, Path: "a.ts", Kind: "modified"}}}}}},
+		Tools: []report.ToolRun{{
+			RedactedReasons: nil,
+			Name:            "", App: report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""}, Parser: nil, FailOn: "", GateActive: false, Category: "", Complete: false, Incomplete: nil, Invocations: []report.Invocation{{
+				RedactedState:      0,
+				RedactedExtraction: 0,
+				ID:                 "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Findings: nil, Step: 0, OutputTail: "", Changes: []report.Change{{Patch: false, Step: 0, Path: "a.ts", Kind: "modified"}},
+			}},
+		}},
 	}
 	tests := []struct {
 		name string
@@ -134,7 +150,16 @@ func TestSnapshotBoundedAfterAnInterruption(t *testing.T) {
 	plan := &tooling.ExecutionPlan{ConfigName: "", FailOn: "", Skipped: nil, Groups: []tooling.TaskGroup{{Priority: 0, Tasks: []tooling.Task{task}}}}
 	rec := report.NewAccumulator(report.Options{Root: "", Tools: nil, Apps: nil, FailOn: "", Parsers: nil, Secrets: nil}).BeginOperation(string(config.OpFix), plan, nil)
 	ctx, cancel := context.WithCancel(context.Background())
-	cb := (&sharedContext{cfg: nil, cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, placementGated: false, startedAt: time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, rootPath: t.TempDir()}).stepCallback(ctx, config.OpFix, rec)
+	cb := (&sharedContext{
+		preparedTools:        false,
+		parserPrewarmed:      false,
+		bundledFixFindings:   nil,
+		bundledFixChanges:    nil,
+		bundledLintFindings:  nil,
+		bundledLintErr:       nil,
+		completedBundledLint: false,
+		cfg:                  nil, cwdPath: "", selection: tooling.Selection{Mode: 0, Dir: "", Paths: nil}, opts: Options{WidenTo: "", RequireCoverage: "", FailFast: nil, FailOn: "", Reports: nil, AllowPartial: false, AllDiagnostics: false, Annotations: "", Output: "", Baseline: nil}, files: nil, selectedTools: nil, explainLevel: "", planner: nil, projectCache: nil, executor: nil, binMgr: nil, timings: nil, parserMgr: nil, parseProblems: nil, ignoredFailOn: nil, nameWidth: 0, failOnSkip: false, platformSkipped: nil, narrowed: nil, failFast: false, afterFailedFix: false, summaries: nil, fileScoped: false, report: nil, secrets: nil, annotator: nil, baselineMatcher: nil, placement: nil, startedAt: time.Time{}, ci: zerovalue_cienv.Info{Vendor: "", IsCI: false, IsPR: false, SHA: "", Ref: "", BaseRef: "", PRNumber: ""}, ciRuntime: zerovalue_cienv.Runtime{EventName: "", Workspace: "", StepSummaryPath: "", EventPath: ""}, annotations: annotationState{mode: "", export: "", why: "", recorded: false, regionOpen: false, executed: false}, rootPath: t.TempDir(),
+	}).stepCallback(ctx, config.OpFix, rec)
 	time.AfterFunc(20*time.Millisecond, cancel)
 	begin := time.Now()
 	cb(1, plan.Groups[0].Tasks)

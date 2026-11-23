@@ -250,8 +250,7 @@ datamitsu enforces a canonical format for `.datamitsuignore` files. Running `dat
 
 ## Linting
 
-`datamitsu lint` validates `.datamitsuignore` files and reports:
-
-- Parse errors (missing colon, empty pattern, empty tool list) — causes failure
-- Formatting deviations from canonical form — warning
-- Unknown tool names not in your configuration — warning
+`datamitsu lint` fails for invalid `.datamitsuignore` syntax, noncanonical
+formatting, or unknown tool names. Formatting errors show the current and
+expected rule; run `datamitsu fix` to normalize the file. Correct unknown tool
+names in the file or in the configuration.

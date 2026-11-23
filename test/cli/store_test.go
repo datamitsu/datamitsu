@@ -1,12 +1,15 @@
 package cli_test
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/datamitsu/datamitsu/internal/clitest"
+	"github.com/datamitsu/datamitsu/internal/storelock"
 )
 
 // TestStorePath freezes `store path`: the printed path is the store subdir
@@ -89,6 +92,57 @@ func TestStoreClear(t *testing.T) {
 
 	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
 		t.Errorf("`store clear` did not remove the store sentinel %s (err=%v)", sentinel, err)
+	}
+}
+
+func TestStoreClearWaitsForProvisioning(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("DATAMITSU_CACHE_DIR", cache)
+	store := filepath.Join(cache, "store")
+	sentinel := filepath.Join(store, "sentinel")
+	if err := os.MkdirAll(store, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sentinel, []byte("keep until lease release"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bin := clitest.BuildOnce(t)
+	ctx, cancel := context.WithTimeout(context.Background(), clitest.DefaultTimeout)
+	defer cancel()
+	_, release, err := storelock.WithStore(ctx, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	stderr, err := os.CreateTemp(t.TempDir(), "clear-stderr-*.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = stderr.Close() }()
+	cmd := exec.CommandContext(ctx, bin, "store", "clear")
+	cmd.Dir = cache
+	cmd.Env = clitest.BaseEnv(cache)
+	cmd.Stderr = stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if cmd.ProcessState == nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	})
+	waitForProvisionText(t, stderr.Name(), "Waiting for exclusive store access")
+	if _, err := os.Stat(sentinel); err != nil {
+		t.Fatalf("sentinel must survive while provisioning holds the lease: %v", err)
+	}
+	release()
+	if err := cmd.Wait(); err != nil {
+		log, _ := os.ReadFile(stderr.Name())
+		t.Fatalf("store clear after lease release: %v\nstderr:\n%s", err, log)
+	}
+	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
+		t.Fatalf("sentinel must be removed after lease release: %v", err)
 	}
 }
 

@@ -73,7 +73,8 @@ func TestSelect(t *testing.T) {
 	}
 	fs = append(fs, finding("w.ts", 1, "warning"), finding("i.ts", 1, "info"), finding("h.ts", 1, "hint"))
 	run := &report.Run{
-		Schema:      "",
+		RedactedReasons: nil,
+
 		Fingerprint: "",
 		Datamitsu:   report.Producer{Version: "", Configuration: ""},
 		StartedAt:   zerovalue_time.Time{},
@@ -94,15 +95,21 @@ func TestSelect(t *testing.T) {
 			ChangesDetail:   "",
 			ChangesScope:    nil,
 			Changes:         nil, Name: "lint", Tools: []report.ToolRun{{
-				App:         report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
-				Parser:      nil,
-				FailOn:      "",
-				GateActive:  false,
-				Category:    "",
-				Complete:    false,
-				Incomplete:  nil,
-				Name:        "eslint",
-				Invocations: []report.Invocation{{ID: "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", Findings: fs}},
+				RedactedReasons: nil,
+
+				App:        report.AppRef{Name: "", Kind: "", Version: "", OfficialURL: ""},
+				Parser:     nil,
+				FailOn:     "",
+				GateActive: false,
+				Category:   "",
+				Complete:   false,
+				Incomplete: nil,
+				Name:       "eslint",
+				Invocations: []report.Invocation{{
+					RedactedState:      0,
+					RedactedExtraction: 0,
+					ID:                 "", TaskID: "", Dir: "", Scope: "", Granularity: "", Arity: "", Coverage: "", WholeUnit: false, State: "", ExitCode: nil, Success: false, FailureKind: "", Duration: 0, Extraction: "", Provenance: "", Files: nil, Step: 0, Changes: nil, OutputTail: "", Findings: fs,
+				}},
 			}},
 		}},
 	}

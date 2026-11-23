@@ -72,8 +72,10 @@ declarations do not have it, this version does not accept it.
 - App names match `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`, are not Windows reserved
   device names, and do not differ from another app's name only by case.
 - `dependsOn` puts other native binary apps on an app's `PATH`.
-  `${APP_BIN:<name>}` resolves only in `runtimeEnv`, and only for a direct
-  dependency. `PATH` is rejected in `env` and `runtimeEnv`.
+  `${APP_BIN:<alias>}` resolves in `runtimeEnv`, `prepare.args`, and
+  `prepare.env` for a direct dependency. A plain dependency uses its app name
+  as the alias; `{ app: "compiler", as: "cc" }` binds only `cc`. `PATH` is
+  rejected in `env`, `runtimeEnv`, and `prepare.env`.
 - To turn a tool off, set `skip: true` with a `skipReason` instead of deleting
   it or omitting it conditionally. A managed config whose `tools` names a missing
   tool fails the load.
@@ -104,6 +106,18 @@ writes the configuration; never ship it to consumers.
 
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
+
+- **after v0.6.2** - The `datamitsu` and `datamitsu-fix` tool keys are reserved
+  for built-in results. Rename any tool using either key and update its
+  references, including `managedConfigs.*.tools`, `ejectConfigs`,
+  `.datamitsuignore`, and `--tools` selectors. App keys are unaffected. See
+  `datamitsu llms reference/configuration-api`.
+
+- **after v0.6.2** - Unknown tool names in `.datamitsuignore` now fail
+  `lint` and `check`. When removing or renaming a tool, remove or update its
+  references in `.datamitsuignore`, including any rules your wrapper generates.
+  See the [Ignore Rules reference](/docs/reference/ignore-rules#linting).
+  For the installed version, run `datamitsu llms reference/ignore-rules`.
 
 - **after v0.5.3** - `.datamitsuignore` is root-only: a file below the git root
   no longer applies its rules, and the core config-placement check reports it
@@ -204,7 +218,7 @@ configuration should do about it.
   closure are installed and fills a keyed, project-independent state exposed
   to the app as `${APP_PREPARED}`. `dependsOn` entries may also be objects
   (`{ app, as }`) that bind a dependency under an alias for
-  `${APP_BIN:<alias>}`; `${APP_BIN}` now resolves binary, uv and go targets.
+  `${APP_BIN:<alias>}`, which resolves binary, uv and Go targets.
   Raise `getMinVersion()` to at least the first version with these fields —
   an older core silently drops `prepare` and passes `${APP_PREPARED}` through
   as a literal string. A literal `{word:…}` in tool arguments is now a load

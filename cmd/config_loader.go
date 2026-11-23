@@ -34,7 +34,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// SkipRemoteConfig skips resolution of remote configs declared via getRemoteConfigs()
+// SkipRemoteConfig omits getRemoteConfigs() layers while retaining the local configuration chain.
 var SkipRemoteConfig bool
 
 // resolvedRemoteURLs collects remote config URLs resolved during the last loadConfig call.
@@ -112,20 +112,14 @@ func configEvalCacheable() bool {
 	return configEvalNonDeterminism == ""
 }
 
-// chainObservations accumulates what only evaluating the chain can know: the
-// first non-deterministic source or unreproducible side effect any layer
-// produced, and the warnings the evaluation emitted. The chain-level verdict is
-// the OR over its engines, since one impure layer makes the merged result
-// impure.
+// chainObservations accumulates evaluation warnings and skipped version checks
+// so cache hits can reproduce the same user-visible notices. It also tracks
+// the engines whose observable behavior determines config reproducibility.
 type chainObservations struct {
 	nonDeterminism string
-	// warnings are the evaluation-time warnings a hit must replay, in the order
-	// they were produced.
-	warnings []string
-	// engines is every engine the chain created, remote layers included. A
-	// managed config render after the chain calls content functions that may
-	// belong to any of them, so each is observed again once it has run.
-	engines []*engine.Engine
+	warnings       []string
+	versionNotices []configcache.VersionNotice
+	engines        []*engine.Engine
 }
 
 // track remembers an engine for recordAll.
@@ -376,6 +370,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		// verdict of whatever chain ran last must not be left standing for a
 		// later reader.
 		markConfigServedFromCache()
+		publishConfigVersionNotices(entry.VersionNotices, ldflags.Version)
 		publishConfigWarnings(entry.Warnings)
 		setResolvedRemoteURLs(entry.RemoteURLs)
 		// An EMPTY layer map, never a partial one: ManagedConfig.Content is a live
@@ -390,7 +385,10 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// stack: tracks URLs in the current recursion path (for cycle detection).
 	var currentConfig *config.Config
 	var lastVM *goja.Runtime
-	obs := &chainObservations{nonDeterminism: "", warnings: nil, engines: nil}
+	obs := &chainObservations{
+		versionNotices: nil,
+		nonDeterminism: "", warnings: nil, engines: nil,
+	}
 	// Until the chain has finished evaluating, the verdict is "not cacheable":
 	// an early failure must never leave the previous load's verdict standing.
 	obs.markIncomplete()
@@ -457,6 +455,7 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 		}
 	}
 	obs.publish()
+	publishConfigVersionNotices(obs.versionNotices, ldflags.Version)
 	publishConfigWarnings(obs.warnings)
 
 	// Collect resolved remote URLs from resolved map
@@ -549,17 +548,15 @@ func loadConfigImpl(ctx context.Context, beforeConfigPaths []string, noAutoConfi
 	// ldflags.Version is in the key: a binary that validates differently cannot
 	// read this entry.
 	cache.save(obs, &configcache.Entry{
-		Config:     currentConfig,
-		Warnings:   configWarnings,
-		RemoteURLs: remoteURLs,
+		Config:         currentConfig,
+		Warnings:       configWarnings,
+		VersionNotices: obs.versionNotices,
+		RemoteURLs:     remoteURLs,
 	})
-
 	return currentConfig, &layerMap, lastVM, nil
 }
 
-// publishConfigWarnings emits config validation warnings. It is the single
-// place they are written, so a hit replaying stored warnings and a miss
-// producing them are indistinguishable.
+// publishConfigWarnings emits ordinary config validation warnings.
 func publishConfigWarnings(warnings []string) {
 	for _, w := range warnings {
 		logger.Logger.Warn(w, zap.String("source", "config"))
@@ -765,15 +762,13 @@ func processConfigSource(ctx context.Context, input *config.Config, source confi
 			return nil, nil, fmt.Errorf("config %s: %w", sourceLabel, err)
 		}
 		if skipped {
-			// Collected rather than logged here: an unstable build's warning must
-			// survive into the cached artifact, or it would print on the miss and
-			// never again.
-			obs.warn(fmt.Sprintf(
-				"config %s: version check skipped: current build is unstable (current %s, required %s) — proceeding at your own risk",
-				sourceLabel, ldflags.Version, minVersionStr))
+			obs.versionNotices = append(obs.versionNotices, configcache.VersionNotice{
+				Source:   configVersionSourceLabel(source.path),
+				Required: minVersionStr,
+				Path:     sourceLabel,
+			})
 		}
 	}
-
 	// Resolve remote configs depth-first (unless SkipRemoteConfig is set)
 	chainedInput := input
 	if !SkipRemoteConfig {

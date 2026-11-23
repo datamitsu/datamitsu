@@ -205,7 +205,7 @@ globalThis.getMinVersion = () => "0.5.0";`, server.URL, digest.SHA256Of(payload)
 	}
 	secondCtx, cancel := context.WithTimeout(context.Background(), clitest.DefaultTimeout)
 	secondCancel = cancel
-	second = exec.CommandContext(secondCtx, clitest.BuildOnce(t), append(append([]string(nil), args...), "beta")...)
+	second = exec.CommandContext(secondCtx, clitest.BuildOnce(t), jsonl(append(append([]string(nil), args...), "beta")...)...)
 	second.Dir = opts.Dir
 	second.Env = append(clitest.BaseEnv(cache), opts.Env...)
 	second.Stdout = &secondStdout
@@ -234,8 +234,21 @@ globalThis.getMinVersion = () => "0.5.0";`, server.URL, digest.SHA256Of(payload)
 	if got := clitest.ExitCodeOf(secondErr); got != 0 {
 		t.Fatalf("second runtime app install exited %d: stdout=%s stderr=%s", got, secondStdout.String(), secondStderrBytes)
 	}
-	if !strings.Contains(string(secondStderrBytes), "Waiting for installation: app shared") {
-		t.Fatalf("waiter did not report the shared app by name:\n%s", secondStderrBytes)
+	var waitID string
+	var ended bool
+	for _, event := range clitest.MustParseJSONL(t, string(secondStderrBytes)) {
+		if event.Type != "install" || !strings.HasPrefix(event.OpID, "install-wait") {
+			continue
+		}
+		if event.Status == "progress" && event.Fields["name"] == "app shared" {
+			waitID = event.OpID
+		}
+		if waitID != "" && event.OpID == waitID && event.Status == "skip" {
+			ended = true
+		}
+	}
+	if !ended {
+		t.Fatalf("shared wait %q did not receive a terminal event:\n%s", waitID, secondStderrBytes)
 	}
 	want := map[string]int{"example.invalid/shared": 1, "example.invalid/alpha": 1, "example.invalid/beta": 1}
 	checkBuildLog(t, buildLog, want)
@@ -314,15 +327,6 @@ globalThis.getMinVersion = () => "0.5.0";`, server.URL, digest.SHA256Of(payload)
 	first := clitest.Run(t, opts, args...)
 	if first.ExitCode != 0 {
 		t.Fatalf("pnpm runtime app install failed: %+v", first)
-	}
-	progressLines := 0
-	for line := range strings.SplitSeq(first.Stderr, "\n") {
-		if strings.HasPrefix(line, "Installing app readable-tool: ") {
-			progressLines++
-		}
-	}
-	if progressLines != 2 || strings.Count(first.Stderr, "Installing app readable-tool: install (1 packages)") != 1 {
-		t.Fatalf("pnpm progress lines = %d; want exactly two including the 1-package counter:\n%s", progressLines, first.Stderr)
 	}
 	if strings.Contains(first.Stderr, "Installing app readable-tool: hash") || strings.Contains(first.Stderr, "hash install") {
 		t.Fatalf("pnpm exposed an internal hash as a progress label:\n%s", first.Stderr)
