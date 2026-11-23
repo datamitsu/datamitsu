@@ -355,8 +355,16 @@ destinations are not rolled back.
   bundles rather than picking the newest one. A claim with no corresponding
   bundle requires reconciliation; do not remove the claim or rerun the build.
 - `reuse_parser_finalization` verifies the existing parser signature and the
-  signed record for the original index. `image_signer_sha` does the same for
-  Debian and Alpine images in each registry, without uploading missing images.
+  signed record for the original index.
+- Choose the image recovery mode separately for each registry. Supply
+  `ghcr_image_signer_sha` or `dockerhub_image_signer_sha` to verify that
+  registry's existing Debian and Alpine images, signatures, and attestation
+  without writing to it. Set `first_ghcr_image_finalization` or
+  `first_dockerhub_image_finalization` only if the corresponding registry
+  never reserved its signing claim. Do not set both modes for one registry.
+  For example, if GHCR completed and Docker Hub failed at login, dispatch
+  with the original index, `ghcr_image_signer_sha`, and
+  `first_dockerhub_image_finalization`.
 - `signature_recovery` restores both checksum bundles without any new signing.
   It pins the original artifact ZIP and the checksum bundle. The second
   signature binds that bundle to the exact preparation index.
