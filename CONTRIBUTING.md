@@ -288,6 +288,11 @@ or publishing. Choose `prerelease` to prepare unstable artifacts for deliberate
 publication. A protected `vX.Y.Z` or `vX.Y.Z-rc.N` tag starts a tagged release.
 The workflow must exist on the default branch before GitHub allows dispatch.
 
+The npm launcher is outside the default workspace globs. The release workflow
+packs it from the workspace root with an explicit package selection so `pnpm`
+resolves `catalog:` from the root configuration. It installs the packed launcher
+and the matching host-platform archive offline for the smoke test.
+
 [Release Preflight](.github/workflows/release-preflight.yml) starts automatically
 after a successful tagged preparation. It runs from the protected default
 branch, finds the original index, and checks that its producing build job
