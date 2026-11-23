@@ -50,7 +50,7 @@ var testedLeafCommands = map[string]string{
 	"devtools split-config":        "TestDevtoolsArgValidation",
 	"devtools tools inspect":       "TestDevtoolsToolsInspect",
 	"devtools tools list":          "TestDevtoolsToolsList",
-	"devtools verify-all":          "TestDevtoolsArgValidation",
+	"devtools verify-all":          "TestDevtoolsVerifyAllBundleCache",
 	"exec":                         "TestExecListEmpty / TestExecListGrouped",
 	"fix":                          "TestExplainPlanGolden / TestExecutionFixCache",
 	"init":                         "TestInitNoopSuccess / TestInitDryRunGolden",

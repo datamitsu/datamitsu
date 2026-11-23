@@ -499,53 +499,9 @@ func Execute() {
 						delete(requests, id)
 						for op := range req.rows {
 							ui.ForgetProgress(op)
-							req.display.RenderProvisionEvent(uievent.Event{
-								TS:              0,
-								ThrottleID:      "",
-								Op:              "",
-								Tool:            "",
-								Dir:             "",
-								Name:            "",
-								BytesDone:       0,
-								BytesTotal:      0,
-								Percent:         0,
-								Index:           0,
-								Total:           0,
-								Success:         nil,
-								DurationMs:      0,
-								Msg:             "",
-								Level:           "",
-								Tools:           0,
-								Runs:            0,
-								Failed:          0,
-								Skipped:         0,
-								Cancelled:       nil,
-								Complete:        nil,
-								Format:          "",
-								Path:            "",
-								File:            "",
-								Row:             0,
-								Col:             0,
-								EndRow:          0,
-								EndCol:          0,
-								Severity:        "",
-								Code:            "",
-								Source:          "",
-								Fingerprint:     "",
-								Provenance:      "",
-								Reported:        nil,
-								Gates:           nil,
-								Baselined:       false,
-								FindingsError:   nil,
-								FindingsWarning: nil,
-								FindingsInfo:    nil,
-								FindingsHint:    nil,
-								Cached:          nil,
-								Schema:          "",
-								Events:          "",
-								Annotations:     "",
-								Type:            uievent.TypeInstall, Status: uievent.StatusSkip, OpID: op,
-							})
+							var event uievent.Event
+							event.Type, event.Status, event.OpID = uievent.TypeInstall, uievent.StatusSkip, op
+							req.display.RenderProvisionEvent(event)
 						}
 						refreshQueue(req.display)
 					}

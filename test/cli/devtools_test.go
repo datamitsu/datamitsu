@@ -1,7 +1,9 @@
 package cli_test
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -258,6 +260,48 @@ func TestDevtoolsBundlesList(t *testing.T) {
 		}
 		clitest.AssertGolden(t, "devtools_bundles_list", norm.Apply(res.Stdout))
 	})
+}
+
+func TestDevtoolsVerifyAllBundleCache(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "bundles.config.js")
+	if err := os.WriteFile(cfg, []byte(bundlesListConfigJS), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opts := clitest.RunOptions{Dir: dir, CacheDir: t.TempDir(), Env: nil, Stdin: "", Timeout: 0}
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "fresh", args: nil, want: "ok"},
+		{name: "resumed", args: []string{"--skip-passed"}, want: "cached"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := []string{"--no-auto-config", "--config", cfg, "devtools", "verify-all", "--json", "--no-remote", "--no-version-check"}
+			result := clitest.Run(t, opts, append(args, tc.args...)...)
+			if result.ExitCode != 0 {
+				t.Fatalf("verify-all exit = %d; stderr: %s", result.ExitCode, result.Stderr)
+			}
+			var output struct {
+				OverallStatus string `json:"overallStatus"`
+				Bundles       []struct {
+					Name   string `json:"name"`
+					Status string `json:"status"`
+				} `json:"bundles"`
+			}
+			if err := json.Unmarshal([]byte(result.Stdout), &output); err != nil {
+				t.Fatalf("verify-all stdout is not JSON: %v\n%s", err, result.Stdout)
+			}
+			statuses := make(map[string]string, len(output.Bundles))
+			for _, bundle := range output.Bundles {
+				statuses[bundle.Name] = bundle.Status
+			}
+			if output.OverallStatus != "ok" || statuses["alpha-bundle"] != tc.want || statuses["beta-bundle"] != tc.want {
+				t.Errorf("verify-all overall = %q, bundles = %v; want success with both bundles %q", output.OverallStatus, statuses, tc.want)
+			}
+		})
+	}
 }
 
 // TestDevtoolsAppsInspectPath characterizes the offline error contract of

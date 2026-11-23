@@ -203,8 +203,8 @@ importers:
         specifier: 26.6.6
         version: 26.6.6
       '@types/vscode':
-        specifier: 1.146.0
-        version: 1.146.0
+        specifier: 1.144.0
+        version: 1.144.0
       '@vscode/vsce':
         specifier: 4.1.1
         version: 4.1.1(supports-color@8.1.1)
@@ -3328,8 +3328,8 @@ packages:
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
 
-  '@types/vscode@1.146.0':
-    resolution: {integrity: sha512-OtU25faeM997QQsW+D07FN9cX06j+EEI4aQaPw/UO3HWlCM39N1W7fG8ewhdZKluut31KffyMsmDzJzgMu6t8Q==}
+  '@types/vscode@1.144.0':
+    resolution: {integrity: sha512-IDd4eQzu6MjGucfaQF0V/TY5vHX9o1albkKyZD6K/iVXSCcL5NSj4KW1wWfx1QDadPKWyxMaE/+M1wKLCJlXpA==}
 
   '@types/ws@8.18.2':
     resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
@@ -12080,7 +12080,7 @@ snapshots:
 
   '@types/unist@3.0.3': {}
 
-  '@types/vscode@1.146.0': {}
+  '@types/vscode@1.144.0': {}
 
   '@types/ws@8.18.2':
     dependencies:
