@@ -312,10 +312,14 @@ jobs:
           for package in packaging/npm/datamitsu-{darwin,freebsd,linux,win32}-{arm64,x64} packaging/npm/datamitsu; do
             destination="$out/${package##*/}"
             mkdir "$destination"
-            # These release packages are outside the default workspace globs.
-            # Select each from the root so pnpm can resolve the launcher's catalog references.
-            pnpm --workspace-packages "$package" --filter "./$package" --fail-if-no-match \
-              pack --pack-destination "$destination"
+            if [[ "$package" == packaging/npm/datamitsu ]]; then
+              # The launcher needs the root catalog; generated binary packages must
+              # be packed standalone so the root ignore rules do not drop their binaries.
+              pnpm --workspace-packages "$package" --filter "./$package" --fail-if-no-match \
+                pack --pack-destination "$destination"
+            else
+              (cd "$package" && pnpm pack --ignore-workspace --pack-destination "$destination")
+            fi
             archives=("$destination"/*.tgz)
             [[ ${#archives[@]} == 1 && -f "${archives[0]}" ]]
             mv "${archives[0]}" "$destination.tgz"

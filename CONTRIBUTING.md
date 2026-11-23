@@ -290,8 +290,9 @@ The workflow must exist on the default branch before GitHub allows dispatch.
 
 The npm launcher is outside the default workspace globs. The release workflow
 packs it from the workspace root with an explicit package selection so `pnpm`
-resolves `catalog:` from the root configuration. It installs the packed launcher
-and the matching host-platform archive offline for the smoke test.
+resolves `catalog:` from the root configuration. Generated platform packages
+are packed independently so root ignore rules do not omit their executables.
+The smoke test installs the packed launcher and matching host archive offline.
 
 [Release Preflight](.github/workflows/release-preflight.yml) starts automatically
 after a successful tagged preparation. It runs from the protected default
