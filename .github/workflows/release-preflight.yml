@@ -1,0 +1,1272 @@
+# cspell:ignore Ftags slurpfile
+name: Release Preflight
+on:
+  workflow_run:
+    workflows:
+      - Release
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      preparation_run_id:
+        description: Release preparation run ID
+        type: string
+        required: true
+      producing_attempt:
+        description: Attempt that uploaded the index
+        type: string
+        required: true
+      index_id:
+        description: Exact release artifact index ID
+        type: string
+        required: true
+      index_archive_digest:
+        description: SHA-256 of the uploaded index ZIP (sha256:...)
+        type: string
+        required: true
+      github_release:
+        description: Include GitHub Releases in the prerelease request
+        type: boolean
+        default: false
+      reuse_parser_finalization:
+        description: Reuse verified parser evidence without signing again
+        type: boolean
+        default: false
+      first_parser_finalization:
+        description: Confirm first parser finalization for the exact preparation index
+        type: boolean
+        default: false
+      first_checksum_finalization:
+        description: Confirm first checksum finalization for the exact preparation index
+        type: boolean
+        default: false
+      first_image_finalization:
+        description: Confirm first CLI image finalization for the exact preparation index
+        type: boolean
+        default: false
+      image_signer_sha:
+        description: Original workflow SHA for read-only CLI image recovery
+        type: string
+        required: false
+      signature_recovery:
+        description: Original signing run ID, artifact ID, ZIP SHA-256, bundle SHA-256, and signer SHA (space-separated)
+        type: string
+        required: false
+      checksum_checkpoint:
+        description: Original run ID, checkpoint artifact ID, ZIP SHA-256, and signer SHA (space-separated)
+        type: string
+        required: false
+      release_tag:
+        description: Existing stable or RC tag to verify instead of a manual prerelease
+        type: string
+        required: false
+      publish_pypi:
+        description: Request PyPI publication for the selected tag
+        type: boolean
+        default: false
+      publish_rubygems:
+        description: Request RubyGems publication for the selected tag
+        type: boolean
+        default: false
+permissions:
+  actions: read
+  contents: read
+jobs:
+  preflight:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
+    timeout-minutes: 10
+    outputs:
+      preparation_run: ${{ steps.verify.outputs.preparation_run }}
+      producing_attempt: ${{ steps.verify.outputs.producing_attempt }}
+      index_id: ${{ steps.verify.outputs.index_id }}
+      index_digest: ${{ steps.verify.outputs.index_digest }}
+      github_release: ${{ steps.verify.outputs.github_release }}
+      review_url: ${{ steps.verify.outputs.review_url }}
+      payloads: ${{ steps.verify.outputs.payloads }}
+      version: ${{ steps.verify.outputs.version }}
+      preparation_attempt: ${{ steps.verify.outputs.preparation_attempt }}
+      source_sha: ${{ steps.verify.outputs.source_sha }}
+      release_tag: ${{ steps.verify.outputs.release_tag }}
+      signature_recovery: ${{ steps.verify.outputs.signature_recovery }}
+      mode: ${{ steps.verify.outputs.mode }}
+      publish_pypi: ${{ steps.verify.outputs.publish_pypi }}
+      publish_rubygems: ${{ steps.verify.outputs.publish_rubygems }}
+      publication_enabled: ${{ steps.verify.outputs.publication_enabled }}
+    steps:
+      - name: Require the default branch
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          [[ "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" ]] || {
+            echo 'Release Preflight must run on the default branch' >&2
+            exit 1
+          }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        if: github.event_name == 'workflow_dispatch' && inputs.signature_recovery != '' && (inputs.github_release || inputs.release_tag != '')
+      - name: Verify exact release preparation
+        id: verify
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREPARATION_RUN: ${{ inputs.preparation_run_id }}
+          PRODUCING_ATTEMPT: ${{ inputs.producing_attempt }}
+          INDEX_ID: ${{ inputs.index_id }}
+          INDEX_DIGEST: ${{ inputs.index_archive_digest }}
+          GITHUB_DESTINATION: ${{ inputs.github_release }}
+          RECOVERY: ${{ inputs.signature_recovery }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+          PUBLISH_PYPI: ${{ inputs.publish_pypi }}
+          PUBLISH_RUBYGEMS: ${{ inputs.publish_rubygems }}
+          PUBLICATION_REQUEST: ${{ vars.RELEASE_PUBLICATION_ENABLED == 'true' }}
+          PROTECTED_REF: ${{ github.ref_protected }}
+        run: |
+          evidence=$(realpath -- "$(mktemp -d)")
+          trap 'rm -rf "$evidence"' EXIT
+          api="repos/$GITHUB_REPOSITORY/actions"
+          number='(0|[1-9][0-9]*)'
+          tag_pattern="^v${number}\.${number}\.${number}(-rc\.${number})?$"
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+            jq -e --arg repo "$GITHUB_REPOSITORY" '
+              .workflow_run | .path == ".github/workflows/release.yml" and .event == "push"
+              and .conclusion == "success" and .repository.full_name == $repo and .head_repository.full_name == $repo
+            ' "$GITHUB_EVENT_PATH" > /dev/null
+            PREPARATION_RUN=$(jq -er '.workflow_run.id | tostring' "$GITHUB_EVENT_PATH")
+            COMPLETED_ATTEMPT=$(jq -er '.workflow_run.run_attempt | tostring' "$GITHUB_EVENT_PATH")
+            REQUESTED_TAG=$(jq -er '.workflow_run.head_branch' "$GITHUB_EVENT_PATH")
+            [[ "$REQUESTED_TAG" =~ $tag_pattern ]]
+            PUBLISH_PYPI=true
+            PUBLISH_RUBYGEMS=true
+          fi
+          [[ "$PREPARATION_RUN" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid run ID' >&2; exit 1; }
+          gh api --paginate --slurp "$api/runs/$PREPARATION_RUN/artifacts?per_page=100" > "$evidence/pages.json"
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+            [[ "$COMPLETED_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+            index=$(jq -ce '
+              [.[].artifacts[] | select(.name | test("^release-artifact-index-attempt-[1-9][0-9]*$"))]
+              | if length == 1 then .[0] else error("Expected exactly one original release index in the run") end
+            ' "$evidence/pages.json")
+            PRODUCING_ATTEMPT=$(jq -er '.name | sub("^release-artifact-index-attempt-"; "")' <<< "$index")
+            [[ "$PRODUCING_ATTEMPT" =~ ^[1-9][0-9]*$ && "$PRODUCING_ATTEMPT" -le "$COMPLETED_ATTEMPT" ]]
+            INDEX_ID=$(jq -er '.id | tostring' <<< "$index")
+            INDEX_DIGEST=$(jq -er '.digest' <<< "$index")
+          fi
+          [[ "$PRODUCING_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid producing attempt' >&2; exit 1; }
+          index_name="release-artifact-index-attempt-$PRODUCING_ATTEMPT"
+          attempt_api="$api/runs/$PREPARATION_RUN/attempts/$PRODUCING_ATTEMPT"
+          gh api "$attempt_api" > "$evidence/run.json"
+          gh api --paginate --slurp "$attempt_api/jobs?per_page=100" > "$evidence/jobs.json"
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+            jq -e --slurpfile trigger "$GITHUB_EVENT_PATH" '
+              .head_sha == $trigger[0].workflow_run.head_sha
+            ' "$evidence/run.json" > /dev/null
+          fi
+          [[ "$INDEX_ID" =~ ^[1-9][0-9]*$ && "$INDEX_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo 'Invalid index identity' >&2
+            exit 1
+          }
+          jq -e --arg id "$INDEX_ID" --arg digest "$INDEX_DIGEST" --arg name "$index_name" '
+                {artifacts: [.[].artifacts[]]} as $inventory
+                | [$inventory.artifacts[] | select((.id | tostring) == $id)] as $matches
+                | if ($matches | length) != 1 then error("Index ID \($id) is absent or ambiguous in this run")
+                  elif $matches[0].name != $name then error("Artifact \($id) is not the expected index")
+                  elif $matches[0].expired != false then error("Index \($id) is expired")
+                  elif $matches[0].digest != $digest then error("Index \($id) digest mismatch")
+                  elif ($matches[0].size_in_bytes | type) != "number" or $matches[0].size_in_bytes < 1 or $matches[0].size_in_bytes > 131072 then error("Index \($id) has an invalid archive size")
+                  else $inventory end
+              ' "$evidence/pages.json" > "$evidence/artifacts.json"
+          gh api "$api/artifacts/$INDEX_ID/zip" | python3 -c '
+          import sys
+          archive = sys.stdin.buffer.read(131073)
+          if len(archive) > 131072:
+              sys.exit("Index ZIP exceeds 128 KiB")
+          sys.stdout.buffer.write(archive)
+          ' > "$evidence/index.zip"
+          route=(--publish-mode prerelease --publish-github-release "$GITHUB_DESTINATION")
+          if [[ -n "$REQUESTED_TAG" ]]; then
+            [[ "$REQUESTED_TAG" =~ $tag_pattern ]]
+            tagged_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$REQUESTED_TAG" --jq .sha)
+            jq -e --arg tag "$REQUESTED_TAG" --arg sha "$tagged_sha" '
+              .event == "push" and .head_branch == $tag and .head_sha == $sha
+              and ($sha | test("^[0-9a-f]{40}$"))' "$evidence/run.json" > /dev/null
+            route=(--trigger-tag "$REQUESTED_TAG")
+            GITHUB_DESTINATION=true
+          fi
+          python3 .github/scripts/verify-release-index.py \
+            --run-id "$PREPARATION_RUN" --index-id "$INDEX_ID" --archive-digest "$INDEX_DIGEST" \
+            --archive "$evidence/index.zip" --run-metadata "$evidence/run.json" \
+            --artifact-metadata "$evidence/artifacts.json" --job-metadata "$evidence/jobs.json" \
+            "${route[@]}" > "$evidence/verified.json"
+          mode=$(jq -er '.mode' "$evidence/verified.json")
+          if [[ "$mode" != tag && ( "$PUBLISH_PYPI" == true || "$PUBLISH_RUBYGEMS" == true ) ]]; then
+            echo 'PyPI and RubyGems publication requests require a release tag' >&2
+            exit 1
+          fi
+          APPROVED_PAYLOADS=$(jq -ce '.artifacts' "$evidence/verified.json")
+          APPROVED_VERSION=$(jq -er '.version' "$evidence/verified.json")
+          PREPARATION_RUN_ID="$PREPARATION_RUN"
+          PREPARATION_ATTEMPT=$(jq -er '.preparation_attempt' "$evidence/verified.json")
+          PREPARATION_SHA=$(jq -er '.source_sha' "$evidence/verified.json")
+          UNSTABLE_TAG=$(jq -er '.release_tag' "$evidence/verified.json")
+          if [[ "$GITHUB_DESTINATION" == true ]]; then
+            default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)
+            encoded_branch=$(jq -nr --arg branch "$default_branch" '$branch | @uri')
+            default_sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_branch" --jq .commit.sha)
+            [[ "$default_sha" =~ ^[0-9a-f]{40}$ && "$PREPARATION_SHA" =~ ^[0-9a-f]{40}$ ]]
+            relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$PREPARATION_SHA...$default_sha" --jq .status)
+            if [[ "$relation" != identical && "$relation" != ahead ]]; then
+              echo 'GitHub publication with GITHUB_TOKEN requires an approved source already on the default branch under this workflow policy' >&2
+              exit 1
+            fi
+          fi
+          export APPROVED_PAYLOADS APPROVED_VERSION PREPARATION_RUN_ID PREPARATION_ATTEMPT PREPARATION_SHA UNSTABLE_TAG
+          python3 .github/scripts/stage-release-payloads.py "$evidence/payloads"
+          if [[ "$GITHUB_DESTINATION" == true ]]; then
+            python3 .github/scripts/publish-prerelease.py --check-only "$evidence/payloads/release/dist" "$APPROVED_VERSION"
+          fi
+          if [[ -n "$RECOVERY" ]]; then
+            [[ "$GITHUB_DESTINATION" == true ]] || { echo 'Signature recovery requires the GitHub destination' >&2; exit 1; }
+            bash .github/scripts/recover-checksum-signature.sh recover \
+              "$evidence/payloads/release/dist/checksums.txt" "$evidence/recovered-signature.json" \
+              "$INDEX_ID" "$INDEX_DIGEST" > /dev/null
+          fi
+          if [[ "$mode" == tag ]]; then
+            ruby .github/scripts/check-release-gem.rb "$evidence/payloads/release/dist/ruby/datamitsu.gem" "$APPROVED_VERSION"
+            (cd "$evidence/payloads/release" && IS_STABLE=true VERSION="$REQUESTED_TAG" \
+              node "$GITHUB_WORKSPACE/.github/scripts/push-parsers-oci.mjs" check-prepared)
+            if [[ "$PUBLICATION_REQUEST" == true ]]; then
+              npm_dist="$evidence/payloads/release/dist/npm"
+              python3 .github/scripts/fetch-npm-provenance.py "$npm_dist" "$evidence/npm-proof" "$PREPARATION_RUN" "$PRODUCING_ATTEMPT" "$INDEX_ID"
+              python3 .github/scripts/check-npm-release.py "$npm_dist" "$APPROVED_VERSION" --verify-provenance \
+                --source-repository "$GITHUB_REPOSITORY" --source-sha "$PREPARATION_SHA" --source-ref "refs/tags/$REQUESTED_TAG" \
+                --source-run "$PREPARATION_RUN" --producing-attempt "$PRODUCING_ATTEMPT" \
+                --index-id "$INDEX_ID" --index-archive-digest "$INDEX_DIGEST" --provenance-dir "$evidence/npm-proof"
+            fi
+          else
+            (cd "$evidence/payloads/release" && IS_STABLE=false PARSER_VERSION="$APPROVED_VERSION" \
+              node "$GITHUB_WORKSPACE/.github/scripts/push-parsers-oci.mjs" check-prepared)
+          fi
+          python3 .github/scripts/publish-prepared-images.py "$evidence/payloads/release/dist" "$UNSTABLE_TAG" --check-only
+          if [[ "$PUBLICATION_REQUEST" == true ]]; then
+            [[ "$GITHUB_REPOSITORY" == datamitsu/datamitsu && "$PROTECTED_REF" == true && "$GITHUB_WORKFLOW_SHA" == "$GITHUB_SHA" ]] || {
+              echo 'Publication requires the protected default branch of the canonical repository' >&2
+              exit 1
+            }
+          fi
+          {
+            printf 'Release evidence checked; publication enabled: `%s` (approval is separate)\n\n' "$PUBLICATION_REQUEST"
+            printf 'Index: `%s` (`%s`)\n\n' "$INDEX_ID" "$INDEX_DIGEST"
+            printf 'Publisher orchestration: `%s` at `%s`\n\n' "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA"
+            jq -r '"- Source: `\(.source_sha)`\n- Tag: `\(.release_tag)`\n- Version: `\(.version)`\n- Preparation run: `\(.run_id)`\n- Producing attempt: `\(.producing_attempt)`"' "$evidence/verified.json"
+            if [[ "$mode" == tag ]]; then
+              printf 'Tagged destinations requested: PyPI `%s`, RubyGems `%s`\n' "$PUBLISH_PYPI" "$PUBLISH_RUBYGEMS"
+              dist="$evidence/payloads/release/dist"
+              if [[ "$PUBLISH_PYPI" == true ]]; then
+                printf '\nPyPI version: `%s`\n\n' "${APPROVED_VERSION/-rc./rc}"
+                cat "$dist/python/SHA256SUMS"
+              fi
+              if [[ "$PUBLISH_RUBYGEMS" == true ]]; then
+                printf '\nRubyGems version: `%s`\n\n' "${APPROVED_VERSION/-rc./.rc.}"
+                cat "$dist/ruby/SHA256SUMS"
+              fi
+            else
+              printf '%s\n' '- Destinations: npm unstable; GHCR unstable CLI images and parser'
+            fi
+            if [[ "$mode" == prerelease && "$GITHUB_DESTINATION" == true ]]; then
+              printf '%s\n' '- Optional destination: GitHub Pre-release (not Latest)'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          {
+            printf 'preparation_run=%s\nproducing_attempt=%s\nindex_id=%s\nindex_digest=%s\ngithub_release=%s\n' \
+              "$PREPARATION_RUN" "$PRODUCING_ATTEMPT" "$INDEX_ID" "$INDEX_DIGEST" "$GITHUB_DESTINATION"
+            printf 'review_url=%s/%s/actions/runs/%s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+          } >> "$GITHUB_OUTPUT"
+          printf 'payloads=%s\n' "$(jq -ce '.artifacts' "$evidence/verified.json")" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "$(jq -er '.version' "$evidence/verified.json")" >> "$GITHUB_OUTPUT"
+          jq -er '"preparation_attempt=\(.preparation_attempt)\nsource_sha=\(.source_sha)\nrelease_tag=\(.release_tag)"' "$evidence/verified.json" >> "$GITHUB_OUTPUT"
+          printf 'signature_recovery=%s\n' "$RECOVERY" >> "$GITHUB_OUTPUT"
+          printf 'mode=%s\n' "$mode" >> "$GITHUB_OUTPUT"
+          printf 'publish_pypi=%s\npublish_rubygems=%s\n' "$PUBLISH_PYPI" "$PUBLISH_RUBYGEMS" >> "$GITHUB_OUTPUT"
+          printf 'publication_enabled=%s\n' "$PUBLICATION_REQUEST" >> "$GITHUB_OUTPUT"
+  finalize-parser:
+    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && !inputs.reuse_parser_finalization }}
+    needs: preflight
+    environment:
+      name: release-publication
+      url: ${{ needs.preflight.outputs.review_url }}
+    concurrency:
+      group: ghcr-datamitsu-parser-publication
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      digest: ${{ steps.record.outputs.digest }}
+      signer_workflow: ${{ steps.record.outputs.signer_workflow }}
+      signer_sha: ${{ steps.record.outputs.signer_sha }}
+      evidence_id: ${{ steps.evidence.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Stage approved parser payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_PAYLOADS: ${{ needs.preflight.outputs.payloads }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+        run: python3 .github/scripts/stage-release-payloads.py "$RUNNER_TEMP/release-payloads"
+      - name: Check, claim, and publish the prepared parser
+        working-directory: ${{ runner.temp }}/release-payloads/release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FIRST_FINALIZATION: ${{ inputs.first_parser_finalization || github.event_name == 'workflow_run' }}
+          APPROVED_TAG: ${{ needs.preflight.outputs.release_tag }}
+          APPROVED_SHA: ${{ needs.preflight.outputs.source_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PREPARATION_RUN_ID: ${{ needs.preflight.outputs.preparation_run }}
+          PREPARATION_ATTEMPT: ${{ needs.preflight.outputs.preparation_attempt }}
+          PREPARATION_SHA: ${{ needs.preflight.outputs.source_sha }}
+          PARSER_VERSION: ${{ needs.preflight.outputs.version }}
+          UNSTABLE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          VERSION: ${{ needs.preflight.outputs.release_tag }}
+          IS_STABLE: ${{ needs.preflight.outputs.mode == 'tag' }}
+        run: |
+          [[ "$FIRST_FINALIZATION" == true && "$GITHUB_RUN_ATTEMPT" == 1 ]] || {
+            echo 'First parser finalization requires explicit confirmation on a new run; otherwise use verified parser recovery' >&2
+            exit 1
+          }
+          number='(0|[1-9][0-9]*)'
+          [[ "$APPROVED_TAG" =~ ^(v${number}\.${number}\.${number}(-rc\.${number})?|unstable-[1-9][0-9]*-[1-9][0-9]*)$ && "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          node "$GITHUB_WORKSPACE/.github/scripts/push-parsers-oci.mjs" check-prepared
+          if [[ "$IS_STABLE" == true ]]; then
+            observed=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$APPROVED_TAG" --jq .sha)
+            [[ "$observed" == "$APPROVED_SHA" ]]
+          fi
+          claim="refs/heads/release-finalization/parser/$APPROVED_TAG"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="$claim" -f sha="$APPROVED_SHA" > /dev/null || {
+            echo 'Cannot confirm first parser finalization. Do not remove the claim; recover verified evidence or reconcile signing state.' >&2
+            exit 1
+          }
+          node "$GITHUB_WORKSPACE/.github/scripts/push-parsers-oci.mjs" publish
+      - name: Verify anonymous parser access
+        shell: bash
+        env:
+          PARSERS_REPO: ${{ needs.preflight.outputs.mode == 'tag' && 'datamitsu/datamitsu-parsers' || 'datamitsu/datamitsu-parsers-unstable' }}
+        run: |
+          pin="$RUNNER_TEMP/release-payloads/release/dist/parsers-oci.json"
+          PARSERS_REGISTRY=ghcr.io \
+            PARSERS_DIGEST="$(jq -er .digest "$pin")" PARSERS_SHA256="$(jq -er .sha256 "$pin")" \
+            bash .github/scripts/verify-parsers-anonymous.sh
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Sign and verify prepared parser
+        id: sign
+        shell: bash
+        env:
+          PREPARATION_SHA: ${{ needs.preflight.outputs.source_sha }}
+          APPROVED_INDEX_DIGEST: ${{ needs.preflight.outputs.index_digest }}
+          APPROVED_INDEX_ID: ${{ needs.preflight.outputs.index_id }}
+          PARSER_SUBJECT: ${{ needs.preflight.outputs.mode == 'tag' && 'ghcr.io/datamitsu/datamitsu-parsers' || 'ghcr.io/datamitsu/datamitsu-parsers-unstable' }}
+        run: |
+          digest=$(jq -er .digest "$RUNNER_TEMP/release-payloads/release/dist/parsers-oci.json")
+          subject="$PARSER_SUBJECT@$digest"
+          cosign sign --yes "$subject"
+          cosign verify --certificate-identity "$GITHUB_SERVER_URL/$GITHUB_WORKFLOW_REF" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-github-workflow-sha "$GITHUB_WORKFLOW_SHA" "$subject" > "$RUNNER_TEMP/parser-signature.json"
+          jq -n --arg source "$PREPARATION_SHA" --arg index "$APPROVED_INDEX_DIGEST" --arg index_id "$APPROVED_INDEX_ID" \
+            --arg digest "$digest" --arg workflow "$GITHUB_WORKFLOW_REF" --arg signer "$GITHUB_WORKFLOW_SHA" \
+            '{source_sha:$source,index_id:$index_id,index_archive_digest:$index,digest:$digest,signer_workflow:$workflow,signer_sha:$signer}' \
+            > "$RUNNER_TEMP/parser-finalization.json"
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: attest
+        with:
+          subject-name: ${{ needs.preflight.outputs.mode == 'tag' && 'ghcr.io/datamitsu/datamitsu-parsers' || 'ghcr.io/datamitsu/datamitsu-parsers-unstable' }}
+          subject-digest: ${{ steps.sign.outputs.digest }}
+          predicate-type: https://datamitsu.com/attestations/parser-finalization/v1
+          predicate-path: ${{ runner.temp }}/parser-finalization.json
+      - name: Preserve parser finalization evidence
+        shell: bash
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          test -s "$BUNDLE"
+          cp "$BUNDLE" "$RUNNER_TEMP/parser-attestation.jsonl"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        id: evidence
+        with:
+          name: parser-finalization-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            ${{ runner.temp }}/parser-finalization.json
+            ${{ runner.temp }}/parser-signature.json
+            ${{ runner.temp }}/parser-attestation.jsonl
+      - name: Report finalized identity
+        id: record
+        shell: bash
+        run: |
+          jq -er '"digest=\(.digest)\nsigner_workflow=\(.signer_workflow)\nsigner_sha=\(.signer_sha)"' \
+            "$RUNNER_TEMP/parser-finalization.json" >> "$GITHUB_OUTPUT"
+  publish-images:
+    if: ${{ needs.preflight.outputs.publication_enabled == 'true' }}
+    needs: preflight
+    environment:
+      name: release-publication
+      url: ${{ needs.preflight.outputs.review_url }}
+    concurrency:
+      group: datamitsu-cli-images-${{ matrix.registry }}
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        registry: ${{ fromJSON(needs.preflight.outputs.mode == 'tag' && '["ghcr","dockerhub"]' || '["ghcr"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Stage approved OCI archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_PAYLOADS: ${{ needs.preflight.outputs.payloads }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+        run: python3 .github/scripts/stage-release-payloads.py "$RUNNER_TEMP/release-payloads"
+      - name: Require OCI archive tooling
+        run: command -v skopeo
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: matrix.registry == 'ghcr'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: matrix.registry == 'dockerhub'
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - name: Copy checked multi-platform indexes
+        shell: bash
+        env:
+          APPROVED_TAG: ${{ needs.preflight.outputs.release_tag }}
+          GITHUB_TOKEN: ${{ github.token }}
+          FIRST_FINALIZATION: ${{ inputs.first_image_finalization || github.event_name == 'workflow_run' }}
+          RECOVERY_SIGNER: ${{ inputs.image_signer_sha }}
+          APPROVED_SHA: ${{ needs.preflight.outputs.source_sha }}
+          INDEX_ID: ${{ needs.preflight.outputs.index_id }}
+          INDEX_DIGEST: ${{ needs.preflight.outputs.index_digest }}
+          REGISTRY: ${{ matrix.registry }}
+          RELEASE_MODE: ${{ needs.preflight.outputs.mode }}
+        run: |
+          repo=ghcr.io/datamitsu/datamitsu-unstable
+          versioned_tag=$APPROVED_TAG
+          if [[ "$RELEASE_MODE" == tag ]]; then
+            observed=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$APPROVED_TAG" --jq .sha)
+            [[ "$observed" == "$APPROVED_SHA" ]]
+            repo=ghcr.io/datamitsu/datamitsu
+            if [[ "$REGISTRY" == dockerhub ]]; then repo=docker.io/datamitsu/datamitsu; fi
+            versioned_tag=${APPROVED_TAG#v}
+          else
+            [[ "$APPROVED_TAG" =~ ^unstable-[1-9][0-9]*-[1-9][0-9]*$ ]]
+          fi
+          [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ && "$INDEX_ID" =~ ^[1-9][0-9]*$ && "$INDEX_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          results="$RUNNER_TEMP/verified-image-digests.txt"
+          args=("$RUNNER_TEMP/release-payloads/release/dist" "$APPROVED_TAG" --registry "$REGISTRY")
+          signer="$GITHUB_WORKFLOW_SHA"
+          if [[ -n "$RECOVERY_SIGNER" ]]; then
+            [[ "$RECOVERY_SIGNER" =~ ^[0-9a-f]{40}$ && "$FIRST_FINALIZATION" != true ]]
+            signer="$RECOVERY_SIGNER"
+            args+=(--require-present)
+          else
+            [[ "$FIRST_FINALIZATION" == true && "$GITHUB_RUN_ATTEMPT" == 1 ]] || {
+              echo 'First image finalization requires explicit confirmation on a new run; otherwise verify the original signatures' >&2
+              exit 1
+            }
+            claim="refs/heads/release-finalization/images/$REGISTRY/$APPROVED_TAG"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="$claim" -f sha="$APPROVED_SHA" > /dev/null || {
+              echo 'Cannot confirm first image finalization. Recover original signatures or reconcile signing state.' >&2
+              exit 1
+            }
+          fi
+          python3 .github/scripts/publish-prepared-images.py "${args[@]}" > "$results"
+          mapfile -t images < "$results"
+          [[ ${#images[@]} == 2 ]]
+          digests=()
+          for i in 0 1; do
+            tag=$versioned_tag
+            if [[ $i == 1 ]]; then tag+=-alpine; fi
+            [[ "${images[i]}" == "$repo:$tag "* ]]
+            digest=${images[i]#* }
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            digests+=("$digest")
+            subject="$repo@$digest"
+            policy=(--certificate-identity "$GITHUB_SERVER_URL/$GITHUB_WORKFLOW_REF"
+                    --certificate-oidc-issuer https://token.actions.githubusercontent.com
+                    --certificate-github-workflow-sha "$signer")
+            if [[ -z "$RECOVERY_SIGNER" ]]; then
+              cosign sign --yes "$subject"
+            fi
+            cosign verify "${policy[@]}" "$subject" > /dev/null
+            printf 'Verified CLI image signature: %s\n' "$subject"
+          done
+          [[ "$INDEX_ID" =~ ^[1-9][0-9]*$ && "$INDEX_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          jq -n --arg id "$INDEX_ID" --arg index "$INDEX_DIGEST" --arg tag "$APPROVED_TAG" \
+            --arg sha "$APPROVED_SHA" --arg repo "$repo" --arg debian "${digests[0]}" --arg alpine "${digests[1]}" \
+            '{index_id:$id,index_archive_digest:$index,release_tag:$tag,source_sha:$sha,repository:$repo,images:{debian:$debian,alpine:$alpine}}' \
+            > "$RUNNER_TEMP/cli-image-finalization.json"
+          if [[ -n "$RECOVERY_SIGNER" ]]; then
+            gh attestation verify "$RUNNER_TEMP/cli-image-finalization.json" --repo "$GITHUB_REPOSITORY" \
+              --signer-digest "$signer" --cert-identity "$GITHUB_SERVER_URL/$GITHUB_WORKFLOW_REF"
+          fi
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        if: inputs.image_signer_sha == ''
+        with:
+          subject-path: ${{ runner.temp }}/cli-image-finalization.json
+  finalize-github-assets:
+    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.github_release == 'true' }}
+    needs: preflight
+    environment:
+      name: release-publication
+      url: ${{ needs.preflight.outputs.review_url }}
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    outputs:
+      bundle_id: ${{ steps.bundle.outputs.artifact-id }}
+      signer_sha: ${{ steps.signature.outputs.signer_sha }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Stage approved release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_PAYLOADS: ${{ needs.preflight.outputs.payloads }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+        run: python3 .github/scripts/stage-release-payloads.py "$RUNNER_TEMP/release-payloads"
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - name: Sign or recover approved checksums
+        id: signature
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECOVERY: ${{ needs.preflight.outputs.signature_recovery }}
+          CHECKPOINT: ${{ inputs.checksum_checkpoint }}
+          INDEX_ID: ${{ needs.preflight.outputs.index_id }}
+          INDEX_DIGEST: ${{ needs.preflight.outputs.index_digest }}
+          FIRST_FINALIZATION: ${{ inputs.first_checksum_finalization || github.event_name == 'workflow_run' }}
+          APPROVED_TAG: ${{ needs.preflight.outputs.release_tag }}
+          APPROVED_SHA: ${{ needs.preflight.outputs.source_sha }}
+        run: |
+          bundle="$RUNNER_TEMP/checksums.txt.sigstore.json"
+          checksums="$RUNNER_TEMP/release-payloads/release/dist/checksums.txt"
+          signer_sha="$GITHUB_WORKFLOW_SHA"
+          [[ -z "$RECOVERY" || -z "$CHECKPOINT" ]]
+          if [[ -n "$RECOVERY" ]]; then
+            signer_sha=$(bash .github/scripts/recover-checksum-signature.sh recover "$checksums" "$bundle" "$INDEX_ID" "$INDEX_DIGEST")
+          elif [[ -n "$CHECKPOINT" ]]; then
+            python3 .github/scripts/recover-checksum-checkpoint.py "$RUNNER_TEMP" "$CHECKPOINT" "$INDEX_ID" "$INDEX_DIGEST"
+          else
+            [[ "$FIRST_FINALIZATION" == true && "$GITHUB_RUN_ATTEMPT" == 1 ]] || {
+              echo 'First finalization requires explicit confirmation on a new run; otherwise supply original recovery evidence' >&2
+              exit 1
+            }
+            [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]]
+            number='(0|[1-9][0-9]*)'
+            if [[ "$APPROVED_TAG" =~ ^v${number}\.${number}\.${number}(-rc\.${number})?$ ]]; then
+              observed=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$APPROVED_TAG" --jq .sha)
+              [[ "$observed" == "$APPROVED_SHA" ]]
+            else
+              [[ "$APPROVED_TAG" =~ ^unstable-[1-9][0-9]*-[1-9][0-9]*$ ]]
+            fi
+            [[ "$INDEX_ID" =~ ^[1-9][0-9]*$ && "$INDEX_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+            claim="refs/heads/release-finalization/checksums/$APPROVED_TAG"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="$claim" -f sha="$APPROVED_SHA" > /dev/null || {
+              echo 'Cannot confirm first finalization. Do not remove the claim or sign again; recover the original evidence or reconcile signing state.' >&2
+              exit 1
+            }
+            printf 'Claim `%s` reserved for preparation index `%s` (`%s`).\n' "$claim" "$INDEX_ID" "$INDEX_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+            cosign sign-blob --yes --bundle "$bundle" "$checksums"
+            bash .github/scripts/recover-checksum-signature.sh record "$checksums" "$bundle" "$INDEX_ID" "$INDEX_DIGEST" > "$RUNNER_TEMP/checksum-finalization.txt"
+          fi
+          if [[ -z "$RECOVERY" ]]; then
+            cosign verify-blob --bundle "$bundle" --certificate-identity "$GITHUB_SERVER_URL/$GITHUB_WORKFLOW_REF" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --certificate-github-workflow-sha "$signer_sha" "$checksums"
+          fi
+          printf 'signer_sha=%s\n' "$signer_sha" >> "$GITHUB_OUTPUT"
+      - name: Preserve verified checksum checkpoint before index signing
+        if: needs.preflight.outputs.signature_recovery == '' && inputs.checksum_checkpoint == ''
+        id: checksum-checkpoint
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: checksum-checkpoint-${{ needs.preflight.outputs.index_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/checksums.txt.sigstore.json
+            ${{ runner.temp }}/checksum-finalization.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Report checksum checkpoint coordinates
+        if: steps.checksum-checkpoint.outcome == 'success'
+        shell: bash
+        env:
+          ARTIFACT_ID: ${{ steps.checksum-checkpoint.outputs.artifact-id }}
+          ARCHIVE_DIGEST: ${{ steps.checksum-checkpoint.outputs.artifact-digest }}
+        run: |
+          printf 'Checksum checkpoint: `%s %s sha256:%s %s`\n' \
+            "$GITHUB_RUN_ID" "$ARTIFACT_ID" "${ARCHIVE_DIGEST#sha256:}" "$GITHUB_WORKFLOW_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Reserve and sign the preparation index record
+        if: needs.preflight.outputs.signature_recovery == ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_TAG: ${{ needs.preflight.outputs.release_tag }}
+          APPROVED_SHA: ${{ needs.preflight.outputs.source_sha }}
+        run: |
+          claim="refs/heads/release-finalization/checksum-index/$APPROVED_TAG"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="$claim" -f sha="$APPROVED_SHA" > /dev/null || {
+            echo 'Index signing already reserved or its state is unknown; recover the full original bundle or reconcile signing state' >&2
+            exit 1
+          }
+          cosign sign-blob --yes --bundle "$RUNNER_TEMP/checksums.txt.sigstore.json.index.sigstore.json" \
+            "$RUNNER_TEMP/checksum-finalization.txt"
+      - name: Verify both finalization signatures
+        shell: bash
+        env:
+          INDEX_ID: ${{ needs.preflight.outputs.index_id }}
+          INDEX_DIGEST: ${{ needs.preflight.outputs.index_digest }}
+          SIGNER_SHA: ${{ steps.signature.outputs.signer_sha }}
+        run: |
+          bash .github/scripts/recover-checksum-signature.sh verify "$RUNNER_TEMP/release-payloads/release/dist/checksums.txt" \
+            "$RUNNER_TEMP/checksums.txt.sigstore.json" "$INDEX_ID" "$INDEX_DIGEST" "$SIGNER_SHA"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        id: bundle
+        with:
+          name: prerelease-checksum-signature-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/checksums.txt.sigstore.json
+            ${{ runner.temp }}/checksums.txt.sigstore.json.index.sigstore.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Record checksum signature recovery coordinates
+        env:
+          ARTIFACT_ID: ${{ steps.bundle.outputs.artifact-id }}
+          ARCHIVE_DIGEST: ${{ steps.bundle.outputs.artifact-digest }}
+          SIGNER_SHA: ${{ steps.signature.outputs.signer_sha }}
+        run: |
+          digest=$(sha256sum "$RUNNER_TEMP/checksums.txt.sigstore.json" | cut -d' ' -f1)
+          archive_hex=${ARCHIVE_DIGEST#sha256:}
+          [[ "$archive_hex" =~ ^[0-9a-f]{64}$ ]] || { echo 'Missing or invalid signature ZIP digest' >&2; exit 1; }
+          printf 'Checksum signature recovery: `%s %s sha256:%s sha256:%s %s`\n' \
+            "$GITHUB_RUN_ID" "$ARTIFACT_ID" "$archive_hex" "$digest" "$SIGNER_SHA" >> "$GITHUB_STEP_SUMMARY"
+  verify-parser:
+    if: ${{ always() && !cancelled() && needs.preflight.result == 'success' && (needs.preflight.outputs.mode == 'prerelease' || needs.preflight.outputs.mode == 'tag') && (needs.finalize-parser.result == 'success' || (inputs.reuse_parser_finalization && needs.finalize-parser.result == 'skipped')) }}
+    needs:
+      - preflight
+      - finalize-parser
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify approved payload ZIPs before extraction
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_PAYLOADS: ${{ needs.preflight.outputs.payloads }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+        run: python3 .github/scripts/stage-release-payloads.py "$RUNNER_TEMP/release-payloads"
+      - name: Check prepared parser identity offline
+        working-directory: ${{ runner.temp }}/release-payloads/release
+        env:
+          PREPARATION_RUN_ID: ${{ needs.preflight.outputs.preparation_run }}
+          PREPARATION_ATTEMPT: ${{ needs.preflight.outputs.preparation_attempt }}
+          PREPARATION_SHA: ${{ needs.preflight.outputs.source_sha }}
+          PARSER_VERSION: ${{ needs.preflight.outputs.version }}
+          UNSTABLE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          VERSION: ${{ needs.preflight.outputs.release_tag }}
+          IS_STABLE: ${{ needs.preflight.outputs.mode == 'tag' }}
+        run: node "$GITHUB_WORKSPACE/.github/scripts/push-parsers-oci.mjs" check-prepared
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: ${{ !inputs.reuse_parser_finalization }}
+        with:
+          artifact-ids: ${{ needs.finalize-parser.outputs.evidence_id || 'missing-artifact-id' }}
+          path: ${{ runner.temp }}/parser-evidence
+      - name: Verify finalized public parser before publication
+        shell: bash
+        env:
+          APPROVED_VERSION: ${{ needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.release_tag || needs.preflight.outputs.version }}
+          PARSERS_REPO: ${{ needs.preflight.outputs.mode == 'tag' && 'datamitsu/datamitsu-parsers' || 'datamitsu/datamitsu-parsers-unstable' }}
+          FINALIZED_DIGEST: ${{ needs.finalize-parser.outputs.digest }}
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_INDEX_DIGEST: ${{ needs.preflight.outputs.index_digest }}
+          APPROVED_INDEX_ID: ${{ needs.preflight.outputs.index_id }}
+          APPROVED_SOURCE_SHA: ${{ needs.preflight.outputs.source_sha }}
+          REUSE_PARSER_FINALIZATION: ${{ inputs.reuse_parser_finalization }}
+        run: |
+          dist="$RUNNER_TEMP/release-payloads/release/dist"
+          repo="$PARSERS_REPO"
+          ref="ghcr.io/$repo"
+          pin="$dist/parsers-oci.json"
+          tar -xOzf "$dist/npm/datamitsu.tgz" package/parsers-oci.json | cmp - "$pin"
+          jq -e --arg ref "$ref" --arg version "$APPROVED_VERSION" '
+            .ref == $ref and .version == $version and .module == "core"
+            and (.digest | test("^sha256:[0-9a-f]{64}$"))
+            and (.sha256 | test("^sha256:[0-9a-f]{64}$"))
+          ' "$pin" > /dev/null
+          digest=$(jq -er '.digest' "$pin")
+          bundle=()
+          signer_policy=()
+          if [[ "$REUSE_PARSER_FINALIZATION" == true ]]; then
+            [[ -z "$FINALIZED_DIGEST" ]]
+          else
+            [[ "$digest" == "$FINALIZED_DIGEST" ]]
+            bundle=(--bundle "$RUNNER_TEMP/parser-evidence/parser-attestation.jsonl")
+            signer_policy=(--signer-digest "$GITHUB_WORKFLOW_SHA")
+          fi
+          SIGNER_SHA=$(gh attestation verify "$dist/parsers-oci-manifest.json" \
+            --repo "$GITHUB_REPOSITORY" "${bundle[@]}" "${signer_policy[@]}" \
+            --predicate-type https://datamitsu.com/attestations/parser-finalization/v1 \
+            --cert-identity "$GITHUB_SERVER_URL/$GITHUB_WORKFLOW_REF" --format json | jq -er \
+              --arg source "$APPROVED_SOURCE_SHA" --arg index "$APPROVED_INDEX_DIGEST" --arg index_id "$APPROVED_INDEX_ID" \
+              --arg digest "$digest" --arg workflow "$GITHUB_WORKFLOW_REF" --arg ref "$ref" '
+                [.[] | .verificationResult | .signature.certificate.buildSignerDigest as $sha
+                 | select($sha | strings | test("^[0-9a-f]{40}$"))
+                 | select(.statement.subject == [{name:$ref,digest:{sha256:($digest | sub("^sha256:"; ""))}}])
+                 | .statement.predicate
+                 | select(.source_sha == $source and .index_id == $index_id and .index_archive_digest == $index and .digest == $digest
+                          and .signer_workflow == $workflow and .signer_sha == $sha)
+                 | $sha] | unique | if length == 1 then .[0] else error("No unambiguous verified parser finalizer") end
+              ')
+          sha=$(jq -er '.sha256' "$pin")
+          [[ "$digest" == "sha256:$(sha256sum "$dist/parsers-oci-manifest.json" | cut -d' ' -f1)" ]]
+          jq -e --arg sha "$sha" '.layers | length == 1 and .[0].digest == $sha' "$dist/parsers-oci-manifest.json" > /dev/null
+          PARSERS_REGISTRY=ghcr.io PARSERS_REPO="$repo" PARSERS_DIGEST="$digest" PARSERS_SHA256="$sha" \
+            bash .github/scripts/verify-parsers-anonymous.sh
+          cosign verify --certificate-identity "$GITHUB_SERVER_URL/$GITHUB_WORKFLOW_REF" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-github-workflow-sha "$SIGNER_SHA" "$ref@$digest" > /dev/null
+  publish-github:
+    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.github_release == 'true' }}
+    needs:
+      - preflight
+      - finalize-github-assets
+      - verify-parser
+    environment:
+      name: release-publication
+      url: ${{ needs.preflight.outputs.review_url }}
+    concurrency:
+      group: github-datamitsu-prerelease-${{ needs.preflight.outputs.release_tag }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Stage approved release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_PAYLOADS: ${{ needs.preflight.outputs.payloads }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+        run: python3 .github/scripts/stage-release-payloads.py "$RUNNER_TEMP/release-payloads"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.finalize-github-assets.outputs.bundle_id || 'missing-artifact-id' }}
+          path: ${{ runner.temp }}/checksum-signature
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - name: Verify signature and publish exact assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+          APPROVED_TAG: ${{ needs.preflight.outputs.release_tag }}
+          APPROVED_SHA: ${{ needs.preflight.outputs.source_sha }}
+          SIGNER_SHA: ${{ needs.finalize-github-assets.outputs.signer_sha }}
+          INDEX_ID: ${{ needs.preflight.outputs.index_id }}
+          INDEX_DIGEST: ${{ needs.preflight.outputs.index_digest }}
+        run: |
+          dist="$RUNNER_TEMP/release-payloads/release/dist"
+          bundle="$RUNNER_TEMP/checksum-signature/checksums.txt.sigstore.json"
+          bash .github/scripts/recover-checksum-signature.sh verify "$dist/checksums.txt" "$bundle" "$INDEX_ID" "$INDEX_DIGEST" "$SIGNER_SHA"
+          cp "$bundle" "$dist/checksums.txt.sigstore.json"
+          python3 .github/scripts/publish-prerelease.py "$dist" "$APPROVED_VERSION" "$APPROVED_TAG" "$APPROVED_SHA"
+  publisher-inputs:
+    if: ${{ !cancelled() && needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.result == 'success' && needs.publish-images.result == 'success' && (needs.publish-github.result == 'success' || (needs.preflight.outputs.github_release == 'false' && needs.publish-github.result == 'skipped')) && needs.verify-parser.result == 'success' }}
+    needs:
+      - preflight
+      - verify-parser
+      - publish-images
+      - publish-github
+    concurrency:
+      group: npm-datamitsu-unstable-publication
+      queue: max
+      cancel-in-progress: false
+    environment:
+      name: release-publication
+      url: ${{ needs.preflight.outputs.review_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify approved payload ZIPs before extraction
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_PAYLOADS: ${{ needs.preflight.outputs.payloads }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+        run: python3 .github/scripts/stage-release-payloads.py "$RUNNER_TEMP/release-payloads"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26.13.1"
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+      - name: Upload missing npm versions without promoting unstable
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_MODE: ${{ needs.preflight.outputs.mode }}
+          APPROVED_TAG: ${{ needs.preflight.outputs.release_tag }}
+          APPROVED_SHA: ${{ needs.preflight.outputs.source_sha }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+          PREPARATION_RUN: ${{ needs.preflight.outputs.preparation_run }}
+          PRODUCING_ATTEMPT: ${{ needs.preflight.outputs.producing_attempt }}
+          INDEX_ID: ${{ needs.preflight.outputs.index_id }}
+          INDEX_DIGEST: ${{ needs.preflight.outputs.index_digest }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm_dist="$RUNNER_TEMP/release-payloads/release/dist/npm"
+          args=("$npm_dist" "$APPROVED_VERSION" --upload-missing)
+          if [[ "$RELEASE_MODE" == tag ]]; then
+            observed=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$APPROVED_TAG" --jq .sha)
+            [[ "$observed" == "$APPROVED_SHA" ]]
+            bundle_dir="$(realpath -- "$RUNNER_TEMP")/npm-proof"
+            python3 .github/scripts/fetch-npm-provenance.py "$npm_dist" "$bundle_dir" "$PREPARATION_RUN" "$PRODUCING_ATTEMPT" "$INDEX_ID"
+            args+=(--source-repository "$GITHUB_REPOSITORY" --source-sha "$APPROVED_SHA" --source-ref "refs/tags/$APPROVED_TAG"
+                   --source-run "$PREPARATION_RUN" --producing-attempt "$PRODUCING_ATTEMPT" --index-id "$INDEX_ID"
+                   --index-archive-digest "$INDEX_DIGEST" --provenance-dir "$bundle_dir")
+          fi
+          python3 .github/scripts/check-npm-release.py "${args[@]}"
+      - name: Promote reconciled npm channel
+        env:
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          LEGACY_BASELINE: ${{ needs.preflight.outputs.mode == 'prerelease' && vars.NPM_UNSTABLE_CUTOVER_BASELINE || contains(needs.preflight.outputs.version, '-rc.') && vars.NPM_NEXT_CUTOVER_BASELINE || needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') && vars.NPM_LATEST_CUTOVER_BASELINE || '' }}
+        shell: bash
+        run: |
+          args=("$RUNNER_TEMP/release-payloads/release/dist/npm" "$APPROVED_VERSION")
+          if [[ -n "$LEGACY_BASELINE" ]]; then
+            baseline=$(mktemp)
+            trap 'rm -f "$baseline"' EXIT
+            printf '%s\n' "$LEGACY_BASELINE" > "$baseline"
+            args+=("$baseline")
+          fi
+          python3 .github/scripts/promote-npm-unstable.py "${args[@]}"
+  publish-tagged-pypi:
+    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.publish_pypi == 'true' }}
+    needs: preflight
+    environment:
+      name: pypi
+      url: ${{ needs.preflight.outputs.review_url }}
+    concurrency:
+      group: pypi-datamitsu-${{ needs.preflight.outputs.version }}
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - name: Stage approved wheels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_PAYLOADS: ${{ needs.preflight.outputs.payloads }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+        run: python3 .github/scripts/stage-release-payloads.py "$RUNNER_TEMP/release-payloads"
+      - &recheck_release_tag
+        name: Recheck approved tag after environment approval
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_TAG: ${{ needs.preflight.outputs.release_tag }}
+          SOURCE_SHA: ${{ needs.preflight.outputs.source_sha }}
+        run: |
+          number='(0|[1-9][0-9]*)'
+          [[ "$APPROVED_TAG" =~ ^v${number}\.${number}\.${number}(-rc\.${number})?$ ]]
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          observed=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$APPROVED_TAG" --jq .sha)
+          [[ "$observed" == "$SOURCE_SHA" ]] || { echo 'Approved release tag no longer points to the prepared commit' >&2; exit 1; }
+      - name: Upload checked wheels to PyPI
+        shell: bash
+        env:
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          cd "$RUNNER_TEMP/release-payloads/release/dist/python"
+          missing=$(python3 "$GITHUB_WORKSPACE/.github/scripts/check-pypi-release.py" . "$APPROVED_VERSION")
+          if [[ -n "$missing" ]]; then
+            mapfile -t wheels <<< "$missing"
+            uv --no-config publish --trusted-publishing always \
+              --publish-url https://upload.pypi.org/legacy/ --check-url https://pypi.org/simple/ -- "${wheels[@]}"
+          fi
+          python3 "$GITHUB_WORKSPACE/.github/scripts/check-pypi-release.py" . "$APPROVED_VERSION" --require-complete
+  publish-tagged-rubygems:
+    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.publish_rubygems == 'true' }}
+    needs: preflight
+    environment:
+      name: rubygems
+      url: ${{ needs.preflight.outputs.review_url }}
+    concurrency:
+      group: rubygems-datamitsu-${{ needs.preflight.outputs.version }}
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          ruby-version: "3.3"
+      - name: Stage approved gem
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_PAYLOADS: ${{ needs.preflight.outputs.payloads }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+        run: python3 .github/scripts/stage-release-payloads.py "$RUNNER_TEMP/release-payloads"
+      - name: Reconcile the exact gem version
+        id: gem
+        shell: bash
+        env:
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+        run: &reconcile_tagged_gem |
+          gem_file="$RUNNER_TEMP/release-payloads/release/dist/ruby/datamitsu.gem"
+          version=${APPROVED_VERSION/-rc./.rc.}
+          ruby .github/scripts/check-release-gem.rb "$gem_file" "$APPROVED_VERSION"
+          digest=$(sha256sum "$gem_file" | cut -d' ' -f1)
+          response=$(mktemp)
+          trap 'rm -f "$response"' EXIT
+          for attempt in 1 2 3 4 5; do
+            status=$(curl -q -sS --max-time 30 --output "$response" --write-out '%{http_code}' \
+              "https://rubygems.org/api/v2/rubygems/datamitsu/versions/$version.json?platform=ruby")
+            if [[ "$status" != 404 || "${REQUIRE_PUBLISHED:-false}" != true || "$attempt" == 5 ]]; then
+              break
+            fi
+            sleep 3
+          done
+          case "$status" in
+            200)
+              jq -e --arg version "$version" --arg digest "$digest" '
+                .name == "datamitsu" and .version == $version and .platform == "ruby" and .sha == $digest and .yanked == false
+              ' "$response" > /dev/null || { echo 'Existing RubyGems version does not match the approved gem' >&2; exit 1; }
+              echo 'missing=false' >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              if [[ "${REQUIRE_PUBLISHED:-false}" == true ]]; then
+                echo 'RubyGems has not confirmed the uploaded gem' >&2
+                exit 1
+              fi
+              echo 'missing=true' >> "$GITHUB_OUTPUT"
+              ;;
+            *) echo "Unexpected RubyGems lookup status: $status" >&2; exit 1 ;;
+          esac
+      - *recheck_release_tag
+      - uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
+        if: steps.gem.outputs.missing == 'true'
+      - name: Upload only the missing gem
+        if: steps.gem.outputs.missing == 'true'
+        run: gem push --host https://rubygems.org "$RUNNER_TEMP/release-payloads/release/dist/ruby/datamitsu.gem"
+      - name: Verify the uploaded gem
+        if: steps.gem.outputs.missing == 'true'
+        shell: bash
+        env:
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+          REQUIRE_PUBLISHED: "true"
+        run: *reconcile_tagged_gem
+  publish-setup-action:
+    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    needs:
+      - preflight
+      - publish-github
+    environment: setup-action
+    concurrency:
+      group: datamitsu-setup-action
+      queue: max
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26.13.1"
+          package-manager-cache: false
+      - &stage_approved_distribution
+        name: Stage approved release artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_PAYLOADS: ${{ needs.preflight.outputs.payloads }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+        run: python3 .github/scripts/stage-release-payloads.py "$RUNNER_TEMP/release-payloads"
+      - *recheck_release_tag
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: datamitsu/setup-datamitsu
+          ref: main
+          path: setup-action-destination
+          token: ${{ secrets.SETUP_DATAMITSU_TOKEN }}
+      - name: Publish checked action files
+        env:
+          GH_TOKEN: ${{ secrets.SETUP_DATAMITSU_TOKEN }}
+          TARGET_DIR: ${{ github.workspace }}/setup-action-destination
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: APPROVED_DIST_DIR="$RUNNER_TEMP/release-payloads/release/dist/setup-action" node packaging/action/scripts/publish.ts
+  publish-editor-extension:
+    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    needs:
+      - preflight
+      - publish-github
+    environment: ${{ matrix.store == 'open-vsx' && 'open-vsx' || 'vscode-marketplace' }}
+    concurrency:
+      group: datamitsu-editor-${{ matrix.store }}
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        store:
+          - open-vsx
+          - marketplace
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - *stage_approved_distribution
+      - uses: ./.github/actions/setup-environment
+        with:
+          setup-go: "false"
+          install-dependencies: "false"
+          cache-datamitsu: "false"
+          cache-toolchains: "false"
+      - name: Install pinned publisher tools without lifecycle hooks
+        run: pnpm --filter './editors/vscode' install --frozen-lockfile --ignore-scripts
+      - *recheck_release_tag
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        if: matrix.store == 'marketplace'
+        with:
+          allow-no-subscriptions: true
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+      - name: Publish the exact checked VSIX
+        shell: bash
+        env:
+          STORE: ${{ matrix.store }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+          OVSX_PAT: ${{ matrix.store == 'open-vsx' && secrets.OVSX_PAT || '' }}
+        run: |
+          pnpm --filter './editors/vscode' exec python3 "$GITHUB_WORKSPACE/.github/scripts/publish-prepared-vsix.py" \
+            "$STORE" "$RUNNER_TEMP/release-payloads/vsix/datamitsu-$VERSION.vsix" "$VERSION"
+  publish-install-manifests:
+    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    needs:
+      - preflight
+      - publish-github
+    environment: ${{ matrix.target }}
+    concurrency:
+      group: datamitsu-install-manifests-${{ matrix.target }}
+      queue: max
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - homebrew
+          - scoop
+          - winget
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - *stage_approved_distribution
+      - *recheck_release_tag
+      - name: Publish manifest for checked GitHub Release assets
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+          APPROVED_SHA: ${{ needs.preflight.outputs.source_sha }}
+          GH_TOKEN: ${{ matrix.target == 'homebrew' && secrets.HOMEBREW_TAP_TOKEN || matrix.target == 'scoop' && secrets.SCOOP_TOKEN || matrix.target == 'winget' && secrets.WINGET_TOKEN || '' }}
+        run: |
+          [[ -n "$GH_TOKEN" ]]
+          python3 .github/scripts/publish-release-manifests.py "$TARGET" \
+            "$RUNNER_TEMP/release-payloads/release/dist" "$APPROVED_VERSION" "$APPROVED_SHA"
+  promote-stable:
+    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    needs:
+      - preflight
+      - publish-github
+      - finalize-github-assets
+      - verify-parser
+      - publish-images
+      - publisher-inputs
+      - publish-tagged-pypi
+      - publish-tagged-rubygems
+      - publish-setup-action
+      - publish-editor-extension
+      - publish-install-manifests
+    environment: release-publication
+    concurrency:
+      group: datamitsu-stable-alias-${{ matrix.channel }}
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        channel:
+          - github
+          - parser
+          - ghcr
+          - dockerhub
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - *stage_approved_distribution
+      - *recheck_release_tag
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: matrix.channel == 'github'
+        with:
+          artifact-ids: ${{ needs.finalize-github-assets.outputs.bundle_id || 'missing-artifact-id' }}
+          path: ${{ runner.temp }}/checksum-signature
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        if: matrix.channel == 'github'
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: matrix.channel == 'ghcr'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: matrix.channel == 'dockerhub'
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Promote already-published stable bytes
+        shell: bash
+        env:
+          CHANNEL: ${{ matrix.channel }}
+          APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
+          VERSION: ${{ needs.preflight.outputs.release_tag }}
+          PREPARATION_SHA: ${{ needs.preflight.outputs.source_sha }}
+          PREPARATION_RUN_ID: ${{ needs.preflight.outputs.preparation_run }}
+          PREPARATION_ATTEMPT: ${{ needs.preflight.outputs.preparation_attempt }}
+          INDEX_ID: ${{ needs.preflight.outputs.index_id }}
+          INDEX_DIGEST: ${{ needs.preflight.outputs.index_digest }}
+          SIGNER_SHA: ${{ needs.finalize-github-assets.outputs.signer_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |-
+          dist="$RUNNER_TEMP/release-payloads/release/dist"
+          case "$CHANNEL" in
+            github)
+              bundle="$RUNNER_TEMP/checksum-signature/checksums.txt.sigstore.json"
+              bash .github/scripts/recover-checksum-signature.sh verify "$dist/checksums.txt" "$bundle" "$INDEX_ID" "$INDEX_DIGEST" "$SIGNER_SHA"
+              cp "$bundle" "$dist/checksums.txt.sigstore.json"
+              python3 .github/scripts/publish-prerelease.py --promote-latest "$dist" "$APPROVED_VERSION" "$VERSION" "$PREPARATION_SHA"
+              ;;
+            parser)
+              (cd "${dist%/dist}" && IS_STABLE=true node "$GITHUB_WORKSPACE/.github/scripts/push-parsers-oci.mjs" promote-stable)
+              ;;
+            ghcr|dockerhub)
+              python3 .github/scripts/publish-prepared-images.py "$dist" "$VERSION" --registry "$CHANNEL" --promote
+              ;;
+            *) exit 1 ;;
+          esac

@@ -202,8 +202,7 @@ const parsers = {
 ```
 
 The `ref`, the `digest` and the matching `sha256`-prefixed hash all come from
-`parsers-oci.json`, which the release workflow writes after the registry push
-(the manifest digest does not exist before then) and ships inside
+`parsers-oci.json`, which preparation computes locally and embeds in
 `@datamitsu/datamitsu`, so a wrapper reads the pin out of `node_modules`
 instead of querying a registry.
 
@@ -283,54 +282,120 @@ git rebase --reset-author-date --exec 'git commit --amend --no-edit --reset-auth
 
 ## Releases
 
-Releases are automated via GitHub Actions ([release.yml](.github/workflows/release.yml)).
+The [Release workflow](.github/workflows/release.yml) prepares checked artifacts.
+Choose `verify` (the default) to build from any selected branch without signing
+or publishing. Choose `prerelease` to prepare unstable artifacts for deliberate
+publication. A protected `vX.Y.Z` or `vX.Y.Z-rc.N` tag starts a tagged release.
+The workflow must exist on the default branch before GitHub allows dispatch.
 
-### Stable release
+[Release Preflight](.github/workflows/release-preflight.yml) starts automatically
+after a successful tagged preparation. It runs from the protected default
+branch, finds the original index, and checks that its producing build job
+succeeded. It validates the index archive and every referenced payload and
+records the producer SHA and publisher workflow SHA separately. A moved tag,
+ambiguous index, expired artifact, or digest mismatch blocks publication.
+Publisher jobs consume the prepared bytes without rebuilding them or running
+product-source scripts.
 
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
+For unstable publication or a recovery dispatch, use **Release Preflight** on
+the default branch. Copy the preparation run ID, producing attempt, index ID,
+and index archive SHA-256 from the original preparation summary. Repeat the
+original optional GitHub destination choice for unstable. Enter `release_tag`
+for a tagged recovery. If completing all stable destinations on recovery, also
+select `publish_pypi` and `publish_rubygems`. Do not choose newer artifact IDs
+or create a second tag to recover a partial release.
 
-Publishes: GitHub Release, npm, Docker (GHCR + Docker Hub), Homebrew cask, and
-the WASM parser module as an OCI artifact at
-`ghcr.io/datamitsu/datamitsu-parsers` (tagged with the version, plus `latest`).
+### Activation
 
-### Release candidate
+Both `RELEASE_BUILD_ATTESTATION_ENABLED` and `RELEASE_PUBLICATION_ENABLED` are
+off unless explicitly set to `true`. Test `Release` in `verify` mode before
+enabling either switch. Verify does not exercise registry writes, Sigstore,
+environment approvals, or trusted-publishing bindings.
 
-```bash
-git tag v1.0.0-rc.1
-git push origin v1.0.0-rc.1
-```
+Protect the default branch and the release tags. Restrict and require approval
+in `release-build-attestation` for protected release tags, and in the environments
+below for the protected default branch. Restrict writes to the
+`release-finalization/**` refs to the release automation and prevent changes or
+deletion after creation. Retire any old writers for the same channels before
+cutover. Do not activate until the repository and registry owners have confirmed
+the protections and bindings.
 
-Same as stable, but Homebrew cask update is skipped (prerelease detected
-automatically) and the parser artifact is tagged with the rc version only —
-never `latest`.
+| Environment                   | Required registry configuration                                                                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `release-publication`         | `NPM_TOKEN`, `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, and public GHCR repositories with package access for the publisher                 |
+| `pypi`, `rubygems`            | Trusted publisher for `datamitsu/datamitsu`, workflow `release-preflight.yml`, and the matching environment; no API token fallback       |
+| `setup-action`                | `SETUP_DATAMITSU_TOKEN` for `datamitsu/setup-datamitsu`                                                                                  |
+| `open-vsx`                    | Existing publisher namespace and `OVSX_PAT`                                                                                              |
+| `vscode-marketplace`          | Azure federated identity scoped to this environment, `AZURE_CLIENT_ID` and `AZURE_TENANT_ID`, and permission for the extension publisher |
+| `homebrew`, `scoop`, `winget` | `HOMEBREW_TAP_TOKEN`, `SCOOP_TOKEN`, and `WINGET_TOKEN`, respectively; WinGet also needs permission to open an upstream pull request     |
 
-### Unstable release
+Before promoting npm aliases, record any prior channel values in
+`NPM_UNSTABLE_CUTOVER_BASELINE`, `NPM_NEXT_CUTOVER_BASELINE`, or
+`NPM_LATEST_CUTOVER_BASELINE` as applicable. A baseline is a JSON object with
+one entry per package, using `null` for an absent tag. Tagged uploads use
+verified provenance from the protected producer job: each of the nine bundles
+binds the exact tarball, source SHA, tag, and preparation index. Each bundle
+records its own signing attempt, which can be newer than the attempt that
+produced the index. The publisher uses `--provenance-file` instead of generating
+provenance on its own branch. It uploads immutable versions before moving
+channel tags.
 
-Actions > Release > Run workflow > release_type: `unstable`. No tag triggers one:
-`on.push.tags` matches `v1.2.3` and `v1.2.3-rc.N` only, so exercising an
-unreleased core downstream always starts with a human dispatch, followed by a
-wrapper dependency bump and a wrapper PR.
+### Recovery
 
-Publishes: npm (`unstable` tag), Docker (GHCR only), and the WASM parser module
-as an OCI artifact at `ghcr.io/datamitsu/datamitsu-parsers-unstable`, tagged
-`unstable-<date>-<sha>`. No Homebrew.
+Recover a partial publication with the original preparation index and original
+signed evidence. A matching coordinate is not proof of matching content.
+Publishers reconcile remote contents first and stop on different bytes or
+when the destination cannot confirm equality. Successful writes to earlier
+destinations are not rolled back.
 
-The GitHub prerelease stays opt-in: tick `create_github_prerelease` on the same
-form (off by default) to also attach the archives, `checksums.txt` with its
-cosign bundle, the `.wasm` module and `parsers-oci.json`. Because the module
-reaches the registry on every unstable run, the prerelease is a convenience for
-humans rather than the only way to get at an unreleased parser.
+- If an npm attestation job fails before reserving its signing claim, rerun
+  only the failed jobs. The successful build and the other bundles are reused.
+  Preflight accepts one verified bundle per package for that index, even when
+  they come from different attempts of the same run. It rejects duplicate
+  bundles rather than picking the newest one. A claim with no corresponding
+  bundle requires reconciliation; do not remove the claim or rerun the build.
+- `reuse_parser_finalization` verifies the existing parser signature and the
+  signed record for the original index. `image_signer_sha` does the same for
+  Debian and Alpine images in each registry, without uploading missing images.
+- `signature_recovery` restores both checksum bundles without any new signing.
+  It pins the original artifact ZIP and the checksum bundle. The second
+  signature binds that bundle to the exact preparation index.
+- `checksum_checkpoint` restores the first verified signature and its index
+  record after interruption. It requires the original finalizer revision and
+  a successful new reservation for **only** the index signature. If that step
+  was already reserved or its state cannot be determined, stop and reconcile
+  with Sigstore; never remove a claim to retry.
+- For a manually approved first finalization, select the corresponding
+  `first_*_finalization` inputs. A claim is not proof that an external write
+  completed. A missing checkpoint, unconfirmed signature, or ambiguous
+  response requires reconciliation, not re-signing.
 
 ### Distribution channels
 
-| Channel              | Stable              | RC                  | Unstable                     |
-| -------------------- | ------------------- | ------------------- | ---------------------------- |
-| GitHub Release       | yes                 | yes (prerelease)    | opt-in                       |
-| npm                  | `latest` / `rc`     | `rc`                | `unstable`                   |
-| Docker Hub           | yes                 | yes                 | no                           |
-| GHCR                 | yes                 | yes                 | yes                          |
-| Parser module (GHCR) | `datamitsu-parsers` | `datamitsu-parsers` | `datamitsu-parsers-unstable` |
-| Homebrew             | yes                 | no                  | no                           |
+The binary matrix is Linux, macOS, Windows, and FreeBSD on amd64 and arm64.
+FreeBSD is included in npm and RubyGems, but not PyPI. Tagged GitHub releases
+also include the native Linux packages, SBOMs, parser Wasm, and checked VSIX.
+APK filenames keep the release version; native metadata uses `X.Y.Z_rcN`
+and `0.0.0_preRUN_preATTEMPT`. PyPI wheels target macOS 13 or later. Manual
+preparation builds diagnostic wheels and gems, but does not publish them.
+
+| Channel                                              | Stable                                           | RC                          | Unstable                          |
+| ---------------------------------------------------- | ------------------------------------------------ | --------------------------- | --------------------------------- |
+| GitHub Release                                       | Version and Latest promotion                     | Versioned prerelease        | Opt-in prerelease                 |
+| npm                                                  | `latest`                                         | `next`                      | `unstable`                        |
+| Docker Hub and GHCR                                  | Debian and Alpine on amd64/arm64; stable aliases | Versioned Debian and Alpine | GHCR only; versioned              |
+| Parser OCI                                           | Version and `latest`                             | Version only                | Unstable repository, version only |
+| PyPI and RubyGems                                    | Versioned                                        | Native RC version           | No                                |
+| Setup action, editor stores, Homebrew, Scoop, WinGet | Yes                                              | No                          | No                                |
+
+The editor stores receive only the stable VSIX. An RC GitHub release carries
+its own VSIX, but that file embeds the same base extension version as stable.
+Publishing it to a store would occupy the stable coordinate. The cleanup
+workflow only previews old unstable releases; downstream pins may still use
+their assets.
+
+Use `pnpm test:release` and the `.github/scripts/test-*.py` entry points for
+offline routing and publisher checks. Verify that protected tagged preflight
+rejects replaced archives, RC cannot advance stable aliases, and a partial
+publish can recover with the original index but rejects another one. Test
+registry acceptance separately; a successful Verify is not publication proof.

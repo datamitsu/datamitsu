@@ -1,35 +1,45 @@
+# cspell:ignore argjson fsys nocompression pkgver rwxr strenv tvzf
 jobs:
   build:
     if: |
       always() &&
       !cancelled() &&
+      needs.determine-release-type.outputs.verify != 'true' &&
       (needs.validate-stable.result == 'success' || needs.generate-unstable-version.result == 'success')
-    name: Build Release
+    name: Prepare release artifacts
     needs:
       - determine-release-type
       - validate-stable
       - generate-unstable-version
+    outputs:
+      parser_preparation_attempt: ${{ steps.prepare-parser.outputs.attempt }}
+      artifact_id: ${{ steps.upload-release.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload-release.outputs.artifact-digest }}
+      vsix_id: ${{ steps.upload-vsix.outputs.artifact-id }}
+      vsix_digest: ${{ steps.upload-vsix.outputs.artifact-digest }}
+      index_id: ${{ steps.upload-index.outputs.artifact-id }}
+      index_archive_digest: ${{ steps.upload-index.outputs.artifact-digest }}
+      npm_provenance_input: ${{ steps.upload-npm-provenance-input.outputs.artifact-id }}
     permissions:
-      actions: read
-      attestations: write
-      contents: write
-      id-token: write
+      contents: read
     runs-on: ubuntu-latest
-    steps:
+    steps: &release_build_steps
       # 1. Checkout + Setup
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup-environment
+        with:
+          cache-datamitsu: "false"
+          cache-toolchains: "false"
       - name: Check Go modules are tidy
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum
       - name: Install syft
         uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-      - name: Install cosign
-        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       # 2a. Build WASM parser modules — MUST precede goreleaser so the .wasm
       #     SHA-256 lands in checksums.txt (and is thus covered by the cosign
       #     signature). rustup is preinstalled on ubuntu-latest; the release it
@@ -38,16 +48,6 @@ jobs:
       - name: Install the Rust toolchain parsers/rust-toolchain.toml pins
         run: rustup toolchain install
         working-directory: parsers
-      - name: Cache cargo registry + wasm target
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          key: wasm-parsers-${{ runner.os }}-${{ hashFiles('parsers/Cargo.lock') }}
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            parsers/target
-          restore-keys: |
-            wasm-parsers-${{ runner.os }}-
       # DATAMITSU_PARSERS_VERSION is baked into the module's `describe` output
       # (like a Go ldflags -X), read at compile time by option_env! in
       # parsers/src/capabilities.rs. The module — not the config — is the source
@@ -59,6 +59,32 @@ jobs:
           cargo build --release --target wasm32-unknown-unknown
           echo "wasm size: $(wc -c < target/wasm32-unknown-unknown/release/datamitsu_parsers.wasm) bytes"
         working-directory: parsers
+      - name: Prepare native APK version override
+        id: release-config
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.validate-stable.outputs.version }}
+          UNSTABLE_VERSION: ${{ needs.generate-unstable-version.outputs.version }}
+        run: |
+          config="$RUNNER_TEMP/goreleaser-release.yml"
+          number='(0|[1-9][0-9]*)'
+          APK_PRERELEASE=
+          if [[ "$RELEASE_TAG" =~ ^v${number}\.${number}\.${number}$ ]]; then
+            cp .goreleaser.yml "$config"
+          else
+            if [[ "$RELEASE_TAG" =~ -rc\.(${number})$ ]]; then
+              APK_PRERELEASE="rc${BASH_REMATCH[1]}"
+            elif [[ -z "$RELEASE_TAG" && "$UNSTABLE_VERSION" =~ ^0\.0\.0-unstable\.([1-9][0-9]*)\.([1-9][0-9]*)$ ]]; then
+              APK_PRERELEASE="pre${BASH_REMATCH[1]}_pre${BASH_REMATCH[2]}"
+            else
+              echo 'Invalid source version for APK packaging' >&2
+              exit 1
+            fi
+            export APK_PRERELEASE
+            yq '(.nfpms[] | select(.id == "datamitsu") | .overrides.apk.prerelease) = strenv(APK_PRERELEASE)' .goreleaser.yml > "$config"
+          fi
+          printf 'path=%s\n' "$config" >> "$GITHUB_OUTPUT"
+          printf 'apk_prerelease=%s\n' "$APK_PRERELEASE" >> "$GITHUB_OUTPUT"
       # 2. Build Binaries (GoReleaser)
       - env:
           # Canonical base image ref baked into the binary for `devtools dockerfile`.
@@ -67,15 +93,12 @@ jobs:
           # GoReleaser falls back to {{ .Version }}.
           DATAMITSU_IMAGE_REPO: ${{ needs.determine-release-type.outputs.is_unstable == 'true' && 'datamitsu/datamitsu-unstable' || 'datamitsu/datamitsu' }}
           DATAMITSU_IMAGE_TAG: ${{ needs.determine-release-type.outputs.is_unstable == 'true' && needs.generate-unstable-version.outputs.tag_name || '' }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           GORELEASER_CURRENT_TAG: ${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          SCOOP_TOKEN: ${{ secrets.SCOOP_TOKEN }}
-          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
         name: Build binaries with GoReleaser
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
-          args: release ${{ needs.determine-release-type.outputs.is_unstable == 'true' && '--snapshot' || '' }} --clean
+          args: release ${{ needs.determine-release-type.outputs.is_unstable == 'true' && '--snapshot' || '' }} --skip=sign,publish --clean --config "${{ steps.release-config.outputs.path }}"
           distribution: goreleaser
           version: "v2.20.0"
       # 2b. Fail the build if the WASM parser module is not in checksums.txt
@@ -91,30 +114,167 @@ jobs:
       #     signed entry.
       - name: Stage the WASM parser module into dist/
         run: .github/scripts/stage-wasm-artifact.sh
-      # 3. Attest build artifacts
-      - if: ${{ !env.ACT }}
-        name: Attest build artifacts
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        with:
-          subject-checksums: ./dist/checksums.txt
-      # 3a. The .vsix is built INSIDE GoReleaser (vsix `signs` entry in
-      #     .goreleaser.yml) so it ships within GoReleaser's atomic
-      #     draft->publish flow — the release is complete before the
-      #     homebrew/scoop/winget manifests are pushed. Re-publish it here as a
-      #     small artifact so the store publish jobs don't need the full
-      #     release-artifacts for one file. Missing files are fine for unstable
-      #     (--snapshot) runs.
-      - if: ${{ !env.ACT }}
-        name: Upload .vsix artifact
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          if-no-files-found: warn
-          name: vsix
-          path: dist/*.vsix
-          retention-days: 1
-      # 4. Normalize binaries
       - name: Normalize binaries
         run: .github/scripts/normalize-binaries.sh "${{ needs.determine-release-type.outputs.is_unstable }}"
+      - name: Check archive and native package inventory
+        shell: bash
+        env:
+          APK_PRERELEASE: ${{ steps.release-config.outputs.apk_prerelease }}
+        run: |
+          version=$(jq -er '.version | strings | select(length > 0)' dist/metadata.json)
+          apk_expected=${version%%-*}
+          if [[ -n "$APK_PRERELEASE" ]]; then apk_expected+="_$APK_PRERELEASE"; fi
+          alpine=$(awk '$1 == "FROM" && $2 ~ /^alpine:.*@sha256:/ { print $2 }' docker/Dockerfile.alpine)
+          [[ "$alpine" =~ ^alpine:[a-zA-Z0-9._-]+@sha256:[0-9a-f]{64}$ ]]
+          apk_versions=()
+          (cd dist && sha256sum --check --strict --ignore-missing checksums.txt)
+          check_asset() {
+            local name=${1#dist/} entry
+            test -s "$1"
+            entry=$(awk -v name="$name" '$2 == name { print; found++ } END { if (found != 1) exit 1 }' dist/checksums.txt) || {
+              printf 'Expected exactly one checksum for %s\n' "$name" >&2
+              return 1
+            }
+            (cd dist && printf '%s\n' "$entry" | sha256sum --check --strict)
+          }
+          for arch in amd64 arm64; do
+            for platform in linux darwin freebsd; do
+              archive="dist/datamitsu_${version}_${platform}_${arch}.tar.gz"
+              check_asset "$archive"
+              entry=$(tar -tvzf "$archive" datamitsu)
+              [[ "$entry" == '-rwxr-xr-x '* && "$entry" != *$'\n'* ]] || {
+                printf 'Expected one datamitsu executable with mode 0755 in %s\n' "$archive" >&2
+                exit 1
+              }
+              tar -xOzf "$archive" datamitsu | cmp - "dist/binaries/datamitsu-${platform}_${arch}"
+            done
+            archive="dist/datamitsu_${version}_windows_${arch}.zip"
+            check_asset "$archive"
+            unzip -tq "$archive"
+            [[ $(unzip -Z1 "$archive" | grep -xc 'datamitsu.exe') == 1 ]]
+            unzip -p "$archive" datamitsu.exe | cmp - "dist/binaries/datamitsu-windows_${arch}.exe"
+            for format in deb rpm apk; do
+              check_asset "dist/datamitsu_${version}_linux_${arch}.${format}"
+            done
+            member=usr/local/bin/datamitsu
+            deb="dist/datamitsu_${version}_linux_${arch}.deb"
+            apk="dist/datamitsu_${version}_linux_${arch}.apk"
+            rpm="dist/datamitsu_${version}_linux_${arch}.rpm"
+            deb_entry=$(dpkg-deb --fsys-tarfile "$deb" | tar -tvf - "./$member")
+            apk_entry=$(tar --ignore-zeros -tvzf "$apk" "$member")
+            pkgver=$(tar --ignore-zeros -xOzf "$apk" .PKGINFO | awk -F ' = ' '$1 == "pkgver" { print $2 }')
+            revision='(-r[0-9]+)?'
+            [[ "$pkgver" =~ ^"$apk_expected"${revision}$ ]] || {
+              printf 'Unexpected APK version in %s: %s (expected %s)\n' "$apk" "$pkgver" "$apk_expected" >&2
+              exit 1
+            }
+            apk_versions+=("$pkgver")
+            rpm_entry=$(rpm2archive --nocompression "$rpm" | tar -tvf - "./$member")
+            for entry in "$deb_entry" "$apk_entry" "$rpm_entry"; do
+              [[ "$entry" == '-rwxr-xr-x '* && "$entry" != *$'\n'* ]] || {
+                printf 'Expected one executable with mode 0755 for Linux %s\n' "$arch" >&2
+                exit 1
+              }
+            done
+            dpkg-deb --fsys-tarfile "$deb" | tar -xOf - "./$member" | cmp - "dist/binaries/datamitsu-linux_${arch}"
+            tar --ignore-zeros -xOzf "$apk" "$member" | cmp - "dist/binaries/datamitsu-linux_${arch}"
+            rpm2archive --nocompression "$rpm" | tar -xOf - "./$member" | cmp - "dist/binaries/datamitsu-linux_${arch}"
+          done
+          docker run --rm --network=none --entrypoint apk "$alpine" version --check -- "${apk_versions[@]}"
+      - name: Build unsigned VS Code extension
+        env:
+          RELEASE_TAG: ${{ needs.determine-release-type.outputs.is_unstable == 'true' && needs.generate-unstable-version.outputs.tag_name || needs.validate-stable.outputs.version }}
+        run: |
+          version=$(jq -er '.version | strings | select(length > 0)' dist/metadata.json)
+          output="dist/datamitsu-$version.vsix"
+          bash .github/scripts/build-vsix.sh dist/checksums.txt "$output" "$version"
+          test -s "$output"
+          unzip -tq "$output"
+      - if: needs.determine-release-type.outputs.is_stable == 'true' && !contains(needs.validate-stable.outputs.version, '-rc.')
+        name: Prepare setup action distribution files
+        env:
+          VERSION_TAG: ${{ needs.validate-stable.outputs.version }}
+        run: |
+          export VERSION="${VERSION_TAG#v}"
+          pnpm --filter @datamitsu/setup-action codegen
+          pnpm --filter @datamitsu/setup-action build
+          node packaging/action/scripts/prepare.ts dist/setup-action "$VERSION"
+          (cd dist/setup-action && sha256sum -- action.yml dist/index.mjs README.md > SHA256SUMS)
+      - if: ${{ !env.ACT }}
+        name: Upload .vsix artifact
+        id: upload-vsix
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          if-no-files-found: error
+          name: vsix-attempt-${{ github.run_attempt }}
+          path: dist/*.vsix
+          retention-days: 30
+      - name: Install uv for wheel preparation
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - name: Set up Ruby for gem preparation
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          ruby-version: "3.3"
+      - name: Prepare Python wheels and Ruby gem
+        shell: bash
+        env:
+          VERSION_TAG: ${{ needs.validate-stable.outputs.version }}
+          UNSTABLE_VERSION: ${{ needs.generate-unstable-version.outputs.version }}
+        run: |
+          python_version=${VERSION_TAG#v}
+          ruby_version=$python_version
+          if [[ -z "$VERSION_TAG" ]]; then
+            if ! [[ "$UNSTABLE_VERSION" =~ ^0\.0\.0-unstable\.([1-9][0-9]*)\.([1-9][0-9]*)$ ]]; then
+              echo 'Invalid diagnostic package version' >&2
+              exit 1
+            fi
+            python_version="0.0.0.dev${BASH_REMATCH[1]}+${BASH_REMATCH[2]}"
+            ruby_version=$UNSTABLE_VERSION
+          fi
+          constraints="$RUNNER_TEMP/python-build-constraints.txt"
+          (cd packaging/python && uv export --locked --only-dev --no-emit-project --format requirements-txt --output-file "$constraints")
+          VERSION="$python_version" node packaging/pack.ts prepare-python
+          UV_BUILD_CONSTRAINT="$constraints" UV_REQUIRE_HASHES=true VERSION="$python_version" node packaging/pack.ts build-python
+          VERSION="$ruby_version" node packaging/pack.ts prepare-ruby
+          mkdir -p dist/python dist/ruby
+          cp packaging/python/dist/*.whl dist/python/
+          wheel_version=$python_version
+          if [[ "$python_version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-rc\.([0-9]+)$ ]]; then
+            wheel_version="${BASH_REMATCH[1]}rc${BASH_REMATCH[2]}"
+          fi
+          for target in manylinux2014_{x86_64,aarch64} macosx_13_0_{x86_64,arm64} win_{amd64,arm64}; do
+            wheels=("dist/python/datamitsu-${wheel_version}-py3-none-$target.whl")
+            if [[ ${#wheels[@]} != 1 || ! -s "${wheels[0]}" ]]; then
+              echo "Expected one wheel for $target" >&2
+              exit 1
+            fi
+            unzip -tq "${wheels[0]}"
+            metadata=$(unzip -p "${wheels[0]}" "datamitsu-${wheel_version}.dist-info/METADATA")
+            if [[ $(printf '%s\n' "$metadata" | grep '^Version: ') != "Version: $wheel_version" ]]; then
+              printf 'Incorrect wheel metadata version in %s\n' "${wheels[0]}" >&2
+              exit 1
+            fi
+            extension=
+            case "$target" in
+              manylinux*) platform=linux ;;
+              macosx*) platform=darwin ;;
+              win_*) platform=windows; extension=.exe ;;
+            esac
+            case "$target" in
+              *_x86_64|*_amd64) goarch=amd64; python_arch=x86_64 ;;
+              *_aarch64|*_arm64) goarch=arm64; python_arch=arm64 ;;
+            esac
+            member="datamitsu/bin/datamitsu-${platform}-${python_arch}/datamitsu$extension"
+            [[ $(unzip -Z1 "${wheels[0]}" | grep -Fxc "$member") == 1 ]]
+            unzip -p "${wheels[0]}" "$member" | cmp - "dist/binaries/datamitsu-${platform}_${goarch}$extension"
+          done
+          wheels=(dist/python/*.whl)
+          [[ ${#wheels[@]} == 6 ]] || { echo 'Unexpected wheel inventory' >&2; exit 1; }
+          (cd packaging/ruby && gem build datamitsu.gemspec --output ../../dist/ruby/datamitsu.gem)
+          (cd dist/python && sha256sum -- *.whl > SHA256SUMS)
+          (cd dist/ruby && sha256sum -- datamitsu.gem > SHA256SUMS)
       # 5. Build Programmable API
       - name: Build programmable API
         run: |
@@ -131,6 +291,94 @@ jobs:
           VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
           export VERSION="${VERSION_WITH_V#v}"
           pnpm pack:prepare
+      - name: Prepare OCI manifest and launcher pin offline
+        id: prepare-parser
+        env:
+          IS_STABLE: ${{ needs.determine-release-type.outputs.is_stable }}
+          PARSER_VERSION: ${{ needs.generate-unstable-version.outputs.version }}
+          PREPARATION_ATTEMPT: ${{ needs.validate-stable.outputs.attempt || needs.generate-unstable-version.outputs.attempt }}
+          UNSTABLE_TAG: ${{ needs.generate-unstable-version.outputs.tag_name }}
+          VERSION: ${{ needs.validate-stable.outputs.version }}
+        run: |
+          [[ "$PREPARATION_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          node .github/scripts/push-parsers-oci.mjs prepare
+          cp dist/parsers-oci.json packaging/npm/datamitsu/parsers-oci.json
+          echo "attempt=$PREPARATION_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Pack and smoke-test npm release archives
+        shell: bash
+        run: |
+          out="$PWD/dist/npm"
+          mkdir "$out"
+          for package in packaging/npm/datamitsu-{darwin,freebsd,linux,win32}-{arm64,x64} packaging/npm/datamitsu; do
+            destination="$out/${package##*/}"
+            mkdir "$destination"
+            (cd "$package" && pnpm pack --pack-destination "$destination")
+            archives=("$destination"/*.tgz)
+            [[ ${#archives[@]} == 1 && -f "${archives[0]}" ]]
+            mv "${archives[0]}" "$destination.tgz"
+            rmdir "$destination"
+            tar -tzf "$destination.tgz" > /dev/null
+          done
+          tar -xOzf "$out/datamitsu.tgz" package/parsers-oci.json | cmp - dist/parsers-oci.json
+          platform=$(node -p 'process.platform + "-" + process.arch')
+          smoke=$(mktemp -d)
+          trap 'rm -rf "$smoke"' EXIT
+          expected=$(jq -er '.version' dist/metadata.json)
+          dependencies=$(jq -n --arg version "$expected" '$ARGS.positional | map({key: ("@datamitsu/datamitsu-" + .), value: $version}) | from_entries' --args darwin-{arm64,x64} freebsd-{arm64,x64} linux-{arm64,x64} win32-{arm64,x64})
+          tar -xOzf "$out/datamitsu.tgz" package/package.json | jq -e --arg version "$expected" --argjson dependencies "$dependencies" '
+            .name == "@datamitsu/datamitsu" and .version == $version and .optionalDependencies == $dependencies
+            and .bin.datamitsu == "bin/index.js" and .bin.dm == "bin/index.js"
+            and (.dependencies.tinyexec | type == "string" and length > 0)
+          '
+          for archive in "$out"/datamitsu-*.tgz; do
+            name=${archive##*/}
+            target=${name#datamitsu-}
+            target=${target%.tgz}
+            os=${target%-*}
+            cpu=${target##*-}
+            tar -xOzf "$archive" package/package.json | jq -e --arg name "@datamitsu/${name%.tgz}" --arg version "$expected" --arg os "$os" --arg cpu "$cpu" '
+              .name == $name and .version == $version and .os == [$os] and .cpu == [$cpu]
+            '
+            goos=$os
+            goarch=$cpu
+            extension=
+            if [[ "$os" == win32 ]]; then goos=windows; extension=.exe; fi
+            if [[ "$cpu" == x64 ]]; then goarch=amd64; fi
+            tar -xOzf "$archive" "package/datamitsu$extension" | cmp - "dist/binaries/datamitsu-${goos}_${goarch}$extension"
+            if [[ -z "$extension" ]]; then
+              entry=$(tar -tvzf "$archive" package/datamitsu)
+              if [[ "$entry" != '-rwxr-xr-x '* || "$entry" == *$'\n'* ]]; then
+                printf 'Expected one datamitsu executable with mode 0755 in %s\n' "$archive" >&2
+                exit 1
+              fi
+            fi
+          done
+          tinyexec="$PWD/programmable-api/js/node_modules/tinyexec"
+          (cd "$tinyexec" && pnpm pack --ignore-scripts --pack-destination "$smoke")
+          printf '{"private":true}\n' > "$smoke/package.json"
+          (cd "$smoke" && npm install --offline --ignore-scripts --omit=optional --no-audit --no-fund \
+            ./tinyexec-*.tgz "$out/datamitsu-$platform.tgz" "$out/datamitsu.tgz")
+          (cd "$smoke" && node --input-type=module -e '
+            import { version } from "@datamitsu/datamitsu";
+            const result = await version();
+            if (result.success !== true || result.version !== process.argv[1]) {
+              throw new Error(`Installed JS API returned ${JSON.stringify(result)}`);
+            }' "$expected")
+          actual=$("$smoke/node_modules/.bin/datamitsu" version)
+          if [[ "$actual" != "datamitsu version $expected" ]]; then
+            printf 'Expected datamitsu version %s, got %s\n' "$expected" "$actual" >&2
+            exit 1
+          fi
+          (cd "$out" && sha256sum -- *.tgz > SHA256SUMS)
+      - name: Preserve exact npm provenance subjects
+        if: ${{ !env.ACT && github.event_name == 'push' && needs.determine-release-type.outputs.is_stable == 'true' && vars.RELEASE_BUILD_ATTESTATION_ENABLED == 'true' }}
+        id: upload-npm-provenance-input
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-provenance-input-${{ github.run_attempt }}
+          path: dist/npm/*.tgz
+          if-no-files-found: error
+          retention-days: 30
       # 7. Prepare Docker Binaries
       - name: Prepare Docker binaries
         run: |
@@ -146,9 +394,12 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
+          cache-image: false
           platforms: linux/amd64,linux/arm64
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cache-binary: false
       - id: version
         name: Normalize version (remove v prefix for labels)
         run: |
@@ -184,88 +435,229 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           cache-from: type=gha
-          cache-to: type=gha,mode=max
           context: .
           file: ./docker/Dockerfile
           labels: ${{ steps.meta-debian.outputs.labels }}
           load: false
+          outputs: type=oci,dest=dist/datamitsu-debian.oci.tar
           platforms: linux/amd64,linux/arm64
           push: false
       - name: Test Docker build (Alpine)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           cache-from: type=gha
-          cache-to: type=gha,mode=max
           context: .
           file: ./docker/Dockerfile.alpine
           labels: ${{ steps.meta-alpine.outputs.labels }}
           load: false
+          outputs: type=oci,dest=dist/datamitsu-alpine.oci.tar
           platforms: linux/amd64,linux/arm64
           push: false
+      - name: Report preparation limits
+        run: echo 'Preparation does not sign, attest, or publish. Publication is disabled pending trusted publisher integration.' >> "$GITHUB_STEP_SUMMARY"
       # 9. Upload Artifact (everything needed for publish jobs)
       - if: ${{ !env.ACT }}
         name: Upload build artifacts
+        id: upload-release
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: release-artifacts
+          name: release-artifacts-attempt-${{ github.run_attempt }}
           path: |
             dist/
             packaging/npm/
-          retention-days: 1
+          retention-days: 30
+      - if: ${{ !env.ACT }}
+        name: Record preparation artifact identities
+        env:
+          RELEASE_ID: ${{ steps.upload-release.outputs.artifact-id }}
+          RELEASE_DIGEST: ${{ steps.upload-release.outputs.artifact-digest }}
+          VSIX_ID: ${{ steps.upload-vsix.outputs.artifact-id }}
+          VSIX_DIGEST: ${{ steps.upload-vsix.outputs.artifact-digest }}
+          PREPARATION_ATTEMPT: ${{ steps.prepare-parser.outputs.attempt }}
+          PREPARATION_MODE: ${{ needs.determine-release-type.outputs.verify == 'true' && 'verify' || needs.determine-release-type.outputs.is_stable == 'true' && 'tag' || 'prerelease' }}
+          RELEASE_TAG: ${{ needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.tag_name }}
+          GITHUB_RELEASE: ${{ needs.determine-release-type.outputs.is_stable == 'true' || (needs.determine-release-type.outputs.verify != 'true' && needs.determine-release-type.outputs.want_prerelease == 'true') }}
+        run: |
+          for id in "$RELEASE_ID" "$VSIX_ID" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$PREPARATION_ATTEMPT"; do
+            [[ "$id" =~ ^[1-9][0-9]*$ ]] || { echo 'Missing or invalid preparation identity' >&2; exit 1; }
+          done
+          for digest in "$RELEASE_DIGEST" "$VSIX_DIGEST"; do
+            [[ "$digest" =~ ^(sha256:)?[0-9a-f]{64}$ ]] || { echo 'Missing or invalid artifact digest' >&2; exit 1; }
+          done
+          jq -n --arg sha "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" \
+            --arg attempt "$PREPARATION_ATTEMPT" --arg producer "$GITHUB_RUN_ATTEMPT" \
+            --arg mode "$PREPARATION_MODE" \
+            --arg tag "$RELEASE_TAG" --argjson githubRelease "$GITHUB_RELEASE" \
+            --arg version "$(jq -er '.version' dist/metadata.json)" \
+            --arg release "$RELEASE_ID" --arg releaseDigest "sha256:${RELEASE_DIGEST#sha256:}" \
+            --arg vsix "$VSIX_ID" --arg vsixDigest "sha256:${VSIX_DIGEST#sha256:}" \
+            '{mode:$mode, release_tag:$tag, github_release:$githubRelease, source_sha:$sha, version:$version, run_id:$run, preparation_attempt:$attempt, producing_attempt:$producer, artifacts:{release:{id:$release,archive_digest:$releaseDigest}, vsix:{id:$vsix,archive_digest:$vsixDigest}}}' \
+            > "$RUNNER_TEMP/release-artifact-index.json"
+          printf 'Preparation artifacts for `%s` (run `%s`, producing attempt `%s`):\n\n- Release: ID `%s`, archive SHA-256 `%s`\n- VSIX: ID `%s`, archive SHA-256 `%s`\n' \
+            "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$RELEASE_ID" "$RELEASE_DIGEST" "$VSIX_ID" "$VSIX_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+          printf '\n- Release tag: `%s`\n- GitHub Release requested: `%s`\n' \
+            "$RELEASE_TAG" "$GITHUB_RELEASE" >> "$GITHUB_STEP_SUMMARY"
+      - if: ${{ !env.ACT }}
+        name: Upload the release artifact index
+        id: upload-index
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-artifact-index-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-artifact-index.json
+          if-no-files-found: error
+          retention-days: 30
+      - if: ${{ !env.ACT }}
+        name: Record exact artifact index
+        env:
+          INDEX_ID: ${{ steps.upload-index.outputs.artifact-id }}
+          INDEX_DIGEST: ${{ steps.upload-index.outputs.artifact-digest }}
+        run: |
+          [[ "$INDEX_ID" =~ ^[1-9][0-9]*$ && "$INDEX_DIGEST" =~ ^(sha256:)?[0-9a-f]{64}$ ]] || {
+            echo 'Missing or invalid release artifact index identity' >&2
+            exit 1
+          }
+          printf '\n- Artifact index: ID `%s`, archive digest `sha256:%s`\n' \
+            "$INDEX_ID" "${INDEX_DIGEST#sha256:}" >> "$GITHUB_STEP_SUMMARY"
+  attest-tagged-npm:
+    if: ${{ always() && !cancelled() && github.event_name == 'push' && github.ref_type == 'tag' && github.ref_protected && vars.RELEASE_BUILD_ATTESTATION_ENABLED == 'true' && needs.build.result == 'success' && needs.validate-stable.result == 'success' }}
+    needs:
+      - build
+      - validate-stable
+    environment: release-build-attestation
+    permissions:
+      actions: read
+      attestations: write
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - datamitsu-darwin-arm64
+          - datamitsu-darwin-x64
+          - datamitsu-freebsd-arm64
+          - datamitsu-freebsd-x64
+          - datamitsu-linux-arm64
+          - datamitsu-linux-x64
+          - datamitsu-win32-arm64
+          - datamitsu-win32-x64
+          - datamitsu
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build.outputs.npm_provenance_input || 'missing-artifact-id' }}
+          path: ${{ runner.temp }}/npm-provenance-input
+          digest-mismatch: error
+      - name: Prepare the exact npm attestation subject
+        id: subject
+        shell: bash
+        env:
+          VERSION_TAG: ${{ needs.validate-stable.outputs.version }}
+          PACKAGE: ${{ matrix.package }}
+          INDEX_ID: ${{ needs.build.outputs.index_id }}
+          INDEX_DIGEST: ${{ needs.build.outputs.index_archive_digest }}
+        run: |
+          [[ "$GITHUB_REF" == "refs/tags/$VERSION_TAG" && "$GITHUB_WORKFLOW_SHA" == "$GITHUB_SHA" ]]
+          [[ "$INDEX_ID" =~ ^[1-9][0-9]*$ && "$INDEX_DIGEST" =~ ^(sha256:)?[0-9a-f]{64}$ ]]
+          archive="$RUNNER_TEMP/npm-provenance-input/$PACKAGE.tgz"
+          digest=$(sha512sum < "$archive")
+          printf 'name=pkg:npm/%%40datamitsu/%s@%s\ndigest=sha512:%s\n' "$PACKAGE" "${VERSION_TAG#v}" "${digest%% *}" >> "$GITHUB_OUTPUT"
+          repo="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          jq -n --arg repo "$repo" --arg ref "$GITHUB_REF" --arg commit "$GITHUB_SHA" \
+            --arg invocation "$repo/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT" \
+            --arg index_id "$INDEX_ID" --arg index_archive_digest "sha256:${INDEX_DIGEST#sha256:}" '
+              {buildDefinition:{buildType:"https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+                externalParameters:{workflow:{repository:$repo,ref:$ref,path:".github/workflows/release.yml"},
+                  preparation:{index_id:$index_id,index_archive_digest:$index_archive_digest}},
+                resolvedDependencies:[{uri:("git+" + $repo + "@" + $ref),digest:{gitCommit:$commit}}]},
+                runDetails:{builder:{id:"https://github.com/actions/runner/github-hosted"},metadata:{invocationId:$invocation}}}
+            ' > "$RUNNER_TEMP/npm-provenance.json"
+      - name: Reserve the first attestation for this package and index
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-provenance-claim-${{ needs.build.outputs.index_id }}-${{ matrix.package }}
+          path: ${{ runner.temp }}/npm-provenance.json
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: attest
+        with:
+          subject-name: ${{ steps.subject.outputs.name }}
+          subject-digest: ${{ steps.subject.outputs.digest }}
+          predicate-type: https://slsa.dev/provenance/v1
+          predicate-path: ${{ runner.temp }}/npm-provenance.json
+      - name: Preserve npm-compatible provenance bundle
+        shell: bash
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          PACKAGE: ${{ matrix.package }}
+        run: cp -- "$BUNDLE" "$RUNNER_TEMP/$PACKAGE.sigstore.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-provenance-${{ needs.build.outputs.index_id }}-${{ github.run_attempt }}-${{ matrix.package }}
+          path: ${{ runner.temp }}/${{ matrix.package }}.sigstore.json
+          if-no-files-found: error
+          retention-days: 30
+  verify:
+    if: |
+      always() && !cancelled() &&
+      needs.determine-release-type.outputs.verify == 'true' &&
+      needs.generate-unstable-version.result == 'success'
+    name: Verify release build
+    needs:
+      - determine-release-type
+      - validate-stable
+      - generate-unstable-version
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps: *release_build_steps
   determine-release-type:
     name: Determine Release Type
+    permissions: {}
     outputs:
       checkout_ref: ${{ steps.detect.outputs.checkout_ref }}
+      tag_ref: ${{ steps.detect.outputs.tag_ref }}
       is_stable: ${{ steps.detect.outputs.is_stable }}
       is_unstable: ${{ steps.detect.outputs.is_unstable }}
       want_prerelease: ${{ steps.detect.outputs.want_prerelease }}
+      verify: ${{ steps.detect.outputs.verify }}
     runs-on: ubuntu-latest
     steps:
       - id: detect
         name: Detect release type
+        env:
+          WANT_PRERELEASE: ${{ inputs.create_github_prerelease }}
+          RELEASE_MODE: ${{ inputs.mode }}
         run: |
-          # Resolve the prerelease request here rather than in a job-level `if:`.
-          # A `type: boolean` input reaches github.event.inputs as a string but
-          # the inputs context as a real boolean, and in expression syntax
-          # `true == 'true'` is FALSE — so a gate written against the wrong
-          # spelling skips the job with the box ticked and says nothing about
-          # why. In the shell both spellings interpolate to "true"/"false", and
-          # the answer lands in the log where a reader can see it.
-          WANT_PRERELEASE="${{ inputs.create_github_prerelease }}"
-          [[ "$WANT_PRERELEASE" == "true" ]] || WANT_PRERELEASE=false
-          echo "want_prerelease=$WANT_PRERELEASE" >> $GITHUB_OUTPUT
-          echo "GitHub prerelease requested: $WANT_PRERELEASE"
-
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            # Tag push → stable
-            echo "is_stable=true" >> $GITHUB_OUTPUT
-            echo "is_unstable=false" >> $GITHUB_OUTPUT
-            echo "checkout_ref=${{ github.ref }}" >> $GITHUB_OUTPUT
-            echo "Detected: Stable release (tag push)"
-          elif [[ "${{ github.event.inputs.release_type }}" == "stable" ]]; then
-            # Manual stable release
-            VERSION_TAG="${{ github.event.inputs.version }}"
-            if [[ -z "$VERSION_TAG" ]]; then
-              echo "Error: version input required for manual stable release"
-              exit 1
-            fi
-            echo "is_stable=true" >> $GITHUB_OUTPUT
-            echo "is_unstable=false" >> $GITHUB_OUTPUT
-            echo "checkout_ref=$VERSION_TAG" >> $GITHUB_OUTPUT
-            echo "Detected: Manual stable release ($VERSION_TAG)"
-          else
-            # Manual unstable release
-            echo "is_stable=false" >> $GITHUB_OUTPUT
-            echo "is_unstable=true" >> $GITHUB_OUTPUT
-            echo "checkout_ref=${{ github.event.inputs.ref }}" >> $GITHUB_OUTPUT
-            echo "Detected: Unstable release"
-            if [[ "$WANT_PRERELEASE" != "true" ]]; then
-              # An unstable build publishes npm and images unconditionally, so
-              # "no release appeared" reads as a broken workflow rather than a
-              # box left unchecked. Say so where the run summary shows it.
-              echo "::notice title=No GitHub prerelease::create_github_prerelease was not set, so no prerelease (and no WASM parser module asset) is published for this build. Re-run the workflow with the checkbox ticked to publish one."
-            fi
-          fi
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          echo "checkout_ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          case "$GITHUB_EVENT_NAME" in
+            push)
+              number='(0|[1-9][0-9]*)'
+              if ! [[ "$GITHUB_REF" =~ ^refs/tags/v${number}\.${number}\.${number}(-rc\.${number})?$ ]]; then
+                echo "Invalid release tag" >&2
+                exit 1
+              fi
+              echo "tag_ref=$GITHUB_REF" >> "$GITHUB_OUTPUT"
+              echo "is_stable=true" >> "$GITHUB_OUTPUT"
+              echo "is_unstable=false" >> "$GITHUB_OUTPUT"
+              ;;
+            workflow_dispatch)
+              case "$RELEASE_MODE" in
+                verify) echo 'verify=true' >> "$GITHUB_OUTPUT" ;;
+                prerelease) echo 'verify=false' >> "$GITHUB_OUTPUT" ;;
+                *) exit 1 ;;
+              esac
+              echo "is_stable=false" >> "$GITHUB_OUTPUT"
+              echo "is_unstable=true" >> "$GITHUB_OUTPUT"
+              [[ "$WANT_PRERELEASE" == true ]] || WANT_PRERELEASE=false
+              echo "want_prerelease=$WANT_PRERELEASE" >> "$GITHUB_OUTPUT"
+              ;;
+            *) exit 1 ;;
+          esac
   generate-unstable-version:
     if: |
       always() &&
@@ -273,6 +665,7 @@ jobs:
     name: Generate Unstable Version
     needs: determine-release-type
     outputs:
+      attempt: ${{ steps.version.outputs.attempt }}
       short_sha: ${{ steps.version.outputs.short_sha }}
       tag_name: ${{ steps.version.outputs.tag_name }}
       version: ${{ steps.version.outputs.version }}
@@ -285,639 +678,15 @@ jobs:
       - id: version
         name: Generate unstable version
         run: |
-          DATE=$(date +%Y%m%d)
           SHORT_SHA=$(git rev-parse --short HEAD)
-          VERSION="0.0.0-unstable.${DATE}.${SHORT_SHA}"
-          TAG_NAME="unstable-${DATE}-${SHORT_SHA}"
+          VERSION="0.0.0-unstable.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+          TAG_NAME="unstable-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
           echo "npm version: $VERSION"
           echo "git tag: $TAG_NAME"
-  publish-action:
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.build.result == 'success' &&
-      needs.determine-release-type.outputs.is_stable == 'true' &&
-      !contains(needs.validate-stable.outputs.version, '-rc.')
-    name: Publish setup-datamitsu action
-    needs:
-      - build
-      - determine-release-type
-      - validate-stable
-    permissions:
-      contents: read
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      - uses: ./.github/actions/setup-environment
-        with:
-          setup-go: "false"
-      - if: ${{ !env.ACT }}
-        name: Download build artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-artifacts
-          path: .
-      - if: ${{ !env.ACT }}
-        name: Check out setup-datamitsu (publish target)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: setup-datamitsu-dist
-          ref: main
-          repository: datamitsu/setup-datamitsu
-          token: ${{ secrets.SETUP_DATAMITSU_TOKEN }}
-      - env:
-          GH_TOKEN: ${{ secrets.SETUP_DATAMITSU_TOKEN }}
-          TARGET_DIR: ${{ github.workspace }}/setup-datamitsu-dist
-        if: ${{ !env.ACT }}
-        name: Bake hashes, build, and publish action
-        run: |
-          VERSION_WITH_V="${{ needs.validate-stable.outputs.version }}"
-          export VERSION="${VERSION_WITH_V#v}"
-          pnpm --filter @datamitsu/setup-action codegen
-          pnpm --filter @datamitsu/setup-action build
-          pnpm --filter @datamitsu/setup-action exec tsx scripts/publish.ts
-  publish-docker:
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.build.result == 'success'
-    name: Publish Docker Images
-    needs:
-      - build
-      - determine-release-type
-      - validate-stable
-      - generate-unstable-version
-    permissions:
-      contents: read
-      id-token: write
-      packages: write
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      - if: ${{ !env.ACT }}
-        name: Download build artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-artifacts
-          path: .
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
-        with:
-          platforms: linux/amd64,linux/arm64
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - name: Install cosign
-        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
-      - id: version
-        name: Normalize version (remove v prefix for labels)
-        run: |
-          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
-          VERSION="${VERSION_WITH_V#v}"
-          echo "normalized=$VERSION" >> $GITHUB_OUTPUT
-      - if: ${{ !env.ACT && matrix.registry == 'ghcr' }}
-        name: Login to GHCR
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          password: ${{ secrets.GITHUB_TOKEN }}
-          registry: ghcr.io
-          username: ${{ github.actor }}
-      - if: ${{ !env.ACT && matrix.registry == 'dockerhub' }}
-        name: Login to Docker Hub
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-      # Generate metadata for production builds
-      - id: meta
-        name: Generate Docker metadata
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          flavor: |
-            suffix=${{ matrix.variant == 'alpine' && '-alpine' || '' }}
-          images: |
-            ${{ matrix.registry == 'ghcr' && format('ghcr.io/datamitsu/{0}', needs.determine-release-type.outputs.is_stable == 'true' && 'datamitsu' || 'datamitsu-unstable') || 'docker.io/datamitsu/datamitsu' }}
-          labels: |
-            org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
-          tags: |
-            type=semver,pattern={{version}},enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
-            type=semver,pattern={{major}},enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
-            type=raw,value=stable,enable=${{ needs.determine-release-type.outputs.is_stable == 'true' }}
-            type=raw,value=latest,enable=${{ needs.determine-release-type.outputs.is_stable == 'true' && !contains(needs.validate-stable.outputs.version, '-rc.') }}
-            type=raw,value=unstable,enable=${{ needs.determine-release-type.outputs.is_unstable == 'true' && matrix.registry == 'dockerhub' }}
-            type=raw,value=${{ needs.generate-unstable-version.outputs.tag_name }},enable=${{ needs.determine-release-type.outputs.is_unstable == 'true' }}
-      - id: push
-        if: |
-          matrix.registry == 'ghcr' ||
-          (matrix.registry == 'dockerhub' && needs.determine-release-type.outputs.is_stable == 'true')
-        name: Build and push
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          context: .
-          file: ${{ matrix.variant == 'alpine' && './docker/Dockerfile.alpine' || './docker/Dockerfile' }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          push: ${{ !env.ACT }}
-          tags: ${{ steps.meta.outputs.tags }}
-      - if: ${{ !env.ACT && steps.push.outputs.digest != '' }}
-        name: Sign Docker image with cosign
-        run: |
-          IMAGE_NAME="${{ matrix.registry == 'ghcr' && format('ghcr.io/datamitsu/{0}', needs.determine-release-type.outputs.is_stable == 'true' && 'datamitsu' || 'datamitsu-unstable') || 'docker.io/datamitsu/datamitsu' }}"
-          cosign sign --yes "${IMAGE_NAME}@${{ steps.push.outputs.digest }}"
-    strategy:
-      matrix:
-        registry:
-          - ghcr
-          - dockerhub
-        variant:
-          - debian
-          - alpine
-  publish-github:
-    # always() is load-bearing, not decoration. An unstable run skips
-    # validate-stable, and GitHub propagates a skip down the whole dependency
-    # chain — only a job whose own condition says "continue anyway" escapes it.
-    # build escapes with always(); this job did not, so it was skipped on every
-    # unstable dispatch no matter how the prerelease box was set, which is why
-    # no unstable prerelease had ever been created. Every other publish-* job
-    # here already carries this preamble; keep it.
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.build.result == 'success' &&
-      needs.determine-release-type.outputs.is_unstable == 'true' &&
-      needs.determine-release-type.outputs.want_prerelease == 'true'
-    name: Publish to GitHub Releases
-    needs:
-      - build
-      - determine-release-type
-      - generate-unstable-version
-      - publish-parsers-oci
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      - if: ${{ !env.ACT }}
-        name: Download build artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-artifacts
-          path: .
-      - if: ${{ !env.ACT && needs.publish-parsers-oci.outputs.digest != '' }}
-        name: Download the parser pin record
-        # Written by publish-parsers-oci, which runs after build — so it cannot
-        # ride in release-artifacts and has to be fetched separately. Guarded on
-        # the digest so a skipped OCI push does not fail the prerelease.
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: parsers-oci
-          path: dist
-      - env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        if: ${{ !env.ACT }}
-        name: Create GitHub Release
-        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
-        with:
-          # This repository has immutable releases enabled, which allows asset
-          # uploads only while a release is still a draft — publishing first and
-          # uploading after fails every asset with "Cannot upload asset ... to an
-          # immutable release". So: create the draft, upload into it, publish it
-          # in the step below. The release is not visible to anyone until that
-          # step runs, which also means a failed upload leaves no half-populated
-          # prerelease behind.
-          draft: true
-          # The .wasm parser module is the reason this job is worth enabling: it
-          # is the one artifact a wrapper config must fetch by url+hash, and an
-          # unstable build otherwise publishes it nowhere, so an unreleased
-          # parser module cannot be exercised downstream. checksums.txt carries
-          # its SHA-256, and --snapshot skips only the release pipe (not the
-          # signs one, which unstable does not --skip), so the cosign bundle is
-          # produced here too and travels with it.
-          files: |
-            dist/*.tar.gz
-            dist/*.zip
-            dist/checksums.txt
-            dist/checksums.txt.sigstore.json
-            dist/datamitsu_parsers_*.wasm
-            dist/parsers-oci.json
-          name: Unstable Build ${{ needs.generate-unstable-version.outputs.short_sha }}
-          prerelease: true
-          # The tag is created here, and without a commitish GitHub points it at
-          # the default branch head — not at the ref this build was dispatched
-          # for. An unstable build of a feature branch would then publish assets
-          # under a tag naming someone else's commit.
-          tag_name: ${{ needs.generate-unstable-version.outputs.tag_name }}
-          target_commitish: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      - env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.generate-unstable-version.outputs.tag_name }}
-        if: ${{ !env.ACT }}
-        name: Publish the drafted prerelease
-        # Flipping draft off is what creates the tag and makes the assets
-        # downloadable. --prerelease is repeated rather than assumed: publishing
-        # is the moment the release becomes visible, and a prerelease that
-        # published itself as "latest" would move the release consumers resolve.
-        run: gh release edit "$TAG" --draft=false --prerelease --repo "$GITHUB_REPOSITORY"
-  publish-npm:
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.build.result == 'success'
-    name: Publish to npm
-    needs:
-      - build
-      - determine-release-type
-      - publish-parsers-oci
-      - validate-stable
-      - generate-unstable-version
-    permissions:
-      contents: read
-      id-token: write
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      - uses: ./.github/actions/setup-environment
-        with:
-          registry-url: "https://registry.npmjs.org"
-      - if: ${{ !env.ACT }}
-        name: Download build artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-artifacts
-          path: .
-      - env:
-          DIGEST: ${{ needs.publish-parsers-oci.outputs.digest }}
-          REF: ${{ needs.publish-parsers-oci.outputs.ref }}
-          SHA256: ${{ needs.publish-parsers-oci.outputs.sha256 }}
-          TAG: ${{ needs.publish-parsers-oci.outputs.tag }}
-        if: ${{ !env.ACT }}
-        name: Write the parser pin record into the launcher package
-        # The wrapper reads this out of node_modules/@datamitsu/datamitsu to
-        # pin its oci config variants, so the launcher package IS the transport
-        # — no `gh release download`, no registry query, no oras in the wrapper.
-        # The digest only exists after the push, which is why this is written
-        # here rather than during the build.
-        run: |
-          if [[ -z "$DIGEST" ]]; then
-            echo "::warning title=No parser pin::publish-parsers-oci produced no digest; publishing the launcher without parsers-oci.json"
-            exit 0
-          fi
-          cat > packaging/npm/datamitsu/parsers-oci.json <<JSON
-          {
-            "module": "core",
-            "version": "$TAG",
-            "ref": "$REF",
-            "tag": "$TAG",
-            "digest": "$DIGEST",
-            "sha256": "$SHA256"
-          }
-          JSON
-          echo "✓ wrote packaging/npm/datamitsu/parsers-oci.json"
-      - if: ${{ !env.ACT }}
-        name: Restore executable permissions for npm packages
-        run: |
-          # GitHub Actions artifacts don't preserve executable permissions
-          # Restore them for all platform-specific binaries
-          find packaging/npm/datamitsu-* -type f \( -name "datamitsu" -o -name "datamitsu.exe" \) -exec chmod +x {} \;
-          echo "✓ Restored executable permissions for npm package binaries"
-      - env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        name: Publish to npm
-        run: |
-          IS_STABLE="${{ needs.determine-release-type.outputs.is_stable }}"
-          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
-          export VERSION="${VERSION_WITH_V#v}"
-          DRY_RUN=""
-          if [[ -n "$ACT" ]]; then
-            DRY_RUN="--dry-run"
-            echo "Running in act mode - using --dry-run for npm publish"
-          fi
-
-          cd packaging/npm
-
-          if [[ "$IS_STABLE" == "true" ]]; then
-            # Stable: use pack.ts publish (auto-detects tag)
-            node ../pack.ts publish $DRY_RUN
-          else
-            # Unstable: hardcoded unstable tag
-            for dir in datamitsu-*/ datamitsu/; do
-              cd "$dir"
-              echo "Publishing $dir..."
-              npm publish --access public --tag unstable $DRY_RUN
-              cd ..
-            done
-          fi
-  publish-open-vsx:
-    # Environment for parity with the other registry jobs (pypi, rubygems,
-    # vscode-marketplace): registries deploy through named environments.
-    # Auto-created on first deploy; OVSX_PAT stays a repo secret.
-    environment: open-vsx
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.build.result == 'success' &&
-      needs.determine-release-type.outputs.is_stable == 'true' &&
-      !contains(needs.validate-stable.outputs.version, '-rc.')
-    name: Publish to Open VSX
-    needs:
-      - build
-      - determine-release-type
-      - validate-stable
-    permissions:
-      contents: read
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      - uses: ./.github/actions/setup-environment
-        with:
-          setup-go: "false"
-      - if: ${{ !env.ACT }}
-        name: Download .vsix artifact
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: vsix
-          path: dist
-      - env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        if: ${{ !env.ACT }}
-        name: Publish extension to Open VSX
-        run: |
-          VERSION_WITH_V="${{ needs.validate-stable.outputs.version }}"
-          VERSION="${VERSION_WITH_V#v}"
-          # Namespace created once; tolerate "already exists".
-          pnpm --filter "./editors/vscode" exec ovsx create-namespace datamitsu -p "$OVSX_PAT" || true
-          pnpm --filter "./editors/vscode" exec ovsx publish "$GITHUB_WORKSPACE/dist/datamitsu-$VERSION.vsix" -p "$OVSX_PAT"
-  publish-parsers-oci:
-    # Every unstable dispatch publishes the module here unconditionally, which
-    # is what makes an unreleased parser testable downstream at all — the GitHub
-    # prerelease stays an opt-in convenience rather than the only channel.
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.build.result == 'success'
-    name: Publish WASM Parser Module (OCI)
-    needs:
-      - build
-      - determine-release-type
-      - generate-unstable-version
-      - validate-stable
-    outputs:
-      digest: ${{ steps.push.outputs.digest }}
-      ref: ${{ steps.push.outputs.ref }}
-      sha256: ${{ steps.push.outputs.sha256 }}
-      tag: ${{ steps.push.outputs.tag }}
-    permissions:
-      attestations: write
-      contents: read
-      id-token: write
-      packages: write
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      # setup-environment is deliberately NOT used: node is preinstalled on the
-      # runner and the push script needs nothing but GITHUB_TOKEN, so the
-      # self-hosting bootstrap (the published core installing tools to publish
-      # the new core's artifacts) stays off this job's critical path. The module
-      # itself rides in release-artifacts because the build stages it into dist/.
-      - if: ${{ !env.ACT }}
-        name: Download build artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-artifacts
-          path: .
-      - name: Install cosign
-        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
-      - env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IS_STABLE: ${{ needs.determine-release-type.outputs.is_stable }}
-          UNSTABLE_TAG: ${{ needs.generate-unstable-version.outputs.tag_name }}
-          VERSION: ${{ needs.validate-stable.outputs.version }}
-        id: push
-        if: ${{ !env.ACT }}
-        name: Push parser module as an OCI artifact
-        run: node .github/scripts/push-parsers-oci.mjs
-      - env:
-          PARSERS_DIGEST: ${{ steps.push.outputs.digest }}
-          PARSERS_REPO: ${{ needs.determine-release-type.outputs.is_stable == 'true' && 'datamitsu/datamitsu-parsers' || 'datamitsu/datamitsu-parsers-unstable' }}
-          PARSERS_SHA256: ${{ steps.push.outputs.sha256 }}
-        if: ${{ !env.ACT }}
-        name: Verify the artifact pulls anonymously
-        # A GHCR package created by a workflow is private by default; without
-        # this the release goes green and every consumer 401s.
-        run: .github/scripts/verify-parsers-anonymous.sh
-      - if: ${{ !env.ACT }}
-        name: Log in to GHCR for signing
-        # Strictly AFTER the anonymous check and strictly BEFORE cosign: a
-        # signature is an artifact cosign pushes into the same repository, so it
-        # needs write credentials, and it reads them from the docker credential
-        # store rather than from GITHUB_TOKEN in the environment. Logging in
-        # earlier would put a credential on the box before the step whose entire
-        # job is to prove none is needed.
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          password: ${{ secrets.GITHUB_TOKEN }}
-          registry: ghcr.io
-          username: ${{ github.actor }}
-      - if: ${{ !env.ACT }}
-        name: Sign parser artifact with cosign
-        # Real, keyless, transparency-logged — and verifiable only out of band:
-        # the datamitsu binary verifies no signatures at all, which is why a
-        # config that pins `signer` is rejected rather than quietly unverified.
-        run: cosign sign --yes "${{ steps.push.outputs.ref }}@${{ steps.push.outputs.digest }}"
-      - if: ${{ !env.ACT }}
-        name: Attest parser artifact
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        with:
-          subject-digest: ${{ steps.push.outputs.digest }}
-          subject-name: ${{ steps.push.outputs.ref }}
-      - if: ${{ !env.ACT }}
-        name: Upload the parser pin record
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          if-no-files-found: error
-          name: parsers-oci
-          path: dist/parsers-oci.json
-          retention-days: 1
-  publish-pypi:
-    environment: pypi
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.build.result == 'success' &&
-      needs.determine-release-type.outputs.is_stable == 'true'
-    name: Publish to PyPI
-    needs:
-      - build
-      - determine-release-type
-      - validate-stable
-      - generate-unstable-version
-    permissions:
-      contents: read
-      id-token: write
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      - uses: ./.github/actions/setup-environment
-      - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          enable-cache: true
-      - if: ${{ !env.ACT }}
-        name: Download build artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-artifacts
-          path: .
-      - name: Prepare Python package
-        run: |
-          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
-          export VERSION="${VERSION_WITH_V#v}"
-
-          # Restore executable permissions on source binaries before prepare
-          # (GitHub Actions artifacts don't preserve Unix permissions)
-          if [ -d "dist/binaries" ]; then
-            find dist/binaries -type f -name "datamitsu*" ! -name "*.exe" -exec chmod +x {} \;
-            echo "✓ Restored executable permissions on dist/binaries"
-          fi
-
-          node packaging/pack.ts prepare-python
-      - name: Build Python wheels
-        run: node packaging/pack.ts build-python
-      - if: ${{ !env.ACT }}
-        name: Publish to PyPI
-        run: |
-          cd packaging/python
-          # --trusted-publishing always: use OIDC, fail if unavailable (no API token fallback)
-          # --check-url: skip already-published versions without masking real errors
-          uv publish --trusted-publishing always --check-url https://pypi.org/simple/
-          echo "PyPI publishing completed"
-  publish-rubygems:
-    environment: rubygems
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.build.result == 'success' &&
-      needs.determine-release-type.outputs.is_stable == 'true'
-    name: Publish to RubyGems
-    needs:
-      - build
-      - determine-release-type
-      - validate-stable
-      - generate-unstable-version
-    permissions:
-      contents: read
-      id-token: write
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      - uses: ./.github/actions/setup-environment
-        with:
-          setup-go: "false"
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-        with:
-          ruby-version: "3.3"
-      - if: ${{ !env.ACT }}
-        name: Download build artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-artifacts
-          path: .
-      - name: Prepare Ruby gem
-        run: |
-          VERSION_WITH_V="${{ needs.determine-release-type.outputs.is_stable == 'true' && needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.version }}"
-          export VERSION="${VERSION_WITH_V#v}"
-
-          # Restore executable permissions on source binaries
-          # (GitHub Actions artifacts don't preserve Unix permissions)
-          if [ -d "dist/binaries" ]; then
-            find dist/binaries -type f -name "datamitsu*" ! -name "*.exe" -exec chmod +x {} \;
-            echo "Restored executable permissions on dist/binaries"
-          fi
-
-          node packaging/pack.ts prepare-ruby
-      - name: Build gem
-        run: |
-          cd packaging/ruby
-          gem build datamitsu.gemspec
-          echo "Built gem:"
-          ls -lh *.gem
-      - if: ${{ !env.ACT }}
-        name: Configure RubyGems credentials (OIDC)
-        uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
-      - if: ${{ !env.ACT }}
-        name: Publish to RubyGems
-        run: |
-          cd packaging/ruby
-          gem push *.gem
-          echo "RubyGems publishing completed"
-  publish-vscode-marketplace:
-    environment: vscode-marketplace
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.build.result == 'success' &&
-      needs.determine-release-type.outputs.is_stable == 'true' &&
-      !contains(needs.validate-stable.outputs.version, '-rc.')
-    name: Publish to VS Code Marketplace
-    needs:
-      - build
-      - determine-release-type
-      - validate-stable
-    permissions:
-      contents: read
-      id-token: write
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      - uses: ./.github/actions/setup-environment
-        with:
-          setup-go: "false"
-      - if: ${{ !env.ACT }}
-        name: Download .vsix artifact
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: vsix
-          path: dist
-      - if: ${{ !env.ACT }}
-        name: Azure login (federated OIDC for Marketplace)
-        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
-        with:
-          allow-no-subscriptions: true
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-      - if: ${{ !env.ACT }}
-        name: Publish extension to VS Code Marketplace
-        run: |
-          VERSION_WITH_V="${{ needs.validate-stable.outputs.version }}"
-          VERSION="${VERSION_WITH_V#v}"
-          # Publish via Entra OIDC — the azure/login step above set up the Azure
-          # CLI session that `vsce --azure-credential` consumes (no PAT).
-          pnpm --filter "./editors/vscode" exec vsce publish --packagePath "$GITHUB_WORKSPACE/dist/datamitsu-$VERSION.vsix" --azure-credential
   validate-stable:
     if: |
       always() &&
@@ -925,6 +694,7 @@ jobs:
     name: Validate Stable Release
     needs: determine-release-type
     outputs:
+      attempt: ${{ steps.version.outputs.attempt }}
       version: ${{ steps.version.outputs.version }}
     runs-on: ubuntu-latest
     steps:
@@ -932,22 +702,28 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
-      - name: Verify tag is on main branch
+      - id: version
+        name: Validate release tag and main ancestry
+        env:
+          TAG_REF: ${{ needs.determine-release-type.outputs.tag_ref }}
         run: |
-          TAG_REF="${{ needs.determine-release-type.outputs.checkout_ref }}"
-          TAG_COMMIT=$(git rev-parse $TAG_REF)
-          if ! git branch -r --contains $TAG_COMMIT | grep -q 'origin/main'; then
-            echo "Error: Tag $TAG_REF is not on main branch"
+          if [[ "$(git rev-parse "$TAG_REF^{commit}")" != "$(git rev-parse HEAD)" ]]; then
+            echo "Release tag does not identify the event commit" >&2
             exit 1
           fi
-          echo "Tag is on main branch"
-      - id: version
-        name: Extract version from tag
-        run: |
-          TAG_REF="${{ needs.determine-release-type.outputs.checkout_ref }}"
-          VERSION="${TAG_REF#refs/tags/}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Stable version: $VERSION"
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+          module=$(go mod edit -json | jq -er '.Module.Path')
+          major=${TAG_REF#refs/tags/v}
+          major=${major%%.*}
+          if [[ "$module" =~ /v([2-9]|[1-9][0-9]+)$ ]]; then
+            expected=${BASH_REMATCH[1]}
+            [[ "$major" == "$expected" ]] || { echo "Tag major does not match $module" >&2; exit 1; }
+          elif [[ "$major" != 0 && "$major" != 1 ]]; then
+            echo "Tag major requires a versioned Go module path: $module" >&2
+            exit 1
+          fi
+          echo "version=${TAG_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          echo "attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
 name: Release
 on:
   push:
@@ -956,26 +732,18 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
   workflow_dispatch:
     inputs:
-      create_github_prerelease:
-        default: false
-        description: "Create GitHub prerelease (binaries, checksums and the WASM parser module, for downstream testing)"
-        required: false
-        type: boolean
-      ref:
-        default: "main"
-        description: "Branch or commit to build (unstable only)"
-        required: false
-      release_type:
-        default: unstable
-        description: "Release type"
+      mode:
+        description: Verify the release build or prepare a prerelease without publishing
+        default: verify
         options:
-          - unstable
-          - stable
+          - verify
+          - prerelease
         required: true
         type: choice
-      version:
-        description: "Version tag (stable manual, e.g., v1.0.0)"
+      create_github_prerelease:
+        default: false
+        description: Request GitHub assets for the future publisher (publication disabled)
         required: false
+        type: boolean
 permissions:
   contents: read
-  packages: read

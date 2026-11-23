@@ -30,11 +30,9 @@ import { join } from "node:path";
 // whichever one its config declares, verifying the mandatory SHA-256 either way.
 // It is never bundled into the npm/Python/Ruby wrappers.
 //
-// What DOES travel in the launcher package is parsers-oci.json: the release
-// workflow writes it after the registry push (the manifest digest does not
-// exist before then) so a wrapper can read the pin out of node_modules instead
-// of querying a registry. It is listed in this package's `files`; the file is
-// absent from a local `pack:prepare`, which npm tolerates.
+// The release workflow computes parsers-oci.json before packing the launcher,
+// so wrappers can read the pin without querying a registry. Local pack:prepare
+// does not generate the pin.
 
 // Track active child processes for cleanup on Ctrl+C
 const activeProcesses = new Set<ReturnType<typeof spawn>>();

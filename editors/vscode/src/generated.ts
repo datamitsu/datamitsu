@@ -10,5 +10,6 @@ export interface ReleaseAsset {
 }
 
 export const VERSION = "0.0.0";
+export const RELEASE_TAG = `v${VERSION}`;
 
 export const RELEASES: Record<string, ReleaseAsset> = {};

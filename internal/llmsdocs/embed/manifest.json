@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "b1d898f472062c97fee9c7a6113f8610",
+  "pageSetHash": "989be05fa9f9f6c94a6f6c3b1505ac84",
   "pages": [
     {
       "slug": "about",
@@ -105,8 +105,8 @@
       "url": "https://datamitsu.com/docs/getting-started/installation/github-releases.md",
       "title": "GitHub Releases",
       "description": "Download datamitsu binaries, deb/rpm/apk packages, and verification files directly from GitHub Releases",
-      "bytes": 4257,
-      "contentHash": "39f24997303b07c2e800c225342b13df"
+      "bytes": 4482,
+      "contentHash": "703c46a77c7adbe29b5e496a4607e62f"
     },
     {
       "slug": "getting-started/installation/homebrew",

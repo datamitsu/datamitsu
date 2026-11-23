@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { RELEASES, VERSION } from "./generated";
+import { RELEASE_TAG, RELEASES, VERSION } from "./generated";
 import { binaryName, resolveTarget, targetKey } from "./platform";
 
 const REPO = "datamitsu/datamitsu";
@@ -77,7 +77,7 @@ async function run(dependencies: DownloadDependencies): Promise<string> {
   await mkdir(dependencies.storageDir, { recursive: true });
   await mkdir(versionDirectory, { recursive: true });
 
-  const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${asset.file}`;
+  const url = `https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${asset.file}`;
   dependencies.log(`Downloading ${asset.file}`);
   const data = await fetchBytes(url);
 

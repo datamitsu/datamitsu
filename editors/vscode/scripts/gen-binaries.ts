@@ -13,16 +13,22 @@ const version = (process.env.VERSION ?? "").replace(/^v/, "");
 if (version === "") {
   throw new Error("VERSION env var is required (e.g. v0.1.5)");
 }
+const releaseTag = process.env.RELEASE_TAG || `v${version}`;
+if (!/^[a-zA-Z0-9][a-zA-Z0-9.-]*$/.test(releaseTag)) {
+  throw new Error("invalid GitHub release tag");
+}
 
 const checksumsPath = process.env.CHECKSUMS_FILE ?? join(REPO_ROOT, "dist", "checksums.txt");
 
 // Parse "<sha256>  <filename>" lines (BSD "*" binary marker tolerated).
 const checksums = new Map<string, string>();
+const duplicates = new Set<string>();
 for (const line of readFileSync(checksumsPath, "utf8").split("\n")) {
   const match = /^([0-9a-f]{64})[ \t]+\*?(\S(?:.*\S)?)$/i.exec(line.trim());
   const sha = match?.[1];
   const file = match?.[2];
   if (sha !== undefined && file !== undefined) {
+    if (checksums.has(file)) duplicates.add(file);
     checksums.set(file, sha.toLowerCase());
   }
 }
@@ -44,16 +50,14 @@ for (const { goarch, goos } of targets) {
     goos === "windows"
       ? `datamitsu_${version}_${goos}_${goarch}.zip`
       : `datamitsu_${version}_${goos}_${goarch}.tar.gz`;
+  if (duplicates.has(file)) {
+    throw new Error(`duplicate checksum for required VSIX target ${file} in ${checksumsPath}`);
+  }
   const sha256 = checksums.get(file);
   if (sha256 === undefined) {
-    console.warn(`⚠️  no checksum for ${file} — skipping ${goos}_${goarch}`);
-    continue;
+    throw new Error(`missing checksum for required VSIX target ${file} in ${checksumsPath}`);
   }
   releases[`${goos}_${goarch}`] = { file, sha256 };
-}
-
-if (Object.keys(releases).length === 0) {
-  throw new Error(`no datamitsu release assets for ${version} in ${checksumsPath}`);
 }
 
 const entries = Object.entries(releases)
@@ -71,6 +75,7 @@ export interface ReleaseAsset {
 }
 
 export const VERSION = ${JSON.stringify(version)};
+export const RELEASE_TAG = ${JSON.stringify(releaseTag)};
 
 export const RELEASES: Record<string, ReleaseAsset> = {
 ${entries}
