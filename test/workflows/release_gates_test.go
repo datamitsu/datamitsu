@@ -196,7 +196,8 @@ func TestUnstableDispatchResolvesProductFromProtectedWorkflow(t *testing.T) {
 		{"unprotected default branch", "refs/heads/main", "refs/heads/feature/demo", "false", dispatchSHA, "1", ""},
 		{"workflow revision mismatch", "refs/heads/main", "refs/heads/feature/demo", "true", productSHA, "1", ""},
 		{"unstable rebuild", "refs/heads/main", "refs/heads/feature/demo", "true", dispatchSHA, "2", ""},
-		{"missing product ref", "refs/heads/main", "", "true", dispatchSHA, "1", ""},
+		{"empty product ref uses dispatch commit", "refs/heads/main", "", "true", dispatchSHA, "1", dispatchSHA},
+		{"invalid explicit product ref", "refs/heads/main", "invalid ref", "true", dispatchSHA, "1", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()

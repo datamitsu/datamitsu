@@ -683,24 +683,26 @@ jobs:
                     echo 'Unstable requires a new dispatch from the protected default branch' >&2
                     exit 1
                   }
-                  if [[ ! "$PRODUCT_REF" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]]; then
-                    echo 'Set product_ref to a branch, tag, or full commit SHA' >&2
-                    exit 1
+                  if [[ -n "$PRODUCT_REF" ]]; then
+                    if [[ ! "$PRODUCT_REF" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]]; then
+                      echo 'Set product_ref to a branch, tag, or full commit SHA' >&2
+                      exit 1
+                    fi
+                    case "$PRODUCT_REF" in
+                      refs/heads/*|refs/tags/*) git check-ref-format "$PRODUCT_REF" ;;
+                      refs/*) exit 1 ;;
+                      *) git check-ref-format "refs/heads/$PRODUCT_REF" ;;
+                    esac
+                    encoded_ref=$(jq -nr --arg ref "$PRODUCT_REF" '$ref | @uri')
+                    source_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$encoded_ref" --jq .sha)
+                    [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+                    if [[ "$PRODUCT_REF" =~ ^[0-9a-f]{40}$ && "$source_sha" != "$PRODUCT_REF" ]]; then
+                      echo 'Resolved SHA does not match the requested commit' >&2
+                      exit 1
+                    fi
                   fi
-                  case "$PRODUCT_REF" in
-                    refs/heads/*|refs/tags/*) git check-ref-format "$PRODUCT_REF" ;;
-                    refs/*) exit 1 ;;
-                    *) git check-ref-format "refs/heads/$PRODUCT_REF" ;;
-                  esac
-                  encoded_ref=$(jq -nr --arg ref "$PRODUCT_REF" '$ref | @uri')
-                  source_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$encoded_ref" --jq .sha)
-                  [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
-                  if [[ "$PRODUCT_REF" =~ ^[0-9a-f]{40}$ && "$source_sha" != "$PRODUCT_REF" ]]; then
-                    echo 'Resolved SHA does not match the requested commit' >&2
-                    exit 1
-                  fi
-                  printf 'Product ref `%s` resolved to `%s`; preparation workflow `%s`.\n' \
-                    "$PRODUCT_REF" "$source_sha" "$GITHUB_WORKFLOW_SHA" >> "$GITHUB_STEP_SUMMARY"
+                  printf 'Product ref `%s` uses commit `%s`; preparation workflow `%s`.\n' \
+                    "${PRODUCT_REF:-$GITHUB_REF}" "$source_sha" "$GITHUB_WORKFLOW_SHA" >> "$GITHUB_STEP_SUMMARY"
                   echo 'verify=false' >> "$GITHUB_OUTPUT"
                   ;;
                 *) exit 1 ;;
@@ -796,7 +798,7 @@ on:
         required: true
         type: choice
       product_ref:
-        description: Branch, tag, or full commit SHA to build in unstable mode (required there)
+        description: Optional branch, tag, or full commit SHA for unstable (defaults to the dispatch commit)
         required: false
         type: string
 permissions:
