@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "037b34cc3767bb5a1a1b6074843dda6b",
+  "pageSetHash": "b890b6bc9868894c62fd86c5741364d4",
   "pages": [
     {
       "slug": "about",
@@ -105,8 +105,8 @@
       "url": "https://datamitsu.com/docs/getting-started/installation/github-releases.md",
       "title": "GitHub Releases",
       "description": "Download datamitsu binaries, deb/rpm/apk packages, and verification files directly from GitHub Releases",
-      "bytes": 4257,
-      "contentHash": "39f24997303b07c2e800c225342b13df"
+      "bytes": 4482,
+      "contentHash": "703c46a77c7adbe29b5e496a4607e62f"
     },
     {
       "slug": "getting-started/installation/homebrew",
@@ -271,8 +271,8 @@
       "url": "https://datamitsu.com/docs/guides/binary-management.md",
       "title": "Binary Management",
       "description": "How datamitsu downloads, verifies, and stores binary apps",
-      "bytes": 11049,
-      "contentHash": "c3ad543c8cd2496f5da58d4d1e26f108"
+      "bytes": 11276,
+      "contentHash": "c6df1c7b3ef02dec798038bbdbfe57c4"
     },
     {
       "slug": "guides/config-inspector",

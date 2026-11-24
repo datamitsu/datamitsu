@@ -652,73 +652,75 @@ func extractZipToDir(zipPath, destDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
+	if err := extractZipEntries(reader.File, tmpDir); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return "", err
+	}
+	return tmpDir, nil
+}
+
+func extractZipEntries(files []*zip.File, destDir string) error {
+	root, err := os.OpenRoot(destDir)
+	if err != nil {
+		return fmt.Errorf("open ZIP extraction root: %w", err)
+	}
+	defer func() { _ = root.Close() }()
 
 	const maxTotalExtractedSize int64 = 2 * 1024 * 1024 * 1024
 	var totalExtracted int64
 
-	for _, file := range reader.File {
+	for _, file := range files {
 		if err := validateArchivePath(file.Name); err != nil {
 			log.Warn("skipping unsafe archive entry", zap.String("path", file.Name), zap.Error(err))
 			continue
 		}
 
-		// filepath.Join cleans the result, so target is already normalized; guard it
-		// directly so the value used in every file op below is the one checked here.
-		target := filepath.Join(tmpDir, file.Name) //nolint:gosec // G305: file.Name is validated by validateArchivePath above and target is checked to stay within tmpDir below
-		if !strings.HasPrefix(target, tmpDir+string(filepath.Separator)) && target != tmpDir {
-			log.Warn("skipping archive entry that escapes destination", zap.String("path", file.Name))
+		target := filepath.Clean(filepath.FromSlash(file.Name))
+		if !filepath.IsLocal(target) {
 			continue
 		}
 
 		if file.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0o755); err != nil {
-				_ = os.RemoveAll(tmpDir)
-				return "", fmt.Errorf("failed to create directory %q: %w", file.Name, err)
+			if err := root.MkdirAll(target, 0o755); err != nil {
+				return fmt.Errorf("failed to create directory %q: %w", file.Name, err)
 			}
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			_ = os.RemoveAll(tmpDir)
-			return "", fmt.Errorf("failed to create parent directory for %q: %w", file.Name, err)
+		if err := root.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("failed to create parent directory for %q: %w", file.Name, err)
 		}
 
 		rc, err := file.Open()
 		if err != nil {
-			_ = os.RemoveAll(tmpDir)
-			return "", fmt.Errorf("failed to open file from zip: %w", err)
+			return fmt.Errorf("failed to open file from zip: %w", err)
 		}
 
-		outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, file.Mode()&0o777)
+		outFile, err := root.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, file.Mode()&0o777)
 		if err != nil {
 			_ = rc.Close()
-			_ = os.RemoveAll(tmpDir)
-			return "", fmt.Errorf("failed to create file %q: %w", file.Name, err)
+			return fmt.Errorf("failed to create file %q: %w", file.Name, err)
 		}
 
 		written, err := io.Copy(outFile, io.LimitReader(rc, MaxBinarySize+1))
 		closeErr := outFile.Close()
 		_ = rc.Close()
 		if err != nil {
-			_ = os.RemoveAll(tmpDir)
-			return "", fmt.Errorf("failed to write file %q: %w", file.Name, err)
+			return fmt.Errorf("failed to write file %q: %w", file.Name, err)
 		}
 		if closeErr != nil {
-			_ = os.RemoveAll(tmpDir)
-			return "", fmt.Errorf("failed to close file %q: %w", file.Name, closeErr)
+			return fmt.Errorf("failed to close file %q: %w", file.Name, closeErr)
 		}
 		if written > MaxBinarySize {
-			_ = os.RemoveAll(tmpDir)
-			return "", fmt.Errorf("file %q exceeds maximum size of %d bytes", file.Name, MaxBinarySize)
+			return fmt.Errorf("file %q exceeds maximum size of %d bytes", file.Name, MaxBinarySize)
 		}
 		totalExtracted += written
 		if totalExtracted > maxTotalExtractedSize {
-			_ = os.RemoveAll(tmpDir)
-			return "", fmt.Errorf("total extracted size exceeds maximum of %d bytes", maxTotalExtractedSize)
+			return fmt.Errorf("total extracted size exceeds maximum of %d bytes", maxTotalExtractedSize)
 		}
 	}
 
-	return tmpDir, nil
+	return nil
 }
 
 func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
@@ -726,6 +728,19 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
+	if err := extractTarEntries(tarReader, tmpDir); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return "", err
+	}
+	return tmpDir, nil
+}
+
+func extractTarEntries(tarReader *tar.Reader, destDir string) error {
+	root, err := os.OpenRoot(destDir)
+	if err != nil {
+		return fmt.Errorf("open tar extraction root: %w", err)
+	}
+	defer func() { _ = root.Close() }()
 
 	const maxTotalExtractedSize int64 = 2 * 1024 * 1024 * 1024
 	var totalExtracted int64
@@ -736,8 +751,7 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 			break
 		}
 		if err != nil {
-			_ = os.RemoveAll(tmpDir)
-			return "", fmt.Errorf("failed to read tar header: %w", err)
+			return fmt.Errorf("failed to read tar header: %w", err)
 		}
 
 		if err := validateArchivePath(header.Name); err != nil {
@@ -745,79 +759,83 @@ func extractTarToDir(tarReader *tar.Reader, destDir string) (string, error) {
 			continue
 		}
 
-		// filepath.Join cleans the result, so target is already normalized; guard it
-		// directly so the value used in every file op below is the one checked here.
-		target := filepath.Join(tmpDir, header.Name) //nolint:gosec // G305: header.Name is validated by validateArchivePath above and target is checked to stay within tmpDir below
-		if !strings.HasPrefix(target, tmpDir+string(filepath.Separator)) && target != tmpDir {
-			log.Warn("skipping archive entry that escapes destination", zap.String("path", header.Name))
+		target := filepath.Clean(filepath.FromSlash(header.Name))
+		if !filepath.IsLocal(target) {
 			continue
 		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0o777|0o755); err != nil { //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
-				_ = os.RemoveAll(tmpDir)
-				return "", fmt.Errorf("failed to create directory %q: %w", header.Name, err)
+			if err := root.MkdirAll(target, os.FileMode(header.Mode)&0o777|0o755); err != nil { //nolint:gosec // G115: the mask bounds the resulting mode to 0-511.
+				return fmt.Errorf("failed to create directory %q: %w", header.Name, err)
 			}
 
 		case tar.TypeReg, tar.TypeGNUSparse:
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				_ = os.RemoveAll(tmpDir)
-				return "", fmt.Errorf("failed to create parent directory for %q: %w", header.Name, err)
+			if err := root.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return fmt.Errorf("failed to create parent directory for %q: %w", header.Name, err)
 			}
 
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o777) //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
+			outFile, err := root.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o777) //nolint:gosec // G115: the mask bounds the resulting mode to 0-511.
 			if err != nil {
-				_ = os.RemoveAll(tmpDir)
-				return "", fmt.Errorf("failed to create file %q: %w", header.Name, err)
+				return fmt.Errorf("failed to create file %q: %w", header.Name, err)
 			}
 
 			written, err := io.Copy(outFile, io.LimitReader(tarReader, MaxBinarySize+1))
 			closeErr := outFile.Close()
 			if err != nil {
-				_ = os.RemoveAll(tmpDir)
-				return "", fmt.Errorf("failed to write file %q: %w", header.Name, err)
+				return fmt.Errorf("failed to write file %q: %w", header.Name, err)
 			}
 			if closeErr != nil {
-				_ = os.RemoveAll(tmpDir)
-				return "", fmt.Errorf("failed to close file %q: %w", header.Name, closeErr)
+				return fmt.Errorf("failed to close file %q: %w", header.Name, closeErr)
 			}
 			if written > MaxBinarySize {
-				_ = os.RemoveAll(tmpDir)
-				return "", fmt.Errorf("file %q exceeds maximum size of %d bytes", header.Name, MaxBinarySize)
+				return fmt.Errorf("file %q exceeds maximum size of %d bytes", header.Name, MaxBinarySize)
 			}
 			totalExtracted += written
 			if totalExtracted > maxTotalExtractedSize {
-				_ = os.RemoveAll(tmpDir)
-				return "", fmt.Errorf("total extracted size exceeds maximum of %d bytes", maxTotalExtractedSize)
+				return fmt.Errorf("total extracted size exceeds maximum of %d bytes", maxTotalExtractedSize)
 			}
 
 		case tar.TypeSymlink:
-			linkTarget := header.Linkname
-			if filepath.IsAbs(linkTarget) {
-				log.Warn("skipping absolute symlink", zap.String("path", header.Name), zap.String("target", linkTarget))
-				continue
-			}
-			resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(target), linkTarget)) //nolint:gosec // G305: resolvedTarget is checked against tmpDir on the next line before any symlink is created
-			if !strings.HasPrefix(resolvedTarget, tmpDir+string(filepath.Separator)) && resolvedTarget != tmpDir {
-				log.Warn("skipping symlink that escapes destination", zap.String("path", header.Name), zap.String("target", linkTarget))
-				continue
-			}
-
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				_ = os.RemoveAll(tmpDir)
-				return "", fmt.Errorf("failed to create parent directory for symlink %q: %w", header.Name, err)
-			}
-
-			if err := os.Symlink(linkTarget, target); err != nil {
-				_ = os.RemoveAll(tmpDir)
-				return "", fmt.Errorf("failed to create symlink %q -> %q: %w", header.Name, linkTarget, err)
+			if err := extractTarSymlink(root, target, filepath.FromSlash(header.Linkname)); err != nil {
+				return err
 			}
 		}
 	}
 
-	log.Debug("archive extracted to directory", zap.String("dst", tmpDir))
-	return tmpDir, nil
+	log.Debug("archive extracted to directory", zap.String("dst", destDir), zap.Int64("totalBytes", totalExtracted))
+	return nil
+}
+
+func extractTarSymlink(root *os.Root, name, target string) error {
+	parent := filepath.Dir(name)
+	resolved := filepath.Join(parent, target)
+	if target == "" || filepath.IsAbs(target) || filepath.VolumeName(target) != "" || !filepath.IsLocal(resolved) {
+		log.Warn("skipping symlink with an unsafe target", zap.String("path", name), zap.String("target", target))
+		return nil
+	}
+	if err := root.MkdirAll(parent, 0o755); err != nil {
+		return fmt.Errorf("create parent directory for symlink %q: %w", name, err)
+	}
+	// A relative target is interpreted from the actual parent, not the name in the tar header.
+	for dir := parent; dir != "."; dir = filepath.Dir(dir) {
+		info, err := root.Lstat(dir)
+		if err != nil {
+			return fmt.Errorf("inspect symlink parent %q: %w", dir, err)
+		}
+		if !info.IsDir() {
+			log.Warn("skipping symlink under a non-directory entry", zap.String("path", name))
+			return nil
+		}
+	}
+	containedTarget, err := filepath.Rel(parent, resolved)
+	if err != nil {
+		return fmt.Errorf("resolve symlink target %q: %w", name, err)
+	}
+	if err := root.Symlink(containedTarget, name); err != nil {
+		return fmt.Errorf("create symlink %q: %w", name, err)
+	}
+	return nil
 }
 
 // extractArchiveToPath extracts an archive to the specified destination path.
@@ -889,87 +907,9 @@ func extractArchiveToPath(destPath string, tarData []byte, archivePath string, f
 		return "", errors.New("either tarData or archivePath must be provided")
 	}
 
-	const maxTotalExtractedSize int64 = 2 * 1024 * 1024 * 1024
-	var totalExtracted int64
-
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", fmt.Errorf("failed to read tar header: %w", err)
-		}
-
-		if err := validateArchivePath(header.Name); err != nil {
-			log.Warn("skipping unsafe archive entry", zap.String("path", header.Name), zap.Error(err))
-			continue
-		}
-
-		// filepath.Join cleans the result, so target is already normalized; guard it
-		// directly so the value used in every file op below is the one checked here.
-		target := filepath.Join(destPath, header.Name) //nolint:gosec // G305: header.Name is validated by validateArchivePath above and target is checked to stay within destPath below
-		if !strings.HasPrefix(target, destPath+string(filepath.Separator)) && target != destPath {
-			log.Warn("skipping archive entry that escapes destination", zap.String("path", header.Name))
-			continue
-		}
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)&0o777|0o755); err != nil { //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
-				return "", fmt.Errorf("failed to create directory %q: %w", header.Name, err)
-			}
-
-		case tar.TypeReg, tar.TypeGNUSparse:
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return "", fmt.Errorf("failed to create parent directory for %q: %w", header.Name, err)
-			}
-
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o777) //nolint:gosec // G115: header.Mode is masked with &0o777, bounding it to 0-511
-			if err != nil {
-				return "", fmt.Errorf("failed to create file %q: %w", header.Name, err)
-			}
-
-			written, err := io.Copy(outFile, io.LimitReader(tarReader, MaxBinarySize+1))
-			closeErr := outFile.Close()
-			if err != nil {
-				return "", fmt.Errorf("failed to write file %q: %w", header.Name, err)
-			}
-			if closeErr != nil {
-				return "", fmt.Errorf("failed to close file %q: %w", header.Name, closeErr)
-			}
-			if written > MaxBinarySize {
-				return "", fmt.Errorf("file %q exceeds maximum size of %d bytes", header.Name, MaxBinarySize)
-			}
-
-			totalExtracted += written
-			if totalExtracted > maxTotalExtractedSize {
-				return "", fmt.Errorf("total extracted size exceeds maximum of %d bytes", maxTotalExtractedSize)
-			}
-
-		case tar.TypeSymlink:
-			linkTarget := header.Linkname
-			if filepath.IsAbs(linkTarget) {
-				log.Warn("skipping absolute symlink", zap.String("path", header.Name), zap.String("target", linkTarget))
-				continue
-			}
-			resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(target), linkTarget)) //nolint:gosec // G305: resolvedTarget is checked against destPath on the next line before any symlink is created
-			if !strings.HasPrefix(resolvedTarget, destPath+string(filepath.Separator)) && resolvedTarget != destPath {
-				log.Warn("skipping symlink that escapes destination", zap.String("path", header.Name), zap.String("target", linkTarget))
-				continue
-			}
-
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return "", fmt.Errorf("failed to create parent directory for symlink %q: %w", header.Name, err)
-			}
-
-			if err := os.Symlink(linkTarget, target); err != nil {
-				return "", fmt.Errorf("failed to create symlink %q -> %q: %w", header.Name, linkTarget, err)
-			}
-		}
+	if err := extractTarEntries(tarReader, destPath); err != nil {
+		return "", err
 	}
-
-	log.Debug("archive extracted to path", zap.String("dest", destPath), zap.Int64("totalBytes", totalExtracted))
 	return destPath, nil
 }
 
