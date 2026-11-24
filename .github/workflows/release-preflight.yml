@@ -81,7 +81,7 @@ permissions:
   contents: read
 jobs:
   preflight:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || (github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.head_branch == github.event.repository.default_branch))) }}
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -125,6 +125,7 @@ jobs:
         id: verify
         shell: bash
         env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GH_TOKEN: ${{ github.token }}
           PREPARATION_RUN: ${{ inputs.preparation_run_id }}
           PRODUCING_ATTEMPT: ${{ inputs.producing_attempt }}
@@ -143,17 +144,39 @@ jobs:
           api="repos/$GITHUB_REPOSITORY/actions"
           number='(0|[1-9][0-9]*)'
           tag_pattern="^v${number}\.${number}\.${number}(-rc\.${number})?$"
+          PUBLISH_MODE=prerelease
+          unstable_job() {
+            jq -cer '
+              [.[].jobs[] | select(.name | startswith("Prepare unstable release artifacts ["))]
+              | if length > 1 then error("Ambiguous unstable build") else . end
+            ' "$evidence/jobs.json"
+          }
           if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
             jq -e --arg repo "$GITHUB_REPOSITORY" '
-              .workflow_run | .path == ".github/workflows/release.yml" and .event == "push"
+              .workflow_run | .path == ".github/workflows/release.yml"
               and .conclusion == "success" and .repository.full_name == $repo and .head_repository.full_name == $repo
             ' "$GITHUB_EVENT_PATH" > /dev/null
             PREPARATION_RUN=$(jq -er '.workflow_run.id | tostring' "$GITHUB_EVENT_PATH")
             COMPLETED_ATTEMPT=$(jq -er '.workflow_run.run_attempt | tostring' "$GITHUB_EVENT_PATH")
-            REQUESTED_TAG=$(jq -er '.workflow_run.head_branch' "$GITHUB_EVENT_PATH")
-            [[ "$REQUESTED_TAG" =~ $tag_pattern ]]
-            PUBLISH_PYPI=true
-            PUBLISH_RUBYGEMS=true
+            [[ "$PREPARATION_RUN" =~ ^[1-9][0-9]*$ && "$COMPLETED_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+            case "$(jq -er '.workflow_run.event' "$GITHUB_EVENT_PATH")" in
+              push)
+                REQUESTED_TAG=$(jq -er '.workflow_run.head_branch' "$GITHUB_EVENT_PATH")
+                [[ "$REQUESTED_TAG" =~ $tag_pattern ]]
+                PUBLISH_PYPI=true
+                PUBLISH_RUBYGEMS=true
+                ;;
+              workflow_dispatch)
+                [[ "$COMPLETED_ATTEMPT" == 1 ]] || exit 0
+                gh api --paginate --slurp "$api/runs/$PREPARATION_RUN/attempts/1/jobs?per_page=100" > "$evidence/jobs.json"
+                marker=$(unstable_job)
+                if [[ "$marker" == '[]' ]]; then
+                  echo 'No unstable publication requested' >> "$GITHUB_STEP_SUMMARY"
+                  exit 0
+                fi
+                ;;
+              *) exit 1 ;;
+            esac
           fi
           [[ "$PREPARATION_RUN" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid run ID' >&2; exit 1; }
           gh api --paginate --slurp "$api/runs/$PREPARATION_RUN/artifacts?per_page=100" > "$evidence/pages.json"
@@ -172,11 +195,35 @@ jobs:
           index_name="release-artifact-index-attempt-$PRODUCING_ATTEMPT"
           attempt_api="$api/runs/$PREPARATION_RUN/attempts/$PRODUCING_ATTEMPT"
           gh api "$attempt_api" > "$evidence/run.json"
-          gh api --paginate --slurp "$attempt_api/jobs?per_page=100" > "$evidence/jobs.json"
+          if [[ ! -f "$evidence/jobs.json" ]]; then
+            gh api --paginate --slurp "$attempt_api/jobs?per_page=100" > "$evidence/jobs.json"
+          else
+            [[ "$PRODUCING_ATTEMPT" == 1 ]]
+          fi
           if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
             jq -e --slurpfile trigger "$GITHUB_EVENT_PATH" '
               .head_sha == $trigger[0].workflow_run.head_sha
             ' "$evidence/run.json" > /dev/null
+          fi
+          marker=$(unstable_job)
+          if [[ "$marker" != '[]' ]]; then
+            [[ "$GITHUB_REPOSITORY" == datamitsu/datamitsu && "$PROTECTED_REF" == true && -z "$REQUESTED_TAG" ]]
+            dispatch_sha=$(jq -er --arg repo "$GITHUB_REPOSITORY" --arg branch "$DEFAULT_BRANCH" '
+              select(.event == "workflow_dispatch" and .conclusion == "success" and
+                     .head_branch == $branch and .repository.full_name == $repo and .head_repository.full_name == $repo)
+              | .head_sha | select(test("^[0-9a-f]{40}$"))
+            ' "$evidence/run.json")
+            relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$dispatch_sha...$GITHUB_SHA" --jq .status)
+            [[ "$relation" == identical || "$relation" == ahead ]] || {
+              echo 'Unstable preparation workflow is not on the protected default branch' >&2
+              exit 1
+            }
+            PUBLISH_MODE=unstable
+            if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+              GITHUB_DESTINATION=$(jq -er '.[0].name | capture("^Prepare unstable release artifacts \\[([0-9a-f]{40}), (?<github>true|false)\\]$") | .github' <<< "$marker")
+              PUBLISH_PYPI=false
+              PUBLISH_RUBYGEMS=false
+            fi
           fi
           [[ "$INDEX_ID" =~ ^[1-9][0-9]*$ && "$INDEX_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
             echo 'Invalid index identity' >&2
@@ -199,7 +246,10 @@ jobs:
               sys.exit("Index ZIP exceeds 128 KiB")
           sys.stdout.buffer.write(archive)
           ' > "$evidence/index.zip"
-          route=(--publish-mode prerelease --publish-github-release "$GITHUB_DESTINATION")
+          route=(--publish-mode "$PUBLISH_MODE" --publish-github-release "$GITHUB_DESTINATION")
+          if [[ "$PUBLISH_MODE" == unstable ]]; then
+            route+=(--trusted-dispatch-sha "$dispatch_sha")
+          fi
           if [[ -n "$REQUESTED_TAG" ]]; then
             [[ "$REQUESTED_TAG" =~ $tag_pattern ]]
             tagged_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$REQUESTED_TAG" --jq .sha)
@@ -274,6 +324,9 @@ jobs:
             printf 'Release evidence checked; publication enabled: `%s` (approval is separate)\n\n' "$PUBLICATION_REQUEST"
             printf 'Index: `%s` (`%s`)\n\n' "$INDEX_ID" "$INDEX_DIGEST"
             printf 'Publisher orchestration: `%s` at `%s`\n\n' "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA"
+            if [[ "$mode" == unstable ]]; then
+              printf 'Preparation orchestration: `%s`\n\n' "$dispatch_sha"
+            fi
             jq -r '"- Source: `\(.source_sha)`\n- Tag: `\(.release_tag)`\n- Version: `\(.version)`\n- Preparation run: `\(.run_id)`\n- Producing attempt: `\(.producing_attempt)`"' "$evidence/verified.json"
             if [[ "$mode" == tag ]]; then
               printf 'Tagged destinations requested: PyPI `%s`, RubyGems `%s`\n' "$PUBLISH_PYPI" "$PUBLISH_RUBYGEMS"
@@ -289,7 +342,7 @@ jobs:
             else
               printf '%s\n' '- Destinations: npm unstable; GHCR unstable CLI images and parser'
             fi
-            if [[ "$mode" == prerelease && "$GITHUB_DESTINATION" == true ]]; then
+            if [[ "$mode" != tag && "$GITHUB_DESTINATION" == true ]]; then
               printf '%s\n' '- Optional destination: GitHub Pre-release (not Latest)'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
@@ -719,7 +772,7 @@ jobs:
           printf 'Checksum signature recovery: `%s %s sha256:%s sha256:%s %s`\n' \
             "$GITHUB_RUN_ID" "$ARTIFACT_ID" "$archive_hex" "$digest" "$SIGNER_SHA" >> "$GITHUB_STEP_SUMMARY"
   verify-parser:
-    if: ${{ always() && !cancelled() && needs.preflight.result == 'success' && (needs.preflight.outputs.mode == 'prerelease' || needs.preflight.outputs.mode == 'tag') && (needs.finalize-parser.result == 'success' || (inputs.reuse_parser_finalization && needs.finalize-parser.result == 'skipped')) }}
+    if: ${{ always() && !cancelled() && needs.preflight.result == 'success' && (needs.preflight.outputs.mode == 'prerelease' || needs.preflight.outputs.mode == 'unstable' || needs.preflight.outputs.mode == 'tag') && (needs.finalize-parser.result == 'success' || (inputs.reuse_parser_finalization && needs.finalize-parser.result == 'skipped')) }}
     needs:
       - preflight
       - finalize-parser
@@ -928,7 +981,7 @@ jobs:
         env:
           APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          LEGACY_BASELINE: ${{ needs.preflight.outputs.mode == 'prerelease' && vars.NPM_UNSTABLE_CUTOVER_BASELINE || contains(needs.preflight.outputs.version, '-rc.') && vars.NPM_NEXT_CUTOVER_BASELINE || needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') && vars.NPM_LATEST_CUTOVER_BASELINE || '' }}
+          LEGACY_BASELINE: ${{ (needs.preflight.outputs.mode == 'prerelease' || needs.preflight.outputs.mode == 'unstable') && vars.NPM_UNSTABLE_CUTOVER_BASELINE || contains(needs.preflight.outputs.version, '-rc.') && vars.NPM_NEXT_CUTOVER_BASELINE || needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') && vars.NPM_LATEST_CUTOVER_BASELINE || '' }}
         shell: bash
         run: |
           args=("$RUNNER_TEMP/release-payloads/release/dist/npm" "$APPROVED_VERSION")

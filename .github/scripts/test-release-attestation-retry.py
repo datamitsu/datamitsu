@@ -130,14 +130,27 @@ class AttestationRetryTest(unittest.TestCase):
                 }
             )
 
-    def validate_index(self, build_conclusion):
+    def validate_index(
+        self,
+        build_conclusion,
+        *,
+        index_value=None,
+        run_fields=None,
+        build_name="Prepare release artifacts",
+        route=None,
+    ):
         def write(name, data):
             path = self.root / name
             path.write_text(json.dumps(data))
             return str(path)
 
+        data = (
+            self.index
+            if index_value is None
+            else archive("release-artifact-index.json", index_value)
+        )
         index = self.root / "index.zip"
-        index.write_bytes(self.index)
+        index.write_bytes(data)
         run = write(
             "run.json",
             {
@@ -148,6 +161,7 @@ class AttestationRetryTest(unittest.TestCase):
                 "run_attempt": 1,
                 "status": "completed",
                 "conclusion": "failure",
+                **(run_fields or {}),
             },
         )
         jobs = write(
@@ -156,7 +170,7 @@ class AttestationRetryTest(unittest.TestCase):
                 {
                     "jobs": [
                         {
-                            "name": "Prepare release artifacts",
+                            "name": build_name,
                             "run_id": int(RUN),
                             "head_sha": SHA,
                             "run_attempt": 1,
@@ -174,7 +188,7 @@ class AttestationRetryTest(unittest.TestCase):
                     {
                         "name": "release-artifact-index-attempt-1",
                         "id": int(INDEX),
-                        "digest": digest(self.index),
+                        "digest": digest(data),
                         "expired": False,
                     },
                     *[
@@ -201,9 +215,8 @@ class AttestationRetryTest(unittest.TestCase):
                 "--index-id",
                 INDEX,
                 "--archive-digest",
-                digest(self.index),
-                "--trigger-tag",
-                TAG,
+                digest(data),
+                *(route if route is not None else ["--trigger-tag", TAG]),
                 "--archive",
                 str(index),
                 "--run-metadata",
@@ -262,6 +275,89 @@ class AttestationRetryTest(unittest.TestCase):
         result = self.validate_index("failure")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("release build did not succeed", result.stderr)
+
+    def test_unstable_index_matches_independent_build_identity(self):
+        source = "b" * 40
+        index = {
+            "run_id": RUN,
+            "mode": "unstable",
+            "release_tag": f"unstable-{RUN}-1",
+            "version": f"0.0.0-unstable.{RUN}.1",
+            "github_release": False,
+            "source_sha": source,
+            "workflow_sha": SHA,
+            "preparation_attempt": "1",
+            "producing_attempt": "1",
+            "artifacts": self.payloads,
+        }
+        route = [
+            "--publish-mode",
+            "unstable",
+            "--publish-github-release",
+            "false",
+            "--trusted-dispatch-sha",
+            SHA,
+        ]
+        name = f"Prepare unstable release artifacts [{source}, false]"
+        run_fields = {"event": "workflow_dispatch", "conclusion": "success"}
+        for label, overrides, job, dispatch, arguments, error in (
+            ("independent source", {}, name, {}, route, None),
+            (
+                "index claims another source",
+                {"source_sha": SHA},
+                name,
+                {},
+                route,
+                "mismatched release build",
+            ),
+            (
+                "index claims another workflow",
+                {"workflow_sha": source},
+                name,
+                {},
+                route,
+                "trusted dispatch SHA",
+            ),
+            (
+                "job approved another destination",
+                {},
+                f"Prepare unstable release artifacts [{source}, true]",
+                {},
+                route,
+                "mismatched release build",
+            ),
+            ("unauthorized workflow", {}, name, {}, route[:-2], "trusted dispatch SHA"),
+            (
+                "failed preparation",
+                {},
+                name,
+                {"conclusion": "failure"},
+                route,
+                "successful preparation attempt",
+            ),
+            (
+                "manual prerelease route",
+                {},
+                name,
+                {},
+                ["--publish-mode", "prerelease", *route[2:]],
+                "does not match the index mode",
+            ),
+        ):
+            with self.subTest(label=label):
+                result = self.validate_index(
+                    "success",
+                    index_value={**index, **overrides},
+                    run_fields={**run_fields, **dispatch},
+                    build_name=job,
+                    route=arguments,
+                )
+                if error is None:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(json.loads(result.stdout)["source_sha"], source)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(error, result.stderr)
 
     def test_same_bytes_on_another_index_are_not_accepted(self):
         self.fetch_proofs()

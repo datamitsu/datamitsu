@@ -23,8 +23,12 @@ def main():
     )
     parser.add_argument(
         "--publish-mode",
-        choices=("prerelease",),
-        help="Mode explicitly selected in the publisher dispatch",
+        choices=("prerelease", "unstable"),
+        help="Independently authorized nonstable publication mode",
+    )
+    parser.add_argument(
+        "--trusted-dispatch-sha",
+        help="Unstable workflow revision verified against the protected default branch",
     )
     parser.add_argument(
         "--publish-github-release",
@@ -91,12 +95,17 @@ def main():
             require(entries[0].file_size <= 65536, "index JSON is too large")
             index = json.loads(bundle.read(entries[0]))
     require(
-        index["run_id"] == args.run_id and index["source_sha"] == run["head_sha"],
+        index["run_id"] == args.run_id,
         "index does not match run identity",
     )
     mode = index["mode"]
     require(
-        (mode, run["event"]) in {("tag", "push"), ("prerelease", "workflow_dispatch")},
+        (mode, run["event"])
+        in {
+            ("tag", "push"),
+            ("prerelease", "workflow_dispatch"),
+            ("unstable", "workflow_dispatch"),
+        },
         "index is not a publishing preparation",
     )
     producing = index["producing_attempt"]
@@ -112,14 +121,41 @@ def main():
         "run metadata is not for the producing attempt",
     )
     require(run["status"] == "completed", "producing attempt is not complete")
+    source_sha = index["source_sha"]
+    require(re.fullmatch(r"[0-9a-f]{40}", source_sha), "invalid product SHA")
+    tag = index["release_tag"]
+    github_release = index["github_release"]
+    require(type(github_release) is bool, "invalid GitHub release selection")
+    build_name = "Prepare release artifacts"
+    if mode == "unstable":
+        require(
+            args.trusted_dispatch_sha is not None
+            and index.get("workflow_sha")
+            == run["head_sha"]
+            == args.trusted_dispatch_sha,
+            "unstable index does not match the trusted dispatch SHA",
+        )
+        require(
+            preparation == producing == "1" and run["conclusion"] == "success",
+            "unstable requires the first successful preparation attempt",
+        )
+        # GitHub assigns this job name before starting any product-source steps.
+        build_name = f"Prepare unstable release artifacts [{source_sha}, {str(github_release).lower()}]"
+    else:
+        require(
+            source_sha == run["head_sha"] and args.trusted_dispatch_sha is None,
+            "index does not match run identity",
+        )
     builds = [
         job
         for page in json.loads(args.job_metadata.read_text())
         for job in page["jobs"]
         if job["name"] == "Prepare release artifacts"
+        or job["name"].startswith("Prepare unstable release artifacts [")
     ]
     require(
-        len(builds) == 1, "missing or ambiguous release build in the producing attempt"
+        len(builds) == 1 and builds[0]["name"] == build_name,
+        "missing, ambiguous, or mismatched release build in the producing attempt",
     )
     build = builds[0]
     require(
@@ -130,9 +166,6 @@ def main():
         and build["conclusion"] == "success",
         "release build did not succeed for this index's producing attempt",
     )
-    tag = index["release_tag"]
-    github_release = index["github_release"]
-    require(type(github_release) is bool, "invalid GitHub release selection")
     if mode == "tag":
         require(
             args.publish_mode is None and args.publish_github_release is None,
@@ -154,8 +187,8 @@ def main():
     else:
         require(args.trigger_tag is None, "unexpected trigger tag for a manual run")
         require(
-            args.publish_mode == "prerelease",
-            "explicit prerelease publication request is required",
+            args.publish_mode == mode,
+            "nonstable publication route does not match the index mode",
         )
         require(
             args.publish_github_release is not None,

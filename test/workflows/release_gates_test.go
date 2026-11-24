@@ -6,6 +6,7 @@ package workflows_test
 import (
 	"errors"
 	"maps"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -167,8 +168,60 @@ func TestReleaseRouting(t *testing.T) {
 				t.Fatalf("release routing failed: %v: %s", err, log)
 			}
 			got, err := os.ReadFile(output)
-			if err != nil || !strings.HasPrefix(string(got), "checkout_ref="+sha+"\n") || !strings.Contains(string(got), tc.want) {
+			if err != nil || !strings.Contains(string(got), "checkout_ref="+sha+"\n") || !strings.Contains(string(got), tc.want) {
 				t.Fatalf("routing output %q, error %v; want event SHA and %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestUnstableDispatchResolvesProductFromProtectedWorkflow(t *testing.T) {
+	var script string
+	for _, step := range loadReleaseWorkflow(t).Jobs["determine-release-type"].Steps {
+		if step.ID == "detect" {
+			script = step.Run
+		}
+	}
+	const mock = `gh() {
+	[[ "$*" == "api $EXPECTED_API_PATH --jq .sha" ]] || return 2
+	printf '%s\n' "$RESOLVED_SHA"
+}
+`
+	dispatchSHA, productSHA := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	for _, tc := range []struct {
+		name, ref, product, protected, workflow, attempt, output string
+	}{
+		{"protected default branch", "refs/heads/main", "refs/heads/feature/demo", "true", dispatchSHA, "1", productSHA},
+		{"feature workflow", "refs/heads/feature", "refs/heads/feature/demo", "true", dispatchSHA, "1", ""},
+		{"unprotected default branch", "refs/heads/main", "refs/heads/feature/demo", "false", dispatchSHA, "1", ""},
+		{"workflow revision mismatch", "refs/heads/main", "refs/heads/feature/demo", "true", productSHA, "1", ""},
+		{"unstable rebuild", "refs/heads/main", "refs/heads/feature/demo", "true", dispatchSHA, "2", ""},
+		{"missing product ref", "refs/heads/main", "", "true", dispatchSHA, "1", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			output := filepath.Join(dir, "output")
+			cmd := exec.CommandContext(t.Context(), "bash", "-ec", mock+script)
+			cmd.Env = append(os.Environ(), "GITHUB_EVENT_NAME=workflow_dispatch", "RELEASE_MODE=unstable",
+				"GITHUB_REPOSITORY=datamitsu/datamitsu", "DEFAULT_BRANCH=main", "WANT_PRERELEASE=false",
+				"GITHUB_REF="+tc.ref, "PROTECTED_REF="+tc.protected, "GITHUB_SHA="+dispatchSHA,
+				"GITHUB_WORKFLOW_SHA="+tc.workflow, "GITHUB_RUN_ATTEMPT="+tc.attempt,
+				"PRODUCT_REF="+tc.product, "RESOLVED_SHA="+productSHA, "GITHUB_OUTPUT="+output,
+				"EXPECTED_API_PATH=repos/datamitsu/datamitsu/commits/"+url.PathEscape(tc.product),
+				"GITHUB_STEP_SUMMARY="+filepath.Join(dir, "summary"))
+			log, err := cmd.CombinedOutput()
+			if tc.output == "" {
+				if _, ok := errors.AsType[*exec.ExitError](err); !ok {
+					t.Fatalf("expected unstable rejection, got %v: %s", err, log)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unstable routing failed: %v: %s", err, log)
+			}
+			got, err := os.ReadFile(output)
+			if err != nil || !strings.Contains(string(got), "checkout_ref="+tc.output+"\n") || !strings.Contains(string(got), "mode=unstable\n") {
+				t.Fatalf("unstable routing output %q, error %v; want resolved SHA %s", got, err, tc.output)
 			}
 		})
 	}
@@ -339,11 +392,7 @@ func TestReleasePreparationCannotPublish(t *testing.T) {
 			if permissions == nil {
 				permissions = wf.Permissions
 			}
-			if name == "determine-release-type" {
-				if len(permissions) != 0 {
-					t.Errorf("%s must not have token scopes", name)
-				}
-			} else if len(permissions) != 1 || permissions["contents"] != "read" {
+			if len(permissions) != 1 || permissions["contents"] != "read" {
 				t.Errorf("%s must only have contents: read, got %v", name, permissions)
 			}
 			continue

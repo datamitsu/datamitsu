@@ -1,12 +1,13 @@
 # cspell:ignore argjson fsys nocompression pkgver rwxr strenv tvzf
 jobs:
   build:
+    cache-mode: read
     if: |
       always() &&
       !cancelled() &&
       needs.determine-release-type.outputs.verify != 'true' &&
       (needs.validate-stable.result == 'success' || needs.generate-unstable-version.result == 'success')
-    name: Prepare release artifacts
+    name: ${{ inputs.mode == 'unstable' && format('Prepare unstable release artifacts [{0}, {1}]', needs.determine-release-type.outputs.checkout_ref, needs.determine-release-type.outputs.want_prerelease) || 'Prepare release artifacts' }}
     needs:
       - determine-release-type
       - validate-stable
@@ -30,6 +31,16 @@ jobs:
           fetch-depth: 0
           ref: ${{ needs.determine-release-type.outputs.checkout_ref }}
           persist-credentials: false
+      - name: Verify selected product checkout
+        env:
+          SOURCE_SHA: ${{ needs.determine-release-type.outputs.checkout_ref }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" ]]
+          [[ "$MODE" != unstable || "$GITHUB_RUN_ATTEMPT" == 1 ]] || {
+            echo 'Start a new unstable dispatch to rebuild; recover publication from the original index' >&2
+            exit 1
+          }
       - uses: ./.github/actions/setup-environment
         with:
           cache-datamitsu: "false"
@@ -297,6 +308,7 @@ jobs:
           IS_STABLE: ${{ needs.determine-release-type.outputs.is_stable }}
           PARSER_VERSION: ${{ needs.generate-unstable-version.outputs.version }}
           PREPARATION_ATTEMPT: ${{ needs.validate-stable.outputs.attempt || needs.generate-unstable-version.outputs.attempt }}
+          PREPARATION_SHA: ${{ needs.determine-release-type.outputs.checkout_ref }}
           UNSTABLE_TAG: ${{ needs.generate-unstable-version.outputs.tag_name }}
           VERSION: ${{ needs.validate-stable.outputs.version }}
         run: |
@@ -422,6 +434,7 @@ jobs:
             ghcr.io/datamitsu/datamitsu
             docker.io/datamitsu/datamitsu
           labels: |
+            org.opencontainers.image.revision=${{ needs.determine-release-type.outputs.checkout_ref }}
             org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
           tags: |
             type=raw,value=test-debian
@@ -435,6 +448,7 @@ jobs:
             ghcr.io/datamitsu/datamitsu
             docker.io/datamitsu/datamitsu
           labels: |
+            org.opencontainers.image.revision=${{ needs.determine-release-type.outputs.checkout_ref }}
             org.opencontainers.image.version=${{ steps.version.outputs.normalized }}
           tags: |
             type=raw,value=test-alpine
@@ -481,7 +495,8 @@ jobs:
           VSIX_ID: ${{ steps.upload-vsix.outputs.artifact-id }}
           VSIX_DIGEST: ${{ steps.upload-vsix.outputs.artifact-digest }}
           PREPARATION_ATTEMPT: ${{ steps.prepare-parser.outputs.attempt }}
-          PREPARATION_MODE: ${{ needs.determine-release-type.outputs.verify == 'true' && 'verify' || needs.determine-release-type.outputs.is_stable == 'true' && 'tag' || 'prerelease' }}
+          PREPARATION_MODE: ${{ needs.determine-release-type.outputs.mode }}
+          SOURCE_SHA: ${{ needs.determine-release-type.outputs.checkout_ref }}
           RELEASE_TAG: ${{ needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.tag_name }}
           GITHUB_RELEASE: ${{ needs.determine-release-type.outputs.is_stable == 'true' || (needs.determine-release-type.outputs.verify != 'true' && needs.determine-release-type.outputs.want_prerelease == 'true') }}
         run: |
@@ -491,19 +506,20 @@ jobs:
           for digest in "$RELEASE_DIGEST" "$VSIX_DIGEST"; do
             [[ "$digest" =~ ^(sha256:)?[0-9a-f]{64}$ ]] || { echo 'Missing or invalid artifact digest' >&2; exit 1; }
           done
-          jq -n --arg sha "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" \
+          jq -n --arg sha "$SOURCE_SHA" --arg workflow "$GITHUB_WORKFLOW_SHA" --arg run "$GITHUB_RUN_ID" \
             --arg attempt "$PREPARATION_ATTEMPT" --arg producer "$GITHUB_RUN_ATTEMPT" \
             --arg mode "$PREPARATION_MODE" \
             --arg tag "$RELEASE_TAG" --argjson githubRelease "$GITHUB_RELEASE" \
             --arg version "$(jq -er '.version' dist/metadata.json)" \
             --arg release "$RELEASE_ID" --arg releaseDigest "sha256:${RELEASE_DIGEST#sha256:}" \
             --arg vsix "$VSIX_ID" --arg vsixDigest "sha256:${VSIX_DIGEST#sha256:}" \
-            '{mode:$mode, release_tag:$tag, github_release:$githubRelease, source_sha:$sha, version:$version, run_id:$run, preparation_attempt:$attempt, producing_attempt:$producer, artifacts:{release:{id:$release,archive_digest:$releaseDigest}, vsix:{id:$vsix,archive_digest:$vsixDigest}}}' \
+            '{mode:$mode, release_tag:$tag, github_release:$githubRelease, source_sha:$sha, workflow_sha:$workflow, version:$version, run_id:$run, preparation_attempt:$attempt, producing_attempt:$producer, artifacts:{release:{id:$release,archive_digest:$releaseDigest}, vsix:{id:$vsix,archive_digest:$vsixDigest}}}' \
             > "$RUNNER_TEMP/release-artifact-index.json"
           printf 'Preparation artifacts for `%s` (run `%s`, producing attempt `%s`):\n\n- Release: ID `%s`, archive SHA-256 `%s`\n- VSIX: ID `%s`, archive SHA-256 `%s`\n' \
-            "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$RELEASE_ID" "$RELEASE_DIGEST" "$VSIX_ID" "$VSIX_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+            "$SOURCE_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$RELEASE_ID" "$RELEASE_DIGEST" "$VSIX_ID" "$VSIX_DIGEST" >> "$GITHUB_STEP_SUMMARY"
           printf '\n- Release tag: `%s`\n- GitHub Release requested: `%s`\n' \
             "$RELEASE_TAG" "$GITHUB_RELEASE" >> "$GITHUB_STEP_SUMMARY"
+          printf '\n- Preparation workflow SHA: `%s`\n' "$GITHUB_WORKFLOW_SHA" >> "$GITHUB_STEP_SUMMARY"
       - if: ${{ !env.ACT }}
         name: Upload the release artifact index
         id: upload-index
@@ -623,9 +639,11 @@ jobs:
     steps: *release_build_steps
   determine-release-type:
     name: Determine Release Type
-    permissions: {}
+    permissions:
+      contents: read
     outputs:
       checkout_ref: ${{ steps.detect.outputs.checkout_ref }}
+      mode: ${{ steps.detect.outputs.mode }}
       tag_ref: ${{ steps.detect.outputs.tag_ref }}
       is_stable: ${{ steps.detect.outputs.is_stable }}
       is_unstable: ${{ steps.detect.outputs.is_unstable }}
@@ -638,9 +656,13 @@ jobs:
         env:
           WANT_PRERELEASE: ${{ inputs.create_github_prerelease }}
           RELEASE_MODE: ${{ inputs.mode }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT_REF: ${{ inputs.product_ref }}
+          PROTECTED_REF: ${{ github.ref_protected }}
         run: |
           [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
-          echo "checkout_ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          source_sha=$GITHUB_SHA
           case "$GITHUB_EVENT_NAME" in
             push)
               number='(0|[1-9][0-9]*)'
@@ -648,6 +670,7 @@ jobs:
                 echo "Invalid release tag" >&2
                 exit 1
               fi
+              echo 'mode=tag' >> "$GITHUB_OUTPUT"
               echo "tag_ref=$GITHUB_REF" >> "$GITHUB_OUTPUT"
               echo "is_stable=true" >> "$GITHUB_OUTPUT"
               echo "is_unstable=false" >> "$GITHUB_OUTPUT"
@@ -656,8 +679,35 @@ jobs:
               case "$RELEASE_MODE" in
                 verify) echo 'verify=true' >> "$GITHUB_OUTPUT" ;;
                 prerelease) echo 'verify=false' >> "$GITHUB_OUTPUT" ;;
+                unstable)
+                  [[ "$GITHUB_REPOSITORY" == datamitsu/datamitsu && "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" &&
+                     "$PROTECTED_REF" == true && "$GITHUB_WORKFLOW_SHA" == "$GITHUB_SHA" && "$GITHUB_RUN_ATTEMPT" == 1 ]] || {
+                    echo 'Unstable requires a new dispatch from the protected default branch' >&2
+                    exit 1
+                  }
+                  if [[ ! "$PRODUCT_REF" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]]; then
+                    echo 'Set product_ref to a branch, tag, or full commit SHA' >&2
+                    exit 1
+                  fi
+                  case "$PRODUCT_REF" in
+                    refs/heads/*|refs/tags/*) git check-ref-format "$PRODUCT_REF" ;;
+                    refs/*) exit 1 ;;
+                    *) git check-ref-format "refs/heads/$PRODUCT_REF" ;;
+                  esac
+                  encoded_ref=$(jq -nr --arg ref "$PRODUCT_REF" '$ref | @uri')
+                  source_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$encoded_ref" --jq .sha)
+                  [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+                  if [[ "$PRODUCT_REF" =~ ^[0-9a-f]{40}$ && "$source_sha" != "$PRODUCT_REF" ]]; then
+                    echo 'Resolved SHA does not match the requested commit' >&2
+                    exit 1
+                  fi
+                  printf 'Product ref `%s` resolved to `%s`; preparation workflow `%s`.\n' \
+                    "$PRODUCT_REF" "$source_sha" "$GITHUB_WORKFLOW_SHA" >> "$GITHUB_STEP_SUMMARY"
+                  echo 'verify=false' >> "$GITHUB_OUTPUT"
+                  ;;
                 *) exit 1 ;;
               esac
+              printf 'mode=%s\n' "$RELEASE_MODE" >> "$GITHUB_OUTPUT"
               echo "is_stable=false" >> "$GITHUB_OUTPUT"
               echo "is_unstable=true" >> "$GITHUB_OUTPUT"
               [[ "$WANT_PRERELEASE" == true ]] || WANT_PRERELEASE=false
@@ -665,6 +715,7 @@ jobs:
               ;;
             *) exit 1 ;;
           esac
+          printf 'checkout_ref=%s\n' "$source_sha" >> "$GITHUB_OUTPUT"
   generate-unstable-version:
     if: |
       always() &&
@@ -740,16 +791,21 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Verify the release build or prepare a prerelease without publishing
+        description: Verify, prepare a prerelease, or publish an unstable product ref
         default: verify
         options:
           - verify
           - prerelease
+          - unstable
         required: true
         type: choice
+      product_ref:
+        description: Branch, tag, or full commit SHA to build in unstable mode (required there)
+        required: false
+        type: string
       create_github_prerelease:
         default: false
-        description: Request GitHub assets for the future publisher (publication disabled)
+        description: Include a GitHub Pre-release in the non-Verify publication request
         required: false
         type: boolean
 permissions:

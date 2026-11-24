@@ -283,31 +283,44 @@ git rebase --reset-author-date --exec 'git commit --amend --no-edit --reset-auth
 ## Releases
 
 The [Release workflow](.github/workflows/release.yml) prepares checked artifacts.
-Choose `verify` (the default) to build from any selected branch without signing
-or publishing. Choose `prerelease` to prepare unstable artifacts for deliberate
-publication. A protected `vX.Y.Z` or `vX.Y.Z-rc.N` tag starts a tagged release.
-The workflow must exist on the default branch before GitHub allows dispatch.
+
+- `verify` (default): build from the selected branch without signing or publishing.
+- `prerelease`: build from the selected branch and use a separate manual
+  preflight to publish the checked artifacts.
+- `unstable`: select the protected default branch in the workflow picker and
+  set `product_ref` to a branch, tag, or full commit SHA in this repository.
+  The workflow resolves it once and builds that SHA. It runs the same checks
+  and automatically hands the index to `Release Preflight` when successful.
+
+`product_ref` only applies to `unstable`. Use `refs/heads/...` or `refs/tags/...`
+to disambiguate a branch and tag of the same name. A protected `vX.Y.Z` or
+`vX.Y.Z-rc.N` tag starts a tagged release. The workflow must exist on the default
+branch before GitHub allows dispatch.
 
 The npm launcher is outside the default workspace globs. The release workflow
 packs it from the workspace root with an explicit package selection so `pnpm`
 resolves `catalog:` from the root configuration. Generated platform packages
 are packed independently so root ignore rules do not omit their executables.
 The smoke test installs the packed launcher and matching host archive offline.
+The preparation job can restore GitHub Actions caches but cannot save them.
 
 [Release Preflight](.github/workflows/release-preflight.yml) starts automatically
-after a successful tagged preparation. It runs from the protected default
-branch, finds the original index, and checks that its producing build job
-succeeded. It validates the index archive and every referenced payload and
-records the producer SHA and publisher workflow SHA separately. A moved tag,
-ambiguous index, expired artifact, or digest mismatch blocks publication.
+after a successful tagged or `unstable` preparation. It runs on the protected
+default branch, checks the original index and GitHub's producing job metadata,
+and validates every referenced payload. It records the product SHA separately
+from the trusted workflow revision. A moved tag, ambiguous index, expired
+artifact, or digest mismatch blocks publication.
 Publisher jobs consume the prepared bytes without rebuilding them or running
 product-source scripts.
 
-For unstable publication or a recovery dispatch, use **Release Preflight** on
+For a manual `prerelease` publication or recovery, use **Release Preflight** on
 the default branch. Copy the preparation run ID, producing attempt, index ID,
 and index archive SHA-256 from the original preparation summary. Repeat the
-original optional GitHub destination choice for unstable. Enter `release_tag`
-for a tagged recovery. If completing all stable destinations on recovery, also
+original `github_release` choice. For an unmerged product SHA, leave GitHub
+Pre-release disabled; npm and GHCR do not require the product SHA on the
+default branch. To rebuild `unstable`, start a new dispatch. For publication
+recovery, reuse the original index, not a rebuild. Enter `release_tag` for a
+tagged recovery. If completing all stable destinations on recovery, also
 select `publish_pypi` and `publish_rubygems`. Do not choose newer artifact IDs
 or create a second tag to recover a partial release.
 
