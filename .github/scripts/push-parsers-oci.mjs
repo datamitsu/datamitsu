@@ -41,7 +41,8 @@ const UNSTABLE_REPO = "datamitsu/datamitsu-parsers-unstable";
  */
 class Registry {
   constructor(registry, repo, token) {
-    this.base = `https://${registry}/v2/${repo}`;
+    this.origin = `https://${registry}`;
+    this.base = `${this.origin}/v2/${repo}`;
     this.repo = repo;
     this.token = undefined;
     this.password = token;
@@ -57,9 +58,10 @@ class Registry {
     }
     const realm = parameters.get("realm");
     if (!realm) {
-      throw new Error(`unsupported auth challenge: ${challenge}`);
+      throw new Error("unsupported registry authentication challenge");
     }
-    const url = new URL(realm);
+    const url = this.registryURL(realm);
+    if (url.pathname !== "/token") throw new Error("unexpected registry token endpoint");
     const service = parameters.get("service");
     if (service) {
       url.searchParams.set("service", service);
@@ -71,7 +73,7 @@ class Registry {
     if (this.password) {
       headers.Authorization = `Basic ${Buffer.from(`x-access-token:${this.password}`).toString("base64")}`;
     }
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, { headers, redirect: "error" });
     if (!response.ok) {
       throw new Error(`token endpoint returned ${response.status}`);
     }
@@ -82,12 +84,17 @@ class Registry {
     }
   }
 
-  async getManifest(reference) {
-    const response = await this.request(
-      `/manifests/${reference}`,
-      { method: "GET" },
-      MANIFEST_MEDIA_TYPE,
-    );
+  async getManifest(reference, { accept = MANIFEST_MEDIA_TYPE, allowMissing = false } = {}) {
+    const response = await this.request(`/manifests/${reference}`, { method: "GET" }, accept);
+    if (allowMissing && response.status === 404) {
+      const body = await response
+        .clone()
+        .json()
+        .catch(() => null);
+      if (body?.errors?.length && body.errors.every(({ code }) => code === "MANIFEST_UNKNOWN")) {
+        return null;
+      }
+    }
     if (!response.ok) {
       throw new Error(`GET manifest ${reference}: ${response.status} ${await response.text()}`);
     }
@@ -95,11 +102,14 @@ class Registry {
   }
 
   /**
-   * Uploads a blob unless the registry already has it. Returns its descriptor.
+   * Uploads a blob unless the registry already has it.
    */
-  async putBlob(bytes, mediaType, annotations) {
+  async putBlob(bytes) {
     const digest = `sha256:${sha256Hex(bytes)}`;
     const head = await this.request(`/blobs/${digest}`, { method: "HEAD" });
+    if (head.status !== 200 && head.status !== 404) {
+      throw new Error(`HEAD blob ${digest}: ${head.status}`);
+    }
     if (head.status !== 200) {
       const start = await this.request("/blobs/uploads/", { method: "POST" });
       if (start.status !== 202) {
@@ -109,7 +119,7 @@ class Registry {
       if (!location) {
         throw new Error("blob upload returned no Location header");
       }
-      const target = new URL(location, this.base + "/");
+      const target = this.registryURL(location, this.base + "/");
       target.searchParams.set("digest", digest);
       const put = await this.request(target.href, {
         body: bytes,
@@ -120,11 +130,6 @@ class Registry {
         throw new Error(`PUT blob ${digest}: ${put.status} ${await put.text()}`);
       }
     }
-    const descriptor = { digest, mediaType, size: bytes.length };
-    if (annotations) {
-      descriptor.annotations = annotations;
-    }
-    return descriptor;
   }
 
   async putManifest(reference, bytes) {
@@ -133,14 +138,22 @@ class Registry {
       headers: { "Content-Type": MANIFEST_MEDIA_TYPE },
       method: "PUT",
     });
-    if (!response.ok) {
+    if (response.status !== 201) {
       throw new Error(`PUT manifest ${reference}: ${response.status} ${await response.text()}`);
     }
-    return response.headers.get("docker-content-digest") ?? `sha256:${sha256Hex(bytes)}`;
+    return response.headers.get("docker-content-digest");
+  }
+
+  registryURL(value, base) {
+    const url = new URL(value, base);
+    if (url.origin !== this.origin || url.username || url.password) {
+      throw new Error("unexpected registry URL origin or credentials");
+    }
+    return url;
   }
 
   async request(path, init, accept) {
-    const url = path.startsWith("http") ? path : this.base + path;
+    const url = this.registryURL(path.startsWith("/") ? this.base + path : path);
     const send = async () => {
       const headers = new Headers(init.headers);
       if (accept) {
@@ -149,7 +162,7 @@ class Registry {
       if (this.token) {
         headers.set("Authorization", `Bearer ${this.token}`);
       }
-      return fetch(url, { ...init, headers });
+      return fetch(url, { ...init, headers, redirect: "error" });
     };
     let response = await send();
     if (response.status === 401) {
@@ -172,62 +185,100 @@ function emitOutput(key, value) {
 }
 
 async function main() {
+  if (process.argv[2] === "lookup-image") {
+    const tag = process.argv[3];
+    if (!/^unstable-[1-9]\d*-[1-9]\d*(?:-alpine)?$/.test(tag ?? "")) {
+      throw new Error("invalid unstable image tag");
+    }
+    const token = process.env.GITHUB_TOKEN;
+    if (!token) throw new Error("GITHUB_TOKEN is required for image lookup");
+    const registry = new Registry("ghcr.io", "datamitsu/datamitsu-unstable", token);
+    const raw = await registry.getManifest(tag, {
+      accept: [
+        "application/vnd.oci.image.index.v1+json",
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+        MANIFEST_MEDIA_TYPE,
+        "application/vnd.docker.distribution.manifest.v2+json",
+      ].join(", "),
+      allowMissing: true,
+    });
+    console.log(JSON.stringify(raw === null ? null : `sha256:${sha256Hex(raw)}`));
+    return;
+  }
+  const { hash, isStable, manifestBytes, module, record, repo } = prepare();
+  const recordText = `${JSON.stringify(record, null, 2)}\n`;
+  if (process.argv[2] === "prepare") {
+    writeFileSync("dist/parsers-oci-manifest.json", manifestBytes);
+    writeFileSync("dist/parsers-oci.json", recordText);
+    return;
+  }
+  const promote = process.argv[2] === "promote-stable";
+  const check = process.argv[2] === "check-prepared";
+  if (process.argv[2] !== "publish" && !promote && !check) {
+    throw new Error("expected prepare, check-prepared, publish, or promote-stable");
+  }
+  if (promote && (!isStable || record.version.includes("-rc."))) {
+    throw new Error("only stable releases may promote the latest parser channel");
+  }
+  const prepared = readFileSync("dist/parsers-oci-manifest.json");
+  if (
+    !prepared.equals(manifestBytes) ||
+    readFileSync("dist/parsers-oci.json", "utf8") !== recordText
+  ) {
+    throw new Error("prepared parser manifest or pin does not match the checked inputs");
+  }
+  if (check) return;
   const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    throw new Error("GITHUB_TOKEN is required to push to the registry");
-  }
-
-  const isStable = process.env.IS_STABLE === "true";
-  const repo = isStable ? STABLE_REPO : UNSTABLE_REPO;
-  const version = isStable
-    ? (process.env.VERSION || "").replace(/^v/, "")
-    : process.env.UNSTABLE_TAG || "";
-  if (!version) {
-    throw new Error(
-      isStable
-        ? "VERSION is required for a stable release"
-        : "UNSTABLE_TAG is required for an unstable build",
-    );
-  }
-
-  const { hash, name } = resolveModule("dist/checksums.txt");
-  const module = readFileSync(`dist/${name}`);
-  const actual = sha256Hex(module);
-  // Both sides are published checksums of a public artifact, not secrets: there is
-  // nothing for a timing difference to leak, and an integrity check must stay exact.
-  // eslint-disable-next-line security/detect-possible-timing-attacks
-  if (actual !== hash) {
-    throw new Error(`dist/${name} hashes ${actual}, but checksums.txt records ${hash}`);
-  }
-
+  if (!token) throw new Error("GITHUB_TOKEN is required to push to the registry");
+  const { digest, ref: reference, sha256: pin, tag } = record;
   const registry = new Registry(REGISTRY, repo, token);
-  const configDescriptor = await registry.putBlob(EMPTY_CONFIG_BODY, EMPTY_CONFIG_MEDIA_TYPE);
-  const layerDescriptor = await registry.putBlob(module, WASM_MEDIA_TYPE, {
-    "com.datamitsu.kind": "parser",
-    "com.datamitsu.parsers-version": version,
-    "org.opencontainers.image.title": name,
-  });
-
-  // No created timestamp: two runs of the same commit then produce the same
-  // manifest digest, which makes a re-run idempotent instead of publishing a
-  // second manifest for identical content.
-  const manifest = {
-    annotations: {
-      "com.datamitsu.parsers-version": version,
-      "org.opencontainers.image.description": "datamitsu WASM output-parser module",
-      "org.opencontainers.image.revision": process.env.GITHUB_SHA || "",
-      "org.opencontainers.image.source": "https://github.com/datamitsu/datamitsu",
-    },
-    artifactType: ARTIFACT_TYPE,
-    config: configDescriptor,
-    layers: [layerDescriptor],
-    mediaType: MANIFEST_MEDIA_TYPE,
-    schemaVersion: 2,
-  };
-  const manifestBytes = Buffer.from(JSON.stringify(manifest), "utf8");
-
-  const tag = version;
-  const digest = await registry.putManifest(tag, manifestBytes);
+  if (promote) {
+    if (!(await registry.getManifest(tag)).equals(prepared)) {
+      throw new Error("versioned parser manifest does not match the prepared bytes");
+    }
+    const current = await registry.getManifest("latest", { allowMissing: true });
+    if (current?.equals(prepared)) {
+      console.log(`Parser latest already points to ${digest}`);
+      return;
+    }
+    if (current) {
+      const annotations = JSON.parse(current.toString("utf8")).annotations;
+      const currentVersion = annotations?.["com.datamitsu.parsers-version"];
+      if (
+        !/^v\d+\.\d+\.\d+$/.test(currentVersion ?? "") ||
+        !(await registry.getManifest(currentVersion.slice(1))).equals(current)
+      ) {
+        throw new Error("cannot verify the current parser latest pointer");
+      }
+      const [run, attempt] = preparationOrder(annotations);
+      const [candidateRun, candidateAttempt] = preparationOrder(JSON.parse(prepared).annotations);
+      if (run > candidateRun || (run === candidateRun && attempt > candidateAttempt)) {
+        console.log(`Parser latest stays at newer preparation sha256:${sha256Hex(current)}`);
+        return;
+      }
+      if (run === candidateRun && attempt === candidateAttempt) {
+        throw new Error("same parser preparation identity has different manifest bytes");
+      }
+    }
+    if ((await registry.putManifest("latest", prepared)) !== digest) {
+      throw new Error(`registry did not promote the prepared digest ${digest}`);
+    }
+    if (!(await registry.getManifest("latest")).equals(prepared)) {
+      throw new Error("latest does not resolve to the prepared manifest after promotion");
+    }
+    console.log(`Promoted parser latest to ${digest}`);
+    return;
+  }
+  const existing = await registry.getManifest(tag, { allowMissing: true });
+  if (existing === null) {
+    await registry.putBlob(EMPTY_CONFIG_BODY);
+    await registry.putBlob(module);
+    if ((await registry.putManifest(tag, prepared)) !== digest) {
+      throw new Error(`registry did not report the prepared digest ${digest}`);
+    }
+  } else if (!existing.equals(prepared)) {
+    throw new Error(`parser tag ${tag} already exists with different manifest bytes`);
+  }
 
   // Load-bearing, not belt-and-braces: the entire design rests on the layer
   // digest equalling the module's SHA-256. If a future producer change ever
@@ -235,6 +286,8 @@ async function main() {
   // consumer's pull — and it is also what binds this publication to the
   // cosign-signed checksums.txt the hash came from.
   const publishedBytes = await registry.getManifest(digest);
+  if (!publishedBytes.equals(prepared))
+    throw new Error("registry returned different manifest bytes");
   const published = JSON.parse(publishedBytes.toString("utf8"));
   if (published.layers?.length !== 1) {
     throw new Error(`published manifest has ${published.layers?.length} layers, want exactly 1`);
@@ -254,17 +307,6 @@ async function main() {
     );
   }
 
-  // `latest` only for a real stable release: an rc must never become the tag a
-  // human resolves when they ask for the current module.
-  if (isStable && !version.includes("-rc.")) {
-    await registry.putManifest("latest", manifestBytes);
-  }
-
-  const reference = `${REGISTRY}/${repo}`;
-  const pin = `sha256:${hash}`;
-  const record = { digest, module: "core", ref: reference, sha256: pin, tag, version };
-  writeFileSync("dist/parsers-oci.json", `${JSON.stringify(record, null, 2)}\n`);
-
   emitOutput("digest", digest);
   emitOutput("ref", reference);
   emitOutput("sha256", pin);
@@ -283,6 +325,87 @@ async function main() {
         "```\n",
     );
   }
+}
+
+function preparationOrder(annotations) {
+  return ["com.datamitsu.preparation-run", "com.datamitsu.preparation-attempt"].map((key) => {
+    const value = annotations?.[key];
+    if (typeof value !== "string" || !/^[1-9]\d*$/.test(value)) {
+      throw new Error(`missing or invalid parser preparation identity: ${key}`);
+    }
+    return BigInt(value);
+  });
+}
+
+function prepare() {
+  const isStable = process.env.IS_STABLE === "true";
+  const repo = isStable ? STABLE_REPO : UNSTABLE_REPO;
+  const version = isStable ? process.env.VERSION || "" : process.env.PARSER_VERSION || "";
+  const tag = isStable ? version.replace(/^v/, "") : process.env.UNSTABLE_TAG || "";
+  if (!version || !tag) throw new Error("parser version and OCI tag are required");
+
+  const { hash, name } = resolveModule("dist/checksums.txt");
+  const expectedName = `datamitsu_parsers_${isStable ? tag : version}.wasm`;
+  if (name !== expectedName) throw new Error(`expected parser release asset ${expectedName}`);
+  const module = readFileSync(`dist/${name}`);
+  const actual = sha256Hex(module);
+  // Both sides are published checksums of a public artifact, not secrets: there is
+  // nothing for a timing difference to leak, and an integrity check must stay exact.
+  // eslint-disable-next-line security/detect-possible-timing-attacks
+  if (actual !== hash) {
+    throw new Error(`dist/${name} hashes ${actual}, but checksums.txt records ${hash}`);
+  }
+
+  const descriptor = (bytes, mediaType) => ({
+    digest: `sha256:${sha256Hex(bytes)}`,
+    mediaType,
+    size: bytes.length,
+  });
+  const configDescriptor = descriptor(EMPTY_CONFIG_BODY, EMPTY_CONFIG_MEDIA_TYPE);
+  const layerDescriptor = {
+    ...descriptor(module, WASM_MEDIA_TYPE),
+    annotations: {
+      "com.datamitsu.kind": "parser",
+      "com.datamitsu.parsers-version": version,
+      "org.opencontainers.image.title": name,
+    },
+  };
+  const sourceSHA = process.env.PREPARATION_SHA ?? process.env.GITHUB_SHA;
+  if (!/^[0-9a-f]{40}$/.test(sourceSHA ?? "")) {
+    throw new Error("missing or invalid parser preparation SHA");
+  }
+  const order = preparationOrder({
+    "com.datamitsu.preparation-attempt":
+      process.env.PREPARATION_ATTEMPT ?? process.env.GITHUB_RUN_ATTEMPT,
+    "com.datamitsu.preparation-run": process.env.PREPARATION_RUN_ID ?? process.env.GITHUB_RUN_ID,
+  });
+  const manifest = {
+    // Preparation order travels with the registry pointer, including across retries.
+    annotations: {
+      "com.datamitsu.parsers-version": version,
+      "com.datamitsu.preparation-attempt": String(order[1]),
+      "com.datamitsu.preparation-run": String(order[0]),
+      "org.opencontainers.image.description": "datamitsu WASM output-parser module",
+      "org.opencontainers.image.revision": sourceSHA,
+      "org.opencontainers.image.source": "https://github.com/datamitsu/datamitsu",
+    },
+    artifactType: ARTIFACT_TYPE,
+    config: configDescriptor,
+    layers: [layerDescriptor],
+    mediaType: MANIFEST_MEDIA_TYPE,
+    schemaVersion: 2,
+  };
+  const manifestBytes = Buffer.from(JSON.stringify(manifest), "utf8");
+
+  const record = {
+    digest: `sha256:${sha256Hex(manifestBytes)}`,
+    module: "core",
+    ref: `${REGISTRY}/${repo}`,
+    sha256: `sha256:${hash}`,
+    tag,
+    version,
+  };
+  return { hash, isStable, manifestBytes, module, record, repo };
 }
 
 /**

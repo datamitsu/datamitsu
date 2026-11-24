@@ -12,9 +12,11 @@ import atexit
 import os
 import platform
 import shutil
+import struct
 import sys
 import tempfile
 from pathlib import Path
+from zipfile import ZipFile
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
@@ -36,8 +38,8 @@ ARCH_MAPPING = {
 PEP425_TAGS = {
   ("linux", "x86_64"): "py3-none-manylinux2014_x86_64",
   ("linux", "arm64"): "py3-none-manylinux2014_aarch64",
-  ("darwin", "x86_64"): "py3-none-macosx_11_0_x86_64",
-  ("darwin", "arm64"): "py3-none-macosx_11_0_arm64",
+  ("darwin", "x86_64"): "py3-none-macosx_13_0_x86_64",
+  ("darwin", "arm64"): "py3-none-macosx_13_0_arm64",
   ("windows", "x86_64"): "py3-none-win_amd64",
   ("windows", "arm64"): "py3-none-win_arm64",
 }
@@ -69,6 +71,40 @@ def get_platform_info():
   return system, machine
 
 
+def verify_macos_target(artifact_path, arch):
+  with (
+    ZipFile(artifact_path) as wheel,
+    wheel.open(f"datamitsu/bin/datamitsu-darwin-{arch}/datamitsu") as binary,
+  ):
+    header = binary.read(32)
+    if len(header) != 32 or header[:4] != b"\xcf\xfa\xed\xfe":
+      raise ValueError("expected a little-endian 64-bit Mach-O binary")
+    expected_cpu = {"x86_64": 0x01000007, "arm64": 0x0100000C}[arch]
+    if struct.unpack_from("<I", header, 4)[0] != expected_cpu:
+      raise ValueError(f"Mach-O CPU type does not match {arch} wheel")
+    command_count, command_bytes = struct.unpack_from("<II", header, 16)
+    remaining = command_bytes
+    for _ in range(command_count):
+      prefix = binary.read(8)
+      if len(prefix) != 8:
+        break
+      command, size = struct.unpack("<II", prefix)
+      if not 8 <= size <= remaining:
+        break
+      remaining -= size
+      # LC_BUILD_VERSION stores the platform and deployment target first.
+      if command == 0x32 and size >= 24:
+        payload = binary.read(size - 8)
+        if len(payload) != size - 8:
+          break
+        os_id, minimum = struct.unpack_from("<II", payload)
+        if os_id != 1 or minimum != 13 << 16:
+          raise ValueError("Mach-O deployment target does not match macosx_13_0 wheel tag")
+        return
+      binary.seek(size - 8, os.SEEK_CUR)
+    raise ValueError("missing valid LC_BUILD_VERSION in macOS wheel binary")
+
+
 class CustomBuildHook(BuildHookInterface):
   PLUGIN_NAME = "custom"
 
@@ -96,6 +132,8 @@ class CustomBuildHook(BuildHookInterface):
   def finalize(self, version, build_data, artifact_path) -> None:
     self._restore_binaries()
     atexit.unregister(self._restore_binaries)
+    if self.target_name == "wheel" and self.target_platform == "darwin":
+      verify_macos_target(artifact_path, self.target_arch)
 
   def _prune_binaries(self):
     if not self.target_platform or not self.target_arch:

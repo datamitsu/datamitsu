@@ -23,7 +23,7 @@ SHA256="${SHA256#sha256:}"
 # GHCR issues an anonymous pull token for public packages; for a private one the
 # token request succeeds but the pull that follows does not, which is exactly
 # the failure this step exists to catch.
-TOKEN=$(curl -fsSL "https://${REGISTRY}/token?scope=repository:${REPO}:pull&service=${REGISTRY}" |
+TOKEN=$(curl -q -fsSL "https://${REGISTRY}/token?scope=repository:${REPO}:pull&service=${REGISTRY}" |
   sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 if [[ -z "$TOKEN" ]]; then
   echo "error: ${REGISTRY} issued no anonymous pull token for ${REPO}" >&2
@@ -31,17 +31,21 @@ if [[ -z "$TOKEN" ]]; then
 fi
 
 echo "→ anonymous manifest pull of ${REPO}@${DIGEST}"
-if ! curl -fsSL -o /dev/null \
+if ! MANIFEST_SHA256=$(curl -q -fsSL \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Accept: application/vnd.oci.image.manifest.v1+json" \
-  "https://${REGISTRY}/v2/${REPO}/manifests/${DIGEST}"; then
+  "https://${REGISTRY}/v2/${REPO}/manifests/${DIGEST}" | sha256sum | awk '{print $1}'); then
   echo "error: the artifact cannot be pulled anonymously — the ${REPO} package is almost certainly still PRIVATE." >&2
   echo "       A workflow-created GHCR package defaults to private; an org owner has to make it public once." >&2
   exit 1
 fi
+if [[ "sha256:$MANIFEST_SHA256" != "$DIGEST" ]]; then
+  echo "error: the anonymously pulled manifest hashes sha256:$MANIFEST_SHA256, expected $DIGEST" >&2
+  exit 1
+fi
 
 echo "→ anonymous blob pull, verifying it hashes to ${SHA256}"
-ACTUAL=$(curl -fsSL \
+ACTUAL=$(curl -q -fsSL \
   -H "Authorization: Bearer ${TOKEN}" \
   "https://${REGISTRY}/v2/${REPO}/blobs/sha256:${SHA256}" | sha256sum | awk '{print $1}')
 if [[ "$ACTUAL" != "$SHA256" ]]; then
