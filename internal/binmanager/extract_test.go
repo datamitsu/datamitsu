@@ -1880,6 +1880,21 @@ func TestExtractArchiveToPath_InlineBasic(t *testing.T) {
 	}
 }
 
+func TestExtractArchiveToPath_RejectsExternalLinkInDestination(t *testing.T) {
+	dest := t.TempDir()
+	other := t.TempDir()
+	if err := os.Symlink(other, filepath.Join(dest, "data")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	archive := makeTestTar(t, map[string]string{"data/item.txt": "item"})
+	if _, err := extractArchiveToPath(dest, archive, "", BinContentTypeTar); err == nil {
+		t.Fatal("extraction accepted a directory link outside the destination")
+	}
+	if _, err := os.Lstat(filepath.Join(other, "item.txt")); !os.IsNotExist(err) {
+		t.Fatalf("extraction modified the other directory: %v", err)
+	}
+}
+
 func TestExtractArchiveToPath_FromFile(t *testing.T) {
 	destDir := t.TempDir()
 	srcDir := t.TempDir()

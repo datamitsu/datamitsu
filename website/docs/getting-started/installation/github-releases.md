@@ -8,7 +8,7 @@ description: Download datamitsu binaries, deb/rpm/apk packages, and verification
 Every stable release on the
 [releases page](https://github.com/datamitsu/datamitsu/releases) ships:
 
-- **Archives** — `datamitsu_<version>_<os>_<arch>.tar.gz` (Linux, macOS) and
+- **Archives** — `datamitsu_<version>_<os>_<arch>.tar.gz` (Linux, macOS, FreeBSD) and
   `.zip` (Windows) for `amd64` and `arm64`
 - **Linux packages** — `.deb`, `.rpm`, and `.apk`
 - **`checksums.txt`** — SHA-256 of every asset, plus
@@ -23,6 +23,10 @@ Every stable release on the
   [Output Parsers](../../reference/configuration-api.md#output-parsers-parsers)
 - **`datamitsu-<version>.vsix`** — the [VS Code extension](./vscode.md) for
   manual installs
+
+Release candidates on GitHub include their own VSIX for manual installation.
+The editor stores publish stable builds only. A release candidate uses the
+same base extension version as its corresponding stable build.
 
 ## Verify the release manifest
 
