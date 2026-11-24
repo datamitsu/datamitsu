@@ -367,8 +367,10 @@ channel tags.
 
 ### Recovery
 
-Recover a partial publication with the original preparation index and original
-signed evidence. A matching coordinate is not proof of matching content.
+Start a new manual `Release Preflight` run on the protected default branch
+with the original preparation index and signed evidence. Do not rerun publisher
+jobs: their Preflight approval checks apply only to the attempt that ran them.
+A matching coordinate is not proof of matching content.
 Publishers reconcile remote contents first and stop on different bytes or
 when the destination cannot confirm equality. Successful writes to earlier
 destinations are not rolled back.

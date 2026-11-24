@@ -100,7 +100,7 @@ jobs:
       mode: ${{ steps.verify.outputs.mode }}
       publish_pypi: ${{ steps.verify.outputs.publish_pypi }}
       publish_rubygems: ${{ steps.verify.outputs.publish_rubygems }}
-      publication_ready: ${{ steps.approvals.outputs.publication_ready }}
+      publication_attempt: ${{ steps.approvals.outputs.publication_attempt }}
     steps:
       - name: Require the default branch
         shell: bash
@@ -357,6 +357,10 @@ jobs:
           PUBLISH_PYPI: ${{ steps.verify.outputs.publish_pypi }}
           PUBLISH_RUBYGEMS: ${{ steps.verify.outputs.publish_rubygems }}
         run: |
+          if [[ "$GITHUB_RUN_ATTEMPT" != 1 ]]; then
+            echo 'Start a new Release Preflight with the original preparation index to recover publication' >&2
+            exit 1
+          fi
           environments=(release-publication)
           case "$MODE" in
             tag)
@@ -382,9 +386,9 @@ jobs:
               exit 1
             fi
           done
-          echo 'publication_ready=true' >> "$GITHUB_OUTPUT"
+          printf 'publication_attempt=%s\n' "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
   finalize-parser:
-    if: ${{ needs.preflight.outputs.publication_ready == 'true' && !inputs.reuse_parser_finalization }}
+    if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && !inputs.reuse_parser_finalization }}
     needs: preflight
     environment:
       name: release-publication
@@ -517,7 +521,7 @@ jobs:
           jq -er '"digest=\(.digest)\nsigner_workflow=\(.signer_workflow)\nsigner_sha=\(.signer_sha)"' \
             "$RUNNER_TEMP/parser-finalization.json" >> "$GITHUB_OUTPUT"
   publish-images:
-    if: ${{ needs.preflight.outputs.publication_ready == 'true' }}
+    if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt }}
     needs: preflight
     environment:
       name: release-publication
@@ -656,7 +660,7 @@ jobs:
         with:
           subject-path: ${{ runner.temp }}/cli-image-finalization.json
   finalize-github-assets:
-    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.github_release == 'true' }}
+    if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.github_release == 'true' }}
     needs: preflight
     environment:
       name: release-publication
@@ -891,7 +895,7 @@ jobs:
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             --certificate-github-workflow-sha "$SIGNER_SHA" "$ref@$digest" > /dev/null
   publish-github:
-    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.github_release == 'true' }}
+    if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.github_release == 'true' }}
     needs:
       - preflight
       - finalize-github-assets
@@ -940,7 +944,7 @@ jobs:
           cp "$bundle" "$dist/checksums.txt.sigstore.json"
           python3 .github/scripts/publish-prerelease.py "$dist" "$APPROVED_VERSION" "$APPROVED_TAG" "$APPROVED_SHA"
   publisher-inputs:
-    if: ${{ !cancelled() && needs.preflight.outputs.publication_ready == 'true' && needs.preflight.result == 'success' && needs.publish-images.result == 'success' && (needs.publish-github.result == 'success' || (needs.preflight.outputs.github_release == 'false' && needs.publish-github.result == 'skipped')) && needs.verify-parser.result == 'success' }}
+    if: ${{ !cancelled() && needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.result == 'success' && needs.publish-images.result == 'success' && (needs.publish-github.result == 'success' || (needs.preflight.outputs.github_release == 'false' && needs.publish-github.result == 'skipped')) && needs.verify-parser.result == 'success' }}
     needs:
       - preflight
       - verify-parser
@@ -1018,7 +1022,7 @@ jobs:
           fi
           python3 .github/scripts/promote-npm-unstable.py "${args[@]}"
   publish-tagged-pypi:
-    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.publish_pypi == 'true' }}
+    if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.publish_pypi == 'true' }}
     needs: preflight
     environment:
       name: pypi
@@ -1074,7 +1078,7 @@ jobs:
           fi
           python3 "$GITHUB_WORKSPACE/.github/scripts/check-pypi-release.py" . "$APPROVED_VERSION" --require-complete
   publish-tagged-rubygems:
-    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.publish_rubygems == 'true' }}
+    if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.publish_rubygems == 'true' }}
     needs: preflight
     environment:
       name: rubygems
@@ -1152,7 +1156,7 @@ jobs:
           REQUIRE_PUBLISHED: "true"
         run: *reconcile_tagged_gem
   publish-setup-action:
-    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
     needs:
       - preflight
       - publish-github
@@ -1193,7 +1197,7 @@ jobs:
           VERSION: ${{ needs.preflight.outputs.version }}
         run: APPROVED_DIST_DIR="$RUNNER_TEMP/release-payloads/release/dist/setup-action" node packaging/action/scripts/publish.ts
   publish-editor-extension:
-    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
     needs:
       - preflight
       - publish-github
@@ -1245,7 +1249,7 @@ jobs:
           pnpm --filter './editors/vscode' exec python3 "$GITHUB_WORKSPACE/.github/scripts/publish-prepared-vsix.py" \
             "$STORE" "$RUNNER_TEMP/release-payloads/vsix/datamitsu-$VERSION.vsix" "$VERSION"
   publish-install-manifests:
-    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
     needs:
       - preflight
       - publish-github
@@ -1282,7 +1286,7 @@ jobs:
           python3 .github/scripts/publish-release-manifests.py "$TARGET" \
             "$RUNNER_TEMP/release-payloads/release/dist" "$APPROVED_VERSION" "$APPROVED_SHA"
   promote-stable:
-    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
     needs:
       - preflight
       - publish-github

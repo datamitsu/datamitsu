@@ -444,24 +444,32 @@ func TestReleasePreflightRequiresEnvironmentReviewers(t *testing.T) {
 	fi
 }
 `
-	for _, tc := range []struct{ name, mode, version, pypi, blocked, response string }{
-		{"unstable approval present", "unstable", "0.0.0-unstable.1.1", "false", "", ""},
-		{"missing environment", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", ""},
-		{"branch rule alone", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", `{"name":"release-publication","protection_rules":[{"type":"branch_policy"}]}`},
-		{"empty reviewers", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", `{"name":"release-publication","protection_rules":[{"type":"required_reviewers","reviewers":[]}]}`},
-		{"missing selected PyPI environment", "tag", "1.2.0-rc.1", "true", "pypi", ""},
-		{"missing stable-only environment", "tag", "1.2.0", "false", "winget", ""},
+	for _, tc := range []struct{ name, mode, version, pypi, blocked, response, attempt string }{
+		{"unstable approval present", "unstable", "0.0.0-unstable.1.1", "false", "", "", "1"},
+		{"rerun with protected environment", "unstable", "0.0.0-unstable.1.1", "false", "", "", "2"},
+		{"missing environment", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", "", "1"},
+		{"branch rule alone", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", `{"name":"release-publication","protection_rules":[{"type":"branch_policy"}]}`, "1"},
+		{"empty reviewers", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", `{"name":"release-publication","protection_rules":[{"type":"required_reviewers","reviewers":[]}]}`, "1"},
+		{"missing selected PyPI environment", "tag", "1.2.0-rc.1", "true", "pypi", "", "1"},
+		{"missing stable-only environment", "tag", "1.2.0", "false", "winget", "", "1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			output := filepath.Join(t.TempDir(), "outputs")
 			cmd := exec.CommandContext(t.Context(), "bash", "-e", "-o", "pipefail", "-c", mock+script)
 			cmd.Env = append(os.Environ(), "GITHUB_REPOSITORY=datamitsu/datamitsu", "MODE="+tc.mode,
 				"VERSION="+tc.version, "PUBLISH_PYPI="+tc.pypi, "PUBLISH_RUBYGEMS=false",
-				"BLOCKED_ENVIRONMENT="+tc.blocked, "ENVIRONMENT_RESPONSE="+tc.response, "GITHUB_OUTPUT="+output)
+				"GITHUB_RUN_ATTEMPT="+tc.attempt, "BLOCKED_ENVIRONMENT="+tc.blocked,
+				"ENVIRONMENT_RESPONSE="+tc.response, "GITHUB_OUTPUT="+output)
 			log, err := cmd.CombinedOutput()
-			if tc.blocked != "" {
-				if _, ok := errors.AsType[*exec.ExitError](err); !ok || !strings.Contains(string(log), tc.blocked+"; publication blocked") {
-					t.Fatalf("expected missing approval for %s, got %v: %s", tc.blocked, err, log)
+			var denial string
+			if tc.attempt == "2" {
+				denial = "Start a new Release Preflight"
+			} else if tc.blocked != "" {
+				denial = tc.blocked + "; publication blocked"
+			}
+			if denial != "" {
+				if _, ok := errors.AsType[*exec.ExitError](err); !ok || !strings.Contains(string(log), denial) {
+					t.Fatalf("expected %q, got %v: %s", denial, err, log)
 				}
 				if _, err := os.Stat(output); !errors.Is(err, os.ErrNotExist) {
 					t.Fatalf("blocked release must not emit readiness: %v", err)
@@ -472,7 +480,7 @@ func TestReleasePreflightRequiresEnvironmentReviewers(t *testing.T) {
 				t.Fatalf("protected release did not become ready: %v: %s", err, log)
 			}
 			got, err := os.ReadFile(output)
-			if err != nil || string(got) != "publication_ready=true\n" {
+			if err != nil || string(got) != "publication_attempt=1\n" {
 				t.Fatalf("publication readiness = %q, %v", got, err)
 			}
 		})
@@ -498,7 +506,7 @@ func TestReleasePreflightPublicationBoundary(t *testing.T) {
 	if referencesReleaseSecrets(t, complete.Env, false) {
 		t.Error("preflight workflow environment must not reference secrets")
 	}
-	const ready = "needs.preflight.outputs.publication_ready == 'true'"
+	const ready = "needs.preflight.outputs.publication_attempt == github.run_attempt"
 	const stable = "needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.')"
 	guards := map[string][]string{
 		"preflight":                 nil,
