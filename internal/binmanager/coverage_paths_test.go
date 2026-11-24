@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -461,6 +462,192 @@ func TestExtractZipToDir_Branches(t *testing.T) {
 	t.Run("missing zip errors", func(t *testing.T) {
 		if _, err := extractZipToDir(filepath.Join(t.TempDir(), "nope.zip"), t.TempDir()); err == nil {
 			t.Error("extractZipToDir(missing) = nil, want error")
+		}
+	})
+}
+
+func TestArchiveExtractionDestinationConflicts(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, name := range []string{"folder/", "folder/item.txt", "item.txt"} {
+		if _, err := zw.Create(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var tarDir, tarLink tar.Header
+	tarDir.Name, tarDir.Typeflag, tarDir.Mode = "folder/", tar.TypeDir, 0o755
+	tarLink.Name, tarLink.Typeflag, tarLink.Linkname = "folder/link.txt", tar.TypeSymlink, "item.txt"
+	tarLinkData := archiveHeaderBytes(t, tarLink)
+	for _, tc := range []struct {
+		name, existing string
+		isDir          bool
+		zipEntries     []*zip.File
+		tarData        []byte
+	}{
+		{name: "explicit directory over file", existing: "folder", isDir: false, zipEntries: zr.File[:1], tarData: archiveHeaderBytes(t, tarDir)},
+		{name: "implicit parent over file", existing: "folder", isDir: false, zipEntries: zr.File[1:2], tarData: makeTestTar(t, map[string]string{"folder/item.txt": "archive"})},
+		{name: "file over directory", existing: "item.txt", isDir: true, zipEntries: zr.File[2:], tarData: makeTestTar(t, map[string]string{"item.txt": "archive"})},
+		{name: "link parent over file", existing: "folder", isDir: false, zipEntries: nil, tarData: tarLinkData},
+		{name: "link over existing file", existing: "folder/link.txt", isDir: false, zipEntries: nil, tarData: tarLinkData},
+	} {
+		for _, format := range []string{"zip", "tar"} {
+			if format == "zip" && tc.zipEntries == nil {
+				continue
+			}
+			t.Run(format+"/"+tc.name, func(t *testing.T) {
+				dest := t.TempDir()
+				existing := filepath.Join(dest, tc.existing)
+				if tc.isDir {
+					if err := os.MkdirAll(existing, 0o755); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					if err := os.MkdirAll(filepath.Dir(existing), 0o755); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(existing, []byte("original"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				var err error
+				if format == "zip" {
+					err = extractZipEntries(tc.zipEntries, dest)
+				} else {
+					_, err = extractArchiveToPath(dest, tc.tarData, "", BinContentTypeTar)
+				}
+				if err == nil || !strings.Contains(err.Error(), filepath.Base(existing)) {
+					t.Fatalf("expected a conflict at %q, got %v", tc.existing, err)
+				}
+				info, err := os.Lstat(existing)
+				if err != nil || info.IsDir() != tc.isDir || info.Mode()&os.ModeSymlink != 0 {
+					t.Fatalf("original entry %q changed type: %v, %v", tc.existing, info, err)
+				}
+				if !tc.isDir {
+					got, err := os.ReadFile(existing)
+					if err != nil || string(got) != "original" {
+						t.Fatalf("original entry %q changed: %q, %v", tc.existing, got, err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestArchiveExtractionDoesNotCreateLinksThroughDirectoryAlias(t *testing.T) {
+	dest := t.TempDir()
+	folder := filepath.Join(dest, "folder")
+	if err := os.Mkdir(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "item.txt"), []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("folder", filepath.Join(dest, "alias")); err != nil {
+		t.Fatal(err)
+	}
+	var link tar.Header
+	link.Name, link.Typeflag, link.Linkname = "alias/link.txt", tar.TypeSymlink, "item.txt"
+	if _, err := extractArchiveToPath(dest, archiveHeaderBytes(t, link), "", BinContentTypeTar); err != nil {
+		t.Fatalf("skipping a link through a directory alias: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(folder, "link.txt")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("link was not skipped: %v", err)
+	}
+}
+
+func archiveHeaderBytes(t *testing.T, header tar.Header) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	if err := tw.WriteHeader(&header); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestCorruptArchivesDiscardStagingDirectory(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	var hdr zip.FileHeader
+	hdr.Name, hdr.Method = "item.txt", zip.Store
+	w, err := zw.CreateHeader(&hdr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const content = "sample archive content"
+	if _, err := io.WriteString(w, content); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	zipData := buf.Bytes()
+	zr, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	offset, err := zr.File[0].DataOffset()
+	if err != nil {
+		t.Fatal(err)
+	}
+	zipData[offset] ^= 1
+	zipPath := filepath.Join(t.TempDir(), "archive.zip")
+	if err := os.WriteFile(zipPath, zipData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tarData := makeTestTar(t, map[string]string{"item.txt": content})
+	const tarBlockSize = 512
+	for _, tc := range []struct {
+		name    string
+		extract func(string) (string, error)
+		want    error
+	}{
+		{name: "ZIP checksum", extract: func(dest string) (string, error) { return extractZipToDir(zipPath, dest) }, want: zip.ErrChecksum},
+		{name: "TAR partial header", extract: func(dest string) (string, error) {
+			return extractTarToDir(tar.NewReader(bytes.NewReader(tarData[:tarBlockSize/2])), dest)
+		}, want: io.ErrUnexpectedEOF},
+		{name: "TAR partial file", extract: func(dest string) (string, error) {
+			return extractTarToDir(tar.NewReader(bytes.NewReader(tarData[:tarBlockSize+1])), dest)
+		}, want: io.ErrUnexpectedEOF},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dest := t.TempDir()
+			out, err := tc.extract(dest)
+			if out != "" || !errors.Is(err, tc.want) {
+				t.Fatalf("extraction = %q, %v; want no output and %v", out, err, tc.want)
+			}
+			entries, err := os.ReadDir(dest)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("failed extraction left staging files: %v, %v", entries, err)
+			}
+		})
+	}
+
+	t.Run("unavailable extraction roots", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "missing")
+		if err := extractZipEntries(zr.File, missing); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("ZIP root: got %v, want missing root", err)
+		}
+		if err := extractTarEntries(tar.NewReader(bytes.NewReader(tarData)), missing); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("TAR root: got %v, want missing root", err)
+		}
+	})
+	t.Run("unavailable ZIP compression", func(t *testing.T) {
+		entry := *zr.File[0]
+		entry.Method = ^uint16(0)
+		if err := extractZipEntries([]*zip.File{&entry}, t.TempDir()); !errors.Is(err, zip.ErrAlgorithm) {
+			t.Errorf("ZIP compression: got %v, want unsupported compression", err)
 		}
 	})
 }
