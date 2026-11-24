@@ -144,7 +144,7 @@ func TestReleaseRouting(t *testing.T) {
 	}
 	sha := strings.Repeat("a", 40)
 	for _, tc := range []struct{ name, event, ref, mode, want string }{
-		{"verify with toggle", "workflow_dispatch", "refs/heads/feature", "verify", "verify=true\n"},
+		{"verify", "workflow_dispatch", "refs/heads/feature", "verify", "verify=true\n"},
 		{"explicit prerelease", "workflow_dispatch", "refs/heads/feature", "prerelease", "verify=false\n"},
 		{"stable tag", "push", "refs/tags/v1.2.3", "", "tag_ref=refs/tags/v1.2.3\n"},
 		{"candidate tag", "push", "refs/tags/v1.2.3-rc.1", "", "tag_ref=refs/tags/v1.2.3-rc.1\n"},
@@ -156,7 +156,7 @@ func TestReleaseRouting(t *testing.T) {
 			cmd := exec.CommandContext(t.Context(), "bash", "-ec", script)
 			cmd.Env = append(os.Environ(), "GITHUB_SHA="+sha, "GITHUB_OUTPUT="+output,
 				"GITHUB_EVENT_NAME="+tc.event, "GITHUB_REF="+tc.ref,
-				"RELEASE_MODE="+tc.mode, "WANT_PRERELEASE=true")
+				"RELEASE_MODE="+tc.mode)
 			log, err := cmd.CombinedOutput()
 			if tc.want == "" {
 				if _, ok := errors.AsType[*exec.ExitError](err); !ok {
@@ -203,7 +203,7 @@ func TestUnstableDispatchResolvesProductFromProtectedWorkflow(t *testing.T) {
 			output := filepath.Join(dir, "output")
 			cmd := exec.CommandContext(t.Context(), "bash", "-ec", mock+script)
 			cmd.Env = append(os.Environ(), "GITHUB_EVENT_NAME=workflow_dispatch", "RELEASE_MODE=unstable",
-				"GITHUB_REPOSITORY=datamitsu/datamitsu", "DEFAULT_BRANCH=main", "WANT_PRERELEASE=false",
+				"GITHUB_REPOSITORY=datamitsu/datamitsu", "DEFAULT_BRANCH=main",
 				"GITHUB_REF="+tc.ref, "PROTECTED_REF="+tc.protected, "GITHUB_SHA="+dispatchSHA,
 				"GITHUB_WORKFLOW_SHA="+tc.workflow, "GITHUB_RUN_ATTEMPT="+tc.attempt,
 				"PRODUCT_REF="+tc.product, "RESOLVED_SHA="+productSHA, "GITHUB_OUTPUT="+output,

@@ -31,11 +31,6 @@ def main():
         help="Unstable workflow revision verified against the protected default branch",
     )
     parser.add_argument(
-        "--publish-github-release",
-        choices=("true", "false"),
-        help="GitHub destination explicitly selected in the publisher dispatch",
-    )
-    parser.add_argument(
         "--run-metadata",
         type=Path,
         required=True,
@@ -125,7 +120,11 @@ def main():
     require(re.fullmatch(r"[0-9a-f]{40}", source_sha), "invalid product SHA")
     tag = index["release_tag"]
     github_release = index["github_release"]
-    require(type(github_release) is bool, "invalid GitHub release selection")
+    require(
+        type(github_release) is bool
+        and github_release == (mode in {"tag", "prerelease"}),
+        "GitHub destination does not match the preparation mode",
+    )
     build_name = "Prepare release artifacts"
     if mode == "unstable":
         require(
@@ -140,7 +139,7 @@ def main():
             "unstable requires the first successful preparation attempt",
         )
         # GitHub assigns this job name before starting any product-source steps.
-        build_name = f"Prepare unstable release artifacts [{source_sha}, {str(github_release).lower()}]"
+        build_name = f"Prepare unstable release artifacts [{source_sha}]"
     else:
         require(
             source_sha == run["head_sha"] and args.trusted_dispatch_sha is None,
@@ -168,7 +167,7 @@ def main():
     )
     if mode == "tag":
         require(
-            args.publish_mode is None and args.publish_github_release is None,
+            args.publish_mode is None,
             "unexpected manual authorization for a tag run",
         )
         number = r"(?:0|[1-9][0-9]*)"
@@ -181,7 +180,7 @@ def main():
             "release tag does not match verified trigger evidence",
         )
         require(
-            index["version"] == tag[1:] and github_release,
+            index["version"] == tag[1:],
             "inconsistent tagged release route",
         )
     else:
@@ -189,14 +188,6 @@ def main():
         require(
             args.publish_mode == mode,
             "nonstable publication route does not match the index mode",
-        )
-        require(
-            args.publish_github_release is not None,
-            "explicit GitHub destination choice is required",
-        )
-        require(
-            github_release == (args.publish_github_release == "true"),
-            "GitHub destination does not match the publication request",
         )
         require(
             tag == f"unstable-{args.run_id}-{preparation}",

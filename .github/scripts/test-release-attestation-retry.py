@@ -293,12 +293,10 @@ class AttestationRetryTest(unittest.TestCase):
         route = [
             "--publish-mode",
             "unstable",
-            "--publish-github-release",
-            "false",
             "--trusted-dispatch-sha",
             SHA,
         ]
-        name = f"Prepare unstable release artifacts [{source}, false]"
+        name = f"Prepare unstable release artifacts [{source}]"
         run_fields = {"event": "workflow_dispatch", "conclusion": "success"}
         for label, overrides, job, dispatch, arguments, error in (
             ("independent source", {}, name, {}, route, None),
@@ -319,12 +317,12 @@ class AttestationRetryTest(unittest.TestCase):
                 "trusted dispatch SHA",
             ),
             (
-                "job approved another destination",
-                {},
-                f"Prepare unstable release artifacts [{source}, true]",
+                "unstable index requests GitHub publication",
+                {"github_release": True},
+                name,
                 {},
                 route,
-                "mismatched release build",
+                "GitHub destination does not match the preparation mode",
             ),
             ("unauthorized workflow", {}, name, {}, route[:-2], "trusted dispatch SHA"),
             (
@@ -358,6 +356,35 @@ class AttestationRetryTest(unittest.TestCase):
                 else:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn(error, result.stderr)
+
+    def test_manual_prerelease_requires_github_destination(self):
+        index = {
+            "run_id": RUN,
+            "mode": "prerelease",
+            "release_tag": f"unstable-{RUN}-1",
+            "version": f"0.0.0-unstable.{RUN}.1",
+            "source_sha": SHA,
+            "preparation_attempt": "1",
+            "producing_attempt": "1",
+            "artifacts": self.payloads,
+        }
+        for github_release in (True, False):
+            with self.subTest(github_release=github_release):
+                result = self.validate_index(
+                    "success",
+                    index_value={**index, "github_release": github_release},
+                    run_fields={"event": "workflow_dispatch", "conclusion": "success"},
+                    route=["--publish-mode", "prerelease"],
+                )
+                if github_release:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIs(json.loads(result.stdout)["github_release"], True)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(
+                        "GitHub destination does not match the preparation mode",
+                        result.stderr,
+                    )
 
     def test_same_bytes_on_another_index_are_not_accepted(self):
         self.fetch_proofs()

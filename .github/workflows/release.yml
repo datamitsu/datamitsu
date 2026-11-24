@@ -7,7 +7,7 @@ jobs:
       !cancelled() &&
       needs.determine-release-type.outputs.verify != 'true' &&
       (needs.validate-stable.result == 'success' || needs.generate-unstable-version.result == 'success')
-    name: ${{ inputs.mode == 'unstable' && format('Prepare unstable release artifacts [{0}, {1}]', needs.determine-release-type.outputs.checkout_ref, needs.determine-release-type.outputs.want_prerelease) || 'Prepare release artifacts' }}
+    name: ${{ inputs.mode == 'unstable' && format('Prepare unstable release artifacts [{0}]', needs.determine-release-type.outputs.checkout_ref) || 'Prepare release artifacts' }}
     needs:
       - determine-release-type
       - validate-stable
@@ -498,7 +498,7 @@ jobs:
           PREPARATION_MODE: ${{ needs.determine-release-type.outputs.mode }}
           SOURCE_SHA: ${{ needs.determine-release-type.outputs.checkout_ref }}
           RELEASE_TAG: ${{ needs.validate-stable.outputs.version || needs.generate-unstable-version.outputs.tag_name }}
-          GITHUB_RELEASE: ${{ needs.determine-release-type.outputs.is_stable == 'true' || (needs.determine-release-type.outputs.verify != 'true' && needs.determine-release-type.outputs.want_prerelease == 'true') }}
+          GITHUB_RELEASE: ${{ needs.determine-release-type.outputs.mode == 'tag' || needs.determine-release-type.outputs.mode == 'prerelease' }}
         run: |
           for id in "$RELEASE_ID" "$VSIX_ID" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$PREPARATION_ATTEMPT"; do
             [[ "$id" =~ ^[1-9][0-9]*$ ]] || { echo 'Missing or invalid preparation identity' >&2; exit 1; }
@@ -647,14 +647,12 @@ jobs:
       tag_ref: ${{ steps.detect.outputs.tag_ref }}
       is_stable: ${{ steps.detect.outputs.is_stable }}
       is_unstable: ${{ steps.detect.outputs.is_unstable }}
-      want_prerelease: ${{ steps.detect.outputs.want_prerelease }}
       verify: ${{ steps.detect.outputs.verify }}
     runs-on: ubuntu-latest
     steps:
       - id: detect
         name: Detect release type
         env:
-          WANT_PRERELEASE: ${{ inputs.create_github_prerelease }}
           RELEASE_MODE: ${{ inputs.mode }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GH_TOKEN: ${{ github.token }}
@@ -710,8 +708,6 @@ jobs:
               printf 'mode=%s\n' "$RELEASE_MODE" >> "$GITHUB_OUTPUT"
               echo "is_stable=false" >> "$GITHUB_OUTPUT"
               echo "is_unstable=true" >> "$GITHUB_OUTPUT"
-              [[ "$WANT_PRERELEASE" == true ]] || WANT_PRERELEASE=false
-              echo "want_prerelease=$WANT_PRERELEASE" >> "$GITHUB_OUTPUT"
               ;;
             *) exit 1 ;;
           esac
@@ -791,7 +787,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Verify, prepare a prerelease, or publish an unstable product ref
+        description: Verify, prepare a GitHub Pre-release, or publish unstable to npm and GHCR
         default: verify
         options:
           - verify
@@ -803,10 +799,5 @@ on:
         description: Branch, tag, or full commit SHA to build in unstable mode (required there)
         required: false
         type: string
-      create_github_prerelease:
-        default: false
-        description: Include a GitHub Pre-release in the non-Verify publication request
-        required: false
-        type: boolean
 permissions:
   contents: read

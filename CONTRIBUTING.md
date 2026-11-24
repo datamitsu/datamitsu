@@ -285,12 +285,14 @@ git rebase --reset-author-date --exec 'git commit --amend --no-edit --reset-auth
 The [Release workflow](.github/workflows/release.yml) prepares checked artifacts.
 
 - `verify` (default): build from the selected branch without signing or publishing.
-- `prerelease`: build from the selected branch and use a separate manual
-  preflight to publish the checked artifacts.
+- `prerelease`: build from the selected branch. Run `Release Preflight` manually
+  to publish to npm and GHCR and create a GitHub Pre-release without setting
+  it as Latest. The product commit must be on the default branch to publish.
 - `unstable`: select the protected default branch in the workflow picker and
   set `product_ref` to a branch, tag, or full commit SHA in this repository.
   The workflow resolves it once and builds that SHA. It runs the same checks
-  and automatically hands the index to `Release Preflight` when successful.
+  and automatically hands the index to `Release Preflight` for publication to
+  npm and GHCR only.
 
 `product_ref` only applies to `unstable`. Use `refs/heads/...` or `refs/tags/...`
 to disambiguate a branch and tag of the same name. A protected `vX.Y.Z` or
@@ -315,14 +317,13 @@ product-source scripts.
 
 For a manual `prerelease` publication or recovery, use **Release Preflight** on
 the default branch. Copy the preparation run ID, producing attempt, index ID,
-and index archive SHA-256 from the original preparation summary. Repeat the
-original `github_release` choice. For an unmerged product SHA, leave GitHub
-Pre-release disabled; npm and GHCR do not require the product SHA on the
-default branch. To rebuild `unstable`, start a new dispatch. For publication
-recovery, reuse the original index, not a rebuild. Enter `release_tag` for a
-tagged recovery. If completing all stable destinations on recovery, also
-select `publish_pypi` and `publish_rubygems`. Do not choose newer artifact IDs
-or create a second tag to recover a partial release.
+and index archive SHA-256 from the original preparation summary. The verified
+preparation mode determines the destinations; a recovery cannot change them.
+Use `unstable` for an unmerged product SHA. To rebuild `unstable`, start a new
+dispatch. For publication recovery, reuse the original index, not a rebuild.
+Enter `release_tag` for a tagged recovery. To recover all stable destinations,
+also select `publish_pypi` and `publish_rubygems`. Do not choose newer artifact
+IDs or create a second tag to recover a partial release.
 
 ### Activation
 
@@ -406,9 +407,9 @@ APK filenames keep the release version; native metadata uses `X.Y.Z_rcN`
 and `0.0.0_preRUN_preATTEMPT`. PyPI wheels target macOS 13 or later. Manual
 preparation builds diagnostic wheels and gems, but does not publish them.
 
-| Channel                                              | Stable                                           | RC                          | Unstable                          |
+| Channel                                              | Stable                                           | RC                          | Manual prerelease / unstable      |
 | ---------------------------------------------------- | ------------------------------------------------ | --------------------------- | --------------------------------- |
-| GitHub Release                                       | Version and Latest promotion                     | Versioned prerelease        | Opt-in prerelease                 |
+| GitHub Release                                       | Version and Latest promotion                     | Versioned prerelease        | `prerelease` only, never Latest   |
 | npm                                                  | `latest`                                         | `next`                      | `unstable`                        |
 | Docker Hub and GHCR                                  | Debian and Alpine on amd64/arm64; stable aliases | Versioned Debian and Alpine | GHCR only; versioned              |
 | Parser OCI                                           | Version and `latest`                             | Version only                | Unstable repository, version only |

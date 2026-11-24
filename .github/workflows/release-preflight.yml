@@ -24,10 +24,6 @@ on:
         description: SHA-256 of the uploaded index ZIP (sha256:...)
         type: string
         required: true
-      github_release:
-        description: Include GitHub Releases in the prerelease request
-        type: boolean
-        default: false
       reuse_parser_finalization:
         description: Reuse verified parser evidence without signing again
         type: boolean
@@ -120,7 +116,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
-        if: github.event_name == 'workflow_dispatch' && inputs.signature_recovery != '' && (inputs.github_release || inputs.release_tag != '')
+        if: github.event_name == 'workflow_dispatch' && inputs.signature_recovery != ''
       - name: Verify exact release preparation
         id: verify
         shell: bash
@@ -131,7 +127,6 @@ jobs:
           PRODUCING_ATTEMPT: ${{ inputs.producing_attempt }}
           INDEX_ID: ${{ inputs.index_id }}
           INDEX_DIGEST: ${{ inputs.index_archive_digest }}
-          GITHUB_DESTINATION: ${{ inputs.github_release }}
           RECOVERY: ${{ inputs.signature_recovery }}
           REQUESTED_TAG: ${{ inputs.release_tag }}
           PUBLISH_PYPI: ${{ inputs.publish_pypi }}
@@ -220,7 +215,6 @@ jobs:
             }
             PUBLISH_MODE=unstable
             if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
-              GITHUB_DESTINATION=$(jq -er '.[0].name | capture("^Prepare unstable release artifacts \\[([0-9a-f]{40}), (?<github>true|false)\\]$") | .github' <<< "$marker")
               PUBLISH_PYPI=false
               PUBLISH_RUBYGEMS=false
             fi
@@ -246,7 +240,7 @@ jobs:
               sys.exit("Index ZIP exceeds 128 KiB")
           sys.stdout.buffer.write(archive)
           ' > "$evidence/index.zip"
-          route=(--publish-mode "$PUBLISH_MODE" --publish-github-release "$GITHUB_DESTINATION")
+          route=(--publish-mode "$PUBLISH_MODE")
           if [[ "$PUBLISH_MODE" == unstable ]]; then
             route+=(--trusted-dispatch-sha "$dispatch_sha")
           fi
@@ -257,7 +251,6 @@ jobs:
               .event == "push" and .head_branch == $tag and .head_sha == $sha
               and ($sha | test("^[0-9a-f]{40}$"))' "$evidence/run.json" > /dev/null
             route=(--trigger-tag "$REQUESTED_TAG")
-            GITHUB_DESTINATION=true
           fi
           python3 .github/scripts/verify-release-index.py \
             --run-id "$PREPARATION_RUN" --index-id "$INDEX_ID" --archive-digest "$INDEX_DIGEST" \
@@ -265,6 +258,7 @@ jobs:
             --artifact-metadata "$evidence/artifacts.json" --job-metadata "$evidence/jobs.json" \
             "${route[@]}" > "$evidence/verified.json"
           mode=$(jq -er '.mode' "$evidence/verified.json")
+          GITHUB_DESTINATION=$(jq -er '.github_release | tostring' "$evidence/verified.json")
           if [[ "$mode" != tag && ( "$PUBLISH_PYPI" == true || "$PUBLISH_RUBYGEMS" == true ) ]]; then
             echo 'PyPI and RubyGems publication requests require a release tag' >&2
             exit 1
@@ -342,8 +336,8 @@ jobs:
             else
               printf '%s\n' '- Destinations: npm unstable; GHCR unstable CLI images and parser'
             fi
-            if [[ "$mode" != tag && "$GITHUB_DESTINATION" == true ]]; then
-              printf '%s\n' '- Optional destination: GitHub Pre-release (not Latest)'
+            if [[ "$mode" == prerelease ]]; then
+              printf '%s\n' '- Destination: GitHub Pre-release (not Latest)'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           {
