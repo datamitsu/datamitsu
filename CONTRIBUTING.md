@@ -328,14 +328,18 @@ IDs or create a second tag to recover a partial release.
 
 ### Activation
 
-Both `RELEASE_BUILD_ATTESTATION_ENABLED` and `RELEASE_PUBLICATION_ENABLED` are
-off unless explicitly set to `true`. Test `Release` in `verify` mode before
-enabling either switch. Verify does not exercise registry writes, Sigstore,
-environment approvals, or trusted-publishing bindings.
+Preflight checks that every environment used by the release exists and has
+required reviewers before scheduling any publisher jobs. GitHub still requires
+approval for those jobs. `Release` in `verify` mode never publishes and does
+not exercise registry writes, Sigstore, approvals, or trusted publishing.
+Tagged npm releases also require `RELEASE_BUILD_ATTESTATION_ENABLED=true`
+before preparation so Preflight can verify their provenance.
 
-Protect the default branch and the release tags. Restrict and require approval
-in `release-build-attestation` for protected release tags, and in the environments
-below for the protected default branch. Restrict writes to the
+Before enabling publishing workflows on the default branch, create the
+environments below with required reviewers and restrict deployments to the
+protected default branch. For tagged npm attestations, restrict
+`release-build-attestation` to protected release tags and require approval.
+Protect the default branch and release tags. Restrict writes to the
 `release-finalization/**` refs to the release automation and prevent changes or
 deletion after creation. Retire any old writers for the same channels before
 cutover. Do not activate until the repository and registry owners have confirmed
@@ -363,8 +367,10 @@ channel tags.
 
 ### Recovery
 
-Recover a partial publication with the original preparation index and original
-signed evidence. A matching coordinate is not proof of matching content.
+Start a new manual `Release Preflight` run on the protected default branch
+with the original preparation index and signed evidence. Do not rerun publisher
+jobs: their Preflight approval checks apply only to the attempt that ran them.
+A matching coordinate is not proof of matching content.
 Publishers reconcile remote contents first and stop on different bytes or
 when the destination cannot confirm equality. Successful writes to earlier
 destinations are not rolled back.

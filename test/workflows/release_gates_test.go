@@ -415,6 +415,78 @@ func TestReleasePreparationCannotPublish(t *testing.T) {
 	}
 }
 
+func TestReleasePreflightRequiresEnvironmentReviewers(t *testing.T) {
+	raw, err := os.ReadFile("../../.github/workflows/release-preflight.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wf workflowFile
+	if err := yaml.Unmarshal(raw, &wf); err != nil {
+		t.Fatal(err)
+	}
+	var script string
+	for _, step := range wf.Jobs["preflight"].Steps {
+		if step.ID == "approvals" {
+			script = step.Run
+		}
+	}
+	if script == "" {
+		t.Fatal("missing publication approval step")
+	}
+	const mock = `gh() {
+	[[ "$#" == 2 && "$1" == api && "$2" == repos/datamitsu/datamitsu/environments/* ]] || return 2
+	local name=${2##*/}
+	if [[ "$name" == "$BLOCKED_ENVIRONMENT" ]]; then
+		if [[ -z "$ENVIRONMENT_RESPONSE" ]]; then return 1; fi
+		printf '%s\n' "$ENVIRONMENT_RESPONSE"
+	else
+		printf '{"name":"%s","protection_rules":[{"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"id":1}}]}]}\n' "$name"
+	fi
+}
+`
+	for _, tc := range []struct{ name, mode, version, pypi, blocked, response, attempt string }{
+		{"unstable approval present", "unstable", "0.0.0-unstable.1.1", "false", "", "", "1"},
+		{"rerun with protected environment", "unstable", "0.0.0-unstable.1.1", "false", "", "", "2"},
+		{"missing environment", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", "", "1"},
+		{"branch rule alone", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", `{"name":"release-publication","protection_rules":[{"type":"branch_policy"}]}`, "1"},
+		{"empty reviewers", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", `{"name":"release-publication","protection_rules":[{"type":"required_reviewers","reviewers":[]}]}`, "1"},
+		{"missing selected PyPI environment", "tag", "1.2.0-rc.1", "true", "pypi", "", "1"},
+		{"missing stable-only environment", "tag", "1.2.0", "false", "winget", "", "1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			output := filepath.Join(t.TempDir(), "outputs")
+			cmd := exec.CommandContext(t.Context(), "bash", "-e", "-o", "pipefail", "-c", mock+script)
+			cmd.Env = append(os.Environ(), "GITHUB_REPOSITORY=datamitsu/datamitsu", "MODE="+tc.mode,
+				"VERSION="+tc.version, "PUBLISH_PYPI="+tc.pypi, "PUBLISH_RUBYGEMS=false",
+				"GITHUB_RUN_ATTEMPT="+tc.attempt, "BLOCKED_ENVIRONMENT="+tc.blocked,
+				"ENVIRONMENT_RESPONSE="+tc.response, "GITHUB_OUTPUT="+output)
+			log, err := cmd.CombinedOutput()
+			var denial string
+			if tc.attempt == "2" {
+				denial = "Start a new Release Preflight"
+			} else if tc.blocked != "" {
+				denial = tc.blocked + "; publication blocked"
+			}
+			if denial != "" {
+				if _, ok := errors.AsType[*exec.ExitError](err); !ok || !strings.Contains(string(log), denial) {
+					t.Fatalf("expected %q, got %v: %s", denial, err, log)
+				}
+				if _, err := os.Stat(output); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("blocked release must not emit readiness: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("protected release did not become ready: %v: %s", err, log)
+			}
+			got, err := os.ReadFile(output)
+			if err != nil || string(got) != "publication_attempt=1\n" {
+				t.Fatalf("publication readiness = %q, %v", got, err)
+			}
+		})
+	}
+}
+
 func TestReleasePreflightPublicationBoundary(t *testing.T) {
 	raw, err := os.ReadFile("../../.github/workflows/release-preflight.yml")
 	if err != nil {
@@ -434,7 +506,7 @@ func TestReleasePreflightPublicationBoundary(t *testing.T) {
 	if referencesReleaseSecrets(t, complete.Env, false) {
 		t.Error("preflight workflow environment must not reference secrets")
 	}
-	const enabled = "needs.preflight.outputs.publication_enabled == 'true'"
+	const ready = "needs.preflight.outputs.publication_attempt == github.run_attempt"
 	const stable = "needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.')"
 	guards := map[string][]string{
 		"preflight":                 nil,
@@ -465,9 +537,9 @@ func TestReleasePreflightPublicationBoundary(t *testing.T) {
 		condition := strings.TrimSpace(job.If)
 		condition = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(condition, "${{"), "}}"))
 		if name != "preflight" && name != "verify-parser" {
-			gate := enabled
+			gate := ready
 			if name == "publisher-inputs" {
-				gate = "!cancelled() && " + enabled
+				gate = "!cancelled() && " + ready
 			}
 			if condition != gate && !strings.HasPrefix(condition, gate+" && ") {
 				t.Errorf("%s can bypass preflight publication authorization: %q", name, condition)
@@ -478,7 +550,7 @@ func TestReleasePreflightPublicationBoundary(t *testing.T) {
 		}
 		switch name {
 		case "publish-setup-action", "publish-editor-extension", "publish-install-manifests", "promote-stable":
-			if !strings.HasPrefix(condition, enabled+" && "+stable) {
+			if !strings.HasPrefix(condition, ready+" && "+stable) {
 				t.Errorf("%s must not write for RC or unstable builds", name)
 			}
 		}
