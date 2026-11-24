@@ -100,7 +100,7 @@ jobs:
       mode: ${{ steps.verify.outputs.mode }}
       publish_pypi: ${{ steps.verify.outputs.publish_pypi }}
       publish_rubygems: ${{ steps.verify.outputs.publish_rubygems }}
-      publication_enabled: ${{ steps.verify.outputs.publication_enabled }}
+      publication_ready: ${{ steps.approvals.outputs.publication_ready }}
     steps:
       - name: Require the default branch
         shell: bash
@@ -131,9 +131,12 @@ jobs:
           REQUESTED_TAG: ${{ inputs.release_tag }}
           PUBLISH_PYPI: ${{ inputs.publish_pypi }}
           PUBLISH_RUBYGEMS: ${{ inputs.publish_rubygems }}
-          PUBLICATION_REQUEST: ${{ vars.RELEASE_PUBLICATION_ENABLED == 'true' }}
           PROTECTED_REF: ${{ github.ref_protected }}
         run: |
+          [[ "$GITHUB_REPOSITORY" == datamitsu/datamitsu && "$PROTECTED_REF" == true && "$GITHUB_WORKFLOW_SHA" == "$GITHUB_SHA" ]] || {
+            echo 'Publication requires the protected default branch of the canonical repository' >&2
+            exit 1
+          }
           evidence=$(realpath -- "$(mktemp -d)")
           trap 'rm -rf "$evidence"' EXIT
           api="repos/$GITHUB_REPOSITORY/actions"
@@ -295,27 +298,19 @@ jobs:
             ruby .github/scripts/check-release-gem.rb "$evidence/payloads/release/dist/ruby/datamitsu.gem" "$APPROVED_VERSION"
             (cd "$evidence/payloads/release" && IS_STABLE=true VERSION="$REQUESTED_TAG" \
               node "$GITHUB_WORKSPACE/.github/scripts/push-parsers-oci.mjs" check-prepared)
-            if [[ "$PUBLICATION_REQUEST" == true ]]; then
-              npm_dist="$evidence/payloads/release/dist/npm"
-              python3 .github/scripts/fetch-npm-provenance.py "$npm_dist" "$evidence/npm-proof" "$PREPARATION_RUN" "$PRODUCING_ATTEMPT" "$INDEX_ID"
-              python3 .github/scripts/check-npm-release.py "$npm_dist" "$APPROVED_VERSION" --verify-provenance \
-                --source-repository "$GITHUB_REPOSITORY" --source-sha "$PREPARATION_SHA" --source-ref "refs/tags/$REQUESTED_TAG" \
-                --source-run "$PREPARATION_RUN" --producing-attempt "$PRODUCING_ATTEMPT" \
-                --index-id "$INDEX_ID" --index-archive-digest "$INDEX_DIGEST" --provenance-dir "$evidence/npm-proof"
-            fi
+            npm_dist="$evidence/payloads/release/dist/npm"
+            python3 .github/scripts/fetch-npm-provenance.py "$npm_dist" "$evidence/npm-proof" "$PREPARATION_RUN" "$PRODUCING_ATTEMPT" "$INDEX_ID"
+            python3 .github/scripts/check-npm-release.py "$npm_dist" "$APPROVED_VERSION" --verify-provenance \
+              --source-repository "$GITHUB_REPOSITORY" --source-sha "$PREPARATION_SHA" --source-ref "refs/tags/$REQUESTED_TAG" \
+              --source-run "$PREPARATION_RUN" --producing-attempt "$PRODUCING_ATTEMPT" \
+              --index-id "$INDEX_ID" --index-archive-digest "$INDEX_DIGEST" --provenance-dir "$evidence/npm-proof"
           else
             (cd "$evidence/payloads/release" && IS_STABLE=false PARSER_VERSION="$APPROVED_VERSION" \
               node "$GITHUB_WORKSPACE/.github/scripts/push-parsers-oci.mjs" check-prepared)
           fi
           python3 .github/scripts/publish-prepared-images.py "$evidence/payloads/release/dist" "$UNSTABLE_TAG" --check-only
-          if [[ "$PUBLICATION_REQUEST" == true ]]; then
-            [[ "$GITHUB_REPOSITORY" == datamitsu/datamitsu && "$PROTECTED_REF" == true && "$GITHUB_WORKFLOW_SHA" == "$GITHUB_SHA" ]] || {
-              echo 'Publication requires the protected default branch of the canonical repository' >&2
-              exit 1
-            }
-          fi
           {
-            printf 'Release evidence checked; publication enabled: `%s` (approval is separate)\n\n' "$PUBLICATION_REQUEST"
+            printf '%s\n\n' 'Release evidence checked. Publication still requires environment approval.'
             printf 'Index: `%s` (`%s`)\n\n' "$INDEX_ID" "$INDEX_DIGEST"
             printf 'Publisher orchestration: `%s` at `%s`\n\n' "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA"
             if [[ "$mode" == unstable ]]; then
@@ -351,9 +346,45 @@ jobs:
           printf 'signature_recovery=%s\n' "$RECOVERY" >> "$GITHUB_OUTPUT"
           printf 'mode=%s\n' "$mode" >> "$GITHUB_OUTPUT"
           printf 'publish_pypi=%s\npublish_rubygems=%s\n' "$PUBLISH_PYPI" "$PUBLISH_RUBYGEMS" >> "$GITHUB_OUTPUT"
-          printf 'publication_enabled=%s\n' "$PUBLICATION_REQUEST" >> "$GITHUB_OUTPUT"
+      - name: Require protected publication environments
+        id: approvals
+        if: steps.verify.outputs.mode != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ steps.verify.outputs.mode }}
+          VERSION: ${{ steps.verify.outputs.version }}
+          PUBLISH_PYPI: ${{ steps.verify.outputs.publish_pypi }}
+          PUBLISH_RUBYGEMS: ${{ steps.verify.outputs.publish_rubygems }}
+        run: |
+          environments=(release-publication)
+          case "$MODE" in
+            tag)
+              if [[ "$PUBLISH_PYPI" == true ]]; then environments+=(pypi); fi
+              if [[ "$PUBLISH_RUBYGEMS" == true ]]; then environments+=(rubygems); fi
+              if [[ "$VERSION" != *-rc.* ]]; then
+                environments+=(setup-action open-vsx vscode-marketplace homebrew scoop winget)
+              fi
+              ;;
+            prerelease|unstable) ;;
+            *) echo 'Unknown publication mode' >&2; exit 1 ;;
+          esac
+          for environment in "${environments[@]}"; do
+            # Referencing a missing environment in a job would create it without approval rules.
+            if ! gh api "repos/$GITHUB_REPOSITORY/environments/$environment" |
+              jq -e --arg environment "$environment" '
+                .name == $environment and any(.protection_rules[]?;
+                  .type == "required_reviewers" and any(.reviewers[]?;
+                    (.type == "User" or .type == "Team") and
+                    (.reviewer.id | type == "number" and . > 0)))
+              ' > /dev/null; then
+              printf 'Cannot confirm required reviewers for environment %s; publication blocked\n' "$environment" >&2
+              exit 1
+            fi
+          done
+          echo 'publication_ready=true' >> "$GITHUB_OUTPUT"
   finalize-parser:
-    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && !inputs.reuse_parser_finalization }}
+    if: ${{ needs.preflight.outputs.publication_ready == 'true' && !inputs.reuse_parser_finalization }}
     needs: preflight
     environment:
       name: release-publication
@@ -486,7 +517,7 @@ jobs:
           jq -er '"digest=\(.digest)\nsigner_workflow=\(.signer_workflow)\nsigner_sha=\(.signer_sha)"' \
             "$RUNNER_TEMP/parser-finalization.json" >> "$GITHUB_OUTPUT"
   publish-images:
-    if: ${{ needs.preflight.outputs.publication_enabled == 'true' }}
+    if: ${{ needs.preflight.outputs.publication_ready == 'true' }}
     needs: preflight
     environment:
       name: release-publication
@@ -625,7 +656,7 @@ jobs:
         with:
           subject-path: ${{ runner.temp }}/cli-image-finalization.json
   finalize-github-assets:
-    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.github_release == 'true' }}
+    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.github_release == 'true' }}
     needs: preflight
     environment:
       name: release-publication
@@ -860,7 +891,7 @@ jobs:
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             --certificate-github-workflow-sha "$SIGNER_SHA" "$ref@$digest" > /dev/null
   publish-github:
-    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.github_release == 'true' }}
+    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.github_release == 'true' }}
     needs:
       - preflight
       - finalize-github-assets
@@ -909,7 +940,7 @@ jobs:
           cp "$bundle" "$dist/checksums.txt.sigstore.json"
           python3 .github/scripts/publish-prerelease.py "$dist" "$APPROVED_VERSION" "$APPROVED_TAG" "$APPROVED_SHA"
   publisher-inputs:
-    if: ${{ !cancelled() && needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.result == 'success' && needs.publish-images.result == 'success' && (needs.publish-github.result == 'success' || (needs.preflight.outputs.github_release == 'false' && needs.publish-github.result == 'skipped')) && needs.verify-parser.result == 'success' }}
+    if: ${{ !cancelled() && needs.preflight.outputs.publication_ready == 'true' && needs.preflight.result == 'success' && needs.publish-images.result == 'success' && (needs.publish-github.result == 'success' || (needs.preflight.outputs.github_release == 'false' && needs.publish-github.result == 'skipped')) && needs.verify-parser.result == 'success' }}
     needs:
       - preflight
       - verify-parser
@@ -987,7 +1018,7 @@ jobs:
           fi
           python3 .github/scripts/promote-npm-unstable.py "${args[@]}"
   publish-tagged-pypi:
-    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.publish_pypi == 'true' }}
+    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.publish_pypi == 'true' }}
     needs: preflight
     environment:
       name: pypi
@@ -1043,7 +1074,7 @@ jobs:
           fi
           python3 "$GITHUB_WORKSPACE/.github/scripts/check-pypi-release.py" . "$APPROVED_VERSION" --require-complete
   publish-tagged-rubygems:
-    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.publish_rubygems == 'true' }}
+    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.publish_rubygems == 'true' }}
     needs: preflight
     environment:
       name: rubygems
@@ -1121,7 +1152,7 @@ jobs:
           REQUIRE_PUBLISHED: "true"
         run: *reconcile_tagged_gem
   publish-setup-action:
-    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
     needs:
       - preflight
       - publish-github
@@ -1162,7 +1193,7 @@ jobs:
           VERSION: ${{ needs.preflight.outputs.version }}
         run: APPROVED_DIST_DIR="$RUNNER_TEMP/release-payloads/release/dist/setup-action" node packaging/action/scripts/publish.ts
   publish-editor-extension:
-    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
     needs:
       - preflight
       - publish-github
@@ -1214,7 +1245,7 @@ jobs:
           pnpm --filter './editors/vscode' exec python3 "$GITHUB_WORKSPACE/.github/scripts/publish-prepared-vsix.py" \
             "$STORE" "$RUNNER_TEMP/release-payloads/vsix/datamitsu-$VERSION.vsix" "$VERSION"
   publish-install-manifests:
-    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
     needs:
       - preflight
       - publish-github
@@ -1251,7 +1282,7 @@ jobs:
           python3 .github/scripts/publish-release-manifests.py "$TARGET" \
             "$RUNNER_TEMP/release-payloads/release/dist" "$APPROVED_VERSION" "$APPROVED_SHA"
   promote-stable:
-    if: ${{ needs.preflight.outputs.publication_enabled == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    if: ${{ needs.preflight.outputs.publication_ready == 'true' && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
     needs:
       - preflight
       - publish-github
