@@ -288,11 +288,12 @@ The [Release workflow](.github/workflows/release.yml) prepares checked artifacts
 - `prerelease`: build from the selected branch. Run `Release Preflight` manually
   to publish to npm and GHCR and create a GitHub Pre-release without setting
   it as Latest. The product commit must be on the default branch to publish.
-- `unstable`: select the protected default branch in the workflow picker and
-  set `product_ref` to a branch, tag, or full commit SHA in this repository.
-  The workflow resolves it once and builds that SHA. It runs the same checks
-  and automatically hands the index to `Release Preflight` for publication to
-  npm and GHCR only.
+- `unstable`: select the protected default branch in the workflow picker.
+  Leave `product_ref` empty to build the commit that triggered the workflow,
+  or set it to a branch, tag, or full commit SHA in this repository. The
+  workflow resolves an explicit ref once and builds that SHA. It runs the
+  same checks and automatically hands the index to `Release Preflight` for
+  publication to npm and GHCR only.
 
 `product_ref` only applies to `unstable`. Use `refs/heads/...` or `refs/tags/...`
 to disambiguate a branch and tag of the same name. A protected `vX.Y.Z` or
