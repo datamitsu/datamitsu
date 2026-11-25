@@ -10,7 +10,7 @@ audit:
 autoInstallPeers: true
 blockExoticSubdeps: true
 catalog:
-  "@shibanet0/datamitsu-config": 0.0.0-unstable.20261121.ca9c0a1
+  "@shibanet0/datamitsu-config": 0.0.0-unstable.20261125.31dfa5b
 dangerouslyAllowAllBuilds: false
 dedupeDirectDeps: true
 dedupePeerDependents: true
