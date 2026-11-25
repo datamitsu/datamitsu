@@ -28,7 +28,7 @@ def main():
     )
     parser.add_argument(
         "--trusted-dispatch-sha",
-        help="Unstable workflow revision verified against the protected default branch",
+        help="Automatic handoff workflow revision verified against the protected default branch",
     )
     parser.add_argument(
         "--run-metadata",
@@ -126,30 +126,32 @@ def main():
         "GitHub destination does not match the preparation mode",
     )
     build_name = "Prepare release artifacts"
-    if mode == "unstable":
+    if mode == "unstable" or args.trusted_dispatch_sha is not None:
+        require(mode != "tag", "tag preparation cannot use a dispatch workflow")
         require(
             args.trusted_dispatch_sha is not None
             and index.get("workflow_sha")
             == run["head_sha"]
             == args.trusted_dispatch_sha,
-            "unstable index does not match the trusted dispatch SHA",
+            "index does not match the trusted dispatch SHA",
         )
         require(
             preparation == producing == "1" and run["conclusion"] == "success",
-            "unstable requires the first successful preparation attempt",
+            "automatic preparation requires the first successful preparation attempt",
         )
-        # GitHub assigns this job name before starting any product-source steps.
-        build_name = f"Prepare unstable release artifacts [{source_sha}]"
-    else:
-        require(
-            source_sha == run["head_sha"] and args.trusted_dispatch_sha is None,
-            "index does not match run identity",
-        )
+        if mode == "unstable":
+            # GitHub assigns this job name before starting product-source steps.
+            build_name = f"Prepare unstable release artifacts [{source_sha}]"
+        else:
+            build_name = "Prepare prerelease for publication"
+    if mode != "unstable":
+        require(source_sha == run["head_sha"], "index does not match run identity")
     builds = [
         job
         for page in json.loads(args.job_metadata.read_text())
         for job in page["jobs"]
-        if job["name"] == "Prepare release artifacts"
+        if job["name"]
+        in {"Prepare release artifacts", "Prepare prerelease for publication"}
         or job["name"].startswith("Prepare unstable release artifacts [")
     ]
     require(

@@ -386,6 +386,61 @@ class AttestationRetryTest(unittest.TestCase):
                         result.stderr,
                     )
 
+    def test_automatic_prerelease_requires_trusted_producer_marker(self):
+        index = {
+            "run_id": RUN,
+            "mode": "prerelease",
+            "release_tag": f"unstable-{RUN}-1",
+            "version": f"0.0.0-unstable.{RUN}.1",
+            "source_sha": SHA,
+            "workflow_sha": SHA,
+            "github_release": True,
+            "preparation_attempt": "1",
+            "producing_attempt": "1",
+            "artifacts": self.payloads,
+        }
+        marker = "Prepare prerelease for publication"
+        for label, job, override, error in (
+            ("trusted preparation", marker, {}, None),
+            (
+                "manual-only preparation",
+                "Prepare release artifacts",
+                {},
+                "mismatched release build",
+            ),
+            (
+                "wrong workflow revision",
+                marker,
+                {"workflow_sha": "b" * 40},
+                "trusted dispatch SHA",
+            ),
+            (
+                "wrong product revision",
+                marker,
+                {"source_sha": "b" * 40},
+                "index does not match run identity",
+            ),
+        ):
+            with self.subTest(label=label):
+                result = self.validate_index(
+                    "success",
+                    index_value={**index, **override},
+                    run_fields={"event": "workflow_dispatch", "conclusion": "success"},
+                    build_name=job,
+                    route=[
+                        "--publish-mode",
+                        "prerelease",
+                        "--trusted-dispatch-sha",
+                        SHA,
+                    ],
+                )
+                if error is None:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIs(json.loads(result.stdout)["github_release"], True)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(error, result.stderr)
+
     def test_same_bytes_on_another_index_are_not_accepted(self):
         self.fetch_proofs()
         with self.assertRaisesRegex(ValueError, "preparation index does not match"):

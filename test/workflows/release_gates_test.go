@@ -143,20 +143,24 @@ func TestReleaseRouting(t *testing.T) {
 		t.Fatal("release routing step missing")
 	}
 	sha := strings.Repeat("a", 40)
-	for _, tc := range []struct{ name, event, ref, mode, want string }{
-		{"verify", "workflow_dispatch", "refs/heads/feature", "verify", "verify=true\n"},
-		{"explicit prerelease", "workflow_dispatch", "refs/heads/feature", "prerelease", "verify=false\n"},
-		{"stable tag", "push", "refs/tags/v1.2.3", "", "tag_ref=refs/tags/v1.2.3\n"},
-		{"candidate tag", "push", "refs/tags/v1.2.3-rc.1", "", "tag_ref=refs/tags/v1.2.3-rc.1\n"},
-		{"invalid tag", "push", "refs/tags/v01.2.3", "", ""},
-		{"manual stable denied", "workflow_dispatch", "refs/heads/main", "stable", ""},
+	for _, tc := range []struct{ name, event, ref, mode, protected, attempt, want string }{
+		{"verify on protected main", "workflow_dispatch", "refs/heads/main", "verify", "true", "1", "verify=true\n"},
+		{"prerelease on protected main", "workflow_dispatch", "refs/heads/main", "prerelease", "true", "1", "auto_prerelease=true\n"},
+		{"prerelease on feature branch", "workflow_dispatch", "refs/heads/feature", "prerelease", "true", "1", "verify=false\n"},
+		{"prerelease on unprotected main", "workflow_dispatch", "refs/heads/main", "prerelease", "false", "1", "verify=false\n"},
+		{"prerelease rerun", "workflow_dispatch", "refs/heads/main", "prerelease", "true", "2", "verify=false\n"},
+		{"stable tag", "push", "refs/tags/v1.2.3", "", "true", "1", "tag_ref=refs/tags/v1.2.3\n"},
+		{"candidate tag", "push", "refs/tags/v1.2.3-rc.1", "", "true", "1", "tag_ref=refs/tags/v1.2.3-rc.1\n"},
+		{"invalid tag", "push", "refs/tags/v01.2.3", "", "true", "1", ""},
+		{"manual stable denied", "workflow_dispatch", "refs/heads/main", "stable", "true", "1", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			output := filepath.Join(t.TempDir(), "output")
 			cmd := exec.CommandContext(t.Context(), "bash", "-ec", script)
 			cmd.Env = append(os.Environ(), "GITHUB_SHA="+sha, "GITHUB_OUTPUT="+output,
 				"GITHUB_EVENT_NAME="+tc.event, "GITHUB_REF="+tc.ref,
-				"RELEASE_MODE="+tc.mode)
+				"RELEASE_MODE="+tc.mode, "GITHUB_REPOSITORY=datamitsu/datamitsu", "DEFAULT_BRANCH=main",
+				"PROTECTED_REF="+tc.protected, "GITHUB_WORKFLOW_SHA="+sha, "GITHUB_RUN_ATTEMPT="+tc.attempt)
 			log, err := cmd.CombinedOutput()
 			if tc.want == "" {
 				if _, ok := errors.AsType[*exec.ExitError](err); !ok {
@@ -170,6 +174,10 @@ func TestReleaseRouting(t *testing.T) {
 			got, err := os.ReadFile(output)
 			if err != nil || !strings.Contains(string(got), "checkout_ref="+sha+"\n") || !strings.Contains(string(got), tc.want) {
 				t.Fatalf("routing output %q, error %v; want event SHA and %q", got, err, tc.want)
+			}
+			const autoPrerelease = "auto_prerelease=true\n"
+			if strings.Contains(string(got), autoPrerelease) != (tc.want == autoPrerelease) {
+				t.Fatalf("unexpected automatic handoff decision: %s", got)
 			}
 		})
 	}

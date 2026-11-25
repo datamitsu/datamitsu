@@ -285,9 +285,12 @@ git rebase --reset-author-date --exec 'git commit --amend --no-edit --reset-auth
 The [Release workflow](.github/workflows/release.yml) prepares checked artifacts.
 
 - `verify` (default): build from the selected branch without signing or publishing.
-- `prerelease`: build from the selected branch. Run `Release Preflight` manually
-  to publish to npm and GHCR and create a GitHub Pre-release without setting
-  it as Latest. The product commit must be on the default branch to publish.
+  The run summary reports that verification passed and no publication was requested.
+- `prerelease`: a new run on the protected default branch automatically hands the
+  prepared index to `Release Preflight`. After environment approval, it publishes
+  to npm and GHCR and creates a GitHub Pre-release without setting it as Latest.
+  A run from another branch prepares artifacts only; manual publication still
+  requires the source commit to be in the default branch history.
 - `unstable`: select the protected default branch in the workflow picker.
   Leave `product_ref` empty to build the commit that triggered the workflow,
   or set it to a branch, tag, or full commit SHA in this repository. The
@@ -308,16 +311,21 @@ The smoke test installs the packed launcher and matching host archive offline.
 The preparation job can restore GitHub Actions caches but cannot save them.
 
 [Release Preflight](.github/workflows/release-preflight.yml) starts automatically
-after a successful tagged or `unstable` preparation. It runs on the protected
-default branch, checks the original index and GitHub's producing job metadata,
-and validates every referenced payload. It records the product SHA separately
+after a successful tagged preparation or an eligible first `unstable` or
+`prerelease` preparation. It runs on the protected default branch, checks the
+original index and GitHub's producing job metadata, and validates every
+referenced payload. It records the product SHA separately
 from the trusted workflow revision. A moved tag, ambiguous index, expired
 artifact, or digest mismatch blocks publication.
 Publisher jobs consume the prepared bytes without rebuilding them or running
 product-source scripts.
+If a prerelease finalization claim already exists, automatic Preflight stops
+and directs the operator to manual recovery.
+Automatic and manual Preflight runs for the same preparation run ID share
+one queue. A recovery waits for the active run instead of canceling it.
 
-For a manual `prerelease` publication or recovery, use **Release Preflight** on
-the default branch. Copy the preparation run ID, producing attempt, index ID,
+For a manual-only `prerelease` or publication recovery, use **Release Preflight**
+on the default branch. Copy the preparation run ID, producing attempt, index ID,
 and index archive SHA-256 from the original preparation summary. The verified
 preparation mode determines the destinations; a recovery cannot change them.
 Use `unstable` for an unmerged product SHA. To rebuild `unstable`, start a new
