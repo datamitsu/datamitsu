@@ -107,6 +107,11 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **After v0.6.2:** Config serializers accept named formatting options. To share
+  a style, pass the same options object to each managed file's serializer. See
+  the Format Utilities section of the Configuration API reference. Existing
+  calls do not need to change.
+
 - **after v0.6.2** - The `datamitsu` and `datamitsu-fix` tool keys are reserved
   for built-in results. Rename any tool using either key and update its
   references, including `managedConfigs.*.tools`, `ejectConfigs`,

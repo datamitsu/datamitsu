@@ -93,6 +93,9 @@ func NewWithOptions(ctx context.Context, binaryCommandOverride string, opts Opti
 	e.initConsole()
 	e.initColors()
 	e.initFormats()
+	if err := e.initJSONStringifyOptions(); err != nil {
+		return nil, err
+	}
 	e.initMerge()
 	e.initTools()
 	e.initFacts()

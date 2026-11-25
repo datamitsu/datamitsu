@@ -309,7 +309,10 @@ declare global {
        *   alphabetical order.
        * @returns Formatted .gitignore content
        */
-      function stringify<T extends string>(groups: IgnoreMap<T>, groupOrder?: T[]): string;
+      function stringify<T extends string>(
+        groups: IgnoreMap<T>,
+        options?: IgnoreStringifyOptions | T[],
+      ): string;
     }
 
     /**
@@ -1978,6 +1981,46 @@ declare global {
    */
   const facts: () => Facts;
 
+  interface IgnoreStringifyOptions {
+    blankLinesBetweenGroups?: boolean;
+    groupOrder?: string[];
+    lineEnding?: "crlf" | "lf";
+  }
+
+  interface INIStringifyOptions {
+    align?: boolean;
+    blankLinesBetweenSections?: boolean;
+    defaultHeader?: boolean;
+    delimiter?: ":" | "=";
+    indent?: string;
+    lineEnding?: "crlf" | "lf";
+    spaceAroundDelimiter?: boolean;
+  }
+
+  interface JSON {
+    stringify(value: any, options: JSONStringifyOptions): string;
+  }
+
+  interface JSONStringifyOptions {
+    indent?: number | string;
+  }
+
+  interface TOMLStringifyOptions {
+    indent?: string;
+    indentTables?: boolean;
+    inlineTables?: boolean;
+    multilineArrays?: boolean;
+    quoteStyle?: "double" | "single";
+  }
+
+  interface YAMLStringifyOptions {
+    flow?: boolean;
+    indent?: number;
+    indentSequence?: boolean;
+    literalStyleIfMultiline?: boolean;
+    quoteStyle?: "double" | "single";
+  }
+
   /**
    * YAML parser and stringifier
    */
@@ -1998,7 +2041,7 @@ declare global {
      * @returns YAML string
      * @throws Error if object cannot be serialized
      */
-    function stringify(value: any): string;
+    function stringify(value: any, options?: YAMLStringifyOptions): string;
   }
 
   /**
@@ -2021,7 +2064,7 @@ declare global {
      * @returns TOML string
      * @throws Error if object cannot be serialized
      */
-    function stringify(value: any): string;
+    function stringify(value: any, options?: TOMLStringifyOptions): string;
   }
 
   /**
@@ -2080,7 +2123,7 @@ declare global {
      * @returns INI string
      * @throws Error if object cannot be serialized
      */
-    function stringify(sections: Array<SectionEntry>): string;
+    function stringify(sections: Array<SectionEntry>, options?: INIStringifyOptions): string;
 
     /**
      * Convert array of sections to a record, merging sections with the same name

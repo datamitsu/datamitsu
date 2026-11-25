@@ -55,7 +55,7 @@ func isTOMLTable(value any) bool {
 }
 
 // tomlStringifyOrdered writes root primitives before tables to preserve TOML scope.
-func tomlStringifyOrdered(slice yaml.MapSlice) (string, error) {
+func tomlStringifyOrdered(slice yaml.MapSlice, marshal func(any) ([]byte, error)) (string, error) {
 	var buf bytes.Buffer
 	var tables []yaml.MapItem
 
@@ -75,7 +75,7 @@ func tomlStringifyOrdered(slice yaml.MapSlice) (string, error) {
 
 		// Encode primitive value
 		singleItem := map[string]any{key: value}
-		itemBytes, err := toml.Marshal(singleItem)
+		itemBytes, err := marshal(singleItem)
 		if err != nil {
 			return "", fmt.Errorf("failed to marshal TOML item %s: %w", key, err)
 		}
@@ -94,7 +94,7 @@ func tomlStringifyOrdered(slice yaml.MapSlice) (string, error) {
 		value := convertMapSliceToMap(item.Value)
 
 		singleItem := map[string]any{key: value}
-		itemBytes, err := toml.Marshal(singleItem)
+		itemBytes, err := marshal(singleItem)
 		if err != nil {
 			return "", fmt.Errorf("failed to marshal TOML table %s: %w", key, err)
 		}
@@ -256,7 +256,7 @@ func (e *Engine) initFormats() {
 
 			// Convert goja value to ordered structure preserving key order
 			orderedValue := e.convertGojaValueToOrderedStructure(call.Argument(0))
-			yamlBytes, err := yaml.Marshal(orderedValue)
+			yamlBytes, err := e.stringifyYAMLOptions(orderedValue, call.Argument(1))
 			if err != nil {
 				panic(e.vm.NewGoError(fmt.Errorf("YAML.stringify error: %w", err)))
 			}
@@ -293,14 +293,17 @@ func (e *Engine) initFormats() {
 			orderedValue := e.convertGojaValueToOrderedStructure(call.Argument(0))
 
 			var tomlStr string
-			var err error
+			marshal, err := e.tomlOptions(call.Argument(1))
+			if err != nil {
+				panic(e.vm.NewTypeError("TOML.stringify: %s", err))
+			}
 
 			// Check if it's a MapSlice (ordered object) and use ordered encoding
 			if slice, ok := orderedValue.(yaml.MapSlice); ok {
-				tomlStr, err = tomlStringifyOrdered(slice)
+				tomlStr, err = tomlStringifyOrdered(slice, marshal)
 			} else {
 				// For other types, use regular TOML marshaling
-				tomlBytes, marshalErr := toml.Marshal(orderedValue)
+				tomlBytes, marshalErr := marshal(orderedValue)
 				if marshalErr != nil {
 					err = marshalErr
 				} else {
@@ -468,13 +471,12 @@ func (e *Engine) initFormats() {
 			}
 		}
 
-		var buf bytes.Buffer
-		_, err := cfg.WriteTo(&buf)
+		out, err := e.stringifyINIOptions(cfg, call.Argument(1))
 		if err != nil {
 			panic(e.vm.NewGoError(fmt.Errorf("INI.stringify error: %w", err)))
 		}
 
-		return e.vm.ToValue(buf.String())
+		return e.vm.ToValue(out)
 	})
 
 	_ = e.vm.Set("INI", iniNamespace)

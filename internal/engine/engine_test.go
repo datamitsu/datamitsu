@@ -168,6 +168,16 @@ func TestYAMLStringify(t *testing.T) {
 	}
 }
 
+func TestYAMLStringifyFlowAndLiteralMultilineStyleAreRejected(t *testing.T) {
+	engine, err := New(context.Background(), "")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if _, err := engine.vm.RunString(`YAML.stringify({x: "a\nb"}, {flow: true, literalStyleIfMultiline: true})`); err == nil {
+		t.Fatal("expected incompatible YAML styles to fail")
+	}
+}
+
 func TestYAMLParseNoArguments(t *testing.T) {
 	engine, err := New(context.Background(), "")
 	if err != nil {
@@ -447,6 +457,25 @@ func TestINIStringify(t *testing.T) {
 	result := val.String()
 	if !strings.Contains(result, "[section1]") {
 		t.Error("INI output does not contain '[section1]'")
+	}
+}
+
+func TestINIStringifyOptionsPreserveTripleQuotePrefix(t *testing.T) {
+	engine, err := New(context.Background(), "")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	value, err := engine.vm.RunString(`
+		const sections = [{name: "section", properties: {value: '"""hello'}}];
+		const output = INI.stringify(sections, {align: false});
+		INI.toRecord(INI.parse(output)).section.value;
+	`)
+	if err != nil {
+		t.Fatalf("INI stringify/parse round-trip: %v", err)
+	}
+	if got, want := value.String(), `"""hello`; got != want {
+		t.Fatalf("round-trip value = %q, want %q", got, want)
 	}
 }
 
