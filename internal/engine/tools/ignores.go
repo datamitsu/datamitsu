@@ -26,7 +26,7 @@ func ParseIgnoreFile(content string) ParseIgnoreResult {
 	groupOrder := make([]string, 0)
 	seenGroups := make(map[string]bool)
 
-	lines := strings.Split(content, "\n")
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
 
 	currentGroup := ""
 	inManagedSection := false

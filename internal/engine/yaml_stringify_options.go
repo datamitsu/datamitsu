@@ -1,9 +1,11 @@
 package engine
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/dop251/goja"
 	yaml "github.com/goccy/go-yaml"
@@ -63,6 +65,9 @@ func (e *Engine) stringifyYAMLOptions(input any, opts goja.Value) ([]byte, error
 	if settings.flow && settings.literalStyleIfMultiline {
 		return nil, errors.New("YAML.stringify options flow and literalStyleIfMultiline cannot both be true")
 	}
+	if settings.flow {
+		input = quoteYAMLFlowMultiline(input)
+	}
 
 	options := []yaml.EncodeOption{
 		yaml.Indent(settings.indent),
@@ -88,4 +93,33 @@ func (e *Engine) stringifyYAMLOptions(input any, opts goja.Value) ([]byte, error
 		return preferred, nil
 	}
 	return baseline, nil
+}
+
+type yamlFlowString string
+
+func (s yamlFlowString) MarshalYAML() ([]byte, error) {
+	encoded, err := json.Marshal(string(s))
+	if err != nil {
+		return nil, fmt.Errorf("quote YAML flow string: %w", err)
+	}
+	return encoded, nil
+}
+
+func quoteYAMLFlowMultiline(value any) any {
+	switch v := value.(type) {
+	case string:
+		if strings.ContainsAny(v, "\r\n") {
+			return yamlFlowString(v)
+		}
+	case yaml.MapSlice:
+		for i := range v {
+			v[i].Key = quoteYAMLFlowMultiline(v[i].Key)
+			v[i].Value = quoteYAMLFlowMultiline(v[i].Value)
+		}
+	case []any:
+		for i := range v {
+			v[i] = quoteYAMLFlowMultiline(v[i])
+		}
+	}
+	return value
 }
