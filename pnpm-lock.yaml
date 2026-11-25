@@ -315,8 +315,8 @@ importers:
         specifier: 0.0.1
         version: 0.0.1(4f4a38e7550240187061bb462b6541b1)
       asciinema-player:
-        specifier: 3.18.0
-        version: 3.18.0
+        specifier: 3.18.1
+        version: 3.18.1
       clsx:
         specifier: 2.1.1
         version: 2.1.1
@@ -3607,8 +3607,8 @@ packages:
     resolution: {integrity: sha512-HGyxoOTYUyCM6stUe6EJgnd4EoewAI7zMdfqO+kGjnlZmBDz/cR5pf8r/cR4Wq60sL/p0IkcjUEEPwS3GFrIyw==}
     engines: {node: '>=8'}
 
-  asciinema-player@3.18.0:
-    resolution: {integrity: sha512-5gpt2ipFcy4NKmgkv+c/QXnJ9zMicxqWROCOuJqgwwtiYKM8Qe9hnDOvfqke5bW6M2DW/seO3uQYkQ0xeUUVtw==}
+  asciinema-player@3.18.1:
+    resolution: {integrity: sha512-H3blHwZYerDkjUVNABB0zjIzZhZu+JT0/FXT7Skc+4cpa2i7bDab49uOztsIguej4Ppfw6JS0V8J5/6VNqIIkQ==}
 
   asn1js@3.1.0:
     resolution: {integrity: sha512-HWYi1THkOqguCiO+vwj09ZkQFD2kKEsejYHAYCtX0D80WVdoDnvRc9IukXX/jeb0T9NRWJnRtqwdbHltnFjwXA==}
@@ -12397,7 +12397,7 @@ snapshots:
 
   array-union@2.1.0: {}
 
-  asciinema-player@3.18.0:
+  asciinema-player@3.18.1:
     dependencies:
       solid-js: 1.9.19
 
