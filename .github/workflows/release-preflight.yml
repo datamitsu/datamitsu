@@ -72,6 +72,10 @@ on:
         description: Request RubyGems publication for the selected tag
         type: boolean
         default: false
+concurrency:
+  group: release-preflight-${{ github.event.workflow_run.id || inputs.preparation_run_id }}
+  queue: max
+  cancel-in-progress: false
 permissions:
   actions: read
   contents: read
@@ -143,10 +147,13 @@ jobs:
           number='(0|[1-9][0-9]*)'
           tag_pattern="^v${number}\.${number}\.${number}(-rc\.${number})?$"
           PUBLISH_MODE=prerelease
-          unstable_job() {
-            jq -cer '
-              [.[].jobs[] | select(.name | startswith("Prepare unstable release artifacts ["))]
-              | if length > 1 then error("Ambiguous unstable build") else . end
+          handoff_mode() {
+            jq -r '
+              [.[].jobs[] | .name |
+                if . == "Prepare prerelease for publication" then "prerelease"
+                elif startswith("Prepare unstable release artifacts [") then "unstable"
+                else empty end]
+              | if length > 1 then error("Ambiguous automatic release preparation") else .[0] // "" end
             ' "$evidence/jobs.json"
           }
           if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
@@ -165,11 +172,14 @@ jobs:
                 PUBLISH_RUBYGEMS=true
                 ;;
               workflow_dispatch)
-                [[ "$COMPLETED_ATTEMPT" == 1 ]] || exit 0
+                if [[ "$COMPLETED_ATTEMPT" != 1 ]]; then
+                  echo 'No automatic publication on a rerun. Use manual Release Preflight for recovery.' >> "$GITHUB_STEP_SUMMARY"
+                  exit 0
+                fi
                 gh api --paginate --slurp "$api/runs/$PREPARATION_RUN/attempts/1/jobs?per_page=100" > "$evidence/jobs.json"
-                marker=$(unstable_job)
-                if [[ "$marker" == '[]' ]]; then
-                  echo 'No unstable publication requested' >> "$GITHUB_STEP_SUMMARY"
+                automatic_mode=$(handoff_mode)
+                if [[ -z "$automatic_mode" ]]; then
+                  echo 'No automatic publication requested. Verify never publishes; a manual-only prerelease uses its original index in Release Preflight.' >> "$GITHUB_STEP_SUMMARY"
                   exit 0
                 fi
                 ;;
@@ -203,8 +213,8 @@ jobs:
               .head_sha == $trigger[0].workflow_run.head_sha
             ' "$evidence/run.json" > /dev/null
           fi
-          marker=$(unstable_job)
-          if [[ "$marker" != '[]' ]]; then
+          automatic_mode=$(handoff_mode)
+          if [[ -n "$automatic_mode" ]]; then
             [[ "$GITHUB_REPOSITORY" == datamitsu/datamitsu && "$PROTECTED_REF" == true && -z "$REQUESTED_TAG" ]]
             dispatch_sha=$(jq -er --arg repo "$GITHUB_REPOSITORY" --arg branch "$DEFAULT_BRANCH" '
               select(.event == "workflow_dispatch" and .conclusion == "success" and
@@ -213,10 +223,10 @@ jobs:
             ' "$evidence/run.json")
             relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$dispatch_sha...$GITHUB_SHA" --jq .status)
             [[ "$relation" == identical || "$relation" == ahead ]] || {
-              echo 'Unstable preparation workflow is not on the protected default branch' >&2
+              echo 'Automatic release preparation workflow is not on the protected default branch' >&2
               exit 1
             }
-            PUBLISH_MODE=unstable
+            PUBLISH_MODE=$automatic_mode
             if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
               PUBLISH_PYPI=false
               PUBLISH_RUBYGEMS=false
@@ -244,7 +254,7 @@ jobs:
           sys.stdout.buffer.write(archive)
           ' > "$evidence/index.zip"
           route=(--publish-mode "$PUBLISH_MODE")
-          if [[ "$PUBLISH_MODE" == unstable ]]; then
+          if [[ -n "$automatic_mode" ]]; then
             route+=(--trusted-dispatch-sha "$dispatch_sha")
           fi
           if [[ -n "$REQUESTED_TAG" ]]; then
@@ -272,6 +282,16 @@ jobs:
           PREPARATION_ATTEMPT=$(jq -er '.preparation_attempt' "$evidence/verified.json")
           PREPARATION_SHA=$(jq -er '.source_sha' "$evidence/verified.json")
           UNSTABLE_TAG=$(jq -er '.release_tag' "$evidence/verified.json")
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run && "$mode" == prerelease ]]; then
+            for component in parser images/ghcr checksums checksum-index; do
+              ref="heads/release-finalization/$component/$UNSTABLE_TAG"
+              if ! gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/$ref" |
+                jq -e --arg ref "refs/$ref" 'type == "array" and all(.[]; (.ref | type) == "string" and .ref != $ref)' > /dev/null; then
+                echo 'Cannot confirm first prerelease finalization. Use a new manual Release Preflight with the original index and recovery evidence.' >&2
+                exit 1
+              fi
+            done
+          fi
           if [[ "$GITHUB_DESTINATION" == true ]]; then
             default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)
             encoded_branch=$(jq -nr --arg branch "$default_branch" '$branch | @uri')
@@ -313,7 +333,7 @@ jobs:
             printf '%s\n\n' 'Release evidence checked. Publication still requires environment approval.'
             printf 'Index: `%s` (`%s`)\n\n' "$INDEX_ID" "$INDEX_DIGEST"
             printf 'Publisher orchestration: `%s` at `%s`\n\n' "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA"
-            if [[ "$mode" == unstable ]]; then
+            if [[ -n "$automatic_mode" ]]; then
               printf 'Preparation orchestration: `%s`\n\n' "$dispatch_sha"
             fi
             jq -r '"- Source: `\(.source_sha)`\n- Tag: `\(.release_tag)`\n- Version: `\(.version)`\n- Preparation run: `\(.run_id)`\n- Producing attempt: `\(.producing_attempt)`"' "$evidence/verified.json"

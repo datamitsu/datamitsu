@@ -7,7 +7,7 @@ jobs:
       !cancelled() &&
       needs.determine-release-type.outputs.verify != 'true' &&
       (needs.validate-stable.result == 'success' || needs.generate-unstable-version.result == 'success')
-    name: ${{ inputs.mode == 'unstable' && format('Prepare unstable release artifacts [{0}]', needs.determine-release-type.outputs.checkout_ref) || 'Prepare release artifacts' }}
+    name: ${{ inputs.mode == 'unstable' && format('Prepare unstable release artifacts [{0}]', needs.determine-release-type.outputs.checkout_ref) || needs.determine-release-type.outputs.auto_prerelease == 'true' && 'Prepare prerelease for publication' || 'Prepare release artifacts' }}
     needs:
       - determine-release-type
       - validate-stable
@@ -474,8 +474,6 @@ jobs:
           outputs: type=oci,dest=dist/datamitsu-alpine.oci.tar
           platforms: linux/amd64,linux/arm64
           push: false
-      - name: Report preparation limits
-        run: echo 'Preparation does not sign, attest, or publish. Publication is disabled pending trusted publisher integration.' >> "$GITHUB_STEP_SUMMARY"
       # 9. Upload Artifact (everything needed for publish jobs)
       - if: ${{ !env.ACT }}
         name: Upload build artifacts
@@ -534,6 +532,8 @@ jobs:
         env:
           INDEX_ID: ${{ steps.upload-index.outputs.artifact-id }}
           INDEX_DIGEST: ${{ steps.upload-index.outputs.artifact-digest }}
+          MODE: ${{ needs.determine-release-type.outputs.mode }}
+          AUTO_PRERELEASE: ${{ needs.determine-release-type.outputs.auto_prerelease }}
         run: |
           [[ "$INDEX_ID" =~ ^[1-9][0-9]*$ && "$INDEX_DIGEST" =~ ^(sha256:)?[0-9a-f]{64}$ ]] || {
             echo 'Missing or invalid release artifact index identity' >&2
@@ -541,6 +541,19 @@ jobs:
           }
           printf '\n- Artifact index: ID `%s`, archive digest `sha256:%s`\n' \
             "$INDEX_ID" "${INDEX_DIGEST#sha256:}" >> "$GITHUB_STEP_SUMMARY"
+          case "$MODE" in
+            verify) message='Verification passed. No publication was requested.' ;;
+            prerelease)
+              if [[ "$AUTO_PRERELEASE" == true ]]; then
+                message='Prerelease prepared. Release Preflight checks the index and requires environment approval before publication.'
+              else
+                message='Prerelease prepared, not published. Use manual Release Preflight with this index; the source commit must be on the default branch.'
+              fi
+              ;;
+            unstable|tag) message='Release prepared. Publication is separate and requires a successful Release Preflight and environment approval.' ;;
+            *) exit 1 ;;
+          esac
+          printf '\n**%s**\n' "$message" >> "$GITHUB_STEP_SUMMARY"
   attest-tagged-npm:
     if: ${{ always() && !cancelled() && github.event_name == 'push' && github.ref_type == 'tag' && github.ref_protected && vars.RELEASE_BUILD_ATTESTATION_ENABLED == 'true' && needs.build.result == 'success' && needs.validate-stable.result == 'success' }}
     needs:
@@ -624,6 +637,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   verify:
+    cache-mode: read
     if: |
       always() && !cancelled() &&
       needs.determine-release-type.outputs.verify == 'true' &&
@@ -644,6 +658,7 @@ jobs:
     outputs:
       checkout_ref: ${{ steps.detect.outputs.checkout_ref }}
       mode: ${{ steps.detect.outputs.mode }}
+      auto_prerelease: ${{ steps.detect.outputs.auto_prerelease }}
       tag_ref: ${{ steps.detect.outputs.tag_ref }}
       is_stable: ${{ steps.detect.outputs.is_stable }}
       is_unstable: ${{ steps.detect.outputs.is_unstable }}
@@ -676,7 +691,13 @@ jobs:
             workflow_dispatch)
               case "$RELEASE_MODE" in
                 verify) echo 'verify=true' >> "$GITHUB_OUTPUT" ;;
-                prerelease) echo 'verify=false' >> "$GITHUB_OUTPUT" ;;
+                prerelease)
+                  echo 'verify=false' >> "$GITHUB_OUTPUT"
+                  if [[ "$GITHUB_REPOSITORY" == datamitsu/datamitsu && "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" &&
+                        "$PROTECTED_REF" == true && "$GITHUB_WORKFLOW_SHA" == "$GITHUB_SHA" && "$GITHUB_RUN_ATTEMPT" == 1 ]]; then
+                    echo 'auto_prerelease=true' >> "$GITHUB_OUTPUT"
+                  fi
+                  ;;
                 unstable)
                   [[ "$GITHUB_REPOSITORY" == datamitsu/datamitsu && "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" &&
                      "$PROTECTED_REF" == true && "$GITHUB_WORKFLOW_SHA" == "$GITHUB_SHA" && "$GITHUB_RUN_ATTEMPT" == 1 ]] || {
@@ -789,7 +810,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Verify, prepare a GitHub Pre-release, or publish unstable to npm and GHCR
+        description: Verify without publishing, request a GitHub Pre-release, or publish unstable to npm and GHCR
         default: verify
         options:
           - verify
