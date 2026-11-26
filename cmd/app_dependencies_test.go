@@ -35,6 +35,7 @@ func TestInitDependencySets(t *testing.T) {
 				Name:           "",
 				Version:        "",
 				Bundles:        nil,
+				AI:             nil,
 				ManagedConfigs: nil,
 				EjectConfigs:   nil,
 				ProjectTypes:   nil,

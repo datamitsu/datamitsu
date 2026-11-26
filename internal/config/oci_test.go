@@ -160,7 +160,7 @@ func TestValidateOCI_CollectsAllErrors(t *testing.T) {
 // contract: a Config with no oci set must marshal exactly as before the field
 // existed, otherwise every tool's cache is invalidated on upgrade.
 func TestEmptyConfigMarshalUnchanged(t *testing.T) {
-	data, err := json.Marshal(Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil})
+	data, err := json.Marshal(Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil})
 	if err != nil {
 		t.Fatalf("Marshal(Config{}) error: %v", err)
 	}
@@ -175,6 +175,7 @@ func TestOCIRefJSONRoundTrip(t *testing.T) {
 		Version:        "",
 		Apps:           nil,
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,

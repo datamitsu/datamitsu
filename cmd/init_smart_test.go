@@ -17,6 +17,7 @@ func TestScanReferencedApps(t *testing.T) {
 			Version:        "",
 			Apps:           nil,
 			Bundles:        nil,
+			AI:             nil,
 			Runtimes:       nil,
 			ManagedConfigs: nil,
 			EjectConfigs:   nil,
@@ -73,6 +74,7 @@ func TestScanReferencedApps(t *testing.T) {
 			Version:        "",
 			Apps:           nil,
 			Bundles:        nil,
+			AI:             nil,
 			Runtimes:       nil,
 			ManagedConfigs: nil,
 			EjectConfigs:   nil,
@@ -125,6 +127,7 @@ func TestScanReferencedApps(t *testing.T) {
 			Version:        "",
 			Apps:           nil,
 			Bundles:        nil,
+			AI:             nil,
 			Runtimes:       nil,
 			ManagedConfigs: nil,
 			EjectConfigs:   nil,
@@ -158,7 +161,7 @@ func TestScanReferencedApps(t *testing.T) {
 	})
 
 	t.Run("handles empty config", func(t *testing.T) {
-		cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+		cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 		result := scanReferencedApps(cfg)
 
@@ -173,6 +176,7 @@ func TestScanReferencedApps(t *testing.T) {
 			Version:        "",
 			Apps:           nil,
 			Bundles:        nil,
+			AI:             nil,
 			Runtimes:       nil,
 			ManagedConfigs: nil,
 			EjectConfigs:   nil,
@@ -209,6 +213,7 @@ func TestScanReferencedApps(t *testing.T) {
 			Version:        "",
 			Apps:           nil,
 			Bundles:        nil,
+			AI:             nil,
 			Runtimes:       nil,
 			ManagedConfigs: nil,
 			EjectConfigs:   nil,
@@ -484,6 +489,7 @@ func TestSmartInitIntegration(t *testing.T) {
 			Name:           "",
 			Version:        "",
 			Bundles:        nil,
+			AI:             nil,
 			Runtimes:       nil,
 			ManagedConfigs: nil,
 			EjectConfigs:   nil,
@@ -781,6 +787,7 @@ func TestInstallRuntimeAppsWithLinksUsesSmartInit(t *testing.T) {
 		Name:           "",
 		Version:        "",
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,
@@ -1190,6 +1197,7 @@ func TestSmartInitInstallSet(t *testing.T) {
 		Name:           "",
 		Version:        "",
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,

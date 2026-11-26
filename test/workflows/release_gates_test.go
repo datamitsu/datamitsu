@@ -15,8 +15,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/datamitsu/datamitsu/internal/gitenv"
+	"github.com/datamitsu/datamitsu/internal/gittest"
+
 	"github.com/goccy/go-yaml"
 )
+
+func TestMain(m *testing.M) {
+	gittest.Isolate()
+	m.Run()
+}
 
 const releaseWorkflowPath = "../../.github/workflows/release.yml"
 
@@ -217,12 +225,13 @@ func TestUnstableVersionIdentityUsesRunTimestampAndAttempt(t *testing.T) {
 			dir := t.TempDir()
 			cmd := exec.CommandContext(t.Context(), "bash", "-ec", script)
 			cmd.Dir = dir
-			cmd.Env = append(os.Environ(), "MODE="+tc.mode, "GITHUB_RUN_ID=12345", "GITHUB_RUN_ATTEMPT=7", "GITHUB_OUTPUT="+filepath.Join(dir, "output"))
+			cmd.Env = append(gitenv.Environ(), "MODE="+tc.mode, "GITHUB_RUN_ID=12345", "GITHUB_RUN_ATTEMPT=7", "GITHUB_OUTPUT="+filepath.Join(dir, "output"))
 			// The production step reads the checked-out commit. A temporary repository
 			// makes its source-derived identity deterministic without pinning the clock.
 			for _, args := range [][]string{{"init", "-q"}, {"-c", "user.name=workflow-test", "-c", "user.email=workflow@example.invalid", "commit", "--allow-empty", "-qm", "source"}} {
 				git := exec.CommandContext(t.Context(), "git", args...)
 				git.Dir = dir
+				git.Env = gitenv.Environ()
 				if output, err := git.CombinedOutput(); err != nil {
 					t.Fatalf("git %v: %v: %s", args, err, output)
 				}

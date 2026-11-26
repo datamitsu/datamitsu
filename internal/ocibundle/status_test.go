@@ -30,7 +30,7 @@ func seedManifestCache(t *testing.T, digest string, body []byte) {
 
 func TestBundleStatus_NoBundleDeclared(t *testing.T) {
 	testStore(t)
-	if _, err := BundleStatus(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}); err == nil {
+	if _, err := BundleStatus(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}); err == nil {
 		t.Fatal("expected error without an oci declaration")
 	}
 	if _, err := BundleStatus(context.Background(), nil); err == nil {

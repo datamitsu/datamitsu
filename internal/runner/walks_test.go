@@ -66,6 +66,7 @@ func runWithWalkCount(t *testing.T, ops []config.OperationType, wantFailure bool
 				Version:        "",
 				Apps:           nil,
 				Bundles:        nil,
+				AI:             nil,
 				Runtimes:       nil,
 				ManagedConfigs: nil,
 				EjectConfigs:   nil,

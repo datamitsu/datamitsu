@@ -552,6 +552,7 @@ type Config struct {
 	Version        string                  `json:"version,omitempty"`
 	Apps           binmanager.MapOfApps    `json:"apps,omitempty"`
 	Bundles        binmanager.MapOfBundles `json:"bundles,omitempty"`
+	AI             *AIConfig               `json:"ai,omitempty"`
 	Runtimes       MapOfRuntimes           `json:"runtimes,omitempty"`
 	ManagedConfigs MapOfManagedConfigs     `json:"managedConfigs,omitempty"`
 	// EjectConfigs names the tools whose ejectable managed configs the project

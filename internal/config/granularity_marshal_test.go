@@ -10,7 +10,7 @@ import (
 // that declares no execution policy must serialize exactly as it did before the
 // field existed — otherwise adding it resets every user's cache on upgrade.
 func TestExecutionOmittedWhenUnset(t *testing.T) {
-	b, err := json.Marshal(Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: MapOfTools{}})
+	b, err := json.Marshal(Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: MapOfTools{}})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

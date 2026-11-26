@@ -1631,6 +1631,36 @@ const managedConfigs = {
 };
 ```
 
+## AI artifacts (`ai`)
+
+`datamitsu init` installs project-local skills and agent profiles. If `ai` is absent, it leaves them untouched. An explicit empty block removes previously owned artifacts that are no longer requested.
+
+```js
+ai: {
+  skills: {
+    "dm-example": {
+      source: { bundle: "ai-content", path: "skills/dm-example" },
+      targets: { agents: {}, claude: { disableModelInvocation: true } },
+    },
+  },
+  agents: {
+    "dm-reviewer": {
+      description: "Review code changes.",
+      instructions: "Report confirmed findings with file references.",
+      targets: { codex: {}, omp: {} },
+    },
+  },
+},
+```
+
+Names start with `dm-`. A skill source is a directory inside an installed bundle and must contain a matching `SKILL.md`. Use a bundle archive for binary resources and executable scripts. Targets select installation paths, not which clients may discover the content. The `agents` skill target writes under `.agents/skills/`; `claude` writes under `.claude/skills/`. Agent targets are `antigravity`, `claude`, `codex`, `omp`, and `opencode`.
+
+An empty target object enables it. Set `enabled: false` on an entry or target to disable it without discarding inherited settings. A missing required bundle blocks AI installation and cleanup, including under `--skip-download`.
+
+A configured destination is reserved for Datamitsu. Init can replace untracked content there; it protects tracked paths even when their capitalization differs, and does not follow symlinks. For destinations no longer configured, init removes only entries it can identify as owned. Flat profiles use a neighboring fingerprint marker; a stale profile with changed bytes is preserved. Repository-local Git exclude rules keep generated artifacts out of Git status. These rules are shared by linked worktrees and do not affect tracked files.
+
+If an existing profile, skill directory, or ownership marker differs from a requested path only in capitalization, init stops before writing AI artifacts. Rename the existing entry to resolve the conflict.
+
 ## Init Commands (`initCommands`)
 
 Init commands run shell commands during `datamitsu init`.

@@ -190,7 +190,7 @@ func TestResolveSeedRef(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("config declaration is used without arguments", func(t *testing.T) {
-		cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, Parsers: nil, Lsp: nil, OCI: &config.OCIRef{Signer: nil, Ref: "ghcr.io/owner/repo", Digest: storeTestDigest}}
+		cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, Parsers: nil, Lsp: nil, OCI: &config.OCIRef{Signer: nil, Ref: "ghcr.io/owner/repo", Digest: storeTestDigest}}
 		ref, err := resolveSeedRef(ctx, cfg, nil)
 		if err != nil {
 			t.Fatalf("resolveSeedRef: %v", err)
@@ -201,14 +201,14 @@ func TestResolveSeedRef(t *testing.T) {
 	})
 
 	t.Run("no arguments and no declaration is an error", func(t *testing.T) {
-		_, err := resolveSeedRef(ctx, &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil)
+		_, err := resolveSeedRef(ctx, &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil)
 		if err == nil || !strings.Contains(err.Error(), "no oci bundle declared") {
 			t.Errorf("err = %v, want a no-declaration error", err)
 		}
 	})
 
 	t.Run("digest-pinned argument overrides the config", func(t *testing.T) {
-		cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, Parsers: nil, Lsp: nil, OCI: &config.OCIRef{Signer: nil, Ref: "ghcr.io/owner/other", Digest: storeTestDigest}}
+		cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, Parsers: nil, Lsp: nil, OCI: &config.OCIRef{Signer: nil, Ref: "ghcr.io/owner/other", Digest: storeTestDigest}}
 		ref, err := resolveSeedRef(ctx, cfg, []string{"ghcr.io/owner/repo@" + storeTestDigest})
 		if err != nil {
 			t.Fatalf("resolveSeedRef: %v", err)
@@ -219,14 +219,14 @@ func TestResolveSeedRef(t *testing.T) {
 	})
 
 	t.Run("tag reference without --resolve-tag is refused", func(t *testing.T) {
-		_, err := resolveSeedRef(ctx, &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, []string{"ghcr.io/owner/repo:latest"})
+		_, err := resolveSeedRef(ctx, &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, []string{"ghcr.io/owner/repo:latest"})
 		if err == nil || !strings.Contains(err.Error(), "--resolve-tag") {
 			t.Errorf("err = %v, want a pin-the-digest refusal", err)
 		}
 	})
 
 	t.Run("bare reference without tag or digest is refused", func(t *testing.T) {
-		_, err := resolveSeedRef(ctx, &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, []string{"ghcr.io/owner/repo"})
+		_, err := resolveSeedRef(ctx, &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, []string{"ghcr.io/owner/repo"})
 		if err == nil {
 			t.Error("expected an error for an unpinned reference")
 		}

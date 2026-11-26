@@ -17,7 +17,7 @@ func TestDisplayNameFallsBackToDefault(t *testing.T) {
 		{configured: "@acme/config", name: "set", want: "@acme/config"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &Config{Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Name: tc.configured}
+			cfg := &Config{Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Name: tc.configured}
 			if got := cfg.DisplayName(); got != tc.want {
 				t.Fatalf("DisplayName() = %q, want %q", got, tc.want)
 			}

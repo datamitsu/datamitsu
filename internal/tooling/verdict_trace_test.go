@@ -39,7 +39,7 @@ func tracedVerdictFixture(t *testing.T, n int) (*Executor, Task) {
 		t.Fatal(err)
 	}
 
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}

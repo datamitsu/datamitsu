@@ -141,7 +141,8 @@ stderr instead.
 3. Installs runtime-managed apps (Bun/Node/UV/JVM/Go) that are referenced by tools
 4. Creates `.datamitsu/` symlinks for the config files of installed link-apps — an app marked `lazy: true` is deferred and gets its links on first `datamitsu exec` instead
 5. Writes `.datamitsu/configs/`: every [ejectable managed config](./configuration-api.md#keeping-configs-out-of-the-repository-ejectable--ejectconfigs) the project has not ejected, removing any that no longer belong there
-6. Runs configured init commands (e.g., `lefthook install`)
+6. Installs and prunes project-local [AI artifacts](./configuration-api.md#ai-artifacts-ai) when `ai` is configured (skipped in dry-run)
+7. Runs configured init commands (e.g., `lefthook install`)
 
 **Examples:**
 

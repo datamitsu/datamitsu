@@ -276,6 +276,17 @@ func runInit(_ *cobra.Command, _ []string) error {
 		stateChanged = stateChanged || !initDryRun && (!hadMarkerBefore || markerBefore != marker)
 	}
 
+	if !initDryRun && cfg.AI != nil {
+		aiChanged, aiErr := managedconfig.InstallAI(ctx, rootPath, cfg, binMgr.GetBundleRoot, disp.Diagnosticf)
+		if aiErr != nil {
+			return fmt.Errorf("failed to provision AI artifacts: %w", aiErr)
+		}
+		stateChanged = stateChanged || aiChanged
+		if aiChanged {
+			initLabelLine(disp, "ai", "updated")
+		}
+	}
+
 	hookErr := reportInitCommands(ctx, disp, rootPath, projectTypes, cfg, binMgr, initDryRun)
 
 	if quietDisplay {

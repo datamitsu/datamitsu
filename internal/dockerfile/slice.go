@@ -52,7 +52,7 @@ func BuildSlices(source *config.Config, plan Plan, apps binmanager.MapOfApps, ru
 		slices = append(slices, Slice{
 			StageName: stage,
 			FileName:  SliceFileName(stage),
-			Config:    withIdentity(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Runtimes: sliceRuntimes}, identity),
+			Config:    withIdentity(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Runtimes: sliceRuntimes}, identity),
 		})
 	}
 
@@ -77,7 +77,7 @@ func BuildSlices(source *config.Config, plan Plan, apps binmanager.MapOfApps, ru
 		slices = append(slices, Slice{
 			StageName: stage,
 			FileName:  SliceFileName(stage),
-			Config:    withIdentity(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Lsp: nil, Parsers: config.MapOfParsers{ps.Module: parsers[ps.Module]}}, identity),
+			Config:    withIdentity(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Lsp: nil, Parsers: config.MapOfParsers{ps.Module: parsers[ps.Module]}}, identity),
 		})
 	}
 
@@ -100,7 +100,7 @@ func appSlice(root string, apps binmanager.MapOfApps, runtimes config.MapOfRunti
 		runtimeNames = append(runtimeNames, name)
 	}
 	sort.Strings(runtimeNames)
-	cfg := &config.Config{Name: "", Version: "", Bundles: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Apps: make(binmanager.MapOfApps), Runtimes: make(config.MapOfRuntimes)}
+	cfg := &config.Config{Name: "", Version: "", Bundles: nil, AI: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Apps: make(binmanager.MapOfApps), Runtimes: make(config.MapOfRuntimes)}
 	for _, name := range names {
 		app := apps[name]
 		cfg.Apps[name] = app

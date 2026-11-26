@@ -125,7 +125,7 @@ func TestPlanDependencyAvailability(t *testing.T) {
 				if err == nil || !strings.Contains(err.Error(), want) {
 					t.Fatalf("error = %v, want %q", err, want)
 				}
-				if _, err := BuildSlices(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, plan, apps, runtimes, nil); err == nil {
+				if _, err := BuildSlices(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, plan, apps, runtimes, nil); err == nil {
 					t.Fatal("incomplete plan produced slices")
 				}
 			}
@@ -135,7 +135,7 @@ func TestPlanDependencyAvailability(t *testing.T) {
 
 func TestSlicesRejectUnknownDependency(t *testing.T) {
 	apps := binmanager.MapOfApps{"root": {Required: false, Lazy: false, Description: "", VersionCheck: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}, DependsOn: edges("typo")}}
-	_, err := BuildSlices(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, BuildPlan(apps, nil), apps, nil, nil)
+	_, err := BuildSlices(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, BuildPlan(apps, nil), apps, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "typo") {
 		t.Fatalf("error = %v", err)
 	}

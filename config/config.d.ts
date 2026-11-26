@@ -334,7 +334,48 @@ declare global {
     // Project Type Detection
     // ========================================
 
+    interface AIAgent {
+      description: string;
+      enabled?: boolean;
+      instructions: string;
+      targets: {
+        antigravity?: AIAgentTarget;
+        claude?: AIAgentTarget & { model?: string };
+        codex?: AIAgentTarget & { model?: string };
+        omp?: AIAgentTarget;
+        opencode?: AIAgentTarget & { model?: string };
+      };
+    }
+
+    interface AIAgentTarget {
+      description?: string;
+      enabled?: boolean;
+      instructions?: string;
+    }
+
+    interface AIConfig {
+      agents?: Record<string, AIAgent>;
+      skills?: Record<string, AISkill>;
+    }
+
+    interface AISkill {
+      enabled?: boolean;
+      source: { bundle: string; path: string };
+      targets: { agents?: AISkillTarget; claude?: AISkillTarget };
+    }
+
+    interface AISkillTarget {
+      description?: string;
+      disableModelInvocation?: boolean;
+      enabled?: boolean;
+    }
+
     interface Config {
+      /**
+       * Project-local skills and agents installed by init.
+       */
+      ai?: AIConfig;
+
       /**
        * Binary/app definitions
        */

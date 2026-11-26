@@ -373,7 +373,7 @@ function getConfig(input) { return { version: "1.0.0", ignoreRules: ["after: esl
 		nonDeterminism: "", warnings: nil, engines: nil,
 	}, &configcache.Entry{
 		VersionNotices: nil,
-		Warnings:       nil, RemoteURLs: nil, Config: &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil},
+		Warnings:       nil, RemoteURLs: nil, Config: &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil},
 	})
 	if n := configEvalArtifactCount(t, cacheHome); n != 0 {
 		t.Errorf("stored %d artifacts for a chain edited mid-evaluation, want 0", n)
