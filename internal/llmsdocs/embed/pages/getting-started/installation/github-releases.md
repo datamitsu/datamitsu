@@ -82,16 +82,14 @@ sudo rpm -i datamitsu_${VERSION}_linux_amd64.rpm
 sudo apk add --allow-untrusted datamitsu_${VERSION}_linux_amd64.apk
 ```
 
-## Unstable prereleases
+## Manual prereleases
 
-Unstable builds are dispatched by hand (Actions > Release) and the GitHub
-prerelease is an opt-in checkbox on that form, off by default. When it is
-ticked, the prerelease carries the archives, `checksums.txt` with its cosign
-bundle, the `.wasm` parser module built from that commit, and
-`parsers-oci.json` — the registry pin (`ref`, `digest`, `sha256`) for that same
-module, which every unstable build publishes to
-`ghcr.io/datamitsu/datamitsu-parsers-unstable`. These builds exist for testing
-something that has not shipped yet; install one only for that.
+In Actions, select **Release**, choose the source ref, and select a mode.
+`verify` checks artifacts without publishing. An approved `prerelease` publishes
+a GitHub Pre-release, not Latest, with the checked archives, signed checksums,
+parser module, and its `parsers-oci.json` pin. `unstable` does not create a
+GitHub tag or Release. Check Release Preflight for verified install coordinates;
+a successful preparation alone does not confirm publication.
 
 ## Verify provenance
 

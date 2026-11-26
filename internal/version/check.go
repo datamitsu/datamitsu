@@ -1,9 +1,10 @@
 // Package version compares the running datamitsu version against the minimum
-// version a config requires, treating unstable builds as an advisory skip.
+// version a config requires, treating pipeline snapshots as advisory.
 package version
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"golang.org/x/mod/semver"
@@ -18,19 +19,17 @@ func IsUnstable(v string) bool {
 	return strings.HasPrefix(strings.TrimPrefix(v, "v"), "0.0.0-unstable.")
 }
 
-// CompareVersions returns skipped=true (with nil err) when current is an
-// unstable build, signalling the caller to log an advisory warning instead
-// of enforcing required. Unstable builds sort below v0.0.0 under semver
-// prerelease rules, so enforcing the check would block every config.
+var pipelinePreview = regexp.MustCompile(`^v?0\.0\.0-preview\.[1-9][0-9]{11}\.[1-9][0-9]*\.[1-9][0-9]*$`)
+
+// CompareVersions returns skipped=true (with nil err) for pipeline snapshots.
+// Their placeholder base does not indicate the config versions they support.
 //
 // The local-build default "dev" (a plain `go build` with no -ldflags) is an
 // unversioned source build: it satisfies any requirement silently (skipped=false,
 // nil err), so developers can run a `go build` binary against real configs
 // without the v99.99.99 ldflags dance used by `task build`.
 //
-// required is validated as semver even on the unstable/dev paths so config
-// authors see a typo immediately rather than only when stable users run their
-// config.
+// The required version must be valid even on snapshot and local builds.
 func CompareVersions(current, required string) (skipped bool, err error) {
 	normalizedRequired := normalizeVersion(required)
 	if !semver.IsValid(normalizedRequired) {
@@ -41,7 +40,7 @@ func CompareVersions(current, required string) (skipped bool, err error) {
 		return false, nil
 	}
 
-	if IsUnstable(current) {
+	if IsUnstable(current) || pipelinePreview.MatchString(current) {
 		return true, nil
 	}
 

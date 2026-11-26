@@ -43,6 +43,13 @@ def _stable_version(value):
     )
 
 
+def preview_order(version):
+    match = re.fullmatch(
+        r"0\.0\.0-preview\.[1-9][0-9]{11}\.([1-9][0-9]*)\.([1-9][0-9]*)", version or ""
+    )
+    return tuple(map(int, match.groups())) if match else None
+
+
 def promote_tagged(
     directory, version, fetch=None, run=subprocess.run, *, baseline=None
 ):
@@ -79,13 +86,9 @@ def promote_tagged(
         latest, next_version = stable_tag(name, fetch)
         current = next_version if is_rc else latest
         other = latest if is_rc else next_version
-        if other is not None:
+        if other is not None and not (not is_rc and preview_order(other) is not None):
             other_parsed = _stable_version(other)
-            if (
-                other_parsed is None
-                or (is_rc and other_parsed[1])
-                or (not is_rc and not other_parsed[1])
-            ):
+            if other_parsed is None or other_parsed[1] == is_rc:
                 raise ValueError(
                     f"unrecognized npm channel pointer for {name}: {other!r}"
                 )
@@ -95,6 +98,9 @@ def promote_tagged(
                     f"unknown {channel} pointer for {name}; explicit null baseline required"
                 )
             states[name] = None
+            continue
+        if is_rc and preview_order(current) is not None:
+            states[name] = current
             continue
         current_parsed = _stable_version(current)
         if current_parsed is None or current_parsed[1] != is_rc:
@@ -142,7 +148,7 @@ def promote_tagged(
     return {"version": version, "channel": channel, "promoted": names}
 
 
-def unstable_tag(name, fetch):
+def unstable_tag(name, fetch, channel="unstable"):
     url = f"{REGISTRY}/-/package/{quote(name, safe='')}/dist-tags"
     with fetch(url, timeout=30) as response:
         tags = json.load(response)
@@ -150,14 +156,17 @@ def unstable_tag(name, fetch):
         not isinstance(value, str) for value in tags.values()
     ):
         raise ValueError(f"invalid dist-tags response for {name}")
-    return tags.get("unstable")
+    return tags.get(channel)
 
 
 def promote(directory, version, fetch=None, run=subprocess.run, *, baseline=None):
     if LEGACY.fullmatch(version) or not re.fullmatch(
-        r"0\.0\.0-unstable\.[1-9][0-9]*\.[1-9][0-9]*", version
+        r"0\.0\.0-(?:unstable\.(?:[1-9][0-9]{11}\.)?|preview\.[1-9][0-9]{11}\.)[1-9][0-9]*\.[1-9][0-9]*",
+        version,
     ):
         raise ValueError("invalid approved npm prerelease version")
+    preview = preview_order(version) is not None
+    channel = "next" if preview else "unstable"
     if fetch is None:
         fetch = CHECK.build_opener(CHECK.RejectRedirect()).open
     directory = Path(directory)
@@ -175,22 +184,37 @@ def promote(directory, version, fetch=None, run=subprocess.run, *, baseline=None
         or set(baseline) != set(names)
         or any(
             value is not None
-            and (not isinstance(value, str) or not LEGACY.fullmatch(value))
+            and (
+                not isinstance(value, str)
+                or not (_stable_version(value) if preview else LEGACY.fullmatch(value))
+            )
             for value in baseline.values()
         )
     ):
         raise ValueError(
             "cutover baseline must pin every package to a legacy version or null"
         )
-    target_order = tuple(map(int, version.removeprefix("0.0.0-unstable.").split(".")))
+    target_order = tuple(map(int, version.split(".")[-2:]))
     states = {}
+    retained = False
     for name in names:
-        current = unstable_tag(name, fetch)
+        current = unstable_tag(name, fetch, channel)
         if current is None:
+            if preview and (baseline is None or baseline[name] is not None):
+                raise ValueError(
+                    f"unknown next pointer for {name}; explicit null baseline required"
+                )
             if baseline is not None and baseline[name] is not None:
                 raise ValueError(f"pinned unstable tag disappeared for {name}")
             states[name] = None
             continue
+        if preview:
+            tagged = _stable_version(current)
+            if tagged and tagged[1]:
+                retained = True
+                continue
+            if preview_order(current) is None:
+                raise ValueError(f"unrecognized next pointer for {name}: {current!r}")
         if LEGACY.fullmatch(current):
             if baseline is None or baseline[name] != current:
                 raise ValueError(
@@ -198,7 +222,11 @@ def promote(directory, version, fetch=None, run=subprocess.run, *, baseline=None
                 )
             states[name] = current
             continue
-        match = re.fullmatch(r"0\.0\.0-unstable\.([1-9][0-9]*)\.([1-9][0-9]*)", current)
+        match = re.fullmatch(
+            r"0\.0\.0-(?:unstable\.(?:[1-9][0-9]{11}\.)?|preview\.[1-9][0-9]{11}\.)"
+            r"([1-9][0-9]*)\.([1-9][0-9]*)",
+            current,
+        )
         if not match:
             raise ValueError(
                 f"unrecognized unstable tag version for {name}: {current!r}"
@@ -208,7 +236,16 @@ def promote(directory, version, fetch=None, run=subprocess.run, *, baseline=None
             raise ValueError(
                 f"refusing to move {name} unstable tag backward from {current}"
             )
+        if existing == target_order and current != version:
+            raise ValueError(f"conflicting unstable version for {name}: {current}")
         states[name] = current
+    if retained:
+        return {
+            "version": version,
+            "channel": channel,
+            "promoted": [],
+            "retained": "rc",
+        }
     # The complete scan precedes all writes. Equal target is retry-safe for split promotions.
     for name, current in states.items():
         if current != version:
@@ -218,17 +255,17 @@ def promote(directory, version, fetch=None, run=subprocess.run, *, baseline=None
                     "dist-tag",
                     "add",
                     f"{name}@{version}",
-                    "unstable",
+                    channel,
                     "--registry",
                     REGISTRY,
                 ],
                 check=True,
             )
     for name in names:
-        observed = unstable_tag(name, fetch)
+        observed = unstable_tag(name, fetch, channel)
         if observed != version:
             raise ValueError(
-                f"npm unstable tag verification failed for {name}: {observed!r}"
+                f"npm {channel} tag verification failed for {name}: {observed!r}"
             )
     return {"version": version, "promoted": names}
 

@@ -287,21 +287,23 @@ The [Release workflow](.github/workflows/release.yml) prepares checked artifacts
 - `verify` (default): build from the selected branch without signing or publishing.
   The run summary reports that verification passed and no publication was requested.
 - `prerelease`: a new run on the protected default branch automatically hands the
-  prepared index to `Release Preflight`. After environment approval, it publishes
+  prepared index to `Release Preflight`. After verifying the preparation, it publishes
   to npm and GHCR and creates a GitHub Pre-release without setting it as Latest.
   A run from another branch prepares artifacts only; manual publication still
   requires the source commit to be in the default branch history.
-- `unstable`: select the protected default branch in the workflow picker.
-  Leave `product_ref` empty to build the commit that triggered the workflow,
-  or set it to a branch, tag, or full commit SHA in this repository. The
-  workflow resolves an explicit ref once and builds that SHA. It runs the
-  same checks and automatically hands the index to `Release Preflight` for
-  publication to npm and GHCR only.
+- `unstable`: select the source branch or tag in the workflow picker. Release
+  prepares the exact selected commit. Only a new run on the protected default
+  branch hands the index to `Release Preflight` for publication to npm and GHCR.
+  Other refs upload checked artifacts and the index, then the run fails with
+  publication blocked. Merge the desired changes before starting a publishable run.
 
-`product_ref` only applies to `unstable`. Use `refs/heads/...` or `refs/tags/...`
-to disambiguate a branch and tag of the same name. A protected `vX.Y.Z` or
-`vX.Y.Z-rc.N` tag starts a tagged release. The workflow must exist on the default
-branch before GitHub allows dispatch.
+Manual builds use versions such as `0.0.0-preview.202611251830.123.1` for
+`prerelease` and `verify`, or `0.0.0-unstable.202611251830.123.1` for `unstable`.
+The date and time are in UTC. Run and attempt distinguish same-minute builds.
+Publication recovery uses the version recorded in the original index.
+
+A protected `vX.Y.Z` or `vX.Y.Z-rc.N` tag push starts a tagged release.
+The workflow must exist on the default branch before GitHub allows dispatch.
 
 The npm launcher is outside the default workspace globs. The release workflow
 packs it from the workspace root with an explicit package selection so `pnpm`
@@ -336,10 +338,10 @@ IDs or create a second tag to recover a partial release.
 
 ### Activation
 
-Preflight checks that every environment used by the release exists and has
-required reviewers before scheduling any publisher jobs. GitHub still requires
-approval for those jobs. `Release` in `verify` mode never publishes and does
-not exercise registry writes, Sigstore, approvals, or trusted publishing.
+Common publishing jobs run automatically on the protected default branch after
+Preflight verifies the source, preparation and artifacts. They do not use a
+shared approval environment. Destination-specific environments retain their
+required reviewers and deployment restrictions. `verify` never publishes.
 Tagged npm releases also require `RELEASE_BUILD_ATTESTATION_ENABLED=true`
 before preparation so Preflight can verify their provenance.
 
@@ -355,7 +357,7 @@ the protections and bindings.
 
 | Environment                   | Required registry configuration                                                                                                          |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `release-publication`         | `NPM_TOKEN`, `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, and public GHCR repositories with package access for the publisher                 |
+| Common jobs (no environment)  | Existing npm and Docker Hub credentials available to trusted automation, and GHCR package write access for the publisher                 |
 | `pypi`, `rubygems`            | Trusted publisher for `datamitsu/datamitsu`, workflow `release-preflight.yml`, and the matching environment; no API token fallback       |
 | `setup-action`                | `SETUP_DATAMITSU_TOKEN` for `datamitsu/setup-datamitsu`                                                                                  |
 | `open-vsx`                    | Existing publisher namespace and `OVSX_PAT`                                                                                              |
@@ -422,14 +424,27 @@ APK filenames keep the release version; native metadata uses `X.Y.Z_rcN`
 and `0.0.0_preRUN_preATTEMPT`. PyPI wheels target macOS 13 or later. Manual
 preparation builds diagnostic wheels and gems, but does not publish them.
 
-| Channel                                              | Stable                                           | RC                          | Manual prerelease / unstable      |
-| ---------------------------------------------------- | ------------------------------------------------ | --------------------------- | --------------------------------- |
-| GitHub Release                                       | Version and Latest promotion                     | Versioned prerelease        | `prerelease` only, never Latest   |
-| npm                                                  | `latest`                                         | `next`                      | `unstable`                        |
-| Docker Hub and GHCR                                  | Debian and Alpine on amd64/arm64; stable aliases | Versioned Debian and Alpine | GHCR only; versioned              |
-| Parser OCI                                           | Version and `latest`                             | Version only                | Unstable repository, version only |
-| PyPI and RubyGems                                    | Versioned                                        | Native RC version           | No                                |
-| Setup action, editor stores, Homebrew, Scoop, WinGet | Yes                                              | No                          | No                                |
+| Channel                                              | Stable                                           | RC                             | Manual prerelease / unstable                                               |
+| ---------------------------------------------------- | ------------------------------------------------ | ------------------------------ | -------------------------------------------------------------------------- |
+| GitHub Release                                       | Version and Latest promotion                     | Versioned prerelease           | `prerelease` only, never Latest                                            |
+| npm                                                  | `latest`                                         | `next`                         | `next` for preview; `unstable` for unstable                                |
+| Docker Hub and GHCR                                  | Debian and Alpine on amd64/arm64; stable aliases | Versioned images and `preview` | GHCR only; `preview` in the ordinary repository, `unstable` in its sibling |
+| Parser OCI                                           | Version and `latest`                             | Version and `preview`          | `preview` in the ordinary repository, `unstable` in its sibling            |
+| PyPI and RubyGems                                    | Versioned                                        | Native RC version              | No                                                                         |
+| Setup action, editor stores, Homebrew, Scoop, WinGet | Yes                                              | No                             | No                                                                         |
+
+A tagged RC takes precedence over manual previews on npm `next`. If any
+package already points to a tagged RC, manual preview publishes its immutable
+version without moving `next`. Install it by its exact version in that case.
+
+New manual preparations embed the selected OCI repository in the CLI and
+package the matching parser repository and digest in the npm launcher.
+Recover older preparations from their original index and pins; do not rewrite
+them to use the new coordinates.
+
+Stable OCI promotion checks the current digest against the immutable tag named
+by its version metadata. A lower SemVer keeps the current alias; equal versions
+must have equal digests.
 
 The editor stores receive only the stable VSIX. An RC GitHub release carries
 its own VSIX, but that file embeds the same base extension version as stable.

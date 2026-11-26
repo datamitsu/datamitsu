@@ -5,7 +5,7 @@
   "siteTitle": "Datamitsu",
   "siteTagline": "Your toolchain deserves a home.",
   "pageCount": 57,
-  "pageSetHash": "b890b6bc9868894c62fd86c5741364d4",
+  "pageSetHash": "e1aa6084b538635a98ad9cc6a9c31a2b",
   "pages": [
     {
       "slug": "about",
@@ -96,8 +96,8 @@
       "url": "https://datamitsu.com/docs/getting-started/installation/docker.md",
       "title": "Docker",
       "description": "Run datamitsu from the official Docker images on Docker Hub or GitHub Container Registry",
-      "bytes": 1899,
-      "contentHash": "9cbaa104142ac281a798dd5d8cfc69c5"
+      "bytes": 2227,
+      "contentHash": "2fac67019a27ebbed7d9610cc40b25e3"
     },
     {
       "slug": "getting-started/installation/github-releases",
@@ -105,8 +105,8 @@
       "url": "https://datamitsu.com/docs/getting-started/installation/github-releases.md",
       "title": "GitHub Releases",
       "description": "Download datamitsu binaries, deb/rpm/apk packages, and verification files directly from GitHub Releases",
-      "bytes": 4482,
-      "contentHash": "703c46a77c7adbe29b5e496a4607e62f"
+      "bytes": 4373,
+      "contentHash": "403cea7b59a98cbe1a38a94f10490e9a"
     },
     {
       "slug": "getting-started/installation/homebrew",
@@ -289,8 +289,8 @@
       "url": "https://datamitsu.com/docs/guides/configuration.md",
       "title": "Configuration",
       "description": "How to configure datamitsu with JavaScript config files, remote configs, and config layers",
-      "bytes": 15251,
-      "contentHash": "e8b5e3a22fa33e581aa84809163c74db"
+      "bytes": 15116,
+      "contentHash": "2c46f7b572ff388208f73fa74b75b540"
     },
     {
       "slug": "guides/managed-configs",

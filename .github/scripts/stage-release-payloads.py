@@ -57,7 +57,7 @@ def stream_digest(stream):
 def verify_npm_packages(directory, version):
     number = r"(?:0|[1-9][0-9]*)"
     tagged = rf"{number}\.{number}\.{number}(?:-rc\.{number})?"
-    unstable = r"0\.0\.0-unstable\.[1-9][0-9]*\.[1-9][0-9]*"
+    unstable = r"0\.0\.0-(?:unstable\.(?:[1-9][0-9]{11}\.)?|preview\.[1-9][0-9]{11}\.)[1-9][0-9]*\.[1-9][0-9]*"
     if not re.fullmatch(rf"(?:{tagged}|{unstable})", version):
         raise ValueError("invalid approved npm release version")
     names = [
@@ -335,7 +335,7 @@ def stage(output, payloads, repository, version):
                 or extension.testzip() is not None
             ):
                 raise ValueError("invalid prepared VSIX payload")
-        if "-unstable." not in version:
+        if not version.startswith(("0.0.0-unstable.", "0.0.0-preview.")):
             verify_tagged_distributions(dist, version)
         staged.rename(output)
 
