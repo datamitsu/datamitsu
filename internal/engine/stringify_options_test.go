@@ -5,6 +5,7 @@ import "testing"
 func TestStringifyOptionsRoundTrip(t *testing.T) {
 	for _, tc := range []struct{ name, format, input, options, output, check string }{
 		{"YAML flow multiline", "YAML", `{x: "a\nb"}`, `{flow:true}`, "{x: \"a\\nb\"}\n", `parsed.x === input.x`},
+		{"YAML flow multiline key", "YAML", `{["a\nb"]:["c\nd"]}`, `{flow:true}`, "{\"a\\nb\": [\"c\\nd\"]}\n", `parsed["a\nb"][0] === input["a\nb"][0]`},
 		{"YAML indent", "YAML", `{x:{label:"# tag"}}`, `{indent:4, quoteStyle:"single"}`, "x:\n    label: '# tag'\n", `parsed.x.label === input.x.label`},
 		{"TOML basic quote", "TOML", `{table:{text:"a\\b"}, title:"root"}`, `{quoteStyle:"double"}`, "title = \"root\"\n[table]\ntext = \"a\\\\b\"\n", `parsed.title === input.title && parsed.table.text === input.table.text`},
 		{"INI delimiter", "INI", `[{name:"section",properties:{key:"left=right"}}]`, `{align:false,delimiter:":",indent:"\t",spaceAroundDelimiter:false,lineEnding:"crlf"}`, "[section]\r\n\tkey:left=right\r\n", `INI.toRecord(parsed).section.key === input[0].properties.key`},

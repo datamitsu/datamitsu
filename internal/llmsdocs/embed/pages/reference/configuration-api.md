@@ -2034,6 +2034,8 @@ For managed files, call the serializer inside the file's `content` callback.
 | JSON       | `indent` (number or a string of spaces and tabs); quotes are always double                                                                                       |
 | Ignore     | `groupOrder`, `blankLinesBetweenGroups`, `lineEnding` (lf or crlf)                                                                                               |
 
+In flow style, a multiline mapping key is escaped and all strings in the document are quoted.
+
 ```javascript
 const style = { yaml: { indent: 4 }, json: { indent: "\t" } };
 const yaml = YAML.stringify({ server: { port: 8080 } }, style.yaml);

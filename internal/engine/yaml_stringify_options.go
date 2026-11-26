@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/dop251/goja"
@@ -65,7 +66,8 @@ func (e *Engine) stringifyYAMLOptions(input any, opts goja.Value) ([]byte, error
 	if settings.flow && settings.literalStyleIfMultiline {
 		return nil, errors.New("YAML.stringify options flow and literalStyleIfMultiline cannot both be true")
 	}
-	if settings.flow {
+	quoteFlowKeys := settings.flow && hasYAMLMultilineKey(input)
+	if settings.flow && !quoteFlowKeys {
 		input = quoteYAMLFlowMultiline(input)
 	}
 
@@ -74,8 +76,12 @@ func (e *Engine) stringifyYAMLOptions(input any, opts goja.Value) ([]byte, error
 		yaml.IndentSequence(settings.indentSequence),
 		yaml.Flow(settings.flow),
 		yaml.UseLiteralStyleIfMultiline(settings.literalStyleIfMultiline && !settings.flow),
-		yaml.UseSingleQuote(settings.quoteStyle == "single"),
 	}
+	if quoteFlowKeys {
+		// The encoder requires builtin string mapping keys, so quote through its flow mode.
+		options = append(options, yaml.JSON())
+	}
+	options = append(options, yaml.UseSingleQuote(settings.quoteStyle == "single"))
 	baseline, err := yaml.MarshalWithOptions(input, options[:len(options)-1]...)
 	if err != nil {
 		return nil, fmt.Errorf("encode YAML: %w", err)
@@ -113,7 +119,6 @@ func quoteYAMLFlowMultiline(value any) any {
 		}
 	case yaml.MapSlice:
 		for i := range v {
-			v[i].Key = quoteYAMLFlowMultiline(v[i].Key)
 			v[i].Value = quoteYAMLFlowMultiline(v[i].Value)
 		}
 	case []any:
@@ -122,4 +127,23 @@ func quoteYAMLFlowMultiline(value any) any {
 		}
 	}
 	return value
+}
+
+func hasYAMLMultilineKey(value any) bool {
+	switch v := value.(type) {
+	case yaml.MapSlice:
+		for _, item := range v {
+			if key, ok := item.Key.(string); ok && strings.ContainsAny(key, "\r\n") {
+				return true
+			}
+			if hasYAMLMultilineKey(item.Value) {
+				return true
+			}
+		}
+	case []any:
+		if slices.ContainsFunc(v, hasYAMLMultilineKey) {
+			return true
+		}
+	}
+	return false
 }
