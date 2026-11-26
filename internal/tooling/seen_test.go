@@ -85,7 +85,7 @@ func TestPerFileCacheRecordsAgainstTheBytesTheToolSaw(t *testing.T) {
 	root := t.TempDir()
 	file := filepath.Join(root, "f.txt")
 	marker := filepath.Join(root, "runs.log")
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestLintPassIsNotRecordedForAFileThatChangedDuringTheRun(t *testing.T) {
 	if err := os.WriteFile(file, []byte("X\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
+	c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatal(err)
 	}

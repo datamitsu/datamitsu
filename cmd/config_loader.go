@@ -966,7 +966,7 @@ func parseConfigResult(vm *goja.Runtime, resultVal goja.Value) (*config.Config, 
 		return nil, fmt.Errorf("failed to export config: %w", err)
 	}
 
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	if err := vm.ExportTo(resultVal, cfg); err != nil {
 		return nil, fmt.Errorf("failed to export config: %w", err)

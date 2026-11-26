@@ -107,6 +107,10 @@ writes the configuration; never ship it to consumers.
 Newest first. Each entry names the first version that has it and what a
 configuration should do about it.
 
+- **after v0.6.2** - Declare project-local skills and agent profiles under
+  `ai`. Run `datamitsu init` to provision them. For sources, targets, and
+  ownership rules, run `datamitsu llms reference/configuration-api`.
+
 - **after v0.6.2** - The `datamitsu` and `datamitsu-fix` tool keys are reserved
   for built-in results. Rename any tool using either key and update its
   references, including `managedConfigs.*.tools`, `ejectConfigs`,

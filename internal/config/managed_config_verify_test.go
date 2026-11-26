@@ -192,10 +192,10 @@ func TestVerifyChainHashes_Pipeline(t *testing.T) {
 
 	build := func(rootPin string) ManagedConfigLayerMap {
 		lm := make(ManagedConfigLayerMap)
-		baseCfg := &Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, ManagedConfigs: MapOfManagedConfigs{".golangci.yaml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: baseFn}}}
+		baseCfg := &Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, ManagedConfigs: MapOfManagedConfigs{".golangci.yaml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", ExpectChainHash: "", Ejectable: false, Placement: "", Render: nil, Content: baseFn}}}
 		MergeManagedConfigLayers(lm, "base", EvaluateManagedConfigContent(baseCfg, vm, "/root", "/root", lm), baseCfg.ManagedConfigs)
 
-		rootCfg := &Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, ManagedConfigs: MapOfManagedConfigs{".golangci.yaml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", Ejectable: false, Placement: "", Render: nil, Content: rootFn, ExpectChainHash: rootPin}}}
+		rootCfg := &Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, ManagedConfigs: MapOfManagedConfigs{".golangci.yaml": {ProjectTypes: nil, Tools: nil, Scope: "", OtherFileNameList: nil, DeleteOnly: false, LinkTarget: "", Ejectable: false, Placement: "", Render: nil, Content: rootFn, ExpectChainHash: rootPin}}}
 		MergeManagedConfigLayers(lm, "root", EvaluateManagedConfigContent(rootCfg, vm, "/root", "/root", lm), rootCfg.ManagedConfigs)
 		return lm
 	}

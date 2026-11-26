@@ -193,7 +193,7 @@ func runDefaultConfigForTest(t *testing.T) *Config {
 		t.Fatalf("getConfig() error = %v", err)
 	}
 
-	cfg := &Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	if err := vm.ExportTo(result, cfg); err != nil {
 		t.Fatalf("ExportTo error = %v", err)
 	}

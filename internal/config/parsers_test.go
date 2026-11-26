@@ -43,7 +43,7 @@ func TestConfig_ParsersIgnoresLegacyVersion(t *testing.T) {
 }
 
 func TestConfig_ParsersOmitEmpty(t *testing.T) {
-	data, err := json.Marshal(Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil})
+	data, err := json.Marshal(Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil})
 	if err != nil {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
@@ -364,6 +364,7 @@ func TestConfig_URLParserMarshalUnchanged(t *testing.T) {
 		Version:        "",
 		Apps:           nil,
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,

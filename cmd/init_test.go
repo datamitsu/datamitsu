@@ -221,6 +221,7 @@ func TestReportConfigLinks_NoLinksSkipped(t *testing.T) {
 		Name:           "",
 		Version:        "",
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,
@@ -265,6 +266,7 @@ func TestMaterializeInstalledLinks_SkipsDeferredNoError(t *testing.T) {
 		Name:           "",
 		Version:        "",
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,
@@ -352,6 +354,7 @@ func TestMaterializeInstalledLinks_AllDeferredWritesTypeDefs(t *testing.T) {
 		Name:           "",
 		Version:        "",
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,
@@ -408,7 +411,7 @@ func TestMaterializeInstalledLinks_AllDeferredWritesTypeDefs(t *testing.T) {
 // — only type defs are laid down. Also exercises the nil-resolver fast path.
 func TestMaterializeInstalledLinks_NoLinksWritesTypeDefs(t *testing.T) {
 	gitRoot := filepath.Join(t.TempDir(), "repo")
-	cfg := &config.Config{Name: "", Version: "", Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Apps: binmanager.MapOfApps{"x": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}}}}
+	cfg := &config.Config{Name: "", Version: "", Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Apps: binmanager.MapOfApps{"x": {Required: false, Lazy: false, Description: "", VersionCheck: nil, DependsOn: nil, OfficialURL: "", OfficialURLDerived: false, Bun: nil, Uv: nil, Node: nil, Jvm: nil, Go: nil, Shell: nil, Env: nil, RuntimeEnv: nil, Caches: nil, Files: nil, Links: nil, Archives: nil, Prepare: nil, Binary: &binmanager.AppConfigBinary{Binaries: nil, Version: ""}}}}
 
 	created, err := materializeInstalledLinks(gitRoot, cfg, nil, nil, false)
 	if err != nil {
@@ -438,6 +441,7 @@ func TestMaterializeInstalledLinks_DryRun(t *testing.T) {
 		Name:           "",
 		Version:        "",
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,
@@ -542,6 +546,7 @@ func TestMaterializeInstalledLinks_LinksInstalledBundle(t *testing.T) {
 		OCI:            nil,
 		Parsers:        nil,
 		Lsp:            nil,
+		AI:             nil,
 		Bundles: binmanager.MapOfBundles{
 			"my-bundle": {Version: "", Files: nil, Archives: nil, Links: map[string]string{"schema.json": "schema.json"}},
 		},
@@ -562,7 +567,7 @@ func TestMaterializeInstalledLinks_LinksInstalledBundle(t *testing.T) {
 }
 
 func TestBundleResolverFor(t *testing.T) {
-	if r := bundleResolverFor(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil); r != nil {
+	if r := bundleResolverFor(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil); r != nil {
 		t.Errorf("no bundles → want nil resolver, got %v", r)
 	}
 	cfg := &config.Config{
@@ -580,6 +585,7 @@ func TestBundleResolverFor(t *testing.T) {
 		SharedStorage:  nil,
 		OCI:            nil,
 		Parsers:        nil,
+		AI:             nil,
 		Lsp:            nil, Bundles: binmanager.MapOfBundles{
 			"b": {Version: "", Files: nil, Archives: nil, Links: map[string]string{"x": "x"}},
 		},

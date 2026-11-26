@@ -243,6 +243,7 @@ func TestCollectStoreRefsPNPMRuntime(t *testing.T) {
 		Version:        "",
 		Apps:           nil,
 		Bundles:        nil,
+		AI:             nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,
 		ProjectTypes:   nil,

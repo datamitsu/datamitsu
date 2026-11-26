@@ -16,7 +16,7 @@ import (
 // against what survives on disk.
 func reopen(t *testing.T, cacheDir, projectPath string) *Cache {
 	t.Helper()
-	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}, nil, zap.NewNop())
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}, nil, zap.NewNop())
 	if err != nil {
 		t.Fatalf("NewCache: %v", err)
 	}

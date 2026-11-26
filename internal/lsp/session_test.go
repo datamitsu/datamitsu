@@ -64,6 +64,7 @@ func appendConfig(letter string) *config.Config {
 		Name:           "",
 		Version:        "",
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,

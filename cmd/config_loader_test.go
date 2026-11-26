@@ -2843,7 +2843,7 @@ func loadConfigForTestWithManagedConfigContent(ctx context.Context, beforeConfig
 // from Object.keys() — must produce the same result on every evaluation, or the
 // config-eval cache would freeze whichever order the first run happened to see.
 func TestProcessConfigSourceInputMapOrderIsStable(t *testing.T) {
-	input := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}
+	input := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Tools: config.MapOfTools{}}
 	for _, name := range []string{"zeta", "alpha", "mu", "beta", "kappa", "omega", "delta", "iota"} {
 		input.Tools[name] = config.Tool{Name: "", ProjectTypes: nil, Skip: false, SkipReason: "", Operations: nil, OutputParser: nil}
 	}

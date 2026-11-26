@@ -20,6 +20,7 @@ func TestSnapshotPortableMetadata(t *testing.T) {
 		Name:           "",
 		Version:        "",
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		EjectConfigs:   nil,
 		Execution:      nil,
@@ -61,10 +62,10 @@ func TestSnapshotPortableMetadata(t *testing.T) {
 }
 
 func TestSnapshotCarriesTheConfigurationName(t *testing.T) {
-	if got := Snapshot(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, "test").Name; got != config.DefaultName {
+	if got := Snapshot(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, "test").Name; got != config.DefaultName {
 		t.Fatalf("unnamed config exported as %q, want %q", got, config.DefaultName)
 	}
-	if got := Snapshot(&config.Config{Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Name: "@acme/config"}, "test").Name; got != "@acme/config" {
+	if got := Snapshot(&config.Config{Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Name: "@acme/config"}, "test").Name; got != "@acme/config" {
 		t.Fatalf("named config exported as %q", got)
 	}
 }
@@ -75,6 +76,7 @@ func TestSnapshotReportsPlacementOfEjectableConfigsOnly(t *testing.T) {
 		Version:       "",
 		Apps:          nil,
 		Bundles:       nil,
+		AI:            nil,
 		Runtimes:      nil,
 		EjectConfigs:  nil,
 		ProjectTypes:  nil,
@@ -107,7 +109,7 @@ func TestSnapshotReportsPlacementOfEjectableConfigsOnly(t *testing.T) {
 }
 
 func TestRenderEscapesScriptTermination(t *testing.T) {
-	m := Snapshot(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, "test")
+	m := Snapshot(&config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, "test")
 	hostile := "</script><script>globalThis.pwned=true</script>\u2028&<>"
 	m.Tools = append(m.Tools, Tool{ProjectTypes: nil, Skipped: false, SkipReason: "", Operations: nil, ID: "hostile", Name: hostile})
 	theme, err := DefaultTheme()

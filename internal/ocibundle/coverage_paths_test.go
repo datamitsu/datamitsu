@@ -100,7 +100,7 @@ func TestLayoutSource_BlobSizeMismatch(t *testing.T) {
 
 func TestSeedFromLayout_MissingDirectory(t *testing.T) {
 	testStore(t)
-	err := SeedFromLayout(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil},
+	err := SeedFromLayout(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil},
 		filepath.Join(t.TempDir(), "does-not-exist"), sha256DigestOf([]byte("x")), nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil {
 		t.Fatal("expected error for a missing layout directory")
@@ -113,7 +113,7 @@ func TestSeedFromLayout_PathIsNotADirectory(t *testing.T) {
 	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := SeedFromLayout(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, file, sha256DigestOf([]byte("x")), nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
+	err := SeedFromLayout(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, file, sha256DigestOf([]byte("x")), nil, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
 	if err == nil || !strings.Contains(err.Error(), "not a directory") {
 		t.Fatalf("expected not-a-directory error, got %v", err)
 	}
@@ -240,6 +240,7 @@ func binaryReVerifyConfig(t *testing.T) *config.Config {
 		Name:           "",
 		Version:        "",
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,
@@ -341,6 +342,7 @@ func TestExpectedSubtrees_UnknownAndShellAppsContributeNothing(t *testing.T) {
 		Name:           "",
 		Version:        "",
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,

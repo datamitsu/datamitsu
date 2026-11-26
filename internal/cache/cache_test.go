@@ -32,7 +32,7 @@ func TestCacheConcurrentAccess(t *testing.T) {
 	}
 
 	// Create cache
-	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	cache, err := NewCache(tmpDir, projectPath, cfg, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
@@ -109,7 +109,7 @@ func TestCacheConcurrentSave(t *testing.T) {
 	}
 
 	// Create cache
-	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	cache, err := NewCache(tmpDir, projectPath, cfg, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("failed to create cache: %v", err)
@@ -168,7 +168,7 @@ func TestInvalidationKeyFormat(t *testing.T) {
 		t.Fatalf("failed to create project dir: %v", err)
 	}
 
-	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	key, err := calculateInvalidationKey(cfg, nil)
 	if err != nil {
 		t.Fatalf("calculateInvalidationKey() error = %v", err)
@@ -206,7 +206,7 @@ func TestInvalidationKeyFormat(t *testing.T) {
 // TestInvalidationKeyNamesTheEmbeddedParser: two builds that report one version
 // but embed different fallback modules share no per-file pass.
 func TestInvalidationKeyNamesTheEmbeddedParser(t *testing.T) {
-	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	key, err := calculateInvalidationKey(cfg, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -232,6 +232,7 @@ func TestInvalidationKeyIgnoresFailOn(t *testing.T) {
 			Version:        "",
 			Apps:           nil,
 			Bundles:        nil,
+			AI:             nil,
 			Runtimes:       nil,
 			ManagedConfigs: nil,
 			EjectConfigs:   nil,

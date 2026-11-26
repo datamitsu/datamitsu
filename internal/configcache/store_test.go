@@ -38,6 +38,7 @@ func sampleConfig(t *testing.T) *config.Config {
 		Name:         "",
 		Version:      "",
 		Bundles:      nil,
+		AI:           nil,
 		Runtimes:     nil,
 		EjectConfigs: nil,
 		ProjectTypes: nil,

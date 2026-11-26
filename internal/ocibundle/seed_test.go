@@ -298,7 +298,7 @@ func testBinaryConfig(t *testing.T, payloads map[string][]byte) (*config.Config,
 			},
 		}
 	}
-	cfg := &config.Config{Name: "", Version: "", Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Apps: apps}
+	cfg := &config.Config{Name: "", Version: "", Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Apps: apps}
 
 	storeRoot := env.GetStorePath()
 	bm := binmanager.New(cfg.Apps, nil, nil)
@@ -528,7 +528,7 @@ func TestSeed_ReVerificationCatchesSwappedBinary(t *testing.T) {
 
 func TestSeed_MalformedSubtreeAnnotationIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	src := newFakeSource()
 
 	for _, bad := range []string{"../evil", "/abs/path", ".bin/../../evil", "outside/root"} {
@@ -573,7 +573,7 @@ func TestSeed_EntryOutsideDeclaredSubtreeIsFatal(t *testing.T) {
 
 func TestSeed_RuntimeAppRelocation(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/uv/myapp/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
@@ -661,7 +661,7 @@ func TestSeed_RuntimeAppRelocation(t *testing.T) {
 
 func TestSeed_HardlinkOutsideSubtreeIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/node/myapp/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
@@ -710,7 +710,7 @@ func TestSeed_PartialFailureWritesNoMarker(t *testing.T) {
 
 func TestSeed_MissingStoreRootAnnotationIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	src := newFakeSource()
 	blob := buildLayer(t, []tarEntry{fileEntry("dm/store/.bin/x/h", []byte("x"))})
 	digest := src.addManifest(t, []ocispec.Descriptor{src.addLayer(blob, ".bin/x/h")},
@@ -724,7 +724,7 @@ func TestSeed_MissingStoreRootAnnotationIsFatal(t *testing.T) {
 
 func TestSeed_UnknownLayerMediaTypeIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	src := newFakeSource()
 	blob := buildLayer(t, []tarEntry{fileEntry("dm/store/.bin/x/h", []byte("x"))})
 	desc := src.addLayer(blob, ".bin/x/h")
@@ -739,7 +739,7 @@ func TestSeed_UnknownLayerMediaTypeIsFatal(t *testing.T) {
 
 func TestSeed_SignerIsUnsupported(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	src := newFakeSource()
 	digest := src.addManifest(t, nil, nil)
 
@@ -921,7 +921,7 @@ func TestAutoSeed_Gates(t *testing.T) {
 		if _, err := AutoSeed(context.Background(), nil, []string{"x"}, nil); err != nil {
 			t.Errorf("AutoSeed(nil cfg) = %v", err)
 		}
-		if _, err := AutoSeed(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, []string{"x"}, nil); err != nil {
+		if _, err := AutoSeed(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, []string{"x"}, nil); err != nil {
 			t.Errorf("AutoSeed(no oci) = %v", err)
 		}
 	})
@@ -931,6 +931,7 @@ func TestAutoSeed_Gates(t *testing.T) {
 		Version:        "",
 		Apps:           nil,
 		Bundles:        nil,
+		AI:             nil,
 		Runtimes:       nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,
@@ -980,7 +981,7 @@ func TestAutoSeed_Gates(t *testing.T) {
 func TestSeedBundle_OfflineExplicitFails(t *testing.T) {
 	testStore(t)
 	t.Setenv("DATAMITSU_OFFLINE", "1")
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	ref := &config.OCIRef{Signer: nil, Ref: "registry.invalid/owner/repo", Digest: "sha256:" + strings.Repeat("ab", 32)}
 
 	err := SeedBundle(context.Background(), cfg, ref, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false})
@@ -1086,7 +1087,7 @@ func TestValidateSubtreeTable(t *testing.T) {
 
 func TestSeed_AbsoluteSymlinkOutsideStoreRootIsSkipped(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/uv/skipped-link/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
@@ -1111,7 +1112,7 @@ func TestSeed_AbsoluteSymlinkOutsideStoreRootIsSkipped(t *testing.T) {
 
 func TestSeed_RelocatedSymlinkTraversalIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/uv/evil/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
@@ -1137,7 +1138,7 @@ func TestSeed_RelocatedSymlinkTraversalIsFatal(t *testing.T) {
 
 func TestSeed_RelativeSymlinkEscapingSubtreeIsSkipped(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/uv/relative-escape/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
@@ -1159,7 +1160,7 @@ func TestSeed_RelativeSymlinkEscapingSubtreeIsSkipped(t *testing.T) {
 
 func TestSeed_HardlinkBeforeTargetIsRestored(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".apps/node/ordering/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
@@ -1212,6 +1213,7 @@ func testUVConfig(t *testing.T) (*config.Config, map[string]string) {
 		Name:           "",
 		Version:        "",
 		Bundles:        nil,
+		AI:             nil,
 		ManagedConfigs: nil,
 		EjectConfigs:   nil,
 		ProjectTypes:   nil,
@@ -1582,7 +1584,7 @@ func buildLayerZstd(t *testing.T, entries []tarEntry) []byte {
 
 func TestSeed_ZstdLayer(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".bin/zstd-tool/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/")
@@ -1623,7 +1625,7 @@ func TestSeed_ZstdLayer(t *testing.T) {
 
 func TestSeed_WhiteoutEntryIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".bin/wiped/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
@@ -1641,7 +1643,7 @@ func TestSeed_WhiteoutEntryIsFatal(t *testing.T) {
 
 func TestSeed_UnsupportedEntryTypeIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".bin/fifo/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
@@ -1659,7 +1661,7 @@ func TestSeed_UnsupportedEntryTypeIsFatal(t *testing.T) {
 
 func TestSeed_LayerWithoutSubtreeEntriesIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".bin/empty/0123456789abcdef0123456789abcdef"
 	// Only structural parents, no actual subtree content.
@@ -1675,7 +1677,7 @@ func TestSeed_LayerWithoutSubtreeEntriesIsFatal(t *testing.T) {
 
 func TestSeed_RelativeBuilderStoreRootIsFatal(t *testing.T) {
 	testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 
 	subtree := ".bin/relative-root/0123456789abcdef0123456789abcdef"
 	layer := subtreeLayer(t, subtree, []tarEntry{
@@ -1697,7 +1699,7 @@ func TestSeedBundle_MalformedRefIsRejected(t *testing.T) {
 		{Signer: nil, Ref: "ghcr.io/owner/repo", Digest: "sha256:short"},
 		{Signer: nil, Ref: "owner-only", Digest: "sha256:" + strings.Repeat("ab", 32)},
 	} {
-		if err := SeedBundle(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, ref, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err == nil {
+		if err := SeedBundle(context.Background(), &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, ref, Options{Needed: nil, NeededRuntimes: nil, RequireRequested: false}); err == nil {
 			t.Errorf("SeedBundle(%+v) = nil, want validation error", ref)
 		}
 	}
@@ -1796,7 +1798,7 @@ func TestSeed_UncoveredRequestWithoutRequireRequestedStillSucceeds(t *testing.T)
 
 func TestSeed_RejectsSymlinkDestinationBeforeFollowing(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	subtree := ".apps/uv/symlink-file/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
 	victim := filepath.Join(storeRoot, ".apps", "uv", "neighbor", "victim")
@@ -1824,7 +1826,7 @@ func TestSeed_RejectsSymlinkDestinationBeforeFollowing(t *testing.T) {
 
 func TestSeed_RejectsParentSymlinkBeforeCreatingDirectories(t *testing.T) {
 	storeRoot := testStore(t)
-	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
+	cfg := &config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}
 	subtree := ".apps/uv/symlink-parent/0123456789abcdef0123456789abcdef"
 	prefix := strings.TrimPrefix(testBuilderRoot, "/") + "/" + subtree
 	victimDir := filepath.Join(storeRoot, ".apps", "uv", "neighbor")

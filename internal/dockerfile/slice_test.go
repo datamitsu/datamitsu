@@ -325,7 +325,7 @@ func TestBuildPlan_URLParserIsNotFlaggedAsRegistrySourced(t *testing.T) {
 
 func mustBuildSlices(t *testing.T, plan Plan, apps binmanager.MapOfApps, runtimes config.MapOfRuntimes, parsers config.MapOfParsers) []Slice {
 	t.Helper()
-	source := &config.Config{Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Name: "test.config", Version: "2.4.1"}
+	source := &config.Config{Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil, Name: "test.config", Version: "2.4.1"}
 	slices, err := BuildSlices(source, plan, apps, runtimes, parsers)
 	if err != nil {
 		t.Fatal(err)

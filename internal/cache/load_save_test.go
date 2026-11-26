@@ -25,7 +25,7 @@ func newProject(t *testing.T) (cacheDir, projectPath, file string) {
 
 func TestShouldRunCacheHitAndChange(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
-	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -71,7 +71,7 @@ func TestShouldRunCacheHitAndChange(t *testing.T) {
 func TestLoadRoundTripAndInvalidation(t *testing.T) {
 	cacheDir, projectPath, file := newProject(t)
 
-	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -83,7 +83,7 @@ func TestLoadRoundTripAndInvalidation(t *testing.T) {
 	}
 
 	// Reopen with the SAME inputs → Load reads the persisted entry → hit.
-	c2, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
+	c2, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("reopen NewCache() error = %v", err)
 	}
@@ -93,7 +93,7 @@ func TestLoadRoundTripAndInvalidation(t *testing.T) {
 
 	// Reopen with a DIFFERENT selected-tools set → invalidation key mismatch →
 	// the cache resets and the previously-passed file runs again.
-	c3, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, []string{"other-tool"}, logger.Logger)
+	c3, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, []string{"other-tool"}, logger.Logger)
 	if err != nil {
 		t.Fatalf("reopen-with-tools NewCache() error = %v", err)
 	}
@@ -109,7 +109,7 @@ func TestLoadCorruptFileFallsBack(t *testing.T) {
 	projectsDir := filepath.Join(cacheDir, "projects")
 	// NewCache computes the hashed project dir; create the cache first so we can
 	// find the path, then clobber it and reopen.
-	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
+	c, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -119,7 +119,7 @@ func TestLoadCorruptFileFallsBack(t *testing.T) {
 	_ = projectsDir
 
 	// Reopen → Load fails to decode → NewCache warns and starts fresh (no error).
-	c2, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
+	c2, err := NewCache(cacheDir, projectPath, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, logger.Logger)
 	if err != nil {
 		t.Fatalf("NewCache() over corrupt file should not error, got %v", err)
 	}

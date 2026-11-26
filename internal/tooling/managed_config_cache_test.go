@@ -107,7 +107,7 @@ func TestAConfigEditedDuringTheRunIsNotCached(t *testing.T) {
 		if err := os.WriteFile(file, []byte("a: 1\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
+		c, err := cache.NewCache(t.TempDir(), root, config.Config{Name: "", Version: "", Apps: nil, Bundles: nil, AI: nil, Runtimes: nil, ManagedConfigs: nil, EjectConfigs: nil, ProjectTypes: nil, Tools: nil, Execution: nil, InitCommands: nil, IgnoreRules: nil, SharedStorage: nil, OCI: nil, Parsers: nil, Lsp: nil}, nil, zap.NewNop())
 		if err != nil {
 			t.Fatal(err)
 		}

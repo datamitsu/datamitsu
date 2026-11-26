@@ -15,6 +15,7 @@ func ejectFixture() *Config {
 		Version:       "",
 		Apps:          nil,
 		Bundles:       nil,
+		AI:            nil,
 		Runtimes:      nil,
 		EjectConfigs:  nil,
 		ProjectTypes:  nil,
