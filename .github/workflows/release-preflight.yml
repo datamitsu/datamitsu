@@ -97,14 +97,10 @@ jobs:
       review_url: ${{ steps.verify.outputs.review_url }}
       payloads: ${{ steps.verify.outputs.payloads }}
       version: ${{ steps.verify.outputs.version }}
-      preparation_attempt: ${{ steps.verify.outputs.preparation_attempt }}
-      source_sha: ${{ steps.verify.outputs.source_sha }}
-      release_tag: ${{ steps.verify.outputs.release_tag }}
-      signature_recovery: ${{ steps.verify.outputs.signature_recovery }}
       mode: ${{ steps.verify.outputs.mode }}
       publish_pypi: ${{ steps.verify.outputs.publish_pypi }}
       publish_rubygems: ${{ steps.verify.outputs.publish_rubygems }}
-      publication_attempt: ${{ steps.approvals.outputs.publication_attempt }}
+      oci_alias_policy: ${{ steps.verify.outputs.oci_alias_policy }}
     steps:
       - name: Require the default branch
         shell: bash
@@ -139,6 +135,18 @@ jobs:
         run: |
           [[ "$GITHUB_REPOSITORY" == datamitsu/datamitsu && "$PROTECTED_REF" == true && "$GITHUB_WORKFLOW_SHA" == "$GITHUB_SHA" ]] || {
             echo 'Publication requires the protected default branch of the canonical repository' >&2
+            exit 1
+          }
+          default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)
+          encoded_branch=$(jq -nr --arg branch "$default_branch" '$branch | @uri')
+          default_sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_branch" --jq .commit.sha)
+          [[ "$default_sha" =~ ^[0-9a-f]{40}$ && "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'Cannot verify the protected default branch commit; publication blocked' >&2
+            exit 1
+          }
+          relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$GITHUB_SHA...$default_sha" --jq .status)
+          [[ "$relation" == identical || "$relation" == ahead ]] || {
+            echo 'Release Preflight commit is not on the protected default branch' >&2
             exit 1
           }
           evidence=$(realpath -- "$(mktemp -d)")
@@ -292,16 +300,18 @@ jobs:
               fi
             done
           fi
-          if [[ "$GITHUB_DESTINATION" == true ]]; then
+          if [[ "$mode" != unstable ]]; then
             default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)
             encoded_branch=$(jq -nr --arg branch "$default_branch" '$branch | @uri')
             default_sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_branch" --jq .commit.sha)
             [[ "$default_sha" =~ ^[0-9a-f]{40}$ && "$PREPARATION_SHA" =~ ^[0-9a-f]{40}$ ]]
             relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$PREPARATION_SHA...$default_sha" --jq .status)
             if [[ "$relation" != identical && "$relation" != ahead ]]; then
-              echo 'GitHub publication with GITHUB_TOKEN requires an approved source already on the default branch under this workflow policy' >&2
+              echo 'Publication requires a source commit already on the protected default branch' >&2
               exit 1
             fi
+          else
+            [[ "$automatic_mode" == unstable && "$dispatch_sha" =~ ^[0-9a-f]{40}$ ]] || exit 1
           fi
           export APPROVED_PAYLOADS APPROVED_VERSION PREPARATION_RUN_ID PREPARATION_ATTEMPT PREPARATION_SHA UNSTABLE_TAG
           python3 .github/scripts/stage-release-payloads.py "$evidence/payloads"
@@ -328,9 +338,11 @@ jobs:
             (cd "$evidence/payloads/release" && IS_STABLE=false PARSER_VERSION="$APPROVED_VERSION" \
               node "$GITHUB_WORKSPACE/.github/scripts/push-parsers-oci.mjs" check-prepared)
           fi
-          python3 .github/scripts/publish-prepared-images.py "$evidence/payloads/release/dist" "$UNSTABLE_TAG" --check-only
+          policy=$(jq -er 'if has("oci_alias_policy") then .oci_alias_policy else "legacy" end | select(. == "ordered-v1" or . == "legacy")' "$evidence/verified.json")
+          python3 .github/scripts/publish-prepared-images.py "$evidence/payloads/release/dist" "$UNSTABLE_TAG" --check-only --alias-policy "$policy"
+          printf 'oci_alias_policy=%s\n' "$policy" >> "$GITHUB_OUTPUT"
           {
-            printf '%s\n\n' 'Release evidence checked. Publication still requires environment approval.'
+            printf '%s\n\n' 'Release evidence checked. Eligible publication jobs will use this validated index.'
             printf 'Index: `%s` (`%s`)\n\n' "$INDEX_ID" "$INDEX_DIGEST"
             printf 'Publisher orchestration: `%s` at `%s`\n\n' "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA"
             if [[ -n "$automatic_mode" ]]; then
@@ -381,7 +393,7 @@ jobs:
             echo 'Start a new Release Preflight with the original preparation index to recover publication' >&2
             exit 1
           fi
-          environments=(release-publication)
+          environments=()
           case "$MODE" in
             tag)
               if [[ "$PUBLISH_PYPI" == true ]]; then environments+=(pypi); fi
@@ -393,6 +405,7 @@ jobs:
             prerelease|unstable) ;;
             *) echo 'Unknown publication mode' >&2; exit 1 ;;
           esac
+          blocked=()
           for environment in "${environments[@]}"; do
             # Referencing a missing environment in a job would create it without approval rules.
             if ! gh api "repos/$GITHUB_REPOSITORY/environments/$environment" |
@@ -402,17 +415,24 @@ jobs:
                     (.type == "User" or .type == "Team") and
                     (.reviewer.id | type == "number" and . > 0)))
               ' > /dev/null; then
-              printf 'Cannot confirm required reviewers for environment %s; publication blocked\n' "$environment" >&2
-              exit 1
+              blocked+=("$environment")
             fi
           done
+          if (( ${#blocked[@]} > 0 )); then
+            printf 'Cannot confirm required reviewers for environment %s; publication blocked\n' "${blocked[@]}" >&2
+            {
+              printf '**Mode:** `%s`\n\n' "$MODE"
+              printf '**Actual outcome:** Not published by this run. Required reviewers could not be confirmed for: '
+              printf '`%s` ' "${blocked[@]}"
+              printf '\n\n**What to install:** None\n\n'
+              printf '**Next safe action:** Ask a repository administrator to verify these environments and their required reviewers, then recover using the original preparation index.\n'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           printf 'publication_attempt=%s\n' "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
   finalize-parser:
     if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && !inputs.reuse_parser_finalization }}
     needs: preflight
-    environment:
-      name: release-publication
-      url: ${{ needs.preflight.outputs.review_url }}
     concurrency:
       group: ghcr-datamitsu-parser-publication
       queue: max
@@ -463,7 +483,7 @@ jobs:
             exit 1
           }
           number='(0|[1-9][0-9]*)'
-          [[ "$APPROVED_TAG" =~ ^(v${number}\.${number}\.${number}(-rc\.${number})?|unstable-[1-9][0-9]*-[1-9][0-9]*)$ && "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$APPROVED_TAG" =~ ^(v${number}\.${number}\.${number}(-rc\.${number})?|(unstable|preview)-([1-9][0-9]{11}-)?[1-9][0-9]*-[1-9][0-9]*)$ && "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]]
           node "$GITHUB_WORKSPACE/.github/scripts/push-parsers-oci.mjs" check-prepared
           if [[ "$IS_STABLE" == true ]]; then
             observed=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$APPROVED_TAG" --jq .sha)
@@ -478,7 +498,7 @@ jobs:
       - name: Verify anonymous parser access
         shell: bash
         env:
-          PARSERS_REPO: ${{ needs.preflight.outputs.mode == 'tag' && 'datamitsu/datamitsu-parsers' || 'datamitsu/datamitsu-parsers-unstable' }}
+          PARSERS_REPO: ${{ (needs.preflight.outputs.mode == 'tag' || startsWith(needs.preflight.outputs.release_tag, 'preview-')) && 'datamitsu/datamitsu-parsers' || 'datamitsu/datamitsu-parsers-unstable' }}
         run: |
           pin="$RUNNER_TEMP/release-payloads/release/dist/parsers-oci.json"
           PARSERS_REGISTRY=ghcr.io \
@@ -497,7 +517,7 @@ jobs:
           PREPARATION_SHA: ${{ needs.preflight.outputs.source_sha }}
           APPROVED_INDEX_DIGEST: ${{ needs.preflight.outputs.index_digest }}
           APPROVED_INDEX_ID: ${{ needs.preflight.outputs.index_id }}
-          PARSER_SUBJECT: ${{ needs.preflight.outputs.mode == 'tag' && 'ghcr.io/datamitsu/datamitsu-parsers' || 'ghcr.io/datamitsu/datamitsu-parsers-unstable' }}
+          PARSER_SUBJECT: ${{ (needs.preflight.outputs.mode == 'tag' || startsWith(needs.preflight.outputs.release_tag, 'preview-')) && 'ghcr.io/datamitsu/datamitsu-parsers' || 'ghcr.io/datamitsu/datamitsu-parsers-unstable' }}
         run: |
           digest=$(jq -er .digest "$RUNNER_TEMP/release-payloads/release/dist/parsers-oci.json")
           subject="$PARSER_SUBJECT@$digest"
@@ -513,7 +533,7 @@ jobs:
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         id: attest
         with:
-          subject-name: ${{ needs.preflight.outputs.mode == 'tag' && 'ghcr.io/datamitsu/datamitsu-parsers' || 'ghcr.io/datamitsu/datamitsu-parsers-unstable' }}
+          subject-name: ${{ (needs.preflight.outputs.mode == 'tag' || startsWith(needs.preflight.outputs.release_tag, 'preview-')) && 'ghcr.io/datamitsu/datamitsu-parsers' || 'ghcr.io/datamitsu/datamitsu-parsers-unstable' }}
           subject-digest: ${{ steps.sign.outputs.digest }}
           predicate-type: https://datamitsu.com/attestations/parser-finalization/v1
           predicate-path: ${{ runner.temp }}/parser-finalization.json
@@ -541,11 +561,9 @@ jobs:
           jq -er '"digest=\(.digest)\nsigner_workflow=\(.signer_workflow)\nsigner_sha=\(.signer_sha)"' \
             "$RUNNER_TEMP/parser-finalization.json" >> "$GITHUB_OUTPUT"
   publish-images:
+    name: publish-images (${{ matrix.registry }})
     if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt }}
     needs: preflight
-    environment:
-      name: release-publication
-      url: ${{ needs.preflight.outputs.review_url }}
     concurrency:
       group: datamitsu-cli-images-${{ matrix.registry }}
       queue: max
@@ -612,6 +630,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then first=true; fi
           repo=ghcr.io/datamitsu/datamitsu-unstable
           versioned_tag=$APPROVED_TAG
+          if [[ "$APPROVED_TAG" == preview-* ]]; then repo=ghcr.io/datamitsu/datamitsu; fi
           if [[ "$RELEASE_MODE" == tag ]]; then
             observed=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$APPROVED_TAG" --jq .sha)
             [[ "$observed" == "$APPROVED_SHA" ]]
@@ -619,7 +638,7 @@ jobs:
             if [[ "$REGISTRY" == dockerhub ]]; then repo=docker.io/datamitsu/datamitsu; fi
             versioned_tag=${APPROVED_TAG#v}
           else
-            [[ "$APPROVED_TAG" =~ ^unstable-[1-9][0-9]*-[1-9][0-9]*$ ]]
+            [[ "$APPROVED_TAG" =~ ^(unstable|preview)-([1-9][0-9]{11}-)?[1-9][0-9]*-[1-9][0-9]*$ ]]
           fi
           [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ && "$INDEX_ID" =~ ^[1-9][0-9]*$ && "$INDEX_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           results="$RUNNER_TEMP/verified-image-digests.txt"
@@ -682,9 +701,6 @@ jobs:
   finalize-github-assets:
     if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.github_release == 'true' }}
     needs: preflight
-    environment:
-      name: release-publication
-      url: ${{ needs.preflight.outputs.review_url }}
     permissions:
       contents: write
       actions: read
@@ -738,7 +754,7 @@ jobs:
               observed=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$APPROVED_TAG" --jq .sha)
               [[ "$observed" == "$APPROVED_SHA" ]]
             else
-              [[ "$APPROVED_TAG" =~ ^unstable-[1-9][0-9]*-[1-9][0-9]*$ ]]
+              [[ "$APPROVED_TAG" =~ ^(unstable|preview)-([1-9][0-9]{11}-)?[1-9][0-9]*-[1-9][0-9]*$ ]]
             fi
             [[ "$INDEX_ID" =~ ^[1-9][0-9]*$ && "$INDEX_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
             claim="refs/heads/release-finalization/checksums/$APPROVED_TAG"
@@ -864,7 +880,7 @@ jobs:
         shell: bash
         env:
           APPROVED_VERSION: ${{ needs.preflight.outputs.mode == 'tag' && needs.preflight.outputs.release_tag || needs.preflight.outputs.version }}
-          PARSERS_REPO: ${{ needs.preflight.outputs.mode == 'tag' && 'datamitsu/datamitsu-parsers' || 'datamitsu/datamitsu-parsers-unstable' }}
+          PARSERS_REPO: ${{ (needs.preflight.outputs.mode == 'tag' || startsWith(needs.preflight.outputs.release_tag, 'preview-')) && 'datamitsu/datamitsu-parsers' || 'datamitsu/datamitsu-parsers-unstable' }}
           FINALIZED_DIGEST: ${{ needs.finalize-parser.outputs.digest }}
           GH_TOKEN: ${{ github.token }}
           APPROVED_INDEX_DIGEST: ${{ needs.preflight.outputs.index_digest }}
@@ -920,9 +936,6 @@ jobs:
       - preflight
       - finalize-github-assets
       - verify-parser
-    environment:
-      name: release-publication
-      url: ${{ needs.preflight.outputs.review_url }}
     concurrency:
       group: github-datamitsu-prerelease-${{ needs.preflight.outputs.release_tag }}
       cancel-in-progress: false
@@ -974,10 +987,6 @@ jobs:
       group: npm-datamitsu-unstable-publication
       queue: max
       cancel-in-progress: false
-    environment:
-      name: release-publication
-      url: ${{ needs.preflight.outputs.review_url }}
-    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       actions: read
@@ -1030,7 +1039,7 @@ jobs:
         env:
           APPROVED_VERSION: ${{ needs.preflight.outputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          LEGACY_BASELINE: ${{ (needs.preflight.outputs.mode == 'prerelease' || needs.preflight.outputs.mode == 'unstable') && vars.NPM_UNSTABLE_CUTOVER_BASELINE || contains(needs.preflight.outputs.version, '-rc.') && vars.NPM_NEXT_CUTOVER_BASELINE || needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') && vars.NPM_LATEST_CUTOVER_BASELINE || '' }}
+          LEGACY_BASELINE: ${{ (needs.preflight.outputs.mode == 'prerelease' && startsWith(needs.preflight.outputs.version, '0.0.0-preview.') || contains(needs.preflight.outputs.version, '-rc.')) && vars.NPM_NEXT_CUTOVER_BASELINE || (needs.preflight.outputs.mode == 'unstable' || needs.preflight.outputs.mode == 'prerelease' && startsWith(needs.preflight.outputs.version, '0.0.0-unstable.')) && vars.NPM_UNSTABLE_CUTOVER_BASELINE || needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') && vars.NPM_LATEST_CUTOVER_BASELINE || '' }}
         shell: bash
         run: |
           args=("$RUNNER_TEMP/release-payloads/release/dist/npm" "$APPROVED_VERSION")
@@ -1217,6 +1226,7 @@ jobs:
           VERSION: ${{ needs.preflight.outputs.version }}
         run: APPROVED_DIST_DIR="$RUNNER_TEMP/release-payloads/release/dist/setup-action" node packaging/action/scripts/publish.ts
   publish-editor-extension:
+    name: publish-editor-extension (${{ matrix.store }})
     if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
     needs:
       - preflight
@@ -1269,6 +1279,7 @@ jobs:
           pnpm --filter './editors/vscode' exec python3 "$GITHUB_WORKSPACE/.github/scripts/publish-prepared-vsix.py" \
             "$STORE" "$RUNNER_TEMP/release-payloads/vsix/datamitsu-$VERSION.vsix" "$VERSION"
   publish-install-manifests:
+    name: publish-install-manifests (${{ matrix.target }})
     if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
     needs:
       - preflight
@@ -1306,7 +1317,24 @@ jobs:
           python3 .github/scripts/publish-release-manifests.py "$TARGET" \
             "$RUNNER_TEMP/release-payloads/release/dist" "$APPROVED_VERSION" "$APPROVED_SHA"
   promote-stable:
-    if: ${{ needs.preflight.outputs.publication_attempt == github.run_attempt && needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') }}
+    name: promote-stable (${{ matrix.channel }})
+    if: |
+      !cancelled() &&
+      needs.preflight.result == 'success' &&
+      needs.preflight.outputs.publication_attempt == github.run_attempt &&
+      needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.') &&
+      needs.publish-github.result == 'success' &&
+      needs.finalize-github-assets.result == 'success' &&
+      needs.verify-parser.result == 'success' &&
+      needs.publish-images.result == 'success' &&
+      needs.publisher-inputs.result == 'success' &&
+      needs.publish-setup-action.result == 'success' &&
+      needs.publish-editor-extension.result == 'success' &&
+      needs.publish-install-manifests.result == 'success' &&
+      ((needs.preflight.outputs.publish_pypi == 'true' && needs.publish-tagged-pypi.result == 'success') ||
+       (needs.preflight.outputs.publish_pypi == 'false' && needs.publish-tagged-pypi.result == 'skipped')) &&
+      ((needs.preflight.outputs.publish_rubygems == 'true' && needs.publish-tagged-rubygems.result == 'success') ||
+       (needs.preflight.outputs.publish_rubygems == 'false' && needs.publish-tagged-rubygems.result == 'skipped'))
     needs:
       - preflight
       - publish-github
@@ -1319,7 +1347,6 @@ jobs:
       - publish-setup-action
       - publish-editor-extension
       - publish-install-manifests
-    environment: release-publication
     concurrency:
       group: datamitsu-stable-alias-${{ matrix.channel }}
       queue: max
@@ -1394,3 +1421,208 @@ jobs:
               ;;
             *) exit 1 ;;
           esac
+  promote-nonstable:
+    name: promote-nonstable (${{ matrix.channel }})
+    if: |
+      !cancelled() && needs.preflight.result == 'success' &&
+      needs.preflight.outputs.publication_attempt == github.run_attempt &&
+      needs.preflight.outputs.oci_alias_policy == 'ordered-v1' &&
+      (needs.preflight.outputs.mode == 'unstable' || startsWith(needs.preflight.outputs.release_tag, 'preview-') ||
+       (needs.preflight.outputs.mode == 'tag' && contains(needs.preflight.outputs.version, '-rc.'))) &&
+      needs.publisher-inputs.result == 'success' && needs.verify-parser.result == 'success' && needs.publish-images.result == 'success' &&
+      ((needs.preflight.outputs.publish_pypi != 'true' && needs.publish-tagged-pypi.result == 'skipped') || needs.publish-tagged-pypi.result == 'success') &&
+      ((needs.preflight.outputs.publish_rubygems != 'true' && needs.publish-tagged-rubygems.result == 'skipped') || needs.publish-tagged-rubygems.result == 'success')
+    needs:
+      - preflight
+      - publisher-inputs
+      - verify-parser
+      - publish-images
+      - publish-tagged-pypi
+      - publish-tagged-rubygems
+    concurrency:
+      group: datamitsu-nonstable-alias-${{ matrix.channel }}
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: ${{ fromJSON(needs.preflight.outputs.mode == 'tag' && '["parser","ghcr","dockerhub"]' || '["parser","ghcr"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - *stage_approved_distribution
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: matrix.channel == 'ghcr'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: matrix.channel == 'dockerhub'
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Promote verified nonstable digests
+        env:
+          CHANNEL: ${{ matrix.channel }}
+          VERSION: ${{ needs.preflight.outputs.release_tag }}
+          PARSER_VERSION: ${{ needs.preflight.outputs.version }}
+          UNSTABLE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          IS_STABLE: ${{ needs.preflight.outputs.mode == 'tag' }}
+          PREPARATION_SHA: ${{ needs.preflight.outputs.source_sha }}
+          PREPARATION_RUN_ID: ${{ needs.preflight.outputs.preparation_run }}
+          PREPARATION_ATTEMPT: ${{ needs.preflight.outputs.preparation_attempt }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$IS_STABLE" == true || "$VERSION" == preview-* ]]; then
+            observed=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs%2Ftags%2F$VERSION" --jq .sha)
+            [[ "$observed" == "$PREPARATION_SHA" ]]
+          fi
+          cd "$RUNNER_TEMP/release-payloads/release"
+          case "$CHANNEL" in
+            parser) node "$GITHUB_WORKSPACE/.github/scripts/push-parsers-oci.mjs" promote-nonstable ;;
+            ghcr|dockerhub) python3 "$GITHUB_WORKSPACE/.github/scripts/publish-prepared-images.py" dist "$VERSION" --registry "$CHANNEL" --promote-nonstable ;;
+            *) exit 1 ;;
+          esac
+  report-publication:
+    if: ${{ always() && !cancelled() }}
+    needs:
+      - preflight
+      - finalize-parser
+      - publish-images
+      - finalize-github-assets
+      - verify-parser
+      - publish-github
+      - publisher-inputs
+      - publish-tagged-pypi
+      - publish-tagged-rubygems
+      - publish-setup-action
+      - publish-editor-extension
+      - publish-install-manifests
+      - promote-stable
+      - promote-nonstable
+    permissions:
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Report publication results
+        env:
+          MODE: ${{ needs.preflight.outputs.mode }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+          TAG: ${{ needs.preflight.outputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          RESULTS: ${{ toJSON(needs) }}
+          GITHUB_RELEASE: ${{ needs.preflight.outputs.github_release }}
+          PYPI: ${{ needs.preflight.outputs.publish_pypi }}
+          RUBYGEMS: ${{ needs.preflight.outputs.publish_rubygems }}
+          REUSE_PARSER: ${{ inputs.reuse_parser_finalization }}
+          OCI_ALIAS_POLICY: ${{ needs.preflight.outputs.oci_alias_policy }}
+        run: |-
+          required=()
+          legs=()
+          incomplete=()
+          if [[ -n "$MODE" ]]; then
+            required=(preflight verify-parser publisher-inputs)
+            legs=('publish-images (ghcr)')
+            if [[ "$OCI_ALIAS_POLICY" == ordered-v1 && ( "$MODE" == unstable || "$TAG" == preview-* || "$MODE" == tag && "$VERSION" == *-rc.* ) ]]; then
+              legs+=('promote-nonstable (ghcr)' 'promote-nonstable (parser)')
+              if [[ "$MODE" == tag ]]; then legs+=('promote-nonstable (dockerhub)'); fi
+            fi
+            if [[ "$REUSE_PARSER" != true ]]; then required+=(finalize-parser); fi
+            if [[ "$GITHUB_RELEASE" == true ]]; then required+=(finalize-github-assets publish-github); fi
+            if [[ "$MODE" == tag ]]; then
+              legs+=('publish-images (dockerhub)')
+              if [[ "$PYPI" == true ]]; then required+=(publish-tagged-pypi); fi
+              if [[ "$RUBYGEMS" == true ]]; then required+=(publish-tagged-rubygems); fi
+              if [[ "$VERSION" != *-rc.* ]]; then
+                required+=(publish-setup-action)
+                legs+=('publish-editor-extension (open-vsx)' 'publish-editor-extension (marketplace)'
+                  'publish-install-manifests (homebrew)' 'publish-install-manifests (scoop)' 'publish-install-manifests (winget)'
+                  'promote-stable (github)' 'promote-stable (parser)' 'promote-stable (ghcr)' 'promote-stable (dockerhub)')
+              fi
+            fi
+          fi
+          for job in "${required[@]}"; do
+            result=$(jq -r --arg job "$job" '.[$job].result // "missing"' <<< "$RESULTS")
+            if [[ "$result" != success ]]; then incomplete+=("$job: $result"); fi
+          done
+          installs=()
+          image=datamitsu/datamitsu
+          parser=datamitsu/datamitsu-parsers
+          if [[ "$TAG" == unstable-* ]]; then image+=-unstable; parser+=-unstable; fi
+          image_tag=${TAG#v}
+          if (( ${#legs[@]} )); then
+            if evidence=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100"); then
+              for leg in "${legs[@]}"; do
+                result=$(jq -r --arg name "$leg" --arg attempt "$GITHUB_RUN_ATTEMPT" --arg run "$GITHUB_RUN_ID" '
+                  [.[].jobs[] | select(.name == $name)] |
+                  if length == 0 then "missing"
+                  elif length != 1 then "ambiguous"
+                  elif (.[0].run_attempt | tostring) != $attempt or (.[0].run_id | tostring) != $run then "wrong attempt"
+                  else .[0].conclusion // "unconfirmed" end' <<< "$evidence") || result='invalid evidence'
+                if [[ "$result" != success ]]; then incomplete+=("$leg: $result"); fi
+                if [[ "$result" == success ]]; then
+                  case "$leg" in
+                    'publish-images (ghcr)') installs+=("ghcr.io/$image:$image_tag" "ghcr.io/$image:$image_tag-alpine") ;;
+                    'publish-images (dockerhub)') installs+=("docker.io/$image:$image_tag" "docker.io/$image:$image_tag-alpine") ;;
+                  esac
+                fi
+              done
+            else
+              incomplete+=('Could not read matrix job evidence for this attempt')
+            fi
+          fi
+          outcome='All required publication jobs succeeded.'
+          next='Use the verified versioned coordinates below.'
+          if (( ${#incomplete[@]} )) || jq -e 'any(.[]; .result == "failure")' <<< "$RESULTS" > /dev/null; then
+            outcome='Publication did not complete. Some destinations may already have been written.'
+            next='Inspect incomplete jobs before recovering from the original preparation index.'
+          elif [[ -z "$MODE" ]]; then
+            outcome='No publication was verified by this run.'
+            next='Check Preflight for the routing or approval decision.'
+          fi
+          if [[ "$OCI_ALIAS_POLICY" == legacy && ( "$MODE" != tag || "$VERSION" == *-rc.* ) ]]; then
+            outcome+=' Original preparation has no OCI ordering labels; floating OCI aliases were not requested or changed.'
+          fi
+          {
+            printf '**Mode:** `%s`\n\n**Actual outcome:** %s\n\n' "${MODE:-unconfirmed}" "$outcome"
+            printf '**What to install:**\n\n'
+            if [[ $(jq -r '.["publisher-inputs"].result' <<< "$RESULTS") == success ]]; then
+              installs+=("npm: @datamitsu/datamitsu@$VERSION")
+            fi
+            if [[ $(jq -r '.["publish-github"].result' <<< "$RESULTS") == success ]]; then
+              installs+=("GitHub Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG")
+            fi
+            if [[ $(jq -r '.["verify-parser"].result' <<< "$RESULTS") == success ]]; then
+              installs+=("Parser: ghcr.io/$parser:$image_tag")
+            fi
+            if [[ $(jq -r '.["publish-tagged-pypi"].result' <<< "$RESULTS") == success ]]; then
+              installs+=("PyPI: datamitsu==${VERSION/-rc./rc}")
+            fi
+            if [[ $(jq -r '.["publish-tagged-rubygems"].result' <<< "$RESULTS") == success ]]; then
+              installs+=("RubyGems: datamitsu ${VERSION/-rc./.rc.}")
+            fi
+            if (( ${#installs[@]} )); then
+              printf -- '- %s\n' "${installs[@]}"
+            else
+              printf 'None confirmed in this summary.\n'
+            fi
+            printf '\n**Next safe action:** %s\n\n' "$next"
+            if (( ${#incomplete[@]} )); then
+              printf 'Required jobs without verified success:\n\n'
+              printf -- '- %s\n' "${incomplete[@]}"
+              printf '\n'
+            fi
+            jq -r 'to_entries[] | "- \(.key): \(.value.result)"' <<< "$RESULTS"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if (( ${#incomplete[@]} )); then exit 1; fi

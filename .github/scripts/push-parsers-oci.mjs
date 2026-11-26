@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Publish the built WASM parser module as a standalone OCI artifact.
  *
@@ -9,7 +8,6 @@
  * downstream at all.
  *
  * The artifact is deliberately tiny and boring: an OCI 1.1 image manifest with an artifactType, an
- * empty config blob, and exactly ONE uncompressed `application/wasm` layer. That last part is the
  * whole design — the layer digest IS the module's SHA-256, the same value the config already pins
  * as its mandatory `hash`, so a consumer rejects a substituted payload from the manifest alone,
  * before requesting a single byte of it.
@@ -25,6 +23,7 @@
 
 import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 const ARTIFACT_TYPE = "application/vnd.datamitsu.parsers.v1+wasm";
 const WASM_MEDIA_TYPE = "application/wasm";
@@ -39,7 +38,7 @@ const UNSTABLE_REPO = "datamitsu/datamitsu-parsers-unstable";
 /**
  * Minimal OCI registry v2 push client: bearer handshake, blob upload, manifest PUT.
  */
-class Registry {
+export class Registry {
   constructor(registry, repo, token) {
     this.origin = `https://${registry}`;
     this.base = `${this.origin}/v2/${repo}`;
@@ -177,22 +176,124 @@ class Registry {
   }
 }
 
+export function preparationOrder(annotations) {
+  return ["com.datamitsu.preparation-run", "com.datamitsu.preparation-attempt"].map((key) => {
+    const value = annotations?.[key];
+    if (typeof value !== "string" || !/^[1-9]\d*$/.test(value)) {
+      throw new Error(`missing or invalid parser preparation identity: ${key}`);
+    }
+    return BigInt(value);
+  });
+}
+
+export async function promoteNonstableChannel(registry, prepared, record) {
+  const channel = record.tag.startsWith("unstable-") ? "unstable" : "preview";
+  const expectedTag = immutableTag(record.version, undefined, record.tag);
+  if (record.tag !== expectedTag)
+    throw new Error("nonstable parser tag does not match version/channel");
+  const expectedRepo = channel === "unstable" ? UNSTABLE_REPO : STABLE_REPO;
+  if (record.ref !== `${REGISTRY}/${expectedRepo}`) {
+    throw new Error(`parser ${channel} channel targets the wrong repository`);
+  }
+
+  // Resolve and verify the immutable candidate before examining or moving the alias.
+  const immutable = await registry.getManifest(record.tag, { allowMissing: true });
+  if (immutable === null) {
+    throw new Error(`immutable parser tag ${record.tag} is absent; publish it before promotion`);
+  }
+  if (!immutable.equals(prepared)) {
+    throw new Error(`immutable parser tag ${record.tag} does not match the prepared bytes`);
+  }
+  const expectedDigest = record.digest;
+  if (`sha256:${sha256Hex(immutable)}` !== expectedDigest) {
+    throw new Error(`immutable parser tag ${record.tag} has a different digest`);
+  }
+
+  const alias = await registry.getManifest(channel, { allowMissing: true });
+  if (alias) {
+    const annotation = JSON.parse(alias.toString("utf8")).annotations ?? {};
+    const currentVersion = annotation["com.datamitsu.parsers-version"];
+    const currentTag = immutableTag(currentVersion, channel);
+    const currentIdentity = preparationOrder(annotation);
+    if (
+      typeof currentVersion !== "string" ||
+      !currentVersion ||
+      typeof currentTag !== "string" ||
+      !currentTag
+    ) {
+      throw new Error(`cannot verify current parser ${channel} pointer metadata`);
+    }
+    const currentImmutable = await registry.getManifest(currentTag, { allowMissing: true });
+    if (currentImmutable === null || !currentImmutable.equals(alias)) {
+      throw new Error(
+        `cannot verify current parser ${channel} pointer against immutable tag ${currentTag}`,
+      );
+    }
+    const candidate = JSON.parse(prepared.toString("utf8"));
+    const candidateIdentity = preparationOrder(candidate.annotations);
+    const comparison =
+      candidateIdentity[0] - currentIdentity[0] || candidateIdentity[1] - currentIdentity[1];
+    if (comparison === 0n) {
+      if (!alias.equals(prepared)) {
+        throw new Error(`same parser preparation identity has different ${channel} manifest bytes`);
+      }
+      console.log(`Parser ${channel} already points to ${expectedDigest}`);
+      return;
+    }
+    if (comparison < 0) {
+      console.log(`Parser ${channel} stays at ${currentVersion}`);
+      return;
+    }
+  }
+
+  if ((await registry.putManifest(channel, prepared)) !== expectedDigest) {
+    throw new Error(`registry did not promote the prepared digest ${expectedDigest}`);
+  }
+  const promoted = await registry.getManifest(channel);
+  if (!promoted.equals(prepared)) {
+    throw new Error(`${channel} does not resolve to the prepared manifest after promotion`);
+  }
+  console.log(`Promoted parser ${channel} to ${expectedDigest}`);
+}
+
 function emitOutput(key, value) {
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
   }
   console.log(`${key}=${value}`);
 }
+function immutableTag(version, stableChannel, suppliedTag) {
+  const tagged = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-rc\.(0|[1-9]\d*))?$/;
+  const manual =
+    /^0\.0\.0-(unstable\.(?:[1-9]\d{11}\.)?|preview\.[1-9]\d{11}\.)([1-9]\d*)\.([1-9]\d*)$/;
+  const match = tagged.exec(version ?? "");
+  let tag;
+  if (match && (stableChannel === "stable" || (match[4] && stableChannel !== "unstable"))) {
+    tag = version.replace(/^v/, "");
+  } else if (manual.test(version) && stableChannel !== "stable") {
+    tag = version.slice("0.0.0-".length).replaceAll(".", "-");
+    if (stableChannel && !tag.startsWith(`${stableChannel}-`))
+      throw new Error("incorrect parser channel");
+  } else {
+    throw new Error(`invalid parser version ${version}`);
+  }
+  if (suppliedTag && suppliedTag !== tag)
+    throw new Error("parser tag does not match version/channel");
+  return tag;
+}
 
 async function main() {
   if (process.argv[2] === "lookup-image") {
     const tag = process.argv[3];
-    if (!/^unstable-[1-9]\d*-[1-9]\d*(?:-alpine)?$/.test(tag ?? "")) {
+    if (!/^(?:unstable|preview)-(?:[1-9]\d{11}-)?[1-9]\d*-[1-9]\d*(?:-alpine)?$/.test(tag ?? "")) {
       throw new Error("invalid unstable image tag");
     }
     const token = process.env.GITHUB_TOKEN;
     if (!token) throw new Error("GITHUB_TOKEN is required for image lookup");
-    const registry = new Registry("ghcr.io", "datamitsu/datamitsu-unstable", token);
+    const repo = tag.startsWith("preview-")
+      ? "datamitsu/datamitsu"
+      : "datamitsu/datamitsu-unstable";
+    const registry = new Registry("ghcr.io", repo, token);
     const raw = await registry.getManifest(tag, {
       accept: [
         "application/vnd.oci.image.index.v1+json",
@@ -213,12 +314,18 @@ async function main() {
     return;
   }
   const promote = process.argv[2] === "promote-stable";
+  const promoteNonstable = process.argv[2] === "promote-nonstable";
   const check = process.argv[2] === "check-prepared";
-  if (process.argv[2] !== "publish" && !promote && !check) {
-    throw new Error("expected prepare, check-prepared, publish, or promote-stable");
+  if (process.argv[2] !== "publish" && !promote && !promoteNonstable && !check) {
+    throw new Error(
+      "expected prepare, check-prepared, publish, promote-stable, or promote-nonstable",
+    );
   }
   if (promote && (!isStable || record.version.includes("-rc."))) {
     throw new Error("only stable releases may promote the latest parser channel");
+  }
+  if (promoteNonstable && isStable && !record.version.includes("-rc.")) {
+    throw new Error("stable releases cannot promote a nonstable parser channel");
   }
   const prepared = readFileSync("dist/parsers-oci-manifest.json");
   if (
@@ -232,6 +339,10 @@ async function main() {
   if (!token) throw new Error("GITHUB_TOKEN is required to push to the registry");
   const { digest, ref: reference, sha256: pin, tag } = record;
   const registry = new Registry(REGISTRY, repo, token);
+  if (promoteNonstable) {
+    await promoteNonstableChannel(registry, prepared, record);
+    return;
+  }
   if (promote) {
     if (!(await registry.getManifest(tag)).equals(prepared)) {
       throw new Error("versioned parser manifest does not match the prepared bytes");
@@ -244,20 +355,24 @@ async function main() {
     if (current) {
       const annotations = JSON.parse(current.toString("utf8")).annotations;
       const currentVersion = annotations?.["com.datamitsu.parsers-version"];
+      const stableTag = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
       if (
-        !/^v\d+\.\d+\.\d+$/.test(currentVersion ?? "") ||
+        !stableTag.test(currentVersion ?? "") ||
         !(await registry.getManifest(currentVersion.slice(1))).equals(current)
       ) {
         throw new Error("cannot verify the current parser latest pointer");
       }
-      const [run, attempt] = preparationOrder(annotations);
-      const [candidateRun, candidateAttempt] = preparationOrder(JSON.parse(prepared).annotations);
-      if (run > candidateRun || (run === candidateRun && attempt > candidateAttempt)) {
-        console.log(`Parser latest stays at newer preparation sha256:${sha256Hex(current)}`);
-        return;
+      const currentParts = currentVersion.slice(1).split(".").map(BigInt);
+      const candidateParts = tag.split(".").map(BigInt);
+      const difference = candidateParts
+        .map((part, i) => part - currentParts[i])
+        .find((part) => part !== 0n);
+      if (difference === undefined) {
+        throw new Error("same stable parser version has different manifest bytes");
       }
-      if (run === candidateRun && attempt === candidateAttempt) {
-        throw new Error("same parser preparation identity has different manifest bytes");
+      if (difference < 0n) {
+        console.log(`Parser latest stays at ${currentVersion}`);
+        return;
       }
     }
     if ((await registry.putManifest("latest", prepared)) !== digest) {
@@ -327,24 +442,19 @@ async function main() {
   }
 }
 
-function preparationOrder(annotations) {
-  return ["com.datamitsu.preparation-run", "com.datamitsu.preparation-attempt"].map((key) => {
-    const value = annotations?.[key];
-    if (typeof value !== "string" || !/^[1-9]\d*$/.test(value)) {
-      throw new Error(`missing or invalid parser preparation identity: ${key}`);
-    }
-    return BigInt(value);
-  });
-}
-
 function prepare() {
   const isStable = process.env.IS_STABLE === "true";
-  const repo = isStable ? STABLE_REPO : UNSTABLE_REPO;
   const version = isStable ? process.env.VERSION || "" : process.env.PARSER_VERSION || "";
-  const tag = isStable ? version.replace(/^v/, "") : process.env.UNSTABLE_TAG || "";
-  if (!version || !tag) throw new Error("parser version and OCI tag are required");
+  if (!version) throw new Error("parser version is required");
+  const tag = immutableTag(
+    version,
+    isStable ? "stable" : undefined,
+    isStable ? undefined : process.env.UNSTABLE_TAG,
+  );
+  const repo = isStable || tag.startsWith("preview-") ? STABLE_REPO : UNSTABLE_REPO;
 
   const { hash, name } = resolveModule("dist/checksums.txt");
+
   const expectedName = `datamitsu_parsers_${isStable ? tag : version}.wasm`;
   if (name !== expectedName) throw new Error(`expected parser release asset ${expectedName}`);
   const module = readFileSync(`dist/${name}`);
@@ -437,9 +547,11 @@ function sha256Hex(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-try {
-  await main();
-} catch (error) {
-  console.error(`error: ${error.message}`);
-  process.exit(1);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    await main();
+  } catch (error) {
+    console.error(`error: ${error.message}`);
+    process.exit(1);
+  }
 }

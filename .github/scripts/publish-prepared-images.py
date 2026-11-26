@@ -87,33 +87,18 @@ def stable_version(version):
     return tuple(map(int, match.groups()[:3]))
 
 
-def tags(repository):
-    data = json.loads(run("skopeo", "list-tags", f"docker://{repository}"))
-    require(isinstance(data.get("Tags"), list), f"invalid tag listing for {repository}")
-    return data["Tags"]
-
-
-def current_alias_order(repository, alias, alpine):
-    current = destination_digest(repository, alias)
-    if current is None:
-        return None
-    suffix = "-alpine" if alpine else ""
-    evidence = set()
-    for candidate in tags(repository):
-        match = re.fullmatch(
-            rf"({NUMBER}\.{NUMBER}\.{NUMBER}){re.escape(suffix)}", candidate
-        )
-        if match and destination_digest(repository, candidate) == current:
-            evidence.add(stable_version(match.group(1)))
+def current_alias_order(repository, digest, suffix):
+    version = metadata_version(f"docker://{repository}@{digest}")
+    order = stable_version(version)
     require(
-        len(evidence) == 1,
-        f"cannot establish unique stable version provenance for {repository}:{alias} digest {current}",
+        destination_digest(repository, version + suffix) == digest,
+        f"stable image metadata does not match the versioned digest in {repository}",
     )
-    return next(iter(evidence))
+    return order
 
 
-def metadata_version(source):
-    versions = set()
+def metadata(source):
+    result = {}
     for arch in sorted(ARCHES):
         raw = run(
             "skopeo",
@@ -130,9 +115,90 @@ def metadata_version(source):
         require(
             isinstance(version, str), f"missing image version label for linux/{arch}"
         )
-        versions.add(version)
-    require(len(versions) == 1, "Debian and Alpine platform image versions disagree")
-    return versions.pop()
+        result[arch] = (
+            version,
+            labels.get("com.datamitsu.preparation-run"),
+            labels.get("com.datamitsu.preparation-attempt"),
+        )
+    require(
+        len(set(result.values())) == 1,
+        "Debian and Alpine platform image metadata disagree",
+    )
+    return result["amd64"]
+
+
+def metadata_version(source):
+    return metadata(source)[0]
+
+
+def preparation_order(source):
+    _, run_id, attempt = metadata(source)
+    require(
+        isinstance(run_id, str) and run_id.isdecimal() and int(run_id) > 0,
+        "missing or invalid preparation run label",
+    )
+    require(
+        isinstance(attempt, str) and attempt.isdecimal() and int(attempt) > 0,
+        "missing or invalid preparation attempt label",
+    )
+    return (int(run_id), int(attempt))
+
+
+def verified_nonstable_order(repository, digest, suffix):
+    immutable = f"docker://{repository}@{digest}"
+    candidate_version, run_id, attempt = metadata(immutable)
+    require(
+        isinstance(run_id, str) and run_id.isdecimal() and int(run_id) > 0,
+        "current alias has invalid preparation run label",
+    )
+    require(
+        isinstance(attempt, str) and attempt.isdecimal() and int(attempt) > 0,
+        "current alias has invalid preparation attempt label",
+    )
+    parsed = SEMVER.fullmatch(candidate_version)
+    manual = re.fullmatch(
+        r"0\.0\.0-(preview|unstable)\.((?:[1-9][0-9]{11}\.)?([1-9][0-9]*)\.([1-9][0-9]*))",
+        candidate_version,
+    )
+    if manual:
+        require(
+            (run_id, attempt) == manual.groups()[2:],
+            "version and preparation labels disagree",
+        )
+        version_tag = manual.group(1) + "-" + manual.group(2).replace(".", "-") + suffix
+    else:
+        require(
+            parsed is not None and parsed.group(4) is not None,
+            "invalid current nonstable image version",
+        )
+        version_tag = candidate_version + suffix
+    require(
+        destination_digest(repository, version_tag) == digest,
+        f"current nonstable metadata does not match immutable tag {repository}:{version_tag}",
+    )
+    return int(run_id), int(attempt)
+
+
+def nonstable_promotions(repository, plans, candidate, alias):
+    promotions = []
+    for suffix in ("", "-alpine"):
+        immutable_tag = next(
+            plan[0]
+            for plan in plans
+            if plan[0].endswith(suffix) and (suffix or not plan[0].endswith("-alpine"))
+        )
+        digest = next(plan[3] for plan in plans if plan[0] == immutable_tag)
+        current = destination_digest(repository, alias + suffix)
+        if current is not None:
+            current_order = verified_nonstable_order(repository, current, suffix)
+            if candidate < current_order:
+                continue
+            require(
+                candidate != current_order or current == digest,
+                f"same preparation identity has different bytes at {repository}:{alias + suffix}",
+            )
+        promotions.append((repository, alias + suffix, digest, current))
+    return promotions
 
 
 def main():
@@ -145,9 +211,15 @@ def main():
     parser.add_argument("dist", type=Path)
     parser.add_argument("release_tag")
     parser.add_argument("--check-only", action="store_true")
+    parser.add_argument("--alias-policy", choices=("legacy", "ordered-v1"))
     parser.add_argument("--registry", choices=("ghcr", "dockerhub"))
     parser.add_argument(
         "--promote", action="store_true", help="promote existing signed stable indexes"
+    )
+    parser.add_argument(
+        "--promote-nonstable",
+        action="store_true",
+        help="promote the guarded preview or unstable alias",
     )
     parser.add_argument(
         "--require-present",
@@ -155,13 +227,17 @@ def main():
         help="recovery: require all immutable tags to exist and perform no registry writes",
     )
     args = parser.parse_args()
+    if args.alias_policy and not args.check_only:
+        parser.error("--alias-policy requires --check-only")
 
-    unstable = re.fullmatch(r"unstable-[1-9][0-9]*-[1-9][0-9]*", args.release_tag)
+    unstable = re.fullmatch(
+        r"(unstable|preview)-(?:[1-9][0-9]{11}-)?[1-9][0-9]*-[1-9][0-9]*",
+        args.release_tag,
+    )
     if unstable:
         is_stable = False
-        version = "0.0.0-unstable." + args.release_tag.removeprefix(
-            "unstable-"
-        ).replace("-", ".")
+        kind, identity = args.release_tag.split("-", 1)
+        version = f"0.0.0-{kind}." + identity.replace("-", ".")
     else:
         parsed = SEMVER.fullmatch(args.release_tag)
         if parsed is None:
@@ -172,7 +248,7 @@ def main():
             f"-rc.{rc}" if rc is not None else ""
         )
     if unstable:
-        repositories = UNSTABLE
+        repositories = TAGGED[:1] if kind == "preview" else UNSTABLE
         sources = (
             (args.dist / "datamitsu-debian.oci.tar", args.release_tag),
             (args.dist / "datamitsu-alpine.oci.tar", args.release_tag + "-alpine"),
@@ -191,6 +267,14 @@ def main():
             for repo in repositories
             if repo.startswith("ghcr.io/" if args.registry == "ghcr" else "docker.io/")
         )
+    if args.promote_nonstable and (
+        is_stable or args.check_only or args.require_present or not args.registry
+    ):
+        raise ValueError(
+            "nonstable promotion requires a nonstable release and exactly one selected registry"
+        )
+    if args.promote_nonstable and len(repositories) != 1:
+        raise ValueError("nonstable promotion requires exactly one selected registry")
     if args.promote and (not is_stable or args.check_only or args.require_present):
         raise ValueError("promotion is a separate stable-only operation")
     for path, _ in sources:
@@ -198,8 +282,21 @@ def main():
 
     with tempfile.TemporaryDirectory() as stage:
         plans = []
+        candidate_orders = set()
         for index, (path, tag) in enumerate(sources):
             source = f"oci-archive:{path}"
+            if args.alias_policy == "legacy":
+                require(
+                    metadata(source)[1:] == (None, None),
+                    "legacy index conflicts with prepared image labels",
+                )
+            elif args.alias_policy == "ordered-v1":
+                candidate_orders.add(preparation_order(source))
+            candidate_order = (
+                preparation_order(source) if args.promote_nonstable else None
+            )
+            if args.promote_nonstable:
+                candidate_orders.add(candidate_order)
             expected = index_digest(source)
             local = f"oci:{Path(stage) / str(index)}:checked"
             actual_version = metadata_version(source)
@@ -217,11 +314,16 @@ def main():
                 f"refusing to overwrite {tag}: an existing index has different content",
             )
             require(
-                not (args.require_present or args.promote)
+                not (args.require_present or args.promote or args.promote_nonstable)
                 or all(digest == expected for digest in existing),
                 f"cannot recover missing image {tag}",
             )
             plans.append((tag, source, local, expected, existing))
+        if args.promote_nonstable or args.alias_policy == "ordered-v1":
+            require(
+                len(candidate_orders) == 1,
+                "prepared images have different preparation identities",
+            )
         require(
             len({plan[3] for plan in plans}) == len(plans),
             "Debian and Alpine archives have the same index digest",
@@ -289,7 +391,7 @@ def main():
             candidate = stable_version(version)
             promotions = []
             for repository in repositories:
-                for alpine, suffix in ((False, ""), (True, "-alpine")):
+                for suffix in ("", "-alpine"):
                     digest = next(
                         plan[3] for plan in plans if plan[0] == version + suffix
                     )
@@ -301,17 +403,23 @@ def main():
                             if alias == "minor"
                             else alias
                         ) + suffix
-                        current_order = current_alias_order(repository, target, alpine)
-                        require(
-                            current_order is None or candidate >= current_order,
-                            f"refusing stable alias downgrade {repository}:{target}: {candidate} < {current_order}",
-                        )
+                        current = destination_digest(repository, target)
+                        if current is not None:
+                            current_order = current_alias_order(
+                                repository, current, suffix
+                            )
+                            if candidate < current_order:
+                                continue
+                            require(
+                                candidate != current_order or current == digest,
+                                f"same stable version has different bytes at {repository}:{target}",
+                            )
                         promotions.append(
                             (
                                 repository,
                                 target,
                                 digest,
-                                destination_digest(repository, target),
+                                current,
                             )
                         )
             for repository, target, digest, current in promotions:
@@ -333,6 +441,28 @@ def main():
                     f"alias digest mismatch for {repository}:{target}",
                 )
 
+        if args.promote_nonstable:
+            candidate = next(iter(candidate_orders))
+            alias = "unstable" if unstable and kind == "unstable" else "preview"
+            promotions = nonstable_promotions(repositories[0], plans, candidate, alias)
+            for repository, target, digest, current in promotions:
+                require(
+                    destination_digest(repository, target) == current,
+                    f"nonstable alias changed after preflight for {repository}:{target}",
+                )
+                if current != digest:
+                    run(
+                        "skopeo",
+                        "copy",
+                        "--all",
+                        "--preserve-digests",
+                        f"docker://{repository}@{digest}",
+                        f"docker://{repository}:{target}",
+                    )
+                require(
+                    destination_digest(repository, target) == digest,
+                    f"alias digest mismatch for {repository}:{target}",
+                )
         for tag, _, _, expected, _ in plans:
             for repository in repositories:
                 print(f"{repository}:{tag} {expected}")

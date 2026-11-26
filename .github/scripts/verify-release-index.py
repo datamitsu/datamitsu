@@ -191,12 +191,16 @@ def main():
             args.publish_mode == mode,
             "nonstable publication route does not match the index mode",
         )
+        suffix = f"{args.run_id}-{preparation}"
+        kind = "unstable" if mode == "unstable" else "preview"
         require(
-            tag == f"unstable-{args.run_id}-{preparation}",
-            "incorrect manual release tag",
+            tag == f"unstable-{suffix}"
+            or re.fullmatch(rf"{kind}-[1-9][0-9]{{11}}-{suffix}", tag),
+            "incorrect manual release tag for mode",
         )
+        prefix, identity = tag.split("-", 1)
         require(
-            index["version"] == f"0.0.0-unstable.{args.run_id}.{preparation}",
+            index["version"] == f"0.0.0-{prefix}." + identity.replace("-", "."),
             "incorrect manual release version",
         )
     check_artifact(args.index_id, digest, f"release-artifact-index-attempt-{producing}")
