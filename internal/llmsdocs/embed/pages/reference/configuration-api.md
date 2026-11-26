@@ -2022,6 +2022,26 @@ explicit in config-evaluation cache keys.
 
 ### Format Utilities
 
+Pass a named options object to set the style for one call. Keep a shared style
+object in your config and spread its options to override them for one file.
+For managed files, call the serializer inside the file's `content` callback.
+
+| Serializer | Formatting options                                                                                                                                               |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| YAML       | Numeric `indent` (1–16 spaces), `indentSequence`, `quoteStyle` (single or double preference), `flow`, `literalStyleIfMultiline` (cannot be combined with `flow`) |
+| TOML       | `indent` (spaces or tabs), `indentTables`, `multilineArrays`, `inlineTables`, `quoteStyle` for string values                                                     |
+| INI        | `indent` (spaces or tabs), `delimiter`, `spaceAroundDelimiter`, `align`, `blankLinesBetweenSections`, `defaultHeader`, `lineEnding` (lf or crlf)                 |
+| JSON       | `indent` (number or a string of spaces and tabs); quotes are always double                                                                                       |
+| Ignore     | `groupOrder`, `blankLinesBetweenGroups`, `lineEnding` (lf or crlf)                                                                                               |
+
+In flow style, a multiline mapping key is escaped and all strings in the document are quoted.
+
+```javascript
+const style = { yaml: { indent: 4 }, json: { indent: "\t" } };
+const yaml = YAML.stringify({ server: { port: 8080 } }, style.yaml);
+const json = JSON.stringify({ server: { port: 8080 } }, style.json);
+```
+
 ```javascript
 // YAML
 YAML.parse(text);

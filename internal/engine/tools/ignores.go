@@ -26,7 +26,7 @@ func ParseIgnoreFile(content string) ParseIgnoreResult {
 	groupOrder := make([]string, 0)
 	seenGroups := make(map[string]bool)
 
-	lines := strings.Split(content, "\n")
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
 
 	currentGroup := ""
 	inManagedSection := false
@@ -101,6 +101,10 @@ func ParseIgnoreFile(content string) ParseIgnoreResult {
 // emitting groups in groupOrder first and remaining groups sorted by name,
 // deduplicating rules within each group.
 func FormatIgnoreFile(groups map[string][]string, groupOrder []string) string {
+	return formatIgnoreFile(groups, groupOrder, true, "\n")
+}
+
+func formatIgnoreFile(groups map[string][]string, groupOrder []string, blankLines bool, newline string) string {
 	var result strings.Builder
 
 	processedGroups := make(map[string]bool)
@@ -114,11 +118,13 @@ func FormatIgnoreFile(groups map[string][]string, groupOrder []string) string {
 		// Deduplicate rules while preserving order
 		uniqueRules := deduplicateSlice(rules)
 
-		fmt.Fprintf(&result, "# %s\n", groupName)
+		fmt.Fprintf(&result, "# %s%s", groupName, newline)
 		for _, rule := range uniqueRules {
-			result.WriteString(rule + "\n")
+			result.WriteString(rule + newline)
 		}
-		result.WriteString("\n")
+		if blankLines {
+			result.WriteString(newline)
+		}
 		processedGroups[groupName] = true
 	}
 
@@ -136,11 +142,13 @@ func FormatIgnoreFile(groups map[string][]string, groupOrder []string) string {
 		// Deduplicate rules while preserving order
 		uniqueRules := deduplicateSlice(rules)
 
-		fmt.Fprintf(&result, "# %s\n", groupName)
+		fmt.Fprintf(&result, "# %s%s", groupName, newline)
 		for _, rule := range uniqueRules {
-			result.WriteString(rule + "\n")
+			result.WriteString(rule + newline)
 		}
-		result.WriteString("\n")
+		if blankLines {
+			result.WriteString(newline)
+		}
 	}
 
 	return strings.TrimSpace(result.String())
@@ -232,6 +240,50 @@ func RegisterIgnoreToolsInVM(vm *goja.Runtime) error {
 		}
 
 		var groupOrder []string
+		blankLines, newline := true, "\n"
+		if opts, ok := call.Argument(1).(*goja.Object); ok && opts.ClassName() == "Object" && opts.Get("length") == nil {
+			for _, key := range opts.Keys() {
+				v := opts.Get(key)
+				if goja.IsUndefined(v) {
+					continue
+				}
+				switch key {
+				case "groupOrder":
+					a, ok := v.(*goja.Object)
+					if !ok || a.ClassName() != "Array" {
+						panic(vm.NewTypeError("groupOrder must be an array"))
+					}
+					for i := range int(a.Get("length").ToInteger()) {
+						item := a.Get(strconv.Itoa(i))
+						if item == nil {
+							panic(vm.NewTypeError("groupOrder items must be strings"))
+						}
+						s, ok := item.Export().(string)
+						if !ok {
+							panic(vm.NewTypeError("groupOrder items must be strings"))
+						}
+						groupOrder = append(groupOrder, s)
+					}
+				case "blankLinesBetweenGroups":
+					b, ok := v.Export().(bool)
+					if !ok {
+						panic(vm.NewTypeError("blankLinesBetweenGroups must be a boolean"))
+					}
+					blankLines = b
+				case "lineEnding":
+					s, ok := v.Export().(string)
+					if !ok || (s != "lf" && s != "crlf") {
+						panic(vm.NewTypeError("lineEnding must be lf or crlf"))
+					}
+					if s == "crlf" {
+						newline = "\r\n"
+					}
+				default:
+					panic(vm.NewTypeError("unknown ignore stringify option %q", key))
+				}
+			}
+			return vm.ToValue(formatIgnoreFile(convertedGroups, groupOrder, blankLines, newline))
+		}
 		if len(call.Arguments) >= 2 && !goja.IsUndefined(call.Argument(1)) && !goja.IsNull(call.Argument(1)) {
 			orderArg := call.Argument(1)
 			orderExported := orderArg.Export()
