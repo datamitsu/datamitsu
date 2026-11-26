@@ -44,7 +44,7 @@ class PromotionTest(unittest.TestCase):
             for filename in names:
                 (directory / filename).write_bytes(filename.encode())
             requests = []
-            target = "0.0.0-unstable.12345678901.1"
+            target = "0.0.0-unstable.202611251830.12345678901.1"
             legacy = "0.0.0-unstable.20261121.3f08339"
             launcher = "@datamitsu/datamitsu"
             tags = {f"@datamitsu/{Path(filename).stem}": target for filename in names}

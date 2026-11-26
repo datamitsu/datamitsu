@@ -6,7 +6,6 @@ package workflows_test
 import (
 	"errors"
 	"maps"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +26,7 @@ type workflowJob struct {
 	Permissions map[string]string `yaml:"permissions"`
 	Env         map[string]string `yaml:"env"`
 	Steps       []struct {
+		Name string            `yaml:"name"`
 		ID   string            `yaml:"id"`
 		Run  string            `yaml:"run"`
 		Uses string            `yaml:"uses"`
@@ -133,8 +133,9 @@ func TestReleaseJobsDownstreamOfAConditionalJobOptOutOfSkipPropagation(t *testin
 }
 
 func TestReleaseRouting(t *testing.T) {
+	wf := loadReleaseWorkflow(t)
 	var script string
-	for _, step := range loadReleaseWorkflow(t).Jobs["determine-release-type"].Steps {
+	for _, step := range wf.Jobs["determine-release-type"].Steps {
 		if step.ID == "detect" {
 			script = step.Run
 		}
@@ -143,16 +144,21 @@ func TestReleaseRouting(t *testing.T) {
 		t.Fatal("release routing step missing")
 	}
 	sha := strings.Repeat("a", 40)
-	for _, tc := range []struct{ name, event, ref, mode, protected, attempt, want string }{
-		{"verify on protected main", "workflow_dispatch", "refs/heads/main", "verify", "true", "1", "verify=true\n"},
-		{"prerelease on protected main", "workflow_dispatch", "refs/heads/main", "prerelease", "true", "1", "auto_prerelease=true\n"},
-		{"prerelease on feature branch", "workflow_dispatch", "refs/heads/feature", "prerelease", "true", "1", "verify=false\n"},
-		{"prerelease on unprotected main", "workflow_dispatch", "refs/heads/main", "prerelease", "false", "1", "verify=false\n"},
-		{"prerelease rerun", "workflow_dispatch", "refs/heads/main", "prerelease", "true", "2", "verify=false\n"},
-		{"stable tag", "push", "refs/tags/v1.2.3", "", "true", "1", "tag_ref=refs/tags/v1.2.3\n"},
-		{"candidate tag", "push", "refs/tags/v1.2.3-rc.1", "", "true", "1", "tag_ref=refs/tags/v1.2.3-rc.1\n"},
-		{"invalid tag", "push", "refs/tags/v01.2.3", "", "true", "1", ""},
-		{"manual stable denied", "workflow_dispatch", "refs/heads/main", "stable", "true", "1", ""},
+	for _, tc := range []struct {
+		name, event, ref, mode, protected, attempt, wantMode, wantVerify, wantIsUnstable, wantAutoUnstable, wantPrerelease string
+	}{
+		{"verify from protected source", "workflow_dispatch", "refs/heads/main", "verify", "true", "1", "verify", "true", "true", "false", "false"},
+		{"verify from feature source", "workflow_dispatch", "refs/heads/feature", "verify", "false", "1", "verify", "true", "true", "false", "false"},
+		{"prerelease from protected source", "workflow_dispatch", "refs/heads/main", "prerelease", "true", "1", "prerelease", "false", "true", "false", "true"},
+		{"unstable from protected source", "workflow_dispatch", "refs/heads/main", "unstable", "true", "1", "unstable", "false", "true", "true", "false"},
+		{"unstable from unprotected source", "workflow_dispatch", "refs/heads/main", "unstable", "false", "1", "unstable", "false", "true", "false", "false"},
+		{"unstable rerun", "workflow_dispatch", "refs/heads/main", "unstable", "true", "2", "unstable", "false", "true", "false", "false"},
+		{"unstable from feature source", "workflow_dispatch", "refs/heads/feature", "unstable", "true", "1", "unstable", "false", "true", "false", "false"},
+		{"workflow-run is not a native release dispatch", "workflow_run", "refs/heads/main", "unstable", "true", "1", "", "", "", "", ""},
+		{"stable tag", "push", "refs/tags/v1.2.3", "", "true", "1", "tag", "false", "false", "false", "false"},
+		{"candidate tag", "push", "refs/tags/v1.2.3-rc.1", "", "true", "1", "tag", "false", "false", "false", "false"},
+		{"invalid tag", "push", "refs/tags/v01.2.3", "", "true", "1", "", "", "", "", ""},
+		{"unsupported mode", "workflow_dispatch", "refs/heads/main", "stable", "true", "1", "", "", "", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			output := filepath.Join(t.TempDir(), "output")
@@ -162,7 +168,7 @@ func TestReleaseRouting(t *testing.T) {
 				"RELEASE_MODE="+tc.mode, "GITHUB_REPOSITORY=datamitsu/datamitsu", "DEFAULT_BRANCH=main",
 				"PROTECTED_REF="+tc.protected, "GITHUB_WORKFLOW_SHA="+sha, "GITHUB_RUN_ATTEMPT="+tc.attempt)
 			log, err := cmd.CombinedOutput()
-			if tc.want == "" {
+			if tc.wantMode == "" {
 				if _, ok := errors.AsType[*exec.ExitError](err); !ok {
 					t.Fatalf("expected release rejection, got %v: %s", err, log)
 				}
@@ -172,65 +178,69 @@ func TestReleaseRouting(t *testing.T) {
 				t.Fatalf("release routing failed: %v: %s", err, log)
 			}
 			got, err := os.ReadFile(output)
-			if err != nil || !strings.Contains(string(got), "checkout_ref="+sha+"\n") || !strings.Contains(string(got), tc.want) {
-				t.Fatalf("routing output %q, error %v; want event SHA and %q", got, err, tc.want)
+			if err != nil {
+				t.Fatal(err)
 			}
-			const autoPrerelease = "auto_prerelease=true\n"
-			if strings.Contains(string(got), autoPrerelease) != (tc.want == autoPrerelease) {
-				t.Fatalf("unexpected automatic handoff decision: %s", got)
+			fields := string(got)
+			for _, want := range []string{"checkout_ref=" + sha + "\n", "mode=" + tc.wantMode + "\n", "is_unstable=" + tc.wantIsUnstable + "\n"} {
+				if !strings.Contains(fields, want) {
+					t.Errorf("routing output %q does not contain %q", fields, want)
+				}
+			}
+			verifyEnabled := strings.Contains(fields, "verify=true\n")
+			if verifyEnabled != (tc.wantVerify == "true") {
+				t.Errorf("verification routing = %v, want %s; output: %q", verifyEnabled, tc.wantVerify, fields)
+			}
+			for key, want := range map[string]string{"auto_unstable": tc.wantAutoUnstable, "auto_prerelease": tc.wantPrerelease} {
+				present := strings.Contains(fields, key+"=true\n")
+				if present != (want == "true") {
+					t.Errorf("%s handoff = %v, want %s; output: %q", key, present, want, fields)
+				}
 			}
 		})
 	}
 }
 
-func TestUnstableDispatchResolvesProductFromProtectedWorkflow(t *testing.T) {
+func TestUnstableVersionIdentityUsesRunTimestampAndAttempt(t *testing.T) {
+	job := loadReleaseWorkflow(t).Jobs["generate-unstable-version"]
 	var script string
-	for _, step := range loadReleaseWorkflow(t).Jobs["determine-release-type"].Steps {
-		if step.ID == "detect" {
+	for _, step := range job.Steps {
+		if step.ID == "version" {
 			script = step.Run
 		}
 	}
-	const mock = `gh() {
-	[[ "$*" == "api $EXPECTED_API_PATH --jq .sha" ]] || return 2
-	printf '%s\n' "$RESOLVED_SHA"
-}
-`
-	dispatchSHA, productSHA := strings.Repeat("a", 40), strings.Repeat("b", 40)
-	for _, tc := range []struct {
-		name, ref, product, protected, workflow, attempt, output string
-	}{
-		{"protected default branch", "refs/heads/main", "refs/heads/feature/demo", "true", dispatchSHA, "1", productSHA},
-		{"feature workflow", "refs/heads/feature", "refs/heads/feature/demo", "true", dispatchSHA, "1", ""},
-		{"unprotected default branch", "refs/heads/main", "refs/heads/feature/demo", "false", dispatchSHA, "1", ""},
-		{"workflow revision mismatch", "refs/heads/main", "refs/heads/feature/demo", "true", productSHA, "1", ""},
-		{"unstable rebuild", "refs/heads/main", "refs/heads/feature/demo", "true", dispatchSHA, "2", ""},
-		{"empty product ref uses dispatch commit", "refs/heads/main", "", "true", dispatchSHA, "1", dispatchSHA},
-		{"invalid explicit product ref", "refs/heads/main", "invalid ref", "true", dispatchSHA, "1", ""},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
+	if script == "" {
+		t.Fatal("unstable version generation step missing")
+	}
+	for _, tc := range []struct{ mode, kind string }{{"verify", "preview"}, {"prerelease", "preview"}, {"unstable", "unstable"}} {
+		t.Run(tc.mode, func(t *testing.T) {
 			dir := t.TempDir()
-			output := filepath.Join(dir, "output")
-			cmd := exec.CommandContext(t.Context(), "bash", "-ec", mock+script)
-			cmd.Env = append(os.Environ(), "GITHUB_EVENT_NAME=workflow_dispatch", "RELEASE_MODE=unstable",
-				"GITHUB_REPOSITORY=datamitsu/datamitsu", "DEFAULT_BRANCH=main",
-				"GITHUB_REF="+tc.ref, "PROTECTED_REF="+tc.protected, "GITHUB_SHA="+dispatchSHA,
-				"GITHUB_WORKFLOW_SHA="+tc.workflow, "GITHUB_RUN_ATTEMPT="+tc.attempt,
-				"PRODUCT_REF="+tc.product, "RESOLVED_SHA="+productSHA, "GITHUB_OUTPUT="+output,
-				"EXPECTED_API_PATH=repos/datamitsu/datamitsu/commits/"+url.PathEscape(tc.product),
-				"GITHUB_STEP_SUMMARY="+filepath.Join(dir, "summary"))
-			log, err := cmd.CombinedOutput()
-			if tc.output == "" {
-				if _, ok := errors.AsType[*exec.ExitError](err); !ok {
-					t.Fatalf("expected unstable rejection, got %v: %s", err, log)
+			cmd := exec.CommandContext(t.Context(), "bash", "-ec", script)
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(), "MODE="+tc.mode, "GITHUB_RUN_ID=12345", "GITHUB_RUN_ATTEMPT=7", "GITHUB_OUTPUT="+filepath.Join(dir, "output"))
+			// The production step reads the checked-out commit. A temporary repository
+			// makes its source-derived identity deterministic without pinning the clock.
+			for _, args := range [][]string{{"init", "-q"}, {"-c", "user.name=workflow-test", "-c", "user.email=workflow@example.invalid", "commit", "--allow-empty", "-qm", "source"}} {
+				git := exec.CommandContext(t.Context(), "git", args...)
+				git.Dir = dir
+				if output, err := git.CombinedOutput(); err != nil {
+					t.Fatalf("git %v: %v: %s", args, err, output)
 				}
-				return
 			}
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("version generation failed: %v: %s", err, output)
+			}
+			values, err := os.ReadFile(filepath.Join(dir, "output"))
 			if err != nil {
-				t.Fatalf("unstable routing failed: %v: %s", err, log)
+				t.Fatal(err)
 			}
-			got, err := os.ReadFile(output)
-			if err != nil || !strings.Contains(string(got), "checkout_ref="+tc.output+"\n") || !strings.Contains(string(got), "mode=unstable\n") {
-				t.Fatalf("unstable routing output %q, error %v; want resolved SHA %s", got, err, tc.output)
+			version := regexp.MustCompile(`(?m)^version=(0\.0\.0-` + tc.kind + `\.[0-9]{12}\.12345\.7)$`).FindStringSubmatch(string(values))
+			if len(version) != 2 {
+				t.Fatalf("generated version lacks timestamp/run/attempt identity: %s", values)
+			}
+			tag := regexp.MustCompile(`(?m)^tag_name=(` + tc.kind + `-[0-9]{12}-12345-7)$`).FindStringSubmatch(string(values))
+			if len(tag) != 2 {
+				t.Fatalf("generated tag lacks timestamp/run/attempt identity: %s", values)
 			}
 		})
 	}
@@ -405,9 +415,22 @@ func TestReleasePreparationCannotPublish(t *testing.T) {
 				t.Errorf("%s must only have contents: read, got %v", name, permissions)
 			}
 			continue
-		}
-		if name != "attest-tagged-npm" {
-			t.Errorf("unexpected job in the preparation workflow: %s", name)
+		case "report-preparation-failure":
+			checkSecrets(name, complete.Jobs[name])
+			if len(job.Permissions) != 0 {
+				t.Errorf("preparation failure reporting must have no token permissions, got %v", job.Permissions)
+			}
+			var run string
+			var runSb423 strings.Builder
+			for _, step := range job.Steps {
+				runSb423.WriteString(step.Run)
+			}
+			run += runSb423.String()
+			for _, field := range []string{"Actual outcome", "What to install", "Next safe action"} {
+				if !strings.Contains(run, field) {
+					t.Errorf("preparation failure summary omits %q information", field)
+				}
+			}
 			continue
 		}
 		checkSecrets(name, complete.Jobs[name])
@@ -441,6 +464,14 @@ func TestReleasePreflightRequiresEnvironmentReviewers(t *testing.T) {
 	if script == "" {
 		t.Fatal("missing publication approval step")
 	}
+	if strings.Contains(script, "release-publication") {
+		t.Fatal("publication preflight must not require the former shared release-publication environment")
+	}
+	for _, destination := range []string{"pypi", "rubygems", "setup-action", "open-vsx", "vscode-marketplace", "homebrew", "scoop", "winget"} {
+		if !strings.Contains(script, destination) {
+			t.Errorf("publication preflight does not protect destination environment %q", destination)
+		}
+	}
 	const mock = `gh() {
 	[[ "$#" == 2 && "$1" == api && "$2" == repos/datamitsu/datamitsu/environments/* ]] || return 2
 	local name=${2##*/}
@@ -453,12 +484,11 @@ func TestReleasePreflightRequiresEnvironmentReviewers(t *testing.T) {
 }
 `
 	for _, tc := range []struct{ name, mode, version, pypi, blocked, response, attempt string }{
-		{"unstable approval present", "unstable", "0.0.0-unstable.1.1", "false", "", "", "1"},
-		{"rerun with protected environment", "unstable", "0.0.0-unstable.1.1", "false", "", "", "2"},
-		{"missing environment", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", "", "1"},
-		{"branch rule alone", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", `{"name":"release-publication","protection_rules":[{"type":"branch_policy"}]}`, "1"},
-		{"empty reviewers", "unstable", "0.0.0-unstable.1.1", "false", "release-publication", `{"name":"release-publication","protection_rules":[{"type":"required_reviewers","reviewers":[]}]}`, "1"},
+		{"destination environments present", "unstable", "0.0.0-unstable.1.1", "false", "", "", "1"},
+		{"rerun with protected destination environment", "unstable", "0.0.0-unstable.1.1", "false", "", "", "2"},
 		{"missing selected PyPI environment", "tag", "1.2.0-rc.1", "true", "pypi", "", "1"},
+		{"destination without reviewer protection", "tag", "1.2.0-rc.1", "true", "pypi", `{"name":"pypi","protection_rules":[{"type":"branch_policy"}]}`, "1"},
+		{"destination with empty reviewers", "tag", "1.2.0-rc.1", "true", "pypi", `{"name":"pypi","protection_rules":[{"type":"required_reviewers","reviewers":[]}]}`, "1"},
 		{"missing stable-only environment", "tag", "1.2.0", "false", "winget", "", "1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -514,6 +544,9 @@ func TestReleasePreflightPublicationBoundary(t *testing.T) {
 	if referencesReleaseSecrets(t, complete.Env, false) {
 		t.Error("preflight workflow environment must not reference secrets")
 	}
+	if strings.Contains(string(raw), "release-publication") {
+		t.Error("preflight and publisher jobs must not use the former shared release-publication environment")
+	}
 	const ready = "needs.preflight.outputs.publication_attempt == github.run_attempt"
 	const stable = "needs.preflight.outputs.mode == 'tag' && !contains(needs.preflight.outputs.version, '-rc.')"
 	guards := map[string][]string{
@@ -530,6 +563,32 @@ func TestReleasePreflightPublicationBoundary(t *testing.T) {
 		"publish-editor-extension":  {"preflight", "publish-github"},
 		"publish-install-manifests": {"preflight", "publish-github"},
 		"promote-stable":            {"finalize-github-assets", "preflight", "publish-editor-extension", "publish-github", "publish-images", "publish-install-manifests", "publish-setup-action", "publish-tagged-pypi", "publish-tagged-rubygems", "publisher-inputs", "verify-parser"},
+		"promote-nonstable":         {"preflight", "publisher-inputs", "verify-parser", "publish-images", "publish-tagged-pypi", "publish-tagged-rubygems"},
+		"report-publication":        {"preflight", "finalize-parser", "publish-images", "finalize-github-assets", "verify-parser", "publish-github", "publisher-inputs", "publish-tagged-pypi", "publish-tagged-rubygems", "publish-setup-action", "publish-editor-extension", "publish-install-manifests", "promote-stable", "promote-nonstable"},
+	}
+	var preflightScript, branchScript string
+	for _, step := range wf.Jobs["preflight"].Steps {
+		if step.ID == "verify" {
+			preflightScript = step.Run
+		}
+		if step.Name == "Require the default branch" {
+			branchScript = step.Run
+		}
+	}
+	for _, contract := range []string{"workflow_run", "handoff_mode", "COMPLETED_ATTEMPT", "head_branch", "DEFAULT_BRANCH", "automatic_mode"} {
+		if !strings.Contains(preflightScript, contract) {
+			t.Errorf("preflight handoff does not enforce %q", contract)
+		}
+	}
+	for _, contract := range []string{"refs/heads/$DEFAULT_BRANCH", "GITHUB_REPOSITORY"} {
+		if !strings.Contains(branchScript+preflightScript, contract) {
+			t.Errorf("preflight does not require canonical protected default-branch source: missing %q", contract)
+		}
+	}
+	for _, contract := range []string{"datamitsu/datamitsu", "PROTECTED_REF", `"$PROTECTED_REF" == true`, `"$GITHUB_WORKFLOW_SHA" == "$GITHUB_SHA"`, `"$GITHUB_REPOSITORY" == datamitsu/datamitsu`, `"$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH"`} {
+		if !strings.Contains(branchScript+preflightScript, contract) {
+			t.Errorf("preflight source check is missing %q", contract)
+		}
 	}
 	for name := range wf.Jobs {
 		if _, known := guards[name]; !known {
@@ -544,24 +603,64 @@ func TestReleasePreflightPublicationBoundary(t *testing.T) {
 		}
 		condition := strings.TrimSpace(job.If)
 		condition = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(condition, "${{"), "}}"))
-		if name != "preflight" && name != "verify-parser" {
-			gate := ready
-			if name == "publisher-inputs" {
-				gate = "!cancelled() && " + ready
-			}
-			if condition != gate && !strings.HasPrefix(condition, gate+" && ") {
+		if name != "preflight" && name != "verify-parser" && name != "report-publication" {
+			if !strings.Contains(condition, ready) {
 				t.Errorf("%s can bypass preflight publication authorization: %q", name, condition)
 			}
-			if complete.Jobs[name]["environment"] == nil {
-				t.Errorf("%s must require a publication environment", name)
+			destinationEnvironment := name == "publish-tagged-pypi" || name == "publish-tagged-rubygems" || name == "publish-setup-action" || name == "publish-editor-extension" || name == "publish-install-manifests"
+			if (complete.Jobs[name]["environment"] != nil) != destinationEnvironment {
+				t.Errorf("%s: unexpected destination environment policy", name)
 			}
 		}
-		switch name {
-		case "publish-setup-action", "publish-editor-extension", "publish-install-manifests", "promote-stable":
-			if !strings.HasPrefix(condition, ready+" && "+stable) {
-				t.Errorf("%s must not write for RC or unstable builds", name)
+		if name == "report-publication" {
+			if !strings.Contains(condition, "always()") || !strings.Contains(condition, "!cancelled()") {
+				t.Errorf("publication summary must run after success or failure, unless cancelled: %q", condition)
+			}
+			var run string
+			for _, step := range job.Steps {
+				if strings.Contains(step.Run, "GITHUB_STEP_SUMMARY") {
+					run = step.Run
+				}
+			}
+			for _, field := range []string{"Actual outcome", "What to install", "Next safe action"} {
+				if !strings.Contains(run, field) {
+					t.Errorf("publication summary omits its %q information", field)
+				}
+			}
+			if run == "" || !strings.Contains(run, "incomplete") {
+				t.Error("publication summary must report incomplete destinations")
 			}
 		}
+		if name == "promote-stable" || name == "promote-nonstable" {
+			for _, dependency := range job.needsList(t, name) {
+				if dependency == "preflight" {
+					continue
+				}
+				if !strings.Contains(condition, "needs."+dependency+".result == 'success'") &&
+					!strings.Contains(condition, "needs."+dependency+".result == 'skipped'") {
+					t.Errorf("%s alias promotion does not gate on %s outcome", name, dependency)
+				}
+			}
+		}
+		if name == "promote-stable" && !strings.Contains(condition, stable) {
+			t.Errorf("stable alias promotion must exclude RC and nonstable builds: %q", condition)
+		}
+		if name == "promote-nonstable" {
+			strategy, _ := complete.Jobs[name]["strategy"].(map[string]any)
+			matrix, _ := strategy["matrix"].(map[string]any)
+			channels, _ := matrix["channel"].(string)
+			if !strings.Contains(channels, `"parser"`) || !strings.Contains(channels, `"ghcr"`) || !strings.Contains(channels, `"dockerhub"`) {
+				t.Errorf("nonstable promotion matrix omits a required registry channel: %q", channels)
+			}
+			if !strings.Contains(channels, "needs.preflight.outputs.mode == 'tag'") {
+				t.Errorf("Docker Hub must only be an eligible nonstable alias for tagged RC publication: %q", channels)
+			}
+			if !strings.Contains(condition, "needs.preflight.outputs.mode == 'unstable'") ||
+				!strings.Contains(condition, "startsWith(needs.preflight.outputs.release_tag, 'preview-')") {
+				t.Errorf("nonstable alias promotion lacks preview/unstable routing: %q", condition)
+			}
+		}
+		sort.Strings(guard)
 		needs := job.needsList(t, name)
 		sort.Strings(needs)
 		if !slices.Equal(needs, guard) {

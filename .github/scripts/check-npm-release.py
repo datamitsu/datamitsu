@@ -223,7 +223,11 @@ def verify_provenance(directory, version, options, *, run=subprocess.run):
 def upload_missing(
     directory, version, fetch=None, run=subprocess.run, *, provenance=None
 ):
-    unstable = re.fullmatch(r"0\.0\.0-unstable\.([1-9][0-9]*)\.([1-9][0-9]*)", version)
+    unstable = re.fullmatch(
+        r"0\.0\.0-(?:unstable\.(?:([1-9][0-9]{11})\.)?|preview\.([1-9][0-9]{11})\.)"
+        r"([1-9][0-9]*)\.([1-9][0-9]*)",
+        version,
+    )
     tagged = TAGGED_VERSION.fullmatch(version)
     if unstable is None and tagged is None:
         raise ValueError("invalid approved npm version")
@@ -268,7 +272,7 @@ def upload_missing(
                     env=clean_env,
                 )
     elif unstable:
-        tag = "staged-" + "-".join(unstable.groups())
+        tag = "staged-" + "-".join(filter(None, unstable.groups()))
         with tempfile.TemporaryDirectory() as cwd:
             for filename in before["missing"]:
                 try:

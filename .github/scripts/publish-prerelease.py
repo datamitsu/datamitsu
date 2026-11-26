@@ -11,8 +11,12 @@ import sys
 from pathlib import Path
 
 REPOSITORY = "datamitsu/datamitsu"
-VERSION_RE = re.compile(r"0\.0\.0-unstable\.([1-9][0-9]*)\.([1-9][0-9]*)")
-TAG_RE = re.compile(r"unstable-([1-9][0-9]*)-([1-9][0-9]*)")
+VERSION_RE = re.compile(
+    r"0\.0\.0-(unstable|preview)\.(?:([1-9][0-9]{11})\.)?([1-9][0-9]*)\.([1-9][0-9]*)"
+)
+TAG_RE = re.compile(
+    r"(unstable|preview)-(?:([1-9][0-9]{11})-)?([1-9][0-9]*)-([1-9][0-9]*)"
+)
 TAGGED_VERSION_RE = re.compile(
     r"(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){2}(?:-rc\.(?:0|[1-9][0-9]*))?"
 )

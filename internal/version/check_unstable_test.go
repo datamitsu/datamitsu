@@ -45,6 +45,8 @@ func TestCompareVersions_UnstableCurrent_BypassesCheck(t *testing.T) {
 		{"unstable vs higher required", "0.0.0-unstable.20260523.abc1234", "0.1.0"},
 		{"unstable vs much higher required", "0.0.0-unstable.20260523.abc1234", "99.99.99"},
 		{"v-prefixed unstable", "v0.0.0-unstable.20260523.abc1234", "0.1.0"},
+		{"pipeline preview", "0.0.0-preview.202611251830.12345678901.2", "0.0.1"},
+		{"v-prefixed pipeline preview", "v0.0.0-preview.202611251830.12345678901.2", "0.0.1"},
 	}
 
 	for _, tt := range tests {
@@ -57,6 +59,14 @@ func TestCompareVersions_UnstableCurrent_BypassesCheck(t *testing.T) {
 				t.Errorf("CompareVersions(%q, %q) skipped=false; expected true so caller can warn", tt.current, tt.required)
 			}
 		})
+	}
+}
+
+func TestCompareVersions_PreviewLookalikesAndRC(t *testing.T) {
+	for _, current := range []string{"0.0.0-preview.12345678901.2", "0.0.0-preview.202611251830.123.0", "1.0.0-rc.1"} {
+		if skipped, err := CompareVersions(current, "1.0.0"); skipped || err == nil {
+			t.Errorf("CompareVersions(%q, 1.0.0) = %v, %v; want enforcement", current, skipped, err)
+		}
 	}
 }
 

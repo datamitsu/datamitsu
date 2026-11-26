@@ -7,4 +7,4 @@ description: Configure or fix the project's tsconfig.json to extend the correct 
 
 Read `.datamitsu/ai/skills/setup-tsconfig/instructions.md` from the project root and follow it precisely.
 
-The instructions file is the source of truth for this skill — it is regenerated automatically by `datamitsu` from the central `datamitsu-config` repository, so it is always up to date with the current presets and rules in `.datamitsu/tsconfig.md`.
+`datamitsu` automatically regenerates this source of truth from the central `datamitsu-config` repository, keeping it current with `.datamitsu/tsconfig.md` presets and rules.

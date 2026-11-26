@@ -22,14 +22,18 @@ project at `/workspace` and pass any CLI command as arguments.
 
 ## Tags
 
-| Tag                    | Meaning                            |
-| ---------------------- | ---------------------------------- |
-| `latest`               | Latest stable release              |
-| `stable`               | Latest stable release (alias)      |
-| `0.1.13` / `0.1` / `0` | Pinned semver (full, minor, major) |
-| `unstable`             | Latest unstable build (Docker Hub) |
+| Tag                    | Meaning                                       |
+| ---------------------- | --------------------------------------------- |
+| `latest`               | Latest stable release                         |
+| `stable`               | Latest stable release (alias)                 |
+| `0.1.13` / `0.1` / `0` | Pinned semver (full, minor, major)            |
+| `preview`              | Prerelease channel in the ordinary repository |
 
-Unstable builds are also published to `ghcr.io/datamitsu/datamitsu-unstable`.
+For unstable builds use `ghcr.io/datamitsu/datamitsu-unstable:unstable` instead
+of the ordinary repository. For Alpine use `preview-alpine` or `unstable-alpine`.
+To keep the same bytes across later releases, pin the repository and digest from
+the release report instead of a floating tag. Changing this reference does not
+deploy the image.
 
 Both `linux/amd64` and `linux/arm64` are supported via multi-arch manifests.
 
