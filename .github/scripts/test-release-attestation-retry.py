@@ -301,6 +301,25 @@ class AttestationRetryTest(unittest.TestCase):
         for label, overrides, job, dispatch, arguments, error in (
             ("independent source", {}, name, {}, route, None),
             (
+                "timestamped identity",
+                {
+                    "release_tag": f"unstable-202611251830-{RUN}-1",
+                    "version": f"0.0.0-unstable.202611251830.{RUN}.1",
+                },
+                name,
+                {},
+                route,
+                None,
+            ),
+            (
+                "mismatched timestamp",
+                {"release_tag": f"unstable-202611251830-{RUN}-1"},
+                name,
+                {},
+                route,
+                "incorrect manual release version",
+            ),
+            (
                 "index claims another source",
                 {"source_sha": SHA},
                 name,
@@ -361,8 +380,8 @@ class AttestationRetryTest(unittest.TestCase):
         index = {
             "run_id": RUN,
             "mode": "prerelease",
-            "release_tag": f"unstable-{RUN}-1",
-            "version": f"0.0.0-unstable.{RUN}.1",
+            "release_tag": f"preview-202611251830-{RUN}-1",
+            "version": f"0.0.0-preview.202611251830.{RUN}.1",
             "source_sha": SHA,
             "preparation_attempt": "1",
             "producing_attempt": "1",
@@ -402,6 +421,15 @@ class AttestationRetryTest(unittest.TestCase):
         marker = "Prepare prerelease for publication"
         for label, job, override, error in (
             ("trusted preparation", marker, {}, None),
+            (
+                "wrong mode prefix",
+                marker,
+                {
+                    "release_tag": f"unstable-202611251830-{RUN}-1",
+                    "version": f"0.0.0-unstable.202611251830.{RUN}.1",
+                },
+                "incorrect manual release tag for mode",
+            ),
             (
                 "manual-only preparation",
                 "Prepare release artifacts",

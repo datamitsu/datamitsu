@@ -17,7 +17,7 @@ If more than one exists, datamitsu returns an error. You can disable auto-discov
 Every configuration file exports `getMinVersion()` and `getConfig(config)`, and
 the final resolved config must contain a top-level `version`.
 
-- `getMinVersion()` — Returns the minimum datamitsu version required (semver string). For stable builds, the loader fails with upgrade instructions if the current version is too old. Unstable builds (`0.0.0-unstable.<date>.<sha>`, produced from non-tagged commits) skip the check and emit an advisory warning instead — users on those builds have already opted into a non-released binary.
+- `getMinVersion()` — Returns the minimum datamitsu version required (a SemVer string). Stable builds and release candidates enforce it. Pipeline preview builds (`0.0.0-preview.<UTC>.<run>.<attempt>`) and unstable builds emit an advisory warning instead.
 - `getConfig(config)` — Receives the accumulated configuration from previous layers and returns a new config.
 
 The unstable-build advisory is grouped once per configuration load, including a
