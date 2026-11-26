@@ -300,14 +300,18 @@ jobs:
               fi
             done
           fi
-          default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)
-          encoded_branch=$(jq -nr --arg branch "$default_branch" '$branch | @uri')
-          default_sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_branch" --jq .commit.sha)
-          [[ "$default_sha" =~ ^[0-9a-f]{40}$ && "$PREPARATION_SHA" =~ ^[0-9a-f]{40}$ ]]
-          relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$PREPARATION_SHA...$default_sha" --jq .status)
-          if [[ "$relation" != identical && "$relation" != ahead ]]; then
-            echo 'Publication requires a source commit already on the protected default branch' >&2
-            exit 1
+          if [[ "$mode" != unstable ]]; then
+            default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)
+            encoded_branch=$(jq -nr --arg branch "$default_branch" '$branch | @uri')
+            default_sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_branch" --jq .commit.sha)
+            [[ "$default_sha" =~ ^[0-9a-f]{40}$ && "$PREPARATION_SHA" =~ ^[0-9a-f]{40}$ ]]
+            relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$PREPARATION_SHA...$default_sha" --jq .status)
+            if [[ "$relation" != identical && "$relation" != ahead ]]; then
+              echo 'Publication requires a source commit already on the protected default branch' >&2
+              exit 1
+            fi
+          else
+            [[ "$automatic_mode" == unstable && "$dispatch_sha" =~ ^[0-9a-f]{40}$ ]] || exit 1
           fi
           export APPROVED_PAYLOADS APPROVED_VERSION PREPARATION_RUN_ID PREPARATION_ATTEMPT PREPARATION_SHA UNSTABLE_TAG
           python3 .github/scripts/stage-release-payloads.py "$evidence/payloads"

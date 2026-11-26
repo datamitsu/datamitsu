@@ -396,7 +396,7 @@ jobs:
           globalThis.getConfig = () => ({ version: "1.0.0", apps: {}, runtimes: {}, managedConfigs: {}, tools: {} });
           EOF
           minimum=0.0.1
-          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+          if [[ "$MODE" == verify || "$GITHUB_EVENT_NAME" == push ]]; then
             minimum=$expected
           fi
           jq -nr --arg minimum "$minimum" '"globalThis.getMinVersion = () => \($minimum | @json);"' >> "$smoke/minimum.config.js"
@@ -584,7 +584,7 @@ jobs:
                 message='Unstable prepared, not published by this run. Release Preflight validates the index before publishing.'
               else
                 message='Unstable artifacts are available in this run, but publication is blocked.'
-                next='Start a new dispatch on the protected default branch with the desired changes merged.'
+                next='Start a new dispatch from the protected default branch and enter the source branch in product_ref.'
               fi
               ;;
             tag) message='Release prepared. Publication is separate and requires successful Release Preflight validation.' ;;
@@ -716,6 +716,8 @@ jobs:
         name: Detect release type
         env:
           RELEASE_MODE: ${{ inputs.mode }}
+          PRODUCT_REF: ${{ inputs.product_ref }}
+          GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           PROTECTED_REF: ${{ github.ref_protected }}
         run: |
@@ -734,6 +736,20 @@ jobs:
               echo "is_unstable=false" >> "$GITHUB_OUTPUT"
               ;;
             workflow_dispatch)
+              if [[ -n "$PRODUCT_REF" ]]; then
+                [[ "$RELEASE_MODE" == verify || "$RELEASE_MODE" == unstable ]] || {
+                  echo 'product_ref is only supported for verify and unstable' >&2
+                  exit 1
+                }
+                [[ "$GITHUB_REF" == "refs/heads/$DEFAULT_BRANCH" && "$PROTECTED_REF" == true && "$GITHUB_WORKFLOW_SHA" == "$GITHUB_SHA" ]] || {
+                  echo 'Select the protected default branch for the workflow and set product_ref to the source branch' >&2
+                  exit 1
+                }
+                git check-ref-format "refs/heads/$PRODUCT_REF"
+                encoded=$(jq -nr --arg ref "refs/heads/$PRODUCT_REF" '$ref | @uri')
+                source_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$encoded" --jq .sha)
+                [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || exit 1
+              fi
               case "$RELEASE_MODE" in
                 verify) echo 'verify=true' >> "$GITHUB_OUTPUT" ;;
                 prerelease)
@@ -873,5 +889,9 @@ on:
           - unstable
         required: true
         type: choice
+      product_ref:
+        description: Source branch for verify or unstable. Run the workflow from main. Leave empty for the dispatch commit.
+        required: false
+        type: string
 permissions:
   contents: read

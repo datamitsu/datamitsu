@@ -291,11 +291,12 @@ The [Release workflow](.github/workflows/release.yml) prepares checked artifacts
   to npm and GHCR and creates a GitHub Pre-release without setting it as Latest.
   A run from another branch prepares artifacts only; manual publication still
   requires the source commit to be in the default branch history.
-- `unstable`: select the source branch or tag in the workflow picker. Release
-  prepares the exact selected commit. Only a new run on the protected default
-  branch hands the index to `Release Preflight` for publication to npm and GHCR.
-  Other refs upload checked artifacts and the index, then the run fails with
-  publication blocked. Merge the desired changes before starting a publishable run.
+- `unstable`: select `main` under **Use workflow from**, then enter the unmerged
+  branch name in `product_ref`. Release resolves that branch in this repository
+  once and publishes the checked commit to npm and GHCR. The publisher runs
+  from the protected default branch, not from the product branch. `verify`
+  accepts the same input without publishing. Leave it empty to use the dispatch
+  commit. `prerelease` does not accept a product override.
 
 Manual builds use versions such as `0.0.0-preview.202611251830.123.1` for
 `prerelease` and `verify`, or `0.0.0-unstable.202611251830.123.1` for `unstable`.
